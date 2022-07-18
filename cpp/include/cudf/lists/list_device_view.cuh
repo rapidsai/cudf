@@ -36,6 +36,12 @@ class list_device_view {
  public:
   list_device_view() = default;
 
+  /**
+   * @brief Constructs a list_device_view from a list column and index.
+   *
+   * @param lists_column list column device view containing the list to view
+   * @param row_index index of the list row to view
+   */
   __device__ inline list_device_view(lists_column_device_view const& lists_column,
                                      size_type const& row_index)
     : lists_column(lists_column), _row_index(row_index)
@@ -72,6 +78,9 @@ class list_device_view {
    *
    * The offset of this element as stored in the child column (i.e. 5)
    * may be fetched using this method.
+   *
+   * @param idx The list index of the element to fetch the offset for
+   * @return The offset of the element at the specified list index
    */
   [[nodiscard]] __device__ inline size_type element_offset(size_type idx) const
   {
@@ -93,7 +102,10 @@ class list_device_view {
   }
 
   /**
-   * @brief Checks whether element is null at specified index in the list row.
+   * @brief Checks whether the element is null at the specified index in the list
+   *
+   * @param idx The index into the list row
+   * @return `true` if the element is null at the specified index in the list row
    */
   [[nodiscard]] __device__ inline bool is_null(size_type idx) const
   {
@@ -104,16 +116,22 @@ class list_device_view {
 
   /**
    * @brief Checks whether this list row is null.
+   *
+   * @return `true` if this list is null
    */
   [[nodiscard]] __device__ inline bool is_null() const { return lists_column.is_null(_row_index); }
 
   /**
    * @brief Fetches the number of elements in this list row.
+   *
+   * @return The number of elements in this list row
    */
   [[nodiscard]] __device__ inline size_type size() const { return _size; }
 
   /**
    * @brief Fetches the lists_column_device_view that contains this list.
+   *
+   * @return The lists_column_device_view that contains this list
    */
   [[nodiscard]] __device__ inline lists_column_device_view const& get_column() const
   {
@@ -126,10 +144,12 @@ class list_device_view {
   template <typename T>
   struct pair_rep_accessor;
 
+  /// const pair iterator for the list
   template <typename T>
   using const_pair_iterator =
     thrust::transform_iterator<pair_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
 
+  /// const pair iterator type for the list
   template <typename T>
   using const_pair_rep_iterator =
     thrust::transform_iterator<pair_rep_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
@@ -146,6 +166,9 @@ class list_device_view {
    * If the element at index `i` is null,
    *   1. `p.first` is undefined
    *   2. `p.second == false`
+   *
+   * @return A pair iterator to the first element in the list_device_view and whether or not the
+   * element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_begin() const
@@ -156,6 +179,9 @@ class list_device_view {
   /**
    * @brief Fetcher for a pair iterator to one position past the last element in the
    * list_device_view.
+   *
+   * @return A pair iterator to one past the last element in the list_device_view and whether or not
+   * that element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
@@ -178,6 +204,9 @@ class list_device_view {
    * If the element at index `i` is null,
    *   1. `p.first` is undefined
    *   2. `p.second == false`
+   *
+   * @return A pair iterator to the first element in the list_device_view and whether or not that
+   * element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
@@ -189,6 +218,9 @@ class list_device_view {
   /**
    * @brief Fetcher for a pair iterator to one position past the last element in the
    * list_device_view.
+   *
+   * @return A pair iterator one past the last element in the list_device_view and whether or not
+   * that element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
@@ -215,7 +247,7 @@ class list_device_view {
    */
   template <typename T>
   struct pair_accessor {
-    list_device_view const& list;
+    list_device_view const& list;  ///< The list_device_view to access
 
     /**
      * @brief constructor
@@ -250,9 +282,9 @@ class list_device_view {
    */
   template <typename T>
   struct pair_rep_accessor {
-    list_device_view const& list;
+    list_device_view const& list;  ///< The list_device_view whose rows are being accessed
 
-    using rep_type = device_storage_type_t<T>;
+    using rep_type = device_storage_type_t<T>;  ///< The type used to store the value on the device
 
     /**
      * @brief constructor
@@ -290,15 +322,26 @@ class list_device_view {
 };
 
 /**
- * @brief returns size of the list by row index
+ * @brief Returns the size of the list by row index
  *
  */
 struct list_size_functor {
-  detail::lists_column_device_view const d_column;
+  detail::lists_column_device_view const d_column;  ///< The list column to access
+  /**
+   * @brief Constructor
+   *
+   * @param d_col The cudf::lists_column_device_view whose rows are being accessed
+   */
   CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
     : d_column(d_col)
   {
   }
+  /**
+   * @brief Returns size of the list by row index
+   *
+   * @param idx row index
+   * @return size of the list
+   */
   __device__ inline size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return size_type{0};
@@ -318,6 +361,8 @@ struct list_size_functor {
  * assert(it[2] == 4);
  * @endcode
  *
+ * @param c The list_column_device_view to iterate over
+ * @return An iterator that returns the size of the list by row index
  */
 CUDF_HOST_DEVICE auto inline make_list_size_iterator(detail::lists_column_device_view const& c)
 {

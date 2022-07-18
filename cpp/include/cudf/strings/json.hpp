@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/optional.h>
 
@@ -38,6 +40,9 @@ class get_json_object_options {
   // individual string values are returned with quotes stripped.
   bool strip_quotes_from_single_strings = true;
 
+  // Whether to return nulls when an object does not contain the requested field.
+  bool missing_fields_as_nulls = false;
+
  public:
   /**
    * @brief Default constructor.
@@ -47,6 +52,8 @@ class get_json_object_options {
   /**
    * @brief Returns true/false depending on whether single-quotes for representing strings
    * are allowed.
+   *
+   * @return true if single-quotes are allowed, false otherwise.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline bool get_allow_single_quotes() const
   {
@@ -74,10 +81,38 @@ class get_json_object_options {
    * Output = b
    *
    * @endcode
+   *
+   * @return true if individually returned string values have their quotes stripped.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline bool get_strip_quotes_from_single_strings() const
   {
     return strip_quotes_from_single_strings;
+  }
+
+  /**
+   * @brief Whether a field not contained by an object is to be interpreted as null.
+   *
+   * When set to true, if an object is queried for a field it does not contain, a null is returned.
+   *
+   * @code{.pseudo}
+   *
+   * With missing_fields_as_nulls OFF:
+   * Input  = {"a" : [{"x": "1", "y": "2"}, {"x": "3"}]}
+   * Query  = $.a[*].y
+   * Output = ["2"]
+   *
+   * With missing_fields_as_nulls ON:
+   * Input  = {"a" : [{"x": "1", "y": "2"}, {"x": "3"}]}
+   * Query  = $.a[*].y
+   * Output = ["2", null]
+   *
+   * @endcode
+   *
+   * @return true if missing fields are interpreted as null.
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool get_missing_fields_as_nulls() const
+  {
+    return missing_fields_as_nulls;
   }
 
   /**
@@ -98,6 +133,16 @@ class get_json_object_options {
   void set_strip_quotes_from_single_strings(bool _strip_quotes_from_single_strings)
   {
     strip_quotes_from_single_strings = _strip_quotes_from_single_strings;
+  }
+
+  /**
+   * @brief Set whether missing fields are interpreted as null.
+   *
+   * @param _missing_fields_as_nulls bool indicating desired behavior.
+   */
+  void set_missing_fields_as_nulls(bool _missing_fields_as_nulls)
+  {
+    missing_fields_as_nulls = _missing_fields_as_nulls;
   }
 };
 

@@ -339,6 +339,12 @@ python3 ./cpp/scripts/run-clang-format.py -inplace
 Additionally, many editors have plugins or extensions that you can set up to automatically run
 `clang-format` either manually or on file save.
 
+[`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
+In order to run doxygen as linter on C++/CUDA code, run
+```bash
+./ci/checks/doxygen.sh
+```
+
 ### Python / Pre-commit hooks
 
 cuDF uses [pre-commit](https://pre-commit.com/) to execute code linters and formatters such as

@@ -517,46 +517,75 @@ class SparkMurmurHash3Test : public cudf::test::BaseFixture {
 
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
-  // The hash values were determined by running the following Scala code in Apache Spark:
-  // import org.apache.spark.sql.catalyst.util.DateTimeUtils
-  // val schema = new StructType().add("structs", new StructType().add("a",IntegerType)
-  //   .add("b",StringType).add("c",new StructType().add("x",FloatType).add("y",LongType)))
-  //   .add("strings",StringType).add("doubles",DoubleType).add("timestamps",TimestampType)
-  //   .add("decimal64", DecimalType(18,7)).add("longs",LongType).add("floats",FloatType)
-  //   .add("dates",DateType).add("decimal32", DecimalType(9,3)).add("ints",IntegerType)
-  //   .add("shorts",ShortType).add("bytes",ByteType).add("bools",BooleanType)
-  //   .add("decimal128", DecimalType(38,11))
-  // val data = Seq(
-  // Row(Row(0, "a", Row(0f, 0L)), "", 0.toDouble, DateTimeUtils.toJavaTimestamp(0), BigDecimal(0),
-  //     0.toLong, 0.toFloat, DateTimeUtils.toJavaDate(0), BigDecimal(0), 0, 0.toShort, 0.toByte,
-  //     false, BigDecimal(0)),
-  // Row(Row(100, "bc", Row(100f, 100L)), "The quick brown fox", -(0.toDouble),
-  //     DateTimeUtils.toJavaTimestamp(100), BigDecimal("0.00001"), 100.toLong, -(0.toFloat),
-  //     DateTimeUtils.toJavaDate(100), BigDecimal("0.1"), 100, 100.toShort, 100.toByte, true,
-  //     BigDecimal("0.000000001")),
-  // Row(Row(-100, "def", Row(-100f, -100L)), "jumps over the lazy dog.", -Double.NaN,
-  //     DateTimeUtils.toJavaTimestamp(-100), BigDecimal("-0.00001"), -100.toLong, -Float.NaN,
-  //     DateTimeUtils.toJavaDate(-100), BigDecimal("-0.1"), -100, -100.toShort, -100.toByte,
-  //     true, BigDecimal("-0.00000000001")),
-  // Row(Row(0x12345678, "ghij", Row(Float.PositiveInfinity, 0x123456789abcdefL)),
-  //     "All work and no play makes Jack a dull boy", Double.MinValue,
-  //     DateTimeUtils.toJavaTimestamp(Long.MinValue/1000000), BigDecimal("-99999999999.9999999"),
-  //     Long.MinValue, Float.MinValue, DateTimeUtils.toJavaDate(Int.MinValue/100),
-  //     BigDecimal("-999999.999"), Int.MinValue, Short.MinValue, Byte.MinValue, true,
-  //     BigDecimal("-9999999999999999.99999999999")),
-  // Row(Row(-0x76543210, "klmno", Row(Float.NegativeInfinity, -0x123456789abcdefL)),
-  //     "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721", Double.MaxValue,
-  //     DateTimeUtils.toJavaTimestamp(Long.MaxValue/1000000), BigDecimal("99999999999.9999999"),
-  //     Long.MaxValue, Float.MaxValue, DateTimeUtils.toJavaDate(Int.MaxValue/100),
-  //     BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false,
-  //     BigDecimal("99999999999999999999999999.99999999999")))
-  // val df = spark.createDataFrame(sc.parallelize(data), schema)
-  // df.columns.foreach(c => println(s"$c => ${df.select(hash(col(c))).collect.mkString(",")}"))
-  // df.select(hash(col("*"))).collect
+  // The hash values were determined by running the following Scala code in Apache Spark.
+  // Note that Spark >= 3.2 normalizes the float/double value of -0. to +0. and both values hash
+  // to the same result. This is normalized in the calling code (Spark RAPIDS plugin) for Spark
+  // >= 3.2. However, the reference values for -0. below must be obtained with Spark < 3.2 and
+  // libcudf will continue to implement the Spark < 3.2 behavior until Spark >= 3.2 is required and
+  // the workaround in the calling code is removed. This also affects the combined hash values.
+
+  /*
+  import org.apache.spark.sql.functions._
+  import org.apache.spark.sql.types._
+  import org.apache.spark.sql.Row
+  import org.apache.spark.sql.catalyst.util.DateTimeUtils
+
+  val schema = new StructType()
+      .add("structs", new StructType()
+          .add("a", IntegerType)
+          .add("b", StringType)
+          .add("c", new StructType()
+              .add("x", FloatType)
+              .add("y", LongType)))
+      .add("strings", StringType)
+      .add("doubles", DoubleType)
+      .add("timestamps", TimestampType)
+      .add("decimal64", DecimalType(18, 7))
+      .add("longs", LongType)
+      .add("floats", FloatType)
+      .add("dates", DateType)
+      .add("decimal32", DecimalType(9, 3))
+      .add("ints", IntegerType)
+      .add("shorts", ShortType)
+      .add("bytes", ByteType)
+      .add("bools", BooleanType)
+      .add("decimal128", DecimalType(38, 11))
+
+  val data = Seq(
+      Row(Row(0, "a", Row(0f, 0L)), "", 0.toDouble,
+          DateTimeUtils.toJavaTimestamp(0), BigDecimal(0), 0.toLong, 0.toFloat,
+          DateTimeUtils.toJavaDate(0), BigDecimal(0), 0, 0.toShort, 0.toByte,
+          false, BigDecimal(0)),
+      Row(Row(100, "bc", Row(100f, 100L)), "The quick brown fox", -(0.toDouble),
+          DateTimeUtils.toJavaTimestamp(100), BigDecimal("0.00001"), 100.toLong, -(0.toFloat),
+          DateTimeUtils.toJavaDate(100), BigDecimal("0.1"), 100, 100.toShort, 100.toByte,
+          true, BigDecimal("0.000000001")),
+      Row(Row(-100, "def", Row(-100f, -100L)), "jumps over the lazy dog.", -Double.NaN,
+          DateTimeUtils.toJavaTimestamp(-100), BigDecimal("-0.00001"), -100.toLong, -Float.NaN,
+          DateTimeUtils.toJavaDate(-100), BigDecimal("-0.1"), -100, -100.toShort, -100.toByte,
+          true, BigDecimal("-0.00000000001")),
+      Row(Row(0x12345678, "ghij", Row(Float.PositiveInfinity, 0x123456789abcdefL)),
+          "All work and no play makes Jack a dull boy", Double.MinValue,
+          DateTimeUtils.toJavaTimestamp(Long.MinValue/1000000), BigDecimal("-99999999999.9999999"),
+          Long.MinValue, Float.MinValue, DateTimeUtils.toJavaDate(Int.MinValue/100),
+          BigDecimal("-999999.999"), Int.MinValue, Short.MinValue, Byte.MinValue, true,
+          BigDecimal("-9999999999999999.99999999999")),
+      Row(Row(-0x76543210, "klmno", Row(Float.NegativeInfinity, -0x123456789abcdefL)),
+          "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721", Double.MaxValue,
+          DateTimeUtils.toJavaTimestamp(Long.MaxValue/1000000), BigDecimal("99999999999.9999999"),
+          Long.MaxValue, Float.MaxValue, DateTimeUtils.toJavaDate(Int.MaxValue/100),
+          BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false,
+          BigDecimal("99999999999999999999999999.99999999999")))
+
+  val df = spark.createDataFrame(sc.parallelize(data), schema)
+  df.columns.foreach(c => println(s"$c => ${df.select(hash(col(c))).collect.mkString(",")}"))
+  println(s"combined => ${df.select(hash(col("*"))).collect.mkString(",")}")
+  */
+
   fixed_width_column_wrapper<int32_t> const hash_structs_expected(
     {-105406170, 90479889, -678041645, 1667387937, 301478567});
   fixed_width_column_wrapper<int32_t> const hash_strings_expected(
-    {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
+    {142593372, 1217302703, -715697185, -2061143941, -111635966});
   fixed_width_column_wrapper<int32_t> const hash_doubles_expected(
     {-1670924195, -853646085, -1281358385, 1897734433, -508695674});
   fixed_width_column_wrapper<int32_t> const hash_timestamps_expected(
@@ -632,7 +661,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;
   auto const hash_structs    = cudf::hash(cudf::table_view({structs_col}), hasher, 42);
-  auto const hash_strings    = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
+  auto const hash_strings    = cudf::hash(cudf::table_view({strings_col}), hasher, 42);
   auto const hash_doubles    = cudf::hash(cudf::table_view({doubles_col}), hasher, 42);
   auto const hash_timestamps = cudf::hash(cudf::table_view({timestamps_col}), hasher, 42);
   auto const hash_decimal64  = cudf::hash(cudf::table_view({decimal64_col}), hasher, 42);
@@ -679,6 +708,32 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
                                                 decimal128_col});
   auto const hash_combined  = cudf::hash(combined_table, hasher, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
+}
+
+TEST_F(SparkMurmurHash3Test, StringsWithSeed)
+{
+  // The hash values were determined by running the following Scala code in Apache Spark:
+  // val strs = Seq("", "The quick brown fox",
+  //              "jumps over the lazy dog.",
+  //              "All work and no play makes Jack a dull boy",
+  //              "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721")
+  // println(strs.map(org.apache.spark.unsafe.types.UTF8String.fromString)
+  //   .map(org.apache.spark.sql.catalyst.expressions.Murmur3HashFunction.hash(
+  //     _, org.apache.spark.sql.types.StringType, 314)))
+
+  fixed_width_column_wrapper<int32_t> const hash_strings_expected_seed_314(
+    {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
+
+  strings_column_wrapper const strings_col({"",
+                                            "The quick brown fox",
+                                            "jumps over the lazy dog.",
+                                            "All work and no play makes Jack a dull boy",
+                                            "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
+
+  constexpr auto hasher   = cudf::hash_id::HASH_SPARK_MURMUR3;
+  auto const hash_strings = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected_seed_314, verbosity);
 }
 
 TEST_F(SparkMurmurHash3Test, ListThrows)

@@ -24,6 +24,7 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class StringContains : public cudf::benchmark {
 };
@@ -86,7 +87,7 @@ static void BM_contains(benchmark::State& state, contains_type ct)
   auto pattern = patterns[pattern_index];
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (ct) {
       case contains_type::contains:  // contains_re and matches_re use the same main logic
         cudf::strings::contains_re(input, pattern);

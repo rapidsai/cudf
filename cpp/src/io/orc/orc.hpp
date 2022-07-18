@@ -495,6 +495,17 @@ class ProtobufWriter {
     put_byte(static_cast<uint8_t>(v));
     return l;
   }
+
+  uint32_t varint_size(uint64_t val)
+  {
+    auto len = 1u;
+    while (val > 0x7f) {
+      val >>= 7;
+      ++len;
+    }
+    return len;
+  }
+
   uint32_t put_int(int64_t v)
   {
     int64_t s = (v < 0);

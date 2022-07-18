@@ -20,10 +20,12 @@
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <optional>
 #include <utility>
@@ -325,7 +327,6 @@ std::unique_ptr<cudf::table> full_join(
  * @code{.pseudo}
  * TableA: {{0, 1, 2}}
  * TableB: {{1, 2, 3}}
- * right_on: {1}
  * Result: {1, 2}
  * @endcode
  *
@@ -381,7 +382,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  *                             The column from `right` indicated by `right_on[i]`
  *                             will be compared against the column from `left`
  *                             indicated by `left_on[i]`.
- * @param[in] compare_nulls    Controls whether null join-key values should match or not.
+ * @param[in] compare_nulls    Controls whether null join-key values should match or not
  * @param[in] mr               Device memory resource used to allocate the returned table's
  *                             device memory
  *
@@ -463,7 +464,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
  *                             The column from `right` indicated by `right_on[i]`
  *                             will be compared against the column from `left`
  *                             indicated by `left_on[i]`.
- * @param[in] compare_nulls    Controls whether null join-key values should match or not.
+ * @param[in] compare_nulls    Controls whether null join-key values should match or not
  * @param[in] mr               Device memory resource used to allocate the returned table's
  *                             device memory
  *
@@ -514,8 +515,8 @@ std::unique_ptr<cudf::table> cross_join(
  */
 class hash_join {
  public:
-  using impl_type =
-    typename cudf::detail::hash_join<cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;
+  using impl_type = typename cudf::detail::hash_join<
+    cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;  ///< Implementation type
 
   hash_join() = delete;
   ~hash_join();
@@ -530,21 +531,21 @@ class hash_join {
    * @note The `hash_join` object must not outlive the table viewed by `build`, else behavior is
    * undefined.
    *
-   * @param build The build table, from which the hash table is built.
-   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param build The build table, from which the hash table is built
+   * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   hash_join(cudf::table_view const& build,
             null_equality compare_nulls,
-            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+            rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   /**
    * Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
-   * @param probe The probe table, from which the tuples are probed.
-   * @param output_size Optional value which allows users to specify the exact output size.
+   * @param probe The probe table, from which the tuples are probed
+   * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
@@ -557,7 +558,7 @@ class hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size = {},
-             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+             rmm::cuda_stream_view stream           = cudf::default_stream_value,
              rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -565,8 +566,8 @@ class hash_join {
    * a left join between two tables. @see cudf::left_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
-   * @param probe The probe table, from which the tuples are probed.
-   * @param output_size Optional value which allows users to specify the exact output size.
+   * @param probe The probe table, from which the tuples are probed
+   * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
@@ -579,7 +580,7 @@ class hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
-            rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+            rmm::cuda_stream_view stream           = cudf::default_stream_value,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -587,8 +588,8 @@ class hash_join {
    * a full join between two tables. @see cudf::full_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
-   * @param probe The probe table, from which the tuples are probed.
-   * @param output_size Optional value which allows users to specify the exact output size.
+   * @param probe The probe table, from which the tuples are probed
+   * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
@@ -601,40 +602,40 @@ class hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
-            rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+            rmm::cuda_stream_view stream           = cudf::default_stream_value,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the exact number of matches (rows) when performing an inner join with the specified
    * probe table.
    *
-   * @param probe The probe table, from which the tuples are probed.
+   * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::default_stream_value) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a left join with the specified probe
    * table.
    *
-   * @param probe The probe table, from which the tuples are probed.
+   * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::default_stream_value) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a full join with the specified probe
    * table.
    *
-   * @param probe The probe table, from which the tuples are probed.
+   * @param probe The probe table, from which the tuples are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
@@ -644,7 +645,7 @@ class hash_join {
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::cuda_stream_view stream        = cudf::default_stream_value,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
@@ -679,8 +680,8 @@ class hash_join {
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
- * @param output_size Optional value which allows users to specify the exact output size.
+ * @param binary_predicate The condition on which to join
+ * @param output_size Optional value which allows users to specify the exact output size
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -725,8 +726,8 @@ conditional_inner_join(
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
- * @param output_size Optional value which allows users to specify the exact output size.
+ * @param binary_predicate The condition on which to join
+ * @param output_size Optional value which allows users to specify the exact output size
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -769,7 +770,7 @@ conditional_left_join(table_view const& left,
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
+ * @param binary_predicate The condition on which to join
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -806,8 +807,8 @@ conditional_full_join(table_view const& left,
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
- * @param output_size Optional value which allows users to specify the exact output size.
+ * @param binary_predicate The condition on which to join
+ * @param output_size Optional value which allows users to specify the exact output size
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -845,8 +846,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
- * @param output_size Optional value which allows users to specify the exact output size.
+ * @param binary_predicate The condition on which to join
+ * @param output_size Optional value which allows users to specify the exact output size
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -892,12 +893,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_inner_join_size API).
@@ -952,12 +953,12 @@ mixed_inner_join(
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_left_join_size API).
@@ -1012,12 +1013,12 @@ mixed_left_join(
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_full_join_size API).
@@ -1065,12 +1066,12 @@ mixed_full_join(
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_full_join_size API).
@@ -1117,12 +1118,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param output_size_data An optional pair of values indicating the exact output size and the
  * number of matches for each row in the larger of the two input tables, left or right (may be
  * precomputed using the corresponding mixed_full_join_size API).
@@ -1158,15 +1159,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1201,15 +1199,12 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1244,15 +1239,12 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1285,15 +1277,12 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
  * match.
  *
- * @param left_equality The left table used for the equality join.
- * @param right_equality The right table used for the equality join.
- * @param left_conditional The left table used for the conditional join.
- * @param right_conditional The right table used for the conditional join.
- * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
+ * @param left_equality The left table used for the equality join
+ * @param right_equality The right table used for the equality join
+ * @param left_conditional The left table used for the conditional join
+ * @param right_conditional The right table used for the conditional join
+ * @param binary_predicate The condition on which to join
+ * @param compare_nulls Whether or not null values join to each other or not
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1323,10 +1312,10 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
+ * @param binary_predicate The condition on which to join
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return The size that would result from performing the requested join.
+ * @return The size that would result from performing the requested join
  */
 std::size_t conditional_inner_join_size(
   table_view const& left,
@@ -1346,10 +1335,10 @@ std::size_t conditional_inner_join_size(
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
+ * @param binary_predicate The condition on which to join
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return The size that would result from performing the requested join.
+ * @return The size that would result from performing the requested join
  */
 std::size_t conditional_left_join_size(
   table_view const& left,
@@ -1369,10 +1358,10 @@ std::size_t conditional_left_join_size(
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
+ * @param binary_predicate The condition on which to join
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return The size that would result from performing the requested join.
+ * @return The size that would result from performing the requested join
  */
 std::size_t conditional_left_semi_join_size(
   table_view const& left,
@@ -1392,10 +1381,10 @@ std::size_t conditional_left_semi_join_size(
  *
  * @param left The left table
  * @param right The right table
- * @param binary_predicate The condition on which to join.
+ * @param binary_predicate The condition on which to join
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
- * @return The size that would result from performing the requested join.
+ * @return The size that would result from performing the requested join
  */
 std::size_t conditional_left_anti_join_size(
   table_view const& left,

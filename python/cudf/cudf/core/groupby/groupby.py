@@ -8,6 +8,7 @@ from functools import cached_property
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
+import pandas as pd
 
 import cudf
 from cudf._lib import groupby as libgroupby
@@ -188,7 +189,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     len(self.obj), "int8", masked=False
                 )
             )
-            .groupby(self.grouping, sort=self._sort)
+            .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
 
@@ -200,11 +201,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             cudf.Series(
                 cudf.core.column.column_empty(
                     len(self.obj), "int8", masked=False
-                )
+                ),
+                index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
-            .reset_index(drop=True)
         )
 
     def rank(
@@ -342,7 +343,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not self._as_index:
             result = result.reset_index()
-
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
@@ -822,7 +822,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-            result = result.reset_index(drop=True)
+            result.index = self.obj.index
         return result
 
     def rolling(self, *args, **kwargs):
@@ -1663,6 +1663,10 @@ class _Grouping(Serializable):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
+                elif isinstance(by, pd.Series):
+                    self._handle_series(cudf.Series.from_pandas(by))
+                elif isinstance(by, pd.Index):
+                    self._handle_index(cudf.Index.from_pandas(by))
                 else:
                     try:
                         self._handle_label(by)

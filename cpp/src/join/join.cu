@@ -20,6 +20,7 @@
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -251,7 +252,7 @@ inner_join(table_view const& left,
            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::inner_join(left, right, compare_nulls, rmm::cuda_stream_default, mr);
+  return detail::inner_join(left, right, compare_nulls, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> inner_join(table_view const& left,
@@ -263,7 +264,7 @@ std::unique_ptr<table> inner_join(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::inner_join(
-    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+    left, right, left_on, right_on, compare_nulls, cudf::default_stream_value, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -274,7 +275,7 @@ left_join(table_view const& left,
           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::left_join(left, right, compare_nulls, rmm::cuda_stream_default, mr);
+  return detail::left_join(left, right, compare_nulls, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> left_join(table_view const& left,
@@ -286,7 +287,7 @@ std::unique_ptr<table> left_join(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::left_join(
-    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+    left, right, left_on, right_on, compare_nulls, cudf::default_stream_value, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -297,7 +298,7 @@ full_join(table_view const& left,
           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::full_join(left, right, compare_nulls, rmm::cuda_stream_default, mr);
+  return detail::full_join(left, right, compare_nulls, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> full_join(table_view const& left,
@@ -309,6 +310,6 @@ std::unique_ptr<table> full_join(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::full_join(
-    left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+    left, right, left_on, right_on, compare_nulls, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

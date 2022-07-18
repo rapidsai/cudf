@@ -26,6 +26,7 @@
 
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,14 +38,11 @@ namespace io {
  * @file
  */
 
-constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
-constexpr size_type default_row_group_size_rows = 1000000;
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;
-constexpr size_type default_max_page_size_rows  = 20000;
+constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
+constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
 
-/**
- * @brief Builds parquet_reader_options to use for `read_parquet()`.
- */
 class parquet_reader_options_builder;
 
 /**
@@ -54,7 +52,7 @@ class parquet_reader_options {
   source_info _source;
 
   // Path in schema of column to read; empty is all
-  std::vector<std::string> _columns;
+  std::optional<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -73,7 +71,7 @@ class parquet_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read parquet file.
+   * @param src source information used to read parquet file
    */
   explicit parquet_reader_options(source_info const& src) : _source(src) {}
 
@@ -90,19 +88,23 @@ class parquet_reader_options {
   /**
    * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
    *
-   * @param src Source information to read parquet file.
-   * @return Builder to build reader options.
+   * @param src Source information to read parquet file
+   * @return Builder to build reader options
    */
   static parquet_reader_options_builder builder(source_info const& src);
 
   /**
    * @brief Returns source info.
+   *
+   * @return Source info
    */
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns true/false depending on whether strings should be converted to categories or
    * not.
+   *
+   * @return `true` if strings should be converted to categories
    */
   [[nodiscard]] bool is_enabled_convert_strings_to_categories() const
   {
@@ -111,45 +113,60 @@ class parquet_reader_options {
 
   /**
    * @brief Returns true/false depending whether to use pandas metadata or not while reading.
+   *
+   * @return `true` if pandas metadata is used while reading
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
    * @brief Returns number of rows to skip from the start.
+   *
+   * @return Number of rows to skip from the start
    */
   [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
+   *
+   * @return Number of rows to read
    */
   [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
-   * @brief Returns names of column to be read.
+   * @brief Returns names of column to be read, if set.
+   *
+   * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
+  {
+    return _columns;
+  }
 
   /**
    * @brief Returns list of individual row groups to be read.
+   *
+   * @return List of individual row groups to be read
    */
   std::vector<std::vector<size_type>> const& get_row_groups() const { return _row_groups; }
 
   /**
    * @brief Returns timestamp type used to cast timestamp columns.
+   *
+   * @return Timestamp type used to cast timestamp columns
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Sets names of the columns to be read.
    *
-   * @param col_names Vector of column names.
+   * @param col_names Vector of column names
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Sets vector of individual row groups to read.
    *
-   * @param row_groups Vector of row groups to read.
+   * @param row_groups Vector of row groups to read
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups)
   {
@@ -163,21 +180,21 @@ class parquet_reader_options {
   /**
    * @brief Sets to enable/disable conversion of strings to categories.
    *
-   * @param val Boolean value to enable/disable conversion of string columns to categories.
+   * @param val Boolean value to enable/disable conversion of string columns to categories
    */
   void enable_convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
 
   /**
    * @brief Sets to enable/disable use of pandas metadata to read.
    *
-   * @param val Boolean value whether to use pandas metadata.
+   * @param val Boolean value whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
    * @brief Sets number of rows to skip.
    *
-   * @param val Number of rows to skip from start.
+   * @param val Number of rows to skip from start
    */
   void set_skip_rows(size_type val)
   {
@@ -191,7 +208,7 @@ class parquet_reader_options {
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read after skip.
+   * @param val Number of rows to read after skip
    */
   void set_num_rows(size_type val)
   {
@@ -205,11 +222,14 @@ class parquet_reader_options {
   /**
    * @brief Sets timestamp_type used to cast timestamp columns.
    *
-   * @param type The timestamp data_type to which all timestamp columns need to be cast.
+   * @param type The timestamp data_type to which all timestamp columns need to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 };
 
+/**
+ * @brief Builds parquet_reader_options to use for `read_parquet()`.
+ */
 class parquet_reader_options_builder {
   parquet_reader_options options;
 
@@ -224,15 +244,15 @@ class parquet_reader_options_builder {
   /**
    * @brief Constructor from source info.
    *
-   * @param src The source information used to read parquet file.
+   * @param src The source information used to read parquet file
    */
   explicit parquet_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
    * @brief Sets names of the columns to be read.
    *
-   * @param col_names Vector of column names.
-   * @return this for chaining.
+   * @param col_names Vector of column names
+   * @return this for chaining
    */
   parquet_reader_options_builder& columns(std::vector<std::string> col_names)
   {
@@ -243,8 +263,8 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets vector of individual row groups to read.
    *
-   * @param row_groups Vector of row groups to read.
-   * @return this for chaining.
+   * @param row_groups Vector of row groups to read
+   * @return this for chaining
    */
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
   {
@@ -255,8 +275,8 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets enable/disable conversion of strings to categories.
    *
-   * @param val Boolean value to enable/disable conversion of string columns to categories.
-   * @return this for chaining.
+   * @param val Boolean value to enable/disable conversion of string columns to categories
+   * @return this for chaining
    */
   parquet_reader_options_builder& convert_strings_to_categories(bool val)
   {
@@ -267,8 +287,8 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets to enable/disable use of pandas metadata to read.
    *
-   * @param val Boolean value whether to use pandas metadata.
-   * @return this for chaining.
+   * @param val Boolean value whether to use pandas metadata
+   * @return this for chaining
    */
   parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
@@ -279,8 +299,8 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets number of rows to skip.
    *
-   * @param val Number of rows to skip from start.
-   * @return this for chaining.
+   * @param val Number of rows to skip from start
+   * @return this for chaining
    */
   parquet_reader_options_builder& skip_rows(size_type val)
   {
@@ -291,8 +311,8 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read after skip.
-   * @return this for chaining.
+   * @param val Number of rows to read after skip
+   * @return this for chaining
    */
   parquet_reader_options_builder& num_rows(size_type val)
   {
@@ -303,8 +323,8 @@ class parquet_reader_options_builder {
   /**
    * @brief timestamp_type used to cast timestamp columns.
    *
-   * @param type The timestamp data_type to which all timestamp columns need to be cast.
-   * @return this for chaining.
+   * @param type The timestamp data_type to which all timestamp columns need to be cast
+   * @return this for chaining
    */
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
@@ -321,6 +341,8 @@ class parquet_reader_options_builder {
    * @brief move parquet_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `parquet_reader_options` object's r-value reference
    */
   parquet_reader_options&& build() { return std::move(options); }
 };
@@ -352,9 +374,6 @@ table_with_metadata read_parquet(
  * @file
  */
 
-/**
- * @brief Class to build `parquet_writer_options`.
- */
 class parquet_writer_options_builder;
 
 /**
@@ -392,15 +411,15 @@ class parquet_writer_options {
   /**
    * @brief Constructor from sink and table.
    *
-   * @param sink The sink used for writer output.
-   * @param table Table to be written to output.
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
    */
   explicit parquet_writer_options(sink_info const& sink, table_view const& table)
     : _sink(sink), _table(table)
   {
   }
 
-  friend class parquet_writer_options_builder;
+  friend parquet_writer_options_builder;
 
  public:
   /**
@@ -413,52 +432,66 @@ class parquet_writer_options {
   /**
    * @brief Create builder to create `parquet_writer_options`.
    *
-   * @param sink The sink used for writer output.
-   * @param table Table to be written to output.
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
    *
-   * @return Builder to build parquet_writer_options.
+   * @return Builder to build parquet_writer_options
    */
   static parquet_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
   /**
    * @brief Create builder to create `parquet_writer_options`.
    *
-   * @return parquet_writer_options_builder.
+   * @return parquet_writer_options_builder
    */
   static parquet_writer_options_builder builder();
 
   /**
    * @brief Returns sink info.
+   *
+   * @return Sink info
    */
   [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression format used.
+   *
+   * @return Compression format
    */
   [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns level of statistics requested in output file.
+   *
+   * @return level of statistics requested in output file
    */
   [[nodiscard]] statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
    * @brief Returns table_view.
+   *
+   * @return Table view
    */
   [[nodiscard]] table_view get_table() const { return _table; }
 
   /**
    * @brief Returns partitions.
+   *
+   * @return Partitions
    */
   [[nodiscard]] std::vector<partition_info> const& get_partitions() const { return _partitions; }
 
   /**
    * @brief Returns associated metadata.
+   *
+   * @return Associated metadata
    */
   [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
+   *
+   * @return Key-Value footer metadata information
    */
   std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
   {
@@ -467,11 +500,15 @@ class parquet_writer_options {
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
+   *
+   * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
    * @brief Returns Column chunks file paths to be set in the raw output metadata.
+   *
+   * @return Column chunks file paths to be set in the raw output metadata
    */
   std::vector<std::string> const& get_column_chunks_file_paths() const
   {
@@ -480,17 +517,24 @@ class parquet_writer_options {
 
   /**
    * @brief Returns maximum row group size, in bytes.
+   *
+   * @return Maximum row group size, in bytes
    */
   auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
    * @brief Returns maximum row group size, in rows.
+   *
+   * @return Maximum row group size, in rows
    */
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns the maximum uncompressed page size, in bytes. If set larger than the row group
-   * size, then this will return the row group size.
+   * @brief Returns the maximum uncompressed page size, in bytes.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -498,8 +542,11 @@ class parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -522,7 +569,7 @@ class parquet_writer_options {
   /**
    * @brief Sets metadata.
    *
-   * @param metadata Associated metadata.
+   * @param metadata Associated metadata
    */
   void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
 
@@ -541,14 +588,14 @@ class parquet_writer_options {
   /**
    * @brief Sets the level of statistics.
    *
-   * @param sf Level of statistics requested in the output file.
+   * @param sf Level of statistics requested in the output file
    */
   void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
   /**
    * @brief Sets compression type.
    *
-   * @param compression The compression type to use.
+   * @param compression The compression type to use
    */
   void set_compression(compression_type compression) { _compression = compression; }
 
@@ -575,6 +622,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum row group size, in bytes.
+   *
+   * @param size_bytes Maximum row group size, in bytes to set
    */
   void set_row_group_size_bytes(size_t size_bytes)
   {
@@ -586,6 +635,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum row group size, in rows.
+   *
+   * @param size_rows Maximum row group size, in rows to set
    */
   void set_row_group_size_rows(size_type size_rows)
   {
@@ -597,6 +648,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -606,6 +659,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
+   * @param size_rows Maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -616,6 +671,9 @@ class parquet_writer_options {
   }
 };
 
+/**
+ * @brief Class to build `parquet_writer_options`.
+ */
 class parquet_writer_options_builder {
   parquet_writer_options options;
 
@@ -630,8 +688,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Constructor from sink and table.
    *
-   * @param sink The sink used for writer output.
-   * @param table Table to be written to output.
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
    */
   explicit parquet_writer_options_builder(sink_info const& sink, table_view const& table)
     : options(sink, table)
@@ -643,7 +701,7 @@ class parquet_writer_options_builder {
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
    * be same size as number of sinks in sink_info
-   * @return this for chaining.
+   * @return this for chaining
    */
   parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
   {
@@ -656,8 +714,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets metadata in parquet_writer_options.
    *
-   * @param metadata Associated metadata.
-   * @return this for chaining.
+   * @param metadata Associated metadata
+   * @return this for chaining
    */
   parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
@@ -669,7 +727,7 @@ class parquet_writer_options_builder {
    * @brief Sets Key-Value footer metadata in parquet_writer_options.
    *
    * @param metadata Key-Value footer metadata
-   * @return this for chaining.
+   * @return this for chaining
    */
   parquet_writer_options_builder& key_value_metadata(
     std::vector<std::map<std::string, std::string>> metadata)
@@ -683,8 +741,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
    *
-   * @param sf Level of statistics requested in the output file.
-   * @return this for chaining.
+   * @param sf Level of statistics requested in the output file
+   * @return this for chaining
    */
   parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
@@ -695,8 +753,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets compression type in parquet_writer_options.
    *
-   * @param compression The compression type to use.
-   * @return this for chaining.
+   * @param compression The compression type to use
+   * @return this for chaining
    */
   parquet_writer_options_builder& compression(compression_type compression)
   {
@@ -709,7 +767,7 @@ class parquet_writer_options_builder {
    *
    * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
    * data sinks
-   * @return this for chaining.
+   * @return this for chaining
    */
   parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths)
   {
@@ -723,7 +781,7 @@ class parquet_writer_options_builder {
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param val maximum row group size
-   * @return this for chaining.
+   * @return this for chaining
    */
   parquet_writer_options_builder& row_group_size_bytes(size_t val)
   {
@@ -734,8 +792,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the maximum number of rows in output row groups.
    *
-   * @param val maximum number of rows
-   * @return this for chaining.
+   * @param val maximum number or rows
+   * @return this for chaining
    */
   parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
@@ -744,12 +802,14 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
-   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
-   * bytes, and will be adjusted to match if it is.
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * Serves as a hint to the writer, * and can be exceeded under certain circumstances.
+   * Cannot be larger than the row group size in bytes, and will be adjusted to
+   * match if it is.
    *
    * @param val maximum page size
-   * @return this for chaining.
+   * @return this for chaining
    */
   parquet_writer_options_builder& max_page_size_bytes(size_t val)
   {
@@ -762,7 +822,7 @@ class parquet_writer_options_builder {
    * Cannot be larger than the row group size in rows, and will be adjusted to match if it is.
    *
    * @param val maximum rows per page
-   * @return this for chaining.
+   * @return this for chaining
    */
   parquet_writer_options_builder& max_page_size_rows(size_type val)
   {
@@ -773,8 +833,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
-   * @param enabled Boolean value to enable/disable int96 timestamps.
-   * @return this for chaining.
+   * @param enabled Boolean value to enable/disable int96 timestamps
+   * @return this for chaining
    */
   parquet_writer_options_builder& int96_timestamps(bool enabled)
   {
@@ -791,6 +851,8 @@ class parquet_writer_options_builder {
    * @brief move parquet_writer_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `parquet_writer_options` object's r-value reference
    */
   parquet_writer_options&& build() { return std::move(options); }
 };
@@ -805,8 +867,8 @@ class parquet_writer_options_builder {
  *  cudf::io::write_parquet(options);
  * @endcode
  *
- * @param options Settings for controlling writing behavior.
- * @param mr Device memory resource to use for device memory allocation.
+ * @param options Settings for controlling writing behavior
+ * @param mr Device memory resource to use for device memory allocation
  *
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in parquet_writer_options (empty blob otherwise).
@@ -822,15 +884,12 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  *
  * @ingroup io_writers
  *
- * @param[in] metadata_list List of input file metadata.
- * @return A parquet-compatible blob that contains the data for all row groups in the list.
+ * @param[in] metadata_list List of input file metadata
+ * @return A parquet-compatible blob that contains the data for all row groups in the list
  */
 std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
-/**
- * @brief Builds options for chunked_parquet_writer_options.
- */
 class chunked_parquet_writer_options_builder;
 
 /**
@@ -862,7 +921,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Constructor from sink.
    *
-   * @param sink Sink used for writer output.
+   * @param sink Sink used for writer output
    */
   explicit chunked_parquet_writer_options(sink_info const& sink) : _sink(sink) {}
 
@@ -878,26 +937,36 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Returns sink info.
+   *
+   * @return Sink info
    */
   [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression format used.
+   *
+   * @return Compression format
    */
   [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns level of statistics requested in output file.
+   *
+   * @return Level of statistics requested in output file
    */
   [[nodiscard]] statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
    * @brief Returns metadata information.
+   *
+   * @return Metadata information
    */
   [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
+   *
+   * @return Key-Value footer metadata information
    */
   std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
   {
@@ -906,22 +975,32 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
+   *
+   * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
    * @brief Returns maximum row group size, in bytes.
+   *
+   * @return Maximum row group size, in bytes
    */
   auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
    * @brief Returns maximum row group size, in rows.
+   *
+   * @return Maximum row group size, in rows
    */
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns maximum uncompressed page size, in bytes. If set larger than the row group size,
-   * then this will return the row group size.
+   * @brief Returns maximum uncompressed page size, in bytes.
+   *
+   * If set larger than the row group size, then this will return the
+   * row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -929,8 +1008,11 @@ class chunked_parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -940,7 +1022,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets metadata.
    *
-   * @param metadata Associated metadata.
+   * @param metadata Associated metadata
    */
   void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
 
@@ -959,20 +1041,21 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
    *
-   * @param sf Level of statistics requested in the output file.
+   * @param sf Level of statistics requested in the output file
    */
   void set_stats_level(statistics_freq sf) { _stats_level = sf; }
 
   /**
    * @brief Sets compression type.
    *
-   * @param compression The compression type to use.
+   * @param compression The compression type to use
    */
   void set_compression(compression_type compression) { _compression = compression; }
 
   /**
-   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
-   * if `true` and TIMESTAMP_MICROS will be written if `false`.
+   * @brief Sets timestamp writing preferences.
+   *
+   * INT96 timestamps will be written if `true` and TIMESTAMP_MICROS will be written if `false`.
    *
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
@@ -980,6 +1063,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum row group size, in bytes.
+   *
+   * @param size_bytes Maximum row group size, in bytes to set
    */
   void set_row_group_size_bytes(size_t size_bytes)
   {
@@ -991,6 +1076,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum row group size, in rows.
+   *
+   * @param size_rows The maximum row group size, in rows to set
    */
   void set_row_group_size_rows(size_type size_rows)
   {
@@ -1002,6 +1089,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -1011,6 +1100,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
+   * @param size_rows The maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -1023,13 +1114,16 @@ class chunked_parquet_writer_options {
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
    *
-   * @param sink sink to use for writer output.
+   * @param sink sink to use for writer output
    *
-   * @return Builder to build `chunked_parquet_writer_options`.
+   * @return Builder to build `chunked_parquet_writer_options`
    */
   static chunked_parquet_writer_options_builder builder(sink_info const& sink);
 };
 
+/**
+ * @brief Builds options for chunked_parquet_writer_options.
+ */
 class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options options;
 
@@ -1044,15 +1138,15 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Constructor from sink.
    *
-   * @param sink The sink used for writer output.
+   * @param sink The sink used for writer output
    */
   chunked_parquet_writer_options_builder(sink_info const& sink) : options(sink){};
 
   /**
    * @brief Sets metadata to chunked_parquet_writer_options.
    *
-   * @param metadata Associated metadata.
-   * @return this for chaining.
+   * @param metadata Associated metadata
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
@@ -1064,7 +1158,7 @@ class chunked_parquet_writer_options_builder {
    * @brief Sets Key-Value footer metadata in parquet_writer_options.
    *
    * @param metadata Key-Value footer metadata
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& key_value_metadata(
     std::vector<std::map<std::string, std::string>> metadata)
@@ -1078,8 +1172,8 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
    *
-   * @param sf Level of statistics requested in the output file.
-   * @return this for chaining.
+   * @param sf Level of statistics requested in the output file
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
@@ -1090,8 +1184,8 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Sets compression type to chunked_parquet_writer_options.
    *
-   * compression The compression type to use.
-   * @return this for chaining.
+   * @param compression The compression type to use
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& compression(compression_type compression)
   {
@@ -1105,8 +1199,8 @@ class chunked_parquet_writer_options_builder {
    * not an internal type for cudf, it needs to be written for backwards
    * compatibility reasons.
    *
-   * @param enabled Boolean value to enable/disable int96 timestamps.
-   * @return this for chaining.
+   * @param enabled Boolean value to enable/disable int96 timestamps
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& int96_timestamps(bool enabled)
   {
@@ -1118,7 +1212,7 @@ class chunked_parquet_writer_options_builder {
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param val maximum row group size
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& row_group_size_bytes(size_t val)
   {
@@ -1129,8 +1223,8 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Sets the maximum number of rows in output row groups.
    *
-   * @param val maximum number of rows
-   * @return this for chaining.
+   * @param val maximum number or rows
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
@@ -1139,12 +1233,13 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
-   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
-   * bytes, and will be adjusted to match if it is.
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * Serves as a hint to the writer, and can be exceeded under certain circumstances. Cannot be
+   * larger than the row group size in bytes, and will be adjusted to match if it is.
    *
    * @param val maximum page size
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& max_page_size_bytes(size_t val)
   {
@@ -1157,7 +1252,7 @@ class chunked_parquet_writer_options_builder {
    * Cannot be larger than the row group size in rows, and will be adjusted to match if it is.
    *
    * @param val maximum rows per page
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& max_page_size_rows(size_type val)
   {
@@ -1174,6 +1269,8 @@ class chunked_parquet_writer_options_builder {
    * @brief move chunked_parquet_writer_options member once it's is built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `chunked_parquet_writer_options` object's r-value reference
    */
   chunked_parquet_writer_options&& build() { return std::move(options); }
 };
@@ -1239,7 +1336,7 @@ class parquet_chunked_writer {
   std::unique_ptr<std::vector<uint8_t>> close(
     std::vector<std::string> const& column_chunks_file_paths = {});
 
-  // Unique pointer to impl writer class
+  /// Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::parquet::writer> writer;
 };
 

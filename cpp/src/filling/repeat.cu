@@ -26,6 +26,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -165,7 +166,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, check_count, rmm::cuda_stream_default, mr);
+  return detail::repeat(input_table, count, check_count, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -173,7 +174,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, rmm::cuda_stream_default, mr);
+  return detail::repeat(input_table, count, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

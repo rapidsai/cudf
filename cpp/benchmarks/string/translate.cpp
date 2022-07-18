@@ -24,6 +24,7 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -53,7 +54,7 @@ static void BM_translate(benchmark::State& state, int entry_count)
                  });
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::translate(input, entries);
   }
 

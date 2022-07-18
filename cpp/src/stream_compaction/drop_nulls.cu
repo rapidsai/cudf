@@ -21,6 +21,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -90,7 +91,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nulls(input, keys, keep_threshold, rmm::cuda_stream_default, mr);
+  return cudf::detail::drop_nulls(input, keys, keep_threshold, cudf::default_stream_value, mr);
 }
 /*
  * Filters a table to remove null elements.
@@ -100,7 +101,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nulls(input, keys, keys.size(), rmm::cuda_stream_default, mr);
+  return cudf::detail::drop_nulls(input, keys, keys.size(), cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

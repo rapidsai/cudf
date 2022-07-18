@@ -34,6 +34,7 @@
  * redefines them properly.
  */
 
+// @cond
 #define Types      Types_NOT_USED
 #define Types0     Types0_NOT_USED
 #define TypeList   TypeList_NOT_USED
@@ -89,15 +90,35 @@ struct TypeList<Types<TYPES...>> {
 
 }  // namespace internal
 }  // namespace testing
+// @endcond
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+/**
+ * @brief test macro to be expects `expr` to return cudaSuccess
+ *
+ * This will stop the test process on failure.
+ *
+ * @param expr expression to be tested
+ */
 #define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
+/**
+ * @brief test macro to be expects `expr` to return cudaSuccess
+ *
+ * @param expr expression to be tested
+ */
 #define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
 
-// Utility for testing the expectation that an expression x throws the specified
-// exception whose what() message ends with the msg
+/**
+ * @brief Utility for testing the expectation that an expression x throws the specified
+ * exception whose what() message ends with the msg
+ *
+ * @param x The expression to test
+ * @param exception The exception type to test for
+ * @param startswith The start of the expected message
+ * @param endswith The end of the expected message
+ */
 #define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)    \
   do {                                                              \
     EXPECT_THROW(                                                   \
@@ -114,17 +135,36 @@ struct TypeList<Types<TYPES...>> {
       exception);                                                   \
   } while (0)
 
+/**
+ * @brief test macro to be expected to throw cudf::logic_error with a message
+ *
+ * @param x The statement to be tested
+ * @param msg The message associated with the exception
+ */
 #define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
 
+/**
+ * @brief test macro to be expected to throw cudf::cuda_error with a message
+ *
+ * @param x The statement to be tested
+ * @param msg The message associated with the exception
+ */
 #define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
 
+/**
+ * @brief test macro to be expected to throw cudf::fatal_logic_error with a message
+ *
+ * @param x The statement to be tested
+ * @param msg The message associated with the exception
+ */
 #define FATAL_CUDA_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::fatal_cuda_error, "Fatal CUDA error encountered at:", msg)
 
 /**
  * @brief test macro to be expected as no exception.
+ *
  * The testing is same with EXPECT_NO_THROW() in gtest.
  * It also outputs captured error message, useful for debugging.
  *

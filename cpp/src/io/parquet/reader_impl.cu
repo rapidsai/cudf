@@ -590,7 +590,8 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters and reduces down to a selection of columns
    *
-   * @param use_names List of paths of column names to select
+   * @param use_names List of paths of column names to select; `nullopt` if user did not select
+   * columns to read
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
@@ -598,7 +599,7 @@ class aggregate_reader_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  [[nodiscard]] auto select_columns(std::vector<std::string> const& use_names,
+  [[nodiscard]] auto select_columns(std::optional<std::vector<std::string>> const& use_names,
                                     bool include_index,
                                     bool strings_to_categorical,
                                     type_id timestamp_type_id) const
@@ -724,7 +725,7 @@ class aggregate_reader_metadata {
     // ["name", "firstname"]
     //
     auto const& root = get_schema(0);
-    if (use_names.empty()) {
+    if (not use_names.has_value()) {
       for (auto const& schema_idx : root.children_idx) {
         build_column(nullptr, schema_idx, output_columns);
         output_column_schemas.push_back(schema_idx);
@@ -752,7 +753,7 @@ class aggregate_reader_metadata {
 
       // Find which of the selected paths are valid and get their schema index
       std::vector<path_info> valid_selected_paths;
-      for (auto const& selected_path : use_names) {
+      for (auto const& selected_path : *use_names) {
         auto found_path =
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
             return valid_path.full_path == selected_path;
@@ -1101,15 +1102,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
   size_t total_decomp_size = 0;
 
   struct codec_stats {
-    parquet::Compression compression_type;
-    size_t num_pages;
-    int32_t max_decompressed_size;
+    parquet::Compression compression_type = UNCOMPRESSED;
+    size_t num_pages                      = 0;
+    int32_t max_decompressed_size         = 0;
+    size_t total_decomp_size              = 0;
   };
 
-  std::array codecs{codec_stats{parquet::GZIP, 0, 0},
-                    codec_stats{parquet::SNAPPY, 0, 0},
-                    codec_stats{parquet::BROTLI, 0, 0},
-                    codec_stats{parquet::ZSTD, 0, 0}};
+  std::array codecs{codec_stats{parquet::GZIP},
+                    codec_stats{parquet::SNAPPY},
+                    codec_stats{parquet::BROTLI},
+                    codec_stats{parquet::ZSTD}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == parquet::UNCOMPRESSED) return true;
@@ -1128,6 +1130,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
     for_each_codec_page(codec.compression_type, [&](size_t page) {
       auto page_uncomp_size = pages[page].uncompressed_page_size;
       total_decomp_size += page_uncomp_size;
+      codec.total_decomp_size += page_uncomp_size;
       codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
       codec.num_pages++;
       num_comp_pages++;
@@ -1187,6 +1190,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                      d_comp_out,
                                      d_comp_stats_view,
                                      codec.max_decompressed_size,
+                                     codec.total_decomp_size,
                                      stream);
         } else {
           gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
@@ -1198,6 +1202,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                    d_comp_out,
                                    d_comp_stats_view,
                                    codec.max_decompressed_size,
+                                   codec.total_decomp_size,
                                    stream);
         break;
       case parquet::BROTLI:

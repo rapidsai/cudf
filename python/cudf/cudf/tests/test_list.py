@@ -84,7 +84,7 @@ def test_leaves(data):
     assert_eq(
         expect,
         got,
-        check_dtype=False if isinstance(pa_array, pa.NullArray) else True,
+        check_dtype=not isinstance(pa_array, pa.NullArray),
     )
 
 
@@ -276,9 +276,7 @@ def test_get(data, index, expect):
     expect = cudf.Series(expect)
     got = sr.list.get(index)
 
-    assert_eq(
-        expect, got, check_dtype=False if expect.isnull().all() else True
-    )
+    assert_eq(expect, got, check_dtype=not expect.isnull().all())
 
 
 def test_get_nested_lists():

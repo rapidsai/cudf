@@ -525,5 +525,5 @@ def test_dask_struct_field_Int_Error(data):
 def test_struct_explode(data):
     expect = Series(data).struct.explode()
     got = dgd.from_cudf(Series(data), 2).struct.explode()
-
-    assert_eq(expect, got.compute())
+    # Output index will not agree for >1 partitions
+    assert_eq(expect, got.compute().reset_index(drop=True))

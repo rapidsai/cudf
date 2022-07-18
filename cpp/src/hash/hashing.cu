@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -113,7 +114,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, seed, rmm::cuda_stream_default, mr);
+  return detail::hash(input, hash_function, seed, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 
 #include <new>
 
+#include <cudf/utilities/default_stream.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
@@ -36,14 +38,14 @@ struct managed_allocator {
   {
   }
 
-  T* allocate(std::size_t n, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  T* allocate(std::size_t n, rmm::cuda_stream_view stream = cudf::default_stream_value) const
   {
     return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
   }
 
   void deallocate(T* p,
                   std::size_t n,
-                  rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+                  rmm::cuda_stream_view stream = cudf::default_stream_value) const
   {
     mr->deallocate(p, n * sizeof(T), stream);
   }
@@ -72,14 +74,14 @@ struct default_allocator {
   {
   }
 
-  T* allocate(std::size_t n, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  T* allocate(std::size_t n, rmm::cuda_stream_view stream = cudf::default_stream_value) const
   {
     return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
   }
 
   void deallocate(T* p,
                   std::size_t n,
-                  rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+                  rmm::cuda_stream_view stream = cudf::default_stream_value) const
   {
     mr->deallocate(p, n * sizeof(T), stream);
   }

@@ -129,7 +129,7 @@ For example, `s.sum()` is not guaranteed to produce identical results
 to Pandas nor produce identical results from run to run, when `s` is a
 Series of floats.  If you need to compare floating point results, you
 should typically do so using the functions provided in the
-[`cudf.testing`](/api_docs/general_utilities.html#testing-functions)
+[`cudf.testing`](/api_docs/general_utilities#testing-functions)
 module, which allow you to compare values up to a desired precision.
 
 ## Column names

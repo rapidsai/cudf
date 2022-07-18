@@ -29,13 +29,6 @@ namespace cudf {
 using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
- * @brief The string length is initialized to this value as a place-holder
- *
- * The number of characters in a string computed on-demand.
- */
-constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
-
-/**
  * @brief A non-owning, immutable view of device data that is a variable length
  * char array representing a UTF-8 string.
  *
@@ -50,19 +43,27 @@ class string_view {
  public:
   /**
    * @brief Return the number of bytes in this string
+   *
+   * @return The number of bytes in this string
    */
   CUDF_HOST_DEVICE [[nodiscard]] inline size_type size_bytes() const { return _bytes; }
   /**
    * @brief Return the number of characters in this string
+   *
+   * @return The number of characters in this string
    */
   __device__ [[nodiscard]] inline size_type length() const;
   /**
    * @brief Return a pointer to the internal device array
+   *
+   * @return A pointer to the internal device array
    */
   CUDF_HOST_DEVICE [[nodiscard]] inline const char* data() const { return _data; }
 
   /**
    * @brief Return true if string has no characters
+   *
+   * @return true if string has no characters
    */
   CUDF_HOST_DEVICE [[nodiscard]] inline bool empty() const { return size_bytes() == 0; }
 
@@ -70,6 +71,7 @@ class string_view {
    * @brief Handy iterator for navigating through encoded characters.
    */
   class const_iterator {
+    /// @cond
    public:
     using difference_type   = ptrdiff_t;
     using value_type        = char_utf8;
@@ -104,14 +106,19 @@ class string_view {
     size_type bytes{};
     size_type char_pos{};
     size_type byte_pos{};
+    /// @endcond
   };
 
   /**
    * @brief Return new iterator pointing to the beginning of this string
+   *
+   * @return new iterator pointing to the beginning of this string
    */
   __device__ [[nodiscard]] inline const_iterator begin() const;
   /**
    * @brief Return new iterator pointing past the end of this string
+   *
+   * @return new iterator pointing past the end of this string
    */
   __device__ [[nodiscard]] inline const_iterator end() const;
 
@@ -119,12 +126,14 @@ class string_view {
    * @brief Return single UTF-8 character at the given character position
    *
    * @param pos Character position
+   * @return UTF-8 character at the given character position
    */
   __device__ inline char_utf8 operator[](size_type pos) const;
   /**
    * @brief Return the byte offset from data() for a given character position
    *
    * @param pos Character position
+   * @return Byte offset from data() for a given character position
    */
   __device__ [[nodiscard]] inline size_type byte_offset(size_type pos) const;
 
@@ -160,26 +169,44 @@ class string_view {
 
   /**
    * @brief Returns true if rhs matches this string exactly.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if rhs matches this string exactly
    */
   __device__ inline bool operator==(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs does not match this string.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if rhs does not match this string
    */
   __device__ inline bool operator!=(const string_view& rhs) const;
   /**
    * @brief Returns true if this string is ordered before rhs.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if this string is ordered before rhs
    */
   __device__ inline bool operator<(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs is ordered before this string.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if rhs is ordered before this string
    */
   __device__ inline bool operator>(const string_view& rhs) const;
   /**
    * @brief Returns true if this string matches or is ordered before rhs.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if this string matches or is ordered before rhs
    */
   __device__ inline bool operator<=(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs matches or is ordered before this string.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if rhs matches or is ordered before this string
    */
   __device__ inline bool operator>=(const string_view& rhs) const;
 
@@ -191,7 +218,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if str is not found in this string.
+   * @return npos if str is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type find(const string_view& str,
                                                  size_type pos   = 0,
@@ -205,7 +232,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ inline size_type find(const char* str,
                                    size_type bytes,
@@ -219,7 +246,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type find(char_utf8 character,
                                                  size_type pos   = 0,
@@ -232,7 +259,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type rfind(const string_view& str,
                                                   size_type pos   = 0,
@@ -246,7 +273,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ inline size_type rfind(const char* str,
                                     size_type bytes,
@@ -260,7 +287,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type rfind(char_utf8 character,
                                                   size_type pos   = 0,
@@ -313,16 +340,40 @@ class string_view {
   {
   }
 
-  string_view(const string_view&) = default;
-  string_view(string_view&&)      = default;
+  string_view(const string_view&) = default;  ///< Copy constructor
+  string_view(string_view&&)      = default;  ///< Move constructor
   ~string_view()                  = default;
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this instance
+   */
   string_view& operator=(const string_view&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this instance (after transferring ownership)
+   */
   string_view& operator=(string_view&&) = default;
+
+  /**
+   * @brief No-position value.
+   *
+   * Used when specifying or returning an invalid or unknown character position value.
+   */
+  static inline cudf::size_type const npos{-1};
 
  private:
   const char* _data{};          ///< Pointer to device memory contain char array for this string
   size_type _bytes{};           ///< Number of bytes in _data for this string
   mutable size_type _length{};  ///< Number of characters in this string (computed)
+
+  /**
+   * @brief The string length is initialized to this value as a place-holder
+   *
+   * The number of characters in a string is computed on-demand.
+   */
+  static inline cudf::size_type const UNKNOWN_STRING_LENGTH{-1};
 
   /**
    * @brief Return the character position of the given byte offset.
@@ -331,6 +382,23 @@ class string_view {
    * @return The character position for the specified byte.
    */
   __device__ [[nodiscard]] inline size_type character_offset(size_type bytepos) const;
+
+  /**
+   * @brief Common internal implementation for string_view::find and string_view::rfind.
+   *
+   * @tparam forward True for find and false for rfind
+   *
+   * @param str Target string to search with this string
+   * @param bytes Number of bytes in str
+   * @param pos Character position to start search within this string
+   * @param count Number of characters from pos to include in the search
+   * @return npos if str is not found in this string
+   */
+  template <bool forward>
+  __device__ inline size_type find_impl(const char* str,
+                                        size_type bytes,
+                                        size_type pos,
+                                        size_type count) const;
 };
 
 }  // namespace cudf
