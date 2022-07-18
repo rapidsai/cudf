@@ -66,9 +66,14 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import (
+    BaseIndex,
+    Index,
+    RangeIndex,
+    _index_from_data,
+    as_index,
+)
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -76,6 +81,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.join import Merge, MergeSemi
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
@@ -1648,7 +1654,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if 1 == first_data_column_position:
                 table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
-                table_index = Frame(
+                table_index = DataFrame._from_data(
                     data=dict(
                         zip(
                             indices[:first_data_column_position],
@@ -1657,7 +1663,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             tables.append(
-                Frame(
+                DataFrame._from_data(
                     data=dict(
                         zip(
                             indices[first_data_column_position:],
@@ -3168,7 +3174,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 except OverflowError:
                     index_data = self.index._data.copy(deep=True)
 
-                out = DataFrame(index=self.index._from_data(index_data))
+                out = DataFrame(index=_index_from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 
@@ -3465,6 +3471,72 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(False, n, columns, keep)
 
     @_cudf_nvtx_annotate
+    def swaplevel(self, i=-2, j=-1, axis=0):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level of index to be swapped.
+        j : int or str, default -1
+            Second level of index to be swapped.
+        axis : The axis to swap levels on.
+            0 or 'index' for row-wise, 1 or 'columns' for column-wise.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(levels=[['llama', 'cow', 'falcon'],
+        ...   ['speed', 'weight', 'length'],['first','second']],
+        ...   codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        ...             [0, 0, 0, 0, 0, 0, 1, 1, 1]])
+        >>> cdf = cudf.DataFrame(index=midx, columns=['big', 'small'],
+        ...  data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
+        ...         [250, 150], [1.5, 0.8], [320, 250], [1, 0.8], [0.3, 0.2]])
+
+        >>> cdf
+                                     big  small
+             llama  speed  first    45.0   30.0
+                    weight first   200.0  100.0
+                    length first     1.5    1.0
+             cow    speed  first    30.0   20.0
+                    weight first   250.0  150.0
+                    length first     1.5    0.8
+             falcon speed  second  320.0  250.0
+                    weight second    1.0    0.8
+                    length second    0.3    0.2
+
+        >>> cdf.swaplevel()
+                                     big  small
+             llama  first  speed    45.0   30.0
+                           weight  200.0  100.0
+                           length    1.5    1.0
+             cow    first  speed    30.0   20.0
+                           weight  250.0  150.0
+                           length    1.5    0.8
+             falcon second speed   320.0  250.0
+                           weight    1.0    0.8
+                           length    0.3    0.2
+        """
+        result = self.copy()
+
+        # To get axis number
+        axis = self._get_axis_from_axis_arg(axis)
+
+        if axis == 0:
+            if not isinstance(result.index, MultiIndex):
+                raise TypeError("Can only swap levels on a hierarchical axis.")
+            result.index = result.index.swaplevel(i, j)
+        else:
+            if not result._data.multiindex:
+                raise TypeError("Can only swap levels on a hierarchical axis.")
+            result._data = result._data.swaplevel(i, j)
+
+        return result
+
+    @_cudf_nvtx_annotate
     def transpose(self):
         """Transpose index and columns.
 
@@ -3659,9 +3731,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - For outer joins, the result will be the union of categories
         from both sides.
         """
-        # Compute merge
-        gdf_result = super()._merge(
-            right,
+        if indicator:
+            raise NotImplementedError(
+                "Only indicator=False is currently supported"
+            )
+
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')"
+                % (lsuffix or "_x", rsuffix or "_y")
+            )
+        else:
+            lsuffix, rsuffix = suffixes
+
+        lhs, rhs = self, right
+        merge_cls = Merge
+        if how == "right":
+            # Merge doesn't support right, so just swap
+            how = "left"
+            lhs, rhs = right, self
+            left_on, right_on = right_on, left_on
+            left_index, right_index = right_index, left_index
+            suffixes = (suffixes[1], suffixes[0])
+        elif how in {"leftsemi", "leftanti"}:
+            merge_cls = MergeSemi
+
+        return merge_cls(
+            lhs,
+            rhs,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -3671,10 +3771,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
-        )
-        return gdf_result
+        ).perform_merge()
 
     @_cudf_nvtx_annotate
     def join(
@@ -3710,6 +3807,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+        if on is not None:
+            raise NotImplementedError("The on parameter is not yet supported")
 
         df = self.merge(
             other,
@@ -6988,7 +7087,9 @@ def from_pandas(obj, nan_as_null=None):
 
 @_cudf_nvtx_annotate
 def merge(left, right, *args, **kwargs):
-    return super(type(left), left)._merge(right, *args, **kwargs)
+    if isinstance(left, Series):
+        left = left.to_frame()
+    return left.merge(right, *args, **kwargs)
 
 
 # a bit of fanciness to inject docstring with left parameter
@@ -6996,7 +7097,11 @@ merge_doc = DataFrame.merge.__doc__
 if merge_doc is not None:
     idx = merge_doc.find("right")
     merge.__doc__ = "".join(
-        [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
+        [
+            merge_doc[:idx],
+            "\n\tleft : Series or DataFrame\n\t",
+            merge_doc[idx:],
+        ]
     )
 
 

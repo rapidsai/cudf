@@ -201,11 +201,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             cudf.Series(
                 cudf.core.column.column_empty(
                     len(self.obj), "int8", masked=False
-                )
+                ),
+                index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
-            .reset_index(drop=True)
         )
 
     def rank(
@@ -343,7 +343,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not self._as_index:
             result = result.reset_index()
-
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
@@ -1416,6 +1415,48 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
+
+    def pct_change(
+        self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
+    ):
+        """
+        Calculates the percent change between sequential elements
+        in the group.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : str, default 'ffill'
+            How to handle NAs before computing percent changes.
+        limit : int, optional
+            The number of consecutive NAs to fill before stopping.
+            Not yet implemented.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+
+        Returns
+        -------
+        Series or DataFrame
+            Percentage changes within each group
+        """
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+        if limit is not None:
+            raise NotImplementedError("limit parameter not supported yet.")
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+            raise ValueError(
+                "fill_method must be one of 'ffill', 'pad', "
+                "'bfill', or 'backfill'."
+            )
+
+        filled = self.fillna(method=fill_method, limit=limit)
+        fill_grp = filled.groupby(self.grouping)
+        shifted = fill_grp.shift(periods=periods, freq=freq)
+        return (filled / shifted) - 1
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries

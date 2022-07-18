@@ -16,10 +16,10 @@
 
 #include <strings/char_types/char_cases.h>
 #include <strings/char_types/char_flags.h>
-#include <strings/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 

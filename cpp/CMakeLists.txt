@@ -369,7 +369,6 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
-  src/lists/apply_boolean_mask.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -387,6 +386,9 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/stream_compaction/apply_boolean_mask.cu
+  src/lists/stream_compaction/distinct.cu
+  src/lists/utilities.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
@@ -427,14 +429,17 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/rolling_collect_list.cu
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
-  src/rolling/rolling_collect_list.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/contains.cu
+  src/search/contains_column.cu
+  src/search/contains_table.cu
   src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
@@ -450,6 +455,7 @@ add_library(
   src/stream_compaction/distinct_reduce.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
