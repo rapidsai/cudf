@@ -60,6 +60,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
+#include <cuda/std/climits>
 #include <cuda/std/limits>
 
 #include <memory>

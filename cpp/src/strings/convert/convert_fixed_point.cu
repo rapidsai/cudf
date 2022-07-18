@@ -41,6 +41,7 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
+#include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
