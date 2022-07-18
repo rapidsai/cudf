@@ -15,7 +15,7 @@ All Cython code is contained in `python/cudf/cudf/_lib`.
 cuDF employs a number of linters to ensure consistent style across the code base.
 We manage our linters using [`pre-commit`](https://pre-commit.com/).
 Developers are strongly recommended to set up `pre-commit` prior to any development.
-The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth for what linters are used and their configuration.
+The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth linting.
 Specifically, cuDF uses the following tools:
 
 - [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance. 
@@ -25,6 +25,17 @@ Specifically, cuDF uses the following tools:
   In conjunction with [type hints](https://docs.python.org/3/library/typing.html),
   `mypy` can help catch various bugs that are otherwise difficult to find.
 - [`pydocstyle`](https://github.com/PyCQA/pydocstyle/) lints docstring style.
+
+Linter config data is stored in a number of files.
+We generally use `pyproject.toml` over `setup.cfg` and avoid project-specific files (e.g. `setup.cfg` > `python/cudf/setup.cfg`).
+However, differences between tools and the different packages in the repo result in the following caveats:
+
+- `flake8` has no plans to support `pyproject.toml`, so it must live in `setup.cfg`.
+- `isort` must be configured per project to set which project is the "first party" project.
+
+Additionally, our use of `versioneer` means that each project must have a `setup.cfg`.
+As a result, we maintain both root and project-level `pyproject.toml` and `setup.cfg` files.
+
 
 For more information, see the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
