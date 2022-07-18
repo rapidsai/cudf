@@ -4,4 +4,4 @@
 :maxdepth: 2
 
 library_design
-config
+options
