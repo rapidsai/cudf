@@ -22,6 +22,7 @@ More specific information on these can be found in the pages below:
 :maxdepth: 1
 
 library_design
+documentation
 ```
 
 The rest of this document focuses on a high-level overview of best practices in cuDF.
