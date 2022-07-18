@@ -16,7 +16,12 @@
 
 #pragma once
 
-#include <cudf/lists/set_operations.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/types.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::lists::detail {
 
