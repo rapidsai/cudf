@@ -299,11 +299,9 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result   = cudf::left_anti_join(left, right, {0}, {0});
-  auto expected = [] {
-    column_wrapper<int32_t> child1{{null}, cudf::test::iterators::null_at(0)};
-    column_wrapper<int32_t> child2{12};
-    return cudf::test::structs_column_wrapper{{child1, child2}};
-  }();
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
+  auto result      = cudf::left_anti_join(left, right);
+  auto result_span = cudf::device_span<cudf::size_type const>{*result};
+  auto result_col  = cudf::column_view{result_span};
+  auto expected    = column_wrapper<cudf::size_type>{1};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_col);
 }
