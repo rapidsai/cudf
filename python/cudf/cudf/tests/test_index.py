@@ -2518,3 +2518,50 @@ def test_isin_multiindex(data, values, level, err):
                 "squences  when `level=None`."
             ),
         )
+
+
+range_data = [
+    range(np.random.randint(0, 100)),
+    range(9, 12, 2),
+    range(20, 30),
+    range(100, 1000, 10),
+    range(0, 10, -2),
+    range(0, -10, 2),
+    range(0, -10, -2),
+]
+
+
+@pytest.fixture(params=range_data)
+def rangeindex(request):
+    """Create a cudf RangeIndex of different `nrows`"""
+    return RangeIndex(request.param)
+
+
+def test_rangeindex_nunique(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.nunique()
+    expected = pidx.nunique()
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_min(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.min()
+    expected = pidx.min()
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_max(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.max()
+    expected = pidx.max()
+
+    assert_eq(expected, actual)
