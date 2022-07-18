@@ -24,12 +24,10 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
-    is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_integer,
     is_integer_dtype,
-    is_interval_dtype,
     is_list_dtype,
     is_scalar,
     is_struct_dtype,
@@ -38,6 +36,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
+    IntervalColumn,
     TimeDeltaColumn,
     arange,
     as_column,
@@ -1148,14 +1147,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     )
                 )
             else:
-                if is_categorical_dtype(self):
-                    if is_interval_dtype(
-                        self.dtype.categories
-                    ) and is_struct_dtype(preprocess._column.categories):
-                        # with a series input the IntervalIndex's are turn
-                        # into a struct dtype this line will change the
-                        # categories back to an intervalIndex.
-                        preprocess.dtype._categories = self.dtype.categories
                 pd_series = preprocess.to_pandas()
             output = pd_series.to_string(
                 name=self.name,
@@ -1169,7 +1160,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
-
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             if preprocess._column.categories.dtype.kind == "f":
@@ -2752,7 +2742,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         bins : int, optional
             Rather than count values, group them into half-open bins,
-            works with numeric data. This Parameter is not yet supported.
+            only works with numeric data.
 
         dropna : bool, default True
             Don’t include counts of NaN and None.
@@ -2824,9 +2814,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         <NA>    2
         1.0     1
         dtype: int32
+
+        >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
+        >>> s.value_counts(bins=3)
+        (2.0, 3.0]      2
+        (0.996, 2.0]    2
+        (3.0, 4.0]      1
+        dtype: int32
         """
         if bins is not None:
-            raise NotImplementedError("bins is not yet supported")
+            series_bins = cudf.cut(self, bins, include_lowest=True)
 
         if dropna and self.null_count == len(self):
             return Series(
@@ -2836,7 +2833,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 index=cudf.Index([], dtype=self.dtype),
             )
 
-        res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+        if bins is not None:
+            res = self.groupby(series_bins, dropna=dropna).count(dropna=dropna)
+            res = res[res.index.notna()]
+        else:
+            res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+
         res.index.name = None
 
         if sort:
@@ -2844,6 +2846,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         if normalize:
             res = res / float(res._column.sum())
+
+        # Pandas returns an IntervalIndex as the index of res
+        # this condition makes sure we do too if bins is given
+        if bins is not None and len(res) == len(res.index.categories):
+            int_index = IntervalColumn.as_interval_column(
+                res.index._column, res.index.categories.dtype
+            )
+            res.index = int_index
+
         return res
 
     @_cudf_nvtx_annotate

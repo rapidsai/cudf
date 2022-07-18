@@ -437,12 +437,12 @@ class Series(_Frame, dd.core.Series):
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
 
-    @property
+    @property  # type: ignore
     @_dask_cudf_nvtx_annotate
     def list(self):
         return ListMethods(self)
 
-    @property
+    @property  # type: ignore
     @_dask_cudf_nvtx_annotate
     def struct(self):
         return StructMethods(self)
