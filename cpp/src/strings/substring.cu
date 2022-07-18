@@ -274,7 +274,7 @@ void compute_substring_indices(column_device_view const& d_column,
         for (auto i = 0; i < nsearches; ++i) {
           char_pos = left_to_right ? col_val.find(delim_val, start_pos)
                                    : col_val.rfind(delim_val, 0, end_pos);
-          if (char_pos == -1) return;
+          if (char_pos == string_view::npos) return;
           if (left_to_right)
             start_pos = char_pos + delimiter_len;
           else

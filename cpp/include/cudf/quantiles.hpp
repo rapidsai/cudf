@@ -21,6 +21,8 @@
 #include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 /**
  * @addtogroup column_quantiles
