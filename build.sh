@@ -165,7 +165,7 @@ function buildLibCudfJniInDocker {
                                      -DCMAKE_CXX_LINKER_LAUNCHER=ccache' \
                 -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
-                -DPER_THREAD_DEFAULT_STREAM=ON \
+                -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DUSE_GDS=ON \
                 -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
  public:
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
 };
 
 template <typename T>

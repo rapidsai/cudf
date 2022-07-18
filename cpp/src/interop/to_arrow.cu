@@ -25,6 +25,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -414,7 +415,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 {
   CUDF_FUNC_RANGE();
 
-  return detail::to_arrow(input, metadata, rmm::cuda_stream_default, ar_mr);
+  return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
 }
 
 }  // namespace cudf

@@ -354,7 +354,7 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
     fname = tmpdir.join("test_pq_reader_index_col.parquet")
 
     # PANDAS' PyArrow backend always writes the index unless disabled
-    df.to_parquet(fname, index=(False if index_col is None else True))
+    df.to_parquet(fname, index=(index_col is not None))
     assert os.path.exists(fname)
 
     pdf = pd.read_parquet(fname, columns=columns)
@@ -1960,7 +1960,7 @@ def test_write_read_cudf(tmpdir, pdf):
     gdf.to_parquet(file_path)
     gdf = cudf.read_parquet(file_path)
 
-    assert_eq(gdf, pdf, check_index_type=False if pdf.empty else True)
+    assert_eq(gdf, pdf, check_index_type=not pdf.empty)
 
 
 def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
@@ -1978,7 +1978,7 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
     cudf_res = pd.read_parquet(cudf_path)
     pd_res = pd.read_parquet(pandas_path)
 
-    assert_eq(pd_res, cudf_res, check_index_type=False if pdf.empty else True)
+    assert_eq(pd_res, cudf_res, check_index_type=not pdf.empty)
 
     cudf_res = pa.parquet.read_table(
         cudf_path, use_pandas_metadata=True
@@ -1987,7 +1987,7 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
         pandas_path, use_pandas_metadata=True
     ).to_pandas()
 
-    assert_eq(cudf_res, pd_res, check_index_type=False if pdf.empty else True)
+    assert_eq(cudf_res, pd_res, check_index_type=not pdf.empty)
 
 
 def test_parquet_writer_criteo(tmpdir):
@@ -2430,7 +2430,7 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    nullable = True if num_rows > 0 else False
+    nullable = num_rows > 0
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
@@ -2550,6 +2550,24 @@ def test_parquet_reader_zstd_compression(datadir):
         assert_eq(df, pdf)
     except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_read_parquet_multiple_files(tmpdir):
+    df_1_path = tmpdir / "df_1.parquet"
+    df_2_path = tmpdir / "df_2.parquet"
+    df_1 = cudf.DataFrame({"id": range(100), "a": [1] * 100})
+    df_1.to_parquet(df_1_path)
+
+    df_2 = cudf.DataFrame({"id": range(200, 2200), "a": [2] * 2000})
+    df_2.to_parquet(df_2_path)
+
+    expected = pd.read_parquet([df_1_path, df_2_path])
+    actual = cudf.read_parquet([df_1_path, df_2_path])
+    assert_eq(expected, actual)
+
+    expected = pd.read_parquet([df_2_path, df_1_path])
+    actual = cudf.read_parquet([df_2_path, df_1_path])
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("index", [True, False, None])

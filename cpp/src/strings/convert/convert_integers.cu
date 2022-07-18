@@ -26,6 +26,7 @@
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/convert/utilities.cuh>
 
@@ -182,7 +183,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, rmm::cuda_stream_default, mr);
+  return detail::is_integer(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
@@ -190,7 +191,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, int_type, rmm::cuda_stream_default, mr);
+  return detail::is_integer(strings, int_type, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -283,7 +284,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::to_integers(strings, output_type, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -404,7 +405,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, rmm::cuda_stream_default, mr);
+  return detail::from_integers(integers, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

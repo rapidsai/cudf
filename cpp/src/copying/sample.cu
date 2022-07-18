@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -93,6 +94,6 @@ std::unique_ptr<table> sample(table_view const& input,
 {
   CUDF_FUNC_RANGE();
 
-  return detail::sample(input, n, replacement, seed, rmm::cuda_stream_default, mr);
+  return detail::sample(input, n, replacement, seed, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

@@ -4776,38 +4776,42 @@ public class TableTest extends CudfTestBase {
           //  a) excluding NULLs
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
+               ColumnVector resultSorted = windowAggResults.getColumn(0).listSortRows(false, false);
                ColumnVector expected = ColumnVector.fromLists(
                    new ListType(false, new BasicType(false, DType.INT32)),
                    Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
                    Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
                    Arrays.asList(), Arrays.asList(6), Arrays.asList(6, 7), Arrays.asList(6, 7))) {
-            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expected, resultSorted);
           }
           //  b) including NULLs AND NULLs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNulls.onColumn(3).overWindow(winOpts));
+               ColumnVector resultSorted = windowAggResults.getColumn(0).listSortRows(false, false);
                ColumnVector expected = ColumnVector.fromLists(
                    new ListType(false, new BasicType(false, DType.INT32)),
                    Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
                    Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
                    Arrays.asList((Integer) null), Arrays.asList(6, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
-            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expected, resultSorted);
           }
           //  c) including NULLs AND NULLs are unequal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithUnEqNulls.onColumn(3).overWindow(winOpts));
+               ColumnVector resultSorted = windowAggResults.getColumn(0).listSortRows(false, false);
                ColumnVector expected = ColumnVector.fromLists(
                    new ListType(false, new BasicType(false, DType.INT32)),
                    Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
                    Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
                    Arrays.asList(null, null), Arrays.asList(6, null, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
-            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expected, resultSorted);
           }
 
           // Primitive type: FLOAT64
           //  a) excluding NULLs
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
+               ColumnVector resultSorted = windowAggResults.getColumn(0).listSortRows(false, false);
                ColumnVector expected = ColumnVector.fromLists(
                    new ListType(false, new BasicType(false, DType.FLOAT64)),
                    Arrays.asList(1.1), Arrays.asList(1.1), Arrays.asList(1.1, 2.2), Arrays.asList(2.2),
@@ -4815,11 +4819,12 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
                    Arrays.asList(1e-3), Arrays.asList(1e-3, Double.NaN),
                    Arrays.asList(Double.NaN, Double.NaN), Arrays.asList(Double.NaN, Double.NaN))) {
-            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expected, resultSorted);
           }
           //  b) including NULLs AND NULLs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNulls.onColumn(4).overWindow(winOpts));
+               ColumnVector resultSorted = windowAggResults.getColumn(0).listSortRows(false, false);
                ColumnVector expected = ColumnVector.fromLists(
                    new ListType(false, new BasicType(false, DType.FLOAT64)),
                    Arrays.asList(1.1), Arrays.asList(1.1, null), Arrays.asList(1.1, 2.2, null), Arrays.asList(2.2, null),
@@ -4827,11 +4832,12 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
                    Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
                    Arrays.asList(Double.NaN, Double.NaN, null), Arrays.asList(Double.NaN, Double.NaN))) {
-            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expected, resultSorted);
           }
           //  c) including NULLs AND NULLs are equal AND NaNs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNaNs.onColumn(4).overWindow(winOpts));
+               ColumnVector resultSorted = windowAggResults.getColumn(0).listSortRows(false, false);
                ColumnVector expected = ColumnVector.fromLists(
                    new ListType(false, new BasicType(false, DType.FLOAT64)),
                    Arrays.asList(1.1), Arrays.asList(1.1, null), Arrays.asList(1.1, 2.2, null), Arrays.asList(2.2, null),
@@ -4839,7 +4845,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
                    Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
                    Arrays.asList(Double.NaN, null), Arrays.asList(Double.NaN))) {
-            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expected, resultSorted);
           }
         }
       }
@@ -5309,6 +5315,56 @@ public class TableTest extends CudfTestBase {
               .aggregateWindows(RollingAggregation.mean().onColumn(3).overWindow(window));
                ColumnVector expect = ColumnVector.fromBoxedDoubles(6.0d, 5.0d, 5.0d, 5.0d, 8.0d, 8.0d, 7.0d, 6.0d, 4.0d, 4.0d, 4.0d, 6.0d)) {
             assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testWindowingNthElement() {
+    final Integer X = null;
+    try (Table unsorted = new Table.TestBuilder()
+        .column(  1,  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // 0: GBY Key
+        .column(  3,  3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1) // 1: GBY Key
+        .column( 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0) // 2: OBY Key
+        .column(  X,  4, 0, X, 4, X, 9, 7, 7, 3, 5, 7) // 3: Agg Column
+        .build()) {
+      try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
+           ColumnVector expectedSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 3, 7, 7, 9, X, 4, X, 0, 4, X)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectedSortedAggCol, sortedAggColumn);
+
+        try (Scalar one = Scalar.fromInt(1);
+             Scalar two = Scalar.fromInt(2);
+             WindowOptions window = WindowOptions.builder()
+                 .minPeriods(1)
+                 .window(two, one)
+                 .build()) {
+
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(
+                RollingAggregation.nth(0, NullPolicy.INCLUDE).onColumn(3).overWindow(window),
+                RollingAggregation.nth(-1, NullPolicy.INCLUDE).onColumn(3).overWindow(window),
+                RollingAggregation.nth(1, NullPolicy.INCLUDE).onColumn(3).overWindow(window),
+                RollingAggregation.nth(0, NullPolicy.EXCLUDE).onColumn(3).overWindow(window),
+                RollingAggregation.nth(-1, NullPolicy.EXCLUDE).onColumn(3).overWindow(window),
+                RollingAggregation.nth(1, NullPolicy.EXCLUDE).onColumn(3).overWindow(window));
+               ColumnVector expect_first = ColumnVector.fromBoxedInts(7, 7, 5, 3, 7, 7, 9, X, X, X, 0, 4);
+               ColumnVector expect_last = ColumnVector.fromBoxedInts(5, 3, 7, 7, 9, X, 4, 4, 0, 4, X, X);
+               ColumnVector expect_1th  = ColumnVector.fromBoxedInts(5, 5, 3, 7, 9, 9, X, 4, 0, 0, 4, X);
+               ColumnVector expect_first_skip_null  =
+                 ColumnVector.fromBoxedInts(7, 7, 5, 3, 7, 7, 9, 4, 0, 0, 0, 4);
+               ColumnVector expect_last_skip_null  =
+                 ColumnVector.fromBoxedInts(5, 3, 7, 7, 9, 9, 4, 4, 0, 4, 4, 4);
+               ColumnVector expect_1th_skip_null  =
+                 ColumnVector.fromBoxedInts(5, 5, 3, 7, 9, 9, 4, X, X, 4, 4, X)) {
+            assertColumnsAreEqual(expect_first, windowAggResults.getColumn(0));
+            assertColumnsAreEqual(expect_last, windowAggResults.getColumn(1));
+            assertColumnsAreEqual(expect_1th, windowAggResults.getColumn(2));
+            assertColumnsAreEqual(expect_first_skip_null, windowAggResults.getColumn(3));
+            assertColumnsAreEqual(expect_last_skip_null, windowAggResults.getColumn(4));
+            assertColumnsAreEqual(expect_1th_skip_null, windowAggResults.getColumn(5));
           }
         }
       }
@@ -6995,8 +7051,10 @@ public class TableTest extends CudfTestBase {
                  Arrays.asList(13, null, null), Arrays.asList(14, 15, null, null),
                  Arrays.asList(1, 4), Arrays.asList(0))
              .build();
-         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
-      assertTablesAreEqual(expected, found);
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1));
+         ColumnVector listsSorted = found.getColumn(1).listSortRows(false, false)) {
+      assertColumnsAreEqual(expected.getColumn(0), found.getColumn(0));
+      assertColumnsAreEqual(expected.getColumn(1), listsSorted);
     }
     // test with null equal and nan unequal
     collectSet = GroupByAggregation.collectSet(NullPolicy.INCLUDE,
@@ -7016,8 +7074,10 @@ public class TableTest extends CudfTestBase {
                  Arrays.asList(1.0, Double.NaN, null),
                  Arrays.asList((Integer) null))
              .build();
-         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
-      assertTablesAreEqual(expected, found);
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1));
+         ColumnVector listsSorted = found.getColumn(1).listSortRows(false, false)) {
+      assertColumnsAreEqual(expected.getColumn(0), found.getColumn(0));
+      assertColumnsAreEqual(expected.getColumn(1), listsSorted);
     }
     // test with null equal and nan equal
     collectSet = GroupByAggregation.collectSet(NullPolicy.INCLUDE,
@@ -7037,8 +7097,10 @@ public class TableTest extends CudfTestBase {
                  Arrays.asList(0.0),
                  Arrays.asList(Double.NaN, (Integer) null))
              .build();
-         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
-      assertTablesAreEqual(expected, found);
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1));
+         ColumnVector listsSorted = found.getColumn(1).listSortRows(false, false)) {
+      assertColumnsAreEqual(expected.getColumn(0), found.getColumn(0));
+      assertColumnsAreEqual(expected.getColumn(1), listsSorted);
     }
   }
 
@@ -7084,10 +7146,18 @@ public class TableTest extends CudfTestBase {
          Table retListOfInts = input.groupBy(0).aggregate(GroupByAggregation.mergeSets().onColumn(1));
          Table retListOfDoubles = input.groupBy(0).aggregate(GroupByAggregation.mergeSets().onColumn(2));
          Table retListOfDoublesNaNEq = input.groupBy(0).aggregate(
-             GroupByAggregation.mergeSets(NullEquality.UNEQUAL, NaNEquality.ALL_EQUAL).onColumn(2))) {
-      assertTablesAreEqual(expectedListOfInts, retListOfInts);
-      assertTablesAreEqual(expectedListOfDoubles, retListOfDoubles);
-      assertTablesAreEqual(expectedListOfDoublesNaNEq, retListOfDoublesNaNEq);
+             GroupByAggregation.mergeSets(NullEquality.UNEQUAL, NaNEquality.ALL_EQUAL).onColumn(2));
+         ColumnVector listsIntsSorted = retListOfInts.getColumn(1).listSortRows(false, false);
+         ColumnVector listsDoublesSorted = retListOfDoubles.getColumn(1).listSortRows(false, false);
+         ColumnVector listsDoublesNaNEqSorted = retListOfDoublesNaNEq.getColumn(1).listSortRows(false, false)) {
+      assertColumnsAreEqual(expectedListOfInts.getColumn(0), retListOfInts.getColumn(0));
+      assertColumnsAreEqual(expectedListOfDoubles.getColumn(0), retListOfDoubles.getColumn(0));
+      assertColumnsAreEqual(expectedListOfDoublesNaNEq.getColumn(0), retListOfDoublesNaNEq.getColumn(0));
+
+      assertColumnsAreEqual(expectedListOfInts.getColumn(1), listsIntsSorted);
+      assertColumnsAreEqual(expectedListOfDoubles.getColumn(1), listsDoublesSorted);
+      assertColumnsAreEqual(expectedListOfDoublesNaNEq.getColumn(1), listsDoublesNaNEqSorted);
+
     }
   }
 
@@ -7460,19 +7530,21 @@ public class TableTest extends CudfTestBase {
          Table input = new Table(col1, col2)) {
 
       // Keep the first duplicate element.
-      try (Table result = input.dropDuplicates(keyColumns, true, true, true);
+      try (Table result = input.dropDuplicates(keyColumns, Table.DuplicateKeepOption.KEEP_FIRST, true);
+           Table resultSorted = result.orderBy(OrderByArg.asc(1, true));
            ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(null, 5, 5, 8);
            ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
            Table expected = new Table(expectedCol1, expectedCol2)) {
-        assertTablesAreEqual(expected, result);
+        assertTablesAreEqual(expected, resultSorted);
       }
 
       // Keep the last duplicate element.
-      try (Table result = input.dropDuplicates(keyColumns, false, true, true);
+      try (Table result = input.dropDuplicates(keyColumns, Table.DuplicateKeepOption.KEEP_LAST, true);
+           Table resultSorted = result.orderBy(OrderByArg.asc(1, true));
            ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(3, 1, 5, 8);
            ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
            Table expected = new Table(expectedCol1, expectedCol2)) {
-        assertTablesAreEqual(expected, result);
+        assertTablesAreEqual(expected, resultSorted);
       }
     }
   }

@@ -170,14 +170,14 @@ resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)
 object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
 detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
-libcudf functions typically take views as input (`column_view`, `table_view`, or `scalar_view`)
+libcudf functions typically take views as input (`column_view` or `table_view`)
 and produce `unique_ptr`s to owning objects as output. For example,
 
 ```c++
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## `rmm::device_memory_resource`<a name="memory_resource"></a>
+## `rmm::device_memory_resource`
 
 libcudf allocates all device memory via RMM memory resources (MR). See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
@@ -350,7 +350,7 @@ internal API in the `detail` namespace. The internal `detail` API has the same p
 public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. If the
 detail API also accepts a memory resource parameter, the stream parameter should be ideally placed
 just *before* the memory resource. The public API will call the detail API and provide
-`rmm::cuda_stream_default`. The implementation should be wholly contained in the `detail` API
+`cudf::default_stream_value`. The implementation should be wholly contained in the `detail` API
 definition and use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
@@ -381,7 +381,7 @@ namespace detail{
 
 void external_function(...){
     CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., rmm::cuda_stream_default);
+    detail::external_function(..., cudf::default_stream_value);
 }
 ```
 
@@ -413,7 +413,7 @@ should avoid creating streams (even if it is slightly less efficient). It is a g
 
 ## Memory Allocation
 
-Device [memory resources](#memory_resource) are used in libcudf to abstract and control how device
+Device [memory resources](#rmmdevice_memory_resource) are used in libcudf to abstract and control how device
 memory is allocated.
 
 ### Output Memory
@@ -1169,7 +1169,7 @@ instance of a class object to represent a null string.
 
 The `string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
 functions like `sort` without string-specific code. The data for a `string_view` instance is
-required to be [UTF-8](#UTF-8) and all operators and methods expect this encoding. Unless documented
+required to be [UTF-8](#utf-8) and all operators and methods expect this encoding. Unless documented
 otherwise, position and length parameters are specified in characters and not bytes. The class also
 includes a `string_view::const_iterator` which can be used to navigate through individual characters
 within the string.

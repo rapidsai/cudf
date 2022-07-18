@@ -23,6 +23,7 @@
 #include <cudf/strings/detail/copying.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -173,7 +174,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               scalar const& fill_value,
                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::shift(input, offset, fill_value, rmm::cuda_stream_default, mr);
+  return detail::shift(input, offset, fill_value, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

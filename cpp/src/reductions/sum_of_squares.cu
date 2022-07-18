@@ -33,6 +33,7 @@ std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
     simple::detail::element_type_dispatcher<cudf::reduction::op::sum_of_squares>{},
     col,
     output_dtype,
+    std::nullopt,
     stream,
     mr);
 }

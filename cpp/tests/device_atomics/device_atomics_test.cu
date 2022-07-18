@@ -16,14 +16,13 @@
 
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -155,7 +154,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CUDF_CHECK_CUDA(rmm::cuda_stream_default.value());
+    CUDF_CHECK_CUDA(cudf::default_stream_value.value());
 
     if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
       EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
@@ -302,7 +301,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CUDF_CHECK_CUDA(rmm::cuda_stream_default.value());
+    CUDF_CHECK_CUDA(cudf::default_stream_value.value());
 
     // print_exact(exact, "exact");
     // print_exact(host_result.data(), "result");

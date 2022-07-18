@@ -121,6 +121,16 @@ enum class PageType : uint8_t {
 };
 
 /**
+ * @brief Enum to annotate whether lists of min/max elements inside ColumnIndex
+ * are ordered and if so, in which direction.
+ */
+enum BoundaryOrder {
+  UNORDERED  = 0,
+  ASCENDING  = 1,
+  DESCENDING = 2,
+};
+
+/**
  * @brief Thrift compact protocol struct field types
  */
 enum {

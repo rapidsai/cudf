@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -161,7 +162,7 @@ class hostdevice_vector {
     v.h_data       = nullptr;
   }
 
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
   size_t max_elements{};
   size_t num_elements{};
   T* h_data{};
