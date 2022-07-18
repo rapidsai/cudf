@@ -279,21 +279,13 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
       auto d_nullability = detail::make_device_uvector_async(nullability, stream);
       dremel_data.push_back(detail::get_dremel_data(col, d_nullability, nullability, stream));
       max_def_levels.push_back(max_def_level);
-      // } else {
-      //   max_def_levels.push_back(0);
     }
   }
 
-  // std::vector<device_span<size_type>> dremel_offsets;
-  // std::vector<device_span<uint8_t>> rep_levels;
-  // std::vector<device_span<uint8_t>> def_levels;
   std::vector<detail::dremel_device_view> dremel_device_views;
   size_type c = 0;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
-      // dremel_offsets.emplace_back(dremel_data[c].dremel_offsets);
-      // rep_levels.emplace_back(dremel_data[c].rep_level);
-      // def_levels.emplace_back(dremel_data[c].def_level);
       dremel_device_views.push_back(detail::dremel_device_view{dremel_data[c].dremel_offsets.data(),
                                                                dremel_data[c].rep_level.data(),
                                                                dremel_data[c].def_level.data(),
@@ -301,22 +293,11 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
                                                                max_def_levels[c]});
       ++c;
     } else {
-      // dremel_offsets.emplace_back();
-      // rep_levels.emplace_back();
-      // def_levels.emplace_back();
       dremel_device_views.emplace_back();
     }
   }
-  // auto d_dremel_offsets = detail::make_device_uvector_async(dremel_offsets, stream);
-  // auto d_rep_levels     = detail::make_device_uvector_async(rep_levels, stream);
-  // auto d_def_levels     = detail::make_device_uvector_async(def_levels, stream);
-  // auto d_max_def_levels = detail::make_device_uvector_async(max_def_levels, stream);
   auto d_dremel_device_views = detail::make_device_uvector_async(dremel_device_views, stream);
   return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
-  //  std::move(d_dremel_offsets),
-  //  std::move(d_rep_levels),
-  //  std::move(d_def_levels),
-  //  std::move(d_max_def_levels));
 }
 
 using column_checker_fn_t = std::function<void(column_view const&)>;
@@ -402,7 +383,6 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
     decompose_structs(t, column_order, null_precedence);
 
-  // auto [dremel_data, d_dremel_offsets, d_rep_levels, d_def_levels, d_max_def_levels] =
   auto [dremel_data, d_dremel_device_views] = list_lex_preprocess(verticalized_lhs, stream);
 
   auto d_t               = table_device_view::create(verticalized_lhs, stream);
