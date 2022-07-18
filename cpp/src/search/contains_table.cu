@@ -62,11 +62,12 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
+  auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
 
   // Insert all row hash values and indices of the haystack table.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack, stream);
-    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{haystack_has_nulls});
+    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
 
     using make_pair_fn = make_pair_function<decltype(d_hasher), lhs_index_type>;
 
@@ -110,7 +111,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   // Check existence for each row of the needles table in the haystack table.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles, stream);
-    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls});
+    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
@@ -121,8 +122,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       size_type{0}, make_pair_fn{d_hasher, map.get_empty_key_sentinel()});
 
     auto const check_contains = [&](auto const value_comp) {
-      auto const d_eqcomp = comparator.equal_to(
-        nullate::DYNAMIC{needles_has_nulls || haystack_has_nulls}, compare_nulls, value_comp);
+      auto const d_eqcomp =
+        comparator.equal_to(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
       map.pair_contains(needles_it,
                         needles_it + needles.num_rows(),
                         contained.begin(),
