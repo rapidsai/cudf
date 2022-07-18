@@ -985,51 +985,6 @@ get_mixed_size_info(JNIEnv *env, jlong j_output_row_count, jlong j_matches_view)
                                        matches->template data<cudf::size_type>(), matches->size()));
 }
 
-// Returns a table view containing only the columns at the specified indices
-cudf::table_view const get_keys_table(cudf::table_view const *t,
-                                      native_jintArray const &key_indices) {
-  std::vector<cudf::column_view> key_cols;
-  key_cols.reserve(key_indices.size());
-  std::transform(key_indices.begin(), key_indices.end(), std::back_inserter(key_cols),
-                 [t](int idx) { return t->column(idx); });
-  return table_view(key_cols);
-}
-
-// Returns a table view containing only the columns that are NOT at the specified indices
-cudf::table_view const get_non_keys_table(cudf::table_view const *t,
-                                          native_jintArray const &key_indices) {
-  std::vector<int> non_key_indices;
-  for (int i = 0; i < t->num_columns(); ++i) {
-    if (std::find(key_indices.begin(), key_indices.end(), i) == key_indices.end()) {
-      non_key_indices.push_back(i);
-    }
-  }
-  std::vector<cudf::column_view> cols;
-  std::transform(non_key_indices.begin(), non_key_indices.end(), std::back_inserter(cols),
-                 [&t](int idx) { return t->column(idx); });
-  return table_view(cols);
-}
-
-// Combine left and right join results into a column pointer array that can be returned to the JVM.
-jlongArray combine_join_results(JNIEnv *env, std::vector<std::unique_ptr<cudf::column>> left_cols,
-                                std::vector<std::unique_ptr<cudf::column>> right_cols) {
-  cudf::jni::native_jlongArray outcol_handles(env, left_cols.size() + right_cols.size());
-  auto iter =
-      std::transform(left_cols.begin(), left_cols.end(), outcol_handles.begin(),
-                     [](std::unique_ptr<cudf::column> &col) { return release_as_jlong(col); });
-  std::transform(right_cols.begin(), right_cols.end(), iter,
-                 [](std::unique_ptr<cudf::column> &col) { return release_as_jlong(col); });
-  return outcol_handles.get_jArray();
-}
-
-// Combine left and right join results into a column pointer array that can be returned to the JVM.
-jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
-                                cudf::table &right_results) {
-  std::vector<std::unique_ptr<cudf::column>> left_cols = left_results.release();
-  std::vector<std::unique_ptr<cudf::column>> right_cols = right_results.release();
-  return combine_join_results(env, std::move(left_cols), std::move(right_cols));
-}
-
 cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
   if (!cudf::is_compound(column_view.type())) {
     if (column_view.nullable() && column_view.null_count() == 0) {
