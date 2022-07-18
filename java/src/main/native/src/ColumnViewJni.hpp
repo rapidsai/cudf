@@ -54,8 +54,8 @@ generate_list_offsets(cudf::column_view const &list_length,
                       rmm::cuda_stream_view stream = cudf::default_stream_value);
 
 /**
- * @brief Generates lists column by copying from each row of the input lists column the list
- * elements that are distinct by key.
+ * @brief Generates lists column by copying elements that are distinct by key from each input list
+ * row to the corresponding output row.
  *
  * The input lists column must be given such that each list element is a struct of <key, value>
  * pair. With such input, a list containing distinct by key elements are defined such that the keys
