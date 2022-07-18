@@ -24,15 +24,15 @@ requirements:
   host:
     - python
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf_kafka {{ version }}
+    - cudf_kafka ={{ version }}
   run:
     - python
     - streamz
-    - cudf {{ version }}
+    - cudf ={{ version }}
     - dask>=2022.05.2
     - distributed>=2022.05.2
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf_kafka {{ version }}
+    - cudf_kafka ={{ version }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]
