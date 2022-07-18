@@ -2236,16 +2236,38 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(libstrings.get(self._column, i))
 
-    def get_json_object(self, json_path):
+    def get_json_object(
+        self,
+        json_path,
+        *,
+        allow_single_quotes=False,
+        strip_quotes_from_single_strings=True,
+        missing_fields_as_nulls=False,
+    ):
         r"""
         Applies a JSONPath string to an input strings column
         where each row in the column is a valid json string
 
         Parameters
         ----------
-        json_path: str
+        json_path : str
             The JSONPath string to be applied to each row
             of the input column
+        allow_single_quotes : bool, default False
+            If True, representing strings with single
+            quotes is allowed.
+            If False, strings must only be represented
+            with double quotes.
+        strip_quotes_from_single_strings : bool, default True
+            If True, strip the quotes from the return value of
+            a given row if it is a string.
+            If False, values returned for a given row include
+            quotes if they are strings.
+        missing_fields_as_nulls : bool, default False
+            If True, when an object is queried for a field
+            it does not contain, "null" is returned.
+            If False, when an object is queried for a field
+            it does not contain, None is returned.
 
         Returns
         -------
@@ -2286,9 +2308,16 @@ class StringMethods(ColumnMethods):
         """
 
         try:
+            options = libstrings.GetJsonObjectOptions(
+                allow_single_quotes=allow_single_quotes,
+                strip_quotes_from_single_strings=(
+                    strip_quotes_from_single_strings
+                ),
+                missing_fields_as_nulls=missing_fields_as_nulls,
+            )
             res = self._return_or_inplace(
                 libstrings.get_json_object(
-                    self._column, cudf.Scalar(json_path, "str")
+                    self._column, cudf.Scalar(json_path, "str"), options
                 )
             )
         except RuntimeError as e:

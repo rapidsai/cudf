@@ -65,7 +65,7 @@ struct token_counter_fn {
     size_type start_pos   = 0;
     while (token_count < max_tokens - 1) {
       auto const delimiter_pos = d_str.find(d_delimiter, start_pos);
-      if (delimiter_pos < 0) break;
+      if (delimiter_pos == string_view::npos) break;
       token_count++;
       start_pos = delimiter_pos + d_delimiter.length();
     }
@@ -119,7 +119,7 @@ struct token_reader_fn {
     while (token_idx < token_count - 1) {
       auto const delimiter_pos = dir == Dir::FORWARD ? d_str.find(d_delimiter, start_pos)
                                                      : d_str.rfind(d_delimiter, start_pos, end_pos);
-      if (delimiter_pos < 0) break;
+      if (delimiter_pos == string_view::npos) break;
       auto const token = resolve_token(d_str, start_pos, end_pos, delimiter_pos);
       if (dir == Dir::FORWARD) {
         d_result[token_idx] = token;

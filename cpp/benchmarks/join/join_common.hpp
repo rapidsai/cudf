@@ -88,14 +88,14 @@ static void BM_join(state_type& state, Join JoinFunc)
     return cudf::detail::valid_if(validity, validity + size, thrust::identity<bool>{}).first;
   };
 
-  std::unique_ptr<cudf::column> build_key_column = [&]() {
+  std::unique_ptr<cudf::column> build_key_column0 = [&]() {
     return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 build_table_size,
                                                 build_random_null_mask(build_table_size))
                     : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 build_table_size);
   }();
-  std::unique_ptr<cudf::column> probe_key_column = [&]() {
+  std::unique_ptr<cudf::column> probe_key_column0 = [&]() {
     return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
                                                 probe_table_size,
                                                 build_random_null_mask(probe_table_size))
@@ -104,12 +104,25 @@ static void BM_join(state_type& state, Join JoinFunc)
   }();
 
   generate_input_tables<key_type, cudf::size_type>(
-    build_key_column->mutable_view().data<key_type>(),
+    build_key_column0->mutable_view().data<key_type>(),
     build_table_size,
-    probe_key_column->mutable_view().data<key_type>(),
+    probe_key_column0->mutable_view().data<key_type>(),
     probe_table_size,
     selectivity,
     multiplicity);
+
+  // Copy build_key_column0 and probe_key_column0 into new columns.
+  // If Nullable, the new columns will be assigned new nullmasks.
+  auto const build_key_column1 = [&]() {
+    auto col = std::make_unique<cudf::column>(build_key_column0->view());
+    if (Nullable) { col->set_null_mask(build_random_null_mask(build_table_size)); }
+    return col;
+  }();
+  auto const probe_key_column1 = [&]() {
+    auto col = std::make_unique<cudf::column>(probe_key_column0->view());
+    if (Nullable) { col->set_null_mask(build_random_null_mask(probe_table_size)); }
+    return col;
+  }();
 
   auto init = cudf::make_fixed_width_scalar<payload_type>(static_cast<payload_type>(0));
   auto build_payload_column = cudf::sequence(build_table_size, *init);
@@ -117,8 +130,10 @@ static void BM_join(state_type& state, Join JoinFunc)
 
   CUDF_CHECK_CUDA(0);
 
-  cudf::table_view build_table({build_key_column->view(), *build_payload_column});
-  cudf::table_view probe_table({probe_key_column->view(), *probe_payload_column});
+  cudf::table_view build_table(
+    {build_key_column0->view(), build_key_column1->view(), *build_payload_column});
+  cudf::table_view probe_table(
+    {probe_key_column0->view(), probe_key_column1->view(), *probe_payload_column});
 
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};

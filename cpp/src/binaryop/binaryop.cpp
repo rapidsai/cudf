@@ -52,19 +52,21 @@ namespace binops {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
-                                             scalar const& s,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
+  column_view const& col,
+  scalar const& s,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
-  if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
+  if (col.is_empty()) return std::pair(rmm::device_buffer{0, stream, mr}, 0);
 
   if (not s.is_valid(stream)) {
-    return cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
+    return std::pair(cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
+                     col.size());
   } else if (s.is_valid(stream) and col.nullable()) {
-    return cudf::detail::copy_bitmask(col, stream, mr);
+    return std::pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
   } else {
-    return rmm::device_buffer{0, stream, mr};
+    return std::pair(rmm::device_buffer{0, stream, mr}, 0);
   }
 }
 
@@ -253,9 +255,9 @@ std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
   if (binops::is_null_dependent(op)) {
     return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
-    auto new_mask = binops::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+    auto [new_mask, new_null_count] = binops::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
     return make_fixed_width_column(
-      output_type, rhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+      output_type, rhs.size(), std::move(new_mask), new_null_count, stream, mr);
   }
 };
 
@@ -280,9 +282,9 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
   if (binops::is_null_dependent(op)) {
     return make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
-    auto new_mask = binops::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+    auto [new_mask, new_null_count] = binops::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     return make_fixed_width_column(
-      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+      output_type, lhs.size(), std::move(new_mask), new_null_count, stream, mr);
   }
 };
 

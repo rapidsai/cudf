@@ -24,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/lists/contains.hpp>
@@ -78,7 +79,6 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
-#include "map_lookup.hpp"
 #include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
@@ -1290,9 +1290,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
     cudf::jni::auto_set_device(env);
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
-
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
+
+    if (lhs->type().id() == cudf::type_id::STRUCT) {
+      auto [new_mask, null_count] = cudf::bitmask_and(cudf::table_view{{*lhs, *rhs}});
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count);
+      auto out_view = out->mutable_view();
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, *rhs, false,
+                                                                     false, op);
+      return release_as_jlong(out);
+    }
+
     return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);
@@ -1321,8 +1330,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     cudf::scalar *rhs = reinterpret_cast<cudf::scalar *>(rhs_ptr);
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
-
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
+
+    if (lhs->type().id() == cudf::type_id::STRUCT) {
+      auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
+      auto out =
+          make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), new_null_count);
+      auto rhsv = cudf::make_column_from_scalar(*rhs, 1);
+      auto out_view = out->mutable_view();
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, rhsv->view(),
+                                                                     false, true, op);
+      return release_as_jlong(out);
+    }
+
     return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);
@@ -1583,17 +1603,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *
                                                                         jint idx) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
 
-  if (idx > 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "group index > 0 is not supported", 0);
-  }
-
   try {
     cudf::jni::auto_set_device(env);
     cudf::strings_column_view const strings_column{
         *reinterpret_cast<cudf::column_view *>(j_view_handle)};
     cudf::jni::native_jstring pattern(env, pattern_obj);
 
-    return release_as_jlong(cudf::strings::findall_record(strings_column, pattern.get()));
+    auto result = (idx == 0) ? cudf::strings::findall_record(strings_column, pattern.get()) :
+                               cudf::strings::extract_all_record(strings_column, pattern.get());
+
+    return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
 }
