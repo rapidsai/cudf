@@ -47,7 +47,7 @@ enum class binary_operator : int32_t {
                          ///< else, it returns (dividend % divisor)
   PYMOD,                 ///< operator % but following Python's sign rules for negatives
   POW,                   ///< lhs ^ rhs
-  INT_POW,               ///< int ^ int, used to avoid floating point precision loss
+  INT_POW,               ///< int ^ int, used to avoid floating point precision loss. Returns 0 for negative exponents.
   LOG_BASE,              ///< logarithm to the base
   ATAN2,                 ///< 2-argument arctangent
   SHIFT_LEFT,            ///< operator <<
