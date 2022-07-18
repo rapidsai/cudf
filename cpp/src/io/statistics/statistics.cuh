@@ -46,6 +46,7 @@ enum statistics_dtype {
   dtype_float32,
   dtype_float64,
   dtype_string,
+  dtype_byte_array,
 };
 
 struct stats_column_desc {
@@ -83,12 +84,17 @@ struct string_stats {
   }
 };
 
+struct byte_array_stats {
+  const uint8_t* ptr;  //!< ptr to byte data
+  uint32_t length;     //!< length of bytes
+};
+
 union statistics_val {
-  string_stats str_val;  //!< string columns
-  double fp_val;         //!< float columns
-  int64_t i_val;         //!< integer columns
-  uint64_t u_val;        //!< unsigned integer columns
-  __int128_t d128_val;   //!< decimal128 columns
+  string_stats str_val;       //!< string columns
+  byte_array_stats byte_val;  //!< byte array columns
+  double fp_val;              //!< float columns
+  int64_t i_val;              //!< integer columns
+  uint64_t u_val;             //!< unsigned integer columns
 };
 
 struct statistics_chunk {

@@ -301,9 +301,14 @@ __global__ void __launch_bounds__(128)
       __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
-        if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
-          minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
-                           ck_g.stats[fragments_in_chunk].max_value.str_val.length);
+        if (!t && ck_g.stats) {
+          if (col_g.stats_dtype == dtype_string) {
+            minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
+                             ck_g.stats[fragments_in_chunk].max_value.str_val.length);
+          } else if (col_g.stats_dtype == dtype_byte_array) {
+            minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.byte_val.length,
+                             ck_g.stats[fragments_in_chunk].max_value.byte_val.length);
+          }
         }
       } else if (!t) {
         frag_g.fragment_data_size = 0;
@@ -338,7 +343,7 @@ __global__ void __launch_bounds__(128)
           page_g.max_hdr_size  = 32;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
-            if (col_g.stats_dtype == dtype_string) {
+            if (col_g.stats_dtype == dtype_string || col_g.stats_dtype == dtype_byte_array) {
               stats_hdr_len += 5 * 3 + 2 * max_stats_len;
             } else {
               stats_hdr_len += ((col_g.stats_dtype >= dtype_int64) ? 10 : 5) * 3;
@@ -1269,17 +1274,18 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   uint8_t *end, dtype_len;
   switch (dtype) {
     case dtype_bool: dtype_len = 1; break;
-    case dtype_int8:
-    case dtype_int16:
-    case dtype_int32:
-    case dtype_date32:
+    case dtype_int8: [[fallthrough]];
+    case dtype_int16: [[fallthrough]];
+    case dtype_int32: [[fallthrough]];
+    case dtype_date32: [[fallthrough]];
     case dtype_float32: dtype_len = 4; break;
-    case dtype_int64:
-    case dtype_timestamp64:
-    case dtype_float64:
+    case dtype_int64: [[fallthrough]];
+    case dtype_timestamp64: [[fallthrough]];
+    case dtype_float64: [[fallthrough]];
     case dtype_decimal64: dtype_len = 8; break;
     case dtype_decimal128: dtype_len = 16; break;
-    case dtype_string:
+    case dtype_string: [[fallthrough]];
+    case dtype_byte_array: [[fallthrough]];
     default: dtype_len = 0; break;
   }
   header_encoder encoder(start);
@@ -1293,6 +1299,11 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
       vmin = s->min_value.str_val.ptr;
       lmax = s->max_value.str_val.length;
       vmax = s->max_value.str_val.ptr;
+    } else if (dtype == dtype_byte_array) {
+      lmin = s->min_value.byte_val.length;
+      vmin = s->min_value.byte_val.ptr;
+      lmax = s->max_value.byte_val.length;
+      vmax = s->max_value.byte_val.ptr;
     } else {
       lmin = lmax = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
