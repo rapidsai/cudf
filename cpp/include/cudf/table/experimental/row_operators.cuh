@@ -415,7 +415,8 @@ class device_row_comparator {
           return cuda::std::pair(state, _depth);
         }
         if (l_def_levels[i] == l_max_def_level) {
-          auto comparator     = element_comparator{_check_nulls, lcol, rcol, _null_precedence};
+          auto comparator =
+            element_comparator{_check_nulls, lcol, rcol, _null_precedence, _depth, _comparator};
           int last_null_depth = _depth;
           cuda::std::tie(state, last_null_depth) =
             cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, k, k);
