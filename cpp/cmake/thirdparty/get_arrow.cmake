@@ -161,8 +161,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       # This shouldn't be necessary!
       #
       # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
-      # targets in FindArrow, so for static source-builds, we have to
-      # do it after-the-fact.
+      # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
       #
       # This only works because we know exactly which components we're using. Don't forget to update
       # this list if we add more!
@@ -247,8 +246,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       )
     endif()
   endif()
-  # We generate the arrow-configfiles when we built arrow locally, so always
-  # do `find_dependency`
+  # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 
