@@ -87,8 +87,27 @@ using string_stats     = t_array_stats<string_view, char>;
 using byte_array_stats = t_array_stats<byte_array_view, uint8_t>;
 
 struct byte_array_stats {
-  const uint8_t* ptr;  //!< ptr to byte data
-  uint32_t length;     //!< length of bytes
+  const int8_t* ptr;  //!< ptr to byte data
+  uint32_t length;    //!< length of bytes
+  __host__ __device__ __forceinline__ volatile byte_array_stats& operator=(
+    const byte_array_view& val) volatile
+  {
+    ptr    = val.data();
+    length = val.size_bytes();
+    return *this;
+  }
+  __host__ __device__ __forceinline__ operator byte_array_view() volatile
+  {
+    return byte_array_view(ptr, static_cast<size_type>(length));
+  }
+  __host__ __device__ __forceinline__ operator byte_array_view() const
+  {
+    return byte_array_view(ptr, static_cast<size_type>(length));
+  }
+  __host__ __device__ __forceinline__ operator byte_array_view()
+  {
+    return byte_array_view(ptr, static_cast<size_type>(length));
+  }
 };
 
 union statistics_val {
