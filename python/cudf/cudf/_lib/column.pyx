@@ -366,13 +366,13 @@ cdef class Column:
         instead replaces the Buffers and other attributes underneath the column
         object with the Buffers and attributes from the other column.
         """
-        print("369")
+        #print("369")
         if inplace:
             if other_col.has_a_weakref():
-                print("355")
+                #print("355")
                 new_col = other_col.custom_deep_copy()
             else:
-                print("358")
+                #print("358")
                 new_col = other_col
 
             self._offset = new_col.offset
