@@ -1661,24 +1661,14 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page],
-                 col_g.stats_dtype,
-                 true,
-                 scratch,
-                 &vmin,
-                 &lmin);
+    get_extremum(&column_stats[pageidx + page], col_g.stats_dtype, true, scratch, &vmin, &lmin);
     encoder.put_binary(vmin, lmin);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page],
-                 col_g.stats_dtype,
-                 false,
-                 scratch,
-                 &vmax,
-                 &lmax);
+    get_extremum(&column_stats[pageidx + page], col_g.stats_dtype, false, scratch, &vmax, &lmax);
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);
