@@ -84,7 +84,7 @@ from cudf._lib.utils cimport (
 @cython.no_gc_clear
 cdef class DeviceScalar:
 
-    def __cinit(self, *args, **kwargs):
+    def __cinit__(self, *args, **kwargs):
         self.mr = get_current_device_resource()
 
     def __init__(self, value, dtype):
