@@ -1534,7 +1534,7 @@ __global__ void __launch_bounds__(1024)
 /**
  * @brief Tests if statistics are comparable
  */
-static __device__ bool isComparable(int8_t ptype, int8_t ctype)
+static __device__ bool is_comparable(int8_t ptype, int8_t ctype)
 {
   switch (ptype) {
     case Type::BOOLEAN:
@@ -1563,10 +1563,10 @@ __device__ int32_t compare(T& v1, T& v2)
  * @brief Compares two statistics_val structs.
  * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
  */
-static __device__ int32_t compareValues(int8_t ptype,
-                                        int8_t ctype,
-                                        const statistics_val& v1,
-                                        const statistics_val& v2)
+static __device__ int32_t compare_values(int8_t ptype,
+                                         int8_t ctype,
+                                         const statistics_val& v1,
+                                         const statistics_val& v2)
 {
   switch (ptype) {
     case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
@@ -1593,14 +1593,14 @@ static __device__ int32_t compareValues(int8_t ptype,
 /**
  * @brief Determine if a set of statstistics are in ascending order.
  */
-static __device__ bool isAscending(const statistics_chunk* s,
-                                   int8_t ptype,
-                                   int8_t ctype,
-                                   uint32_t num_pages)
+static __device__ bool is_ascending(const statistics_chunk* s,
+                                    int8_t ptype,
+                                    int8_t ctype,
+                                    uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
-    if (compareValues(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
-        compareValues(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0)
+    if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
+        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0)
       return false;
   }
   return true;
@@ -1609,14 +1609,14 @@ static __device__ bool isAscending(const statistics_chunk* s,
 /**
  * @brief Determine if a set of statstistics are in descending order.
  */
-static __device__ bool isDescending(const statistics_chunk* s,
-                                    int8_t ptype,
-                                    int8_t ctype,
-                                    uint32_t num_pages)
+static __device__ bool is_descending(const statistics_chunk* s,
+                                     int8_t ptype,
+                                     int8_t ctype,
+                                     uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
-    if (compareValues(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
-        compareValues(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0)
+    if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
+        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0)
       return false;
   }
   return true;
@@ -1625,15 +1625,15 @@ static __device__ bool isDescending(const statistics_chunk* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-static __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
-                                                 int8_t ptype,
-                                                 int8_t ctype,
-                                                 uint32_t num_pages)
+static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+                                                   int8_t ptype,
+                                                   int8_t ctype,
+                                                   uint32_t num_pages)
 {
-  if (not isComparable(ptype, ctype)) return BoundaryOrder::UNORDERED;
-  if (isAscending(s, ptype, ctype, num_pages))
+  if (not is_comparable(ptype, ctype)) return BoundaryOrder::UNORDERED;
+  if (is_ascending(s, ptype, ctype, num_pages))
     return BoundaryOrder::ASCENDING;
-  else if (isDescending(s, ptype, ctype, num_pages))
+  else if (is_descending(s, ptype, ctype, num_pages))
     return BoundaryOrder::DESCENDING;
   else
     return BoundaryOrder::UNORDERED;
@@ -1681,10 +1681,10 @@ __global__ void __launch_bounds__(1)
   }
   encoder.field_list_end(3);
   encoder.field_int32(4,
-                      calculateBoundaryOrder(&column_stats[first_data_page + pageidx],
-                                             col_g.physical_type,
-                                             col_g.converted_type,
-                                             num_pages - first_data_page));
+                      calculate_boundary_order(&column_stats[first_data_page + pageidx],
+                                               col_g.physical_type,
+                                               col_g.converted_type,
+                                               num_pages - first_data_page));
   // null_counts
   encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
   for (uint32_t page = first_data_page; page < num_pages; page++)
