@@ -402,11 +402,11 @@ def test_datetime_scalar_from_string(data, dtype):
     assert expected == slr.value
 
 
-def test_default_32bit_integer_scalar(default_32bit_int_bitwidth):
+def test_default_32bit_integer_scalar(default_32bit_integer):
     slr = cudf.Scalar(128)
     assert slr.dtype == np.dtype("i4")
 
 
-def test_default_32bit_float_scalar(default_32bit_float_bitwidth):
+def test_default_32bit_float_scalar(default_32bit_float):
     slr = cudf.Scalar(128.0)
     assert slr.dtype == np.dtype("f4")

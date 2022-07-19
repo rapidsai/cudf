@@ -2571,7 +2571,7 @@ def test_rangeindex_max(rangeindex):
 # user configuration.
 
 
-def test_rangeindex_union_default_32bit(default_32bit_int_bitwidth):
+def test_rangeindex_union_default_32bit(default_32bit_integer):
     idx1 = cudf.RangeIndex(0, 2)
     idx2 = cudf.RangeIndex(5, 6)
 
@@ -2581,7 +2581,7 @@ def test_rangeindex_union_default_32bit(default_32bit_int_bitwidth):
     assert_eq(expected, actual)
 
 
-def test_rangeindex_intersect_default_32bit(default_32bit_int_bitwidth):
+def test_rangeindex_intersect_default_32bit(default_32bit_integer):
     idx1 = cudf.RangeIndex(0, 100)
     idx2 = cudf.Index([50, 102])
 
@@ -2591,14 +2591,14 @@ def test_rangeindex_intersect_default_32bit(default_32bit_int_bitwidth):
     assert_eq(expected, actual)
 
 
-def test_rangeindex_take_default_32bit(default_32bit_int_bitwidth):
+def test_rangeindex_take_default_32bit(default_32bit_integer):
     idx = cudf.RangeIndex(0, 100)
     actual = idx.take([0, 3, 7, 62])
     expected = cudf.Int32Index([0, 3, 7, 62])
     assert_eq(expected, actual)
 
 
-def test_rangeindex_apply_boolean_mask_32bit(default_32bit_int_bitwidth):
+def test_rangeindex_apply_boolean_mask_32bit(default_32bit_integer):
     idx = cudf.RangeIndex(0, 8)
     mask = [True, True, True, False, False, False, True, False]
     actual = idx[mask]
@@ -2606,7 +2606,7 @@ def test_rangeindex_apply_boolean_mask_32bit(default_32bit_int_bitwidth):
     assert_eq(expected, actual)
 
 
-def test_rangeindex_repeat_32bit(default_32bit_int_bitwidth):
+def test_rangeindex_repeat_32bit(default_32bit_integer):
     idx = cudf.RangeIndex(0, 3)
     actual = idx.repeat(3)
     expected = cudf.Int32Index([0, 0, 0, 1, 1, 1, 2, 2, 2])
@@ -2624,13 +2624,13 @@ def test_rangeindex_repeat_32bit(default_32bit_int_bitwidth):
         (lambda idx: 3 % idx, cudf.Int32Index([0, 1, 0, 3])),
     ],
 )
-def test_rangeindex_binops_32bit(op, expected, default_32bit_int_bitwidth):
+def test_rangeindex_binops_32bit(op, expected, default_32bit_integer):
     idx = cudf.RangeIndex(1, 5)
     actual = op(idx)
     assert_eq(expected, actual)
 
 
-def test_rangeindex_join_32bit(default_32bit_int_bitwidth):
+def test_rangeindex_join_32bit(default_32bit_integer):
     idx1 = cudf.RangeIndex(0, 10)
     idx2 = cudf.RangeIndex(5, 15)
 
@@ -2640,7 +2640,7 @@ def test_rangeindex_join_32bit(default_32bit_int_bitwidth):
     assert_eq(expected, actual)
 
 
-def test_rangeindex_where(default_32bit_int_bitwidth):
+def test_rangeindex_where(default_32bit_integer):
     idx = cudf.RangeIndex(0, 10)
     mask = [True, False, True, False, True, False, True, False, True, False]
     actual = idx.where(mask, -1)
