@@ -815,28 +815,20 @@ TEST_F(SparkMurmurHash3Test, ListValues)
                                              cudf::UNKNOWN_NULL_COUNT,
                                              std::move(list_validity_buffer));
 
-  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{42,
-                                                                 42,
-                                                                 42,
-                                                                 -559580957,
-                                                                 -222940379,
-                                                                 -912918097,
-                                                                 -912918097,
-                                                                 -912918097,
-                                                                 -912918097,
-                                                                 -912918097,
-                                                                 -912918097};
+  auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{42,
+                                                                42,
+                                                                42,
+                                                                -559580957,
+                                                                -222940379,
+                                                                -912918097,
+                                                                -912918097,
+                                                                -912918097,
+                                                                -912918097,
+                                                                -912918097,
+                                                                -912918097};
 
   auto output = cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
-}
-
-TEST_F(SparkMurmurHash3Test, ListThrows)
-{
-  lists_column_wrapper<cudf::string_view> strings_list_col({{""}, {"abc"}, {"123"}});
-  EXPECT_THROW(
-    cudf::hash(cudf::table_view({strings_list_col}), cudf::hash_id::HASH_SPARK_MURMUR3, {}),
-    cudf::logic_error);
 }
 
 class MD5HashTest : public cudf::test::BaseFixture {
