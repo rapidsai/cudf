@@ -74,11 +74,10 @@ class device_spark_row_hasher {
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
    public:
-    __device__ element_hasher_adapter(
-      Nullate check_nulls,
-      uint32_t seed             = DEFAULT_HASH_SEED,
-      hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
-      : _element_hasher(check_nulls, seed, null_hash), _check_nulls(check_nulls)
+    __device__ element_hasher_adapter(Nullate check_nulls,
+                                      uint32_t seed,
+                                      hash_value_type null_hash) noexcept
+      : _check_nulls(check_nulls), _seed(seed), _null_hash(null_hash)
     {
     }
 
@@ -86,18 +85,19 @@ class device_spark_row_hasher {
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      return _element_hasher.template operator()<T>(col, row_index);
+      auto const hasher = cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>(
+        _check_nulls, _seed, _null_hash);
+      return hasher.template operator()<T>(col, row_index);
     }
 
     template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      auto hash                   = hash_value_type{0};
       column_device_view curr_col = col.slice(row_index, 1);
       while (is_nested(curr_col.type())) {
         if (curr_col.type().id() == type_id::STRUCT) {
-          if (curr_col.num_child_columns() == 0) { return hash; }
+          if (curr_col.num_child_columns() == 0) { return _seed; }
           // Non-empty structs are assumed to be decomposed and contain only one child
           curr_col = detail::structs_column_device_view(curr_col).get_sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
@@ -105,17 +105,22 @@ class device_spark_row_hasher {
           curr_col      = list_col.get_sliced_child();
         }
       }
-      for (int i = 0; i < curr_col.size(); ++i) {
-        hash =
-          cudf::detail::hash_combine(hash,
-                                     type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
-                                       curr_col.type(), _element_hasher, curr_col, i));
-      }
-      return hash;
+
+      return detail::accumulate(
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(curr_col.size()),
+        _seed,
+        [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
+          auto const hasher =
+            cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>(nulls, hash, hash);
+          return cudf::type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
+            curr_col.type(), hasher, curr_col, element_index);
+        });
     }
 
-    cudf::experimental::row::hash::element_hasher<hash_fn, Nullate> const _element_hasher;
-    Nullate const _check_nulls;
+    Nullate const _check_nulls;        ///< Whether to check for nulls
+    uint32_t const _seed;              ///< The seed to use for hashing
+    hash_value_type const _null_hash;  ///< Hash value to use for null elements
   };
 
   CUDF_HOST_DEVICE device_spark_row_hasher(Nullate check_nulls,
