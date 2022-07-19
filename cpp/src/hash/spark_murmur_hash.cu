@@ -30,64 +30,6 @@ namespace detail {
 
 namespace {
 
-// /**
-//  * @brief Computes the hash value of an element in the given column.
-//  *
-//  * @tparam hash_function Hash functor to use for hashing elements.
-//  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-//  */
-// class element_hasher {
-//  public:
-// /**
-//  * @brief Constructs an element_hasher object.
-//  *
-//  * @param nulls Indicates whether to check for nulls
-//  * @param seed  The seed to use for the hash function
-//  * @param null_hash The hash value to use for nulls
-//  */
-// __device__ element_hasher(
-// Nullate nulls,
-// uint32_t seed             = DEFAULT_HASH_SEED,
-// hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
-// : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
-// {
-// }
-//
-// /**
-//  * @brief Returns the hash value of the given element.
-//  *
-//  * @tparam T The type of the element to hash
-//  * @param col The column to hash
-//  * @param row_index The index of the row to hash
-//  * @return The hash value of the given element
-//  */
-// template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-// __device__ hash_value_type operator()(column_device_view const& col,
-// size_type row_index) const noexcept
-// {
-// if (_check_nulls && col.is_null(row_index)) { return _null_hash; }
-// return hash_function<T>{_seed}(col.element<T>(row_index));
-// }
-//
-// /**
-//  * @brief Returns the hash value of the given element.
-//  *
-//  * @tparam T The type of the element to hash
-//  * @param col The column to hash
-//  * @param row_index The index of the row to hash
-//  * @return The hash value of the given element
-//  */
-// template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-// __device__ hash_value_type operator()(column_device_view const&, size_type) const noexcept
-// {
-// CUDF_UNREACHABLE("Unsupported type in hash.");
-// }
-//
-// uint32_t _seed;              ///< The seed to use for hashing
-// hash_value_type _null_hash;  ///< Hash value to use for null elements
-// Nullate _check_nulls;        ///< Whether to check for nulls
-// };
-
 /**
  * @brief Computes the hash value of a row in the given table.
  *
@@ -109,28 +51,15 @@ class device_spark_row_hasher {
    */
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    /*
-    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
-      return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(), element_hasher_adapter<hash_function>{_check_nulls}, column, row_index);
-    });
-
-    // Hash each element and combine all the hash values together
-    return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
-      return cudf::detail::hash_combine(hash, h);
-    });
-    */
-
     return detail::accumulate(
       _table.begin(),
       _table.end(),
       _seed,
       [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
-        return cudf::type_dispatcher<dispatch_storage_type>(
-          column.type(),
-          element_hasher_adapter<hash_function>{nulls, hash, hash},
-          column,
-          row_index);
+        return cudf::type_dispatcher(column.type(),
+                                     element_hasher_adapter<hash_function>{nulls, hash, hash},
+                                     column,
+                                     row_index);
       });
   }
 
@@ -144,9 +73,6 @@ class device_spark_row_hasher {
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
-    // static constexpr hash_value_type NULL_HASH     = std::numeric_limits<hash_value_type>::max();
-    // static constexpr hash_value_type NON_NULL_HASH = 0;
-
    public:
     __device__ element_hasher_adapter(
       Nullate check_nulls,
@@ -170,29 +96,13 @@ class device_spark_row_hasher {
       auto hash                   = hash_value_type{0};
       column_device_view curr_col = col.slice(row_index, 1);
       while (is_nested(curr_col.type())) {
-        /*
-        if (_check_nulls) {
-          auto validity_it = detail::make_validity_iterator<true>(curr_col);
-          hash             = detail::accumulate(
-            validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
-              return cudf::detail::hash_combine(hash, is_valid ? NON_NULL_HASH : NULL_HASH);
-            });
-        }
-        */
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return hash; }
           // Non-empty structs are assumed to be decomposed and contain only one child
           curr_col = detail::structs_column_device_view(curr_col).get_sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
           auto list_col = detail::lists_column_device_view(curr_col);
-          /*
-          auto list_sizes = make_list_size_iterator(list_col);
-          hash            = detail::accumulate(
-            list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-              return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
-            });
-          */
-          curr_col = list_col.get_sliced_child();
+          curr_col      = list_col.get_sliced_child();
         }
       }
       for (int i = 0; i < curr_col.size(); ++i) {
