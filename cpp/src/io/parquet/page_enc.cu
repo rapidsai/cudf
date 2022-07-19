@@ -1321,13 +1321,12 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
                d_char_ptr);
 }
 
-__device__ void get_min_max(const statistics_chunk* s,
-                            uint8_t dtype,
-                            void* scratch,
-                            const void** vmin,
-                            const void** vmax,
-                            uint32_t* lmin,
-                            uint32_t* lmax)
+__device__ void get_extremum(const statistics_chunk* s,
+                             uint8_t dtype,
+                             bool is_min,
+                             void* scratch,
+                             const void** val,
+                             uint32_t* len)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1346,33 +1345,27 @@ __device__ void get_min_max(const statistics_chunk* s,
     default: dtype_len = 0; break;
   }
   if (s->has_minmax) {
+    auto const& stats_val = is_min ? s->min_value : s->max_value;
     if (dtype == dtype_string) {
-      *lmin = s->min_value.str_val.length;
-      *vmin = s->min_value.str_val.ptr;
-      *lmax = s->max_value.str_val.length;
-      *vmax = s->max_value.str_val.ptr;
+      *len = stats_val.str_val.length;
+      *val = stats_val.str_val.ptr;
     } else {
-      *lmin = *lmax = dtype_len;
+      *len = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
         auto const fp_scratch = static_cast<float*>(scratch);
-        fp_scratch[0]         = s->min_value.fp_val;
-        fp_scratch[1]         = s->max_value.fp_val;
-        *vmin                 = &fp_scratch[0];
-        *vmax                 = &fp_scratch[1];
+        fp_scratch[0]         = stats_val.fp_val;
+        *val                  = scratch;
       } else if (dtype == dtype_decimal128) {
-        auto const d128_scratch = static_cast<uint8_t*>(scratch);
-        byte_reverse128(s->min_value.d128_val, d128_scratch);
-        byte_reverse128(s->max_value.d128_val, &d128_scratch[16]);
-        *vmin = &d128_scratch[0];
-        *vmax = &d128_scratch[16];
+        byte_reverse128(stats_val.d128_val, scratch);
+        *val = scratch;
       } else {
-        *vmin = &s->min_value;
-        *vmax = &s->max_value;
+        // TODO can this just be &stats_val
+        *val = &stats_val.i_val;
       }
     }
   } else {
-    *lmin = *lmax = 0;
-    *vmin = *vmax = nullptr;
+    *len = 0;
+    *val = nullptr;
   }
 }
 
@@ -1388,8 +1381,9 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    get_min_max(s, dtype, scratch, &vmin, &vmax, &lmin, &lmax);
+    get_extremum(s, dtype, false, scratch, &vmax, &lmax);
     encoder.field_binary(5, vmax, lmax);
+    get_extremum(s, dtype, true, scratch, &vmin, &lmin);
     encoder.field_binary(6, vmin, lmin);
   }
   encoder.end(&end);
@@ -1407,7 +1401,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) unsigned char scratch[32];
+  __shared__ __align__(8) unsigned char scratch[16];
 
   uint32_t t = threadIdx.x;
 
@@ -1647,7 +1641,7 @@ __global__ void __launch_bounds__(1)
   const void *vmin, *vmax;
   uint32_t lmin, lmax;
   uint8_t* col_idx_end;
-  unsigned char scratch[32];
+  unsigned char scratch[16];
 
   if (column_stats.empty()) return;
 
@@ -1667,19 +1661,28 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_min_max(
-      &column_stats[pageidx + page], col_g.stats_dtype, scratch, &vmin, &vmax, &lmin, &lmax);
+    get_extremum(&column_stats[pageidx + page],
+                 col_g.stats_dtype,
+                 true,
+                 scratch,
+                 &vmin,
+                 &lmin);
     encoder.put_binary(vmin, lmin);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_min_max(
-      &column_stats[pageidx + page], col_g.stats_dtype, scratch, &vmin, &vmax, &lmin, &lmax);
+    get_extremum(&column_stats[pageidx + page],
+                 col_g.stats_dtype,
+                 false,
+                 scratch,
+                 &vmax,
+                 &lmax);
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);
+  // boundary_order
   encoder.field_int32(4,
                       calculate_boundary_order(&column_stats[first_data_page + pageidx],
                                                col_g.physical_type,
