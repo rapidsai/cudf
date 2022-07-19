@@ -84,11 +84,13 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const contained =
     cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
 
+  auto const n_lists = lhs.size();
+
   // This stores the unique label values, used as scatter map.
-  auto list_indices = rmm::device_uvector<size_type>(lhs.size(), stream);
+  auto list_indices = rmm::device_uvector<size_type>(n_lists, stream);
 
   // Stores the result of checking overlap for non-empty lists.
-  auto overlap_results = rmm::device_uvector<bool>(lhs.size(), stream);
+  auto overlap_results = rmm::device_uvector<bool>(n_lists, stream);
 
   auto const labels_begin           = rhs_labels->view().begin<size_type>();
   auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -104,13 +106,12 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   auto result = make_numeric_column(
-    data_type{type_to_id<bool>()}, lhs.size(), std::move(null_mask), null_count, stream, mr);
+    data_type{type_to_id<bool>()}, n_lists, std::move(null_mask), null_count, stream, mr);
   auto const result_begin = result->mutable_view().begin<bool>();
 
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), result_begin, result_begin + lhs.size(), false);
+  thrust::uninitialized_fill(rmm::exec_policy(stream), result_begin, result_begin + n_lists, false);
   thrust::scatter(rmm::exec_policy(stream),
                   overlap_results.begin(),
                   overlap_results.begin() + num_non_empty_segments,
@@ -159,10 +160,11 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                                  stream,
                                                  mr);
 
-  auto out_offsets = reconstruct_offsets(out_table->get_column(0).view(), lhs.size(), stream, mr);
+  auto const n_lists = lhs.size();
+  auto out_offsets   = reconstruct_offsets(out_table->get_column(0).view(), n_lists, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  auto output = make_lists_column(lhs.size(),
+  auto output = make_lists_column(n_lists,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
@@ -233,11 +235,12 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                                  stream,
                                                  mr);
 
-  auto out_offsets = reconstruct_offsets(out_table->get_column(0).view(), lhs.size(), stream, mr);
+  auto const n_lists = lhs.size();
+  auto out_offsets   = reconstruct_offsets(out_table->get_column(0).view(), n_lists, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
-  auto output = make_lists_column(lhs.size(),
+  auto output = make_lists_column(n_lists,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
