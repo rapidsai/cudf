@@ -99,8 +99,8 @@ def describe_option(name: Optional[str] = None):
     print(s)
 
 
-def _categorical_validator(valid_options: Container) -> Callable:
-    """Return a validator that checks if an option value is in `valid_options`."""
+def _make_categorical_validator(valid_options: Container) -> Callable:
+    """Return a validator that checks if a value is in `valid_options`."""
     def _validator(val):
         if val not in valid_options:
             raise ValueError(f"{val} is not a valid option")
@@ -110,20 +110,21 @@ def _categorical_validator(valid_options: Container) -> Callable:
 _register_option(
     "default_integer_bitwidth",
     64,
-    "Default integer bitwidth when inferring integer column or scalars."
-    "Influences integer column bitwidth for csv, json readers if unspecified "
-    "and integer column bitwidth constructed from python scalar and lists. "
-    "Valid values are 32 or 64.",
-    _categorical_validator([32, 64]),
+    "Default integer bitwidth when the dtype of the integer needs to be "
+    "inferred. This includes: cudf.read_csv, cudf.read_json when `dtype`"
+    "is not specified. cudf object constructors when `dtype` is unspecified."
+    "Implicit conversion from cudf.RangeIndex to an integer index."
+    "Valid values are 32 or 64. Default is 64.",
+    _make_categorical_validator([32, 64]),
 )
 
 
 _register_option(
     "default_float_bitwidth",
     64,
-    "Default float bitwidth when inferring float column or scalars."
-    "Influences float column bitwidth for csv, json readers if unspecified "
-    "and float column bitwidth constructed from python scalar and lists. "
-    "Valid values are 32 or 64.",
-    _categorical_validator([32, 64]),
+    "Default floating point bitwidth when the dtype of the integer needs to "
+    "be inferred. This includes: cudf.read_csv, cudf.read_json when `dtype`"
+    "is not specified. cudf object constructors when `dtype` is unspecified."
+    "Valid values are 32 or 64. Default is 64.",
+    _make_categorical_validator([32, 64]),
 )
