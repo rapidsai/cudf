@@ -1381,9 +1381,9 @@ class element_hasher {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
+  Nullate _check_nulls;        ///< Whether to check for nulls
   uint32_t _seed;              ///< The seed to use for hashing
   hash_value_type _null_hash;  ///< Hash value to use for null elements
-  Nullate _check_nulls;        ///< Whether to check for nulls
 };
 
 /**
