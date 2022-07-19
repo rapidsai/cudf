@@ -1132,14 +1132,16 @@ struct preprocessed_table {
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     rmm::cuda_stream_view stream);
 
- private:
-  friend class self_comparator;       ///< Allow self_comparator to access private members
-  friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
-  friend class hash::row_hasher;      ///< Allow row_hasher to access private members
-
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+  ///< Type returned by table creation.
 
+  /**
+   * @brief Construct a preprocessed table.
+   *
+   * @param table The owning table device view
+   * @param null_buffers Null masks superimposed from parent columns
+   */
   preprocessed_table(table_device_view_owner&& table,
                      std::vector<rmm::device_buffer>&& null_buffers)
     : _t(std::move(table)), _null_buffers(std::move(null_buffers))
@@ -1153,6 +1155,7 @@ struct preprocessed_table {
    */
   operator table_device_view() { return *_t; }
 
+ private:
   table_device_view_owner _t;
   std::vector<rmm::device_buffer> _null_buffers;
 };
