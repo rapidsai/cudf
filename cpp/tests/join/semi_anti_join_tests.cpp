@@ -40,6 +40,7 @@ using Table          = cudf::table;
 struct JoinTest : public cudf::test::BaseFixture {
 };
 
+namespace {
 // This function is a wrapper around cudf's join APIs that takes the gather map
 // from join APIs and materializes the table that would be created by gathering
 // from the joined tables. Join APIs originally returned tables like this, but
@@ -67,6 +68,7 @@ std::unique_ptr<cudf::table> join_and_gather(
   auto left_indices_col  = cudf::column_view{left_indices_span};
   return cudf::gather(left_input, left_indices_col);
 }
+}  // namespace
 
 std::unique_ptr<cudf::table> left_semi_join(
   cudf::table_view const& left_input,
