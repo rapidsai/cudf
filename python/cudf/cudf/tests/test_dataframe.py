@@ -9470,3 +9470,15 @@ def test_value_counts(
 
     with pytest.raises(KeyError):
         gdf.value_counts(subset=["not_a_column_name"])
+
+
+def test_multiindex_wildcard_selection():
+    midx = cudf.MultiIndex.from_tuples(
+        [("a", "a"), ("a", "b"), ("b", "a"), ("b", "b")]
+    )
+    df = cudf.DataFrame({"a": [1], "b": [2], "c": [3], "d": 4})
+    df.columns = midx
+
+    expect = df.to_pandas().loc[:, (slice(None), "b")]
+    got = df.loc[:, (slice(None), "b")]
+    assert_eq(expect, got)
