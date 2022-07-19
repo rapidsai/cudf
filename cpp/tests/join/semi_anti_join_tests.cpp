@@ -40,6 +40,58 @@ using Table          = cudf::table;
 struct JoinTest : public cudf::test::BaseFixture {
 };
 
+namespace {
+// This function is a wrapper around cudf's join APIs that takes the gather map
+// from join APIs and materializes the table that would be created by gathering
+// from the joined tables. Join APIs originally returned tables like this, but
+// they were modified in https://github.com/rapidsai/cudf/pull/7454. This
+// helper function allows us to avoid rewriting all our tests in terms of
+// gather maps.
+template <std::unique_ptr<rmm::device_uvector<cudf::size_type>> (*join_impl)(
+  cudf::table_view const& left_keys,
+  cudf::table_view const& right_keys,
+  cudf::null_equality compare_nulls,
+  rmm::mr::device_memory_resource* mr)>
+std::unique_ptr<cudf::table> join_and_gather(
+  cudf::table_view const& left_input,
+  cudf::table_view const& right_input,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  cudf::null_equality compare_nulls,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto left_selected      = left_input.select(left_on);
+  auto right_selected     = right_input.select(right_on);
+  auto const join_indices = join_impl(left_selected, right_selected, compare_nulls, mr);
+
+  auto left_indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
+  auto left_indices_col  = cudf::column_view{left_indices_span};
+  return cudf::gather(left_input, left_indices_col);
+}
+}  // namespace
+
+std::unique_ptr<cudf::table> left_semi_join(
+  cudf::table_view const& left_input,
+  cudf::table_view const& right_input,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+{
+  return join_and_gather<cudf::left_semi_join>(
+    left_input, right_input, left_on, right_on, compare_nulls);
+}
+
+std::unique_ptr<cudf::table> left_anti_join(
+  cudf::table_view const& left_input,
+  cudf::table_view const& right_input,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+{
+  return join_and_gather<cudf::left_anti_join>(
+    left_input, right_input, left_on, right_on, compare_nulls);
+}
+
 TEST_F(JoinTest, TestSimple)
 {
   column_wrapper<int32_t> left_col0{0, 1, 2};
@@ -48,7 +100,7 @@ TEST_F(JoinTest, TestSimple)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result    = cudf::left_semi_join(left, right);
+  auto result    = left_semi_join(left, right);
   auto result_cv = cudf::column_view(
     cudf::data_type{cudf::type_to_id<cudf::size_type>()}, result->size(), result->data());
   column_wrapper<cudf::size_type> expected{0, 1};
@@ -104,8 +156,8 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
 {
   auto tables = get_saj_tables({1, 1, 0, 1, 0}, {1, 0, 0, 1, 1});
 
-  auto result = cudf::left_semi_join(
-    *tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL);
+  auto result =
+    left_semi_join(*tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -136,7 +188,7 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNullsNotEqual)
 {
   auto tables = get_saj_tables({1, 1, 0, 1, 1}, {1, 1, 0, 1, 1});
 
-  auto result = cudf::left_semi_join(
+  auto result = left_semi_join(
     *tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::UNEQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
@@ -169,8 +221,8 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNulls)
 {
   auto tables = get_saj_tables({1, 1, 0, 1, 0}, {1, 0, 0, 1, 1});
 
-  auto result = cudf::left_anti_join(
-    *tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL);
+  auto result =
+    left_anti_join(*tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -202,7 +254,7 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsNotEqual)
 {
   auto tables = get_saj_tables({1, 1, 0, 1, 1}, {1, 1, 0, 1, 1});
 
-  auto result = cudf::left_anti_join(
+  auto result = left_anti_join(
     *tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::UNEQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
@@ -249,11 +301,9 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
   auto left  = cudf::table_view{{left_col0}};
   auto right = cudf::table_view{{right_col0}};
 
-  auto result   = cudf::left_anti_join(left, right, {0}, {0});
-  auto expected = [] {
-    column_wrapper<int32_t> child1{{null}, cudf::test::iterators::null_at(0)};
-    column_wrapper<int32_t> child2{12};
-    return cudf::test::structs_column_wrapper{{child1, child2}};
-  }();
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
+  auto result      = cudf::left_anti_join(left, right);
+  auto result_span = cudf::device_span<cudf::size_type const>{*result};
+  auto result_col  = cudf::column_view{result_span};
+  auto expected    = column_wrapper<cudf::size_type>{1};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_col);
 }
