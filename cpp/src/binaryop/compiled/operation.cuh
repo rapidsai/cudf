@@ -216,6 +216,34 @@ struct Pow {
   }
 };
 
+struct IntPow {
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
+  {
+    if (y < 0) {
+      // Integer exponentiation with negative exponent is not possible.
+      return 0;
+    }
+    if (y == 0) { return 1; }
+    if (x == 0) { return 0; }
+    TypeLhs extra = 1;
+    while (y > 1) {
+      if (y & 1) {
+        // The exponent is odd, so multiply by one factor of x.
+        extra *= x;
+        y -= 1;
+      }
+      // The exponent is even, so square x and divide the exponent y by 2.
+      y /= 2;
+      x *= x;
+    }
+    return x * extra;
+  }
+};
+
 struct LogBase {
   template <typename TypeLhs,
             typename TypeRhs,
