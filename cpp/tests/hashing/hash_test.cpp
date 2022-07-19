@@ -827,7 +827,7 @@ TEST_F(SparkMurmurHash3Test, ListValues)
                                                                 -912918097,
                                                                 -912918097};
 
-  auto output = cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3);
+  auto output = cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
