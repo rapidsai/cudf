@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -37,25 +34,10 @@
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
-#include <thrust/tuple.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
-
-namespace {
-/**
- * @brief Device functor to create a pair of hash value and index for a given row.
- */
-struct make_pair_fn {
-  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
-  {
-    // The value is irrelevant since we only ever use the hash map to check for
-    // membership of a particular row index.
-    return cuco::make_pair(static_cast<hash_value_type>(i), 0);
-  }
-};
-
-}  // namespace
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   join_kind const kind,
@@ -78,90 +60,28 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     return result;
   }
 
-  auto const left_num_rows  = left_keys.num_rows();
-  auto const right_num_rows = right_keys.num_rows();
+  // Materialize a `flagged` boolean array to generate a gather map.
+  // Previously, the gather map was generated directly without this array but by calling to
+  // `map.contains` inside the `thrust::copy_if` kernel. However, that led to increasing register
+  // usage and reducing performance, as reported here: https://github.com/rapidsai/cudf/pull/10511.
+  auto const flagged =
+    cudf::detail::contains(right_keys, left_keys, compare_nulls, nan_equality::ALL_EQUAL, stream);
 
-  // flatten structs for the right and left and use that for the hash table
-  auto right_flattened_tables = structs::detail::flatten_nested_columns(
-    right_keys, {}, {}, structs::detail::column_nullability::FORCE);
-  auto left_flattened_tables = structs::detail::flatten_nested_columns(
-    left_keys, {}, {}, structs::detail::column_nullability::FORCE);
-
-  auto right_flattened_keys = right_flattened_tables.flattened_columns();
-  auto left_flattened_keys  = left_flattened_tables.flattened_columns();
-
-  // Create hash table.
-  semi_map_type hash_table{compute_hash_table_size(right_num_rows),
-                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
-                           hash_table_allocator_type{default_allocator<char>{}, stream},
-                           stream.value()};
-
-  // Create hash table containing all keys found in right table
-  auto right_rows_d      = table_device_view::create(right_flattened_keys, stream);
-  auto const right_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(right_flattened_keys)};
-  row_hash const hash_build{right_nulls, *right_rows_d};
-  row_equality equality_build{right_nulls, *right_rows_d, *right_rows_d, compare_nulls};
-  make_pair_fn pair_func_build{};
-
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
-
-  // skip rows that are null here.
-  if ((compare_nulls == null_equality::EQUAL) or (not nullable(right_keys))) {
-    hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
-  } else {
-    thrust::counting_iterator<size_type> stencil(0);
-    auto const [row_bitmask, _] = cudf::detail::bitmask_and(right_flattened_keys, stream);
-    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-    // insert valid rows
-    hash_table.insert_if(
-      iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
-  }
-
-  // Now we have a hash table, we need to iterate over the rows of the left table
-  // and check to see if they are contained in the hash table
-  auto left_rows_d      = table_device_view::create(left_flattened_keys, stream);
-  auto const left_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(left_flattened_keys)};
-  row_hash hash_probe{left_nulls, *left_rows_d};
-  // Note: This equality comparator violates symmetry of equality and is
-  // therefore relying on the implementation detail of the order in which its
-  // operator is invoked. If cuco makes no promises about the order of
-  // invocation this seems a bit unsafe.
-  row_equality equality_probe{left_nulls, *right_rows_d, *left_rows_d, compare_nulls};
-
-  // For semi join we want contains to be true, for anti join we want contains to be false
-  bool const join_type_boolean = (kind == join_kind::LEFT_SEMI_JOIN);
-
-  auto hash_table_view = hash_table.get_device_view();
-
+  auto const left_num_rows = left_keys.num_rows();
   auto gather_map =
     std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
-
-  rmm::device_uvector<bool> flagged(left_num_rows, stream, mr);
-  auto flagged_d = flagged.data();
-
-  auto counting_iter = thrust::counting_iterator<size_type>(0);
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    counting_iter,
-    counting_iter + left_num_rows,
-    [flagged_d, hash_table_view, join_type_boolean, hash_probe, equality_probe] __device__(
-      const size_type idx) {
-      flagged_d[idx] =
-        hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
-    });
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end =
     thrust::copy_if(rmm::exec_policy(stream),
-                    counting_iter,
-                    counting_iter + left_num_rows,
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(left_num_rows),
                     gather_map->begin(),
-                    [flagged_d] __device__(size_type const idx) { return flagged_d[idx]; });
+                    [kind, d_flagged = flagged.begin()] __device__(size_type const idx) {
+                      return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
+                    });
 
-  auto join_size = thrust::distance(gather_map->begin(), gather_map_end);
-  gather_map->resize(join_size, stream);
+  gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;
 }
 

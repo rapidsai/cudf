@@ -19,6 +19,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 
 namespace cudf {

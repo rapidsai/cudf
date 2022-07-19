@@ -23,13 +23,13 @@ build:
 requirements:
   host:
     - python
-    - cudf {{ version }}
+    - cudf ={{ version }}
     - dask>=2022.05.2
     - distributed>=2022.05.2
-    - cudatoolkit {{ cuda_version }}
+    - cudatoolkit ={{ cuda_version }}
   run:
     - python
-    - cudf {{ version }}
+    - cudf ={{ version }}
     - dask>=2022.05.2
     - distributed>=2022.05.2
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
