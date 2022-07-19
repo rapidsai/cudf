@@ -30,7 +30,6 @@
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
-#include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -463,9 +462,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view const *cv = reinterpret_cast<cudf::column_view const *>(column_view);
-    cudf::lists_column_view lcv(*cv);
-    return release_as_jlong(cudf::lists::drop_list_duplicates(lcv));
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    return release_as_jlong(cudf::lists::distinct(cudf::lists_column_view{*input_cv}));
   }
   CATCH_STD(env, 0);
 }
@@ -476,59 +474,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
   try {
     cudf::jni::auto_set_device(env);
     auto const input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
-    CUDF_EXPECTS(input_cv->offset() == 0, "Input column has non-zero offset.");
-    CUDF_EXPECTS(input_cv->type().id() == cudf::type_id::LIST,
-                 "Input column is not a lists column.");
+    JNI_ARG_CHECK(env, input_cv->type().id() == cudf::type_id::LIST,
+                  "Input column is not a lists column.", 0);
 
-    // Extract list offsets and a column of struct<keys, values> from the input lists column.
     auto const lists_keys_vals = cudf::lists_column_view(*input_cv);
-    auto const keys_vals = lists_keys_vals.get_sliced_child(cudf::default_stream_value);
-    CUDF_EXPECTS(keys_vals.type().id() == cudf::type_id::STRUCT,
-                 "Input column has child that is not a structs column.");
-    CUDF_EXPECTS(keys_vals.num_children() == 2,
-                 "Input column has child that does not have 2 children.");
+    auto const keys_vals = lists_keys_vals.child();
+    JNI_ARG_CHECK(env, keys_vals.type().id() == cudf::type_id::STRUCT,
+                  "Input column has child that is not a structs column.", 0);
+    JNI_ARG_CHECK(env, keys_vals.num_children() == 2,
+                  "Input column has child that does not have 2 children.", 0);
 
-    auto const lists_offsets = lists_keys_vals.offsets();
-    auto const structs_keys_vals = cudf::structs_column_view(keys_vals);
-
-    // Assemble a lists_column_view from the existing data (offsets + child).
-    // This will not copy any data, just create a view, for performance reason.
-    auto const make_lists_view = [&input_cv](auto const &offsets, auto const &child) {
-      return cudf::lists_column_view(
-          cudf::column_view(cudf::data_type{input_cv->type()}, input_cv->size(), nullptr,
-                            input_cv->null_mask(), input_cv->null_count(), 0, {offsets, child}));
-    };
-
-    // Extract keys and values lists columns from the input lists of structs column.
-    auto const keys = make_lists_view(lists_offsets, structs_keys_vals.child(0));
-    auto const vals = make_lists_view(lists_offsets, structs_keys_vals.child(1));
-
-    // Apache Spark desires to keep the last duplicate element.
-    auto [out_keys, out_vals] =
-        cudf::lists::drop_list_duplicates(keys, vals, cudf::duplicate_keep_option::KEEP_LAST);
-
-    // Release the contents of the outputs.
-    auto out_keys_content = out_keys->release();
-    auto out_vals_content = out_vals->release();
-
-    // Total number of elements in the child column.
-    // This should be the same for the out_vals column.
-    auto const out_child_size =
-        out_keys_content.children[cudf::lists_column_view::child_column_index]->size();
-
-    // Assemble a lists column of struct<out_keys, out_vals> for the final output.
-    auto out_structs_members = std::vector<std::unique_ptr<cudf::column>>();
-    out_structs_members.emplace_back(
-        std::move(out_keys_content.children[cudf::lists_column_view::child_column_index]));
-    out_structs_members.emplace_back(
-        std::move(out_vals_content.children[cudf::lists_column_view::child_column_index]));
-    auto &out_offsets = out_keys_content.children[cudf::lists_column_view::offsets_column_index];
-
-    auto out_structs =
-        cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0, {});
-    return release_as_jlong(cudf::make_lists_column(input_cv->size(), std::move(out_offsets),
-                                                    std::move(out_structs), input_cv->null_count(),
-                                                    cudf::copy_bitmask(*input_cv)));
+    return release_as_jlong(
+        cudf::jni::lists_distinct_by_key(lists_keys_vals, cudf::default_stream_value));
   }
   CATCH_STD(env, 0);
 }

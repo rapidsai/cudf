@@ -196,26 +196,26 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
+  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/BitwiseAnd.cu
   src/binaryop/compiled/BitwiseOr.cu
   src/binaryop/compiled/BitwiseXor.cu
-  src/binaryop/compiled/Less.cu
-  src/binaryop/compiled/Greater.cu
-  src/binaryop/compiled/LessEqual.cu
-  src/binaryop/compiled/GreaterEqual.cu
   src/binaryop/compiled/Div.cu
-  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/FloorDiv.cu
+  src/binaryop/compiled/Greater.cu
+  src/binaryop/compiled/GreaterEqual.cu
+  src/binaryop/compiled/IntPow.cu
+  src/binaryop/compiled/Less.cu
+  src/binaryop/compiled/LessEqual.cu
   src/binaryop/compiled/LogBase.cu
   src/binaryop/compiled/LogicalAnd.cu
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
-  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullLogicalAnd.cu
+  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -227,6 +227,7 @@ add_library(
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
   src/binaryop/compiled/binary_ops.cu
+  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -430,12 +431,12 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/rolling_collect_list.cu
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
-  src/rolling/rolling_collect_list.cu
-  src/rolling/rolling_detail_fixed_window.cu
-  src/rolling/rolling_detail_variable_window.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
