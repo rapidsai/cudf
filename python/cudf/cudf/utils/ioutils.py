@@ -90,7 +90,7 @@ Parameters
 path : string or path object
     Path of file to be read
 fs : fsspec.AbstractFileSystem, optional
-    Fsspec file-system object.
+    fsspec file-system object.
 storage_options : dict, optional
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the
