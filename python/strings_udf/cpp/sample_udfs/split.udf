@@ -1,0 +1,47 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/split.cuh>
+
+//
+// Example input string:
+// <entry age="35" address="211" name="Ted" size="10"/>
+//
+// Splits on ' ' space to get array like:
+// ['<entry', 'age="35"', 'address="211"', 'name="Ted"', 'size="10"/>']
+//
+// Splits each try on '=' to find the one with 'name':
+// ['name', '"Ted"']
+//
+// Finally, splits the value to remove the double-quotes:
+// ['"', 'Ted', '"'] --> output is element 1
+//
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, 
+                            cudf::strings::udf::dstring* d_out_strs, int count )
+{
+  int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+  if( tid >= count ) return;
+
+  cudf::string_view str = d_in_strs[tid];
+  cudf::string_view entries[5]; // 5 is the max split for the example
+
+  // first, split on whitespace
+  auto splits = cudf::strings::udf::split( str, entries );
+
+  cudf::strings::udf::dstring out{""}; // empty if name is not found
+
+  cudf::string_view name("name", 4);
+  for( int idx=1; idx < splits; ++idx ) {
+    cudf::string_view attrs[2]; // looking for 'name="value"'
+    cudf::strings::udf::split( entries[idx], "=", attrs );
+    if( attrs[0] == name ) {
+      // extract value from the double-quotes
+      cudf::string_view values[3];
+      cudf::strings::udf::split( attrs[1], "\"", values );
+      out = values[1]; // actual name is entry 1
+    }
+  }
+
+  d_out_strs[tid] = out;
+}
+

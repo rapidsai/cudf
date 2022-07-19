@@ -1,0 +1,42 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/dstring.cuh>
+
+//
+// Example text:
+//  "pears £12"
+//  "plums $34"
+//  "Temp  72℉"
+//  "100K℧"
+//
+// Output from this udf:
+//  "pears   12"
+//  "plums  34"
+//  "Temp  72 "
+//  "100K   "
+//
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, 
+                            cudf::strings::udf::dstring* d_out_strs, int count )
+{
+  int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+  if( tid >= count ) return;
+
+  cudf::string_view str = d_in_strs[tid];
+  char const* sptr = str.data();
+  char const* eptr = sptr + str.size_bytes();
+
+  cudf::strings::udf::dstring out;
+  while( sptr < eptr )
+  {
+    char ch = *sptr++;
+    if( ((ch < '0') || (ch > 'z')) ||
+        ((ch > '9') && (ch < 'A')) ||
+        ((ch > 'Z') && (ch < 'a')) )
+      out.append(' ');
+    else
+      out.append(ch);
+  }
+  d_out_strs[tid] = out;
+}
+

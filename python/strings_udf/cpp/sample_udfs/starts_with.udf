@@ -1,0 +1,21 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/starts_with.cuh>
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, 
+                            cudf::strings::udf::dstring* d_out_strs, int count )
+{
+  int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+  if( tid < count )
+  {
+    auto const d_str = d_in_strs[tid];
+    cudf::strings::udf::dstring d_out = d_str;
+    if( cudf::strings::udf::ends_with(d_str, "/>") )
+      d_out += " <------- entry";
+    else if( cudf::strings::udf::ends_with(d_str, "/></base>") )
+      d_out += " <------- last entry";
+    if( cudf::strings::udf::starts_with(d_str, "<entry name") )
+      d_out += ": name first";
+    d_out_strs[tid] = d_out;
+  }
+}

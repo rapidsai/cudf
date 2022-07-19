@@ -1,0 +1,34 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/dstring.cuh>
+#include <cudf/strings/udf/numeric.cuh>
+
+#include "../tests/utilities.cuh"
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, cudf::strings::udf::dstring* d_out_strs, int count )
+{
+    int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if( tid > 0 ) return;
+
+    using dstring = cudf::strings::udf::dstring;
+
+    auto const test_data = cudf::string_view{"-1234567890A", 12};
+
+    auto value = cudf::strings::udf::stoi(test_data);
+    dstring d_str = cudf::strings::udf::to_string(value);
+    verify(d_str, test_data.substr(0,11), "-1234567890");
+
+    value = cudf::strings::udf::stoi(test_data.substr(0,1));
+    d_str = cudf::strings::udf::to_string(value);
+    verify(d_str, cudf::string_view("0",1), "sign");
+
+    value = cudf::strings::udf::stoi(test_data.substr(0,0));
+    d_str = cudf::strings::udf::to_string(value);
+    verify(d_str, cudf::string_view("0",1), "<empty>");
+
+    value = cudf::strings::udf::stoi(test_data.substr(11,1));
+    d_str = cudf::strings::udf::to_string(value);
+    verify(d_str, cudf::string_view("0",1), "A");
+
+    d_out_strs[tid] = d_in_strs[tid];
+}

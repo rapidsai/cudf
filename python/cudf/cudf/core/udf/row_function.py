@@ -13,7 +13,7 @@ from cudf.core.udf.templates import (
     row_kernel_template,
     unmasked_input_initializer_template,
 )
-from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.utils import (
     _all_dtypes_from_frame,
     _construct_signature,

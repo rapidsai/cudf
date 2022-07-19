@@ -1,0 +1,5 @@
+Example text:
+"Pears £12"
+"Plums $34"
+"Temp  72℉"
+"100K℧"

@@ -11,7 +11,7 @@ from numba.types import Poison, Tuple, boolean, int64, void, CPointer
 
 import cupy as cp
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -22,9 +22,9 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
-from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view
 from strings_udf import ptxpath
+from strings_udf._lib.cudf_jit_udf import to_string_view_array
 
 from cudf.utils.utils import _cudf_nvtx_annotate
 

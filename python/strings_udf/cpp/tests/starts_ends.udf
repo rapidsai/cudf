@@ -1,0 +1,35 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/starts_with.cuh>
+
+#include "../tests/utilities.cuh"
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, cudf::strings::udf::dstring* d_out_strs, int count )
+{
+    int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if( tid > 0 ) return;
+
+    using dstring = cudf::strings::udf::dstring;
+
+    auto const test_data = cudf::string_view{"0123456789", 10};
+
+    dstring d_test{test_data};
+    cudf::string_view first("012345",6);
+    cudf::string_view last("456789",6);
+
+    check_result(cudf::strings::udf::starts_with(d_test, "0123"), "starts_with(0123)");
+    check_result(!cudf::strings::udf::starts_with(d_test, "123"), "starts_with(123)");
+    check_result(cudf::strings::udf::starts_with(d_test, "0123", 2), "starts_with(0123,2)");
+    check_result(!cudf::strings::udf::starts_with(d_test, "123", 2), "starts_with(123,2)");
+    check_result(cudf::strings::udf::starts_with(d_test, first), "starts_with(first)");
+    check_result(!cudf::strings::udf::starts_with(d_test, last), "starts_with(last)");
+
+    check_result(cudf::strings::udf::ends_with(d_test, "6789"), "ends_with(6789)");
+    check_result(!cudf::strings::udf::ends_with(d_test, "78"), "ends_with(78)");
+    check_result(cudf::strings::udf::ends_with(d_test, "8901", 2), "ends_with(8901,2)");
+    check_result(!cudf::strings::udf::ends_with(d_test, "8901", 3), "ends_with(890,2)");
+    check_result(cudf::strings::udf::ends_with(d_test, last), "ends_with(last)");
+    check_result(!cudf::strings::udf::ends_with(d_test, first), "ends_with(first)");
+
+    d_out_strs[tid] = d_in_strs[tid];
+}

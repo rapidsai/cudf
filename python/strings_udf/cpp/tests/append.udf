@@ -1,0 +1,45 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/dstring.cuh>
+
+#include "../tests/utilities.cuh"
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, cudf::strings::udf::dstring* d_out_strs, int count )
+{
+    int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if( tid > 0 ) return;
+
+    using dstring = cudf::strings::udf::dstring;
+
+    auto const hello       = cudf::string_view{"hello", 5};
+    auto const hello_space = cudf::string_view{"hello ", 6};
+    auto const world       = cudf::string_view{"world", 5};
+    auto const hello_world = cudf::string_view{"hello world", 11};
+
+    dstring d_str;
+
+    d_str.append("hello");
+    verify(d_str, hello, "append(char*)");
+
+    d_str.append(' ');
+    verify(d_str, hello_space, "append(char)");
+
+    d_str.append(world);
+    verify(d_str, hello_world, "append(string_view)");
+
+    d_str.append(" goodbye", 5);
+    verify(d_str, cudf::string_view{"hello world good", 16}, "append(char*,size)");
+
+    d_str.clear();
+
+    d_str += "hello";
+    verify(d_str, hello, "operator+=(char*)");
+
+    d_str += ' ';
+    verify(d_str, hello_space, "operator+=(char)");
+
+    d_str += world;
+    verify(d_str, hello_world, "operator+=(string_view)");
+
+    d_out_strs[tid] = d_in_strs[tid];
+}

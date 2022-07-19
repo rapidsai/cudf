@@ -1,0 +1,59 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/char_types.cuh>
+
+#include "../tests/utilities.cuh"
+
+namespace cudf::strings::udf {
+// global variable with character-type flags
+__device__ cudf::strings::detail::character_flags_table_type* g_character_flags_table;
+}
+
+using namespace cudf::strings;
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, 
+                            udf::dstring* d_out_strs, int count )
+{
+    int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if( tid > 0 ) return;
+
+    auto const alpha     = cudf::string_view{"Hello", 5};
+    auto const alpha_num = cudf::string_view{"Hello123", 8};
+    auto const numeric   = cudf::string_view{"17¼", 4};
+    auto const digit     = cudf::string_view{"2³", 3};
+    auto const decimal   = cudf::string_view{"156789", 6};
+    auto const space     = cudf::string_view{" \t\n\r", 4};
+    auto const upper     = cudf::string_view{"123XYZ", 6};
+    auto const lower     = cudf::string_view{"xyz123", 6};
+
+    check_result(udf::is_alpha(udf::g_character_flags_table, alpha), "alpha");
+    check_result(!udf::is_alpha(udf::g_character_flags_table, alpha_num), "!alpha");
+
+    check_result(udf::is_alpha_numeric(udf::g_character_flags_table, alpha_num), "alpha_num");
+    check_result(!udf::is_alpha_numeric(udf::g_character_flags_table, space), "!alpha_num");
+
+    check_result(udf::is_numeric(udf::g_character_flags_table, numeric), "numeric");
+    check_result(!udf::is_numeric(udf::g_character_flags_table, alpha), "!numeric");
+
+    check_result(udf::is_digit(udf::g_character_flags_table, digit), "digit");
+    check_result(!udf::is_digit(udf::g_character_flags_table, alpha), "!digit");
+
+    check_result(udf::is_decimal(udf::g_character_flags_table, decimal), "decimal");
+    check_result(!udf::is_decimal(udf::g_character_flags_table, alpha), "!decimal");
+
+    check_result(udf::is_space(udf::g_character_flags_table, space), "space");
+    check_result(!udf::is_space(udf::g_character_flags_table, alpha), "!space");
+
+    check_result(udf::is_lower(udf::g_character_flags_table, lower), "lower");
+    check_result(!udf::is_lower(udf::g_character_flags_table, alpha), "!lower");
+
+    check_result(udf::is_upper(udf::g_character_flags_table, upper), "upper");
+    check_result(!udf::is_upper(udf::g_character_flags_table, alpha), "!upper");
+
+    //
+    auto alpha_space_type = string_character_types::ALPHA | string_character_types::SPACE;
+    auto const test1 = cudf::string_view{"Hello world", 11};
+    check_result(udf::all_characters_of_type(udf::g_character_flags_table, test1, alpha_space_type), "alpha+space");
+
+    d_out_strs[tid] = d_in_strs[tid];
+}

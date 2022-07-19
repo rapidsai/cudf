@@ -1,0 +1,6 @@
+<xml version='1.0'><base>
+<entry age="8" name="Toby"/>
+<entry address="283" name="David"/>
+<entry name="Bill" size="10" />
+<entry age="35" address="211" name="Ted" size="10"/>
+<entry name="Jane" zip="90210" /></base>

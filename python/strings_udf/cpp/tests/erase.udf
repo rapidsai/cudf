@@ -1,0 +1,33 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/dstring.cuh>
+
+#include "../tests/utilities.cuh"
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, cudf::strings::udf::dstring* d_out_strs, int count )
+{
+    int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if( tid > 0 ) return;
+
+    using dstring = cudf::strings::udf::dstring;
+
+    auto const test_data = cudf::string_view{"0123456789", 10};
+
+    dstring d_str{test_data};
+
+    d_str.erase(5, 5);
+    verify(d_str, cudf::string_view{"01234", 5}, "erase(5,5)");
+    d_str = test_data;
+    d_str.erase(5);
+    verify(d_str, cudf::string_view{"01234", 5}, "erase(5)");
+
+    d_str = test_data;
+    d_str.erase(0,5);
+    verify(d_str, cudf::string_view{"56789", 5}, "erase(0,5)");
+
+    d_str = test_data;
+    d_str.erase(0);
+    verify(d_str, cudf::string_view{"", 0}, "erase(0)");
+
+    d_out_strs[tid] = d_in_strs[tid];
+}

@@ -1,0 +1,29 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/dstring.cuh>
+
+__device__ cudf::string_view find_attr( cudf::string_view const& input, 
+                                        cudf::string_view const& name )
+{
+  auto pos = input.find(name);
+  if( pos < 0 ) return cudf::string_view{"",0};
+
+  cudf::string_view quote("\"",1);
+  auto begin = input.find(quote, pos) + 1;
+  auto end   = input.find(quote, begin);
+
+  return input.substr(begin, end-begin);
+}
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size,
+                            cudf::strings::udf::dstring* d_out_strs, int count )
+{
+  int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+  if( tid >= count ) return;
+
+  auto input_str = d_in_strs[tid];
+  
+  auto name = find_attr(input_str, cudf::string_view("name",4));
+
+  d_out_strs[tid] = name; // makes a copy here
+}

@@ -1,0 +1,18 @@
+// Copyright (c) 2022, NVIDIA CORPORATION.
+
+#include <cudf/strings/udf/strip.cuh>
+
+using dstring = cudf::strings::udf::dstring;
+
+__global__ void udf_kernel( cudf::string_view* d_in_strs, int size, 
+                            dstring* d_out_strs, int count )
+{
+  int tid = (blockDim.x * blockIdx.x) + threadIdx.x;
+  if( tid < count )
+  {
+    dstring out = cudf::strings::udf::strip(d_in_strs[tid]);
+    out.insert(0,"[");
+    out.append("]");
+    d_out_strs[tid] = out;
+  }
+}

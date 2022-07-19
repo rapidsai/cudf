@@ -250,7 +250,7 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    if not isinstance(return_type, cudf.core.udf.typing.MaskedType):
+    if not isinstance(return_type, cudf.core.udf.masked_typing.MaskedType):
         output_type = numpy_support.as_dtype(return_type).type
     else:
         output_type = return_type
