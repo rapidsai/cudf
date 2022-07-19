@@ -26,7 +26,7 @@ CUMULATIVE_AGGS = (
     'cumcount',
 )
 
-SUPPORTED_AGGS = (
+AGGS = (
     "count",
     "mean",
     "std",
@@ -37,8 +37,9 @@ SUPPORTED_AGGS = (
     "collect",
     "first",
     "last",
-    *CUMULATIVE_AGGS
 )
+
+SUPPORTED_AGGS = (*AGGS, *CUMULATIVE_AGGS)
 
 
 def _check_groupby_supported(func):
