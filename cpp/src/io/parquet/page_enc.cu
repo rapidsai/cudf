@@ -1345,22 +1345,21 @@ __device__ void get_extremum(const statistics_chunk* s,
     default: dtype_len = 0; break;
   }
   if (s->has_minmax) {
-    auto const& stats_val = is_min ? s->min_value : s->max_value;
+    auto const stats_val = is_min ? &s->min_value : &s->max_value;
     if (dtype == dtype_string) {
-      *len = stats_val.str_val.length;
-      *val = stats_val.str_val.ptr;
+      *len = stats_val->str_val.length;
+      *val = stats_val->str_val.ptr;
     } else {
       *len = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
         auto const fp_scratch = static_cast<float*>(scratch);
-        fp_scratch[0]         = stats_val.fp_val;
+        fp_scratch[0]         = stats_val->fp_val;
         *val                  = scratch;
       } else if (dtype == dtype_decimal128) {
-        byte_reverse128(stats_val.d128_val, scratch);
+        byte_reverse128(stats_val->d128_val, scratch);
         *val = scratch;
       } else {
-        // TODO can this just be &stats_val
-        *val = &stats_val.i_val;
+        *val = stats_val;
       }
     }
   } else {
@@ -1645,13 +1644,13 @@ __global__ void __launch_bounds__(1)
 
   if (column_stats.empty()) return;
 
-  EncColumnChunk ck_g              = chunks[blockIdx.x];
-  uint32_t num_pages               = ck_g.num_pages;
-  parquet_column_device_view col_g = *ck_g.col_desc;
-  size_t first_data_page           = ck_g.use_dictionary ? 1 : 0;
-  uint32_t pageidx                 = ck_g.first_page;
+  EncColumnChunk* ck_g             = &chunks[blockIdx.x];
+  uint32_t num_pages               = ck_g->num_pages;
+  parquet_column_device_view col_g = *ck_g->col_desc;
+  size_t first_data_page           = ck_g->use_dictionary ? 1 : 0;
+  uint32_t pageidx                 = ck_g->first_page;
 
-  header_encoder encoder(ck_g.column_index_blob);
+  header_encoder encoder(ck_g->column_index_blob);
 
   // null_pages
   encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
@@ -1685,7 +1684,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_end(5);
   encoder.end(&col_idx_end, false);
 
-  chunks[blockIdx.x].column_index_size = (uint32_t)(col_idx_end - ck_g.column_index_blob);
+  ck_g->column_index_size = (uint32_t)(col_idx_end - ck_g->column_index_blob);
 }
 
 /**
