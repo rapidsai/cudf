@@ -18,7 +18,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -172,7 +171,7 @@ std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state
 void expect_tables_prop_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
 {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  for (cudf::size_type index = 0; index < lhs.num_columns(); index++){
+  for (cudf::size_type index = 0; index < lhs.num_columns(); index++) {
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs.column(index), rhs.column(index));
   }
 }
