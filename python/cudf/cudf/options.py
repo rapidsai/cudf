@@ -1,9 +1,8 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-import textwrap
+from collections.abc import Container
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
-from collections.abc import Container
 
 
 @dataclass
@@ -12,6 +11,7 @@ class Option:
     value: Any
     description: str
     validator: Callable
+
 
 _OPTIONS: Dict[str, Option] = {}
 
@@ -37,6 +37,7 @@ def _register_option(
     _OPTIONS[name] = Option(
         default_value, default_value, description, validator
     )
+
 
 def get_option(name: str) -> Any:
     """Get the value of option.
@@ -101,9 +102,11 @@ def describe_option(name: Optional[str] = None):
 
 def _make_categorical_validator(valid_options: Container) -> Callable:
     """Return a validator that checks if a value is in `valid_options`."""
+
     def _validator(val):
         if val not in valid_options:
             raise ValueError(f"{val} is not a valid option")
+
     return _validator
 
 
