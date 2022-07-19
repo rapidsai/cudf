@@ -22,6 +22,14 @@
 
 namespace cudf::detail {
 
+struct dremel_device_view {
+  size_type* offsets;
+  uint8_t* rep_levels;
+  uint8_t* def_levels;
+  size_type leaf_data_size;
+  uint8_t max_def_level;
+};
+
 /**
  * @brief Dremel data that describes one nested type column
  *
@@ -33,14 +41,13 @@ struct dremel_data {
   rmm::device_uvector<uint8_t> def_level;
 
   size_type leaf_data_size;
-};
-
-struct dremel_device_view {
-  size_type* offsets;
-  uint8_t* rep_levels;
-  uint8_t* def_levels;
-  size_type leaf_data_size;
   uint8_t max_def_level;
+
+  operator dremel_device_view()
+  {
+    return dremel_device_view{
+      dremel_offsets.data(), rep_level.data(), def_level.data(), leaf_data_size, max_def_level};
+  }
 };
 
 /**
@@ -63,7 +70,6 @@ struct dremel_device_view {
  * @return A struct containing dremel data
  */
 dremel_data get_dremel_data(column_view h_col,
-                            rmm::device_uvector<uint8_t> const& d_nullability,
                             std::vector<uint8_t> const& nullability,
                             rmm::cuda_stream_view stream);
 

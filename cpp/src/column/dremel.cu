@@ -18,7 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/dremel.cuh>
+#include <cudf/detail/utilities/dremel.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -173,8 +173,6 @@ struct def_level_fn {
  * ```
  */
 dremel_data get_dremel_data(column_view h_col,
-                            // TODO(cp): use device_span once it is converted to a single hd_vec
-                            rmm::device_uvector<uint8_t> const& d_nullability,
                             std::vector<uint8_t> const& nullability,
                             rmm::cuda_stream_view stream)
 {
@@ -268,10 +266,10 @@ dremel_data get_dremel_data(column_view h_col,
       col = col.child(0);
       ++curr_nesting_level_idx;
     }
-    // At the end of all those structs is either a list column or the leaf. Leaf column contributes
-    // at least one def level. It doesn't matter what the leaf contributes because it'll be at the
-    // end of the exclusive scan.
-    def += (nullability[curr_nesting_level_idx]) ? 2 : 1;
+    // At the end of all those structs is either a list column or the leaf. List column contributes
+    // at least one def level. Leaf contributes 1 level only if it is nullable.
+    def +=
+      (col.type().id() == type_id::LIST ? 1 : 0) + (nullability[curr_nesting_level_idx] ? 1 : 0);
     def_at_level.push_back(def);
     ++curr_nesting_level_idx;
   };
@@ -298,8 +296,10 @@ dremel_data get_dremel_data(column_view h_col,
   auto [device_view_owners, d_nesting_levels] =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
+  auto max_def_level = def_at_level.back();
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
+  max_def_level += def_at_level.back();
 
   // Sliced list column views only have offsets applied to top level. Get offsets for each level.
   rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size(), stream);
@@ -344,6 +344,8 @@ dremel_data get_dremel_data(column_view h_col,
   for (size_t l = 0; l < column_offsets.size(); ++l) {
     max_vals_size += column_ends[l] - column_offsets[l];
   }
+
+  auto d_nullability = cudf::detail::make_device_uvector_async(nullability, stream);
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -532,8 +534,11 @@ dremel_data get_dremel_data(column_view h_col,
 
   size_type leaf_data_size = column_ends.back() - column_offsets.back();
 
-  return dremel_data{
-    std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
+  return dremel_data{std::move(new_offsets),
+                     std::move(rep_level),
+                     std::move(def_level),
+                     leaf_data_size,
+                     max_def_level};
 }
 
 }  // namespace cudf::detail

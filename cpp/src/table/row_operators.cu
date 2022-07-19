@@ -262,23 +262,17 @@ auto decompose_structs(table_view table,
 auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
 {
   std::vector<detail::dremel_data> dremel_data;
-  std::vector<uint8_t> max_def_levels;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
       // Check nullability of the list
       std::vector<uint8_t> nullability;
-      auto cur_col          = col;
-      uint8_t max_def_level = 0;
+      auto cur_col = col;
       while (cur_col.type().id() == type_id::LIST) {
-        max_def_level += (cur_col.nullable() ? 2 : 1);
         nullability.push_back(static_cast<uint8_t>(cur_col.nullable()));
         cur_col = cur_col.child(lists_column_view::child_column_index);
       }
-      max_def_level += (cur_col.nullable() ? 1 : 0);
       nullability.push_back(static_cast<uint8_t>(cur_col.nullable()));
-      auto d_nullability = detail::make_device_uvector_async(nullability, stream);
-      dremel_data.push_back(detail::get_dremel_data(col, d_nullability, nullability, stream));
-      max_def_levels.push_back(max_def_level);
+      dremel_data.push_back(detail::get_dremel_data(col, nullability, stream));
     }
   }
 
@@ -286,11 +280,7 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
   size_type c = 0;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
-      dremel_device_views.push_back(detail::dremel_device_view{dremel_data[c].dremel_offsets.data(),
-                                                               dremel_data[c].rep_level.data(),
-                                                               dremel_data[c].def_level.data(),
-                                                               dremel_data[c].leaf_data_size,
-                                                               max_def_levels[c]});
+      dremel_device_views.push_back(dremel_data[c]);
       ++c;
     } else {
       dremel_device_views.emplace_back();

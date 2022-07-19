@@ -21,7 +21,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/dremel.cuh>
+#include <cudf/detail/utilities/dremel.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
