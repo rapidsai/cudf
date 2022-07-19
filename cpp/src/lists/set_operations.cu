@@ -90,7 +90,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // Stores the result of checking overlap for non-empty lists.
   auto overlap_results = rmm::device_uvector<bool>(lhs.size(), stream);
 
-  auto const labels_begin           = rhs_labels->view().template begin<size_type>();
+  auto const labels_begin           = rhs_labels->view().begin<size_type>();
   auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
                                          labels_begin,  // keys
                                          labels_begin + rhs_labels->size(),  // keys
@@ -105,7 +105,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   auto result = make_numeric_column(
     data_type{type_to_id<bool>()}, lhs.size(), std::move(null_mask), null_count, stream, mr);
-  auto const result_begin = result->mutable_view().template begin<bool>();
+  auto const result_begin = result->mutable_view().begin<bool>();
 
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
