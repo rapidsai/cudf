@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "byte_array_view.cuh"
+
 #include <cudf/fixed_point/fixed_point.hpp>
 
 #include <cudf/wrappers/timestamps.hpp>
@@ -123,8 +125,11 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
-    typename std::conditional_t<std::is_same_v<T, string_view>, string_view, void>>;
+    int64_t,
+    typename std::conditional_t<
+      std::is_same_v<T, string_view>,
+      string_view,
+      std::conditional_t<std::is_same_v<T, byte_array_view>, byte_array_view, void>>>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
@@ -133,13 +138,14 @@ class extrema_type {
   // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
+  // byte_array_view   -> byte_array_view
   // timestamp_[T]     -> int64_t
 
  public:
   // Does type T have an extrema?
-  static constexpr bool is_supported = std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
-                                       cudf::is_duration<T>() or cudf::is_timestamp<T>() or
-                                       cudf::is_fixed_point<T>();
+  static constexpr bool is_supported =
+    std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or cudf::is_duration<T>() or
+    cudf::is_timestamp<T>() or cudf::is_fixed_point<T>() or std::is_same_v<T, byte_array_view>;
 
   using type = typename std::
     conditional_t<std::is_arithmetic_v<T>, arithmetic_extrema_type, non_arithmetic_extrema_type>;
@@ -149,7 +155,8 @@ class extrema_type {
    */
   __device__ static type convert(const T& val)
   {
-    if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view>) {
+    if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
+                  std::is_same_v<T, byte_array_view>) {
       return val;
     } else if constexpr (cudf::is_fixed_point<T>()) {
       return val.value();
@@ -178,12 +185,13 @@ class aggregation_type {
   using arithmetic_aggregation_type =
     typename std::conditional_t<std::is_integral_v<T>, integral_aggregation_type, double>;
 
-  using non_arithmetic_aggregation_type = typename std::conditional_t<
-    cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
-      cudf::is_timestamp<T>()  // To be disabled with static_assert
-      or std::is_same_v<T, string_view>,
-    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
-    void>;
+  using non_arithmetic_aggregation_type =
+    typename std::conditional_t<cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
+                                  cudf::is_timestamp<T>()  // To be disabled with static_assert
+                                  or std::is_same_v<T, string_view> or
+                                  std::is_same_v<T, byte_array_view>,
+                                int64_t,
+                                void>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
@@ -197,7 +205,8 @@ class aggregation_type {
  public:
   // Does type T aggregate?
   static constexpr bool is_supported = std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
-                                       cudf::is_duration<T>() or cudf::is_fixed_point<T>();
+                                       cudf::is_duration<T>() or cudf::is_fixed_point<T>() or
+                                       std::is_same_v<T, byte_array_view>;
 
   using type = typename std::conditional_t<std::is_arithmetic_v<T>,
                                            arithmetic_aggregation_type,
@@ -208,7 +217,7 @@ class aggregation_type {
    */
   __device__ static type convert(const T& val)
   {
-    if constexpr (std::is_same_v<T, string_view>) {
+    if constexpr (std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>) {
       return val.size_bytes();
     } else if constexpr (std::is_integral_v<T>) {
       return val;
@@ -230,14 +239,22 @@ class aggregation_type {
 template <typename T>
 __inline__ __device__ constexpr T minimum_identity()
 {
-  if constexpr (std::is_same_v<T, string_view>) { return string_view::max(); }
+  if constexpr (std::is_same_v<T, string_view>) {
+    return string_view::max();
+  } else if constexpr (std::is_same_v<T, byte_array_view>) {
+    return cuda::std::numeric_limits<byte_array_view::element_type>::max();
+  }
   return cuda::std::numeric_limits<T>::max();
 }
 
 template <typename T>
 __inline__ __device__ constexpr T maximum_identity()
 {
-  if constexpr (std::is_same_v<T, string_view>) { return string_view::min(); }
+  if constexpr (std::is_same_v<T, string_view>) {
+    return string_view::min();
+  } else if constexpr (std::is_same_v<T, byte_array_view>) {
+    return cuda::std::numeric_limits<byte_array_view::element_type>::min();
+  }
   return cuda::std::numeric_limits<T>::lowest();
 }
 
