@@ -250,6 +250,15 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
 
+inline void decompress_check(device_span<decompress_status const> stats,
+                             rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              stats.begin(),
+                              stats.end(),
+                              [] __device__(auto const& stat) { return stat.status == 0; }),
+               "Error during decompression");
+}
 }  // namespace
 
 std::string name_from_path(const std::vector<std::string>& path_in_schema)
@@ -1060,16 +1069,6 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   chunks.host_to_device(_stream);
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), _stream);
   pages.device_to_host(_stream, true);
-}
-
-inline void decompress_check(device_span<decompress_status const> stats,
-                             rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
-               "Error during decompression");
 }
 
 /**
