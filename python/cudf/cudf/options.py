@@ -2,7 +2,8 @@
 
 import textwrap
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional
+from collections.abc import Container
 
 
 @dataclass
@@ -11,7 +12,6 @@ class Option:
     value: Any
     description: str
     validator: Callable
-
 
 _OPTIONS: Dict[str, Option] = {}
 
@@ -32,13 +32,11 @@ def _register_option(
     validator : Callable
         Called on the option value to check its validity. Should raise an
         error if the value is invalid.
-
     """
     validator(default_value)
     _OPTIONS[name] = Option(
         default_value, default_value, description, validator
     )
-
 
 def get_option(name: str) -> Any:
     """Get the value of option.
@@ -101,6 +99,14 @@ def describe_option(name: Optional[str] = None):
     print(s)
 
 
+def _categorical_validator(valid_options: Container) -> Callable:
+    """Return a validator that checks if an option value is in `valid_options`."""
+    def _validator(val):
+        if val not in valid_options:
+            raise ValueError(f"{val} is not a valid option")
+    return _validator
+
+
 _register_option(
     "default_integer_bitwidth",
     64,
@@ -108,8 +114,9 @@ _register_option(
     "Influences integer column bitwidth for csv, json readers if unspecified "
     "and integer column bitwidth constructed from python scalar and lists. "
     "Valid values are 32 or 64.",
-    lambda x: x in [32, 64],
+    _categorical_validator([32, 64]),
 )
+
 
 _register_option(
     "default_float_bitwidth",
@@ -118,5 +125,5 @@ _register_option(
     "Influences float column bitwidth for csv, json readers if unspecified "
     "and float column bitwidth constructed from python scalar and lists. "
     "Valid values are 32 or 64.",
-    lambda x: x in [32, 64],
+    _categorical_validator([32, 64]),
 )
