@@ -19,6 +19,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace strings {
 /**

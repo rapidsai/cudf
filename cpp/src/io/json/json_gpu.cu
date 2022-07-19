@@ -379,10 +379,8 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
  *
  * Excludes the top-level brackets.
  *
- * @param[in] data Pointer to the JSON data in device memory
- * @param[in] data_size Size of the data buffer, in bytes
- * @param[in] rec_starts The offset of each row in the input
- * @param[in] num_rows The number of lines/rows
+ * @param[in] data Device span pointing to the JSON data in device memory
+ * @param[in] row_offsets The offset of each row in the input
  * @param[in] row Index of the row for which the range is returned
  *
  * @return The begin and end iterators of the row data.

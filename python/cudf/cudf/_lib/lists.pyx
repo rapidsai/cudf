@@ -73,12 +73,12 @@ def explode_outer(
     return columns_from_unique_ptr(move(c_result))
 
 
-def drop_list_duplicates(Column col, bool nulls_equal, bool nans_all_equal):
+def distinct(Column col, bool nulls_equal, bool nans_all_equal):
     """
-    nans_all_equal == True indicates that libcudf should treat any two elements
-    from {+nan, -nan} as equal, and as unequal otherwise.
     nulls_equal == True indicates that libcudf should treat any two nulls as
     equal, and as unequal otherwise.
+    nans_all_equal == True indicates that libcudf should treat any two
+    elements from {-nan, +nan} as equal, and as unequal otherwise.
     """
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())

@@ -44,6 +44,14 @@
 #define NVCOMP_HAS_TEMPSIZE_EX 0
 #endif
 
+// ZSTD is stable for nvcomp 2.3.2 or newer
+#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or \
+  (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and NVCOMP_PATCH_VERSION >= 2)
+#define NVCOMP_ZSTD_IS_EXPERIMENTAL 0
+#else
+#define NVCOMP_ZSTD_IS_EXPERIMENTAL 1
+#endif
+
 namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
@@ -146,9 +154,11 @@ void batched_decompress(compression_type compression,
   // TODO Consolidate config use to a common location
   if (compression == compression_type::ZSTD) {
 #if NVCOMP_HAS_ZSTD
+#if NVCOMP_ZSTD_IS_EXPERIMENTAL
     CUDF_EXPECTS(cudf::io::detail::nvcomp_integration::is_all_enabled(),
                  "Zstandard compression is experimental, you can enable it through "
                  "`LIBCUDF_NVCOMP_POLICY` environment variable.");
+#endif
 #else
     CUDF_FAIL("nvCOMP 2.3 or newer is required for Zstandard compression");
 #endif

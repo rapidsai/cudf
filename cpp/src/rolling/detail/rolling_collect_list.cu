@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <rolling/rolling_collect_list.cuh>
+#include "rolling_collect_list.cuh"
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>

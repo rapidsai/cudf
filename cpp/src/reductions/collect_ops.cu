@@ -26,12 +26,28 @@
 namespace cudf {
 namespace reduction {
 
+namespace {
+
+/**
+ * @brief Check if we need to handle nulls in the input column.
+ *
+ * @param input The input column
+ * @param null_handling The null handling policy
+ * @return A boolean value indicating if we need to handle nulls
+ */
+bool need_handle_nulls(column_view const& input, null_policy null_handling)
+{
+  return null_handling == null_policy::EXCLUDE && input.has_nulls();
+}
+
+}  // namespace
+
 std::unique_ptr<scalar> collect_list(column_view const& col,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  if (null_handling == null_policy::EXCLUDE && col.has_nulls()) {
+  if (need_handle_nulls(col, null_handling)) {
     auto d_view             = column_device_view::create(col, stream);
     auto filter             = detail::validity_accessor(*d_view);
     auto null_purged_table  = detail::copy_if(table_view{{col}}, filter, stream, mr);
@@ -58,15 +74,26 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto scalar         = collect_list(col, null_handling, stream, mr);
-  auto ls             = dynamic_cast<list_scalar*>(scalar.get());
-  auto distinct_table = detail::distinct(table_view{{ls->view()}},
+  // `input_as_collect_list` is the result of the input column that has been processed to obey
+  // the given null handling behavior.
+  [[maybe_unused]] auto const [input_as_collect_list, unused_scalar] = [&] {
+    if (need_handle_nulls(col, null_handling)) {
+      // Only call `collect_list` when we need to handle nulls.
+      auto scalar = collect_list(col, null_handling, stream, mr);
+      return std::pair(static_cast<list_scalar*>(scalar.get())->view(), std::move(scalar));
+    }
+
+    return std::pair(col, std::unique_ptr<scalar>(nullptr));
+  }();
+
+  auto distinct_table = detail::distinct(table_view{{input_as_collect_list}},
                                          std::vector<size_type>{0},
                                          duplicate_keep_option::KEEP_ANY,
                                          nulls_equal,
                                          nans_equal,
                                          stream,
                                          mr);
+
   return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
 }
 

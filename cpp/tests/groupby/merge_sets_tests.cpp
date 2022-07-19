@@ -47,17 +47,26 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
   requests[0].aggregations.emplace_back(
     cudf::make_merge_sets_aggregation<cudf::groupby_aggregation>());
 
-  auto const result     = cudf::groupby::groupby(cudf::table_view({*keys})).aggregate(requests);
-  auto const sort_order = cudf::sorted_order(result.first->view(), {}, {cudf::null_order::AFTER});
-  auto const sorted_vals =
-    std::move(cudf::gather(cudf::table_view{{result.second[0].results[0]->view()}}, *sort_order)
-                ->release()
-                .front());
+  auto const result      = cudf::groupby::groupby(cudf::table_view({*keys})).aggregate(requests);
+  auto const result_keys = result.first->view();                 // <== table_view of 1 column
+  auto const result_vals = result.second[0].results[0]->view();  // <== column_view
 
-  auto result_keys = std::move(cudf::gather(result.first->view(), *sort_order)->release().front());
-  auto result_vals = cudf::lists::sort_lists(
-    cudf::lists_column_view{sorted_vals->view()}, cudf::order::ASCENDING, cudf::null_order::AFTER);
-  return std::pair(std::move(result_keys), std::move(result_vals));
+  // Sort the output columns based on the output keys.
+  // This is to facilitate comparison of the output with the expected columns.
+  auto keys_vals_sorted = cudf::sort_by_key(cudf::table_view{{result_keys.column(0), result_vals}},
+                                            result_keys,
+                                            {},
+                                            {cudf::null_order::AFTER})
+                            ->release();
+
+  // After the columns were reordered, individual rows of the output values column (which are lists)
+  // also need to be sorted.
+  auto out_values =
+    cudf::lists::sort_lists(cudf::lists_column_view{keys_vals_sorted.back()->view()},
+                            cudf::order::ASCENDING,
+                            cudf::null_order::AFTER);
+
+  return std::pair(std::move(keys_vals_sorted.front()), std::move(out_values));
 }
 
 }  // namespace
@@ -147,8 +156,6 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNulls)
   using keys_col  = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  // Note that the null elements here are not sorted, while the results from current collect_list
-  // and collect_set are sorted.
   auto const keys1 = keys_col{1, 2};
   auto const keys2 = keys_col{1, 3};
   auto const keys3 = keys_col{2, 3, 4};
@@ -223,8 +230,6 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNullsAndEmptyLists)
   using keys_col  = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  // Note that the null elements here are not sorted, while the results from current collect_list
-  // and collect_set are sorted.
   auto const keys1 = keys_col{1, 2, 3};
   auto const keys2 = keys_col{1, 3, 4};
   auto const keys3 = keys_col{2, 3, 4};

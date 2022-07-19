@@ -54,8 +54,17 @@ generate_list_offsets(cudf::column_view const &list_length,
                       rmm::cuda_stream_view stream = cudf::default_stream_value);
 
 /**
- * @brief lists_distinct_by_key
- * @return
+ * @brief Generates lists column by copying elements that are distinct by key from each input list
+ * row to the corresponding output row.
+ *
+ * The input lists column must be given such that each list element is a struct of <key, value>
+ * pair. With such input, a list containing distinct by key elements are defined such that the keys
+ * of all elements in the list are distinct (i.e., any two keys are always compared unequal).
+ *
+ * There will not be any validity check for the input. The caller is responsible to make sure that
+ * the input lists column has the right structure.
+ *
+ * @return A new list columns in which the elements in each list are distinct by key.
  */
 std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view const &input,
                                                     rmm::cuda_stream_view stream);
