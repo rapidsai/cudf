@@ -6,11 +6,11 @@ on:
       - 'pull-request/[0-9]+'
 
 jobs:
-  build-test-publish:
+  cudf-wheels:
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-wheels.yml@feat/wheel-ci-actions
     with:
       package-name: cudf
       package-dir: python/cudf
-      cibw-before-build: "dnf update -y && dnf install -y openssl-devel"
+      cibw-before-all: "dnf update -y && dnf install -y openssl-devel"
       cpu-smoketest-command: "python3 -c 'import cudf; print(cudf)'"
     secrets: inherit
