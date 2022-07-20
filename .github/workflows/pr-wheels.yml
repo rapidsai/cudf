@@ -23,6 +23,7 @@ jobs:
       uses: sevagh/shared-action-workflows/cibuildwheel@feat/wheel-ci-actions
       env:
         CIBW_ENVIRONMENT: "PYTHON_PACKAGE_CUDA_SUFFIX='-cuda11'"
+        CIBW_BEFORE_ALL_LINUX: "dnf update -y && dnf install -y openssl-devel openssl"
       with:
         package-dir: python/cudf
         output-dir: dist
