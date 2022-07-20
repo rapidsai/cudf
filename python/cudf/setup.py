@@ -23,6 +23,7 @@ install_requires = [
     "packaging",
     "pandas>=1.0,<1.5.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
+    "pyarrow==8.0.0",
     "typing_extensions",
 ]
 
@@ -129,7 +130,7 @@ cmdclass = versioneer.get_cmdclass()
 cmdclass["build_ext"] = build_ext_and_proto
 
 setup(
-    name="cudf",
+    name="cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
     version=versioneer.get_version(),
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",

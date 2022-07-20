@@ -9,4 +9,5 @@ requires = [
     "scikit-build>=0.13.1",
     "cmake>=3.20.1,!=3.23.0",
     "ninja",
+    "numpy",
 ]
