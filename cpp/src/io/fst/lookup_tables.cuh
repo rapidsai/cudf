@@ -61,7 +61,8 @@ class SingleSymbolSmemLUT {
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
   /**
-   * @brief Initializes the given \p sgid_init with the symbol group lookups defined by \p symbol_strings.
+   * @brief Initializes the given \p sgid_init with the symbol group lookups defined by \p
+   * symbol_strings.
    *
    * @param[out] sgid_init A hostdevice_vector that will be populated
    * @param[in] symbol_strings Array of strings, where the i-th string holds all symbols
@@ -269,7 +270,8 @@ class dfa_device_view {
 
 /**
  * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a sequence of symbols
- * that the finite-state transducer is supposed to output for each transition. The class uses shared memory for the lookups.
+ * that the finite-state transducer is supposed to output for each transition. The class uses shared
+ * memory for the lookups.
  *
  * @tparam OutSymbolT The symbol type being output
  * @tparam OutSymbolOffsetT Type sufficiently large to index into the lookup table of output symbols
