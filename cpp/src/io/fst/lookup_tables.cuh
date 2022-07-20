@@ -31,7 +31,7 @@ namespace cudf::io::fst::detail {
 /**
  * @brief Class template that can be plugged into the finite-state machine to look up the symbol
  * group index for a given symbol. Class template does not support multi-symbol lookups (i.e., no
- * look-ahead).
+ * look-ahead). The class uses shared memory for the lookups.
  *
  * @tparam SymbolT The symbol type being passed in to lookup the corresponding symbol group id
  */
@@ -61,7 +61,7 @@ class SingleSymbolSmemLUT {
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
   /**
-   * @brief
+   * @brief Initializes the given \p sgid_init with the symbol group lookups defined by \p symbol_strings.
    *
    * @param[out] sgid_init A hostdevice_vector that will be populated
    * @param[in] symbol_strings Array of strings, where the i-th string holds all symbols
@@ -128,9 +128,7 @@ class SingleSymbolSmemLUT {
 
 #else
     // CPU-side init
-    for (std::size_t i = 0; i < kernel_param.num_luts; i++) {
-      this->temp_storage.sym_to_sgid[i] = kernel_param.sym_to_sgid[i];
-    }
+    std::copy_n(kernel_param.sym_to_sgid, kernel_param.num_luts, this->temp_storage.sym_to_sgid);
 #endif
   }
 
@@ -271,7 +269,7 @@ class dfa_device_view {
 
 /**
  * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a sequence of symbols
- * that the finite-state transducer is supposed to output for each transition
+ * that the finite-state transducer is supposed to output for each transition. The class uses shared memory for the lookups.
  *
  * @tparam OutSymbolT The symbol type being output
  * @tparam OutSymbolOffsetT Type sufficiently large to index into the lookup table of output symbols
