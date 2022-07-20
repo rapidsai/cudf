@@ -1096,6 +1096,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             self.loc[key] = value
 
     def __repr__(self):
+        if isinstance(
+            self._column, cudf.core.column.datetime.TZDatetimeColumn
+        ):
+            return self._column._local_time.to_pandas().__repr__()
         _, height = get_terminal_size()
         max_rows = (
             height
@@ -1119,7 +1123,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             and not is_decimal_dtype(preprocess.dtype)
             and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
-            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
+            preprocess._column,
+            cudf.core.column.timedelta.TimeDeltaColumn,
         ):
             output = repr(
                 preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
@@ -4465,7 +4470,7 @@ class DatetimeProperties:
         )
 
     @_cudf_nvtx_annotate
-    def tz_localize(self, tz):
+    def tz_localize(self, tz, *args, **kwargs):
         localized = self.series._column.localize(tz)
         return self.series._from_data_like_self(
             {self.series._data.names[0]: localized}
