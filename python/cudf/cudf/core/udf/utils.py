@@ -24,7 +24,6 @@ from cudf.utils.dtypes import (
 from cudf.api.types import is_string_dtype
 from strings_udf._typing import str_view_arg_handler, string_view
 from strings_udf import ptxpath
-from strings_udf._lib.cudf_jit_udf import to_string_view_array
 
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -240,6 +239,8 @@ def _get_kernel(kernel_string, globals_, sig, func):
     return kernel
 
 def _launch_arg_from_col(col):
+    from strings_udf._lib.cudf_jit_udf import to_string_view_array
+
     data = col.data if not is_string_dtype(col.dtype) else to_string_view_array(col)
     mask = col.mask
     if mask is None:

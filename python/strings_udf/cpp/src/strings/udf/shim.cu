@@ -255,6 +255,17 @@ __device__ int pyisalnum(bool* nb_retval, void* str, std::int64_t chars_table) {
 }
 
 /*
+isalpha
+*/
+extern "C"
+__device__ int pyisalpha(bool* nb_retval, void* str, std::int64_t chars_table) {
+    cudf::string_view* str_view = reinterpret_cast<cudf::string_view*>(str);
+
+    *nb_retval = is_alpha(reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(chars_table), *str_view);
+    return 0;
+}
+
+/*
 count
 */
 

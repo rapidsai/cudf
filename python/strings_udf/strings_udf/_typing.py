@@ -358,7 +358,7 @@ def isalnum(st):
     return st.isalnum()
 
 @cuda_decl_registry.register_global(isalnum)
-class StringViewIsalnum(AbstractTemplate):
+class StringViewIsAlnum(AbstractTemplate):
     """
     Return True if the string is all alphanumeric characters else false
     """
@@ -369,6 +369,23 @@ class StringViewIsalnum(AbstractTemplate):
 
 _string_view_isalnum = cuda.declare_device(
     "pyisalnum",
+    types.boolean(types.CPointer(string_view), types.int64)
+)
+
+def isalpha(st):
+    return st.isalpha()
+
+@cuda_decl_registry.register_global(isalpha)
+class StringViewIsAlpha(AbstractTemplate):
+    """
+    Return True if the string is all alphabetical characters else false
+    """
+    def generic(self, args, kws):
+        if isinstance(args[0], any_string_ty) and len(args) == 1:
+            return nb_signature(types.boolean, string_view)
+
+_string_view_isalpha = cuda.declare_device(
+    "pyisalpha",
     types.boolean(types.CPointer(string_view), types.int64)
 )
 

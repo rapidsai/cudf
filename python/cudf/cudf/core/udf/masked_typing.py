@@ -53,6 +53,13 @@ class MaskedType(types.Type):
         # TODO - replace object with stringview immediately
         if isinstance(value, (types.PyObject, StringView)):
             self.value_type = string_view
+
+            from strings_udf import lowering
+            from strings_udf._lib.cudf_jit_udf import get_character_flags_table_ptr
+
+            character_flags_table_ptr = get_character_flags_table_ptr()
+            lowering.character_flags_table_ptr = character_flags_table_ptr
+
         elif isinstance(value, SUPPORTED_NUMBA_TYPES):
             self.value_type = value
         else:

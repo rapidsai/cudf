@@ -22,6 +22,7 @@ from strings_udf._typing import (
     _string_view_rfind,
     _string_view_isdigit,
     _string_view_isalnum,
+    _string_view_isalpha,
     _string_view_isnumeric,
     _string_view_isdecimal,
     _string_view_isspace,
@@ -30,6 +31,7 @@ from strings_udf._typing import (
     _string_view_count,
     isdigit,
     isalnum,
+    isalpha,
     isnumeric,
     isdecimal,
     isspace,
@@ -44,6 +46,8 @@ from strings_udf._typing import (
 )
 
 import operator
+
+character_flags_table_ptr = None
 
 # String function implementations
 def call_len_string_view(st):
@@ -401,6 +405,27 @@ def string_view_isalnum_impl(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_isalnum,
+        nb_signature(
+            types.boolean, types.CPointer(string_view), types.int64
+        ),
+        (sv_ptr, tbl_ptr),
+    )
+
+    return result
+
+def call_string_view_isalpha(st, tbl):
+    return _string_view_isalpha(st, tbl)
+
+
+@cuda_lower(isalpha, string_view)
+def string_view_isalpha_impl(context, builder, sig, args):
+    sv_ptr = builder.alloca(args[0].type)
+    builder.store(args[0], sv_ptr)
+    tbl_ptr = context.get_constant(types.int64, character_flags_table_ptr)
+
+    result = context.compile_internal(
+        builder,
+        call_string_view_isalpha,
         nb_signature(
             types.boolean, types.CPointer(string_view), types.int64
         ),

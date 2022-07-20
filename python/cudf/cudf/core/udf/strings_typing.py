@@ -103,6 +103,63 @@ class MaskedStringViewRFind(AbstractTemplate):
             MaskedType(types.int32), MaskedType(string_view), recvr=self.this
         )
 
+class MaskedStringViewIsAlnum(AbstractTemplate):
+    key = "MaskedType.isalnum"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+class MaskedStringViewIsAlpha(AbstractTemplate):
+    key = "MaskedType.isalpha"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+class MaskedStringViewIsDecimal(AbstractTemplate):
+    key = "MaskedType.isdecimal"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+class MaskedStringViewIsDigit(AbstractTemplate):
+    key = "MaskedType.isdigit"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+class MaskedStringViewIsLower(AbstractTemplate):
+    key = "MaskedType.islower"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+class MaskedStringViewIsUpper(AbstractTemplate):
+    key = "MaskedType.isupper"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+class MaskedStringViewIsSpace(AbstractTemplate):
+    key = "MaskedType.isspace"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), recvr=self.this
+        )
+
+
 @cuda_decl_registry.register_attr
 class MaskedStringViewAttrs(AttributeTemplate):
     key = MaskedType(string_view)
@@ -126,6 +183,42 @@ class MaskedStringViewAttrs(AttributeTemplate):
         return types.BoundFunction(
             MaskedStringViewRFind, MaskedType(string_view)
         )
+
+    def resolve_isalnum(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsAlnum, MaskedType(string_view)
+        )
+
+    def resolve_isalpha(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsAlpha, MaskedType(string_view)
+        )
+
+    def resolve_isdecimal(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsDecimal, MaskedType(string_view)
+        )
+
+    def resolve_isdigit(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsDigit, MaskedType(string_view)
+        )
+
+    def resolve_islower(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsLower, MaskedType(string_view)
+        )
+
+    def resolve_isupper(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsUpper, MaskedType(string_view)
+        )
+
+    def resolve_isspace(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIsSpace, MaskedType(string_view)
+        )
+
 
     def resolve_value(self, mod):
         return string_view

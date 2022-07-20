@@ -840,3 +840,188 @@ def test_string_udf_cmpops(data, other, cmpop):
         return cmpop(st, other)
 
     run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "gpu",
+                "2022",
+                "cuDF",
+                "again_gpu",
+            ]
+        }
+    ],
+)
+def test_string_udf_isalnum(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.isalnum()
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "",
+                "  ",
+                "12 ab",
+                "@2a",
+            ]
+        }
+    ],
+)
+def test_string_udf_isalpha(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.isalpha()
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "123",
+                "",
+                "  ",
+                "12 ab",
+                "@2a",
+            ]
+        }
+    ],
+)
+def test_string_udf_isdigit(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.isdigit()
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "",
+                "  ",
+                "12 ab",
+                "@2a",
+                "12.34",
+                "0.123",
+                ".123"
+                ".12abc"
+            ]
+        }
+    ],
+)
+def test_string_udf_isdecimal(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.isdecimal()
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "",
+                "rApIdS",
+                "12 ab",
+                "@2a",
+                "12.34",
+                "ABC DEF"
+            ]
+        }
+    ],
+)
+def test_string_udf_isupper(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.isupper()
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "",
+                "rApIdS",
+                "12 ab",
+                "@2a",
+                "12.34",
+                "abc def"
+            ]
+        }
+    ],
+)
+def test_string_udf_islower(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.islower()
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "",
+                "  ",
+                "   123   ",
+                "2022 2222",
+                "cuDF",
+            ]
+        }
+    ],
+)
+def test_string_udf_isspace(data):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.isspace()
+
+    run_masked_udf_test(func, data, check_dtype=False)
