@@ -57,7 +57,6 @@ constexpr bool enable_bool_rle = false;
 
 using ::cudf::detail::device_2dspan;
 
-constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
@@ -99,30 +98,6 @@ uint32_t __device__ physical_type_len(Type physical_type, type_id id)
     case BOOLEAN: return 1u;
     default: return sizeof(int32_t);
   }
-}
-
-/**
- * @brief Return a 12-bit hash from a byte sequence
- */
-inline __device__ uint32_t hash_string(const string_view& val)
-{
-  char const* ptr = val.data();
-  uint32_t len    = val.size_bytes();
-  if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
-  } else {
-    return 0;
-  }
-}
-
-inline __device__ uint32_t uint32_init_hash(uint32_t v)
-{
-  return (v + (v >> 11) + (v >> 22)) & ((1 << init_hash_bits) - 1);
-}
-
-inline __device__ uint32_t uint64_init_hash(uint64_t v)
-{
-  return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
 // blockDim {512,1,1}
