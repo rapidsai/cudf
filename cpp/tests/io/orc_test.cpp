@@ -1118,7 +1118,9 @@ TEST_F(OrcReaderTest, ZstdCompressionRegression)
   cudf_io::orc_reader_options in_opts =
     cudf_io::orc_reader_options::builder(source).use_index(false);
 
-  CUDF_EXPECT_NO_THROW(cudf_io::read_orc(in_opts));
+  cudf::io::table_with_metadata result;
+  CUDF_EXPECT_NO_THROW(result = cudf_io::read_orc(in_opts));
+  EXPECT_EQ(1920800, result.tbl->num_rows());
 }
 
 TEST_F(OrcReaderTest, MultipleInputs)
