@@ -264,15 +264,7 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
   std::vector<detail::dremel_data> dremel_data;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
-      // Check nullability of the list
-      std::vector<uint8_t> nullability;
-      auto cur_col = col;
-      while (cur_col.type().id() == type_id::LIST) {
-        nullability.push_back(static_cast<uint8_t>(cur_col.nullable()));
-        cur_col = cur_col.child(lists_column_view::child_column_index);
-      }
-      nullability.push_back(static_cast<uint8_t>(cur_col.nullable()));
-      dremel_data.push_back(detail::get_dremel_data(col, nullability, stream));
+      dremel_data.push_back(detail::get_dremel_data(col, {}, stream));
     }
   }
 
