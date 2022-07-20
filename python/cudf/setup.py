@@ -127,7 +127,7 @@ cmdclass = versioneer.get_cmdclass()
 cmdclass["build_ext"] = build_ext_and_proto
 
 setup(
-    name="cudf",
+    name="cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
     version=versioneer.get_version(),
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",

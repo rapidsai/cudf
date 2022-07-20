@@ -1,0 +1,96 @@
+name: cuDF wheels
+
+on:
+  push:
+    branches:
+      - 'pull-request/[0-9]+'
+
+jobs:
+  wheel-build:
+    name: cibuildwheel ${{ matrix.python-version }} ${{ matrix.labels[2] }}
+    runs-on: ${{ matrix.labels }}
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+        labels: [[self-hosted, linux, amd64, cpu4], [self-hosted, linux, arm64, cpu4]]
+    steps:
+    - name: checkout cudf repo
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0 # unshallow fetch for setuptools-scm
+
+    - name: Build wheels with custom RAPIDS cibuildwheel action
+      uses: sevagh/shared-action-workflows/cibuildwheel@feat/wheel-ci-actions
+      env:
+        CIBW_ENVIRONMENT: "PYTHON_PACKAGE_CUDA_SUFFIX='-cuda11'"
+      with:
+        package-dir: python/cudf
+        output-dir: dist
+        manylinux-platform: manylinux_2_24
+        python-version: "${{ matrix.python-version }}"
+        #build-sdist-on: "x86_64-3.8"
+
+    - name: Download gha-tools
+      run: |
+        wget https://github.com/rapidsai/gha-tools/releases/latest/download/tools.tar.gz -O - | sudo tar -xz -C /usr/local/bin
+        pip install awscli
+
+    - name: Upload wheels to downloads.rapids.ai
+      run: rapids-upload-wheels-to-s3 dist
+      env:
+        RAPIDS_BUILD_TYPE: "pull-request"
+        RAPIDS_PY_VER: ${{ matrix.python-version }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+
+  wheel-test:
+    name: wheel smoketest ${{ matrix.python-version }} ${{ matrix.labels[2] }}
+    runs-on: ${{ matrix.labels }}
+    needs: wheel-build
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+        labels: [[self-hosted, linux, amd64, cpu4], [self-hosted, linux, arm64, cpu4]]
+    steps:
+    - name: Download gha-tools
+      run: |
+        wget https://github.com/rapidsai/gha-tools/releases/latest/download/tools.tar.gz -O - | sudo tar -xz -C /usr/local/bin
+        pip install awscli
+
+    - name: Download wheels from downloads.rapids.ai
+      run: rapids-download-wheels-from-s3 ./dist
+      env:
+        RAPIDS_BUILD_TYPE: "pull-request"
+        RAPIDS_PY_VER: ${{ matrix.python-version }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+
+    - name: Run wheel smoketests with custom RAPIDS citestwheel action
+      uses: sevagh/shared-action-workflows/citestwheel@feat/wheel-ci-actions
+      env:
+        RAPIDS_PY_VER: ${{ matrix.python-version }}
+      with:
+        wheel-dir: $(pwd)/dist
+        cpu-smoketest-command: >
+          "python3 -m venv /clean-venv &&
+          . /clean-venv/bin/activate &&
+          set -x &&
+          python3 -m pip install --verbose /wheels/cudf_cuda11*-cp${RAPIDS_PY_VER/./}-cp${RAPIDS_PY_VER/./}-manylinux_2_24_$(uname -m).whl &&
+          python3 -m pip check &&
+          python3 -c 'import cudf; print(cudf)';"
+        #gpu-smoketest-command: >
+        #  "python3 -m venv /clean-venv &&
+        #  . /clean-venv/bin/activate &&
+        #  set -x &&
+        #  python3 -m pip install --verbose /wheels/cudf_cuda11*-cp${RAPIDS_PY_VER/./}-cp${RAPIDS_PY_VER/./}-manylinux_2_24_$(uname -m).whl &&
+        #  python3 -m pip check &&
+        #  python3 -c 'import cudf; print(cudf); buf = cudf.DeviceBuffer(size=100); print(buf.size); print(buf.ptr); assert buf.size == 100';"
+
+    - name: Publish wheels to RAPIDS internal PyPI
+      run: |
+        pip install twine
+        twine upload ./dist/*.whl
+      env:
+        TWINE_USERNAME: cibuildwheel
+        TWINE_PASSWORD: ${{ secrets.RAPIDSAI_PYPI_CI_PASSWORD }}
+        TWINE_REPOSITORY_URL: "https://pypi.k8s.rapids.ai/simple/"
