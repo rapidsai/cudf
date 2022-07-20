@@ -13,7 +13,4 @@ jobs:
       package-dir: python/cudf
       cibw-before-all: "dnf update -y && dnf install -y openssl-devel openssl"
       cpu-smoketest-command: "python3 -c 'import cudf; print(cudf)';"
-        #gpu-smoketest-command: "python3 -c 'import rmm; print(rmm); buf = rmm.DeviceBuffer(size=100); print(buf.size); print(buf.ptr); assert buf.size == 100';"
-    env:
-      CIBW_BUILD_VERBOSITY: "3"
     secrets: inherit
