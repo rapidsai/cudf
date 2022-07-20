@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 
 #include <cub/cub.cuh>
@@ -52,12 +53,14 @@ class MultiFragmentInRegArray {
     0x01U << (cub::Log2<(AVAIL_BITS_PER_FRAG_ITEM + 1)>::VALUE - 1);
 
   // The total number of fragments required to store all the items
-  static constexpr uint32_t FRAGMENTS_PER_ITEM =
-    (MIN_BITS_PER_ITEM + BITS_PER_FRAG_ITEM - 1) / BITS_PER_FRAG_ITEM;
+  static constexpr uint32_t FRAGMENTS_PER_ITEM = cudf::util::div_rounding_up_safe(MIN_BITS_PER_ITEM, BITS_PER_FRAG_ITEM);
 
   //------------------------------------------------------------------------------
   // HELPER FUNCTIONS
   //------------------------------------------------------------------------------
+  /**
+   * @brief Returns the \p num_bits bits starting at \p bit_start
+   */
   CUDF_HOST_DEVICE uint32_t bfe(const uint32_t& data, uint32_t bit_start, uint32_t num_bits) const
   {
 #if CUB_PTX_ARCH > 0
@@ -68,6 +71,9 @@ class MultiFragmentInRegArray {
 #endif
   }
 
+/**
+ * @brief Replaces the \p num_bits bits in \p data starting from \p bit_start with the lower \p num_bits from \p bits.
+ */
   CUDF_HOST_DEVICE void bfi(uint32_t& data,
                             uint32_t bits,
                             uint32_t bit_start,
