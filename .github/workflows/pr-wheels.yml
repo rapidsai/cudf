@@ -6,7 +6,7 @@ on:
       - 'pull-request/[0-9]+'
 
 jobs:
-  cudf-wheels:
+  cudf-wheel:
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-wheels.yml@feat/wheel-ci-actions
     with:
       package-name: cudf
