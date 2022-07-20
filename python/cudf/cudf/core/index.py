@@ -43,6 +43,7 @@ from cudf.core.column import (
     IntervalColumn,
     NumericalColumn,
     StringColumn,
+    StructColumn,
     TimeDeltaColumn,
     arange,
     column,
@@ -108,7 +109,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
             index_class_type = StringIndex
         elif isinstance(values, CategoricalColumn):
             index_class_type = CategoricalIndex
-        elif isinstance(values, IntervalColumn):
+        elif isinstance(values, (IntervalColumn, StructColumn)):
             index_class_type = IntervalIndex
     else:
         index_class_type = cudf.MultiIndex
@@ -555,17 +556,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def __getattr__(self, key):
-        # For methods that are not defined for RangeIndex we attempt to operate
-        # on the corresponding integer index if possible.
-        try:
-            return getattr(self._as_int64(), key)
-        except AttributeError:
-            raise AttributeError(
-                f"'{type(self)}' object has no attribute {key}"
-            )
-
-    @_cudf_nvtx_annotate
     def get_loc(self, key, method=None, tolerance=None):
         # Given an actual integer,
         idx = (key - self._start) / self._step
@@ -773,6 +763,91 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def _binaryop(self, other, op: str):
         return self._as_int64()._binaryop(other, op=op)
+
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
+        # TODO: pandas supports directly merging RangeIndex objects and can
+        # intelligently create RangeIndex outputs depending on the type of
+        # join. We need to implement that for the supported special cases.
+        return self._as_int64().join(other, how, level, return_indexers, sort)
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def _column(self):
+        return self._as_int64()._column
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def _columns(self):
+        return self._as_int64()._columns
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def values_host(self):
+        return self.to_pandas().values
+
+    @_cudf_nvtx_annotate
+    def argsort(
+        self,
+        ascending=True,
+        na_position="last",
+    ):
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
+        indices = cupy.arange(0, len(self))
+        if (ascending and self._step < 0) or (
+            not ascending and self._step > 0
+        ):
+            indices = indices[::-1]
+        return indices
+
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        return self._as_int64().where(cond, other, inplace)
+
+    @_cudf_nvtx_annotate
+    def to_numpy(self):
+        return self.values_host
+
+    @_cudf_nvtx_annotate
+    def to_arrow(self):
+        return self._as_int64().to_arrow()
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".to_cupy()\nTo explicitly construct a host matrix, consider "
+            "using .to_numpy()."
+        )
+
+    @_cudf_nvtx_annotate
+    def nunique(self):
+        return len(self)
+
+    @_cudf_nvtx_annotate
+    def isna(self):
+        return cupy.zeros(len(self), dtype=bool)
+
+    @_cudf_nvtx_annotate
+    def _minmax(self, meth: str):
+        no_steps = len(self) - 1
+        if no_steps == -1:
+            return np.nan
+        elif (meth == "min" and self.step > 0) or (
+            meth == "max" and self.step < 0
+        ):
+            return self.start
+
+        return self.start + self.step * no_steps
+
+    def min(self):
+        return self._minmax("min")
+
+    def max(self):
+        return self._minmax("max")
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance

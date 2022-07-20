@@ -248,7 +248,12 @@ class IndexedFrame(Frame):
     }
 
     def __init__(self, data=None, index=None):
-        super().__init__(data=data, index=index)
+        super().__init__(data=data)
+        # TODO: Right now it is possible to initialize an IndexedFrame without
+        # an index. The code's correctness relies on the subclass constructors
+        # assigning the attribute after the fact. We should restructure those
+        # to ensure that this constructor is always invoked with an index.
+        self._index = index
 
     def to_dict(self, *args, **kwargs):  # noqa: D102
         raise TypeError(
@@ -261,6 +266,10 @@ class IndexedFrame(Frame):
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
         return len(self._index)
+
+    @property
+    def _index_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
+        return self._index._data.names
 
     @classmethod
     def _from_data(

@@ -16,11 +16,11 @@
 
 #pragma once
 
-#include "lead_lag_nested_detail.cuh"
-#include "rolling/rolling_collect_list.cuh"
-#include "rolling/rolling_detail.hpp"
-#include "rolling/rolling_jit_detail.hpp"
-#include "rolling_detail.hpp"
+#include "lead_lag_nested.cuh"
+#include "nth_element.cuh"
+#include "rolling.hpp"
+#include "rolling_collect_list.cuh"
+#include "rolling_jit.hpp"
 
 #include <reductions/struct_minmax_util.cuh>
 
@@ -38,7 +38,7 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/lists/detail/drop_list_duplicates.hpp>
+#include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -604,7 +604,7 @@ struct DeviceRollingLag {
 };
 
 /**
- * @brief Maps an `InputType and `aggregation::Kind` value to it's corresponding
+ * @brief Maps an `InputType and `aggregation::Kind` value to its corresponding
  * rolling window operator.
  *
  * @tparam InputType The input type to map to its corresponding operator
@@ -818,6 +818,13 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     aggs.push_back(agg.clone());
     return aggs;
   }
+
+  // NTH_ELEMENT aggregations are computed in finalize(). Skip preprocessing.
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type, cudf::detail::nth_element_aggregation const&) override
+  {
+    return {};
+  }
 };
 
 /**
@@ -921,8 +928,8 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
 
-    result = lists::detail::drop_list_duplicates(
-      lists_column_view(collected_list->view()), agg._nulls_equal, agg._nans_equal, stream, mr);
+    result = lists::detail::distinct(
+      lists_column_view{collected_list->view()}, agg._nulls_equal, agg._nans_equal, stream, mr);
   }
 
   // perform the element-wise square root operation on result of VARIANCE
@@ -959,6 +966,17 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
     else {
       result = std::move(intermediate);
     }
+  }
+
+  // Nth_ELEMENT aggregation.
+  void visit(cudf::detail::nth_element_aggregation const& agg) override
+  {
+    result =
+      agg._null_handling == null_policy::EXCLUDE
+        ? rolling::nth_element<null_policy::EXCLUDE>(
+            agg._n, input, preceding_window_begin, following_window_begin, min_periods, stream, mr)
+        : rolling::nth_element<null_policy::INCLUDE>(
+            agg._n, input, preceding_window_begin, following_window_begin, min_periods, stream, mr);
   }
 
  private:

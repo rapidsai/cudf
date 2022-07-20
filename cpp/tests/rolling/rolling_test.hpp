@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 
 // return true if the aggregation is valid for the specified ColumnType
 // valid aggregations may still be further specialized (eg, is_string_specialized)
-template <typename ColumnType, class AggOp, cudf::aggregation::Kind op>
+template <typename ColumnType, cudf::aggregation::Kind op>
 static constexpr bool is_rolling_supported()
 {
   using namespace cudf;
@@ -31,23 +31,11 @@ static constexpr bool is_rolling_supported()
   if (!cudf::detail::is_valid_aggregation<ColumnType, op>()) {
     return false;
   } else if (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>()) {
-    constexpr bool is_comparable_countable_op = std::is_same_v<AggOp, DeviceMin> or
-                                                std::is_same_v<AggOp, DeviceMax> or
-                                                std::is_same_v<AggOp, DeviceCount>;
-
-    constexpr bool is_operation_supported =
-      (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
-      (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-      (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
-      (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
-
-    constexpr bool is_valid_numeric_agg =
-      (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>() or
-       is_comparable_countable_op) and
-      is_operation_supported;
-
-    return is_valid_numeric_agg;
-
+    return (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+           (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER) or
+           (op == aggregation::LEAD) or (op == aggregation::LAG) or
+           (op == aggregation::COLLECT_LIST);
   } else if (cudf::is_timestamp<ColumnType>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or

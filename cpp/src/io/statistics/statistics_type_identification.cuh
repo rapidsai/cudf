@@ -123,13 +123,14 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    int64_t,
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
     typename std::conditional_t<std::is_same_v<T, string_view>, string_view, void>>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
   // decimal32/64      -> int64_t
+  // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
   // timestamp_[T]     -> int64_t
@@ -177,17 +178,18 @@ class aggregation_type {
   using arithmetic_aggregation_type =
     typename std::conditional_t<std::is_integral_v<T>, integral_aggregation_type, double>;
 
-  using non_arithmetic_aggregation_type =
-    typename std::conditional_t<cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
-                                  cudf::is_timestamp<T>()  // To be disabled with static_assert
-                                  or std::is_same_v<T, string_view>,
-                                int64_t,
-                                void>;
+  using non_arithmetic_aggregation_type = typename std::conditional_t<
+    cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
+      cudf::is_timestamp<T>()  // To be disabled with static_assert
+      or std::is_same_v<T, string_view>,
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
+    void>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
   // decimal32/64      -> int64_t
+  // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> int64_t
   // NOTE : timestamps do not have an aggregation type

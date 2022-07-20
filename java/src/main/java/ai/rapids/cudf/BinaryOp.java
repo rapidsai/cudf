@@ -31,28 +31,29 @@ public enum BinaryOp {
   PMOD(7), // pmod
   PYMOD(8), // mod operator % follow by python's sign rules for negatives
   POW(9),
-  LOG_BASE(10), // logarithm to the base
-  ATAN2(11), // atan2
-  SHIFT_LEFT(12), // bitwise shift left (<<)
-  SHIFT_RIGHT(13), // bitwise shift right (>>)
-  SHIFT_RIGHT_UNSIGNED(14), // bitwise shift right (>>>)
-  BITWISE_AND(15),
-  BITWISE_OR(16),
-  BITWISE_XOR(17),
-  LOGICAL_AND(18),
-  LOGICAL_OR(19),
-  EQUAL(20),
-  NOT_EQUAL(21),
-  LESS(22),
-  GREATER(23),
-  LESS_EQUAL(24), // <=
-  GREATER_EQUAL(25), // >=
-  NULL_EQUALS(26), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
-  NULL_MAX(27), // MAX but NULL < not NULL
-  NULL_MIN(28), // MIN but NULL > not NULL
-  //NOT IMPLEMENTED YET GENERIC_BINARY(29);
-  NULL_LOGICAL_AND(30),
-  NULL_LOGICAL_OR(31);
+  INT_POW(10), // int ^ int, used to avoid floating point precision loss
+  LOG_BASE(11), // logarithm to the base
+  ATAN2(12), // atan2
+  SHIFT_LEFT(13), // bitwise shift left (<<)
+  SHIFT_RIGHT(14), // bitwise shift right (>>)
+  SHIFT_RIGHT_UNSIGNED(15), // bitwise shift right (>>>)
+  BITWISE_AND(16),
+  BITWISE_OR(17),
+  BITWISE_XOR(18),
+  LOGICAL_AND(19),
+  LOGICAL_OR(20),
+  EQUAL(21),
+  NOT_EQUAL(22),
+  LESS(23),
+  GREATER(24),
+  LESS_EQUAL(25), // <=
+  GREATER_EQUAL(26), // >=
+  NULL_EQUALS(27), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
+  NULL_MAX(28), // MAX but NULL < not NULL
+  NULL_MIN(29), // MIN but NULL > not NULL
+  //NOT IMPLEMENTED YET GENERIC_BINARY(30);
+  NULL_LOGICAL_AND(31),
+  NULL_LOGICAL_OR(32);
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(

@@ -236,10 +236,11 @@ __global__ void __launch_bounds__(128)
 __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                device_span<gpu::EncPage> pages,
+               device_span<size_type> page_sizes,
+               device_span<size_type> comp_page_sizes,
                device_span<parquet_column_device_view const> col_desc,
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
-               size_t max_page_comp_data_size,
                int32_t num_columns,
                size_t max_page_size_bytes,
                size_type max_page_size_rows)
@@ -299,13 +300,16 @@ __global__ void __launch_bounds__(128)
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
-        comp_page_offset += page_g.max_hdr_size + max_page_comp_data_size;
+        if (not comp_page_sizes.empty()) {
+          comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
+        }
         page_headers_size += page_g.max_hdr_size;
         max_page_data_size = max(max_page_data_size, page_g.max_data_size);
       }
       __syncwarp();
       if (t == 0) {
         if (not pages.empty()) pages[ck_g.first_page] = page_g;
+        if (not page_sizes.empty()) page_sizes[ck_g.first_page] = page_g.max_data_size;
         if (page_grstats) page_grstats[ck_g.first_page] = pagestats_g;
       }
       num_pages = 1;
@@ -366,8 +370,10 @@ __global__ void __launch_bounds__(128)
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.page_data        = ck_g.uncompressed_bfr + page_offset;
-          page_g.compressed_data  = ck_g.compressed_bfr + comp_page_offset;
+          page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+          if (not comp_page_sizes.empty()) {
+            page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
+          }
           page_g.start_row        = cur_row;
           page_g.num_rows         = rows_in_page;
           page_g.num_leaf_values  = leaf_values_in_page;
@@ -389,7 +395,9 @@ __global__ void __launch_bounds__(128)
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset += page_g.max_hdr_size + page_g.max_data_size;
-          comp_page_offset += page_g.max_hdr_size + max_page_comp_data_size;
+          if (not comp_page_sizes.empty()) {
+            comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page + num_pages];
+          }
           page_headers_size += page_g.max_hdr_size;
           max_page_data_size = max(max_page_data_size, page_g.max_data_size);
           cur_row += rows_in_page;
@@ -398,7 +406,9 @@ __global__ void __launch_bounds__(128)
         __syncwarp();
         if (t == 0) {
           if (not pages.empty()) { pages[ck_g.first_page + num_pages] = page_g; }
-
+          if (not page_sizes.empty()) {
+            page_sizes[ck_g.first_page + num_pages] = page_g.max_data_size;
+          }
           if (page_grstats) { page_grstats[ck_g.first_page + num_pages] = pagestats_g; }
         }
 
@@ -431,6 +441,7 @@ __global__ void __launch_bounds__(128)
       ck_g.bfr_size           = page_offset;
       ck_g.page_headers_size  = page_headers_size;
       ck_g.max_page_data_size = max_page_data_size;
+      if (not comp_page_sizes.empty()) { ck_g.compressed_size = comp_page_offset; }
       pagestats_g.start_chunk = ck_g.first_page + ck_g.use_dictionary;  // Exclude dictionary
       pagestats_g.num_chunks  = num_pages - ck_g.use_dictionary;
     }
@@ -1263,10 +1274,22 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
+// byteswap 128 bit integer, placing result in dst in network byte order.
+// dst must point to at least 16 bytes of memory.
+static __device__ void byte_reverse128(__int128_t v, void* dst)
+{
+  auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
+  auto const d_char_ptr = static_cast<unsigned char*>(dst);
+  thrust::copy(thrust::seq,
+               thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+               thrust::make_reverse_iterator(v_char_ptr),
+               d_char_ptr);
+}
+
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
                                      uint8_t dtype,
-                                     float* fp_scratch)
+                                     void* scratch)
 {
   uint8_t *end, dtype_len;
   switch (dtype) {
@@ -1298,10 +1321,17 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     } else {
       lmin = lmax = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
-        fp_scratch[0] = s->min_value.fp_val;
-        fp_scratch[1] = s->max_value.fp_val;
-        vmin          = &fp_scratch[0];
-        vmax          = &fp_scratch[1];
+        auto const fp_scratch = static_cast<float*>(scratch);
+        fp_scratch[0]         = s->min_value.fp_val;
+        fp_scratch[1]         = s->max_value.fp_val;
+        vmin                  = &fp_scratch[0];
+        vmax                  = &fp_scratch[1];
+      } else if (dtype == dtype_decimal128) {
+        auto const d128_scratch = static_cast<uint8_t*>(scratch);
+        byte_reverse128(s->min_value.d128_val, d128_scratch);
+        byte_reverse128(s->max_value.d128_val, &d128_scratch[16]);
+        vmin = &d128_scratch[0];
+        vmax = &d128_scratch[16];
       } else {
         vmin = &s->min_value;
         vmax = &s->max_value;
@@ -1325,7 +1355,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) float fp_scratch[2];
+  __shared__ __align__(8) unsigned char scratch[32];
 
   uint32_t t = threadIdx.x;
 
@@ -1340,7 +1370,7 @@ __global__ void __launch_bounds__(128)
     if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
       hdr_end =
-        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
+        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, scratch);
       page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
@@ -1381,8 +1411,8 @@ __global__ void __launch_bounds__(128)
       // Optionally encode page-level statistics
       if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
-        encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
+        encoder.set_ptr(
+          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
@@ -1977,23 +2007,25 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
 
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
+                      device_span<size_type> page_sizes,
+                      device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
-                      size_t max_page_comp_data_size,
                       rmm::cuda_stream_view stream)
 {
   auto num_rowgroups = chunks.size().first;
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(chunks,
                                                      pages,
+                                                     page_sizes,
+                                                     comp_page_sizes,
                                                      col_desc,
                                                      page_grstats,
                                                      chunk_grstats,
-                                                     max_page_comp_data_size,
                                                      num_columns,
                                                      max_page_size_bytes,
                                                      max_page_size_rows);

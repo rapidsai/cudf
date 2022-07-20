@@ -2181,3 +2181,10 @@ def test_join_multiindex_index():
     expect = lhs.to_pandas().join(rhs.to_pandas(), how="inner")
     got = lhs.join(rhs, how="inner")
     assert_join_results_equal(expect, got, how="inner")
+
+
+def test_dataframe_join_on():
+    """Verify that specifying the on parameter gives a NotImplementedError."""
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    with pytest.raises(NotImplementedError):
+        df.join(df, on="a")

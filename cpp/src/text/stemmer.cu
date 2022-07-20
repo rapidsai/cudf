@@ -58,11 +58,11 @@ __device__ bool is_consonant(cudf::string_view::const_iterator string_iterator)
 {
   auto ch = *string_iterator;
   cudf::string_view const d_vowels("aeiou", 5);
-  if (d_vowels.find(ch) >= 0) return false;
+  if (d_vowels.find(ch) != cudf::string_view::npos) return false;
   if ((ch != 'y') || (string_iterator.position() == 0)) return true;
   // for 'y' case, check previous character is a consonant
   --string_iterator;
-  return d_vowels.find(*string_iterator) >= 0;
+  return d_vowels.find(*string_iterator) != cudf::string_view::npos;
 }
 
 /**
