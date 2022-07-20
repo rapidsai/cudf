@@ -2044,8 +2044,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_joinStrings(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *env, jobject j_object,
                                                                       jlongArray handles,
                                                                       jlong row_count) {
