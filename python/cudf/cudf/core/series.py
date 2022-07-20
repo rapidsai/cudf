@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
+import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
@@ -51,7 +52,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.groupby.groupby import SeriesGroupBy
+from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
@@ -3198,8 +3199,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self - self.shift(periods=periods)
 
-    @copy_docstring(SeriesGroupBy)
     @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        groupby_doc_template.format(
+            ret=textwrap.dedent(
+                """
+                Returns
+                -------
+                SeriesGroupBy
+                    Returns a SeriesGroupBy object that contains
+                    information about the groups.
+                """
+            )
+        )
+    )
     def groupby(
         self,
         by=None,

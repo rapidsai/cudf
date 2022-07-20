@@ -9,6 +9,7 @@ import numbers
 import pickle
 import re
 import sys
+import textwrap
 import warnings
 from collections import abc, defaultdict
 from typing import (
@@ -66,7 +67,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.groupby.groupby import DataFrameGroupBy
+from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
     BaseIndex,
     Index,
@@ -3826,7 +3827,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @_cudf_nvtx_annotate
-    @copy_docstring(DataFrameGroupBy)
+    @docutils.doc_apply(
+        groupby_doc_template.format(
+            ret=textwrap.dedent(
+                """
+                Returns
+                -------
+                DataFrameGroupBy
+                    Returns a DataFrameGroupBy object that contains
+                    information about the groups.
+                """
+            )
+        )
+    )
     def groupby(
         self,
         by=None,
