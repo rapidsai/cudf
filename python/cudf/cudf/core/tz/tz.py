@@ -44,8 +44,10 @@ def tz_localize(data, zone):
     tz_zone = get_tz_for_zone(zone)
 
     time_start = tz_zone["time_start"]
-    gmt_offset = tz_zone["gmt_offset"].astype(
-        f"timedelta64[{data._time_unit}]"
+    gmt_offset = (
+        tz_zone["gmt_offset"]
+        .astype("timedelta64[s]")
+        .astype(f"timedelta64[{data._time_unit}]")
     )
 
     local_time_new_offsets = time_start[1:]._column + gmt_offset[1:]._column
@@ -77,7 +79,7 @@ def tz_localize(data, zone):
         data, nonexistent_begin, True, nonexistent_end, False
     ).notnull()
 
-    return ambiguous or nonexistent
+    return ambiguous._binaryop(nonexistent, "__or__")
 
 
 def to_gmt(data, zone):

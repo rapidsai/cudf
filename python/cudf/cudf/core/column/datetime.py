@@ -530,23 +530,20 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.tz.tz import tz_localize
 
         dtype = cudf.core.dtypes.Datetime64TZDtype(self._time_unit, tz)
-        # ambiguous_or_nonexistent = tz_localize(self, tz)
-        # mask = libcudf.transform.bools_to_mask(ambiguous_or_nonexistent)
-        # ambiguous_or_nonexistent = ambiguous_or_nonexistent.set_mask(mask)
-        # result_mask = libcudf.null_mask.bitmask_or(
-        #     [self, ambiguous_or_nonexistent]
-        # )
-        # result_mask = result_mask if result_mask.size else None
+        ambiguous_or_nonexistent = tz_localize(self, tz)
         result = TZDatetimeColumn(
             data=self.base_data,
             dtype=dtype,
             mask=None,
-            size=self.base_size,
+            size=self.size,
             offset=self.offset,
             null_count=self.null_count,
         )
+        result = result._scatter_by_column(
+            result.isnull() and ambiguous_or_nonexistent,
+            cudf.Scalar(cudf.NA, dtype=result.dtype.base),
+        )
         return result
-        #   return result.set_mask(result_mask)
 
     def _with_type_metadata(self, dtype):
         if is_datetime64tz_dtype(dtype):
@@ -579,9 +576,6 @@ class TZDatetimeColumn(DatetimeColumn):
             offset=offset,
             null_count=null_count,
         )
-        if not is_datetime64tz_dtype(dtype):
-            breakpoint()
-
         self._dtype = dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
@@ -638,6 +632,17 @@ class TZDatetimeColumn(DatetimeColumn):
 
     def round(self, freq: str) -> ColumnBase:
         return libcudf.datetime.round_datetime(self, freq)
+
+    def convert(self, tz):
+        if tz is None:
+            return self._local_time
+        return self.__class__(
+            data=self.base_data,
+            dtype=pd.DatetimeTZDtype(tz=tz),
+            mask=self.base_mask,
+            size=self.size,
+            offset=self.offset,
+        )
 
 
 def infer_format(element: str, **kwargs) -> str:
