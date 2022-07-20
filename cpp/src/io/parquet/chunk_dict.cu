@@ -119,10 +119,11 @@ __global__ void __launch_bounds__(block_size)
 
   // Find the bounds of values in leaf column to be inserted into the map for current chunk
   auto const cudf_col               = *(col->parent_column);
-  size_type const s_start_value_idx = row_to_value_idx(start_row, cudf_col);
-  size_type const end_value_idx     = row_to_value_idx(end_row, cudf_col);
+  size_type const s_start_value_idx = row_to_value_idx(start_row, cudf_col, col->physical_type);
+  size_type const end_value_idx     = row_to_value_idx(end_row, cudf_col, col->physical_type);
 
-  column_device_view const& data_col = *col->leaf_column;
+  column_device_view const& data_col =
+    col->physical_type == BYTE_ARRAY ? cudf_col : *col->leaf_column;
 
   // Make a view of the hash map
   auto hash_map_mutable =
@@ -151,11 +152,27 @@ __global__ void __launch_bounds__(block_size)
           case Type::INT96: return 12;
           case Type::FLOAT: return 4;
           case Type::DOUBLE: return 8;
-          case Type::BYTE_ARRAY:
-            if (data_col.type().id() == type_id::STRING) {
+          case Type::BYTE_ARRAY: {
+            auto const col_type = data_col.type().id();
+            if (col_type == type_id::STRING) {
               // Strings are stored as 4 byte length + string bytes
               return 4 + data_col.element<string_view>(val_idx).size_bytes();
+            } else if (col_type == type_id::INT8 || col_type == type_id::UINT8) {
+              // Binary is stored as 4 byte length + bytes
+              printf("leaf col(%p with parent %p) is type %d and has %d elements and %d children\n",
+                     col->leaf_column,
+                     &cudf_col,
+                     (int)data_col.type().id(),
+                     data_col.size(),
+                     data_col.num_child_columns());
+              printf("reading from %d to %d and my index is %d!\n",
+                     s_start_value_idx,
+                     end_value_idx,
+                     val_idx);
+              return 4 + get_element<byte_array_view>(data_col, val_idx).size_bytes();
             }
+            CUDF_UNREACHABLE("Unsupported type for byte array");
+          }
           case Type::FIXED_LEN_BYTE_ARRAY:
             if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
           default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
@@ -232,9 +249,9 @@ __global__ void __launch_bounds__(block_size)
 
   // Find the bounds of values in leaf column to be searched in the map for current chunk
   auto const cudf_col           = *(col->parent_column);
-  auto const s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
-  auto const s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
-  auto const end_value_idx      = row_to_value_idx(end_row, cudf_col);
+  auto const s_start_value_idx  = row_to_value_idx(start_row, cudf_col, col->physical_type);
+  auto const s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col, col->physical_type);
+  auto const end_value_idx      = row_to_value_idx(end_row, cudf_col, col->physical_type);
 
   column_device_view const& data_col = *col->leaf_column;
 

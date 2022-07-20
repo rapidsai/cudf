@@ -503,11 +503,46 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
       };
 
-      if (col->type().id() == type_id::STRUCT) {
+      printf("saving col %p with type %d, %d rows, %d children (out as binary is %s)\n",
+             &col,
+             (int)col->type().id(),
+             col->size(),
+             (int)col->children.size(),
+             col_meta.is_enabled_output_as_binary() ? "true" : "false");
+
+      // There is a special case for a list<int8> column with one child. This column can have a
+      // special flag that indicates we write this out as binary instead of a list. This is a more
+      // efficient storage mechanism for a single-depth list of bytes, but is a departure from
+      // original cuIO behavior so it is locked behind the option. If the option is selected on a
+      // column that isn't a single-depth list<int8> the code will throw.
+      if (col_meta.is_enabled_output_as_binary() && col->type().id() == type_id::LIST) {
+        CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                     "Binary column's corresponding metadata should have zero or two children");
+        auto const data_col_type =
+          col->children[lists_column_view::child_column_index]->type().id();
+        CUDF_EXPECTS(data_col_type == type_id::INT8 || data_col_type == type_id::UINT8,
+                     "Binary column's type must be INT8 or UINT8");
+
+        schema_tree_node col_schema{};
+
+        printf("doing this one as binary!\n");
+
+        col_schema.type            = Type::BYTE_ARRAY;
+        col_schema.converted_type  = ConvertedType::UNKNOWN;
+        col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
+        col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
+        col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
+        col_schema.parent_idx  = parent_idx;
+        col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
+        schema.push_back(col_schema);
+      } else if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
         struct_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+
+        printf("struct\n");
 
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         struct_schema.num_children = col->children.size();
@@ -529,6 +564,8 @@ std::vector<schema_tree_node> construct_schema_tree(
         // The top level is the same name as the column name.
         // So e.g. List<List<int>> is denoted in the schema by
         // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
+
+        printf("non-map list\n");
 
         schema_tree_node list_schema_1{};
         list_schema_1.converted_type = ConvertedType::LIST;
@@ -557,7 +594,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         // Map schema is denoted by a list of struct
         // e.g. List<Struct<String,String>> will be
         // "col_name" : { "key_value" : { "key", "value" } }
-
+        printf("map\n");
         // verify the List child structure is a struct<left_child, right_child>
         column_view struct_col = *col->children[lists_column_view::child_column_index];
         CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
@@ -609,6 +646,7 @@ std::vector<schema_tree_node> construct_schema_tree(
                    struct_col_index);
 
       } else {
+        printf("leaf\n");
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
           CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,

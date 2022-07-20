@@ -24,6 +24,7 @@
 #include "byte_array_view.cuh"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
 
@@ -140,6 +141,24 @@ struct statistics_merge_group {
   uint32_t start_chunk;          //!< Start chunk of this group
   uint32_t num_chunks;           //!< Number of chunks in group
 };
+
+template <typename T, std::enable_if_t<!std::is_same_v<T, byte_array_view>>* = nullptr>
+__device__ T get_element(column_device_view const& col, uint32_t row)
+{
+  return col.element<T>(row);
+}
+
+template <typename T, std::enable_if_t<std::is_same_v<T, byte_array_view>>* = nullptr>
+__device__ T get_element(column_device_view const& col, uint32_t row)
+{
+  using et              = typename T::element_type;
+  size_type index       = row + col.offset();  // account for this view's _offset
+  auto const* d_offsets = col.child(lists_column_view::offsets_column_index).data<offset_type>();
+  typename T::element_type const* d_data =
+    col.child(lists_column_view::child_column_index).data<et>();
+  size_type offset = d_offsets[index];
+  return T(d_data + offset, d_offsets[index + 1] - offset);
+}
 
 }  // namespace io
 }  // namespace cudf

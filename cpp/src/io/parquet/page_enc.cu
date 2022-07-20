@@ -117,6 +117,7 @@ __global__ void __launch_bounds__(block_size)
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
   int frag_y                 = blockIdx.y;
+  auto const physical_type   = s->col.physical_type;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
   __syncthreads();
@@ -136,8 +137,9 @@ __global__ void __launch_bounds__(block_size)
     s->frag.dict_data_size     = 0;
 
     auto col                = *(s->col.parent_column);
-    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col);
-    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, col);
+    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col, physical_type);
+    size_type end_value_idx =
+      row_to_value_idx(s->frag.start_row + s->frag.num_rows, col, physical_type);
     s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {
@@ -151,8 +153,8 @@ __global__ void __launch_bounds__(block_size)
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  auto const physical_type = s->col.physical_type;
-  auto const dtype_len     = physical_type_len(physical_type, s->col.leaf_column->type().id());
+  auto const leaf_type = s->col.leaf_column->type().id();
+  auto const dtype_len = physical_type_len(physical_type, leaf_type);
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
@@ -166,10 +168,35 @@ __global__ void __launch_bounds__(block_size)
     uint32_t len;
     if (is_valid) {
       len = dtype_len;
-      if (physical_type != BOOLEAN) {
-        if (physical_type == BYTE_ARRAY) {
-          auto str = s->col.leaf_column->element<string_view>(val_idx);
-          len += str.size_bytes();
+      if (physical_type == BYTE_ARRAY && physical_type != BOOLEAN) {
+        printf("found byte array\n");
+        switch (leaf_type) {
+          case type_id::STRING: {
+            printf("found string byte array\n");
+            auto str = s->col.leaf_column->element<string_view>(val_idx);
+            len += str.size_bytes();
+          } break;
+          case type_id::INT8: {
+            printf("int8 list, getting size\n");
+            auto list_element = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
+            printf("int8 list, getting size2\n");
+            len += list_element.size_bytes();
+            printf("int8 list, got size %d\n", (int)list_element.size_bytes());
+          } break;
+          case type_id::UINT8: {
+            printf("uint8 list, getting size\n");
+            printf("leaf has %d values\n", nvals);
+            printf("%d %d - uint8 list, getting size of s(%p)->col.leaf_column(%p)\n",
+                   threadIdx.x,
+                   blockIdx.x,
+                   s,
+                   s->col.leaf_column);
+            auto list_element = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
+            printf("uint8 list, getting size2\n");
+            len += list_element.size_bytes();
+            printf("uint8 list, got size %d\n", (int)list_element.size_bytes());
+          } break;
+          default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
         }
       }
     } else {
@@ -898,8 +925,8 @@ __global__ void __launch_bounds__(128, 8)
       s->rle_out = dst + 1;
     }
     auto col           = *(s->col.parent_column);
-    s->page_start_val  = row_to_value_idx(s->page.start_row, col);
-    s->chunk_start_val = row_to_value_idx(s->ck.start_row, col);
+    s->page_start_val  = row_to_value_idx(s->page.start_row, col, physical_type);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, col, physical_type);
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
