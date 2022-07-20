@@ -311,7 +311,7 @@ class TransducerLookupTable {
     OutSymbolT d_out_symbols[MAX_TABLE_SIZE];
   };
 
-   /**
+  /**
    * @brief Initializes the lookup table, primarily to be invoked from within device code but also
    * provides host-side implementation for verification.
    * @note Synchronizes the thread block, if called from device, and, hence, requires all threads
@@ -464,6 +464,16 @@ class Dfa {
   }
 
  public:
+  /**
+   * @brief Constructs a new DFA.
+   *
+   * @param symbol_vec Sequence container of symbol groups. Each symbol group is a sequence
+   * container to symbols within that group. The index of the symbol group containing a symbol being
+   * read will be used as symbol_gid of the transition and translation tables.
+   * @param tt_vec The transition table
+   * @param out_tt_vec The translation table
+   * @param stream The stream to which memory operations and kernels are getting dispatched to
+   */
   template <typename StateIdT, typename SymbolGroupIdItT>
   Dfa(SymbolGroupIdItT const& symbol_vec,
       std::vector<std::vector<StateIdT>> const& tt_vec,
