@@ -1160,3 +1160,240 @@ def _length_check_params(obj, columns, name):
                 f"length of the columns being "
                 f"encoded ({len(columns)})."
             )
+
+
+def crosstab(
+    index,
+    columns,
+    values=None,
+    rownames=None,
+    colnames=None,
+    aggfunc=None,
+    margins=None,
+    margins_name=None,
+    dropna=None,
+    normalize=None,
+):
+    """
+    Compute a simple cross tabulation of two (or more) factors. By default
+    computes a frequency table of the factors unless an array of values and an
+    aggregation function are passed.
+
+    Parameters
+    ----------
+    index : array-like, Series, or list of arrays/Series
+        Values to group by in the rows.
+    columns : array-like, Series, or list of arrays/Series
+        Values to group by in the columns.
+    values : array-like, optional
+        Array of values to aggregate according to the factors.
+        Requires `aggfunc` be specified.
+    rownames : sequence, default None
+        If passed, must match number of row arrays passed.
+    colnames : sequence, default None
+        If passed, must match number of column arrays passed.
+    aggfunc : function, optional
+        If specified, requires `values` be specified as well.
+    margins : bool, default False
+        margins is not supported yet
+        Add row/column margins (subtotals).
+    margins_name : str, default 'All'
+        margins_name is not supported yet
+        Name of the row/column that will contain the totals
+        when margins is True.
+    dropna : bool, default True
+        dropna is not supported yet
+        Do not include columns whose entries are all NaN.
+    normalize : bool, {'all', 'index', 'columns'}, or {0,1}, default False
+        normalize is not supported yet
+        Normalize by dividing all values by the sum of values.
+
+        - If passed 'all' or `True`, will normalize over all values.
+        - If passed 'index' will normalize over each row.
+        - If passed 'columns' will normalize over each column.
+        - If margins is `True`, will also normalize margin values.
+
+    Returns
+    -------
+    DataFrame
+        Cross tabulation of the data.
+
+    Examples
+    --------
+    >>> a = np.array(["foo", "foo", "foo", "foo", "bar", "bar",
+    ...               "bar", "bar", "foo", "foo", "foo"], dtype=object)
+    >>> b = np.array(["one", "one", "one", "two", "one", "one",
+    ...               "one", "two", "two", "two", "one"], dtype=object)
+    >>> c = np.array(["dull", "dull", "shiny", "dull", "dull", "shiny",
+    ...               "shiny", "dull", "shiny", "shiny", "shiny"],
+    ...              dtype=object)
+    >>> cudf.crosstab(a, [b, c], rownames=['a'], colnames=['b', 'c'])
+    b   one        two
+    c   dull shiny dull shiny
+    a
+    bar    1     2    1     0
+    foo    2     2    1     2
+    """
+    if normalize is not None:
+        raise NotImplementedError("normalize is not supported yet")
+
+    if values is None and aggfunc is not None:
+        raise ValueError("aggfunc cannot be used without values.")
+
+    if values is not None and aggfunc is None:
+        raise ValueError("values cannot be used without an aggfunc.")
+
+    if not pd.core.dtypes.inference.is_nested_list_like(index):
+        index = [index]
+    if not pd.core.dtypes.inference.is_nested_list_like(columns):
+        columns = [columns]
+
+    rownames = (
+        pd.core.reshape.pivot._get_names(index, rownames, prefix="row")
+        if not rownames
+        else rownames
+    )
+    colnames = (
+        pd.core.reshape.pivot._get_names(columns, colnames, prefix="col")
+        if not colnames
+        else colnames
+    )
+
+    if len(index) != len(rownames):
+        raise ValueError("'index' and 'rownames' must have same length")
+    if len(columns) != len(colnames):
+        raise ValueError("'columns' and 'colnames' must have same length")
+
+    if len(set(rownames)) != len(rownames):
+        raise ValueError("rownames must be unique")
+    if len(set(colnames)) != len(colnames):
+        raise ValueError("colnames must be unique")
+
+    data = {
+        **dict(zip(rownames, index)),
+        **dict(zip(colnames, columns)),
+    }
+
+    df = cudf.DataFrame(data)
+
+    if values is None:
+        df["__dummy__"] = 0
+        kwargs = {"aggfunc": "count", "fill_value": 0}
+    else:
+        df["__dummy__"] = values
+        kwargs = {"aggfunc": aggfunc}
+
+    table = pivot_table(
+        data=df,
+        index=rownames,
+        columns=colnames,
+        values="__dummy__",
+        margins=margins,
+        margins_name=margins_name,
+        dropna=dropna,
+        **kwargs,
+    )
+
+    return table
+
+
+def pivot_table(
+    data,
+    values=None,
+    index=None,
+    columns=None,
+    aggfunc="mean",
+    fill_value=None,
+    margins=None,
+    dropna=None,
+    margins_name=None,
+    observed=None,
+    sort=None,
+):
+    """
+    Create a spreadsheet-style pivot table as a DataFrame.
+    """
+    if margins is not None:
+        raise NotImplementedError("margins is not supported yet")
+
+    if margins_name is not None:
+        raise NotImplementedError("margins_name is not supported yet")
+
+    if dropna is not None:
+        raise NotImplementedError("dropna is not supported yet")
+
+    if observed is not None:
+        raise NotImplementedError("observed is not supported yet")
+
+    if sort is not None:
+        raise NotImplementedError("sort is not supported yet")
+
+    keys = index + columns
+
+    values_passed = values is not None
+    if values_passed:
+        if pd.api.types.is_list_like(values):
+            values_multi = True
+            values = list(values)
+        else:
+            values_multi = False
+            values = [values]
+
+        for i in values:
+            if i not in data:
+                raise KeyError(i)
+
+        to_filter = []
+        for x in keys + values:
+            if isinstance(x, cudf.Grouper):
+                x = x.key
+            try:
+                if x in data:
+                    to_filter.append(x)
+            except TypeError:
+                pass
+        if len(to_filter) < len(data.columns):
+            data = data[to_filter]
+
+    else:
+        values = data.columns
+        for key in keys:
+            try:
+                values = values.drop(key)
+            except (TypeError, ValueError, KeyError):
+                pass
+        values = list(values)
+
+    grouped = data.groupby(keys)
+    agged = grouped.agg(aggfunc)
+
+    table = agged
+
+    if table.index.nlevels > 1 and index:
+        # If index_names are integers, determine whether the integers refer
+        # to the level position or name.
+        index_names = agged.index.names[: len(index)]
+        to_unstack = []
+        for i in range(len(index), len(keys)):
+            name = agged.index.names[i]
+            if name is None or name in index_names:
+                to_unstack.append(i)
+            else:
+                to_unstack.append(name)
+        table = agged.unstack(to_unstack)
+
+    if fill_value is not None:
+        table = table.fillna(fill_value)
+
+    # discard the top level
+    if values_passed and not values_multi and table.columns.nlevels > 1:
+        column_names = table.columns.names[1:]
+        table_columns = tuple(map(lambda column: column[1:], table.columns))
+        table.columns = cudf.MultiIndex.from_tuples(
+            tuples=table_columns, names=column_names
+        )
+
+    if len(index) == 0 and len(columns) > 0:
+        table = table.T
+
+    return table

@@ -63,6 +63,8 @@ from cudf.core.reshape import (
     melt,
     pivot,
     unstack,
+    crosstab,
+    pivot_table,
 )
 from cudf.core.series import isclose
 from cudf.core.tools.datetimes import DateOffset, to_datetime
@@ -167,4 +169,6 @@ __all__ = [
     "to_datetime",
     "to_numeric",
     "unstack",
+    "crosstab",
+    "pivot_table",
 ]
