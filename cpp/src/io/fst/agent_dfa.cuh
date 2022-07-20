@@ -28,8 +28,8 @@ namespace cudf::io::fst::detail {
 using StateIndexT = uint32_t;
 
 /**
- * @brief Implements an associative composition operation for state transition vectors and
- * offset-to-overap vectors to be used with a prefix scan.
+ * @brief Implements an associative composition operation for state transition vectors to be used
+ * with a prefix scan.
  *
  * Read the following table as follows: c = op(l,r), where op is the composition operator.
  * For row 0: l maps 0 to 2. r maps 2 to 2. Hence, the result for 0 is 2.
