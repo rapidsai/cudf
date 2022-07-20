@@ -1845,7 +1845,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       return new ColumnVector(joinStrings(getNativeView(), separator.getScalarHandle(),
           narep.getScalarHandle()));
     }
-    throw new IllegalArgumentException("The input, spearator, and narep all need to be the STRINGs");
+    throw new IllegalArgumentException("The column, separator, and narep all need to be STRINGs");
   }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
