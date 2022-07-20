@@ -11,6 +11,6 @@ jobs:
     with:
       package-name: cudf
       package-dir: python/cudf
-      cibw-before-all: "dnf update -y && dnf install -y openssl-devel openssl"
-      cpu-smoketest-command: "python3 -c 'import cudf; print(cudf)';"
+      cibw-before-build: "dnf update -y && dnf install -y openssl-devel"
+      cpu-smoketest-command: "python3 -c 'import cudf; print(cudf)'"
     secrets: inherit
