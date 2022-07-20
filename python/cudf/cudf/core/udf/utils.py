@@ -219,10 +219,7 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
-
-    #np_return_type = scalar_return_type if scalar_return_type is dstring else numpy_support.as_dtype(scalar_return_type)
     np_return_type = numpy_support.as_dtype(scalar_return_type)
-
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
@@ -249,18 +246,7 @@ def _launch_arg_from_col(col):
         return data, mask
 
 def _return_col_from_dtype(dt, size):
-    #if dt is dstring:
-    #    #
-    #    return rmm.DeviceBuffer(
-    #        size=int(size * dstring_model.size_bytes)
-    #    )
-    #else:
-    #    return cp.empty(size, dtype=dt)
     return cp.empty(size, dtype=dt)
 
 def _post_process_output_col(col, retty):
-    #if retty == dstring:
-    #    return from_dstring_array(col)
-    #else:
-    #    return as_column(col)
-    return as_column(col)
+    return as_column(col, retty)

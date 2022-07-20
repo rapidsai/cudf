@@ -1809,7 +1809,7 @@ class IndexedFrame(Frame):
             offsets.append(col.offset)
         launch_args += offsets
         launch_args += list(args)
-        
+    
         try:
             kernel.forall(len(self))(*launch_args)
         except Exception as e:

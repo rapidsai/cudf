@@ -55,7 +55,6 @@ def _get_frame_row_type(dtype):
         else:
             sizes.append(field[0].itemsize)
 
-    #sizes = [val[0].itemsize for val in dtype.fields.values()]
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.

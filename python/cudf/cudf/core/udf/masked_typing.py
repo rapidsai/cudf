@@ -70,7 +70,7 @@ class MaskedType(types.Type):
             self.value_type = types.Poison(
                 "\n\n\n Unsupported MaskedType. This is usually caused by "
                 "attempting to use a column of unsupported dtype in a UDF. "
-                f"Supported dtypes are {SUPPORTED_NUMBA_TYPES}"
+                f"Supported dtypes are {SUPPORTED_NUMBA_TYPES}\n\n\n"
             )
         super().__init__(name=f"Masked({self.value_type})")
 
@@ -160,7 +160,7 @@ class MaskedConstructor(ConcreteTemplate):
             | datetime_cases
             | timedelta_cases
             | {types.boolean}
-            | {types.pyobject, string_view}
+            | {string_view}
         )
     ]
 
