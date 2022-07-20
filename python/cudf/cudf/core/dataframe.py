@@ -616,6 +616,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _accessors: Set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
+    _groupby = DataFrameGroupBy
+    _resampler = DataFrameResampler
 
     @_cudf_nvtx_annotate
     def __init__(

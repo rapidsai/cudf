@@ -46,11 +46,11 @@ from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
-from cudf.core.groupby.groupby import DataFrameGroupBy, SeriesGroupBy
+from cudf.core.groupby.groupby import GroupBy
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
-from cudf.core.resample import DataFrameResampler, SeriesResampler
+from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
@@ -233,6 +233,8 @@ class IndexedFrame(Frame):
     _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
     _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
     _index: cudf.core.index.BaseIndex
+    _groupby = GroupBy
+    _resampler = _Resampler
 
     _VALID_SCANS = {
         "cumsum",
@@ -3567,20 +3569,10 @@ class IndexedFrame(Frame):
                 "groupby() requires either by or level to be specified."
             )
 
-        resampler = (
-            DataFrameResampler
-            if self.__class__ is cudf.DataFrame
-            else SeriesResampler
-        )
-        groupby = (
-            DataFrameGroupBy
-            if self.__class__ is cudf.DataFrame
-            else SeriesGroupBy
-        )
         return (
-            resampler(self, by=by)
+            self.__class__._resampler(self, by=by)
             if isinstance(by, cudf.Grouper) and by.freq
-            else groupby(
+            else self.__class__._groupby(
                 self,
                 by=by,
                 level=level,

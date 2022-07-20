@@ -60,6 +60,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
 from cudf.utils import docutils
@@ -281,6 +282,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     _accessors: Set[Any] = set()
     _loc_indexer_type = _SeriesLocIndexer
     _iloc_indexer_type = _SeriesIlocIndexer
+    _groupby = SeriesGroupBy
+    _resampler = SeriesResampler
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
