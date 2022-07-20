@@ -82,46 +82,35 @@ def tz_localize(data, zone):
     return ambiguous._binaryop(nonexistent, "__or__")
 
 
-def to_gmt(data, zone):
-    # for each time in `data`,
-    # find out which offset to apply
-    tz_zone = tz[tz._data["zone_name"] == zone]
-    time_starts_in_zone = tz_zone._data["time_start"] + tz_zone._data[
-        "gmt_offset"
-    ].astype("timedelta64[s]")
-    gmt_offsets = (
-        tz_zone["gmt_offset"]
-        .astype("timedelta64[s]")
-        .iloc[
-            search_sorted(
-                [time_starts_in_zone], [data.astype("datetime64[s]")], "left"
-            ).fillna(-1)
-        ]
-    )
-    gmt_offsets = gmt_offsets.reset_index(drop=True)
-
-    # apply each offset to get the GMT time
-    return data - gmt_offsets._column
-
-
 def from_gmt(data, zone):
-    # for each itme in `data`
-    # find out which offset to apply
     tz_zone = tz[tz._data["zone_name"] == zone]
-    time_starts_in_zone = tz_zone._data["time_start"]
+    time_starts = tz_zone._data["time_start"].astype(data.dtype.base)
+    indices = search_sorted([time_starts], [data], "left")
     gmt_offsets = (
         tz_zone["gmt_offset"]
-        .astype("timedelta64[s]")
-        .iloc[
-            search_sorted(
-                [time_starts_in_zone], [data.astype("datetime64[s]")], "left"
-            ).fillna(-1)
-        ]
+        ._column.astype("timedelta64[s]")
+        .astype(f"timedelta64[{data._time_unit}]")
+        .take(indices, nullify=True)
     )
-    gmt_offsets = gmt_offsets.reset_index(drop=True)
-
     # apply each offset to get the time in `zone`:
-    return data + gmt_offsets._column
+    return data + gmt_offsets
+
+
+def to_gmt(data, zone):
+    tz_zone = tz[tz._data["zone_name"] == zone]
+    time_starts = (
+        tz_zone._data["time_start"]
+        + tz_zone._data["gmt_offset"].astype("timedelta64[s]")
+    ).astype(data.dtype.base)
+    indices = search_sorted([time_starts], [data], "left")
+    gmt_offsets = (
+        tz_zone["gmt_offset"]
+        ._column.astype("timedelta64[s]")
+        .astype(f"timedelta64[{data._time_unit}]")
+        .take(indices, nullify=True)
+    )
+    # apply each offset to get the time in `zone`:
+    return data - gmt_offsets
 
 
 def tz_convert(data, from_timezone, to_timezone):

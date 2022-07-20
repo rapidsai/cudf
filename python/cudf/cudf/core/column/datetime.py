@@ -527,21 +527,22 @@ class DatetimeColumn(column.ColumnBase):
             return False
 
     def localize(self, tz):
-        from cudf.core.tz.tz import tz_localize
+        from cudf.core.tz.tz import to_gmt, tz_localize
 
         dtype = cudf.core.dtypes.Datetime64TZDtype(self._time_unit, tz)
         ambiguous_or_nonexistent = tz_localize(self, tz)
+        localized = self._scatter_by_column(
+            self.isnull() and ambiguous_or_nonexistent,
+            cudf.Scalar(cudf.NA, dtype=self.dtype),
+        )
+        gmt = to_gmt(localized, tz)
         result = TZDatetimeColumn(
-            data=self.base_data,
+            data=gmt.data,
             dtype=dtype,
-            mask=None,
+            mask=gmt.mask,
             size=self.size,
             offset=self.offset,
             null_count=self.null_count,
-        )
-        result = result._scatter_by_column(
-            result.isnull() and ambiguous_or_nonexistent,
-            cudf.Scalar(cudf.NA, dtype=result.dtype.base),
         )
         return result
 
@@ -614,6 +615,16 @@ class TZDatetimeColumn(DatetimeColumn):
         )
 
     @property
+    def _gmt_time(self):
+        return DatetimeColumn(
+            data=self.data,
+            dtype=self.dtype.base,
+            mask=self.mask,
+            size=self.size,
+            offset=self.offset,
+        )
+
+    @property
     def _local_time(self):
         from cudf.core.tz.tz import from_gmt
 
@@ -638,10 +649,17 @@ class TZDatetimeColumn(DatetimeColumn):
             return self._local_time
         return self.__class__(
             data=self.base_data,
-            dtype=pd.DatetimeTZDtype(tz=tz),
+            dtype=cudf.core.dtypes.Datetime64TZDtype(
+                unit=self._time_unit, tz=tz
+            ),
             mask=self.base_mask,
             size=self.size,
             offset=self.offset,
+        )
+
+    def as_string_column(self, dtype, *args, **kwargs):
+        return self._local_time.as_string_column(
+            self.dtype.base, *args, **kwargs
         )
 
 

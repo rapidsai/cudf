@@ -4471,6 +4471,12 @@ class DatetimeProperties:
             {self.series._data.names[0]: localized}
         )
 
+    @_cudf_nvtx_annotate
+    def tz_convert(self, tz):
+        return self.series._from_data_like_self(
+            {self.series._data.names[0]: self.series._column.convert(tz)}
+        )
+
 
 class TimedeltaProperties:
     """
