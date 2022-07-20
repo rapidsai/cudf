@@ -824,8 +824,15 @@ class two_table_comparator {
 }  // namespace lexicographic
 
 namespace hash {
+
+template <template <typename> class hash_function, typename Nullate>
+class device_row_hasher;
+
+template <template <template <typename> class hash_function, typename> class device_row_hasher =
+            device_row_hasher>
 class row_hasher;
-}
+
+}  // namespace hash
 
 namespace equality {
 
@@ -1134,7 +1141,7 @@ struct preprocessed_table {
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
-  ///< Type returned by table creation.
+  ///< Owning type returned by table device view creation.
 
   /**
    * @brief Construct a preprocessed table.
@@ -1394,7 +1401,7 @@ class element_hasher {
  */
 template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher {
-  friend class row_hasher;  ///< Allow row_hasher to access private members.
+  friend class row_hasher<device_row_hasher>;  ///< Allow row_hasher to access private members.
 
  public:
   device_row_hasher() = delete;
@@ -1487,12 +1494,12 @@ class device_row_hasher {
   CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
                                      table_device_view t,
                                      uint32_t seed = DEFAULT_HASH_SEED) noexcept
-    : _table{t}, _seed(seed), _check_nulls{check_nulls}
+    : _check_nulls{check_nulls}, _table{t}, _seed(seed)
   {
   }
 
-  table_device_view const _table;
   Nullate const _check_nulls;
+  table_device_view const _table;
   uint32_t const _seed;
 };
 
@@ -1505,6 +1512,7 @@ using preprocessed_table = row::equality::preprocessed_table;
  * @brief Computes the hash value of a row in the given table.
  *
  */
+template <template <template <typename> class, typename> class device_row_hasher>
 class row_hasher {
  public:
   /**

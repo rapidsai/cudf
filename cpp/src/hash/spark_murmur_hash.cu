@@ -38,7 +38,8 @@ namespace {
  */
 template <template <typename> class hash_function, typename Nullate>
 class device_spark_row_hasher {
-  friend class spark_row_hasher;  ///< Allow spark_row_hasher to access private members.
+  friend class cudf::experimental::row::hash::row_hasher<
+    device_spark_row_hasher>;  ///< Allow row_hasher to access private members.
 
  public:
   device_spark_row_hasher() = delete;
@@ -125,67 +126,13 @@ class device_spark_row_hasher {
   CUDF_HOST_DEVICE device_spark_row_hasher(Nullate check_nulls,
                                            table_device_view t,
                                            uint32_t seed = DEFAULT_HASH_SEED) noexcept
-    : _table{t}, _seed(seed), _check_nulls{check_nulls}
+    : _check_nulls{check_nulls}, _table{t}, _seed(seed)
   {
   }
 
-  table_device_view const _table;
   Nullate const _check_nulls;
+  table_device_view const _table;
   uint32_t const _seed;
-};
-
-using preprocessed_table = cudf::experimental::row::hash::preprocessed_table;
-
-/**
- * @brief Computes the hash value of a row in the given table.
- *
- */
-class spark_row_hasher {
- public:
-  /**
-   * @brief Construct an owning object for hashing the rows of a table
-   *
-   * @param t The table containing rows to hash
-   * @param stream The stream to construct this object on. Not the stream that will be used for
-   * comparisons using this object.
-   */
-  spark_row_hasher(table_view const& t, rmm::cuda_stream_view stream)
-    : d_t(preprocessed_table::create(t, stream))
-  {
-  }
-
-  /**
-   * @brief Construct an owning object for hashing the rows of a table from an existing
-   * preprocessed_table
-   *
-   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
-   * multiple `spark_row_hasher` and `equality::self_comparator` objects.
-   *
-   * @param t A table preprocessed for hashing or equality.
-   */
-  spark_row_hasher(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
-
-  /**
-   * @brief Get the hash operator to use on the device
-   *
-   * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_type)`.
-   *
-   * `F(i)` returns the hash of row i.
-   *
-   * @tparam Nullate A cudf::nullate type describing whether to check for nulls
-   * @param nullate Indicates if any input column contains nulls
-   * @param seed The seed to use for the hash function
-   * @return A hash operator to use on the device
-   */
-  template <template <typename> class hash_function = detail::default_hash, typename Nullate>
-  device_spark_row_hasher<hash_function, Nullate> device_hasher(
-    Nullate nullate = {}, uint32_t seed = DEFAULT_HASH_SEED) const
-  {
-    return device_spark_row_hasher<hash_function, Nullate>(nullate, *d_t, seed);
-  }
-
- private:
-  std::shared_ptr<preprocessed_table> d_t;
 };
 
 }  // namespace
@@ -209,9 +156,10 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  bool const nullable   = has_nulls(input);
-  auto const row_hasher = spark_row_hasher(input, stream);
-  auto output_view      = output->mutable_view();
+  bool const nullable = has_nulls(input);
+  auto const row_hasher =
+    cudf::experimental::row::hash::row_hasher<device_spark_row_hasher>(input, stream);
+  auto output_view = output->mutable_view();
 
   // Compute the hash value for each row
   thrust::tabulate(rmm::exec_policy(stream),
