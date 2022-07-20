@@ -805,13 +805,6 @@ endif()
 ]=]
 )
 
-set(install_code_string
-    [=[
-set(ArrowCUDA_DIR "${Arrow_DIR}")
-find_dependency(ArrowCUDA)
-]=]
-)
-
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(
     APPEND
