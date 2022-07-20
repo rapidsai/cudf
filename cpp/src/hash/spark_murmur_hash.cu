@@ -101,14 +101,13 @@ class device_spark_row_hasher {
           // Non-empty structs are assumed to be decomposed and contain only one child
           curr_col = detail::structs_column_device_view(curr_col).get_sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
-          auto list_col = detail::lists_column_device_view(curr_col);
-          curr_col      = list_col.get_sliced_child();
+          curr_col = detail::lists_column_device_view(curr_col).get_sliced_child();
         }
       }
 
       return detail::accumulate(
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(curr_col.size()),
+        thrust::counting_iterator(0),
+        thrust::counting_iterator(curr_col.size()),
         _seed,
         [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
           auto const hasher =
