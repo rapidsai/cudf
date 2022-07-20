@@ -3209,37 +3209,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         observed=False,
         dropna=True,
     ):
-        import cudf.core.resample
-
-        if axis not in (0, "index"):
-            raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
-
-        if observed is not False:
-            raise NotImplementedError(
-                "observed parameter is not yet implemented"
-            )
-
-        if by is None and level is None:
-            raise TypeError(
-                "groupby() requires either by or level to be specified."
-            )
-
-        return (
-            cudf.core.resample.SeriesResampler(self, by=by)
-            if isinstance(by, cudf.Grouper) and by.freq
-            else SeriesGroupBy(
-                self, by=by, level=level, dropna=dropna, sort=sort
-            )
+        return super().groupby(
+            by,
+            axis,
+            level,
+            as_index,
+            sort,
+            group_keys,
+            squeeze,
+            observed,
+            dropna,
         )
 
     @_cudf_nvtx_annotate
