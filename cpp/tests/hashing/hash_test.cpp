@@ -786,7 +786,7 @@ TEST_F(SparkMurmurHash3Test, ListValues)
   auto child_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
   auto nested_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0 && i != 15; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0 && i != 14; });
   auto nested_list = cudf::test::lists_column_wrapper<int>({{},
                                                             {1},
                                                             {1, 2},
