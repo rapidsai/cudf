@@ -116,6 +116,12 @@ class SingleSymbolSmemLUT {
     return private_storage;
   }
 
+  /**
+   * @brief Initializes the lookup table, primarily to be invoked from within device code but also
+   * provides host-side implementation for verification.
+   * @note Synchronizes the thread block, if called from device, and, hence, requires all threads
+   * of the thread block to call the constructor
+   */
   constexpr CUDF_HOST_DEVICE SingleSymbolSmemLUT(KernelParameter const& kernel_param,
                                                  TempStorage& temp_storage)
     : temp_storage(temp_storage.Alias()), num_valid_entries(kernel_param.num_valid_entries)
@@ -140,6 +146,13 @@ class SingleSymbolSmemLUT {
   }
 };
 
+/**
+ * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a new target state. The
+ * class uses shared memory for the lookups.
+ *
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ */
 template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES>
 class TransitionTable {
  private:
@@ -187,9 +200,8 @@ class TransitionTable {
     }
     __syncthreads();
 #else
-    for (int i = 0; i < MAX_NUM_STATES * MAX_NUM_SYMBOLS; i++) {
-      this->temp_storage.transitions[i] = kernel_param.transitions[i];
-    }
+    std::copy_n(
+      kernel_param.transitions, MAX_NUM_STATES * MAX_NUM_SYMBOLS, this->temp_storage.transitions);
 #endif
   }
 
@@ -299,8 +311,11 @@ class TransducerLookupTable {
     OutSymbolT d_out_symbols[MAX_TABLE_SIZE];
   };
 
-  /**
-   * @brief Initializes the translation table (both the host and device parts)
+   /**
+   * @brief Initializes the lookup table, primarily to be invoked from within device code but also
+   * provides host-side implementation for verification.
+   * @note Synchronizes the thread block, if called from device, and, hence, requires all threads
+   * of the thread block to call the constructor
    */
   static void InitDeviceTranslationTable(
     hostdevice_vector<KernelParameter>& translation_table_init,
@@ -329,7 +344,7 @@ class TransducerLookupTable {
       if (MAX_NUM_SYMBOLS > num_added) {
         int32_t count = MAX_NUM_SYMBOLS - num_added;
         auto begin_it = std::prev(std::end(out_symbol_offsets));
-        std::copy(begin_it, begin_it + count, std::back_inserter(out_symbol_offsets));
+        std::fill_n(begin_it, count, out_symbol_offsets[0]);
       }
     }
 
@@ -359,7 +374,9 @@ class TransducerLookupTable {
 
  public:
   /**
-   * @brief Synchronizes the thread block, if called from device, and, hence, requires all threads
+   * @brief Initializes the lookup table, primarily to be invoked from within device code but also
+   * provides host-side implementation for verification.
+   * @note Synchronizes the thread block, if called from device, and, hence, requires all threads
    * of the thread block to call the constructor
    */
   CUDF_HOST_DEVICE TransducerLookupTable(KernelParameter const& kernel_param,
@@ -379,12 +396,10 @@ class TransducerLookupTable {
     }
     __syncthreads();
 #else
-    for (int i = 0; i < num_offsets; i++) {
-      this->temp_storage.out_symbol_offsets[i] = kernel_param.d_out_offsets[i];
-    }
-    for (int i = 0; i < this->temp_storage.out_symbol_offsets[i]; i++) {
-      this->temp_storage.out_symbols[i] = kernel_param.d_out_symbols[i];
-    }
+    std::copy_n(kernel_param.d_out_offsets, num_offsets, this->temp_storage.out_symbol_offsets);
+    std::copy_n(kernel_param.d_out_symbols,
+                this->temp_storage.out_symbol_offsets,
+                this->temp_storage.out_symbols);
 #endif
   }
 
