@@ -89,22 +89,18 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
     // The symbol currently being read
     auto const& symbol = *it;
 
-    std::size_t symbol_group = 0;
-
     // Iterate over symbol groups and search for the first symbol group containing the current
-    // symbol
-    for (auto const& sg : symbol_group_lut) {
-      if (std::find(std::cbegin(sg), std::cend(sg), symbol) != std::cend(sg)) { break; }
-      symbol_group++;
-    }
+    // symbol, if no match is found we use cend(symbol_group_lut) as the "catch-all" symbol group
+    auto symbol_group_it = std::find_if(std::cbegin(symbol_group_lut), std::cend(symbol_group_lut),
+            [symbol](auto& sg) { 
+              return std::find(std::cbegin(sg), std::cend(sg), symbol) != std::cend(sg); 
+              });
+    auto symbol_group = std::distance(std::cbegin(symbol_group_lut), symbol_group_it);
 
     // Output the translated symbols to the output tape
-    for (auto out : translation_table[state][symbol_group]) {
-      *out_tape = out;
-      ++out_tape;
-      *out_index_tape = in_offset;
-      out_index_tape++;
-    }
+    out_tape = std::copy(std::cbegin(translation_table[state][symbol_group]), std::cend(translation_table[state][symbol_group]), out_tape);
+    auto out_size = std::distance(std::cbegin(translation_table[state][symbol_group]), std::cend(translation_table[state][symbol_group]));
+    out_index_tape = std::fill_n(out_index_tape, out_size, in_offset);
 
     // Transition the state of the finite-state machine
     state = transition_table[state][symbol_group];
@@ -128,7 +124,7 @@ enum DFA_STATES : char {
   TT_STR,
   // The state being active after encountering an escape symbol (e.g., '\') while being in the
   // TT_STR state.
-  TT_ESC [[maybe_unused]],
+  TT_ESC,
   // Total number of states
   TT_NUM_STATES
 };
@@ -149,7 +145,7 @@ enum PDA_SG_ID {
 const std::vector<std::vector<char>> pda_state_tt = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
-  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR, TT_STR},
+  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
   /* TT_ESC    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}};
 
 // Translation table (i.e., for each transition, what are the symbols that we output)
