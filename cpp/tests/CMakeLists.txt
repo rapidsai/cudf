@@ -224,6 +224,7 @@ ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
@@ -472,7 +473,6 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
-  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
@@ -482,6 +482,8 @@ ConfigureTest(
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
+  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/distinct_tests.cpp
 )
 
 # ##################################################################################################

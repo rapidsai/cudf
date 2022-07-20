@@ -4129,7 +4129,7 @@ public class ColumnVectorTest extends CudfTestBase {
               null,
               null,
               Arrays.asList("a", "1", "b", "1", "a", "2"));
-          
+
           ColumnVector resultIdx0 = v.extractAllRecord(pattern, 0);
           ColumnVector resultIdx1 = v.extractAllRecord(pattern, 1);
           ColumnVector resultIdx2 = v.extractAllRecord(pattern, 2);
@@ -4466,31 +4466,52 @@ public class ColumnVectorTest extends CudfTestBase {
         );
         ColumnVector inputStructsKeysVals = ColumnVector.makeStruct(inputChildKeys, inputChildVals);
         ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 5, 10, 15, 15);
-        ColumnVector inputListsKeysVals = inputStructsKeysVals.makeListFromOffsets(5,
-            inputOffsets);
-
-        ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
-            1, 2,
-            3, 4, 5,
-            0, 6, null,
-            6, 7, null
-        );
-        ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
-            10, 20,
-            30, 40, 50,
-            100, 90, 60,
-            120, 150, 140
-        );
-        ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
-            expectedChildVals);
-        ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 5, 8, 11, 11);
-        ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(5,
-            expectedOffsets);
-
-        ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
-        ColumnVector sortedOutput = output.listSortRows(false, false);
+        ColumnVector inputListsKeysVals = inputStructsKeysVals.makeListFromOffsets(5, inputOffsets)
     ) {
-      assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+      // Test full input:
+      try(ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+              1, 2, // list1
+              3, 4, 5, // list2
+              0, 6, null, // list3
+              6, 7, null // list4
+              // list5 (empty)
+          );
+          ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+              10, 20, // list1
+              30, 40, 50, // list2
+              100, 90, 60, // list3
+              120, 150, 140 // list4
+              // list5 (empty)
+          );
+          ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys, expectedChildVals);
+          ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 5, 8, 11, 11);
+          ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(5, expectedOffsets);
+
+          ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
+          ColumnVector sortedOutput = output.listSortRows(false, false)
+      ) {
+        assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+      }
+
+      // Test sliced input:
+      try(ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+              3, 4, 5, // list1
+              0, 6, null // list2
+          );
+          ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+              30, 40, 50, // list1
+              100, 90, 60 // list2
+          );
+          ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys, expectedChildVals);
+          ColumnVector expectedOffsets = ColumnVector.fromInts(0, 3, 6);
+          ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(2, expectedOffsets);
+
+          ColumnVector inputSliced = inputListsKeysVals.subVector(1, 3);
+          ColumnVector output = inputSliced.dropListDuplicatesWithKeysValues();
+          ColumnVector sortedOutput = output.listSortRows(false, false)
+      ) {
+        assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+      }
     }
   }
 
@@ -4516,35 +4537,59 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 2, 5, 10, 15, 15);
         ColumnVector tmpInputListsKeysVals = inputStructsKeysVals.makeListFromOffsets(6,inputOffsets);
         ColumnVector templateBitmask = ColumnVector.fromBoxedInts(1, null, 1, 1, 1, null);
-        ColumnVector inputListsKeysVals = tmpInputListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, templateBitmask);
-
-        ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
-            1, 2, // list1
-            // list2 (null)
-            3, 4, 5, // list3
-            0, 6, null, // list4
-            6, 7, null // list5
-            // list6 (null)
-        );
-        ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
-            10, 20, // list1
-            // list2 (null)
-            30, 40, 50, // list3
-            100, 90, 60, // list4
-            120, 150, 140 // list5
-            // list6 (null)
-        );
-        ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
-            expectedChildVals);
-        ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 2, 5, 8, 11, 11);
-        ColumnVector tmpExpectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(6,
-            expectedOffsets);
-        ColumnVector expectedListsKeysVals = tmpExpectedListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, templateBitmask);
-
-        ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
-        ColumnVector sortedOutput = output.listSortRows(false, false);
+        ColumnVector inputListsKeysVals = tmpInputListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, templateBitmask)
     ) {
-      assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+      // Test full input:
+      try(ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+              1, 2, // list1
+              // list2 (null)
+              3, 4, 5, // list3
+              0, 6, null, // list4
+              6, 7, null // list5
+              // list6 (null)
+          );
+          ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+              10, 20, // list1
+              // list2 (null)
+              30, 40, 50, // list3
+              100, 90, 60, // list4
+              120, 150, 140 // list5
+              // list6 (null)
+          );
+          ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys, expectedChildVals);
+          ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 2, 5, 8, 11, 11);
+          ColumnVector tmpExpectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(6, expectedOffsets);
+          ColumnVector expectedListsKeysVals = tmpExpectedListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, templateBitmask);
+
+          ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
+          ColumnVector sortedOutput = output.listSortRows(false, false)
+      ) {
+        assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+      }
+
+      // Test sliced input:
+      try(ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+              // list1 (null)
+              3, 4, 5, // list2
+              0, 6, null // list3
+          );
+          ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+              // list1 (null)
+              30, 40, 50, // list2
+              100, 90, 60 // list3
+          );
+          ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys, expectedChildVals);
+          ColumnVector expectedOffsets = ColumnVector.fromInts(0, 0, 3, 6);
+          ColumnVector tmpExpectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(3, expectedOffsets);
+          ColumnVector slicedTemplateBitmask = ColumnVector.fromBoxedInts(null, 1, 1);
+          ColumnVector expectedListsKeysVals = tmpExpectedListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, slicedTemplateBitmask);
+
+          ColumnVector inputSliced = inputListsKeysVals.subVector(1, 4);
+          ColumnVector output = inputSliced.dropListDuplicatesWithKeysValues();
+          ColumnVector sortedOutput = output.listSortRows(false, false)
+      ) {
+        assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+      }
     }
   }
 
