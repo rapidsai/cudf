@@ -37,30 +37,24 @@ using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
 /**
- * @brief Functor to remap hash values to new values if they are equal to the specified sentinel
- * value.
+ * @brief An adapter functor to support strong index types for row hasher.
  */
 template <typename Hasher>
-struct remap_sentinel_hasher {
-  remap_sentinel_hasher(Hasher&& row_hasher, hash_value_type const sentinel)
-    : _hasher{std::move(row_hasher)}, _sentinel(sentinel)
-  {
-  }
+struct strong_index_hasher_adapter {
+  strong_index_hasher_adapter(Hasher const& hasher) : _hasher{hasher} {}
 
   template <typename T>
   __device__ inline auto operator()(T const idx) const noexcept
   {
-    return remap_sentinel_hash(_hasher(static_cast<size_type>(idx)), _sentinel);
+    return _hasher(static_cast<size_type>(idx));
   }
 
  private:
   Hasher _hasher;
-  hash_value_type const _sentinel;
 };
 
 /**
- * @brief A comparator adapter so that the underlying self comparator can work with strong index
- * types.
+ * @brief An adapter functor to support strong index types for table self comparator.
  */
 template <typename Comparator>
 struct strong_index_self_comparator_adapter {
@@ -129,8 +123,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
     auto const hasher = cudf::experimental::row::hash::row_hasher(haystack, stream);
     auto const d_hasher =
-      remap_sentinel_hasher(hasher.device_hasher(nullate::DYNAMIC{has_any_nulls}),
-                            static_cast<hash_value_type>(map.get_empty_key_sentinel()));
+      strong_index_hasher_adapter{hasher.device_hasher(nullate::DYNAMIC{has_any_nulls})};
 
     auto const comparator = cudf::experimental::row::equality::self_comparator(haystack, stream);
 
@@ -191,8 +184,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
     auto const hasher = cudf::experimental::row::hash::row_hasher(needles, stream);
     auto const d_hasher =
-      remap_sentinel_hasher(hasher.device_hasher(nullate::DYNAMIC{has_any_nulls}),
-                            static_cast<hash_value_type>(map.get_empty_key_sentinel()));
+      strong_index_hasher_adapter{hasher.device_hasher(nullate::DYNAMIC{has_any_nulls})};
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
