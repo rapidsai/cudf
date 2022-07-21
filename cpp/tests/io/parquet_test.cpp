@@ -233,7 +233,7 @@ bool read_footer(std::unique_ptr<cudf::io::datasource>& source,
 // parse and return as a ColumnIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
 cudf::io::parquet::ColumnIndex read_column_index(std::unique_ptr<cudf::io::datasource>& source,
-                                                const cudf::io::parquet::ColumnChunk& chunk)
+                                                 const cudf::io::parquet::ColumnChunk& chunk)
 {
   CUDF_EXPECTS(chunk.column_index_offset > 0, "Cannot find column index");
   CUDF_EXPECTS(chunk.column_index_length > 0, "Invalid column index length");
@@ -249,7 +249,7 @@ cudf::io::parquet::ColumnIndex read_column_index(std::unique_ptr<cudf::io::datas
 // parse and return as an OffsetIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
 cudf::io::parquet::OffsetIndex read_offset_index(std::unique_ptr<cudf::io::datasource>& source,
-                                                const cudf::io::parquet::ColumnChunk& chunk)
+                                                 const cudf::io::parquet::ColumnChunk& chunk)
 {
   CUDF_EXPECTS(chunk.offset_index_offset > 0, "Cannot find offset index");
   CUDF_EXPECTS(chunk.offset_index_length > 0, "Invalid offset index length");
@@ -278,7 +278,7 @@ cudf::io::parquet::Statistics parse_statistics(const cudf::io::parquet::ColumnCh
 // parse and return as a PageHeader struct.
 // throws cudf::logic_error if the page_loc data is invalid.
 cudf::io::parquet::PageHeader read_page_header(std::unique_ptr<cudf::io::datasource>& source,
-                                              const cudf::io::parquet::PageLocation& page_loc)
+                                               const cudf::io::parquet::PageLocation& page_loc)
 {
   CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
   CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
@@ -3742,9 +3742,10 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  cudf::io::parquet::BoundaryOrder expected_orders[] = {cudf::io::parquet::BoundaryOrder::ASCENDING,
-                                                       cudf::io::parquet::BoundaryOrder::DESCENDING,
-                                                       cudf::io::parquet::BoundaryOrder::UNORDERED};
+  cudf::io::parquet::BoundaryOrder expected_orders[] = {
+    cudf::io::parquet::BoundaryOrder::ASCENDING,
+    cudf::io::parquet::BoundaryOrder::DESCENDING,
+    cudf::io::parquet::BoundaryOrder::UNORDERED};
 
   for (std::size_t i = 0; i < columns.size(); i++) {
     auto ci = read_column_index(source, columns[i]);
@@ -3803,9 +3804,7 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
       int32_t v1sz = v1.size();
       int32_t v2sz = v2.size();
       int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));
-      if (ret != 0 or v1sz == v2sz) {
-        return ret;
-      }
+      if (ret != 0 or v1sz == v2sz) { return ret; }
       return v1sz - v2sz;
     }
   }
@@ -4004,7 +4003,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       int8_t ctype = fmd.schema[c + 1].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
-        if (c > 0) { // first column has no nulls
+        if (c > 0) {  // first column has no nulls
           EXPECT_GT(ci.null_counts[p], 0);
         } else {
           EXPECT_EQ(ci.null_counts[p], 0);
