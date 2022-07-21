@@ -18,7 +18,6 @@ from cudf.api.extensions import (
     register_series_accessor,
 )
 from cudf.core.scalar import Scalar
-
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
@@ -103,6 +102,10 @@ except AttributeError:
     # Numba < 0.54: No occupancy warnings
     pass
 del numba_config
+
+
+rmm.register_reinitialize_hook(clear_cache)
+
 
 __version__ = get_versions()["version"]
 del get_versions

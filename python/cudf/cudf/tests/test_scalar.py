@@ -9,6 +9,8 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
 from cudf._lib.copying import get_element
 from cudf.testing._utils import (
@@ -21,7 +23,7 @@ from cudf.testing._utils import (
 
 @pytest.fixture(autouse=True)
 def clear_scalar_cache():
-    cudf.Scalar.clear_cache()
+    cudf.Scalar._clear_cache()
     yield
 
 
@@ -408,3 +410,24 @@ def test_datetime_scalar_from_string(data, dtype):
     expected = np.datetime64(datetime.datetime(2000, 1, 1)).astype(dtype)
 
     assert expected == slr.value
+
+
+def test_scalar_cache():
+    s = cudf.Scalar(1)
+    s2 = cudf.Scalar(1)
+
+    assert s is s2
+
+
+def test_scalar_cache_rmm_hook():
+    # test that reinitializing rmm clears the cuDF scalar cache, as we
+    # register a hook with RMM that does that on reinitialization
+    s = cudf.Scalar(1)
+    s2 = cudf.Scalar(1)
+
+    assert s is s2
+
+    rmm.reinitialize()
+
+    s3 = cudf.Scalar(1)
+    assert s3 is not s

@@ -335,5 +335,5 @@ class Scalar(BinaryOperand, metaclass=CachedInstanceMeta):
         return Scalar(self.value, dtype)
 
     @classmethod
-    def clear_cache(cls):
+    def _clear_cache(cls):
         type(cls).clear(cls)
