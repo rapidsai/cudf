@@ -188,7 +188,6 @@ endif()
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 
-
 add_library(
   cudf
   src/aggregation/aggregation.cpp
@@ -550,17 +549,11 @@ add_library(
   src/utilities/type_checks.cpp
 )
 
-
 set_source_files_properties(
-  src/binaryop/binaryop.cpp
-  src/binaryop/transform.cpp
-  src/rolling/detail/rolling_variable_window.cu
-  src/rolling/detail/rolling_fixed_window.cu
-  src/rolling/grouped_rolling.cu
-  src/rolling/rolling.cu
+  src/binaryop/binaryop.cpp src/binaryop/transform.cpp src/rolling/detail/rolling_variable_window.cu
+  src/rolling/detail/rolling_fixed_window.cu src/rolling/grouped_rolling.cu src/rolling/rolling.cu
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
-
 
 set_target_properties(
   cudf
@@ -576,8 +569,6 @@ set_target_properties(
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
-
-
 
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
