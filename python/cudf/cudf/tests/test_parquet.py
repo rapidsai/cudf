@@ -439,13 +439,11 @@ def test_parquet_read_metadata(tmpdir, pdf):
     row_group_size = 5
     pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
 
-    parquet_metadata = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
-    assert parquet_metadata.num_rows == len(pdf.index)
-    assert parquet_metadata.num_row_groups == num_row_groups(
-        parquet_metadata.num_rows, row_group_size
-    )
-    for a, b in zip(parquet_metadata.schema.names, pdf.columns):
+    assert num_rows == len(pdf.index)
+    assert row_groups == num_row_groups(num_rows, row_group_size)
+    for a, b in zip(col_names, pdf.columns):
         assert a == b
 
 
@@ -486,8 +484,8 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
     tbl_filtered = pq.read_table(
         fname, filters=[("1", ">", 60)], use_legacy_dataset=False
     )
-    file_metadata = cudf.io.read_parquet_metadata(fname)
-    assert_eq(file_metadata.num_row_groups, 2048 / 64)
+
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
     print(len(df_filtered))
     print(len(tbl_filtered))
     assert len(df_filtered) < len(df)
@@ -561,7 +559,7 @@ def test_parquet_read_filtered_complex_predicate(
 
     # Check filters
     df_filtered = cudf.read_parquet(fname, filters=predicate)
-    assert_eq(cudf.io.read_parquet_metadata(fname).num_row_groups, 10 / 2)
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
     assert_eq(len(df_filtered), expected_len)
 
 
@@ -575,12 +573,9 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
-    file_metadata = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
-    gdf = [
-        cudf.read_parquet(fname, row_groups=[i])
-        for i in range(file_metadata.num_row_groups)
-    ]
+    gdf = [cudf.read_parquet(fname, row_groups=[i]) for i in range(row_groups)]
     gdf = cudf.concat(gdf)
     assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
 
@@ -588,13 +583,8 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     gdf = cudf.read_parquet(
         [fname, fname],
         row_groups=[
-            list(range(file_metadata.num_row_groups // 2)),
-            list(
-                range(
-                    file_metadata.num_row_groups // 2,
-                    file_metadata.num_row_groups,
-                )
-            ),
+            list(range(row_groups // 2)),
+            list(range(row_groups // 2, row_groups)),
         ],
     )
     assert_eq(pdf.reset_index(drop=True), gdf.reset_index(drop=True))
@@ -607,21 +597,21 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
 
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
-    file_metadata = cudf.io.read_parquet_metadata(fname)
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     # alternate rows between the two sources
     gdf = cudf.read_parquet(
         [fname, fname],
         row_groups=[
-            list(range(0, file_metadata.num_row_groups, 2)),
-            list(range(1, file_metadata.num_row_groups, 2)),
+            list(range(0, row_groups, 2)),
+            list(range(1, row_groups, 2)),
         ],
     )
 
     ref_df = [
         cudf.read_parquet(fname, row_groups=i)
-        for i in list(range(0, file_metadata.num_row_groups, 2))
-        + list(range(1, file_metadata.num_row_groups, 2))
+        for i in list(range(0, row_groups, 2)) + list(range(1, row_groups, 2))
     ]
     ref_df = cudf.concat(ref_df)
 
@@ -642,10 +632,10 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
 
-    file_metadata = cudf.io.read_parquet_metadata(fname)
+    total_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
-    num_rows = file_metadata.num_rows // 4
-    skiprows = (file_metadata.num_rows - num_rows) // 2
+    num_rows = total_rows // 4
+    skiprows = (total_rows - num_rows) // 2
     gdf = cudf.read_parquet(fname, skiprows=skiprows, num_rows=num_rows)
 
     for row in range(num_rows):
@@ -1669,16 +1659,15 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
         writer.write_table(gdf)
 
     # Simple check for multiple row-groups
-    file_metadata = cudf.io.parquet.read_parquet_metadata(fname)
-    assert file_metadata.num_rows == size
-    assert file_metadata.num_row_groups > 1
-    assert file_metadata.schema.names == ["a", "b"]
+    nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
+    assert nrows == size
+    assert nrow_groups > 1
+    assert columns == ["a", "b"]
 
     # Know the specific row-group count for row_group_size_rows
     if "row_group_size_rows" in row_group_size_kwargs:
         assert (
-            file_metadata.num_row_groups
-            == size // row_group_size_kwargs["row_group_size_rows"]
+            nrow_groups == size // row_group_size_kwargs["row_group_size_rows"]
         )
 
     assert_eq(cudf.read_parquet(fname), gdf)
@@ -2548,18 +2537,12 @@ def test_to_parquet_row_group_size(
         fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
     )
 
-    file_metadata = cudf.io.read_parquet_metadata(fname)
-
-    assert file_metadata.num_rows == sum(
-        file_metadata.row_group(i).num_rows
-        for i in range(file_metadata.num_row_groups)
-    )
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
     # 8 bytes per row, as the column is int64
     expected_num_rows = max(
-        math.ceil(file_metadata.num_rows / size_rows),
-        math.ceil(8 * file_metadata.num_rows / size_bytes),
+        math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)
     )
-    assert expected_num_rows == file_metadata.num_row_groups
+    assert expected_num_rows == row_groups
 
 
 def test_parquet_reader_decimal_columns():

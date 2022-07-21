@@ -9,7 +9,6 @@ from contextlib import ExitStack
 from typing import Dict, List, Tuple
 from uuid import uuid4
 
-import fsspec
 import numpy as np
 from pyarrow import dataset as ds, parquet as pq
 
@@ -194,16 +193,16 @@ def write_to_dataset(
 
 @ioutils.doc_read_parquet_metadata()
 @_cudf_nvtx_annotate
-def read_parquet_metadata(path, fs=None, storage_options=None):
-    fs = (
-        fs
-        or fsspec.core.get_fs_token_paths(
-            path, storage_options=storage_options or {}
-        )[0]
-    )
-    with fs.open(path, mode="rb", cache_type="none") as f:
-        file_metadata = pq.ParquetFile(f).metadata
-    return file_metadata
+def read_parquet_metadata(path):
+    """{docstring}"""
+
+    pq_file = pq.ParquetFile(path)
+
+    num_rows = pq_file.metadata.num_rows
+    num_row_groups = pq_file.num_row_groups
+    col_names = pq_file.schema.names
+
+    return num_rows, num_row_groups, col_names
 
 
 @_cudf_nvtx_annotate
