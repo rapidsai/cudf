@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 ./udf_cli -u ../tests/ctors.udf -t ../tests/done.txt
 ./udf_cli -u ../tests/append.udf -t ../tests/done.txt
 ./udf_cli -u ../tests/insert.udf -t ../tests/done.txt

@@ -5,20 +5,19 @@
 
 import os
 
-from libcpp.string cimport string
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
 from cudf.core.buffer import Buffer
 
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.column cimport Column
-
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
 from strings_udf._lib.cpp.strings_udf cimport (
     call_udf as cpp_call_udf,
     create_udf_module as cpp_create_udf_module,
@@ -29,7 +28,8 @@ from strings_udf._lib.cpp.strings_udf cimport (
 
 import numpy as np
 
-def process_udf( udf, name, cols ):
+
+def process_udf(udf, name, cols):
     cdef string c_udf
     cdef string c_name
     cdef size_type c_size
@@ -52,11 +52,11 @@ def process_udf( udf, name, cols ):
     include_path = "-I" + os.environ.get("CONDA_PREFIX") + "/include"
     c_options.push_back(str(include_path).encode('UTF-8'))
 
-    #with nogil:
+    # with nogil:
     c_module = move(cpp_create_udf_module(c_udf, c_options))
     # c_module will be nullptr if there is a compile error
 
-    #with nogil:
+    # with nogil:
     c_result = move(cpp_call_udf(c_module.get()[0], c_name, c_size, c_columns))
 
     return Column.from_unique_ptr(move(c_result))
@@ -65,7 +65,7 @@ def process_udf( udf, name, cols ):
 def to_string_view_array(Column strings_col):
     cdef unique_ptr[device_buffer] c_buffer
 
-    #with nogil:
+    # with nogil:
     c_buffer = move(cpp_to_string_view_array(strings_col.view()))
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
@@ -79,7 +79,7 @@ def from_dstring_array(DeviceBuffer d_buffer):
     cdef unique_ptr[column] c_result
     # data = <void *>
 
-    #with nogil:
+    # with nogil:
     c_result = move(cpp_from_dstring_array(data, size))
 
     return Column.from_unique_ptr(move(c_result))

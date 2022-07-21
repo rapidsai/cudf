@@ -49,7 +49,13 @@ from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.utils import _compile_or_get, _launch_arg_from_col, _supported_cols_from_frame, _return_col_from_dtype, _post_process_output_col
+from cudf.core.udf.utils import (
+    _compile_or_get,
+    _launch_arg_from_col,
+    _post_process_output_col,
+    _return_col_from_dtype,
+    _supported_cols_from_frame,
+)
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -1809,7 +1815,7 @@ class IndexedFrame(Frame):
             offsets.append(col.offset)
         launch_args += offsets
         launch_args += list(args)
-    
+
         try:
             kernel.forall(len(self))(*launch_args)
         except Exception as e:

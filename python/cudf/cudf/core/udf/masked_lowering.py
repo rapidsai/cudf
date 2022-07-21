@@ -5,12 +5,13 @@ import operator
 from llvmlite import ir
 from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
-from numba.cuda.cudadrv import nvvm
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types
+
+from strings_udf._typing import string_view
 
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
@@ -19,15 +20,8 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.masked_typing import (
-    MaskedType,
-    NAType,
-)
+from cudf.core.udf.masked_typing import MaskedType, NAType
 
-import operator
-
-
-from strings_udf._typing import string_view
 
 @cuda_lowering_registry.lower_constant(NAType)
 def constant_na(context, builder, ty, pyval):
@@ -295,6 +289,7 @@ def pack_return_scalar_impl(context, builder, sig, args):
 
     return outdata._getvalue()
 
+
 @cuda_lower(operator.truth, MaskedType)
 def masked_scalar_truth_impl(context, builder, sig, args):
     indata = cgutils.create_struct_proxy(MaskedType(types.boolean))(
@@ -366,7 +361,6 @@ def masked_constructor(context, builder, sig, args):
     masked.value = value
     masked.valid = valid
     return masked._getvalue()
-
 
 
 # Allows us to make an instance of MaskedType a global variable

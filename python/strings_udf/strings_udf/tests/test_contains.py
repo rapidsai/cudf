@@ -1,10 +1,13 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from .utils import run_udf_test
 import pytest
 
+from .utils import run_udf_test
 
-@pytest.mark.parametrize("data", [["cudf", "rapids", "AI", "gpu", "2022", "cuda"]])
+
+@pytest.mark.parametrize(
+    "data", [["cudf", "rapids", "AI", "gpu", "2022", "cuda"]]
+)
 @pytest.mark.parametrize("substr", ["a", "cu", "2", "abc"])
 def test_string_udf_contains(data, substr):
     # Tests contains for string UDFs

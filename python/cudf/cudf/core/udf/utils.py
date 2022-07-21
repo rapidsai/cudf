@@ -3,34 +3,36 @@
 from typing import Callable
 
 import cachetools
+import cupy as cp
 import numpy as np
 from numba import cuda, typeof
 from numba.core.errors import TypingError
 from numba.np import numpy_support
-from numba.types import Poison, Tuple, boolean, int64, void, CPointer
+from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
-import cupy as cp
+from strings_udf import ptxpath
+from strings_udf._typing import str_view_arg_handler, string_view
+
+from cudf.api.types import is_string_dtype
+from cudf.core.column.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.masked_typing import MaskedType
-from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    TIMEDELTA_TYPES,
     STRING_TYPES,
+    TIMEDELTA_TYPES,
 )
-from cudf.api.types import is_string_dtype
-from strings_udf._typing import str_view_arg_handler, string_view
-from strings_udf import ptxpath
-
 from cudf.utils.utils import _cudf_nvtx_annotate
 
-import rmm
-
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
+    NUMERIC_TYPES
+    | BOOL_TYPES
+    | DATETIME_TYPES
+    | TIMEDELTA_TYPES
+    | STRING_TYPES
 )
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
@@ -134,12 +136,7 @@ def _masked_array_type_from_col(col):
     if col.mask is None:
         return col_type
     else:
-        return Tuple(
-            (
-                col_type,
-                libcudf_bitmask_type[::1]
-            )
-        )
+        return Tuple((col_type, libcudf_bitmask_type[::1]))
 
 
 def _construct_signature(frame, return_type, args):
@@ -231,22 +228,31 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])(_kernel)
+    kernel = cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])(
+        _kernel
+    )
 
     return kernel
+
 
 def _launch_arg_from_col(col):
     from strings_udf._lib.cudf_jit_udf import to_string_view_array
 
-    data = col.data if not is_string_dtype(col.dtype) else to_string_view_array(col)
+    data = (
+        col.data
+        if not is_string_dtype(col.dtype)
+        else to_string_view_array(col)
+    )
     mask = col.mask
     if mask is None:
         return data
     else:
         return data, mask
 
+
 def _return_col_from_dtype(dt, size):
     return cp.empty(size, dtype=dt)
+
 
 def _post_process_output_col(col, retty):
     return as_column(col, retty)
