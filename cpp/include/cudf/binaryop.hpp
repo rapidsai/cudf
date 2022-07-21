@@ -36,23 +36,25 @@ namespace cudf {
  * @brief Types of binary operations that can be performed on data.
  */
 enum class binary_operator : int32_t {
-  ADD,                   ///< operator +
-  SUB,                   ///< operator -
-  MUL,                   ///< operator *
-  DIV,                   ///< operator / using common type of lhs and rhs
-  TRUE_DIV,              ///< operator / after promoting type to floating point
-  FLOOR_DIV,             ///< operator / after promoting to 64 bit floating point and then
-                         ///< flooring the result
-  MOD,                   ///< operator %
-  PMOD,                  ///< positive modulo operator
-                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
-                         ///< else, it returns (dividend % divisor)
-  PYMOD,                 ///< operator % but following Python's sign rules for negatives
-  POW,                   ///< lhs ^ rhs
-  LOG_BASE,              ///< logarithm to the base
-  ATAN2,                 ///< 2-argument arctangent
-  SHIFT_LEFT,            ///< operator <<
-  SHIFT_RIGHT,           ///< operator >>
+  ADD,          ///< operator +
+  SUB,          ///< operator -
+  MUL,          ///< operator *
+  DIV,          ///< operator / using common type of lhs and rhs
+  TRUE_DIV,     ///< operator / after promoting type to floating point
+  FLOOR_DIV,    ///< operator / after promoting to 64 bit floating point and then
+                ///< flooring the result
+  MOD,          ///< operator %
+  PMOD,         ///< positive modulo operator
+                ///< If remainder is negative, this returns (remainder + divisor) % divisor
+                ///< else, it returns (dividend % divisor)
+  PYMOD,        ///< operator % but following Python's sign rules for negatives
+  POW,          ///< lhs ^ rhs
+  INT_POW,      ///< int ^ int, used to avoid floating point precision loss. Returns 0 for negative
+                ///< exponents.
+  LOG_BASE,     ///< logarithm to the base
+  ATAN2,        ///< 2-argument arctangent
+  SHIFT_LEFT,   ///< operator <<
+  SHIFT_RIGHT,  ///< operator >>
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
                          ///< Logical right shift. Casts to an unsigned value before shifting.
   BITWISE_AND,           ///< operator &
