@@ -413,13 +413,15 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  *
  * Note : this function is where output device memory is allocated for nested columns.
  *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in,out] input_columns Input column information
- * @param[in,out] output_columns Output column information
- * @param[in] num_rows Maximum number of rows to read
- * @param[in] min_rows crop all rows below min_row
- * @param[in] stream Cuda stream
+ * @param pages All pages to be decoded
+ * @param chunks All chunks to be decoded
+ * @param input_columns Input column information
+ * @param output_columns Output column information
+ * @param num_rows Maximum number of rows to read
+ * @param min_rows crop all rows below min_row
+ * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+ * bounds
+ * @param stream Cuda stream
  */
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -427,6 +429,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
                           size_t min_row,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
