@@ -27,8 +27,6 @@
 
 #include "statistics.cuh"
 
-#include <cudf/lists/list_device_view.cuh>
-
 namespace cudf {
 namespace io {
 

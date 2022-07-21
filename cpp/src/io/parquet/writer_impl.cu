@@ -510,11 +510,16 @@ std::vector<schema_tree_node> construct_schema_tree(
       // column that isn't a single-depth list<int8> the code will throw.
       if (col_meta.is_enabled_output_as_binary() && col->type().id() == type_id::LIST) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                     "Binary column's corresponding metadata should have zero or two children");
-        auto const data_col_type =
-          col->children[lists_column_view::child_column_index]->type().id();
-        CUDF_EXPECTS(data_col_type == type_id::INT8 || data_col_type == type_id::UINT8,
-                     "Binary column's type must be INT8 or UINT8");
+                     "Binary column's corresponding metadata should have zero or two children!");
+        if (col_meta.num_children() > 0) {
+          auto const data_col_type =
+            col->children[lists_column_view::child_column_index]->type().id();
+          CUDF_EXPECTS(data_col_type == type_id::INT8 || data_col_type == type_id::UINT8,
+                       "Binary column's type must be INT8 or UINT8!");
+
+          CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.size() == 0,
+                       "Binary column must not be nested!");
+        }
 
         schema_tree_node col_schema{};
 
@@ -526,6 +531,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
         schema.push_back(col_schema);
       } else if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
@@ -819,7 +825,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
 column_view parquet_column_view::leaf_column_view() const
 {
-  if (schema_node.stats_dtype != dtype_byte_array) {
+  if (!schema_node.output_as_byte_array) {
     auto col = cudf_col;
     while (cudf::is_nested(col.type())) {
       if (col.type().id() == type_id::LIST) {
@@ -847,8 +853,9 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.rep_values    = _rep_level.data();
     desc.def_values    = _def_level.data();
   }
-  desc.num_rows      = cudf_col.size();
-  desc.physical_type = physical_type();
+  desc.num_rows             = cudf_col.size();
+  desc.physical_type        = physical_type();
+  desc.output_as_byte_array = schema_node.output_as_byte_array;
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());

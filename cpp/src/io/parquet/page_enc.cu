@@ -136,10 +136,8 @@ __global__ void __launch_bounds__(block_size)
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
 
-    auto col                = *(s->col.parent_column);
-    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col, physical_type);
-    size_type end_value_idx =
-      row_to_value_idx(s->frag.start_row + s->frag.num_rows, col, physical_type);
+    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, &s->col);
+    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, &s->col);
     s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {
@@ -168,7 +166,7 @@ __global__ void __launch_bounds__(block_size)
     uint32_t len;
     if (is_valid) {
       len = dtype_len;
-      if (physical_type == BYTE_ARRAY && physical_type != BOOLEAN) {
+      if (physical_type == BYTE_ARRAY) {
         switch (leaf_type) {
           case type_id::STRING: {
             auto str = s->col.leaf_column->element<string_view>(val_idx);
@@ -910,9 +908,8 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    auto col           = *(s->col.parent_column);
-    s->page_start_val  = row_to_value_idx(s->page.start_row, col, physical_type);
-    s->chunk_start_val = row_to_value_idx(s->ck.start_row, col, physical_type);
+    s->page_start_val  = row_to_value_idx(s->page.start_row, &s->col);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, &s->col);
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
@@ -976,7 +973,12 @@ __global__ void __launch_bounds__(128, 8)
       if (is_valid) {
         len = dtype_len_out;
         if (physical_type == BYTE_ARRAY) {
-          len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
+          if (type_id == type_id::STRING) {
+            len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
+          } else if (s->col.output_as_byte_array &&
+                     (type_id == type_id::INT8 || type_id == type_id::UINT8)) {
+            len += get_element<byte_array_view>(*s->col.leaf_column, val_idx).size_bytes();
+          }
         }
       } else {
         len = 0;
@@ -1067,13 +1069,24 @@ __global__ void __launch_bounds__(128, 8)
             memcpy(dst + pos, &v, 8);
           } break;
           case BYTE_ARRAY: {
-            auto str     = s->col.leaf_column->element<string_view>(val_idx);
-            uint32_t v   = len - 4;  // string length
-            dst[pos + 0] = v;
-            dst[pos + 1] = v >> 8;
-            dst[pos + 2] = v >> 16;
-            dst[pos + 3] = v >> 24;
-            if (v != 0) memcpy(dst + pos + 4, str.data(), v);
+            if (type_id == type_id::STRING) {
+              auto str     = s->col.leaf_column->element<string_view>(val_idx);
+              uint32_t v   = len - 4;  // string length
+              dst[pos + 0] = v;
+              dst[pos + 1] = v >> 8;
+              dst[pos + 2] = v >> 16;
+              dst[pos + 3] = v >> 24;
+              if (v != 0) memcpy(dst + pos + 4, str.data(), v);
+            } else if (s->col.output_as_byte_array &&
+                       (type_id == type_id::INT8 || type_id == type_id::UINT8)) {
+              auto bytes   = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
+              uint32_t v   = len - 4;  // byte length
+              dst[pos + 0] = v;
+              dst[pos + 1] = v >> 8;
+              dst[pos + 2] = v >> 16;
+              dst[pos + 3] = v >> 24;
+              if (v != 0) memcpy(dst + pos + 4, bytes.data(), v);
+            }
           } break;
           case FIXED_LEN_BYTE_ARRAY: {
             if (type_id == type_id::DECIMAL128) {
