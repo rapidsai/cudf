@@ -22,12 +22,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
-#include <cuco/static_multimap.cuh>
+#include <cuco/static_map.cuh>
 
 namespace cudf::detail {
 
@@ -35,6 +35,66 @@ namespace {
 
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
+
+/**
+ * @brief Functor to remap hash values to new values if they are equal to the specified sentinel
+ * value.
+ */
+template <typename Hasher>
+struct remap_sentinel_hasher {
+  remap_sentinel_hasher(Hasher&& row_hasher, hash_value_type const sentinel)
+    : _hasher{std::move(row_hasher)}, _sentinel(sentinel)
+  {
+  }
+
+  template <typename T>
+  __device__ inline auto operator()(T const idx) const noexcept
+  {
+    return remap_sentinel_hash(_hasher(static_cast<size_type>(idx)), _sentinel);
+  }
+
+ private:
+  Hasher _hasher;
+  hash_value_type const _sentinel;
+};
+
+/**
+ * @brief A comparator adapter so that the underlying self comparator can work with strong index
+ * types.
+ */
+template <typename Comparator>
+struct strong_index_self_comparator_adapter {
+  strong_index_self_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
+
+  template <typename T>
+  __device__ inline auto operator()(T const lhs_index, T const rhs_index) const noexcept
+  {
+    return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+  }
+
+ private:
+  Comparator const _comparator;
+};
+
+/**
+ * @brief Invoke an `operator()` template with a row equality comparator based on the specified
+ * `compare_nans` parameter.
+ *
+ * @param compare_nans The flag to specify whether NaNs should be compared equal or not
+ * @param func The input functor to invoke
+ */
+template <typename Func>
+void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
+{
+  if (compare_nans == nan_equality::ALL_EQUAL) {
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+    func(nan_equal_comparator{});
+  } else {
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+    func(nan_unequal_comparator{});
+  }
+}
 
 }  // namespace
 
@@ -45,20 +105,16 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  // Use a hash map with key type is row hash values and map value type is `lhs_index_type` to store
-  // all row indices of the haystack table.
-  using static_multimap =
-    cuco::static_multimap<hash_value_type,
-                          lhs_index_type,
-                          cuda::thread_scope_device,
-                          rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
-                          cuco::double_hashing<detail::DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
+  using static_map = cuco::static_map<lhs_index_type,
+                                      size_type,
+                                      cuda::thread_scope_device,
+                                      rmm::mr::stream_allocator_adaptor<default_allocator<char>>>;
 
-  auto map = static_multimap(compute_hash_table_size(haystack.num_rows()),
-                             cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                             cuco::sentinel::empty_value{lhs_index_type{detail::JoinNoneValue}},
-                             stream.value(),
-                             detail::hash_table_allocator_type{default_allocator<char>{}, stream});
+  auto map = static_map(compute_hash_table_size(haystack.num_rows()),
+                        cuco::sentinel::empty_key{std::numeric_limits<lhs_index_type>::max()},
+                        cuco::sentinel::empty_value{detail::JoinNoneValue},
+                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value());
 
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
@@ -66,13 +122,16 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
   // Insert all row hash values and indices of the haystack table.
   {
-    auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack, stream);
-    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
-
-    using make_pair_fn = make_pair_function<decltype(d_hasher), lhs_index_type>;
-
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, make_pair_fn{d_hasher, map.get_empty_key_sentinel()});
+      size_type{0},
+      [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
+
+    auto const hasher = cudf::experimental::row::hash::row_hasher(haystack, stream);
+    auto const d_hasher =
+      remap_sentinel_hasher(hasher.device_hasher(nullate::DYNAMIC{has_any_nulls}),
+                            static_cast<hash_value_type>(map.get_empty_key_sentinel()));
+
+    auto const comparator = cudf::experimental::row::equality::self_comparator(haystack, stream);
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
@@ -95,13 +154,29 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                      : haystack_nullable_columns.front().null_mask();
 
       // Insert only rows that do not have any null at any level.
-      map.insert_if(haystack_it,
-                    haystack_it + haystack.num_rows(),
-                    thrust::counting_iterator<size_type>(0),  // stencil
-                    row_is_valid{row_bitmask_ptr},
-                    stream.value());
-    } else {
-      map.insert(haystack_it, haystack_it + haystack.num_rows(), stream.value());
+      auto const insert_map = [&](auto const value_comp) {
+        auto const d_eqcomp = strong_index_self_comparator_adapter{
+          comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+        map.insert_if(haystack_it,
+                      haystack_it + haystack.num_rows(),
+                      thrust::counting_iterator<size_type>(0),  // stencil
+                      row_is_valid{row_bitmask_ptr},
+                      d_hasher,
+                      d_eqcomp,
+                      stream.value());
+      };
+
+      dispatch_nan_comparator(compare_nans, insert_map);
+
+    } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
+      auto const insert_map = [&](auto const value_comp) {
+        auto const d_eqcomp = strong_index_self_comparator_adapter{
+          comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+        map.insert(
+          haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
+      };
+
+      dispatch_nan_comparator(compare_nans, insert_map);
     }
   }
 
@@ -110,36 +185,29 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
   // Check existence for each row of the needles table in the haystack table.
   {
-    auto const hasher   = cudf::experimental::row::hash::row_hasher(needles, stream);
-    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
+    auto const needles_it = cudf::detail::make_counting_transform_iterator(
+      size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
+
+    auto const hasher = cudf::experimental::row::hash::row_hasher(needles, stream);
+    auto const d_hasher =
+      remap_sentinel_hasher(hasher.device_hasher(nullate::DYNAMIC{has_any_nulls}),
+                            static_cast<hash_value_type>(map.get_empty_key_sentinel()));
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
 
-    using make_pair_fn = make_pair_function<decltype(d_hasher), rhs_index_type>;
-
-    auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, make_pair_fn{d_hasher, map.get_empty_key_sentinel()});
-
     auto const check_contains = [&](auto const value_comp) {
       auto const d_eqcomp =
         comparator.equal_to(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
-      map.pair_contains(needles_it,
-                        needles_it + needles.num_rows(),
-                        contained.begin(),
-                        pair_equality{d_eqcomp},
-                        stream.value());
+      map.contains(needles_it,
+                   needles_it + needles.num_rows(),
+                   contained.begin(),
+                   d_hasher,
+                   d_eqcomp,
+                   stream.value());
     };
 
-    if (compare_nans == nan_equality::ALL_EQUAL) {
-      using nan_equal_comparator =
-        cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-      check_contains(nan_equal_comparator{});
-    } else {
-      using nan_unequal_comparator =
-        cudf::experimental::row::equality::physical_equality_comparator;
-      check_contains(nan_unequal_comparator{});
-    }
+    dispatch_nan_comparator(compare_nans, check_contains);
   }
 
   return contained;
