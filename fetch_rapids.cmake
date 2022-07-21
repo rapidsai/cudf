@@ -11,7 +11,8 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-file(DOWNLOAD https://raw.githubusercontent.com/vyasr/rapids-cmake/feature/nvcomp_2.3.3/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
+file(
+  DOWNLOAD https://raw.githubusercontent.com/vyasr/rapids-cmake/feature/nvcomp_2.3.3/RAPIDS.cmake
+  ${CMAKE_BINARY_DIR}/RAPIDS.cmake
 )
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
