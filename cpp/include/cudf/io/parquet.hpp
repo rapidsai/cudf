@@ -68,7 +68,7 @@ class parquet_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
   // Whether to store binary data as a string column
-  bool _convert_binary_to_strings = true;
+  std::optional<std::vector<bool>> _convert_binary_to_strings{std::nullopt};
 
   /**
    * @brief Constructor from source info.
@@ -126,7 +126,7 @@ class parquet_reader_options {
    *
    * @return `true` if binary data should be converted to strings
    */
-  [[nodiscard]] bool is_enabled_convert_binary_to_strings() const
+  [[nodiscard]] std::optional<std::vector<bool>> is_enabled_convert_binary_to_strings() const
   {
     return _convert_binary_to_strings;
   }
@@ -205,11 +205,12 @@ class parquet_reader_options {
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
-   * @brief Sets to enable/disable conversion of binary to strings.
+   * @brief Sets to enable/disable conversion of binary to strings per column.
    *
-   * @param val Boolean value to enable/disable conversion of binary to string columns
+   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
+   * Note default is to convert to string columns.
    */
-  void enable_convert_binary_to_strings(bool val) { _convert_binary_to_strings = val; }
+  void set_convert_binary_to_strings(std::vector<bool> val) { _convert_binary_to_strings = val; }
 
   /**
    * @brief Sets number of rows to skip.
@@ -317,12 +318,13 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets enable/disable conversion of binary to strings.
+   * @brief Sets enable/disable conversion of binary to strings per column.
    *
-   * @param val Boolean value to enable/disable conversion of binary to string columns
+   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
+   * Note default is to convert to string columns.
    * @return this for chaining
    */
-  parquet_reader_options_builder& convert_binary_to_strings(bool val)
+  parquet_reader_options_builder& convert_binary_to_strings(std::vector<bool> val)
   {
     options._convert_binary_to_strings = val;
     return *this;

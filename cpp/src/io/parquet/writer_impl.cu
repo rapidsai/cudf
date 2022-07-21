@@ -307,7 +307,7 @@ struct leaf_schema_fn {
     col_schema.type = Type::BYTE_ARRAY;
     if (col_meta.is_enabled_output_as_binary()) {
       col_schema.converted_type = ConvertedType::UNKNOWN;
-      col_schema.stats_dtype    = statistics_dtype::dtype_string;
+      col_schema.stats_dtype    = statistics_dtype::dtype_byte_array;
     } else {
       col_schema.converted_type = ConvertedType::UTF8;
       col_schema.stats_dtype    = statistics_dtype::dtype_string;
@@ -503,13 +503,6 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
       };
 
-      printf("saving col %p with type %d, %d rows, %d children (out as binary is %s)\n",
-             &col,
-             (int)col->type().id(),
-             col->size(),
-             (int)col->children.size(),
-             col_meta.is_enabled_output_as_binary() ? "true" : "false");
-
       // There is a special case for a list<int8> column with one child. This column can have a
       // special flag that indicates we write this out as binary instead of a list. This is a more
       // efficient storage mechanism for a single-depth list of bytes, but is a departure from
@@ -525,8 +518,6 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         schema_tree_node col_schema{};
 
-        printf("doing this one as binary!\n");
-
         col_schema.type            = Type::BYTE_ARRAY;
         col_schema.converted_type  = ConvertedType::UNKNOWN;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
@@ -541,8 +532,6 @@ std::vector<schema_tree_node> construct_schema_tree(
         schema_tree_node struct_schema{};
         struct_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-
-        printf("struct\n");
 
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         struct_schema.num_children = col->children.size();
@@ -564,8 +553,6 @@ std::vector<schema_tree_node> construct_schema_tree(
         // The top level is the same name as the column name.
         // So e.g. List<List<int>> is denoted in the schema by
         // "col_name" : { "list" : { "element" : { "list" : { "element" } } } }
-
-        printf("non-map list\n");
 
         schema_tree_node list_schema_1{};
         list_schema_1.converted_type = ConvertedType::LIST;
@@ -594,7 +581,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         // Map schema is denoted by a list of struct
         // e.g. List<Struct<String,String>> will be
         // "col_name" : { "key_value" : { "key", "value" } }
-        printf("map\n");
+
         // verify the List child structure is a struct<left_child, right_child>
         column_view struct_col = *col->children[lists_column_view::child_column_index];
         CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
@@ -646,7 +633,6 @@ std::vector<schema_tree_node> construct_schema_tree(
                    struct_col_index);
 
       } else {
-        printf("leaf\n");
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
           CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
@@ -833,15 +819,19 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
 column_view parquet_column_view::leaf_column_view() const
 {
-  auto col = cudf_col;
-  while (cudf::is_nested(col.type())) {
-    if (col.type().id() == type_id::LIST) {
-      col = col.child(lists_column_view::child_column_index);
-    } else if (col.type().id() == type_id::STRUCT) {
-      col = col.child(0);  // Stored cudf_col has only one child if struct
+  if (schema_node.stats_dtype != dtype_byte_array) {
+    auto col = cudf_col;
+    while (cudf::is_nested(col.type())) {
+      if (col.type().id() == type_id::LIST) {
+        col = col.child(lists_column_view::child_column_index);
+      } else if (col.type().id() == type_id::STRUCT) {
+        col = col.child(0);  // Stored cudf_col has only one child if struct
+      }
     }
+    return col;
+  } else {
+    return *schema_node.leaf_column;
   }
-  return col;
 }
 
 gpu::parquet_column_device_view parquet_column_view::get_device_view(

@@ -159,16 +159,6 @@ __global__ void __launch_bounds__(block_size)
               return 4 + data_col.element<string_view>(val_idx).size_bytes();
             } else if (col_type == type_id::INT8 || col_type == type_id::UINT8) {
               // Binary is stored as 4 byte length + bytes
-              printf("leaf col(%p with parent %p) is type %d and has %d elements and %d children\n",
-                     col->leaf_column,
-                     &cudf_col,
-                     (int)data_col.type().id(),
-                     data_col.size(),
-                     data_col.num_child_columns());
-              printf("reading from %d to %d and my index is %d!\n",
-                     s_start_value_idx,
-                     end_value_idx,
-                     val_idx);
               return 4 + get_element<byte_array_view>(data_col, val_idx).size_bytes();
             }
             CUDF_UNREACHABLE("Unsupported type for byte array");

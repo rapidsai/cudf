@@ -1581,7 +1581,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   // Binary columns can be read as binary or strings
-  _force_binary_as_strings = options.is_enabled_convert_binary_to_strings();
+  _force_binary_columns_as_strings = options.is_enabled_convert_binary_to_strings();
 
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
@@ -1755,7 +1755,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
         auto col                   = make_column(_output_columns[i], &col_name, stream, _mr);
-        if (!_force_binary_as_strings && _output_columns[i].type.id() == type_id::STRING) {
+        if (_output_columns[i].type.id() == type_id::STRING &&
+            _force_binary_columns_as_strings.has_value() &&
+            !_force_binary_columns_as_strings.value()[i]) {
           auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
           if (schema.converted_type == parquet::UNKNOWN) {
             auto const num_rows = col->size();

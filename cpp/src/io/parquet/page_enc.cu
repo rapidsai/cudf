@@ -117,7 +117,7 @@ __global__ void __launch_bounds__(block_size)
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
   int frag_y                 = blockIdx.y;
-  auto const physical_type   = s->col.physical_type;
+  auto const physical_type   = col_desc[blockIdx.x].physical_type;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
   __syncthreads();
@@ -169,32 +169,18 @@ __global__ void __launch_bounds__(block_size)
     if (is_valid) {
       len = dtype_len;
       if (physical_type == BYTE_ARRAY && physical_type != BOOLEAN) {
-        printf("found byte array\n");
         switch (leaf_type) {
           case type_id::STRING: {
-            printf("found string byte array\n");
             auto str = s->col.leaf_column->element<string_view>(val_idx);
             len += str.size_bytes();
           } break;
           case type_id::INT8: {
-            printf("int8 list, getting size\n");
             auto list_element = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
-            printf("int8 list, getting size2\n");
             len += list_element.size_bytes();
-            printf("int8 list, got size %d\n", (int)list_element.size_bytes());
           } break;
           case type_id::UINT8: {
-            printf("uint8 list, getting size\n");
-            printf("leaf has %d values\n", nvals);
-            printf("%d %d - uint8 list, getting size of s(%p)->col.leaf_column(%p)\n",
-                   threadIdx.x,
-                   blockIdx.x,
-                   s,
-                   s->col.leaf_column);
             auto list_element = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
-            printf("uint8 list, getting size2\n");
             len += list_element.size_bytes();
-            printf("uint8 list, got size %d\n", (int)list_element.size_bytes());
           } break;
           default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
         }
