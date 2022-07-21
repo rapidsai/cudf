@@ -2,7 +2,6 @@
 
 from .utils import run_udf_test
 import pytest
-from strings_udf._typing import find
 
 @pytest.mark.parametrize(
     "data", [
@@ -14,6 +13,6 @@ def test_string_udf_find(data, substr):
     # tests the `find` function in string udfs
 
     def func(st):
-        return find(st, substr)
+        return st.find(substr)
 
     run_udf_test(data, func, 'int32')

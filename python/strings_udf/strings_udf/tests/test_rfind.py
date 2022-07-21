@@ -2,7 +2,6 @@
 
 from .utils import run_udf_test
 import pytest
-from strings_udf._typing import rfind
 
 @pytest.mark.parametrize(
     "data", [
@@ -14,6 +13,6 @@ def test_string_udf_rfind(data, substr):
     # tests the `rfind` function in string udfs
 
     def func(st):
-        return rfind(st, substr)
+        return st.rfind(substr)
 
     run_udf_test(data, func, 'int32')

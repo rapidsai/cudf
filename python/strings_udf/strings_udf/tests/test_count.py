@@ -2,7 +2,6 @@
 
 from .utils import run_udf_test
 import pytest
-from strings_udf._typing import count
 
 @pytest.mark.parametrize(
     "data", [
@@ -14,6 +13,6 @@ def test_string_udf_count(data, substr):
     # tests the `count` function in string udfs
 
     def func(st):
-        return count(st, substr)
+        return st.count(substr)
 
     run_udf_test(data, func, 'int32')

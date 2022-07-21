@@ -25,10 +25,7 @@ from strings_udf._lib.cpp.strings_udf cimport (
     from_dstring_array as cpp_from_dstring_array,
     to_string_view_array as cpp_to_string_view_array,
     udf_module as cpp_udf_module,
-    get_character_flags_table as cpp_get_character_flags_table
 )
-
-from libc.stdint cimport uintptr_t, uint8_t
 
 import numpy as np
 
@@ -86,7 +83,3 @@ def from_dstring_array(DeviceBuffer d_buffer):
     c_result = move(cpp_from_dstring_array(data, size))
 
     return Column.from_unique_ptr(move(c_result))
-
-def get_character_flags_table_ptr():
-    cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()
-    return np.int64(<uintptr_t>tbl_ptr)

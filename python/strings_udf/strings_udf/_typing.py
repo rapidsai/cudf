@@ -3,7 +3,7 @@
 from numba import cuda, types
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
-from numba.core.typing.templates import AbstractTemplate
+from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 
 import operator
@@ -259,238 +259,244 @@ _string_view_lt = cuda.declare_device(
     "lt", types.boolean(types.CPointer(string_view), types.CPointer(string_view))
 )
 
-
-def starts_with(st, substr):
-    return st.startswith(substr)
-
-
-@cuda_decl_registry.register_global(starts_with)
 class StringViewStartsWith(AbstractTemplate):
-    """
-    return True if a stringview starts with a substring
-    """
+    key = "StringView.startswith"
 
     def generic(self, args, kws):
-        if isinstance(args[0], (any_string_ty)) and isinstance(args[1], any_string_ty):
-            return nb_signature(types.boolean, string_view, string_view)
+        return nb_signature(
+            types.boolean, string_view, recvr=self.this
+        )
 
+class StringViewEndsWith(AbstractTemplate):
+    key = "StringView.endswith"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, string_view, recvr=self.this
+        )
+
+class StringViewFind(AbstractTemplate):
+    key = "StringView.find"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.int32, string_view, recvr=self.this
+        )
+
+class StringViewRFind(AbstractTemplate):
+    key = "StringView.rfind"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.int32, string_view, recvr=self.this
+        )
+    
+class StringViewIsAlnum(AbstractTemplate):
+    key = "StringView.isalnum"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+    
+class StringViewIsAlpha(AbstractTemplate):
+    key = "StringView.isalpha"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+    
+class StringViewIsDecimal(AbstractTemplate):
+    key = "StringView.isdecimal"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+    
+class StringViewIsDigit(AbstractTemplate):
+    key = "StringView.isdigit"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+class StringViewIsNumeric(AbstractTemplate):
+    key = "StringView.isnumeric"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+class StringViewIsUpper(AbstractTemplate):
+    key = "StringView.isupper"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+    
+class StringViewIsLower(AbstractTemplate):
+    key = "StringView.islower"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+    
+class StringViewIsSpace(AbstractTemplate):
+    key = "StringView.isspace"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.boolean, recvr=self.this
+        )
+
+class StringViewCount(AbstractTemplate):
+    key = "StringView.count"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            types.int32, string_view, recvr=self.this
+        )
+
+
+@cuda_decl_registry.register_attr
+class StringViewAttrs(AttributeTemplate):
+    key = string_view
+
+    def resolve_startswith(self, mod):
+        return types.BoundFunction(
+            StringViewStartsWith, string_view
+        )
+
+    def resolve_endswith(self, mod):
+        return types.BoundFunction(
+            StringViewEndsWith, string_view
+        )
+
+    def resolve_find(self, mod):
+        return types.BoundFunction(
+            StringViewFind, string_view
+        )
+
+    def resolve_rfind(self, mod):
+        return types.BoundFunction(
+            StringViewRFind, string_view
+        )
+
+    def resolve_isalnum(self, mod):
+        return types.BoundFunction(
+            StringViewIsAlnum, string_view
+        )
+
+    def resolve_isalpha(self, mod):
+        return types.BoundFunction(
+            StringViewIsAlpha, string_view
+        )
+
+    def resolve_isdecimal(self, mod):
+        return types.BoundFunction(
+            StringViewIsDecimal, string_view
+        )
+
+    def resolve_isdigit(self, mod):
+        return types.BoundFunction(
+            StringViewIsDigit, string_view
+        )
+
+    def resolve_isnumeric(self, mod):
+        return types.BoundFunction(
+            StringViewIsNumeric, string_view
+        )
+
+    def resolve_islower(self, mod):
+        return types.BoundFunction(
+            StringViewIsLower, string_view
+        )
+
+    def resolve_isupper(self, mod):
+        return types.BoundFunction(
+            StringViewIsUpper, string_view
+        )
+
+    def resolve_isspace(self, mod):
+        return types.BoundFunction(
+            StringViewIsSpace, string_view
+        )
+
+    def resolve_count(self, mod):
+        return types.BoundFunction(
+            StringViewCount, string_view
+        )
 
 _string_view_startswith = cuda.declare_device(
     "startswith",
     types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
 )
 
-
-def ends_with(st, substr):
-    return st.endswith(substr)
-
-
-@cuda_decl_registry.register_global(ends_with)
-class StringViewEndsWith(AbstractTemplate):
-    """
-    return True if a stringview ends with a substring
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], (any_string_ty)) and isinstance(args[1], any_string_ty):
-            return nb_signature(types.boolean, string_view, string_view)
-
-
 _string_view_endswith = cuda.declare_device(
     "endswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view))
 )
-
-def find(st, substr):
-    return st.find(substr)
-
-@cuda_decl_registry.register_global(find)
-class StringViewFind(AbstractTemplate):
-    """
-    Return the index of a substring within a stringview
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], (any_string_ty)) and isinstance(args[1], any_string_ty):
-            return nb_signature(types.int32, string_view, string_view)
 
 _string_view_find = cuda.declare_device(
     "find",
     types.int32(types.CPointer(string_view), types.CPointer(string_view))
 )
 
-def rfind(st, substr):
-    return st.rfind(substr)
-
-@cuda_decl_registry.register_global(rfind)
-class StringViewFind(AbstractTemplate):
-    """
-    Return the index of a substring within a stringview
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], (any_string_ty)) and isinstance(args[1], any_string_ty):
-            return nb_signature(types.int32, string_view, string_view)
-
 _string_view_rfind = cuda.declare_device(
     "rfind",
     types.int32(types.CPointer(string_view), types.CPointer(string_view))
 )
-
-def isdigit(st):
-    return st.isdigit()
-
-@cuda_decl_registry.register_global(isdigit)
-class StringViewIsdigit(AbstractTemplate):
-    """
-    Return True if the string is all numeric characters else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
 
 _string_view_isdigit = cuda.declare_device(
     "pyisdigit",
     types.boolean(types.CPointer(string_view), types.int64)
 )
 
-def isalnum(st):
-    return st.isalnum()
-
-@cuda_decl_registry.register_global(isalnum)
-class StringViewIsAlnum(AbstractTemplate):
-    """
-    Return True if the string is all alphanumeric characters else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
 
 _string_view_isalnum = cuda.declare_device(
     "pyisalnum",
     types.boolean(types.CPointer(string_view), types.int64)
 )
 
-def isalpha(st):
-    return st.isalpha()
-
-@cuda_decl_registry.register_global(isalpha)
-class StringViewIsAlpha(AbstractTemplate):
-    """
-    Return True if the string is all alphabetical characters else false
-    """
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
-
 _string_view_isalpha = cuda.declare_device(
     "pyisalpha",
     types.boolean(types.CPointer(string_view), types.int64)
 )
-
-def isdecimal(st):
-    return st.isdecimal()
-
-@cuda_decl_registry.register_global(isdecimal)
-class StringViewIsdecimal(AbstractTemplate):
-    """
-    Return True if the string is all decimal characters else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
 
 _string_view_isdecimal = cuda.declare_device(
     "pyisdecimal",
     types.boolean(types.CPointer(string_view), types.int64)
 )
 
-def isnumeric(st):
-    return st.isnumeric()
-
-@cuda_decl_registry.register_global(isnumeric)
-class StringViewIsnumeric(AbstractTemplate):
-    """
-    Return True if the string represents a valid number else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
-
 _string_view_isnumeric = cuda.declare_device(
     "pyisnumeric",
     types.boolean(types.CPointer(string_view), types.int64)
 )
-
-def isspace(st):
-    return st.isspace()
-
-@cuda_decl_registry.register_global(isspace)
-class StringViewIsspace(AbstractTemplate):
-    """
-    Return True if the string is all white space else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
 
 _string_view_isspace = cuda.declare_device(
     "pyisspace",
     types.boolean(types.CPointer(string_view), types.int64)
 )
 
-def isupper(st):
-    return st.isupper()
-
-@cuda_decl_registry.register_global(isupper)
-class StringViewIsupper(AbstractTemplate):
-    """
-    Return True if the string's alphabetic characters are all uppercase else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
-
 _string_view_isupper = cuda.declare_device(
     "pyisupper",
     types.boolean(types.CPointer(string_view), types.int64)
 )
 
-def islower(st):
-    return st.islower()
-
-@cuda_decl_registry.register_global(islower)
-class StringViewIslower(AbstractTemplate):
-    """
-    Return True if the string's alphabetic characters are all lowercase else false
-    """
-
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and len(args) == 1:
-            return nb_signature(types.boolean, string_view)
-
 _string_view_islower = cuda.declare_device(
     "pyislower",
     types.boolean(types.CPointer(string_view), types.int64)
 )
-
-
-def count(st, substr):
-    return st.count(substr)
-
-@cuda_decl_registry.register_global(count)
-class StringViewCount(AbstractTemplate):
-    """
-    Return the number of non-overlapping occurences of a substring within a string
-    """
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and isinstance(args[1], any_string_ty):
-            return nb_signature(types.int32, string_view, string_view)
 
 _string_view_count = cuda.declare_device(
     "pycount",

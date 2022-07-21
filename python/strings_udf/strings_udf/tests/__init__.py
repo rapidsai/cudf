@@ -1,6 +1,0 @@
-from strings_udf import lowering
-from strings_udf._lib.cudf_jit_udf import get_character_flags_table_ptr
-
-character_flags_table_ptr = get_character_flags_table_ptr()
-lowering.character_flags_table_ptr = character_flags_table_ptr
-

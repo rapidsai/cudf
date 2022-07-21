@@ -2,7 +2,6 @@
 
 from .utils import run_udf_test
 import pytest
-from strings_udf._typing import starts_with
 
 @pytest.mark.parametrize(
     "data", [
@@ -14,6 +13,6 @@ def test_string_udf_startswith(data, substr):
     # tests the `startswith` function in string udfs
 
     def func(st):
-        return starts_with(st, substr)
+        return st.startswith(substr)
 
     run_udf_test(data, func, 'bool')

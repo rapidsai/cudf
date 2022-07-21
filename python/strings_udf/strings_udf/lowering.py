@@ -8,6 +8,7 @@ from numba.cuda.cudaimpl import lower as cuda_lower
 from numba.cuda.cudaimpl import registry as cuda_lowering_registry
 from strings_udf._typing import (
     StringView,
+    string_view,
     _string_view_endswith,
     _string_view_len,
     _string_view_startswith,
@@ -29,25 +30,13 @@ from strings_udf._typing import (
     _string_view_isupper,
     _string_view_islower,
     _string_view_count,
-    isdigit,
-    isalnum,
-    isalpha,
-    isnumeric,
-    isdecimal,
-    isspace,
-    isupper,
-    islower,
-    ends_with,
-    starts_with,
-    string_view,
-    find,
-    rfind,
-    count,
 )
 
 import operator
 
-character_flags_table_ptr = None
+from strings_udf._lib.tables import get_character_flags_table_ptr
+
+character_flags_table_ptr = get_character_flags_table_ptr()
 
 # String function implementations
 def call_len_string_view(st):
@@ -265,7 +254,7 @@ def call_string_view_startswith(sv, substr):
     return _string_view_startswith(sv, substr)
 
 
-@cuda_lower(starts_with, string_view, string_view)
+@cuda_lower("StringView.startswith", string_view, string_view)
 def string_view_startswith_impl(context, builder, sig, args):
     sv_ptr, substr_ptr = builder.alloca(args[0].type), builder.alloca(args[1].type)
 
@@ -288,7 +277,7 @@ def call_string_view_endswith(sv, substr):
     return _string_view_endswith(sv, substr)
 
 
-@cuda_lower(ends_with, string_view, string_view)
+@cuda_lower("StringView.endswith", string_view, string_view)
 def string_view_endswith_impl(context, builder, sig, args):
     sv_ptr, substr_ptr = builder.alloca(args[0].type), builder.alloca(args[1].type)
 
@@ -310,7 +299,7 @@ def string_view_endswith_impl(context, builder, sig, args):
 def call_string_view_count(st, substr):
     return _string_view_count(st, substr)
 
-@cuda_lower(count, string_view, string_view)
+@cuda_lower("StringView.count", string_view, string_view)
 def string_view_coount_impl(context, builder, sig, args):
     sv_ptr, substr_ptr = builder.alloca(args[0].type), builder.alloca(args[1].type)
 
@@ -332,7 +321,7 @@ def string_view_coount_impl(context, builder, sig, args):
 def call_string_view_find(sv, substr):
     return _string_view_find(sv, substr)
 
-@cuda_lower(find, string_view, string_view)
+@cuda_lower("StringView.find", string_view, string_view)
 def string_view_find_impl(context, builder, sig, args):
     sv_ptr, substr_ptr = builder.alloca(args[0].type), builder.alloca(args[1].type)
 
@@ -353,7 +342,7 @@ def string_view_find_impl(context, builder, sig, args):
 def call_string_view_rfind(sv, substr):
     return _string_view_rfind(sv, substr)
 
-@cuda_lower(rfind, string_view, string_view)
+@cuda_lower("StringView.rfind", string_view, string_view)
 def string_view_rfind_impl(context, builder, sig, args):
     sv_ptr, substr_ptr = builder.alloca(args[0].type), builder.alloca(args[1].type)
 
@@ -375,7 +364,7 @@ def call_string_view_isdigit(st, tbl):
     return _string_view_isdigit(st, tbl)
 
 
-@cuda_lower(isdigit, string_view)
+@cuda_lower("StringView.isdigit", string_view)
 def string_view_isdigit_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -396,7 +385,7 @@ def call_string_view_isalnum(st, tbl):
     return _string_view_isalnum(st, tbl)
 
 
-@cuda_lower(isalnum, string_view)
+@cuda_lower("StringView.isalnum", string_view)
 def string_view_isalnum_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -417,7 +406,7 @@ def call_string_view_isalpha(st, tbl):
     return _string_view_isalpha(st, tbl)
 
 
-@cuda_lower(isalpha, string_view)
+@cuda_lower("StringView.isalpha", string_view)
 def string_view_isalpha_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -438,7 +427,7 @@ def call_string_view_isnumeric(st, tbl):
     return _string_view_isnumeric(st, tbl)
 
 
-@cuda_lower(isnumeric, string_view)
+@cuda_lower("StringView.isnumeric", string_view)
 def string_view_isnumeric_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -459,7 +448,7 @@ def call_string_view_isdecimal(st, tbl):
     return _string_view_isdecimal(st, tbl)
 
 
-@cuda_lower(isdecimal, string_view)
+@cuda_lower("StringView.isdecimal", string_view)
 def string_view_isdecimal_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -480,7 +469,7 @@ def call_string_view_isspace(st, tbl):
     return _string_view_isspace(st, tbl)
 
 
-@cuda_lower(isspace, string_view)
+@cuda_lower("StringView.isspace", string_view)
 def string_view_isspace_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -501,7 +490,7 @@ def call_string_view_isupper(st, tbl):
     return _string_view_isupper(st, tbl)
 
 
-@cuda_lower(isupper, string_view)
+@cuda_lower("StringView.isupper", string_view)
 def string_view_isupper_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -523,7 +512,7 @@ def call_string_view_islower(st, tbl):
     return _string_view_islower(st, tbl)
 
 
-@cuda_lower(islower, string_view)
+@cuda_lower("StringView.islower", string_view)
 def string_view_islower_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -532,6 +521,23 @@ def string_view_islower_impl(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_islower,
+        nb_signature(
+            types.boolean, types.CPointer(string_view), types.int64
+        ),
+        (sv_ptr, tbl_ptr),
+    )
+
+    return result
+
+@cuda_lower("StringView.isnumeric", string_view)
+def string_view_isnumeric_impl(context, builder, sig, args):
+    sv_ptr = builder.alloca(args[0].type)
+    builder.store(args[0], sv_ptr)
+    tbl_ptr = context.get_constant(types.int64, character_flags_table_ptr)
+
+    result = context.compile_internal(
+        builder,
+        call_string_view_isnumeric,
         nb_signature(
             types.boolean, types.CPointer(string_view), types.int64
         ),
