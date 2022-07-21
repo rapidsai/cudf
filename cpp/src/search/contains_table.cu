@@ -110,11 +110,12 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                       cuda::thread_scope_device,
                                       rmm::mr::stream_allocator_adaptor<default_allocator<char>>>;
 
-  auto map = static_map(compute_hash_table_size(haystack.num_rows()),
-                        cuco::sentinel::empty_key{std::numeric_limits<lhs_index_type>::max()},
-                        cuco::sentinel::empty_value{detail::JoinNoneValue},
-                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value());
+  auto map =
+    static_map(compute_hash_table_size(haystack.num_rows()),
+               cuco::sentinel::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
+               cuco::sentinel::empty_value{detail::JoinNoneValue},
+               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+               stream.value());
 
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
