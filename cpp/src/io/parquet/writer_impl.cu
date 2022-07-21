@@ -805,7 +805,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
   if (cudf_col.size() == 0) { return; }
 
-  if (_is_list) {
+  if (_is_list && !schema_node.output_as_byte_array) {
     // Top level column's offsets are not applied to all children. Get the effective offset and
     // size of the leaf column
     // Calculate row offset into dremel data (repetition/definition values) and the respective
@@ -986,7 +986,9 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
-    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
+    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN ||
+        (col_desc[chunk.col_desc_id].output_as_byte_array &&
+         col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;

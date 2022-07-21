@@ -172,11 +172,7 @@ __global__ void __launch_bounds__(block_size)
             auto str = s->col.leaf_column->element<string_view>(val_idx);
             len += str.size_bytes();
           } break;
-          case type_id::INT8: {
-            auto list_element = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
-            len += list_element.size_bytes();
-          } break;
-          case type_id::UINT8: {
+          case type_id::LIST: {
             auto list_element = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
             len += list_element.size_bytes();
           } break;
@@ -975,8 +971,7 @@ __global__ void __launch_bounds__(128, 8)
         if (physical_type == BYTE_ARRAY) {
           if (type_id == type_id::STRING) {
             len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
-          } else if (s->col.output_as_byte_array &&
-                     (type_id == type_id::INT8 || type_id == type_id::UINT8)) {
+          } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
             len += get_element<byte_array_view>(*s->col.leaf_column, val_idx).size_bytes();
           }
         }
@@ -1077,8 +1072,7 @@ __global__ void __launch_bounds__(128, 8)
               dst[pos + 2] = v >> 16;
               dst[pos + 3] = v >> 24;
               if (v != 0) memcpy(dst + pos + 4, str.data(), v);
-            } else if (s->col.output_as_byte_array &&
-                       (type_id == type_id::INT8 || type_id == type_id::UINT8)) {
+            } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
               auto bytes   = get_element<byte_array_view>(*s->col.leaf_column, val_idx);
               uint32_t v   = len - 4;  // byte length
               dst[pos + 0] = v;
