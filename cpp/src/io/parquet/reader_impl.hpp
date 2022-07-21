@@ -58,10 +58,12 @@ class reader::impl {
    *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
                 parquet_reader_options const& options,
+                rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -72,15 +74,13 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
    * bounds
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            bool uses_custom_row_bounds,
-                           std::vector<std::vector<size_type>> const& row_group_indices,
-                           rmm::cuda_stream_view stream);
+                           std::vector<std::vector<size_type>> const& row_group_indices);
 
  private:
   /**
@@ -91,7 +91,6 @@ class reader::impl {
    * @param begin_chunk Index of first column chunk to read
    * @param end_chunk Index after the last column chunk to read
    * @param column_chunk_offsets File offset for all chunks
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    */
   std::future<void> read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>>& page_data,
@@ -99,43 +98,36 @@ class reader::impl {
                                        size_t begin_chunk,
                                        size_t end_chunk,
                                        const std::vector<size_t>& column_chunk_offsets,
-                                       std::vector<size_type> const& chunk_source_map,
-                                       rmm::cuda_stream_view stream);
+                                       std::vector<size_type> const& chunk_source_map);
 
   /**
    * @brief Returns the number of total pages from the given column chunks
    *
    * @param chunks List of column chunk descriptors
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The total number of pages
    */
-  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                            rmm::cuda_stream_view stream);
+  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks);
 
   /**
    * @brief Returns the page information from the given column chunks.
    *
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                           hostdevice_vector<gpu::PageInfo>& pages,
-                           rmm::cuda_stream_view stream);
+                           hostdevice_vector<gpu::PageInfo>& pages);
 
   /**
    * @brief Decompresses the page data, at page granularity.
    *
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                          hostdevice_vector<gpu::PageInfo>& pages,
-                                          rmm::cuda_stream_view stream);
+                                          hostdevice_vector<gpu::PageInfo>& pages);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers
@@ -150,12 +142,10 @@ class reader::impl {
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
    * @param page_nesting_info The allocated nesting info structs.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
                              hostdevice_vector<gpu::PageInfo>& pages,
-                             hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info,
-                             rmm::cuda_stream_view stream);
+                             hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info);
 
   /**
    * @brief Preprocess column information for nested schemas.
@@ -175,15 +165,13 @@ class reader::impl {
    * bounds
    * @param has_lists Whether or not this data contains lists and requires
    * a preprocess.
-   * @param stream Cuda stream
    */
   void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                           hostdevice_vector<gpu::PageInfo>& pages,
                           size_t min_row,
                           size_t total_rows,
                           bool uses_custom_row_bounds,
-                          bool has_lists,
-                          rmm::cuda_stream_view stream);
+                          bool has_lists);
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -193,17 +181,17 @@ class reader::impl {
    * @param page_nesting Page nesting array
    * @param min_row Minimum number of rows from start
    * @param total_rows Number of rows to output
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
                         hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
                         size_t min_row,
-                        size_t total_rows,
-                        rmm::cuda_stream_view stream);
+                        size_t total_rows);
 
  private:
+  rmm::cuda_stream_view _stream;
   rmm::mr::device_memory_resource* _mr = nullptr;
+
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_reader_metadata> _metadata;
 
