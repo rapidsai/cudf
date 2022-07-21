@@ -1528,7 +1528,7 @@ __global__ void __launch_bounds__(1024)
  * @brief Tests if statistics are comparable given the column's
  * physical and converted types
  */
-static __device__ bool is_comparable(int8_t ptype, int8_t ctype)
+static __device__ bool is_comparable(Type ptype, ConvertedType ctype)
 {
   switch (ptype) {
     case Type::BOOLEAN:
@@ -1558,8 +1558,8 @@ __device__ int32_t compare(T& v1, T& v2)
  * @brief Compares two statistics_val structs.
  * @return < 0 if v1 < v2, 0 if v1 == v2, > 0 if v1 > v2
  */
-static __device__ int32_t compare_values(int8_t ptype,
-                                         int8_t ctype,
+static __device__ int32_t compare_values(Type ptype,
+                                         ConvertedType ctype,
                                          const statistics_val& v1,
                                          const statistics_val& v2)
 {
@@ -1590,8 +1590,8 @@ static __device__ int32_t compare_values(int8_t ptype,
  * @brief Determine if a set of statstistics are in ascending order.
  */
 static __device__ bool is_ascending(const statistics_chunk* s,
-                                    int8_t ptype,
-                                    int8_t ctype,
+                                    Type ptype,
+                                    ConvertedType ctype,
                                     uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
@@ -1607,8 +1607,8 @@ static __device__ bool is_ascending(const statistics_chunk* s,
  * @brief Determine if a set of statstistics are in descending order.
  */
 static __device__ bool is_descending(const statistics_chunk* s,
-                                     int8_t ptype,
-                                     int8_t ctype,
+                                     Type ptype,
+                                     ConvertedType ctype,
                                      uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
@@ -1624,8 +1624,8 @@ static __device__ bool is_descending(const statistics_chunk* s,
  * @brief Determine the ordering of a set of statistics.
  */
 static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
-                                                   int8_t ptype,
-                                                   int8_t ctype,
+                                                   Type ptype,
+                                                   ConvertedType ctype,
                                                    uint32_t num_pages)
 {
   if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
@@ -1681,7 +1681,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_int32(4,
                       calculate_boundary_order(&column_stats[first_data_page + pageidx],
                                                col_g.physical_type,
-                                               col_g.converted_type,
+                                               static_cast<ConvertedType>(col_g.converted_type),
                                                num_pages - first_data_page));
   // null_counts
   encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
