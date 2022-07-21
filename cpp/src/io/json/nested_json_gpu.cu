@@ -179,26 +179,39 @@ struct PdaSymbolToSymbolGroupId {
       (stack_symbol == '_') ? STACK_ROOT : ((stack_symbol == '[') ? STACK_LIST : STACK_STRUCT);
 
     // The relative symbol group id of the current input symbol
-    PdaSymbolGroupIdT symbol_gid = tos_sg_to_pda_sgid[min(
-      static_cast<int32_t>(symbol),
-      static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0])) - 1)];
+    constexpr int32_t pda_sgid_lookup_size =
+      static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
+    PdaSymbolGroupIdT symbol_gid =
+      tos_sg_to_pda_sgid[min(static_cast<int32_t>(symbol), pda_sgid_lookup_size - 1)];
     return stack_idx * NUM_PDA_INPUT_SGS + symbol_gid;
   }
 };
 
 // The states defined by the pushdown automaton
 enum pda_state_t : StateT {
+  // Beginning of value
   PD_BOV,
+  // Beginning of array
   PD_BOA,
+  // Literal or number
   PD_LON,
+  // String
   PD_STR,
+  // After escape char when within string
   PD_SCE,
+  // After having parsed a value
   PD_PVL,
+  // Before the next field name
   PD_BFN,
+  // Field name
   PD_FLN,
+  // After escape char when within field name
   PD_FNE,
+  // After a field name inside a struct
   PD_PFN,
+  // Error state (trap state)
   PD_ERR,
+  // Total number of PDA states
   PD_NUM_STATES
 };
 
@@ -216,6 +229,7 @@ const std::vector<std::vector<char>> pda_sgids{
 std::vector<std::vector<StateT>> get_transition_table()
 {
   std::vector<std::vector<StateT>> pda_tt(PD_NUM_STATES);
+  //                   {       [       }       ]       "       \       ,       :     space   other
   pda_tt[PD_BOV] = {PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
                     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
                     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON};
