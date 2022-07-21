@@ -31,8 +31,8 @@ namespace cudf::io::fst {
  * @tparam SymbolItT Random-access input iterator type to symbols fed into the FST
  * @tparam TransducedOutItT Random-access output iterator to which the transduced output will be
  * written
- * @tparam TransducedIndexOutItT Random-access output iterator type to which the indexes of the
- * symbols that caused some output to be written.
+ * @tparam TransducedIndexOutItT Random-access output iterator type to which the input symbols'
+ * indexes are written.
  * @tparam TransducedCountOutItT A single-item output iterator type to which the total number of
  * output symbols is written
  * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and (b)
