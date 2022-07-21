@@ -14,7 +14,10 @@
 
 # Always print verbose output when tests fail if run using `make test`.
 list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
-set(CMAKE_CTEST_ARGUMENTS "${CMAKE_CTEST_ARGUMENTS}" PARENT_SCOPE)
+set(CMAKE_CTEST_ARGUMENTS
+    "${CMAKE_CTEST_ARGUMENTS}"
+    PARENT_SCOPE
+)
 
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
