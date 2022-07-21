@@ -1525,7 +1525,8 @@ __global__ void __launch_bounds__(1024)
 }
 
 /**
- * @brief Tests if statistics are comparable
+ * @brief Tests if statistics are comparable given the column's
+ * physical and converted types
  */
 static __device__ bool is_comparable(int8_t ptype, int8_t ctype)
 {
@@ -1538,6 +1539,7 @@ static __device__ bool is_comparable(int8_t ptype, int8_t ctype)
     case Type::BYTE_ARRAY: return true;
     case Type::FIXED_LEN_BYTE_ARRAY:
       if (ctype == ConvertedType::DECIMAL) return true;
+      [[fallthrough]];
     default: return false;
   }
 }
@@ -1554,7 +1556,7 @@ __device__ int32_t compare(T& v1, T& v2)
 
 /**
  * @brief Compares two statistics_val structs.
- * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+ * @return < 0 if v1 < v2, 0 if v1 == v2, > 0 if v1 > v2
  */
 static __device__ int32_t compare_values(int8_t ptype,
                                          int8_t ctype,
@@ -1578,8 +1580,9 @@ static __device__ int32_t compare_values(int8_t ptype,
     case Type::BYTE_ARRAY: return static_cast<string_view>(v1.str_val).compare(v2.str_val);
     case Type::FIXED_LEN_BYTE_ARRAY:
       if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
-      // fall through
   }
+  // calling is_comparable() should prevent reaching here
+  CUDF_UNREACHABLE("Trying to compare non-comparable type");
   return 0;
 }
 
