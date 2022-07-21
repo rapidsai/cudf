@@ -55,14 +55,14 @@ class byte_array_view {
    * @param idx The index of the element to access.
    * @return A reference to the idx-th element of the byte_array_view, i.e., `_data.data()[idx]`.
    */
-  constexpr element_type& operator[](std::size_t idx) const { return _data[idx]; }
+  [[nodiscard]] constexpr element_type& operator[](std::size_t idx) const { return _data[idx]; }
 
   /**
    * @brief Returns a pointer to the beginning of the byte_array_view.
    *
    * @return A pointer to the first element of the byte_array_view.
    */
-  constexpr element_type* data() const noexcept { return _data.data(); }
+  [[nodiscard]] constexpr element_type* data() const noexcept { return _data.data(); }
 
   /**
    * @brief Returns the number of elements in the byte_array_view.
@@ -90,7 +90,7 @@ class byte_array_view {
    * greater in the arg byte_array_view, or all compared bytes match but the arg byte_array_view is
    * longer.
    */
-  __device__ inline int32_t compare(byte_array_view const& rhs) const
+  [[nodiscard]] __device__ inline int32_t compare(byte_array_view const& rhs) const
   {
     auto const len1  = size_bytes();
     auto const len2  = rhs.size_bytes();
