@@ -20,6 +20,12 @@
 
 namespace cudf::io {
 
+/**
+ * @brief Wrapper for a row of a list<int8> or list<uint8> column. This is analagous to
+ * `string_view` in type. It was created due to the need for comparison operators for cub reduce on
+ * statistics. Otherwise, it is a device_span in all but name.
+ *
+ */
 class byte_array_view {
  public:
   using element_type = uint8_t const;  ///< The type of the elements in the byte array
