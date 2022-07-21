@@ -1274,10 +1274,22 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
+// byteswap 128 bit integer, placing result in dst in network byte order.
+// dst must point to at least 16 bytes of memory.
+static __device__ void byte_reverse128(__int128_t v, void* dst)
+{
+  auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
+  auto const d_char_ptr = static_cast<unsigned char*>(dst);
+  thrust::copy(thrust::seq,
+               thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+               thrust::make_reverse_iterator(v_char_ptr),
+               d_char_ptr);
+}
+
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
                                      uint8_t dtype,
-                                     float* fp_scratch)
+                                     void* scratch)
 {
   uint8_t *end, dtype_len;
   switch (dtype) {
@@ -1309,10 +1321,17 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     } else {
       lmin = lmax = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
-        fp_scratch[0] = s->min_value.fp_val;
-        fp_scratch[1] = s->max_value.fp_val;
-        vmin          = &fp_scratch[0];
-        vmax          = &fp_scratch[1];
+        auto const fp_scratch = static_cast<float*>(scratch);
+        fp_scratch[0]         = s->min_value.fp_val;
+        fp_scratch[1]         = s->max_value.fp_val;
+        vmin                  = &fp_scratch[0];
+        vmax                  = &fp_scratch[1];
+      } else if (dtype == dtype_decimal128) {
+        auto const d128_scratch = static_cast<uint8_t*>(scratch);
+        byte_reverse128(s->min_value.d128_val, d128_scratch);
+        byte_reverse128(s->max_value.d128_val, &d128_scratch[16]);
+        vmin = &d128_scratch[0];
+        vmax = &d128_scratch[16];
       } else {
         vmin = &s->min_value;
         vmax = &s->max_value;
@@ -1336,7 +1355,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) float fp_scratch[2];
+  __shared__ __align__(8) unsigned char scratch[32];
 
   uint32_t t = threadIdx.x;
 
@@ -1351,7 +1370,7 @@ __global__ void __launch_bounds__(128)
     if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
       hdr_end =
-        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
+        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, scratch);
       page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
@@ -1392,8 +1411,8 @@ __global__ void __launch_bounds__(128)
       // Optionally encode page-level statistics
       if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
-        encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
+        encoder.set_ptr(
+          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
