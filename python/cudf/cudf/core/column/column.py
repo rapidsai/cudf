@@ -902,8 +902,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         # Re-label self w.r.t. the provided categories
         if (
-            isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype))
+            isinstance(dtype, cudf.CategoricalDtype)
             and dtype._categories is not None
+        ) or (
+            isinstance(dtype, pd.CategoricalDtype)
+            and dtype.categories is not None
         ):
             labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
@@ -913,7 +916,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
 
             return build_categorical_column(
-                categories=dtype.categories,
+                categories=as_column(dtype.categories),
                 codes=labels._column,
                 mask=self.mask,
                 ordered=dtype.ordered,
