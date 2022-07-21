@@ -77,7 +77,7 @@ const std::vector<std::string> symbol_groups = {"{", "[", "}", "]", "\"", "\\"};
 const std::vector<std::vector<StateT>> transition_table = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
-  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR, TT_STR},
+  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
   /* TT_ESC    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}};
 
 // Translation table (i.e., for each transition, what are the symbols that we output)
@@ -158,7 +158,8 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
   OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OBC, OTR, CBC, OTR};
 
 /**
- * @brief Maps a (top-of-stack symbol, input symbol)-pair to a symbol group id of the DVPA
+ * @brief Maps a (top-of-stack symbol, input symbol)-pair to a symbol group id of the deterministic
+ * visibly pushdown automaton (DVPA)
  */
 struct PdaSymbolToSymbolGroupId {
   template <typename SymbolT, typename StackSymbolT>
