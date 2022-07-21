@@ -375,14 +375,14 @@ struct DispatchFSM : DeviceFSMPolicy {
     allocation_sizes[MEM_SCAN]          = vector_scan_storage_bytes;
 
     // Bytes needed for tile status descriptors (fusing state-transition vector + DFA simulation)
-    if (SINGLE_PASS_STV) {
+    if constexpr (SINGLE_PASS_STV) {
       error = ScanTileStateT::AllocationSize(num_blocks, allocation_sizes[MEM_SINGLE_PASS_STV]);
       if (error != cudaSuccess) return error;
     }
 
     // Bytes needed for tile status descriptors (DFA simulation pass for output size computation +
     // output-generating pass)
-    if (IS_FST) {
+    if constexpr (IS_FST) {
       error = FstScanTileStateT::AllocationSize(num_blocks, allocation_sizes[MEM_FST_OFFSET]);
       if (error != cudaSuccess) return error;
     }
@@ -404,7 +404,7 @@ struct DispatchFSM : DeviceFSMPolicy {
     // INITIALIZE SCAN TILE STATES COMPUTING TRANSDUCED OUTPUT OFFSETS
     //------------------------------------------------------------------------------
     FstScanTileStateT fst_offset_tile_state;
-    if (IS_FST) {
+    if constexpr (IS_FST) {
       // Construct the tile status (aliases memory internally et al.)
       error = fst_offset_tile_state.Init(
         num_blocks, allocations[MEM_FST_OFFSET], allocation_sizes[MEM_FST_OFFSET]);

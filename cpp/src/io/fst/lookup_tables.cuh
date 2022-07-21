@@ -496,6 +496,30 @@ class Dfa {
     TranslationTableT::InitDeviceTranslationTable(translation_table_init, out_tt_vec, stream);
   }
 
+  /**
+   * @brief Dispatches the finite-state transducer algorithm to the GPU.
+   *
+   * @tparam SymbolT The atomic symbol type from the input tape
+   * @tparam TransducedOutItT Random-access output iterator to which the transduced output will be
+   * written
+   * @tparam TransducedIndexOutItT Random-access output iterator type to which the indexes of the
+   * symbols that caused some output to be written.
+   * @tparam TransducedCountOutItT A single-item output iterator type to which the total number of
+   * output symbols is written
+   * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and (b)
+   * the output symbols
+   * @param d_chars Pointer to the input string of symbols
+   * @param num_chars The total number of input symbols to process
+   * @param d_out_it Random-access output iterator to which the transduced output is
+   * written
+   * @param d_out_idx_it Random-access output iterator to which, the index i is written
+   * iff the i-th input symbol caused some output to be written
+   * @param d_num_transduced_out_it A single-item output iterator type to which the total number
+   * of output symbols is written
+   * @param seed_state The DFA's starting state. For streaming DFAs this corresponds to the
+   * "end-state" of the previous invocation of the algorithm.
+   * @param stream CUDA stream to launch kernels within. Default is the null-stream.
+   */
   template <typename SymbolT,
             typename TransducedOutItT,
             typename TransducedIndexOutItT,
