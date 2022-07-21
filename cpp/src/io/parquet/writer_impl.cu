@@ -1699,12 +1699,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       auto const rnext   = r + batch_list[b];
       auto curr_page_idx = chunks[r][0].first_page;
       for (; r < rnext; r++) {
-        int p           = rg_to_part[r];
-        int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
-        auto& row_group = md->file(p).row_groups[global_r];
+        int p                 = rg_to_part[r];
+        int global_r          = global_rowgroup_base[p] + r - first_rg_in_part[p];
+        auto const& row_group = md->file(p).row_groups[global_r];
         for (auto i = 0; i < num_columns; i++) {
-          gpu::EncColumnChunk& ck = chunks[r][i];
-          auto& column_chunk_meta = row_group.columns[i].meta_data;
+          gpu::EncColumnChunk const& ck = chunks[r][i];
+          auto const& column_chunk_meta = row_group.columns[i].meta_data;
 
           // start transfer of the column index
           std::vector<uint8_t> column_idx;
@@ -1720,7 +1720,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
           OffsetIndex offset_idx;
           for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
-            auto& enc_page = h_pages[curr_page_idx++];
+            auto const& enc_page = h_pages[curr_page_idx++];
 
             // skip dict pages
             if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
@@ -1761,7 +1761,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
-          auto& index           = fmd.column_indexes[chunkidx++];
+          auto const& index     = fmd.column_indexes[chunkidx++];
           c.column_index_offset = out_sink_[p]->bytes_written();
           c.column_index_length = index.size();
           out_sink_[p]->host_write(index.data(), index.size());
@@ -1772,7 +1772,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
-          OffsetIndex& offsets = fmd.offset_indexes[chunkidx++];
+          auto const& offsets = fmd.offset_indexes[chunkidx++];
           buffer.resize(0);
           int32_t len           = cpw.write(offsets);
           c.offset_index_offset = out_sink_[p]->bytes_written();

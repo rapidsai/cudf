@@ -198,23 +198,23 @@ std::unique_ptr<cudf::column> make_parquet_list_col(
 // of the file to populate the FileMetaData pointed to by file_meta_data.
 // returns true on success, false if the file metadata cannot be parsed.
 // throws cudf::logic_error if the file is invalid.
-bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
-                 cudf_io::parquet::FileMetaData* file_meta_data)
+bool read_footer(std::unique_ptr<cudf::io::datasource>& source,
+                 cudf::io::parquet::FileMetaData* file_meta_data)
 {
-  constexpr auto header_len = sizeof(cudf_io::parquet::file_header_s);
-  constexpr auto ender_len  = sizeof(cudf_io::parquet::file_ender_s);
+  constexpr auto header_len = sizeof(cudf::io::parquet::file_header_s);
+  constexpr auto ender_len  = sizeof(cudf::io::parquet::file_ender_s);
 
   const auto len           = source->size();
   const auto header_buffer = source->host_read(0, header_len);
   const auto header =
-    reinterpret_cast<const cudf_io::parquet::file_header_s*>(header_buffer->data());
+    reinterpret_cast<const cudf::io::parquet::file_header_s*>(header_buffer->data());
   const auto ender_buffer = source->host_read(len - ender_len, ender_len);
-  const auto ender = reinterpret_cast<const cudf_io::parquet::file_ender_s*>(ender_buffer->data());
+  const auto ender = reinterpret_cast<const cudf::io::parquet::file_ender_s*>(ender_buffer->data());
 
   // checks for valid header, footer, and file length
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == cudf_io::parquet::parquet_magic &&
-                 ender->magic == cudf_io::parquet::parquet_magic,
+  CUDF_EXPECTS(header->magic == cudf::io::parquet::parquet_magic &&
+                 ender->magic == cudf::io::parquet::parquet_magic,
                "Corrupted header or footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
@@ -223,7 +223,7 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
   // seek backwards from the end of the file (footer_length + 8 bytes of ender)
   const auto footer_buffer =
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-  cudf_io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
+  cudf::io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
 
   // returns true on success
   return cp.read(file_meta_data);
@@ -232,44 +232,44 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
 // read column index from datasource at location indicated by chunk,
 // parse and return as a ColumnIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
-cudf_io::parquet::ColumnIndex read_column_index(std::unique_ptr<cudf_io::datasource>& source,
-                                                const cudf_io::parquet::ColumnChunk& chunk)
+cudf::io::parquet::ColumnIndex read_column_index(std::unique_ptr<cudf::io::datasource>& source,
+                                                const cudf::io::parquet::ColumnChunk& chunk)
 {
   CUDF_EXPECTS(chunk.column_index_offset > 0, "Cannot find column index");
   CUDF_EXPECTS(chunk.column_index_length > 0, "Invalid column index length");
 
-  cudf_io::parquet::ColumnIndex colidx;
+  cudf::io::parquet::ColumnIndex colidx;
   const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
-  cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
-  CUDF_EXPECTS(cp.read(&colidx), "Canot parse column index");
+  cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+  CUDF_EXPECTS(cp.read(&colidx), "Cannot parse column index");
   return colidx;
 }
 
 // read offset index from datasource at location indicated by chunk,
 // parse and return as an OffsetIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
-cudf_io::parquet::OffsetIndex read_offset_index(std::unique_ptr<cudf_io::datasource>& source,
-                                                const cudf_io::parquet::ColumnChunk& chunk)
+cudf::io::parquet::OffsetIndex read_offset_index(std::unique_ptr<cudf::io::datasource>& source,
+                                                const cudf::io::parquet::ColumnChunk& chunk)
 {
   CUDF_EXPECTS(chunk.offset_index_offset > 0, "Cannot find offset index");
   CUDF_EXPECTS(chunk.offset_index_length > 0, "Invalid offset index length");
 
-  cudf_io::parquet::OffsetIndex offidx;
+  cudf::io::parquet::OffsetIndex offidx;
   const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
-  cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
+  cudf::io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
   CUDF_EXPECTS(cp.read(&offidx), "Cannot parse offset index");
   return offidx;
 }
 
 // parse the statistics_blob on chunk and return as a Statistics struct.
 // throws cudf::logic_error if the chunk statistics_blob is invalid.
-cudf_io::parquet::Statistics parse_statistics(const cudf_io::parquet::ColumnChunk& chunk)
+cudf::io::parquet::Statistics parse_statistics(const cudf::io::parquet::ColumnChunk& chunk)
 {
   auto& stats_blob = chunk.meta_data.statistics_blob;
   CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
 
-  cudf_io::parquet::Statistics stats;
-  cudf_io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
+  cudf::io::parquet::Statistics stats;
+  cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
   CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
   return stats;
 }
@@ -277,15 +277,15 @@ cudf_io::parquet::Statistics parse_statistics(const cudf_io::parquet::ColumnChun
 // read page header from datasource at location indicated by page_loc,
 // parse and return as a PageHeader struct.
 // throws cudf::logic_error if the page_loc data is invalid.
-cudf_io::parquet::PageHeader read_page_header(std::unique_ptr<cudf_io::datasource>& source,
-                                              const cudf_io::parquet::PageLocation& page_loc)
+cudf::io::parquet::PageHeader read_page_header(std::unique_ptr<cudf::io::datasource>& source,
+                                              const cudf::io::parquet::PageLocation& page_loc)
 {
   CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
   CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
 
-  cudf_io::parquet::PageHeader page_hdr;
+  cudf::io::parquet::PageHeader page_hdr;
   const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
-  cudf_io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
+  cudf::io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
   CUDF_EXPECTS(cp.read(&page_hdr), "Cannot parse page header");
   return page_hdr;
 }
@@ -3447,14 +3447,14 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .max_page_size_rows(page_rows);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
   // check first page header and make sure it has only page_rows values
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
@@ -3465,7 +3465,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
   // version should be smaller than size of the struct.
   auto const ph = read_page_header(
-    source, {first_chunk.data_page_offset, sizeof(cudf_io::parquet::PageHeader), 0});
+    source, {first_chunk.data_page_offset, sizeof(cudf::io::parquet::PageHeader), 0});
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
@@ -3489,12 +3489,12 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
-  cudf_io::write_parquet(out_opts);
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view());
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
@@ -3724,14 +3724,14 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .max_page_size_rows(page_size_for_ordered_tests)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
@@ -3742,9 +3742,9 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  cudf_io::parquet::BoundaryOrder expected_orders[] = {cudf_io::parquet::BoundaryOrder::ASCENDING,
-                                                       cudf_io::parquet::BoundaryOrder::DESCENDING,
-                                                       cudf_io::parquet::BoundaryOrder::UNORDERED};
+  cudf::io::parquet::BoundaryOrder expected_orders[] = {cudf::io::parquet::BoundaryOrder::ASCENDING,
+                                                       cudf::io::parquet::BoundaryOrder::DESCENDING,
+                                                       cudf::io::parquet::BoundaryOrder::UNORDERED};
 
   for (std::size_t i = 0; i < columns.size(); i++) {
     auto ci = read_column_index(source, columns[i]);
@@ -3771,11 +3771,11 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
                        int8_t ctype)
 {
   switch (ptype) {
-    case cudf_io::parquet::INT32:
+    case cudf::io::parquet::INT32:
       switch (ctype) {
-        case cudf_io::parquet::UINT_8:
-        case cudf_io::parquet::UINT_16:
-        case cudf_io::parquet::UINT_32:
+        case cudf::io::parquet::UINT_8:
+        case cudf::io::parquet::UINT_16:
+        case cudf::io::parquet::UINT_32:
           return compare(*(reinterpret_cast<const uint32_t*>(v1.data())),
                          *(reinterpret_cast<const uint32_t*>(v2.data())));
         default:
@@ -3783,30 +3783,30 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
                          *(reinterpret_cast<const int32_t*>(v2.data())));
       }
 
-    case cudf_io::parquet::INT64:
-      if (ctype == cudf_io::parquet::UINT_64)
+    case cudf::io::parquet::INT64:
+      if (ctype == cudf::io::parquet::UINT_64) {
         return compare(*(reinterpret_cast<const uint64_t*>(v1.data())),
                        *(reinterpret_cast<const uint64_t*>(v2.data())));
-      else
-        return compare(*(reinterpret_cast<const int64_t*>(v1.data())),
-                       *(reinterpret_cast<const int64_t*>(v2.data())));
+      }
+      return compare(*(reinterpret_cast<const int64_t*>(v1.data())),
+                     *(reinterpret_cast<const int64_t*>(v2.data())));
 
-    case cudf_io::parquet::FLOAT:
+    case cudf::io::parquet::FLOAT:
       return compare(*(reinterpret_cast<const float*>(v1.data())),
                      *(reinterpret_cast<const float*>(v2.data())));
 
-    case cudf_io::parquet::DOUBLE:
+    case cudf::io::parquet::DOUBLE:
       return compare(*(reinterpret_cast<const double*>(v1.data())),
                      *(reinterpret_cast<const double*>(v2.data())));
 
-    case cudf_io::parquet::BYTE_ARRAY: {
+    case cudf::io::parquet::BYTE_ARRAY: {
       int32_t v1sz = v1.size();
       int32_t v2sz = v2.size();
       int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));
-      if (ret != 0 or v1sz == v2sz)
+      if (ret != 0 or v1sz == v2sz) {
         return ret;
-      else
-        return v1sz - v2sz;
+      }
+      return v1sz - v2sz;
     }
   }
 
@@ -3859,14 +3859,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndex.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(20000);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
@@ -3883,7 +3883,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
       }
@@ -3965,14 +3965,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNulls.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(20000);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
@@ -3989,7 +3989,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
       }
@@ -4004,14 +4004,16 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       int8_t ctype = fmd.schema[c + 1].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
-        if (c > 0)  // first column has no nulls
+        if (c > 0) { // first column has no nulls
           EXPECT_GT(ci.null_counts[p], 0);
-        else
+        } else {
           EXPECT_EQ(ci.null_counts[p], 0);
+        }
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
       }
-      for (size_t p = 0; p < ci.max_values.size(); p++)
+      for (size_t p = 0; p < ci.max_values.size(); p++) {
         EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+      }
     }
   }
 }
@@ -4053,14 +4055,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNullColumn.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(20000);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
@@ -4077,7 +4079,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
       }
@@ -4137,14 +4139,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   table_view expected({c0, c1, *c2});
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStruct.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(page_size_for_ordered_tests);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
@@ -4165,7 +4167,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         auto const& page_loc = oi.page_locations[o];
         auto const ph        = read_page_header(source, page_loc);
-        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
         // last column has 2 values per row
         EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -4178,10 +4180,12 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 
       int8_t ptype = fmd.schema[colidx].type;
       int8_t ctype = fmd.schema[colidx].converted_type;
-      for (size_t p = 0; p < ci.min_values.size(); p++)
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
-      for (size_t p = 0; p < ci.max_values.size(); p++)
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++) {
         EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+      }
     }
   }
 }

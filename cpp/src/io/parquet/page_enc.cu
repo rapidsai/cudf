@@ -1246,9 +1246,9 @@ class header_encoder {
   inline __device__ void field_list_begin(int field, size_t len, int type)
   {
     current_header_ptr = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_LIST);
-    current_header_ptr =
-      cpw_put_byte(current_header_ptr, (uint8_t)((std::min(len, (size_t)0xfu) << 4) | type));
-    if (len >= 0xf) current_header_ptr = cpw_put_uint32(current_header_ptr, len);
+    current_header_ptr = cpw_put_byte(
+      current_header_ptr, static_cast<uint8_t>((std::min(len, size_t{0xfu}) << 4) | type));
+    if (len >= 0xf) { current_header_ptr = cpw_put_uint32(current_header_ptr, len); }
     current_field_index = 0;
   }
 
@@ -1538,7 +1538,7 @@ static __device__ bool is_comparable(int8_t ptype, int8_t ctype)
     case Type::DOUBLE:
     case Type::BYTE_ARRAY: return true;
     case Type::FIXED_LEN_BYTE_ARRAY:
-      if (ctype == ConvertedType::DECIMAL) return true;
+      if (ctype == ConvertedType::DECIMAL) { return true; }
       [[fallthrough]];
     default: return false;
   }
@@ -1579,7 +1579,7 @@ static __device__ int32_t compare_values(int8_t ptype,
     case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
     case Type::BYTE_ARRAY: return static_cast<string_view>(v1.str_val).compare(v2.str_val);
     case Type::FIXED_LEN_BYTE_ARRAY:
-      if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
+      if (ctype == ConvertedType::DECIMAL) { return compare(v1.d128_val, v2.d128_val); }
   }
   // calling is_comparable() should prevent reaching here
   CUDF_UNREACHABLE("Trying to compare non-comparable type");
@@ -1596,8 +1596,9 @@ static __device__ bool is_ascending(const statistics_chunk* s,
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
-        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0)
+        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0) {
       return false;
+    }
   }
   return true;
 }
@@ -1612,8 +1613,9 @@ static __device__ bool is_descending(const statistics_chunk* s,
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
-        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0)
+        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0) {
       return false;
+    }
   }
   return true;
 }
@@ -1626,13 +1628,13 @@ static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
                                                    int8_t ctype,
                                                    uint32_t num_pages)
 {
-  if (not is_comparable(ptype, ctype)) return BoundaryOrder::UNORDERED;
-  if (is_ascending(s, ptype, ctype, num_pages))
+  if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
+  if (is_ascending(s, ptype, ctype, num_pages)) {
     return BoundaryOrder::ASCENDING;
-  else if (is_descending(s, ptype, ctype, num_pages))
+  } else if (is_descending(s, ptype, ctype, num_pages)) {
     return BoundaryOrder::DESCENDING;
-  else
-    return BoundaryOrder::UNORDERED;
+  }
+  return BoundaryOrder::UNORDERED;
 }
 
 // blockDim(1, 1, 1)
@@ -1645,7 +1647,7 @@ __global__ void __launch_bounds__(1)
   uint8_t* col_idx_end;
   unsigned char scratch[16];
 
-  if (column_stats.empty()) return;
+  if (column_stats.empty()) { return; }
 
   EncColumnChunk* ck_g             = &chunks[blockIdx.x];
   uint32_t num_pages               = ck_g->num_pages;
@@ -1657,8 +1659,9 @@ __global__ void __launch_bounds__(1)
 
   // null_pages
   encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
-  for (uint32_t page = first_data_page; page < num_pages; page++)
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
     encoder.put_bool(column_stats[pageidx + page].non_nulls == 0);
+  }
   encoder.field_list_end(1);
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
@@ -1682,12 +1685,13 @@ __global__ void __launch_bounds__(1)
                                                num_pages - first_data_page));
   // null_counts
   encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
-  for (uint32_t page = first_data_page; page < num_pages; page++)
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
     encoder.put_int64(column_stats[pageidx + page].null_count);
+  }
   encoder.field_list_end(5);
   encoder.end(&col_idx_end, false);
 
-  ck_g->column_index_size = (uint32_t)(col_idx_end - ck_g->column_index_blob);
+  ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
 }
 
 /**
