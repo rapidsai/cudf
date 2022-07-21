@@ -62,53 +62,29 @@ struct stats_column_desc {
   column_device_view const* parent_column;  //!< Pointer to parent column; nullptr if not list type
 };
 
-struct string_stats {
-  const char* ptr;  //!< ptr to character data
-  uint32_t length;  //!< length of string
-  __host__ __device__ __forceinline__ volatile string_stats& operator=(
-    const string_view& val) volatile
+template <typename ReturnType, typename InternalType>
+struct t_array_stats {
+  const InternalType* ptr;  //!< ptr to data
+  size_type length;         //!< length of data
+  __host__ __device__ __forceinline__ volatile t_array_stats& operator=(
+    const ReturnType& val) volatile
   {
     ptr    = val.data();
     length = val.size_bytes();
     return *this;
   }
-  __host__ __device__ __forceinline__ operator string_view() volatile
+  __host__ __device__ __forceinline__ operator ReturnType() volatile
   {
-    return string_view(ptr, static_cast<size_type>(length));
+    return ReturnType(ptr, length);
   }
-  __host__ __device__ __forceinline__ operator string_view() const
+  __host__ __device__ __forceinline__ operator ReturnType() const
   {
-    return string_view(ptr, static_cast<size_type>(length));
+    return ReturnType(ptr, length);
   }
-  __host__ __device__ __forceinline__ operator string_view()
-  {
-    return string_view(ptr, static_cast<size_type>(length));
-  }
+  __host__ __device__ __forceinline__ operator ReturnType() { return ReturnType(ptr, length); }
 };
-
-struct byte_array_stats {
-  const int8_t* ptr;  //!< ptr to byte data
-  uint32_t length;    //!< length of bytes
-  __host__ __device__ __forceinline__ volatile byte_array_stats& operator=(
-    const byte_array_view& val) volatile
-  {
-    ptr    = val.data();
-    length = val.size_bytes();
-    return *this;
-  }
-  __host__ __device__ __forceinline__ operator byte_array_view() volatile
-  {
-    return byte_array_view(ptr, static_cast<size_type>(length));
-  }
-  __host__ __device__ __forceinline__ operator byte_array_view() const
-  {
-    return byte_array_view(ptr, static_cast<size_type>(length));
-  }
-  __host__ __device__ __forceinline__ operator byte_array_view()
-  {
-    return byte_array_view(ptr, static_cast<size_type>(length));
-  }
-};
+using string_stats     = t_array_stats<string_view, char>;
+using byte_array_stats = t_array_stats<byte_array_view, uint8_t>;
 
 union statistics_val {
   string_stats str_val;       //!< string columns
