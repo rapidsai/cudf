@@ -1950,7 +1950,7 @@ def as_column(
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
-        if delayed_cast and dtype is not None:
+        if delayed_cast:
             data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
