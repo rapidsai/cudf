@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -15,7 +15,10 @@
 # Create `jitify_preprocess` executable
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
+target_compile_definitions(jitify_preprocess PRIVATE "_FILE_OFFSET_BITS=64")
 target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
+
+
 
 # Take a list of files to JIT-compile and run them through jitify_preprocess.
 function(jit_preprocess_files)
@@ -38,7 +41,7 @@ function(jit_preprocess_files)
       COMMAND
         jitify_preprocess ${ARG_FILE} -o
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
-        -remove-unused-globals -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
+        -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
         -I${CUDF_SOURCE_DIR}/src ${libcudacxx_includes} -I${CUDAToolkit_INCLUDE_DIRS}
         --no-preinclude-workarounds --no-replace-pragma-once
       COMMENT "Custom command to JIT-compile files."
