@@ -98,11 +98,13 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
     auto symbol_group = std::distance(std::cbegin(symbol_group_lut), symbol_group_it);
 
     // Output the translated symbols to the output tape
-    out_tape       = std::copy(std::cbegin(translation_table[state][symbol_group]),
-                               std::cend(translation_table[state][symbol_group]),
-                               out_tape);
-    auto out_size  = std::distance(std::cbegin(translation_table[state][symbol_group]),
-                                   std::cend(translation_table[state][symbol_group]));
+    out_tape = std::copy(std::cbegin(translation_table[state][symbol_group]),
+                         std::cend(translation_table[state][symbol_group]),
+                         out_tape);
+
+    auto out_size = std::distance(std::cbegin(translation_table[state][symbol_group]),
+                                  std::cend(translation_table[state][symbol_group]));
+
     out_index_tape = std::fill_n(out_index_tape, out_size, in_offset);
 
     // Transition the state of the finite-state machine
