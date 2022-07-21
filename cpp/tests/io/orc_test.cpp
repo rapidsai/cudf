@@ -35,6 +35,13 @@
 
 #include <type_traits>
 
+#define NVCOMP_ZSTD_HEADER <nvcomp/zstd.h>
+#if __has_include(NVCOMP_ZSTD_HEADER)
+#define ZSTD_SUPPORTED 1
+#else
+#define ZSTD_SUPPORTED 0
+#endif
+
 namespace cudf_io = cudf::io;
 
 template <typename T, typename SourceElementT = T>
@@ -1097,9 +1104,12 @@ TEST_F(OrcReaderTest, SingleInputs)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
-TEST_F(OrcReaderTest, ZstdCompressionRegression)
+TEST_F(OrcReaderTest, zstdCompressionRegression)
 {
   // Test with zstd compressed orc file with high compression ratio.
+#if !ZSTD_SUPPORTED
+  GTEST_SKIP();
+#endif
   constexpr uint8_t input_buffer[] = {
     0x4f, 0x52, 0x43, 0x5a, 0x00, 0x00, 0x28, 0xb5, 0x2f, 0xfd, 0xa4, 0x34, 0xc7, 0x03, 0x00, 0x74,
     0x00, 0x00, 0x18, 0x41, 0xff, 0xaa, 0x02, 0x00, 0xbb, 0xff, 0x45, 0xc8, 0x01, 0x25, 0x30, 0x04,
