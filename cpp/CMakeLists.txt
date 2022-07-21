@@ -237,7 +237,6 @@ add_library(
   src/column/column_factories.cpp
   src/column/column_factories.cu
   src/column/column_view.cpp
-  src/comms/ipc/ipc.cpp
   src/copying/concatenate.cu
   src/copying/contiguous_split.cu
   src/copying/copy.cpp
@@ -804,13 +803,6 @@ set(common_code_string
 if(NOT TARGET cudf::Thrust)
   thrust_create_target(cudf::Thrust FROM_OPTIONS)
 endif()
-]=]
-)
-
-set(install_code_string
-    [=[
-set(ArrowCUDA_DIR "${Arrow_DIR}")
-find_dependency(ArrowCUDA)
 ]=]
 )
 
