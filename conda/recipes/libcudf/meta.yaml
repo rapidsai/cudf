@@ -35,8 +35,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp {{ arrow_cpp_version }} *cuda
-    - arrow-cpp-proc * cuda
+    - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
 
@@ -57,8 +56,7 @@ outputs:
       run:
         - cudatoolkit {{ cuda_spec }}
         - librmm {{ minor_version }}.*
-        - arrow-cpp {{ arrow_cpp_version }} *cuda
-        - arrow-cpp-proc * cuda
+        - arrow-cpp {{ arrow_cpp_version }}
         - dlpack {{ dlpack_version }}
     test:
       commands:
@@ -159,7 +157,6 @@ outputs:
         - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
         - test -f $PREFIX/include/cudf/io/text/multibyte_split.hpp
         - test -f $PREFIX/include/cudf/io/types.hpp
-        - test -f $PREFIX/include/cudf/ipc.hpp
         - test -f $PREFIX/include/cudf/join.hpp
         - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
         - test -f $PREFIX/include/cudf/lists/combine.hpp
