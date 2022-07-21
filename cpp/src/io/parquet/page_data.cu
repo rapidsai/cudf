@@ -862,14 +862,14 @@ static __device__ void gpuOutputGeneric(volatile page_state_s* s,
 /**
  * @brief Sets up block-local page state information from the global pages.
  *
- * @param s The local page state to be filled in
- * @param p The global page to be copied from
- * @param chunks The global list of chunks
- * @param num_rows Maximum number of rows to read
- * @param min_row Crop all rows below min_row
+ * @param[in, out] s The local page state to be filled in
+ * @param[in] p The global page to be copied from
+ * @param[in] chunks The global list of chunks
+ * @param[in] num_rows Maximum number of rows to read
+ * @param[in] min_row Crop all rows below min_row
  */
 static __device__ bool setupLocalPageInfo(page_state_s* const s,
-                                          PageInfo* p,
+                                          PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
                                           size_t num_rows)
@@ -1794,7 +1794,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
                           size_t min_row,
-                          bool row_bounds,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr)
 {
@@ -1804,15 +1804,15 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page.
   // This computes the size for the entire page, not taking row bounds into account.
-  // If row_bounds is set to true, we have to do a second pass later that "trims"
+  // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
   // the starting and ending read values to account for these bounds.
   gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
     pages.device_ptr(),
     chunks,
-    // if row_bounds is false, include all possible rows.
-    row_bounds ? min_row : 0,
-    row_bounds ? num_rows : INT_MAX,
-    !row_bounds);
+    // if uses_custom_row_bounds is false, include all possible rows.
+    uses_custom_row_bounds ? min_row : 0,
+    uses_custom_row_bounds ? num_rows : INT_MAX,
+    !uses_custom_row_bounds);
 
   // computes:
   // PageInfo::chunk_row for all pages
@@ -1829,9 +1829,9 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
   // PageInfo::skipped_values, which tells us where to start decoding in the input  .
-  // It is only necessary to do this second pass if row_bounds is set (if the user has specified
-  // artifical bounds).
-  if (row_bounds) {
+  // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
+  // specified artifical bounds).
+  if (uses_custom_row_bounds) {
     gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, true);
   }
