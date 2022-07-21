@@ -1162,6 +1162,23 @@ def _length_check_params(obj, columns, name):
             )
 
 
+def _get_names(arrs, names, prefix: str = "row"):
+    if names is None:
+        names = []
+        for i, arr in enumerate(arrs):
+            if isinstance(arr, cudf.Series) and arr.name is not None:
+                names.append(arr.name)
+            else:
+                names.append(f"{prefix}_{i}")
+    else:
+        if len(names) != len(arrs):
+            raise AssertionError("arrays and names must have the same length")
+        if not isinstance(names, list):
+            names = list(names)
+
+    return names
+
+
 def crosstab(
     index,
     columns,
@@ -1249,12 +1266,10 @@ def crosstab(
         columns = [columns]
 
     rownames = (
-        pd.core.reshape.pivot._get_names(index, rownames, prefix="row")
-        if not rownames
-        else rownames
+        _get_names(index, rownames, prefix="row") if not rownames else rownames
     )
     colnames = (
-        pd.core.reshape.pivot._get_names(columns, colnames, prefix="col")
+        _get_names(columns, colnames, prefix="col")
         if not colnames
         else colnames
     )
@@ -1270,11 +1285,11 @@ def crosstab(
         raise ValueError("colnames must be unique")
 
     data = {
-        **dict(zip(rownames, index)),
-        **dict(zip(colnames, columns)),
+        **dict(zip(rownames, map(as_column, index))),
+        **dict(zip(colnames, map(as_column, columns))),
     }
 
-    df = cudf.DataFrame(data)
+    df = cudf.DataFrame._from_data(data)
 
     if values is None:
         df["__dummy__"] = 0
@@ -1387,8 +1402,10 @@ def pivot_table(
 
     # discard the top level
     if values_passed and not values_multi and table.columns.nlevels > 1:
-        column_names = table.columns.names[1:]
-        table_columns = tuple(map(lambda column: column[1:], table.columns))
+        column_names = table._data.level_names[1:]
+        table_columns = tuple(
+            map(lambda column: column[1:], table._data.names)
+        )
         table.columns = cudf.MultiIndex.from_tuples(
             tuples=table_columns, names=column_names
         )
