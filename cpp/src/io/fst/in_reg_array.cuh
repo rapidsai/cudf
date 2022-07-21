@@ -62,7 +62,9 @@ class MultiFragmentInRegArray {
   /**
    * @brief Returns the \p num_bits bits starting at \p bit_start
    */
-  CUDF_HOST_DEVICE [[nodiscard]] uint32_t bfe(const uint32_t& data, uint32_t bit_start, uint32_t num_bits) const
+  CUDF_HOST_DEVICE [[nodiscard]] uint32_t bfe(const uint32_t& data,
+                                              uint32_t bit_start,
+                                              uint32_t num_bits) const
   {
 #if CUB_PTX_ARCH > 0
     return cub::BFE(data, bit_start, num_bits);
