@@ -61,15 +61,30 @@ struct strong_index_hasher_adapter {
 };
 
 /**
- * @brief An adapter functor to support weak index type (i.e., size_type) for table self comparator
+ * @brief An adapter functor to support weak index type (i.e., size_type) for table row comparator
  * when the input indices are strong types.
  */
 template <typename Comparator>
-struct strong_index_self_comparator_adapter {
-  strong_index_self_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
+struct strong_index_comparator_adapter {
+  strong_index_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
 
-  template <typename T, typename U>
-  __device__ inline auto operator()(T const lhs_index, U const rhs_index) const noexcept
+  template <typename T>
+  __device__ inline auto operator()(T const lhs_index, T const rhs_index) const noexcept
+  {
+    return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+  }
+
+  __device__ inline auto operator()(lhs_index_type const lhs_index,
+                                    rhs_index_type const rhs_index) const noexcept
+  {
+    return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+  }
+
+  // This overload enforces symmetry for the two table comparator that doesn't support strong index
+  // types. When the order of invoke indices is wrongly provided, this overload switches it to the
+  // right order.
+  __device__ inline auto operator()(rhs_index_type const rhs_index,
+                                    lhs_index_type const lhs_index) const noexcept
   {
     return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
   }
@@ -166,7 +181,7 @@ rmm::device_uvector<bool> contains_with_lists(table_view const& haystack,
 
       // Insert only rows that do not have any null at any level.
       auto const insert_map = [&](auto const value_comp) {
-        auto const d_eqcomp = strong_index_self_comparator_adapter{
+        auto const d_eqcomp = strong_index_comparator_adapter{
           comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
         map.insert_if(haystack_it,
                       haystack_it + haystack.num_rows(),
@@ -181,7 +196,7 @@ rmm::device_uvector<bool> contains_with_lists(table_view const& haystack,
 
     } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
       auto const insert_map = [&](auto const value_comp) {
-        auto const d_eqcomp = strong_index_self_comparator_adapter{
+        auto const d_eqcomp = strong_index_comparator_adapter{
           comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
         map.insert(
           haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
@@ -262,10 +277,10 @@ rmm::device_uvector<bool> contains_without_lists(table_view const& haystack,
     auto const d_hasher = strong_index_hasher_adapter{
       row_hash{cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr}};
     auto const d_eqcomp =
-      strong_index_self_comparator_adapter{row_equality{cudf::nullate::DYNAMIC{haystack_has_nulls},
-                                                        *haystack_tdv_ptr,
-                                                        *haystack_tdv_ptr,
-                                                        compare_nulls}};
+      strong_index_comparator_adapter{row_equality{cudf::nullate::DYNAMIC{haystack_has_nulls},
+                                                   *haystack_tdv_ptr,
+                                                   *haystack_tdv_ptr,
+                                                   compare_nulls}};
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
@@ -313,10 +328,7 @@ rmm::device_uvector<bool> contains_without_lists(table_view const& haystack,
     auto const d_hasher = strong_index_hasher_adapter{
       row_hash{cudf::nullate::DYNAMIC{has_any_nulls}, *needles_tdv_ptr}};
 
-    // Note: This equality comparator violates symmetry of equality and is therefore relying on the
-    // implementation detail of the order in which its operator is invoked.
-    // If cuco makes no promises about the order of invocation this seems a bit unsafe.
-    auto const d_eqcomp = strong_index_self_comparator_adapter{row_equality{
+    auto const d_eqcomp = strong_index_comparator_adapter{row_equality{
       cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr, *needles_tdv_ptr, compare_nulls}};
 
     map.contains(needles_it,
