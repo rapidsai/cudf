@@ -1,7 +1,9 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from .utils import run_udf_test
 import pytest
+
+from .utils import run_udf_test
+
 
 @pytest.mark.parametrize("data", [["1", "12", "123abc", "2.1", "", "0003"]])
 def test_string_udf_isdigit(data):
@@ -10,4 +12,4 @@ def test_string_udf_isdigit(data):
     def func(st):
         return st.isdigit()
 
-    run_udf_test(data, func, 'bool')
+    run_udf_test(data, func, "bool")

@@ -2,7 +2,7 @@
 
 import operator
 
-from numba import cuda, types
+from numba import types
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -17,6 +17,8 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
+
+from strings_udf._typing import StringView, string_view
 
 from cudf.core.missing import NA
 from cudf.core.udf import api
@@ -35,9 +37,6 @@ SUPPORTED_NUMBA_TYPES = (
     types.PyObject,
 )
 
-import operator
-
-from strings_udf._typing import string_view, StringView
 
 # Masked scalars of all types
 class MaskedType(types.Type):
@@ -131,6 +130,7 @@ class MaskedType(types.Type):
         # Require a cast for another masked with a different value type
         return self.value_type == other.value_type
 
+
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
 @typeof_impl.register(api.Masked)
@@ -162,6 +162,7 @@ class MaskedConstructor(ConcreteTemplate):
 # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
 make_attribute_wrapper(MaskedType, "value", "value")
 make_attribute_wrapper(MaskedType, "valid", "valid")
+
 
 # Typing for `api.Masked`
 @cuda_decl_registry.register_attr
@@ -363,7 +364,6 @@ class UnpackReturnToMasked(AbstractTemplate):
             # scalar_type -> MaskedType(scalar_type, True)
             return_type = MaskedType(args[0])
             return nb_signature(return_type, args[0])
-
 
 
 for binary_op in arith_ops + bitwise_ops + comparison_ops:

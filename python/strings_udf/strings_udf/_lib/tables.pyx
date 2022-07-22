@@ -3,8 +3,12 @@
 # distutils: language = c++
 # cython: c_string_type=unicode, c_string_encoding=utf8
 
-from strings_udf._lib.cpp.strings_udf cimport get_character_flags_table as cpp_get_character_flags_table
-from libc.stdint cimport uintptr_t, uint8_t
+from libc.stdint cimport uint8_t, uintptr_t
+
+from strings_udf._lib.cpp.strings_udf cimport (
+    get_character_flags_table as cpp_get_character_flags_table,
+)
+
 import numpy as np
 
 

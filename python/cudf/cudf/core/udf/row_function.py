@@ -6,14 +6,16 @@ from numba import cuda
 from numba.np import numpy_support
 from numba.types import Record
 
+from strings_udf._typing import DString
+
 from cudf.core.udf.api import Masked, pack_return
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.templates import (
     masked_input_initializer_template,
     row_initializer_template,
     row_kernel_template,
     unmasked_input_initializer_template,
 )
-from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.utils import (
     _all_dtypes_from_frame,
     _construct_signature,
@@ -24,7 +26,6 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-from strings_udf._typing import DString
 dstring = DString()
 
 
@@ -50,7 +51,7 @@ def _get_frame_row_type(dtype):
 
     sizes = []
     for field in dtype.fields.values():
-        if field[0] == np.dtype('object'):
+        if field[0] == np.dtype("object"):
             sizes.append(dstring.size_bytes)
         else:
             sizes.append(field[0].itemsize)
@@ -71,7 +72,7 @@ def _get_frame_row_type(dtype):
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        if elemdtype == np.dtype('object'):
+        if elemdtype == np.dtype("object"):
             itemsize = dstring.size_bytes
         else:
             itemsize = elemdtype.itemsize
