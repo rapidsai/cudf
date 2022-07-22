@@ -49,7 +49,7 @@ TEST_F(JsonTest, StackContext)
                       R"("category": "reference",)"
                       R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
                       R"("author": "Nigel Rees",)"
-                      R"("title": "{}\\\"[], <=semantic-symbols-string\\\"",)"
+                      R"("title": "{}\\\"[], <=semantic-symbols-string\\\\",)"
                       R"("price": 8.95)"
                       R"(}] )";
 
@@ -87,9 +87,7 @@ TEST_F(JsonTest, StackContext)
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '[', '_'};
 
   ASSERT_EQ(golden_stack_context.size(), stack_context.size());
-  for (std::size_t i = 0; i < stack_context.size(); i++) {
-    EXPECT_EQ(golden_stack_context[i], stack_context[i]) << "Mismatch at #" << i;
-  }
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
 TEST_F(JsonTest, TokenStream)
