@@ -1321,12 +1321,8 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
                d_char_ptr);
 }
 
-__device__ void get_extremum(const statistics_chunk* s,
-                             uint8_t dtype,
-                             bool is_min,
-                             void* scratch,
-                             const void** val,
-                             uint32_t* len)
+__device__ void get_extremum(
+  const statistics_val* stats_val, uint8_t dtype, void* scratch, const void** val, uint32_t* len)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1344,27 +1340,22 @@ __device__ void get_extremum(const statistics_chunk* s,
     case dtype_string:
     default: dtype_len = 0; break;
   }
-  if (s->has_minmax) {
-    auto const stats_val = is_min ? &s->min_value : &s->max_value;
-    if (dtype == dtype_string) {
-      *len = stats_val->str_val.length;
-      *val = stats_val->str_val.ptr;
-    } else {
-      *len = dtype_len;
-      if (dtype == dtype_float32) {  // Convert from double to float32
-        auto const fp_scratch = static_cast<float*>(scratch);
-        fp_scratch[0]         = stats_val->fp_val;
-        *val                  = scratch;
-      } else if (dtype == dtype_decimal128) {
-        byte_reverse128(stats_val->d128_val, scratch);
-        *val = scratch;
-      } else {
-        *val = stats_val;
-      }
-    }
+
+  if (dtype == dtype_string) {
+    *len = stats_val->str_val.length;
+    *val = stats_val->str_val.ptr;
   } else {
-    *len = 0;
-    *val = nullptr;
+    *len = dtype_len;
+    if (dtype == dtype_float32) {  // Convert from double to float32
+      auto const fp_scratch = static_cast<float*>(scratch);
+      fp_scratch[0]         = stats_val->fp_val;
+      *val                  = scratch;
+    } else if (dtype == dtype_decimal128) {
+      byte_reverse128(stats_val->d128_val, scratch);
+      *val = scratch;
+    } else {
+      *val = stats_val;
+    }
   }
 }
 
@@ -1380,9 +1371,9 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    get_extremum(s, dtype, false, scratch, &vmax, &lmax);
+    get_extremum(&s->max_value, dtype, scratch, &vmax, &lmax);
     encoder.field_binary(5, vmax, lmax);
-    get_extremum(s, dtype, true, scratch, &vmin, &lmin);
+    get_extremum(&s->min_value, dtype, scratch, &vmin, &lmin);
     encoder.field_binary(6, vmin, lmin);
   }
   encoder.end(&end);
@@ -1666,14 +1657,14 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page], col_g.stats_dtype, true, scratch, &vmin, &lmin);
+    get_extremum(&column_stats[pageidx + page].min_value, col_g.stats_dtype, scratch, &vmin, &lmin);
     encoder.put_binary(vmin, lmin);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page], col_g.stats_dtype, false, scratch, &vmax, &lmax);
+    get_extremum(&column_stats[pageidx + page].max_value, col_g.stats_dtype, scratch, &vmax, &lmax);
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);
