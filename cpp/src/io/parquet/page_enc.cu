@@ -1171,7 +1171,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
 /**
  * Minimal thrift compact protocol support
  */
-inline __device__ uint8_t* cpw_put_byte(uint8_t* p, uint8_t v)
+inline __device__ uint8_t* cpw_put_uint8(uint8_t* p, uint8_t v)
 {
   *p++ = v;
   return p;
@@ -1246,7 +1246,7 @@ class header_encoder {
   inline __device__ void field_list_begin(int field, size_t len, int type)
   {
     current_header_ptr = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_LIST);
-    current_header_ptr = cpw_put_byte(
+    current_header_ptr = cpw_put_uint8(
       current_header_ptr, static_cast<uint8_t>((std::min(len, size_t{0xfu}) << 4) | type));
     if (len >= 0xf) { current_header_ptr = cpw_put_uint32(current_header_ptr, len); }
     current_field_index = 0;
@@ -1256,7 +1256,7 @@ class header_encoder {
 
   inline __device__ void put_bool(bool value)
   {
-    current_header_ptr = cpw_put_byte(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
+    current_header_ptr = cpw_put_uint8(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
   }
 
   inline __device__ void put_binary(const void* value, uint32_t length)
