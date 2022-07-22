@@ -33,10 +33,9 @@ namespace {
 /**
  * @brief Computes the hash value of a row in the given table.
  *
- * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <template <typename> class hash_function, typename Nullate>
+template <typename Nullate>
 class device_spark_row_hasher {
   friend class cudf::experimental::row::hash::row_hasher<
     device_spark_row_hasher>;  ///< Allow row_hasher to access private members.
@@ -58,7 +57,7 @@ class device_spark_row_hasher {
       _seed,
       [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
         return cudf::type_dispatcher(column.type(),
-                                     element_hasher_adapter<hash_function>{nulls, hash, hash},
+                                     element_hasher_adapter{nulls, hash, hash},
                                      column,
                                      row_index);
       });
@@ -72,7 +71,6 @@ class device_spark_row_hasher {
    * When the column is nested, this uses the element_hasher to hash the shape and values of the
    * column.
    */
-  template <template <typename> class hash_fn>
   class element_hasher_adapter {
    public:
     __device__ element_hasher_adapter(Nullate check_nulls,
@@ -82,12 +80,13 @@ class device_spark_row_hasher {
     {
     }
 
+    using hash_functor = cudf::experimental::row::hash::element_hasher<SparkMurmurHash3_32, Nullate>;
+
     template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      auto const hasher = cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>(
-        _check_nulls, _seed, _null_hash);
+      auto const hasher = hash_functor(_check_nulls, _seed, _null_hash);
       return hasher.template operator()<T>(col, row_index);
     }
 
@@ -111,8 +110,7 @@ class device_spark_row_hasher {
         thrust::counting_iterator(curr_col.size()),
         _seed,
         [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
-          auto const hasher =
-            cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>(nulls, hash, hash);
+          auto const hasher = hash_functor(nulls, hash, hash);
           return cudf::type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
             curr_col.type(), hasher, curr_col, element_index);
         });
