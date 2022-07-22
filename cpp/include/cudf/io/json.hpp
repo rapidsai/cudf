@@ -80,7 +80,7 @@ class json_reader_options {
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
-  // Whether to parse dates as DD/MM versus MM/DD
+  // Whether to use the experimental reader
   bool _experimental = false;
 
   /**
@@ -255,7 +255,7 @@ class json_reader_options {
   /**
    * @brief Set whether to use the experimental reader.
    *
-   * @param val Boolean value to enable/disable the experimental readers
+   * @param val Boolean value to enable/disable the experimental reader
    */
   void enable_experimental(bool val) { _experimental = val; }
 };
