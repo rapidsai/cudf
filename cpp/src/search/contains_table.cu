@@ -50,7 +50,7 @@ using static_map = cuco::static_map<lhs_index_type,
  * `rhs_index_type`).
  */
 template <typename T>
-static constexpr auto is_strong_index_type()
+constexpr auto is_strong_index_type()
 {
   return std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>;
 }
@@ -61,12 +61,15 @@ static constexpr auto is_strong_index_type()
  */
 template <typename Hasher>
 struct strong_index_hasher_adapter {
-  template <typename T, CUDF_ENABLE_IF(is_strong_index_type<T>)>
+  strong_index_hasher_adapter(Hasher const& hasher) : _hasher{hasher} {}
+
+  template <typename T, CUDF_ENABLE_IF(is_strong_index_type<T>())>
   __device__ constexpr auto operator()(T const idx) const noexcept
   {
     return _hasher(static_cast<size_type>(idx));
   }
 
+ private:
   Hasher const _hasher;
 };
 
