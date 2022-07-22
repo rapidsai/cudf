@@ -42,9 +42,10 @@ namespace {
  *   the next item
  * - ignorance of null values: [1], [1, null], and [null, 1] have the same hash
  *
+ * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <typename Nullate>
+template <template <typename> class hash_function, typename Nullate>
 class device_spark_row_hasher {
   friend class cudf::experimental::row::hash::row_hasher<
     device_spark_row_hasher>;  ///< Allow row_hasher to access private members.
@@ -65,8 +66,10 @@ class device_spark_row_hasher {
       _table.end(),
       _seed,
       [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
-        return cudf::type_dispatcher(
-          column.type(), element_hasher_adapter{nulls, hash, hash}, column, row_index);
+        return cudf::type_dispatcher(column.type(),
+                                     element_hasher_adapter<hash_function>{nulls, hash, hash},
+                                     column,
+                                     row_index);
       });
   }
 
@@ -78,6 +81,7 @@ class device_spark_row_hasher {
    * When the column is nested, this uses the element_hasher to hash the shape and values of the
    * column.
    */
+  template <template <typename> class hash_fn>
   class element_hasher_adapter {
    public:
     __device__ element_hasher_adapter(Nullate check_nulls,
@@ -87,8 +91,7 @@ class device_spark_row_hasher {
     {
     }
 
-    using hash_functor =
-      cudf::experimental::row::hash::element_hasher<SparkMurmurHash3_32, Nullate>;
+    using hash_functor = cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>;
 
     template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
