@@ -392,7 +392,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   }
 
   // If the input tables don't have lists column and NaNs are compared equal, we rely on the classic
-  // code path that flattens the input tables for row comparisons. This way was know to have
+  // code path that flattens the input tables for row comparisons. This way is known to have
   // better performance.
   return contains_without_lists_or_nans(haystack, needles, compare_nulls, stream, mr);
 
