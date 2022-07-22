@@ -3451,7 +3451,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_EQ(1, expected->num_columns());
 
   auto const filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .max_page_size_rows(page_rows);
   cudf::io::write_parquet(out_opts);
@@ -3493,7 +3493,7 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto const filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view());
   cudf::io::write_parquet(out_opts);
 
@@ -3728,7 +3728,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto const expected = std::make_unique<table>(std::move(cols));
 
   auto const filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .max_page_size_rows(page_size_for_ordered_tests)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
@@ -3864,7 +3864,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   auto const expected = std::make_unique<table>(std::move(cols));
 
   auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndex.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(20000);
@@ -3970,7 +3970,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNulls.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(20000);
@@ -4060,7 +4060,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNullColumn.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(20000);
@@ -4144,7 +4144,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   table_view expected({c0, c1, *c2});
 
   auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStruct.parquet");
-  cudf::io::parquet_writer_options out_opts =
+  const cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .max_page_size_rows(page_size_for_ordered_tests);
