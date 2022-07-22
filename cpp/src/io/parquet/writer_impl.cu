@@ -503,12 +503,20 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
       };
 
-      // There is a special case for a list<int8> column with one child. This column can have a
-      // special flag that indicates we write this out as binary instead of a list. This is a more
-      // efficient storage mechanism for a single-depth list of bytes, but is a departure from
+      auto last_list_child = [](cudf::detail::LinkedColPtr col) {
+        if (col->type().id() != type_id::LIST) { return false; }
+        auto const child_col_type =
+          col->children[lists_column_view::child_column_index]->type().id();
+        if (child_col_type != type_id::INT8 && child_col_type != type_id::UINT8) { return false; }
+        return true;
+      };
+
+      // There is a special case for a list<int8> column with one byte column child. This column can
+      // have a special flag that indicates we write this out as binary instead of a list. This is a
+      // more efficient storage mechanism for a single-depth list of bytes, but is a departure from
       // original cuIO behavior so it is locked behind the option. If the option is selected on a
       // column that isn't a single-depth list<int8> the code will throw.
-      if (col_meta.is_enabled_output_as_binary() && col->type().id() == type_id::LIST) {
+      if (col_meta.is_enabled_output_as_binary() && last_list_child(col)) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
                      "Binary column's corresponding metadata should have zero or two children!");
         if (col_meta.num_children() > 0) {
@@ -805,16 +813,17 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
   if (cudf_col.size() == 0) { return; }
 
-  if (_is_list && !schema_node.output_as_byte_array) {
+  if (_is_list) {
     // Top level column's offsets are not applied to all children. Get the effective offset and
     // size of the leaf column
     // Calculate row offset into dremel data (repetition/definition values) and the respective
     // definition and repetition levels
-    gpu::dremel_data dremel = gpu::get_dremel_data(cudf_col, _d_nullability, _nullability, stream);
-    _dremel_offsets         = std::move(dremel.dremel_offsets);
-    _rep_level              = std::move(dremel.rep_level);
-    _def_level              = std::move(dremel.def_level);
-    _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
+    gpu::dremel_data dremel = gpu::get_dremel_data(
+      cudf_col, _d_nullability, _nullability, schema_node.output_as_byte_array, stream);
+    _dremel_offsets = std::move(dremel.dremel_offsets);
+    _rep_level      = std::move(dremel.rep_level);
+    _def_level      = std::move(dremel.def_level);
+    _data_count     = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
 
     stream.synchronize();
   } else {

@@ -1754,7 +1754,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        auto col                   = make_column(_output_columns[i], &col_name, stream, _mr);
+        auto col                   = make_column(_output_columns[i], &col_name, _stream, _mr);
         if (_output_columns[i].type.id() == type_id::STRING &&
             _force_binary_columns_as_strings.has_value() &&
             !_force_binary_columns_as_strings.value()[i]) {

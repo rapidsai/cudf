@@ -87,36 +87,13 @@ struct t_array_stats {
 using string_stats     = t_array_stats<string_view, char>;
 using byte_array_stats = t_array_stats<byte_array_view, uint8_t>;
 
-struct byte_array_stats {
-  const uint8_t* ptr;  //!< ptr to byte data
-  uint32_t length;     //!< length of bytes
-  __host__ __device__ __forceinline__ volatile byte_array_stats& operator=(
-    const byte_array_view& val) volatile
-  {
-    ptr    = val.data();
-    length = val.size_bytes();
-    return *this;
-  }
-  __host__ __device__ __forceinline__ operator byte_array_view() volatile
-  {
-    return byte_array_view(ptr, static_cast<size_type>(length));
-  }
-  __host__ __device__ __forceinline__ operator byte_array_view() const
-  {
-    return byte_array_view(ptr, static_cast<size_type>(length));
-  }
-  __host__ __device__ __forceinline__ operator byte_array_view()
-  {
-    return byte_array_view(ptr, static_cast<size_type>(length));
-  }
-};
-
 union statistics_val {
   string_stats str_val;       //!< string columns
   byte_array_stats byte_val;  //!< byte array columns
   double fp_val;              //!< float columns
   int64_t i_val;              //!< integer columns
   uint64_t u_val;             //!< unsigned integer columns
+  __int128_t d128_val;        //!< decimal128 columns
 };
 
 struct statistics_chunk {
@@ -154,9 +131,8 @@ __device__ T get_element(column_device_view const& col, uint32_t row)
   using et              = typename T::element_type;
   size_type index       = row + col.offset();  // account for this view's _offset
   auto const* d_offsets = col.child(lists_column_view::offsets_column_index).data<offset_type>();
-  typename T::element_type const* d_data =
-    col.child(lists_column_view::child_column_index).data<et>();
-  size_type offset = d_offsets[index];
+  auto const* d_data    = col.child(lists_column_view::child_column_index).data<et>();
+  size_type offset      = d_offsets[index];
   return T(d_data + offset, d_offsets[index + 1] - offset);
 }
 

@@ -50,7 +50,7 @@ class union_member {
     std::conditional_t<std::is_same_v<std::remove_cv_t<T>, string_view>,
                        reference_type<U, string_stats>,
                        std::conditional_t<std::is_same_v<std::remove_cv_t<T>, byte_array_view>,
-                                          reference_type<U, byte_array_view>,
+                                          reference_type<U, byte_array_stats>,
                                           reference_type<U, T>>>;
 
   template <typename T, typename U>

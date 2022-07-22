@@ -310,8 +310,13 @@ inline size_type __device__ row_to_value_idx(size_type idx,
         col = col.child(0);
       } else {
         auto list_col = cudf::detail::lists_column_device_view(col);
-        idx           = list_col.offset_at(idx);
-        col           = list_col.child();
+        auto child    = list_col.child();
+        if (parquet_col->output_as_byte_array &&
+            (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+          break;
+        }
+        idx = list_col.offset_at(idx);
+        col = child;
       }
     }
   }
@@ -488,6 +493,7 @@ struct dremel_data {
 dremel_data get_dremel_data(column_view h_col,
                             rmm::device_uvector<uint8_t> const& d_nullability,
                             std::vector<uint8_t> const& nullability,
+                            bool output_as_byte_array,
                             rmm::cuda_stream_view stream);
 
 /**

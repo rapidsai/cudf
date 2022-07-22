@@ -125,7 +125,7 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    int64_t,
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
     typename std::conditional_t<
       std::is_same_v<T, string_view>,
       string_view,
@@ -138,7 +138,7 @@ class extrema_type {
   // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
-  // byte_array_view   -> byte_array_view
+  // byte_array_view         -> byte_array_view
   // timestamp_[T]     -> int64_t
 
  public:
@@ -185,13 +185,12 @@ class aggregation_type {
   using arithmetic_aggregation_type =
     typename std::conditional_t<std::is_integral_v<T>, integral_aggregation_type, double>;
 
-  using non_arithmetic_aggregation_type =
-    typename std::conditional_t<cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
-                                  cudf::is_timestamp<T>()  // To be disabled with static_assert
-                                  or std::is_same_v<T, string_view> or
-                                  std::is_same_v<T, byte_array_view>,
-                                int64_t,
-                                void>;
+  using non_arithmetic_aggregation_type = typename std::conditional_t<
+    cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
+      cudf::is_timestamp<T>()  // To be disabled with static_assert
+      or std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>,
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
+    void>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
@@ -200,6 +199,7 @@ class aggregation_type {
   // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> int64_t
+  // byte_array_view         -> int64_t
   // NOTE : timestamps do not have an aggregation type
 
  public:
@@ -242,7 +242,7 @@ __inline__ __device__ constexpr T minimum_identity()
   if constexpr (std::is_same_v<T, string_view>) {
     return string_view::max();
   } else if constexpr (std::is_same_v<T, byte_array_view>) {
-    return cuda::std::numeric_limits<byte_array_view::element_type>::max();
+    return byte_array_view::max();
   }
   return cuda::std::numeric_limits<T>::max();
 }
@@ -253,7 +253,7 @@ __inline__ __device__ constexpr T maximum_identity()
   if constexpr (std::is_same_v<T, string_view>) {
     return string_view::min();
   } else if constexpr (std::is_same_v<T, byte_array_view>) {
-    return cuda::std::numeric_limits<byte_array_view::element_type>::min();
+    return byte_array_view::min();
   }
   return cuda::std::numeric_limits<T>::lowest();
 }
@@ -273,8 +273,9 @@ class statistics_type_category {
     (IO == io_file_format::PARQUET) ? false : aggregation_type<T>::is_supported;
 
   // Types for which sum does not make sense, but extrema do
-  static constexpr bool include_extrema =
-    aggregation_type<T>::is_supported or cudf::is_timestamp<T>();
+  static constexpr bool include_extrema = aggregation_type<T>::is_supported or
+                                          cudf::is_timestamp<T>() or
+                                          std::is_same_v<T, cudf::list_view>;
 
   // Types for which only value count makes sense (e.g. nested)
   static constexpr bool include_count = (IO == io_file_format::ORC) ? true : include_extrema;

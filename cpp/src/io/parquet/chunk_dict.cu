@@ -109,7 +109,7 @@ __global__ void __launch_bounds__(block_size)
   auto chunk   = frag.chunk;
   auto col     = chunk->col_desc;
 
-  if (not chunk->use_dictionary || col->output_as_byte_array) { return; }
+  if (not chunk->use_dictionary) { return; }
 
   using block_reduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
@@ -190,7 +190,7 @@ __global__ void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
-  if (not chunk.use_dictionary || chunk.col_desc->output_as_byte_array) { return; }
+  if (not chunk.use_dictionary) { return; }
 
   auto t   = threadIdx.x;
   auto map = map_type::device_view(chunk.dict_map_slots,
@@ -230,7 +230,7 @@ __global__ void __launch_bounds__(block_size)
   auto chunk   = frag.chunk;
   auto col     = chunk->col_desc;
 
-  if (not chunk->use_dictionary || col->output_as_byte_array) { return; }
+  if (not chunk->use_dictionary) { return; }
 
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
