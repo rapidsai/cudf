@@ -65,10 +65,8 @@ class device_spark_row_hasher {
       _table.end(),
       _seed,
       [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
-        return cudf::type_dispatcher(column.type(),
-                                     element_hasher_adapter{nulls, hash, hash},
-                                     column,
-                                     row_index);
+        return cudf::type_dispatcher(
+          column.type(), element_hasher_adapter{nulls, hash, hash}, column, row_index);
       });
   }
 
@@ -89,7 +87,8 @@ class device_spark_row_hasher {
     {
     }
 
-    using hash_functor = cudf::experimental::row::hash::element_hasher<SparkMurmurHash3_32, Nullate>;
+    using hash_functor =
+      cudf::experimental::row::hash::element_hasher<SparkMurmurHash3_32, Nullate>;
 
     template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
