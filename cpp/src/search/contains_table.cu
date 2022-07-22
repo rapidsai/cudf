@@ -115,7 +115,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const needles_has_nulls  = has_nested_nulls(needles);
   auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
 
-  // Insert all row hash values and indices of the haystack table.
+  // Insert row indices of the haystack table as map keys.
   {
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
