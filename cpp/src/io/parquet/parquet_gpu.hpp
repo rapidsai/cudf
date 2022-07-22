@@ -45,9 +45,8 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
-// Total number of unsigned 16 bit values
-constexpr size_type MAX_DICT_SIZE =
-  std::numeric_limits<uint16_t>::max() - std::numeric_limits<uint16_t>::min() + 1;
+// Total number of unsigned 24 bit values
+constexpr size_type MAX_DICT_SIZE = (1 << 24) - 1;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -355,7 +354,7 @@ struct EncColumnChunk {
     uniq_data_size;  //!< Size of dictionary page (set of all unique values) if dict enc is used
   size_type plain_data_size;  //!< Size of data in this chunk if plain encoding is used
   size_type* dict_data;       //!< Dictionary data (unique row indices)
-  uint16_t* dict_index;   //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
+  size_type* dict_index;  //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
 };
