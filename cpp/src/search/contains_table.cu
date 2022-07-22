@@ -95,8 +95,8 @@ struct strong_index_comparator_adapter {
       return _comparator(lhs, rhs);
     } else {
       // Here we have T == rhs_index_type.
-      // This is when the indices are provided in wrong order, so we need to switch them back
-      // to the right order to enforce symmetry of the comparator.
+      // This is when the indices are provided in wrong order for two table comparator, so we need
+      // to switch them back to the right order before calling the underlying comparator.
       return _comparator(rhs, lhs);
     }
   }
@@ -108,8 +108,8 @@ struct strong_index_comparator_adapter {
 /**
  * @brief Build a row bitmask for the input table.
  *
- * The output bitmask will have invalid bits corresponding to the the input rows having nested
- * nulls and vice versa.
+ * The output bitmask will have invalid bits corresponding to the the input rows having nulls (at
+ * any nested level) and vice versa.
  *
  * @param input The input table
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -124,13 +124,13 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 
   // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
   // Otherwise, we have only one nullable column and can use its null mask directly.
-  auto row_bitmask           = nullable_columns.size() > 1
-                                 ? cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first
-                                 : rmm::device_buffer{0, stream};
-  auto const row_bitmask_ptr = nullable_columns.size() > 1
-                                 ? static_cast<bitmask_type const*>(row_bitmask.data())
-                                 : nullable_columns.front().null_mask();
-  return std::pair(std::move(row_bitmask), row_bitmask_ptr);
+  if (nullable_columns.size() > 1) {
+    auto row_bitmask = cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first;
+    auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
+    return std::pair(std::move(row_bitmask), row_bitmask_ptr);
+  }
+
+  return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
 }
 
 /**
