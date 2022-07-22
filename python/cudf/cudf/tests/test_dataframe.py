@@ -9472,13 +9472,37 @@ def test_value_counts(
         gdf.value_counts(subset=["not_a_column_name"])
 
 
-def test_multiindex_wildcard_selection():
+@pytest.fixture
+def wildcard_df():
     midx = cudf.MultiIndex.from_tuples(
-        [("a", "a"), ("a", "b"), ("b", "a"), ("b", "b")]
+        [(c1, c2) for c1 in "abc" for c2 in "ab"]
     )
-    df = cudf.DataFrame({"a": [1], "b": [2], "c": [3], "d": 4})
+    df = cudf.DataFrame({f"{i}": [i] for i in range(6)})
+    df.columns = midx
+    return df
+
+
+def test_multiindex_wildcard_selection_all(wildcard_df):
+    expect = wildcard_df.to_pandas().loc[:, (slice(None), "b")]
+    got = wildcard_df.loc[:, (slice(None), "b")]
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="Not yet properly supported.")
+def test_multiindex_wildcard_selection_partial(wildcard_df):
+    expect = wildcard_df.to_pandas().loc[:, (slice("a", "b"), "b")]
+    got = wildcard_df.loc[:, (slice("a", "b"), "b")]
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="Not yet properly supported.")
+def test_multiindex_wildcard_selection_three_level_all():
+    midx = cudf.MultiIndex.from_tuples(
+        [(c1, c2, c3) for c1 in "abcd" for c2 in "abc" for c3 in "ab"]
+    )
+    df = cudf.DataFrame({f"{i}": [i] for i in range(24)})
     df.columns = midx
 
-    expect = df.to_pandas().loc[:, (slice(None), "b")]
+    expect = df.to_pandas().loc[:, (slice("a", "c"), slice("a", "b"), "b")]
     got = df.loc[:, (slice(None), "b")]
     assert_eq(expect, got)
