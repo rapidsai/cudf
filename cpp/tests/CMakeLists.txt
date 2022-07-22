@@ -477,7 +477,6 @@ ConfigureTest(
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
   lists/count_elements_tests.cpp
-  lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
