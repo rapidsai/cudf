@@ -88,10 +88,27 @@ parquet::Compression to_parquet_compression(compression_type compression)
  */
 size_t column_index_buffer_size(gpu::EncColumnChunk* ck)
 {
-  // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk
-  // ck_stat_size is a good proxy for how much memory is needed for the min/max values
+  // encoding the column index requires:
+  //   each list requires 6 bytes of overhead
+  //     (1 byte field header, 1 byte type, 4 bytes length)
+  //   1 byte overhead for boundary_order
+  //   1 byte overhead for termination
+  //   sizeof(char) for boundary_order
+  //   sizeof(bool) * num_pages for bool list
+  //   (ck_max_stats_len + 4) * num_pages * 2 for min/max values
+  //     (each binary requires 4 bytes length + ck_max_stats_len)
+  //   sizeof(int64_t) * num_pages for null_counts
+  //
+  // so 26 bytes overhead + sizeof(char) +
+  //    (sizeof(bool) + sizeof(int64_t) + 2 * (4 + ck_max_stats_len)) * num_pages
+  //
+  // we already have ck->ck_stat_size = 48 + 2 * ck_max_stats_len
+  // all of the overhead and non-stats data can fit in under 48 bytes
+  //
+  // so we can simply use ck_stat_size * num_pages
+  //
   // calculating this per-chunk because the sizes can be wildly different
-  return 26 + (ck->ck_stat_size + 9) * ck->num_pages;
+  return ck->ck_stat_size * ck->num_pages;
 }
 
 }  // namespace
