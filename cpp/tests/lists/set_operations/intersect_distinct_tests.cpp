@@ -48,10 +48,10 @@ using structs_col   = cudf::test::structs_column_wrapper;
 using lists_cv      = cudf::lists_column_view;
 
 namespace {
-auto set_op_sorted(cudf::column_view const& lhs,
-                   cudf::column_view const& rhs,
-                   cudf::null_equality nulls_equal = NULL_EQUAL,
-                   cudf::nan_equality nans_equal   = NAN_EQUAL)
+auto set_intersect_sorted(cudf::column_view const& lhs,
+                          cudf::column_view const& rhs,
+                          cudf::null_equality nulls_equal = NULL_EQUAL,
+                          cudf::nan_equality nans_equal   = NAN_EQUAL)
 {
   auto const results =
     cudf::lists::intersect_distinct(lists_cv{lhs}, lists_cv{rhs}, nulls_equal, nans_equal);
@@ -92,7 +92,7 @@ TEST_F(SetIntersectTest, TrivialTest)
                                       floats_lists{} /*NULL*/},
                                      nulls_at({2, 3})};
 
-  auto const results_sorted = set_op_sorted(lhs, rhs);
+  auto const results_sorted = set_intersect_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
 }
 
@@ -110,7 +110,7 @@ TEST_F(SetIntersectTest, TrivialIdentityTest)
   auto const input_distinct_sorted = cudf::lists::sort_lists(
     lists_cv{*input_distinct}, cudf::order::ASCENDING, cudf::null_order::BEFORE);
 
-  auto const results_sorted = set_op_sorted(input, input);
+  auto const results_sorted = set_intersect_sorted(input, input);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_distinct_sorted, *results_sorted);
 }
 
@@ -121,7 +121,7 @@ TEST_F(SetIntersectTest, FloatingPointTestsWithSignedZero)
   auto const rhs      = floats_lists{{-0.0, -0.0, -0.0, -0.0, -0.0}, {0.0, 2.0}, {1.0}};
   auto const expected = floats_lists{floats_lists{0}, floats_lists{0}, floats_lists{}};
 
-  auto const results_sorted = set_op_sorted(lhs, rhs);
+  auto const results_sorted = set_intersect_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
 }
 
@@ -131,7 +131,7 @@ TEST_F(SetIntersectTest, FloatingPointTestsWithInf)
   auto const rhs      = floats_lists{{neg_Inf, neg_Inf}, {0.0, Inf}};
   auto const expected = floats_lists{floats_lists{}, floats_lists{0.0, Inf}};
 
-  auto const results_sorted = set_op_sorted(lhs, rhs);
+  auto const results_sorted = set_intersect_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
 }
 
@@ -145,14 +145,14 @@ TEST_F(SetIntersectTest, FloatingPointTestsWithNaNs)
   // NaNs are equal.
   {
     auto const expected       = floats_lists{{NaN}, {0, 2}, {-2, 0, 1, 2}, {NaN}};
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL, NAN_EQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_EQUAL, NAN_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // NaNs are unequal.
   {
     auto const expected       = floats_lists{{}, {0, 2}, {-2, 0, 1, 2}, {}};
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL, NAN_UNEQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_EQUAL, NAN_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 }
@@ -165,7 +165,7 @@ TEST_F(SetIntersectTest, StringTestsNonNull)
     auto const rhs      = strings_lists{};
     auto const expected = strings_lists{};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -175,7 +175,7 @@ TEST_F(SetIntersectTest, StringTestsNonNull)
     auto const rhs      = strings_lists{strings_lists{}};
     auto const expected = strings_lists{strings_lists{}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -185,7 +185,7 @@ TEST_F(SetIntersectTest, StringTestsNonNull)
     auto const rhs      = strings_lists{"aha", "bear", "blow", "heat"};
     auto const expected = strings_lists{strings_lists{}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -195,7 +195,7 @@ TEST_F(SetIntersectTest, StringTestsNonNull)
     auto const rhs      = strings_lists{"a", "delicious", "banana"};
     auto const expected = strings_lists{"a"};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -209,7 +209,7 @@ TEST_F(SetIntersectTest, StringTestsNonNull)
                                    strings_lists{"two", "and", "1"}};
     auto const expected = strings_lists{strings_lists{"one"}, strings_lists{}, strings_lists{"1"}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 }
@@ -226,7 +226,7 @@ TEST_F(SetIntersectTest, StringTestsWithNullsEqual)
       strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
     auto const expected = strings_lists{{null}, null_at(0)};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
   }
 
@@ -245,7 +245,7 @@ TEST_F(SetIntersectTest, StringTestsWithNullsEqual)
       {strings_lists{{null}, null_at(0)}, strings_lists{} /*NULL*/, strings_lists{"this"}},
       null_at(1)};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 }
@@ -262,7 +262,7 @@ TEST_F(SetIntersectTest, StringTestsWithNullsUnequal)
       strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
     auto const expected = strings_lists{strings_lists{}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_UNEQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -280,7 +280,7 @@ TEST_F(SetIntersectTest, StringTestsWithNullsUnequal)
     auto const expected =
       strings_lists{{strings_lists{}, strings_lists{} /*NULL*/, strings_lists{"this"}}, null_at(1)};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_UNEQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 }
@@ -295,7 +295,7 @@ TYPED_TEST(SetIntersectTypedTest, TrivialInputTests)
     auto const rhs      = lists_col{};
     auto const expected = lists_col{};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -305,7 +305,7 @@ TYPED_TEST(SetIntersectTypedTest, TrivialInputTests)
     auto const rhs      = lists_col{lists_col{}, lists_col{}, lists_col{}};
     auto const expected = lists_col{lists_col{}, lists_col{}, lists_col{}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -315,7 +315,7 @@ TYPED_TEST(SetIntersectTypedTest, TrivialInputTests)
     auto const rhs      = lists_col{{}, {}, {0}, {0, 1, 2, 3, 4, 5}, {}, {6, 7}, {}};
     auto const expected = lists_col{{}, {}, {}, {0, 1, 2, 3, 4, 5}, {}, {6}, {}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 }
@@ -332,7 +332,7 @@ TYPED_TEST(SetIntersectTypedTest, SlicedNonNullInputTests)
   {
     auto const expected = lists_col{{1, 2, 3}, {}, {}, {}, {6, 7}};
 
-    auto const results_sorted = set_op_sorted(lhs_original, rhs_original);
+    auto const results_sorted = set_intersect_sorted(lhs_original, rhs_original);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -341,7 +341,7 @@ TYPED_TEST(SetIntersectTypedTest, SlicedNonNullInputTests)
     auto const rhs      = cudf::slice(rhs_original, {1, 5})[0];
     auto const expected = lists_col{{}, {}, {}, {6, 7}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -350,7 +350,7 @@ TYPED_TEST(SetIntersectTypedTest, SlicedNonNullInputTests)
     auto const rhs      = cudf::slice(rhs_original, {1, 3})[0];
     auto const expected = lists_col{lists_col{}, lists_col{}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -359,7 +359,7 @@ TYPED_TEST(SetIntersectTypedTest, SlicedNonNullInputTests)
     auto const rhs      = cudf::slice(rhs_original, {0, 3})[0];
     auto const expected = lists_col{{1, 2, 3}, {}, {}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 }
@@ -378,7 +378,7 @@ TYPED_TEST(SetIntersectTypedTest, InputHaveNullsTests)
     auto const expected =
       lists_col{{{1, 2}, {} /*NULL*/, {} /*NULL*/, {} /*NULL*/, {10}, {}}, nulls_at({1, 2, 3})};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -393,7 +393,7 @@ TYPED_TEST(SetIntersectTypedTest, InputHaveNullsTests)
     auto const expected =
       lists_col{lists_col{{null}, null_at(0)}, lists_col{{null, 5}, null_at(0)}, lists_col{7, 9}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
@@ -407,7 +407,7 @@ TYPED_TEST(SetIntersectTypedTest, InputHaveNullsTests)
                                lists_col{7, 8, 9}};
     auto const expected = lists_col{lists_col{}, lists_col{5}, lists_col{7, 9}};
 
-    auto const results_sorted = set_op_sorted(lhs, rhs, NULL_UNEQUAL);
+    auto const results_sorted = set_intersect_sorted(lhs, rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
   }
 }
@@ -527,7 +527,7 @@ TEST_F(SetIntersectTest, InputListsOfNestedStructsHaveNull)
     auto const expected = cudf::make_lists_column(
       3, int32s_col{0, 2, 3, 5}.release(), get_structs_expected().release(), 0, {});
 
-    auto const results_sorted = set_op_sorted(*lhs, *rhs, NULL_EQUAL);
+    auto const results_sorted = set_intersect_sorted(*lhs, *rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results_sorted);
   }
 
@@ -547,7 +547,7 @@ TEST_F(SetIntersectTest, InputListsOfNestedStructsHaveNull)
     auto const expected = cudf::make_lists_column(
       3, int32s_col{0, 0, 0, 0}.release(), get_structs_expected().release(), 0, {});
 
-    auto const results_sorted = set_op_sorted(*lhs, *rhs, NULL_UNEQUAL);
+    auto const results_sorted = set_intersect_sorted(*lhs, *rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
   }
 }
