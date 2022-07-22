@@ -49,10 +49,9 @@ For now those groupings are left to the discretion of developers.
 
 ## Running benchmarks
 
-The main distinction between tests and benchmarks is configured prefix.
-Bench files and functions are prefixed with `bench_` rather than `test_`.
-`pytest` is automatically configured to find benchmarks this way, though,
-so running benchmarks is as simple as installing `pytest-benchmark` and then running `pytest`.
+By default, pytest discovers test files and functions prefixed with `test_`.
+For benchmarks, we configure `pytest` to instead search using the `bench_` prefix.
+After installing `pytest-benchmark`, running benchmarks is as simple as just running `pytest`.
 
 When benchmarks are run, the default behavior is to output the results in a table to the terminal.
 A common requirement is to then compare the performance of benchmarks before and after a change.
@@ -76,21 +75,23 @@ The next line contains one useful example, but developers should experiment to f
 pytest-benchmark compare XXXX YYYY --sort="name" --columns=Mean --name=short --group-by=param
 ```
 
+For more details, see the [`pytest-benchmark` documentation](https://pytest-benchmark.readthedocs.io/en/latest/comparing.html).
+
 ## Benchmark contents
 
 ### Benchmark configuration
 
-Our benchmarks aim to support [comparing to pandas](pandascompare) or [running tests](testing) out of the box.
-In order for the former to work, _all tests must import `cudf` and `cupy` from the `config` module_.
-In other words:
-```python
-from ..common.config import cudf  # This is good
-import cudf  # This is bad
-```
-Testing is usually transparently supported except when users define custom fixtures or cases.
-In those instances, as a general rule developers should avoid hardcoding data sizes in benchmarks.
-Instead, data sizes should be dependent on variables stored in `config.py`.
-This requirement is discussed in more depth below.
+Benchmarks must support [comparing to pandas](#comparing-to-pandas) and [being run as tests](#testing-benchmarks).
+To satisfy these requirements, one must follow these rules when writing benchmarks:
+1. Import `cudf` and `cupy` from the config module:
+   ```python
+       from ..common.config import cudf, cupy # Do this
+       import cudf, cupy # Not this
+   ```
+   This enables swapping out for `pandas` and `numpy` respectively.
+2. Avoid hard-coding benchmark dataset sizes, and instead use the sizes advertised by `config.py`.
+   This enables running the benchmarks in "test" mode on small datasets, which will be much faster.
+
 
 ### Writing benchmarks 
 
@@ -125,19 +126,31 @@ The valid set of all parameters (e.g. the numbers of rows) is stored in the `com
 This decorator allows a developer to write a generic benchmark that works for many types of objects,
 then have that benchmark automatically run for all objects of interest.
 
-### Custom fixtures
+### Parametrizing tests
 
-Developers may define custom fixtures if necessary, but this should be done with care.
 The `benchmark_with_object` decorator covers most use cases and automatically guarantees a baseline of benchmark coverage.
+However, many benchmarks will require more customized objects.
+In some cases those will be the primary targets whose methods are called.
+For instance, a benchmark may require a `Series` with a specific data distribution.
+In others, those objects will be arguments passed to other functions.
+An example of this is `DataFrame.where`, which accepts many types of objects to filter with.
+
+In the first case, fixtures should follow certain rules.
 When writing fixtures, developers should make the data sizes dependent on the benchmarks configuration.
 The `benchmarks/common/config.py` file defines standard data sizes to be used in benchmarks.
-These data sizes can be tweaked for debugging purposes (see {ref}`testing` below).
+These data sizes can be tweaked for debugging purposes (see [](#testing-benchmarks) below).
 Fixture sizes should be relative to the `NUM_ROWS` and/or `NUM_COLS` variables defined in the config module.
+These rules ensure consistency between these fixtures and those provided by `benchmark_with_object`.
 
-### Parametrization vs. fixtures
+In the second case, fixtures are really functioning as parameters, which we discuss in the next section.
 
-Our benchmarks make use of the [`pytest_cases`](https://smarie.github.io/python-pytest-cases/) `pytest` plugin.
-This plugin allows us to handle parametrization much more cleanly than pytest does out of the box.
+
+### Parametrization: custom fixtures, `pytest-cases` and `pytest.mark.parametrize`
+
+When it comes to parametrizing tests, we have a number of options at our disposal.
+One option is fixtures, while a second is using `pytest.mark.parametrize`.
+A third option is provided by the [`pytest_cases`](https://smarie.github.io/python-pytest-cases/) `pytest` plugin.
+Our benchmarks make extensive use of this plugin to handle complex parametrization.
 Specifically, it provides some syntactic sugar around
 
 ```python
@@ -169,24 +182,49 @@ def bench_foo(benchmark, num):
     benchmark(num * 2)
 ```
 
-This approach is strongly encouraged within cuDF benchmarks.
-It forces developers to put complex initialization into named, documented functions.
+`pytest-cases` is allows developers to put complex initialization into named, documented functions.
 That becomes especially valuable when benchmarking APIs whose performance can vary drastically based on parameters.
 Additionally, cases, like fixtures, are lazily evaluated.
 Initializing complex objects inside a `pytest.mark.parametrize` can dramatically slow down test collection,
 or even lead to out of memory issues if too many complex cases are collected.
 Using lazy case functions ensures that the associated objects are only created on an as-needed basis.
 
-When writing cases, just as in writing custom fixtures, developers should be make use of the config variables.
+When writing cases, just as in writing custom fixtures, developers should make use of the config variables.
 Cases should import the `NUM_ROWS` and/or `NUM_COLS` variables from the config module and use them to define data sizes.
 
-The observant reader may recognize that cases seem quite familiar to fixtures.
-While the implementations are in fact quite similar, for our purposes it is important to keep the two distinct.
-From a conceptual standpoint, fixtures are homogeneous and generic while cases are heterogeneous and specific.
-Fixtures should be created sparingly and used broadly.
-Cases can be precisely tailored for a single test.
+Given the plethora of options for parametrization,
+we codify here some best practices for how each should be employed.
+In general, these approach are applicable to parametrizations of different complexity.
+For the purpose of this discussion,
+we define a "simple parametrization" as parametrization using a list (possibly nested) of primitive objects.
+Examples include a list of integers or a list of list of strings.
+This _does not_ include e.g. cuDF or pandas objects.
 
-(pandascompare)=
+With that in mind, here are some ground rules for how to parametrize.
+
+Use `pytest.mark.parametrize` when:
+- One test must be run on many inputs and those inputs are simple to construct.
+
+Use fixtures when:
+- One or more tests must be run on the same set of inputs,
+  and all of those inputs can be constructed with simple parametrizations.
+  In practice, that means that it is acceptable to use a fixture like this:
+  ```python
+      @pytest.fixture(params=['a', 'b'])
+      def foo(request):
+          if request.param == 'a':
+              # Some complex initialization
+          elif request.param == 'b':
+              # Some other complex initialization
+  ```
+  In other words, the construction of the fixture may be complex,
+  as long as the parametrization of that construction is simple.
+
+Use `pytest-cases.parametrize_with_cases` when:
+- One or more tests must be run on the same set of inputs,
+  and at least one of those inputs requires complex parametrizations.
+- Given a set of cases, different tests need to run on different subsets with a nonempty intersection.
+
 
 ## Comparing to pandas
 
@@ -203,9 +241,7 @@ It does so by aliasing these modules in `common.config.py`.
 This aliasing is why it is critical for developers to import these packages from `config.py`.
 ```
 
-(testing)=
-
-## Testing
+## Testing benchmarks
 
 Benchmarks need to be kept up to date with API changes in cuDF.
 However, we cannot simply run benchmarks in CI.
@@ -225,19 +261,18 @@ This is why it is crucial for developers to use these variables when defining cu
 ## Profiling
 
 Although not strictly part of our benchmarking suite, profiling is a common need so we provide some guidelines here.
-There are two easy ways to profile benchmarks:
+Here are two easy ways (there may be others) to profile benchmarks:
 1. The [`pytest-profiling`](https://github.com/man-group/pytest-plugins/tree/master/pytest-profiling) plugin.
 2. The [`py-spy`](https://github.com/benfred/py-spy) package.
 
-Using the former is as simple as adding the `--profile` (or `--profile-svg`) arguments to your `pytest` invocation.
+Using the former is as simple as adding the `--profile` (or `--profile-svg`) arguments to the `pytest` invocation.
 The latter requires instead invoking pytest from py-spy, like so:
 ```
 py-spy record -- pytest bench_foo.py
 ```
-Depending on exactly what information you need, your mileage may vary with each one.
-Developers should try both and see what works for their workflows.
-
-(advancedtopics)=
+Each tool has different strengths and provides somewhat different information.
+Developers should try both and see what works for a particular workflow.
+Developers are also encouraged to share useful alternatives that they discover.
 
 ## Advanced Topics
 
@@ -251,7 +286,7 @@ Under the hood, `benchmark_with_object` is made up of two critical pieces, fixtu
 
 #### Fixture unions
 
-Fixture unions are a feature of [`pytest_cases`](https://smarie.github.io/python-pytest-cases/).
+Fixture unions are a feature of `pytest_cases`.
 A fixture union is a fixture that, when used as a test function parameter,
 will trigger the test to run once for each fixture contained in the union.
 Since most cuDF benchmarks can be run with the same relatively small set of objects,
@@ -263,7 +298,7 @@ The resulting fixtures are unambiguously named according to the following scheme
 `{classname}_dtype_{dtype}[_nulls_{true|false}][[_cols_{num_cols}]_rows_{num_rows}]`.
 If a fixture name does not contain a particular component, it represents a union of all values of that component.
 As an example, consider the fixture `dataframe_dtype_int_rows_100`.
-This fixture is a union of both nullable and non-nullable `DataFrame`s of with different numbers of columns.
+This fixture is a union of both nullable and non-nullable `DataFrame`s with different numbers of columns.
 
 #### The `benchmark_with_object` decorator
 
@@ -284,5 +319,5 @@ is functionally equivalent to
 
 ```python
 def bench_foo(benchmark, dataframe_dtype_int_cols_6):
-    benchmark(dataframe.foo)
+    benchmark(dataframe_dtype_int_cols_6.foo)
 ```
