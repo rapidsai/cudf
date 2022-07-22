@@ -176,3 +176,12 @@ struct TypeList<Types<TYPES...>> {
   } catch (std::exception & e) {                                                              \
     FAIL() << "statement:" << #statement << std::endl << "reason: " << e.what() << std::endl; \
   }
+
+/**
+ * @brief test macro comparing for equality of \p lhs and and \p rhs for the first \p size elements.
+ */
+#define CUDF_TEST_EXPECT_VECTOR_EQUAL(lhs, rhs, size)          \
+  do {                                                         \
+    for (decltype(size) i = 0; i < size; i++)                  \
+      EXPECT_EQ(lhs[i], rhs[i]) << "Mismatch at index #" << i; \
+  } while (0)

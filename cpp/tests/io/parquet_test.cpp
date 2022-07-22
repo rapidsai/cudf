@@ -229,6 +229,19 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
   return cp.read(file_meta_data);
 }
 
+// parse the statistics_blob on chunk and return as a Statistics struct.
+// throws cudf::logic_error if the chunk statistics_blob is invalid.
+cudf_io::parquet::Statistics parse_statistics(const cudf_io::parquet::ColumnChunk& chunk)
+{
+  auto& stats_blob = chunk.meta_data.statistics_blob;
+  CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
+
+  cudf_io::parquet::Statistics stats;
+  cudf_io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
+  CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
+  return stats;
+}
+
 // Base test fixture for tests
 struct ParquetWriterTest : public cudf::test::BaseFixture {
 };
@@ -3400,6 +3413,40 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   CUDF_EXPECTS(cp.read(&ph), "Cannot read page header");
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
+}
+
+TEST_F(ParquetWriterTest, Decimal128Stats)
+{
+  // check that decimal128 min and max statistics are written in network byte order
+  // this is negative, so should be the min
+  std::vector<uint8_t> expected_min{
+    0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  std::vector<uint8_t> expected_max{
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6};
+
+  __int128_t val0 = 0xa1b2c3d4e5f6ULL;
+  __int128_t val1 = val0 << 80;
+  column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0}),
+                                            numeric::decimal128(val1, numeric::scale_type{0})}};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+
+  auto const stats = parse_statistics(fmd.row_groups[0].columns[0]);
+
+  EXPECT_EQ(expected_min, stats.min_value);
+  EXPECT_EQ(expected_max, stats.max_value);
 }
 
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
