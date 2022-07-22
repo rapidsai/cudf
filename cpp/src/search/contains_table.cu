@@ -46,21 +46,27 @@ using static_map = cuco::static_map<lhs_index_type,
                                     rmm::mr::stream_allocator_adaptor<default_allocator<char>>>;
 
 /**
+ * @brief Check if the given type `T` is a strong index type (i.e., `lhs_index_type` or
+ * `rhs_index_type`).
+ */
+template <typename T>
+static constexpr auto is_strong_index_type()
+{
+  return std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>;
+}
+
+/**
  * @brief An adapter functor to support strong index types for row hasher that must be operating on
  * `cudf::size_type`.
  */
 template <typename Hasher>
 struct strong_index_hasher_adapter {
-  strong_index_hasher_adapter(Hasher const& hasher) : _hasher{hasher} {}
-
-  template <typename T,
-            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>)>
+  template <typename T, CUDF_ENABLE_IF(is_strong_index_type<T>)>
   __device__ constexpr auto operator()(T const idx) const noexcept
   {
     return _hasher(static_cast<size_type>(idx));
   }
 
- private:
   Hasher const _hasher;
 };
 
@@ -72,13 +78,9 @@ template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
 
-  template <typename T>
-  static constexpr auto is_strong_type()
-  {
-    return std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>;
-  }
-
-  template <typename T, typename U, CUDF_ENABLE_IF(is_strong_type<T>() && is_strong_type<U>())>
+  template <typename T,
+            typename U,
+            CUDF_ENABLE_IF(is_strong_index_type<T>() && is_strong_index_type<U>())>
   __device__ constexpr auto operator()(T const lhs_index, U const rhs_index) const noexcept
   {
     auto const lhs = static_cast<size_type>(lhs_index);
