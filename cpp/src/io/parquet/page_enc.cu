@@ -1321,8 +1321,11 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
                d_char_ptr);
 }
 
-__device__ void get_extremum(
-  const statistics_val* stats_val, uint8_t dtype, void* scratch, const void** val, uint32_t* len)
+__device__ void get_extremum(const statistics_val* stats_val,
+                             statistics_dtype dtype,
+                             void* scratch,
+                             const void** val,
+                             uint32_t* len)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1361,7 +1364,7 @@ __device__ void get_extremum(
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
-                                     uint8_t dtype,
+                                     statistics_dtype dtype,
                                      void* scratch)
 {
   uint8_t* end;
