@@ -72,26 +72,26 @@ template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
 
-  template <typename T,
-            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>)>
-  __device__ constexpr auto operator()(T const lhs_index, T const rhs_index) const noexcept
+  template <typename T>
+  static constexpr auto is_strong_type()
   {
-    return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+    return std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>;
   }
 
-  __device__ constexpr auto operator()(lhs_index_type const lhs_index,
-                                       rhs_index_type const rhs_index) const noexcept
+  template <typename T, typename U, CUDF_ENABLE_IF(is_strong_type<T>() && is_strong_type<U>())>
+  __device__ constexpr auto operator()(T const lhs_index, U const rhs_index) const noexcept
   {
-    return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
-  }
+    auto const lhs = static_cast<size_type>(lhs_index);
+    auto const rhs = static_cast<size_type>(rhs_index);
 
-  // This overload enforces symmetry for the two table comparator that doesn't support strong index
-  // types. When the indices are provided in wrong order, this overload switches them back to the
-  // right one.
-  __device__ constexpr auto operator()(rhs_index_type const rhs_index,
-                                       lhs_index_type const lhs_index) const noexcept
-  {
-    return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
+    if constexpr (std::is_same_v<T, U> || std::is_same_v<T, lhs_index_type>) {
+      return _comparator(lhs, rhs);
+    } else {
+      // Here we have T == rhs_index_type.
+      // This is when the indices are provided in wrong order, so we need to switch them back
+      // to the right order to enforce symmetry of the comparator.
+      return _comparator(rhs, lhs);
+    }
   }
 
  private:
