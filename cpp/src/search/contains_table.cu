@@ -48,6 +48,8 @@ using static_map = cuco::static_map<lhs_index_type,
 /**
  * @brief Check if the given type `T` is a strong index type (i.e., `lhs_index_type` or
  * `rhs_index_type`).
+ *
+ * @return A boolean value indicating if `T` is a strong index type
  */
 template <typename T>
 constexpr auto is_strong_index_type()
