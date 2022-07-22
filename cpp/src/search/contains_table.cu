@@ -160,12 +160,12 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-rmm::device_uvector<bool> contains_with_lists(table_view const& haystack,
-                                              table_view const& needles,
-                                              null_equality compare_nulls,
-                                              nan_equality compare_nans,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack,
+                                                      table_view const& needles,
+                                                      null_equality compare_nulls,
+                                                      nan_equality compare_nans,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
 {
   auto map =
     static_map(compute_hash_table_size(haystack.num_rows()),
@@ -270,11 +270,11 @@ rmm::device_uvector<bool> contains_with_lists(table_view const& haystack,
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-rmm::device_uvector<bool> contains_without_lists(table_view const& haystack,
-                                                 table_view const& needles,
-                                                 null_equality compare_nulls,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& haystack,
+                                                         table_view const& needles,
+                                                         null_equality compare_nulls,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::mr::device_memory_resource* mr)
 {
   auto map =
     static_map(compute_hash_table_size(haystack.num_rows()),
@@ -383,13 +383,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     //  - The input has lists column, or
     //  - Floating-point NaNs are compared as unequal.
     // Inputs with these conditions are supported only by this code path.
-    return contains_with_lists(haystack, needles, compare_nulls, compare_nans, stream, mr);
+    return contains_with_lists_or_nans(haystack, needles, compare_nulls, compare_nans, stream, mr);
   }
 
   // If the input tables don't have lists column and NaNs are compared equal, we rely on the classic
   // code path that flattens the input tables for row comparisons. This way was know to have
   // better performance.
-  return contains_without_lists(haystack, needles, compare_nulls, stream, mr);
+  return contains_without_lists_or_nans(haystack, needles, compare_nulls, stream, mr);
 
   // Note: We have to keep separate code paths because unifying them will cause performance
   // regression for the input having no nested lists.
