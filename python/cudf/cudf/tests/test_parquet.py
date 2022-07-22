@@ -618,6 +618,12 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
     assert_eq(ref_df, gdf)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
+@pytest.mark.filterwarnings(
+    "ignore:num_rows is deprecated and will be removed."
+)
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     if len(pdf) > 100:
@@ -702,6 +708,12 @@ def test_parquet_reader_invalids(tmpdir):
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
+@pytest.mark.filterwarnings(
+    "ignore:num_rows is deprecated and will be removed."
+)
 def test_parquet_chunked_skiprows(tmpdir):
     processed = 0
     batch = 10000
@@ -1120,6 +1132,9 @@ def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
 @pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 10
@@ -1142,6 +1157,12 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
         assert pa.Table.from_pandas(expect).equals(got.to_arrow())
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
+@pytest.mark.filterwarnings(
+    "ignore:num_rows is deprecated and will be removed."
+)
 @pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 20

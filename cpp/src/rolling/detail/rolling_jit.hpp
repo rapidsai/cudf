@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef ROLLING_JIT_DETAIL_HPP
-#define ROLLING_JIT_DETAIL_HPP
+#pragma once
 
 #include <cudf/types.hpp>
 
@@ -60,5 +59,3 @@ struct following_window_wrapper {
 }  // namespace detail
 
 }  // namespace cudf
-
-#endif

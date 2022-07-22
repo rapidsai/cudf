@@ -613,6 +613,22 @@ class Frame(BinaryOperand, Scannable):
         3    <NA>
         4    <NA>
         dtype: int64
+
+        .. pandas-compat::
+            Note that ``where`` treats missing values as falsy,
+            in parallel with pandas treatment of nullable data:
+
+            >>> gsr = cudf.Series([1, 2, 3])
+            >>> gsr.where([True, False, cudf.NA])
+            0       1
+            1    <NA>
+            2    <NA>
+            dtype: int64
+            >>> gsr.where([True, False, False])
+            0       1
+            1    <NA>
+            2    <NA>
+            dtype: int64
         """
         raise NotImplementedError
 

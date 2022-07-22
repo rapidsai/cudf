@@ -28,7 +28,7 @@
 #include <cudf/rolling.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/rolling_detail.hpp>
+#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>

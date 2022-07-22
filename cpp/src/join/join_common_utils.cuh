@@ -42,25 +42,28 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
 }
 
 /**
- * @brief Device functor to create a pair of hash value and index for a given row.
+ * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
+ *
+ * @tparam T Type of row index, must be convertible to `size_type`.
+ * @tparam Hasher The type of internal hasher to compute row hash.
  */
+template <typename Hasher, typename T = size_type>
 class make_pair_function {
  public:
-  CUDF_HOST_DEVICE make_pair_function(row_hash const& hash,
-                                      hash_value_type const empty_key_sentinel)
+  CUDF_HOST_DEVICE make_pair_function(Hasher const& hash, hash_value_type const empty_key_sentinel)
     : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
   {
   }
 
-  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  __device__ __forceinline__ auto operator()(size_type i) const noexcept
   {
     // Compute the hash value of row `i`
     auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
-    return cuco::make_pair(row_hash_value, i);
+    return cuco::make_pair(row_hash_value, T{i});
   }
 
  private:
-  row_hash _hash;
+  Hasher _hash;
   hash_value_type const _empty_key_sentinel;
 };
 
@@ -93,7 +96,10 @@ class row_is_valid {
  * probe_row_hash == build_row_hash) and then using a row_equality_comparator
  * to compare the contents of the row indices that are stored as the payload in
  * the hash map.
+ *
+ * @tparam Comparator The row comparator type to perform row equality comparison from row indices.
  */
+template <typename Comparator = row_equality>
 class pair_equality {
  public:
   pair_equality(table_device_view lhs,
@@ -104,14 +110,16 @@ class pair_equality {
   {
   }
 
-  __device__ __forceinline__ bool operator()(const pair_type& lhs,
-                                             const pair_type& rhs) const noexcept
+  pair_equality(Comparator const d_eqcomp) : _check_row_equality{std::move(d_eqcomp)} {}
+
+  template <typename LhsPair, typename RhsPair>
+  __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
     return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
   }
 
  private:
-  row_equality _check_row_equality;
+  Comparator _check_row_equality;
 };
 
 /**
