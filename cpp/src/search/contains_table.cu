@@ -31,6 +31,8 @@
 
 #include <cuco/static_map.cuh>
 
+#include <type_traits>
+
 namespace cudf::detail {
 
 namespace {
@@ -51,14 +53,14 @@ template <typename Hasher>
 struct strong_index_hasher_adapter {
   strong_index_hasher_adapter(Hasher const& hasher) : _hasher{hasher} {}
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<std::underlying_type_t<T>, size_type>)>
   __device__ inline auto operator()(T const idx) const noexcept
   {
     return _hasher(static_cast<size_type>(idx));
   }
 
  private:
-  Hasher _hasher;
+  Hasher const _hasher;
 };
 
 /**
@@ -69,7 +71,7 @@ template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<std::underlying_type_t<T>, size_type>)>
   __device__ inline auto operator()(T const lhs_index, T const rhs_index) const noexcept
   {
     return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
