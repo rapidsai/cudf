@@ -341,16 +341,18 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 {
   // Checking for only one table is enough, because both tables will be checked to have the same
   // shape later during row comparisons.
-  if (has_nested_lists(haystack)) {
-    // If the input tables have lists column, they must be processed by a separate code path that
-    // supports lists.
+  if (has_nested_lists(haystack) || compare_nans == nan_equality::UNEQUAL) {
+    // We must call a separate code path that uses the new experimental row hasher and row
+    // comparator if:
+    //  - The input has lists column, or
+    //  - Floating-point NaNs are compared as unequal.
+    // This is because the input with these conditions are supported only by this code path.
     return contains_with_lists(haystack, needles, compare_nulls, compare_nans, stream, mr);
   }
 
-  // If the input tables don't have lists column, we rely on the classic code path that flattens the
-  // input tables for row comparisons. This solution was know to have better performance.
-  CUDF_EXPECTS(compare_nans == nan_equality::ALL_EQUAL,
-               "Comparing NaNs as unequal is only supported for input having nested lists column.");
+  // If the input tables don't have lists column and NaNs are compared equal, we rely on the classic
+  // code path that flattens the input tables for row comparisons. This way was know to have
+  // better performance.
   return contains_without_lists(haystack, needles, compare_nulls, stream, mr);
 }
 
