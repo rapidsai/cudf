@@ -138,8 +138,10 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
  * This will also map strings containing "NaN", "Inf", etc. to the appropriate float values.
  *
  * This function will also handle scientific notation format.
+ 
  * @tparam is_check_validity If true, the function return `error_result` if the input string is
  * not a valid floating point number
+ 
  * @param begin Beginning of the string to convert
  * @param end End of the string to convert
  * @param error_result Value to return if the input string is not a valid floating point number

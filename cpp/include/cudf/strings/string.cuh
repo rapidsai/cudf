@@ -141,6 +141,7 @@ constexpr inline bool is_float(const char* data,
   return result;
 }
 // @endcond
+
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to a float type.
@@ -157,7 +158,7 @@ constexpr inline bool is_float(const char* data,
  * The following strings are also allowed and will return true:
  *  "NaN", "NAN", "Inf", "INF", "INFINITY"
  *
- * @param d_str String to check.
+ * @param d_str String to check
  * @return true if string has valid float characters
  */
 inline __device__ bool is_float(string_view const& d_str)
