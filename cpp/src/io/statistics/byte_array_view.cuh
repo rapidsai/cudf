@@ -97,13 +97,19 @@ class byte_array_view {
     auto const* ptr1 = this->data();
     auto const* ptr2 = rhs.data();
     if ((ptr1 == ptr2) && (len1 == len2)) { return 0; }
+    // if I am max, I am greater than the argument
+    if (ptr1 == nullptr && len1 == std::numeric_limits<std::size_t>::max()) { return 1; }
+    // if the argument is max, it is greater than me
+    if (ptr2 == nullptr && len2 == std::numeric_limits<std::size_t>::max()) { return -1; }
     std::size_t idx = 0;
     for (; (idx < len1) && (idx < len2); ++idx) {
       if (ptr1[idx] != ptr2[idx]) {
         return static_cast<int32_t>(ptr1[idx]) - static_cast<int32_t>(ptr2[idx]);
       }
     }
+    // if the argument ran out of data, it is less than me
     if (idx < len1) return 1;
+    // if I ran out of data first, I am less than the argument
     if (idx < len2) return -1;
     return 0;
   }
@@ -127,6 +133,51 @@ class byte_array_view {
   [[nodiscard]] __device__ inline bool operator>(const byte_array_view& rhs) const
   {
     return compare(rhs) > 0;
+  }
+
+  /**
+   * @brief Returns true if this string is ordered before rhs.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if this string is ordered before rhs
+   */
+  [[nodiscard]] __device__ inline bool operator<=(const byte_array_view& rhs) const
+  {
+    return compare(rhs) <= 0;
+  }
+  /**
+   * @brief Returns true if rhs is ordered before this string.
+   *
+   * @param rhs Target string to compare with this string.
+   * @return true if rhs is ordered before this string
+   */
+  [[nodiscard]] __device__ inline bool operator>=(const byte_array_view& rhs) const
+  {
+    return compare(rhs) >= 0;
+  }
+
+  /**
+   * @brief Return minimum value associated with the string type
+   *
+   * This function is needed to be host callable because it is called by a host
+   * callable function DeviceMax::identity<byte_array_view>()
+   *
+   * @return An empty string
+   */
+  [[nodiscard]] __device__ inline static byte_array_view min() { return byte_array_view(); }
+
+  /**
+   * @brief Return maximum value associated with the string type
+   *
+   * This function is needed to be host callable because it is called by a host
+   * callable function DeviceMin::identity<byte_array_view>()
+   *
+   * @return A string value which represents the highest possible valid UTF-8 encoded
+   * character.
+   */
+  [[nodiscard]] __device__ inline static byte_array_view max()
+  {
+    return byte_array_view(nullptr, std::numeric_limits<std::size_t>::max());
   }
 
  private:
