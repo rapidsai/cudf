@@ -241,14 +241,13 @@ rmm::device_uvector<bool> contains_without_lists(table_view const& haystack,
   auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
 
   // Flatten the input tables.
-  //  auto const flatten_nullability       = has_any_nulls
-  //                                           ? structs::detail::column_nullability::FORCE
-  //                                           :
-  //                                           structs::detail::column_nullability::MATCH_INCOMING;
-  auto const haystack_flattened_tables = structs::detail::flatten_nested_columns(
-    haystack, {}, {}, structs::detail::column_nullability::FORCE);
-  auto const needles_flattened_tables = structs::detail::flatten_nested_columns(
-    needles, {}, {}, structs::detail::column_nullability::FORCE);
+  auto const flatten_nullability = has_any_nulls
+                                     ? structs::detail::column_nullability::FORCE
+                                     : structs::detail::column_nullability::MATCH_INCOMING;
+  auto const haystack_flattened_tables =
+    structs::detail::flatten_nested_columns(haystack, {}, {}, flatten_nullability);
+  auto const needles_flattened_tables =
+    structs::detail::flatten_nested_columns(needles, {}, {}, flatten_nullability);
   auto const haystack_flattened = haystack_flattened_tables.flattened_columns();
   auto const needles_flattened  = needles_flattened_tables.flattened_columns();
   auto const haystack_tdv_ptr   = table_device_view::create(haystack_flattened, stream);
