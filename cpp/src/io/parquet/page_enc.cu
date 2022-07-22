@@ -1675,7 +1675,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_int32(4,
                       calculate_boundary_order(&column_stats[first_data_page + pageidx],
                                                col_g.physical_type,
-                                               static_cast<ConvertedType>(col_g.converted_type),
+                                               col_g.converted_type,
                                                num_pages - first_data_page));
   // null_counts
   encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);

@@ -237,8 +237,8 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  Type physical_type;      //!< physical data type
-  uint8_t converted_type;  //!< logical data type
+  Type physical_type;            //!< physical data type
+  ConvertedType converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
   constexpr uint8_t num_def_level_bits() { return level_bits & 0xf; }
