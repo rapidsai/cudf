@@ -90,6 +90,22 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
   }
 }
 
+/**
+ * @brief Check if the input table has any lists column.
+ *
+ * @param input The input table
+ * @return A boolean indicating if the input table has any lists column
+ */
+inline bool has_nested_list(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.type().id() == type_id::LIST ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_list(table_view{{child_col}});
+           });
+  });
+}
+
 }  // namespace
 
 rmm::device_uvector<bool> contains(table_view const& haystack,
