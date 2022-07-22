@@ -88,13 +88,13 @@ parquet::Compression to_parquet_compression(compression_type compression)
  */
 size_t column_index_buffer_size(gpu::EncColumnChunk* ck)
 {
-  // encoding the column index requires:
-  //   each list requires 6 bytes of overhead
+  // encoding the column index for a given chunk requires:
+  //   each list (4 of them) requires 6 bytes of overhead
   //     (1 byte field header, 1 byte type, 4 bytes length)
   //   1 byte overhead for boundary_order
   //   1 byte overhead for termination
   //   sizeof(char) for boundary_order
-  //   sizeof(bool) * num_pages for bool list
+  //   sizeof(bool) * num_pages for null_pages
   //   (ck_max_stats_len + 4) * num_pages * 2 for min/max values
   //     (each binary requires 4 bytes length + ck_max_stats_len)
   //   sizeof(int64_t) * num_pages for null_counts
