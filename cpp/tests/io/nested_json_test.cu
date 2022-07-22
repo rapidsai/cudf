@@ -177,9 +177,8 @@ TEST_F(JsonTest, TokenStream)
   for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
     // Ensure the index the tokens are pointing to do match
     EXPECT_EQ(golden_token_stream[i].first, token_indices_gpu[i]) << "Mismatch at #" << i;
-    ;
+
     // Ensure the token category is correct
     EXPECT_EQ(golden_token_stream[i].second, tokens_gpu[i]) << "Mismatch at #" << i;
-    ;
   }
 }
