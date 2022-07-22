@@ -143,17 +143,16 @@ static void BM_join(state_type& state, Join JoinFunc)
     for (auto _ : state) {
       cuda_event_timer raii(state, true, cudf::default_stream_value);
 
-      auto result = JoinFunc(
-        probe_table, build_table, columns_to_join, columns_to_join, cudf::null_equality::UNEQUAL);
+      auto result = JoinFunc(probe_table.select(columns_to_join),
+                             build_table.select(columns_to_join),
+                             cudf::null_equality::UNEQUAL);
     }
   }
   if constexpr (std::is_same_v<state_type, nvbench::state> and (not is_conditional)) {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       rmm::cuda_stream_view stream_view{launch.get_stream()};
-      auto result = JoinFunc(probe_table,
-                             build_table,
-                             columns_to_join,
-                             columns_to_join,
+      auto result = JoinFunc(probe_table.select(columns_to_join),
+                             build_table.select(columns_to_join),
                              cudf::null_equality::UNEQUAL,
                              stream_view);
     });

@@ -289,6 +289,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testJoinStrings() {
+    try (ColumnVector in = ColumnVector.fromStrings("A", "B", "C", "D", null, "E");
+         ColumnVector expected = ColumnVector.fromStrings("A-B-C-D-null-E");
+         Scalar sep = Scalar.fromString("-");
+         Scalar narep = Scalar.fromString("null");
+         ColumnVector found = in.joinStrings(sep, narep)) {
+      assertColumnsAreEqual(expected, found);
+    }
+  }
+
+  @Test
   void testConcatTypeError() {
     try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4);
          ColumnVector v1 = ColumnVector.fromFloats(5.0f, 6.0f)) {
