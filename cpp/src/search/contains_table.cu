@@ -44,7 +44,8 @@ using static_map = cuco::static_map<lhs_index_type,
                                     rmm::mr::stream_allocator_adaptor<default_allocator<char>>>;
 
 /**
- * @brief An adapter functor to support strong index types for row hasher.
+ * @brief An adapter functor to support strong index types for row hasher that must be operating on
+ * `cudf::size_type`.
  */
 template <typename Hasher>
 struct strong_index_hasher_adapter {
@@ -61,8 +62,8 @@ struct strong_index_hasher_adapter {
 };
 
 /**
- * @brief An adapter functor to support weak index type (i.e., size_type) for table row comparator
- * when the input indices are strong types.
+ * @brief An adapter functor to support strong index type for table row comparator that must be
+ * operating on `cudf::size_type`.
  */
 template <typename Comparator>
 struct strong_index_comparator_adapter {
