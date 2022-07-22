@@ -196,9 +196,8 @@ std::unique_ptr<cudf::column> make_parquet_list_col(
 
 // given a datasource pointing to a parquet file, read the footer
 // of the file to populate the FileMetaData pointed to by file_meta_data.
-// returns true on success, false if the file metadata cannot be parsed.
-// throws cudf::logic_error if the file is invalid.
-bool read_footer(const std::unique_ptr<cudf::io::datasource>& source,
+// throws cudf::logic_error if the file or metadata is invalid.
+void read_footer(const std::unique_ptr<cudf::io::datasource>& source,
                  cudf::io::parquet::FileMetaData* file_meta_data)
 {
   constexpr auto header_len = sizeof(cudf::io::parquet::file_header_s);
@@ -226,7 +225,8 @@ bool read_footer(const std::unique_ptr<cudf::io::datasource>& source,
   cudf::io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
 
   // returns true on success
-  return cp.read(file_meta_data);
+  bool res = cp.read(file_meta_data);
+  CUDF_EXPECTS(res, "Cannot parse file metadata");
 }
 
 // read column index from datasource at location indicated by chunk,
@@ -241,7 +241,8 @@ cudf::io::parquet::ColumnIndex read_column_index(
   cudf::io::parquet::ColumnIndex colidx;
   const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
   cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
-  CUDF_EXPECTS(cp.read(&colidx), "Cannot parse column index");
+  bool res = cp.read(&colidx);
+  CUDF_EXPECTS(res, "Cannot parse column index");
   return colidx;
 }
 
@@ -257,7 +258,8 @@ cudf::io::parquet::OffsetIndex read_offset_index(
   cudf::io::parquet::OffsetIndex offidx;
   const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
   cudf::io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
-  CUDF_EXPECTS(cp.read(&offidx), "Cannot parse offset index");
+  bool res = cp.read(&offidx);
+  CUDF_EXPECTS(res, "Cannot parse offset index");
   return offidx;
 }
 
@@ -270,7 +272,8 @@ cudf::io::parquet::Statistics parse_statistics(const cudf::io::parquet::ColumnCh
 
   cudf::io::parquet::Statistics stats;
   cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
-  CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
+  bool res = cp.read(&stats);
+  CUDF_EXPECTS(res, "Cannot parse column statistics");
   return stats;
 }
 
@@ -286,7 +289,8 @@ cudf::io::parquet::PageHeader read_page_header(const std::unique_ptr<cudf::io::d
   cudf::io::parquet::PageHeader page_hdr;
   const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
   cudf::io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
-  CUDF_EXPECTS(cp.read(&page_hdr), "Cannot parse page header");
+  bool res = cp.read(&page_hdr);
+  CUDF_EXPECTS(res, "Cannot parse page header");
   return page_hdr;
 }
 
@@ -3456,7 +3460,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
   CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
   auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
@@ -3496,7 +3500,7 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   auto const stats = parse_statistics(fmd.row_groups[0].columns[0]);
 
@@ -3733,7 +3737,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
 
   auto const& columns = fmd.row_groups[0].columns;
@@ -3869,7 +3873,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
@@ -3975,7 +3979,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
@@ -4065,7 +4069,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
@@ -4149,7 +4153,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   // hard coded schema indices.
   // TODO find a way to do this without magic
