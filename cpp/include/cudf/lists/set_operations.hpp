@@ -44,7 +44,7 @@ namespace cudf::lists {
  * @code{.pseudo}
  * lhs    = { {0, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
  * rhs    = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
- * result = { true, false, null, false }
+ * result = { true, false, null, true }
  * @endcode
  *
  * @param lhs The input lists column for one side
@@ -58,7 +58,7 @@ namespace cudf::lists {
 std::unique_ptr<column> have_overlap(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
-  null_equality nulls_equal           = null_equality::UNEQUAL,
+  null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
