@@ -63,14 +63,13 @@ std::unique_ptr<column> have_overlap(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of sets containing list elements that are found on both sides of the given
- * columns.
+ * @brief Create a lists column of distinct elements common to two input lists columns.
  *
  * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
  * that each of its row `i` contains a list of distinct elements that can be found in both `lhs[i]`
  * and `rhs[i]`.
  *
- * The order of distinct elements in the output rows is undefined.
+ * The order of distinct elements in the output rows is unspecified.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -99,14 +98,13 @@ std::unique_ptr<column> intersect_distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of sets containing list elements that are found on either side of the
- * given columns.
+ @brief Create a lists column of distinct elements found in either of two input lists columns.
  *
  * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
  * that each of its row `i` contains a list of distinct elements that can be found in either
  * `lhs[i]` or `rhs[i]`.
  *
- * The order of distinct elements in the output rows is undefined.
+ * The order of distinct elements in the output rows is unspecified.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -135,14 +133,13 @@ std::unique_ptr<column> union_distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of sets containing list elements that are found only on the left side the
- * given columns.
+ * @brief Create a lists column of distinct elements found only in the left input column.
  *
  * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
  * that each of its row `i` contains a list of distinct elements that can be found in `lhs[i]` but
  * are not found in `rhs[i]`.
  *
- * The order of distinct elements in the output rows is undefined.
+ * The order of distinct elements in the output rows is unspecified.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -156,8 +153,8 @@ std::unique_ptr<column> union_distinct(
  * result = { {}, {1, 2, 3}, null, {4, 5} }
  * @endcode
  *
- * @param lhs The input lists column containing the searching elements
- * @param rhs The input lists column for checking element existence
+ * @param lhs The input lists column of elements that may be included
+ * @param rhs The input lists column of elements to exclude
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
