@@ -19,14 +19,17 @@
 
 #include <cub/cub.cuh>
 
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
+
 namespace cudf::io::fst::detail {
 
 /// Type used to enumerate (and index) into the states defined by a DFA
 using StateIndexT = uint32_t;
 
 /**
- * @brief Implements an associative composition operation for state transition vectors and
- * offset-to-overap vectors to be used with a prefix scan.
+ * @brief Implements an associative composition operation for state transition vectors to be used
+ * with a prefix scan.
  *
  * Read the following table as follows: c = op(l,r), where op is the composition operator.
  * For row 0: l maps 0 to 2. r maps 2 to 2. Hence, the result for 0 is 2.
@@ -483,11 +486,8 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
 
   static constexpr int32_t NUM_STATES = DfaT::MAX_NUM_STATES;
 
-  enum {
-    BLOCK_THREADS     = AgentDFAPolicy::BLOCK_THREADS,
-    ITEMS_PER_THREAD  = AgentDFAPolicy::ITEMS_PER_THREAD,
-    SYMBOLS_PER_BLOCK = AgentDfaSimT::SYMBOLS_PER_BLOCK
-  };
+  constexpr uint32_t BLOCK_THREADS     = AgentDFAPolicy::BLOCK_THREADS;
+  constexpr uint32_t SYMBOLS_PER_BLOCK = AgentDfaSimT::SYMBOLS_PER_BLOCK;
 
   // Shared memory required by the DFA simulation algorithm
   __shared__ typename AgentDfaSimT::TempStorage dfa_storage;
@@ -522,10 +522,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
     std::array<StateIndexT, NUM_STATES> state_vector;
 
     // Initialize the seed state transition vector with the identity vector
-#pragma unroll
-    for (int32_t i = 0; i < NUM_STATES; ++i) {
-      state_vector[i] = i;
-    }
+    thrust::sequence(thrust::seq, std::begin(state_vector), std::end(state_vector));
 
     // Compute the state transition vector
     agent_dfa.GetThreadStateTransitionVector<NUM_STATES>(symbol_matcher,

@@ -2981,3 +2981,82 @@ def test_binop_series_with_repeated_index():
     expected = psr1 - psr2
     got = gsr1 - gsr2
     utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_series():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_base = gs_base.to_pandas()
+    ps_exponent = gs_exponent.to_pandas()
+    expected = ps_base**ps_exponent
+    got = gs_base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_scalar():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = cudf.Scalar(1)
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent.value
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_int():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = 1
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_series():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base.value**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_scalar():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = cudf.Scalar(1)
+    expected = base.value**exponent.value
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_int():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = 1
+    expected = base.value**exponent
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_series():
+    # GH: #10178
+    base = 3
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+@pytest.mark.xfail(reason="Reverse binops fail for scalar. See GH: #11225.")
+def test_binop_integer_power_int_scalar():
+    # GH: #10178
+    base = 3
+    exponent = cudf.Scalar(1)
+    expected = base**exponent.value
+    got = base**exponent
+    utils.assert_eq(expected, got)

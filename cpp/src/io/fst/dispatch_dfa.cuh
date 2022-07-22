@@ -168,7 +168,7 @@ struct DispatchFSM : DeviceFSMPolicy {
     // Get PTX version
     int ptx_version;
     error = cub::PtxVersion(ptx_version);
-    if (error) return error;
+    if (error != cudaSuccess) return error;
 
     // Create dispatch functor
     DispatchFSM dispatch(d_temp_storage,
@@ -310,15 +310,15 @@ struct DispatchFSM : DeviceFSMPolicy {
     cudaError_t error = cudaSuccess;
 
     // Get SM count
-    int device_ordinal;
-    int sm_count;
+    int device_ordinal = -1;
+    int sm_count       = -1;
 
     // Get current device
     error = cudaGetDevice(&device_ordinal);
-    if (error)
+    if (error != cudaSuccess) return error;
 
-      error = cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device_ordinal);
-    if (error) return error;
+    error = cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device_ordinal);
+    if (error != cudaSuccess) return error;
 
     //------------------------------------------------------------------------------
     // DERIVED TYPEDEFS
@@ -375,23 +375,23 @@ struct DispatchFSM : DeviceFSMPolicy {
     allocation_sizes[MEM_SCAN]          = vector_scan_storage_bytes;
 
     // Bytes needed for tile status descriptors (fusing state-transition vector + DFA simulation)
-    if (SINGLE_PASS_STV) {
+    if constexpr (SINGLE_PASS_STV) {
       error = ScanTileStateT::AllocationSize(num_blocks, allocation_sizes[MEM_SINGLE_PASS_STV]);
-      if (error) return error;
+      if (error != cudaSuccess) return error;
     }
 
     // Bytes needed for tile status descriptors (DFA simulation pass for output size computation +
     // output-generating pass)
-    if (IS_FST) {
+    if constexpr (IS_FST) {
       error = FstScanTileStateT::AllocationSize(num_blocks, allocation_sizes[MEM_FST_OFFSET]);
-      if (error) return error;
+      if (error != cudaSuccess) return error;
     }
 
     // Alias the temporary allocations from the single storage blob (or compute the necessary size
     // of the blob)
     error =
       cub::AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
-    if (error) return error;
+    if (error != cudaSuccess) return error;
 
     // Return if the caller is simply requesting the size of the storage allocation
     if (d_temp_storage == NULL) return cudaSuccess;
@@ -404,11 +404,11 @@ struct DispatchFSM : DeviceFSMPolicy {
     // INITIALIZE SCAN TILE STATES COMPUTING TRANSDUCED OUTPUT OFFSETS
     //------------------------------------------------------------------------------
     FstScanTileStateT fst_offset_tile_state;
-    if (IS_FST) {
+    if constexpr (IS_FST) {
       // Construct the tile status (aliases memory internally et al.)
       error = fst_offset_tile_state.Init(
         num_blocks, allocations[MEM_FST_OFFSET], allocation_sizes[MEM_FST_OFFSET]);
-      if (error) return error;
+      if (error != cudaSuccess) return error;
       constexpr uint32_t FST_INIT_TPB = 256;
       uint32_t num_fst_init_blocks    = CUB_QUOTIENT_CEILING(num_blocks, FST_INIT_TPB);
       initialization_pass_kernel<<<num_fst_init_blocks, FST_INIT_TPB, 0, stream>>>(
@@ -423,7 +423,7 @@ struct DispatchFSM : DeviceFSMPolicy {
       // Construct the tile status (aliases memory internally et al.)
       error = stv_tile_state.Init(
         num_blocks, allocations[MEM_SINGLE_PASS_STV], allocation_sizes[MEM_SINGLE_PASS_STV]);
-      if (error) return error;
+      if (error != cudaSuccess) return error;
       constexpr uint32_t STV_INIT_TPB = 256;
       uint32_t num_stv_init_blocks    = CUB_QUOTIENT_CEILING(num_blocks, STV_INIT_TPB);
       initialization_pass_kernel<<<num_stv_init_blocks, STV_INIT_TPB, 0, stream>>>(stv_tile_state,

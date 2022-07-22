@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
