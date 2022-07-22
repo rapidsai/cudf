@@ -152,6 +152,7 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
     stream);
 
+  // A stable algorithm is required to ensure that list labels remain contiguous.
   auto out_table = cudf::detail::stable_distinct(intersect_table->view(),
                                                  {0, 1},  // indices of key columns
                                                  duplicate_keep_option::KEEP_ANY,
@@ -186,7 +187,7 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
 {
   check_compatibility(lhs, rhs);
 
-  // Algorithm: `return distinct(concatenate(lhs, rhs))`.
+  // Algorithm: `return distinct(concatenate_rows(lhs, rhs))`.
 
   auto const union_col = lists::detail::concatenate_rows(
     table_view{{lhs.parent(), rhs.parent()}}, concatenate_null_policy::NULLIFY_OUTPUT_ROW, stream);
@@ -227,6 +228,7 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return !contained[idx]; },
     stream);
 
+  // A stable algorithm is required to ensure that list labels remain contiguous.
   auto out_table = cudf::detail::stable_distinct(difference_table->view(),
                                                  {0, 1},  // indices of key columns
                                                  duplicate_keep_option::KEEP_ANY,
