@@ -33,6 +33,15 @@ namespace {
 /**
  * @brief Computes the hash value of a row in the given table.
  *
+ * This functor uses Spark conventions for MurmurHash3_32 hashing, which
+ * differs from the standard MurmurHash3_32 implementation. These differences
+ * include:
+ * - specialized tail processing in the hash functor
+ * - specializations for decimal types
+ * - special behavior for serially using the output hash as an input seed for
+ *   the next item
+ * - ignorance of null values: [1], [1, null], and [null, 1] have the same hash
+ *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <typename Nullate>
