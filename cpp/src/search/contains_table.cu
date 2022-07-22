@@ -82,8 +82,8 @@ struct strong_index_comparator_adapter {
   }
 
   // This overload enforces symmetry for the two table comparator that doesn't support strong index
-  // types. When the order of invoke indices is wrongly provided, this overload switches it to the
-  // right order.
+  // types. When the indices are provided in wrong order, this overload switches them back to the
+  // right one.
   __device__ inline auto operator()(rhs_index_type const rhs_index,
                                     lhs_index_type const lhs_index) const noexcept
   {
@@ -367,6 +367,12 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   // code path that flattens the input tables for row comparisons. This way was know to have
   // better performance.
   return contains_without_lists(haystack, needles, compare_nulls, stream, mr);
+
+  // Note: We have to keep separate code paths because unifying them will cause performance
+  // regression for the input having no nested lists.
+  //
+  // TODO: We should unify these code paths in the future when performance regression is no longer
+  // happening.
 }
 
 }  // namespace cudf::detail
