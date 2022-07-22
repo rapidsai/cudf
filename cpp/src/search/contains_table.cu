@@ -53,8 +53,9 @@ template <typename Hasher>
 struct strong_index_hasher_adapter {
   strong_index_hasher_adapter(Hasher const& hasher) : _hasher{hasher} {}
 
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<std::underlying_type_t<T>, size_type>)>
-  __device__ inline auto operator()(T const idx) const noexcept
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>)>
+  __device__ constexpr auto operator()(T const idx) const noexcept
   {
     return _hasher(static_cast<size_type>(idx));
   }
@@ -71,14 +72,15 @@ template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
 
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<std::underlying_type_t<T>, size_type>)>
-  __device__ inline auto operator()(T const lhs_index, T const rhs_index) const noexcept
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>)>
+  __device__ constexpr auto operator()(T const lhs_index, T const rhs_index) const noexcept
   {
     return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
   }
 
-  __device__ inline auto operator()(lhs_index_type const lhs_index,
-                                    rhs_index_type const rhs_index) const noexcept
+  __device__ constexpr auto operator()(lhs_index_type const lhs_index,
+                                       rhs_index_type const rhs_index) const noexcept
   {
     return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
   }
@@ -86,8 +88,8 @@ struct strong_index_comparator_adapter {
   // This overload enforces symmetry for the two table comparator that doesn't support strong index
   // types. When the indices are provided in wrong order, this overload switches them back to the
   // right one.
-  __device__ inline auto operator()(rhs_index_type const rhs_index,
-                                    lhs_index_type const lhs_index) const noexcept
+  __device__ constexpr auto operator()(rhs_index_type const rhs_index,
+                                       lhs_index_type const lhs_index) const noexcept
   {
     return _comparator(static_cast<size_type>(lhs_index), static_cast<size_type>(rhs_index));
   }
@@ -145,21 +147,19 @@ void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
 }
 
 /**
- * @brief Check if the input table has any lists column.
+ * @brief Check if rows in the given `needles` table exist in the `haystack` table.
  *
- * @param input The input table
- * @return A boolean indicating if the input table has any lists column
+ * This function is designed specifically to work with input tables having lists column(s) at
+ * arbitrarily nested levels.
+ *
+ * @param haystack The table containing the search space
+ * @param needles A table of rows whose existence to check in the search space
+ * @param compare_nulls Control whether nulls should be compared as equal or not
+ * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-inline bool has_nested_lists(table_view const& input)
-{
-  return std::any_of(input.begin(), input.end(), [](auto const& col) {
-    return col.type().id() == type_id::LIST ||
-           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
-             return has_nested_lists(table_view{{child_col}});
-           });
-  });
-}
-
 rmm::device_uvector<bool> contains_with_lists(table_view const& haystack,
                                               table_view const& needles,
                                               null_equality compare_nulls,
@@ -257,6 +257,19 @@ rmm::device_uvector<bool> contains_with_lists(table_view const& haystack,
   return contained;
 }
 
+/**
+ * @brief Check if rows in the given `needles` table exist in the `haystack` table.
+ *
+ * This function is designed specifically to work with input tables having only columns of simple
+ * types, or structs columns of simple types.
+ *
+ * @param haystack The table containing the search space
+ * @param needles A table of rows whose existence to check in the search space
+ * @param compare_nulls Control whether nulls should be compared as equal or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
+ */
 rmm::device_uvector<bool> contains_without_lists(table_view const& haystack,
                                                  table_view const& needles,
                                                  null_equality compare_nulls,
@@ -360,12 +373,16 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 {
   // Checking for only one table is enough, because both tables will be checked to have the same
   // shape later during row comparisons.
-  if (has_nested_lists(haystack) || compare_nans == nan_equality::UNEQUAL) {
+  auto const has_lists = std::any_of(haystack.begin(), haystack.end(), [](auto const& col) {
+    return cudf::structs::detail::is_or_has_nested_lists(col);
+  });
+
+  if (has_lists || compare_nans == nan_equality::UNEQUAL) {
     // We must call a separate code path that uses the new experimental row hasher and row
     // comparator if:
     //  - The input has lists column, or
     //  - Floating-point NaNs are compared as unequal.
-    // This is because the input with these conditions are supported only by this code path.
+    // Inputs with these conditions are supported only by this code path.
     return contains_with_lists(haystack, needles, compare_nulls, compare_nans, stream, mr);
   }
 
