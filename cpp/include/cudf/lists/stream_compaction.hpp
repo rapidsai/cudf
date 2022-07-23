@@ -87,6 +87,6 @@ std::unique_ptr<column> distinct(
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/** @} */ // end of group
+/** @} */  // end of group
 
 }  // namespace cudf::lists
