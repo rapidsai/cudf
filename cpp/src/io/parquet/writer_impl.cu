@@ -307,7 +307,7 @@ struct leaf_schema_fn {
     col_schema.type = Type::BYTE_ARRAY;
     if (col_meta.is_enabled_output_as_binary()) {
       col_schema.converted_type = ConvertedType::UNKNOWN;
-      col_schema.stats_dtype    = statistics_dtype::dtype_string;
+      col_schema.stats_dtype    = statistics_dtype::dtype_byte_array;
     } else {
       col_schema.converted_type = ConvertedType::UTF8;
       col_schema.stats_dtype    = statistics_dtype::dtype_string;
@@ -819,8 +819,9 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.rep_values    = _rep_level.data();
     desc.def_values    = _def_level.data();
   }
-  desc.num_rows      = cudf_col.size();
-  desc.physical_type = physical_type();
+  desc.num_rows             = cudf_col.size();
+  desc.physical_type        = physical_type();
+  desc.output_as_byte_array = schema_node.output_as_byte_array;
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());

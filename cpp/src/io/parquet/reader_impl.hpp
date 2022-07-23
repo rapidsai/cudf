@@ -196,8 +196,8 @@ class reader::impl {
   // _output_columns associated schema indices
   std::vector<int> _output_column_schemas;
 
-  bool _strings_to_categorical  = false;
-  bool _force_binary_as_strings = false;
+  bool _strings_to_categorical = false;
+  std::optional<std::vector<bool>> _force_binary_columns_as_strings;
   data_type _timestamp_type{type_id::EMPTY};
 };
 

@@ -696,7 +696,7 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings(false);
+      .convert_binary_to_strings({false, false, false, false, false, false, false, false});
   auto result = cudf_io::read_parquet(in_opts);
 
   auto original_cols = write_tbl->release();
@@ -3556,14 +3556,14 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings(true);
+      .convert_binary_to_strings({true, true, true, true, true, true, true, true});
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 
   cudf_io::parquet_reader_options binary_in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings(false);
+      .convert_binary_to_strings({false, false, false, false, false, false, false, false});
   result = cudf_io::read_parquet(binary_in_opts);
 
   auto original_cols = expected->release();
