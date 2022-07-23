@@ -40,7 +40,7 @@ using PdaInputSymbolGroupIdT = char;
 /// Type used to represent a symbol group id of the stack alphabet in the pushdown automaton
 using PdaStackSymbolGroupIdT = char;
 
-/// Type used to represent a (input-symbol, stack-symbole)-tuple in stack-symbole-major order
+/// Type used to represent a (input-symbol, stack-symbol)-tuple in stack-symbol-major order
 using PdaSymbolGroupIdT = char;
 
 /// Type being emitted by the pushdown automaton transducer
@@ -52,26 +52,26 @@ using PdaTokenT = char;
 enum token_t : PdaTokenT {
   /// Beginning-of-struct token (on encounter of semantic '{')
   StructBegin,
-  /// Beginning-of-list token (on encounter of semantic '[')
-  ListBegin,
-  /// Beginning-of-error token (on first encounter of a parsing error)
-  ErrorBegin,
-  /// Beginning-of-string-value token (on encounter of the string's first quote)
-  StringBegin,
-  /// Beginning-of-value token (first character of literal or numeric)
-  ValueBegin,
-  /// End-of-list token (on encounter of semantic ']')
-  ListEnd,
   /// End-of-struct token (on encounter of semantic '}')
   StructEnd,
+  /// Beginning-of-list token (on encounter of semantic '[')
+  ListBegin,
+  /// End-of-list token (on encounter of semantic ']')
+  ListEnd,
   /// Beginning-of-field-name token (on encounter of first quote)
   FieldNameBegin,
-  /// Post-value token (first character after a literal or numeric string)
-  ValueEnd,
-  /// End-of-string token (on encounter of a string's second quote)
-  StringEnd,
   /// End-of-field-name token (on encounter of a field name's second quote)
   FieldNameEnd,
+  /// Beginning-of-string-value token (on encounter of the string's first quote)
+  StringBegin,
+  /// End-of-string token (on encounter of a string's second quote)
+  StringEnd,
+  /// Beginning-of-value token (first character of literal or numeric)
+  ValueBegin,
+  /// Post-value token (first character after a literal or numeric string)
+  ValueEnd,
+  /// Beginning-of-error token (on first encounter of a parsing error)
+  ErrorBegin,
   /// Total number of tokens
   NUM_TOKENS
 };
@@ -84,7 +84,10 @@ namespace detail {
  * bracket would actually pop a the corresponding opening brace.
  *
  * @param[in] d_json_in The string of input characters
- * @param[out] d_top_of_stack
+ * @param[out] d_top_of_stack Will be populated with what-is-on-top-of-the-stack for any given input
+ * character of \p d_json_in, where a '{' represents that the corresponding input character is
+ * within the context of a struct, a '[' represents that it is within the context of an array, and a
+ * '_' symbol that it is at the root of the JSON.
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
 void get_stack_context(device_span<SymbolT const> d_json_in,
