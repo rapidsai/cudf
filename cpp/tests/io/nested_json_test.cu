@@ -20,6 +20,9 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
 namespace nested_json = cudf::io::json::gpu;
 
 // Base test fixture for tests
@@ -33,8 +36,7 @@ TEST_F(JsonTest, StackContext)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   // Test input
@@ -57,14 +59,17 @@ TEST_F(JsonTest, StackContext)
   rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
   hostdevice_vector<StackSymbolT> stack_context(input.size(), stream_view);
 
-  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
+  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
+                                        input.data(),
+                                        input.size() * sizeof(SymbolT),
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
 
   // Run algorithm
-  cudf::io::json::gpu::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
+  nested_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
 
   // Copy back the results
-  stack_context.device_to_host(stream);
+  stack_context.device_to_host(stream_view);
 
   // Make sure we copied back the stack context
   stream_view.synchronize();
@@ -92,15 +97,14 @@ TEST_F(JsonTest, StackContext)
 
 TEST_F(JsonTest, TokenStream)
 {
-  using cudf::io::json::gpu::PdaTokenT;
-  using cudf::io::json::gpu::SymbolOffsetT;
-  using cudf::io::json::gpu::SymbolT;
+  using nested_json::PdaTokenT;
+  using nested_json::SymbolOffsetT;
+  using nested_json::SymbolT;
 
   constexpr std::size_t single_item = 1;
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   // Test input
@@ -122,24 +126,27 @@ TEST_F(JsonTest, TokenStream)
   // Prepare input & output buffers
   rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
 
-  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
+  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
+                                        input.data(),
+                                        input.size() * sizeof(SymbolT),
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
 
-  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
+  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream_view};
+  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream_view};
+  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream_view};
 
   // Parse the JSON and get the token stream
-  cudf::io::json::gpu::detail::get_token_stream(d_input,
-                                                tokens_gpu.device_ptr(),
-                                                token_indices_gpu.device_ptr(),
-                                                num_tokens_out.device_ptr(),
-                                                stream);
+  nested_json::detail::get_token_stream(d_input,
+                                        tokens_gpu.device_ptr(),
+                                        token_indices_gpu.device_ptr(),
+                                        num_tokens_out.device_ptr(),
+                                        stream_view);
 
   // Copy back the number of tokens that were written
-  num_tokens_out.device_to_host(stream);
-  tokens_gpu.device_to_host(stream);
-  token_indices_gpu.device_to_host(stream);
+  num_tokens_out.device_to_host(stream_view);
+  tokens_gpu.device_to_host(stream_view);
+  token_indices_gpu.device_to_host(stream_view);
 
   // Make sure we copied back all relevant data
   stream_view.synchronize();
