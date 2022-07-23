@@ -168,12 +168,8 @@ __global__ void __launch_bounds__(block_size)
       len = dtype_len;
       if (physical_type != BOOLEAN) {
         if (physical_type == BYTE_ARRAY) {
-          switch (leaf_type) {
-            case type_id::STRING: {
-              auto str = s->col.leaf_column->element<string_view>(val_idx);
-              len += str.size_bytes();
-            } break;
-          }
+          auto str = s->col.leaf_column->element<string_view>(val_idx);
+          len += str.size_bytes();
         }
       }
     } else {
@@ -1277,18 +1273,18 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   uint8_t *end, dtype_len;
   switch (dtype) {
     case dtype_bool: dtype_len = 1; break;
-    case dtype_int8: [[fallthrough]];
-    case dtype_int16: [[fallthrough]];
-    case dtype_int32: [[fallthrough]];
-    case dtype_date32: [[fallthrough]];
+    case dtype_int8:
+    case dtype_int16:
+    case dtype_int32:
+    case dtype_date32:
     case dtype_float32: dtype_len = 4; break;
-    case dtype_int64: [[fallthrough]];
-    case dtype_timestamp64: [[fallthrough]];
-    case dtype_float64: [[fallthrough]];
+    case dtype_int64:
+    case dtype_timestamp64:
+    case dtype_float64:
     case dtype_decimal64: dtype_len = 8; break;
     case dtype_decimal128: dtype_len = 16; break;
-    case dtype_string: [[fallthrough]];
-    case dtype_byte_array: [[fallthrough]];
+    case dtype_string:
+    case dtype_byte_array:
     default: dtype_len = 0; break;
   }
   header_encoder encoder(start);

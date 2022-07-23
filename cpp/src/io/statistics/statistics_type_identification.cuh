@@ -253,9 +253,9 @@ __inline__ __device__ constexpr T maximum_identity()
   if constexpr (std::is_same_v<T, string_view>) {
     return string_view::min();
   } else if constexpr (std::is_same_v<T, byte_array_view>) {
-    return cuda::std::numeric_limits<byte_array_view::element_type>::min();
+    return byte_array_view::min();
   }
-  return byte_array_view::min();
+  return cuda::std::numeric_limits<T>::min();
 }
 
 /**
