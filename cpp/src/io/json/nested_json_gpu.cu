@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "nested_json.h"
+#include "nested_json.hpp"
 
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>

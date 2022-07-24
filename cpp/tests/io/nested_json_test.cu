@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/json/nested_json.h>
+#include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf_test/base_fixture.hpp>
