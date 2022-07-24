@@ -20,7 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::io::json::gpu {
+namespace cudf::io::json {
 
 /// Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
@@ -112,4 +112,4 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       rmm::cuda_stream_view stream);
 }  // namespace detail
 
-}  // namespace cudf::io::json::gpu
+}  // namespace cudf::io::json

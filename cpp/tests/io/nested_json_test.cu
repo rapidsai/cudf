@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-namespace nested_json = cudf::io::json::gpu;
+namespace nested_json = cudf::io::json;
 
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {

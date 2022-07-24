@@ -25,7 +25,7 @@
 
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::io::json::gpu {
+namespace cudf::io::json {
 
 //------------------------------------------------------------------------------
 // JSON-TO-STACK-OP DFA
@@ -635,4 +635,4 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
 
 }  // namespace detail
 
-}  // namespace cudf::io::json::gpu
+}  // namespace cudf::io::json
