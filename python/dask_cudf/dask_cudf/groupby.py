@@ -22,8 +22,8 @@ import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 CUMULATIVE_AGGS = (
-    'cumsum',
-    'cumcount',
+    "cumsum",
+    "cumcount",
 )
 
 AGGS = (

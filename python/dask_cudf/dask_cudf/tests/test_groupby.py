@@ -11,7 +11,8 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import AGGS, _aggs_supported, CUMULATIVE_AGGS
+from dask_cudf.groupby import AGGS, CUMULATIVE_AGGS, _aggs_supported
+
 
 @pytest.fixture
 def pdf():
@@ -57,6 +58,7 @@ def test_groupby_basic(series, aggregation, pdf):
     else:
         dd.assert_eq(a, b)
 
+
 @pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
 def test_groupby_cumulative(aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -67,7 +69,6 @@ def test_groupby_cumulative(aggregation, pdf):
     b = getattr(ddf_grouped, aggregation)().compute()
 
     dd.assert_eq(a, b)
-
 
 
 @pytest.mark.parametrize(
