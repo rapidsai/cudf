@@ -39,6 +39,7 @@ def test_groupby_basic(series, aggregation, pdf):
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
 
     if series:
+        breakpoint()
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
@@ -59,11 +60,18 @@ def test_groupby_basic(series, aggregation, pdf):
         dd.assert_eq(a, b)
 
 
+@pytest.mark.parametrize("series", [True, False])
 @pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
-def test_groupby_cumulative(aggregation, pdf):
+def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
     gdf_grouped = gdf.groupby("xx")
-    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
+    ddf_grouped = ddf.groupby("xx")
+
+    if series:
+        gdf_grouped = gdf_grouped.xx
+        ddf_grouped = ddf_grouped.xx
 
     a = getattr(gdf_grouped, aggregation)()
     b = getattr(ddf_grouped, aggregation)().compute()
