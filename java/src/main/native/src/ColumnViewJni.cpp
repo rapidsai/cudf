@@ -2025,6 +2025,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_capitalize(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_joinStrings(JNIEnv *env, jobject j_object,
+                                                                   jlong strs_handle,
+                                                                   jlong separator_handle,
+                                                                   jlong narep_handle) {
+
+  JNI_NULL_CHECK(env, strs_handle, "native view handle is null", 0)
+  JNI_NULL_CHECK(env, separator_handle, "separator scalar handle is null", 0)
+  JNI_NULL_CHECK(env, narep_handle, "narep scalar handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(strs_handle);
+    cudf::string_scalar *sep = reinterpret_cast<cudf::string_scalar *>(separator_handle);
+    cudf::string_scalar *narep = reinterpret_cast<cudf::string_scalar *>(narep_handle);
+    return release_as_jlong(cudf::strings::join_strings(*view, *sep, *narep));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *env, jobject j_object,
                                                                       jlongArray handles,
                                                                       jlong row_count) {
