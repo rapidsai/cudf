@@ -364,6 +364,7 @@ class json_reader_options_builder {
     options._dayfirst = val;
     return *this;
   }
+
   /**
    * @brief Set whether to use the experimental reader.
    *
