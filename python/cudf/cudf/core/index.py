@@ -1784,7 +1784,7 @@ class DatetimeIndex(GenericIndex):
             raise TypeError("Invalid dtype")
 
         if copy:
-            data = column.as_column(data).copy()
+            data = column.as_column(data, dtype=dtype).copy()
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, np.ndarray) and data.dtype.kind == "M":
             data = column.as_column(data)
@@ -1792,6 +1792,10 @@ class DatetimeIndex(GenericIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
             data = column.as_column(np.array(data, dtype=dtype))
+        elif isinstance(data, cudf.Series):
+            data = data._column.astype(dtype)
+        elif isinstance(data, column.ColumnBase):
+            data = data.astype(dtype)
         super().__init__(data, **kwargs)
 
     @property  # type: ignore
@@ -2263,8 +2267,14 @@ class TimedeltaIndex(GenericIndex):
                 "dtype parameter is supported"
             )
 
+        valid_dtypes = tuple(
+            f"timedelta64[{res}]" for res in ("s", "ms", "us", "ns")
+        )
+        if dtype not in valid_dtypes:
+            raise TypeError("Invalid dtype")
+
         if copy:
-            data = column.as_column(data).copy()
+            data = column.as_column(data, dtype=dtype).copy()
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, np.ndarray) and data.dtype.kind == "m":
             data = column.as_column(data)
@@ -2272,6 +2282,10 @@ class TimedeltaIndex(GenericIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
             data = column.as_column(np.array(data, dtype=dtype))
+        elif isinstance(data, cudf.Series):
+            data = data._column.astype(dtype)
+        elif isinstance(data, column.ColumnBase):
+            data = data.astype(dtype)
         super().__init__(data, **kwargs)
 
     @_cudf_nvtx_annotate
