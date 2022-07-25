@@ -1543,7 +1543,7 @@ static __device__ bool is_comparable(Type ptype, ConvertedType ctype)
  * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
  */
 template <typename T>
-__device__ int32_t compare(T& v1, T& v2)
+constexpr __device__ int32_t compare(T& v1, T& v2)
 {
   return (v1 > v2) - (v1 < v2);
 }
