@@ -223,7 +223,7 @@ struct IntPow {
     std::enable_if_t<(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
   {
-    if constexpr (!std::is_unsigned_v<TypeRhs>) {
+    if constexpr (std::is_signed_v<TypeRhs>) {
       if (y < 0) {
         // Integer exponentiation with negative exponent is not possible.
         return 0;
