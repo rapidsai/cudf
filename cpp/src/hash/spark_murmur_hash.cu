@@ -33,6 +33,15 @@ namespace {
 /**
  * @brief Computes the hash value of a row in the given table.
  *
+ * This functor uses Spark conventions for MurmurHash3_32 hashing, which
+ * differs from the standard MurmurHash3_32 implementation. These differences
+ * include:
+ * - specialized tail processing in the hash functor
+ * - specializations for decimal types
+ * - special behavior for serially using the output hash as an input seed for
+ *   the next item
+ * - ignorance of null values: [1], [1, null], and [null, 1] have the same hash
+ *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
@@ -82,12 +91,13 @@ class device_spark_row_hasher {
     {
     }
 
+    using hash_functor = cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>;
+
     template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      auto const hasher = cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>(
-        _check_nulls, _seed, _null_hash);
+      auto const hasher = hash_functor(_check_nulls, _seed, _null_hash);
       return hasher.template operator()<T>(col, row_index);
     }
 
@@ -111,8 +121,7 @@ class device_spark_row_hasher {
         thrust::counting_iterator(curr_col.size()),
         _seed,
         [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
-          auto const hasher =
-            cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>(nulls, hash, hash);
+          auto const hasher = hash_functor(nulls, hash, hash);
           return cudf::type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
             curr_col.type(), hasher, curr_col, element_index);
         });
