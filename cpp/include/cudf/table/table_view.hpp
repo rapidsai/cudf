@@ -38,8 +38,8 @@ namespace detail {
  * @brief Base class for a table of `ColumnView`s
  *
  * This class should not be used directly. Instead:
- * - `table_view` should be used for a table of `column_view` types
- * - `mutable_table_view` should be used for a table of `mutable_column_view` types
+ * - `table_view` should be used for a table of columns of type `column_view`
+ * - `mutable_table_view` should be used for a table of columns of type `mutable_column_view`
  *
  * All public constructors and member functions of `table_view_base` are
  * available in both `table_view` and `mutable_table_view`.
