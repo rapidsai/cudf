@@ -16,9 +16,10 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
-namespace {
+namespace cudf::test::io::json {
 //------------------------------------------------------------------------------
 // TEST FST SPECIFICATIONS
 //------------------------------------------------------------------------------
@@ -70,4 +71,4 @@ const std::vector<std::string> pda_sgs = {"{", "[", "}", "]", "\"", "\\"};
 // The DFA's starting state
 constexpr DFA_STATES start_state = TT_OOS;
 
-}  // namespace
+}  // namespace cudf::test::io::json

@@ -35,7 +35,6 @@
 #include <thrust/iterator/discard_iterator.h>
 
 #include <cstdlib>
-#include <string>
 
 namespace cudf {
 namespace {
@@ -68,6 +67,7 @@ auto make_test_json_data(nvbench::state& state)
   return cudf::strings::repeat_string(d_string_scalar, repeat_times);
 }
 
+using namespace cudf::test::io::json;
 // Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
