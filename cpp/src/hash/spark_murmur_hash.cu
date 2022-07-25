@@ -165,7 +165,7 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  bool const nullable = has_nulls(input);
+  bool const nullable = has_nested_nulls(input);
   auto const row_hasher =
     cudf::experimental::row::hash::row_hasher<device_spark_row_hasher>(input, stream);
   auto output_view = output->mutable_view();
