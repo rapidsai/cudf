@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -54,7 +55,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
     nullptr, temp_storage_bytes, d_in, result, num_items, cudf::DeviceSum{}, init);
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, rmm::cuda_stream_default);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, cudf::default_stream_value);
 
   // Run reduction
   cub::DeviceReduce::Reduce(

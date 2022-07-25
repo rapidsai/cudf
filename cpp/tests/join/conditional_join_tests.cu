@@ -18,12 +18,11 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -205,8 +204,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                              result.second->element(i, rmm::cuda_stream_default)});
+      result_pairs.push_back({result.first->element(i, cudf::default_stream_value),
+                              result.second->element(i, cudf::default_stream_value)});
     }
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
@@ -684,7 +683,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      resulting_indices.push_back(result->element(i, rmm::cuda_stream_default));
+      resulting_indices.push_back(result->element(i, cudf::default_stream_value));
     }
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());

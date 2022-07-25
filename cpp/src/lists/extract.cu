@@ -22,6 +22,7 @@
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -168,7 +169,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
                                              size_type index,
                                              rmm::mr::device_memory_resource* mr)
 {
-  return detail::extract_list_element_impl(lists_column, index, rmm::cuda_stream_default, mr);
+  return detail::extract_list_element_impl(lists_column, index, cudf::default_stream_value, mr);
 }
 
 /**
@@ -182,7 +183,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
 {
   CUDF_EXPECTS(indices.size() == lists_column.size(),
                "Index column must have as many elements as lists column.");
-  return detail::extract_list_element_impl(lists_column, indices, rmm::cuda_stream_default, mr);
+  return detail::extract_list_element_impl(lists_column, indices, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

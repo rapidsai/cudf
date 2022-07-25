@@ -18,6 +18,7 @@ Attributes
 .. autosummary::
    :toctree: api/
 
+   Series.axes
    Series.index
    Series.values
    Series.data
@@ -117,6 +118,7 @@ Computations / descriptive stats
    Series.all
    Series.any
    Series.autocorr
+   Series.between
    Series.clip
    Series.corr
    Series.count

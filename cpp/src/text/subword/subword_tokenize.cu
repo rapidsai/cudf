@@ -18,7 +18,9 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
@@ -268,7 +270,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  rmm::cuda_stream_default,
+                                  cudf::default_stream_value,
                                   mr);
 }
 

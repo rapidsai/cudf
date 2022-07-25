@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ union block_reduce_storage {
   DECLARE_MEMBER(int16_t)
   DECLARE_MEMBER(int32_t)
   DECLARE_MEMBER(int64_t)
+  DECLARE_MEMBER(__int128_t)
   DECLARE_MEMBER(uint8_t)
   DECLARE_MEMBER(uint16_t)
   DECLARE_MEMBER(uint32_t)
@@ -89,6 +90,7 @@ struct storage_wrapper {
   STORAGE_WRAPPER_GET(int16_t);
   STORAGE_WRAPPER_GET(int32_t);
   STORAGE_WRAPPER_GET(int64_t);
+  STORAGE_WRAPPER_GET(__int128_t);
   STORAGE_WRAPPER_GET(uint8_t);
   STORAGE_WRAPPER_GET(uint16_t);
   STORAGE_WRAPPER_GET(uint32_t);

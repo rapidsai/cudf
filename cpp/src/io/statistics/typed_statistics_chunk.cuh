@@ -64,6 +64,12 @@ class union_member {
   }
 
   template <typename T, typename U>
+  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(U& val)
+  {
+    return val.d128_val;
+  }
+
+  template <typename T, typename U>
   __device__ static std::enable_if_t<std::is_floating_point_v<T>, type<T, U>> get(U& val)
   {
     return val.fp_val;
@@ -126,9 +132,7 @@ struct typed_statistics_chunk<T, true> {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
       maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
     }
-    if (chunk.has_sum) {
-      aggregate += detail::aggregation_type<A>::convert(union_member::get<A>(chunk.sum));
-    }
+    if (chunk.has_sum) { aggregate += union_member::get<A>(chunk.sum); }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
   }

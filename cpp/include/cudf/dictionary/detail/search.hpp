@@ -17,6 +17,7 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -33,7 +34,7 @@ namespace detail {
 std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -58,7 +59,7 @@ std::unique_ptr<scalar> get_index(
 std::unique_ptr<scalar> get_insert_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

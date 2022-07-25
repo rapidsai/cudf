@@ -25,6 +25,7 @@
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -61,7 +62,7 @@ std::unique_ptr<column> pad(
   size_type width,
   pad_side side                       = pad_side::RIGHT,
   std::string_view fill_char          = " ",
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
@@ -210,7 +211,7 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(strings, width, side, fill_char, rmm::cuda_stream_default, mr);
+  return detail::pad(strings, width, side, fill_char, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> zfill(strings_column_view const& strings,
@@ -218,7 +219,7 @@ std::unique_ptr<column> zfill(strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(strings, width, rmm::cuda_stream_default, mr);
+  return detail::zfill(strings, width, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings
