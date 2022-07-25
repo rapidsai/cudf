@@ -2613,7 +2613,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df if not inplace else None
 
     @_cudf_nvtx_annotate
-    def where(self, cond, other=None, inplace=False):
+    def where(
+        self,
+        cond,
+        other=None,
+        inplace=False,
+        axis=None,
+        level=None,
+        errors="raise",
+    ):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,

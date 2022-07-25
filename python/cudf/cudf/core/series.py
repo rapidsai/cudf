@@ -3424,7 +3424,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return change
 
     @_cudf_nvtx_annotate
-    def where(self, cond, other=None, inplace=False):
+    def where(
+        self,
+        cond,
+        other=None,
+        inplace=False,
+        axis=None,
+        level=None,
+        errors="raise",
+    ):
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self({self.name: result_col}),
