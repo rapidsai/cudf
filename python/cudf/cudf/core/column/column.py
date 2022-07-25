@@ -1841,8 +1841,6 @@ def as_column(
                 data = data.fillna(np.nan)
             elif np.issubdtype(data.dtype, np.datetime64):
                 data = data.fillna(np.datetime64("NaT"))
-    # elif isinstance(arbitrary, pd.DatetimeIndex):
-    #     data = as_column(arbitrary.values, dtype=dtype)
     elif hasattr(arbitrary, "__array_interface__"):
         # CUDF assumes values are always contiguous
         desc = arbitrary.__array_interface__
