@@ -45,9 +45,8 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
-// Total number of unsigned 16 bit values
-constexpr size_type MAX_DICT_SIZE =
-  std::numeric_limits<uint16_t>::max() - std::numeric_limits<uint16_t>::min() + 1;
+// Total number of unsigned 24 bit values
+constexpr size_type MAX_DICT_SIZE = (1 << 24) - 1;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -355,7 +354,7 @@ struct EncColumnChunk {
     uniq_data_size;  //!< Size of dictionary page (set of all unique values) if dict enc is used
   size_type plain_data_size;  //!< Size of data in this chunk if plain encoding is used
   size_type* dict_data;       //!< Dictionary data (unique row indices)
-  uint16_t* dict_index;   //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
+  size_type* dict_index;  //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
 };
@@ -413,13 +412,15 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  *
  * Note : this function is where output device memory is allocated for nested columns.
  *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in,out] input_columns Input column information
- * @param[in,out] output_columns Output column information
- * @param[in] num_rows Maximum number of rows to read
- * @param[in] min_rows crop all rows below min_row
- * @param[in] stream Cuda stream
+ * @param pages All pages to be decoded
+ * @param chunks All chunks to be decoded
+ * @param input_columns Input column information
+ * @param output_columns Output column information
+ * @param num_rows Maximum number of rows to read
+ * @param min_rows crop all rows below min_row
+ * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+ * bounds
+ * @param stream Cuda stream
  */
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -427,6 +428,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
                           size_t min_row,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
@@ -573,13 +575,14 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
+                      device_span<size_type> page_sizes,
+                      device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
-                      size_t max_page_comp_data_size,
                       rmm::cuda_stream_view stream);
 
 /**

@@ -549,9 +549,6 @@ public final class Table implements AutoCloseable {
   private static native long[] merge(long[] tableHandles, int[] sortKeyIndexes,
                                      boolean[] isDescending, boolean[] areNullsSmallest) throws CudfException;
 
-  private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                        int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
-
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
@@ -561,9 +558,6 @@ public final class Table implements AutoCloseable {
 
   private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
                                                                long outputRowCount) throws CudfException;
-
-  private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
@@ -575,9 +569,6 @@ public final class Table implements AutoCloseable {
   private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
                                                                 long outputRowCount) throws CudfException;
 
-  private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
-
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
@@ -588,14 +579,8 @@ public final class Table implements AutoCloseable {
   private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
                                                                long outputRowCount) throws CudfException;
 
-  private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
-      int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
-
   private static native long[] leftSemiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
-
-  private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
-      int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
@@ -708,8 +693,7 @@ public final class Table implements AutoCloseable {
   private static native long[] filter(long input, long mask);
 
   private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
-                                              boolean keepFirst, boolean nullsEqual,
-                                              boolean nullsBefore) throws CudfException;
+                                              int keepValue, boolean nullsEqual) throws CudfException;
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
@@ -2030,27 +2014,38 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Enum to specify which of duplicate rows/elements will be copied to the output.
+   */
+  public enum DuplicateKeepOption {
+    KEEP_ANY(0),
+    KEEP_FIRST(1),
+    KEEP_LAST(2),
+    KEEP_NONE(3);
+
+    final int keepValue;
+
+    DuplicateKeepOption(int keepValue) {
+      this.keepValue = keepValue;
+    }
+  }
+
+  /**
    * Copy rows of the current table to an output table such that duplicate rows in the key columns
    * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
    * a subset of the current table columns and their indices are specified by an input array.
    *
-   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
-   * guaranteed in the future.
+   * The order of rows in the output table is not specified.
    *
    * @param keyColumns Array of indices representing key columns from the current table.
-   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
-   *                  copy the last row with a duplicated key.
+   * @param keep Option specifying to keep any, first, last, or none of the found duplicates.
    * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
    *                   key columns to check for uniqueness.
-   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
-   *                    after non-null elements when sorting the table.
    *
    * @return Table with unique keys.
    */
-  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
-                              boolean nullsBefore) {
+  public Table dropDuplicates(int[] keyColumns, DuplicateKeepOption keep, boolean nullsEqual) {
     assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
-    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keep.keepValue, nullsEqual));
   }
 
   /**
@@ -4107,161 +4102,6 @@ public final class Table implements AutoCloseable {
 
     TableOperation(final Table table, final int... indices) {
       operation = new Operation(table, indices);
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table leftJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.leftJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table leftJoin(TableOperation rightJoinIndices) {
-        return leftJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table innerJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table innerJoin(TableOperation rightJoinIndices) {
-      return innerJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table fullJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.fullJoin(operation.table.nativeHandle, operation.indices,
-              rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-              compareNullsEqual));
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table fullJoin(TableOperation rightJoinIndices) {
-      return fullJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Performs a semi-join between a left table and a right table, returning only the rows from
-     * the left table that match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the left semi-joined table.
-     */
-    public Table leftSemiJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Performs a semi-join between a left table and a right table, returning only the rows from
-     * the left table that match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the left semi-joined table.
-     */
-    public Table leftSemiJoin(TableOperation rightJoinIndices) {
-      return leftSemiJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Performs an anti-join between a left table and a right table, returning only the rows from
-     * the left table that do not match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the left anti-joined table.
-     */
-    public Table leftAntiJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Performs an anti-join between a left table and a right table, returning only the rows from
-     * the left table that do not match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the left anti-joined table.
-     */
-    public Table leftAntiJoin(TableOperation rightJoinIndices) {
-      return leftAntiJoin(rightJoinIndices, true);
     }
 
     /**

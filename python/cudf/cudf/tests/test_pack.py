@@ -61,8 +61,7 @@ def assert_packed_frame_equality(df):
 
     packed = pack(df)
     del df
-    tbl = unpack(packed)
-    unpacked = DataFrame._from_data(tbl._data, tbl._index)
+    unpacked = unpack(packed)
 
     assert_eq(unpacked, pdf)
 
@@ -197,15 +196,13 @@ def check_packed_pickled_equality(df):
         )
         for b in buffers:
             assert isinstance(b, pickle.PickleBuffer)
-        tbl = unpack(pickle.loads(serialbytes, buffers=buffers))
-        loaded = DataFrame._from_data(tbl._data, tbl._index)
+        loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
         assert_eq(loaded, df)
 
 
 def assert_packed_frame_picklable(df):
     serialbytes = pickle.dumps(pack(df))
-    tbl = unpack(pickle.loads(serialbytes))
-    loaded = DataFrame._from_data(tbl._data, tbl._index)
+    loaded = unpack(pickle.loads(serialbytes))
     assert_eq(loaded, df)
 
 
@@ -270,8 +267,7 @@ def check_packed_serialized_equality(df):
 def assert_packed_frame_serializable(df):
     packed = pack(df)
     header, frames = packed.serialize()
-    tbl = unpack(packed.deserialize(header, frames))
-    loaded = DataFrame._from_data(tbl._data, tbl._index)
+    loaded = unpack(packed.deserialize(header, frames))
     assert_eq(loaded, df)
 
 

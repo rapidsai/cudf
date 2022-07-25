@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/distance.h>
@@ -154,7 +154,7 @@ void generate_input_tables(key_type* const build_tbl,
 
   const int num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
-  rmm::device_uvector<curandState> devStates(num_states, rmm::cuda_stream_default);
+  rmm::device_uvector<curandState> devStates(num_states, cudf::default_stream_value);
 
   init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data(), num_states);
 

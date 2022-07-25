@@ -29,6 +29,7 @@
 #include <cudf/structs/detail/concatenate.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -540,12 +541,12 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
       create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
     detail::concatenate_masks(
-      views, static_cast<bitmask_type*>(null_mask.data()), rmm::cuda_stream_default);
+      views, static_cast<bitmask_type*>(null_mask.data()), cudf::default_stream_value);
 
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{0, rmm::cuda_stream_default, mr};
+  return rmm::device_buffer{0, cudf::default_stream_value, mr};
 }
 
 // Concatenates the elements from a vector of column_views
@@ -553,14 +554,14 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, rmm::cuda_stream_default, mr);
+  return detail::concatenate(columns_to_concat, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, rmm::cuda_stream_default, mr);
+  return detail::concatenate(tables_to_concat, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

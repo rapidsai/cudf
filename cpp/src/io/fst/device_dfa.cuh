@@ -21,20 +21,18 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace fst {
+namespace cudf::io::fst {
 
 /**
  * @brief Uses a deterministic finite automaton to transduce a sequence of symbols from an input
  * iterator to a sequence of transduced output symbols.
  *
- * @tparam SymbolItT Random-access input iterator type to symbols fed into the FST
  * @tparam DfaT The DFA specification
+ * @tparam SymbolItT Random-access input iterator type to symbols fed into the FST
  * @tparam TransducedOutItT Random-access output iterator to which the transduced output will be
  * written
- * @tparam TransducedIndexOutItT Random-access output iterator type to which the indexes of the
- * symbols that caused some output to be written.
+ * @tparam TransducedIndexOutItT Random-access output iterator type to which the input symbols'
+ * indexes are written.
  * @tparam TransducedCountOutItT A single-item output iterator type to which the total number of
  * output symbols is written
  * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and (b)
@@ -93,6 +91,4 @@ cudaError_t DeviceTransduce(void* d_temp_storage,
                                 stream);
 }
 
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst

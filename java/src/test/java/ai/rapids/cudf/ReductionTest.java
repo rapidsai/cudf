@@ -399,13 +399,15 @@ class ReductionTest extends CudfTestBase {
   }
 
   private static void assertEqualsDelta(ReductionAggregation op, Scalar expected, Scalar result,
-      Double percentage) {
+                                        Double percentage) {
     if (FLOAT_REDUCTIONS.contains(op.getWrapped().kind)) {
       assertEqualsWithinPercentage(expected.getDouble(), result.getDouble(), percentage);
     } else if (expected.getType().typeId == DType.DTypeEnum.LIST) {
-      try (ColumnView e = expected.getListAsColumnView();
-           ColumnView r = result.getListAsColumnView()) {
-        AssertUtils.assertColumnsAreEqual(e, r);
+      try (ColumnVector expectedAsList = ColumnVector.fromScalar(expected, 1);
+           ColumnVector resultAsList = ColumnVector.fromScalar(result, 1);
+           ColumnVector expectedSorted = expectedAsList.listSortRows(false, false);
+           ColumnVector resultSorted = resultAsList.listSortRows(false, false)) {
+        AssertUtils.assertColumnsAreEqual(expectedSorted, resultSorted);
       }
     } else {
       assertEquals(expected, result);
@@ -413,13 +415,15 @@ class ReductionTest extends CudfTestBase {
   }
 
   private static void assertEqualsDelta(ReductionAggregation op, Scalar expected, Scalar result,
-      Float percentage) {
+                                        Float percentage) {
     if (FLOAT_REDUCTIONS.contains(op.getWrapped().kind)) {
       assertEqualsWithinPercentage(expected.getFloat(), result.getFloat(), percentage);
     } else if (expected.getType().typeId == DType.DTypeEnum.LIST) {
-      try (ColumnView e = expected.getListAsColumnView();
-           ColumnView r = result.getListAsColumnView()) {
-        AssertUtils.assertColumnsAreEqual(e, r);
+      try (ColumnVector expectedAsList = ColumnVector.fromScalar(expected, 1);
+           ColumnVector resultAsList = ColumnVector.fromScalar(result, 1);
+           ColumnVector expectedSorted = expectedAsList.listSortRows(false, false);
+           ColumnVector resultSorted = resultAsList.listSortRows(false, false)) {
+        AssertUtils.assertColumnsAreEqual(expectedSorted, resultSorted);
       }
     } else {
       assertEquals(expected, result);

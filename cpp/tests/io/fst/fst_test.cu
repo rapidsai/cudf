@@ -20,13 +20,14 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-
-#include "cub/cub.cuh"
 
 #include <cstdlib>
 #include <vector>
@@ -88,36 +89,28 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
     // The symbol currently being read
     auto const& symbol = *it;
 
-    std::size_t symbol_group = 0;
-    bool found               = false;
-
     // Iterate over symbol groups and search for the first symbol group containing the current
-    // symbol
-    for (auto const& sg : symbol_group_lut) {
-      for (auto const& s : sg)
-        if (s == symbol) found = true;
-      if (found) break;
-      symbol_group++;
-    }
+    // symbol, if no match is found we use cend(symbol_group_lut) as the "catch-all" symbol group
+    auto symbol_group_it =
+      std::find_if(std::cbegin(symbol_group_lut), std::cend(symbol_group_lut), [symbol](auto& sg) {
+        return std::find(std::cbegin(sg), std::cend(sg), symbol) != std::cend(sg);
+      });
+    auto symbol_group = std::distance(std::cbegin(symbol_group_lut), symbol_group_it);
 
     // Output the translated symbols to the output tape
-    size_t inserted = 0;
-    for (auto out : translation_table[state][symbol_group]) {
-      // std::cout << in_offset << ": " << out << "\n";
-      *out_tape = out;
-      ++out_tape;
-      inserted++;
-    }
+    out_tape = std::copy(std::cbegin(translation_table[state][symbol_group]),
+                         std::cend(translation_table[state][symbol_group]),
+                         out_tape);
 
-    // Output the index of the current symbol, iff it caused some output to be written
-    if (inserted > 0) {
-      *out_index_tape = in_offset;
-      out_index_tape++;
-    }
+    auto out_size = std::distance(std::cbegin(translation_table[state][symbol_group]),
+                                  std::cend(translation_table[state][symbol_group]));
+
+    out_index_tape = std::fill_n(out_index_tape, out_size, in_offset);
 
     // Transition the state of the finite-state machine
     state = transition_table[state][symbol_group];
 
+    // Continue with next symbol from input tape
     in_offset++;
   }
   return {out_tape, out_index_tape};
@@ -126,21 +119,20 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
 //------------------------------------------------------------------------------
 // TEST FST SPECIFICATIONS
 //------------------------------------------------------------------------------
-// FST to check for brackets and braces outside of pairs of quotes
-// The state being active while being outside of a string. When encountering an opening bracket
-// or curly brace, we push it onto the stack. When encountering a closing bracket or brace, we
-// pop it from the stack.
-constexpr uint32_t TT_OOS = 0U;
-
-// The state being active while being within a string (e.g., field name or a string value). We do
-// not push or pop from the stack while being in this state.
-constexpr uint32_t TT_STR = 1U;
-
-// The state being active after encountering an escape symbol (e.g., '\') while being in the TT_STR
-// state. constexpr uint32_t TT_ESC = 2U; // cmt to avoid 'unused' warning
-
-// Total number of states
-constexpr uint32_t TT_NUM_STATES = 3U;
+enum DFA_STATES : char {
+  // The state being active while being outside of a string. When encountering an opening bracket or
+  // curly brace, we push it onto the stack. When encountering a closing bracket or brace, we pop it
+  // from the stack.
+  TT_OOS = 0U,
+  // The state being active while being within a string (e.g., field name or a string value). We do
+  // not push or pop from the stack while being in this state.
+  TT_STR,
+  // The state being active after encountering an escape symbol (e.g., '\') while being in the
+  // TT_STR state.
+  TT_ESC,
+  // Total number of states
+  TT_NUM_STATES
+};
 
 // Definition of the symbol groups
 enum PDA_SG_ID {
@@ -155,10 +147,10 @@ enum PDA_SG_ID {
 };
 
 // Transition table
-const std::vector<std::vector<int32_t>> pda_state_tt = {
+const std::vector<std::vector<char>> pda_state_tt = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
-  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR, TT_STR},
+  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
   /* TT_ESC    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}};
 
 // Translation table (i.e., for each transition, what are the symbols that we output)
@@ -189,16 +181,15 @@ TEST_F(FstTest, GroundTruth)
   using SymbolOffsetT = uint32_t;
 
   // Helper class to set up transition table, symbol group lookup table, and translation table
-  using DfaFstT = cudf::io::fst::detail::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
+  using DfaFstT = cudf::io::fst::detail::Dfa<char, NUM_SYMBOL_GROUPS, TT_NUM_STATES>;
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   // Test input
   std::string input = R"(  {)"
-                      R"(category": "reference",)"
+                      R"("category": "reference",)"
                       R"("index:" [4,12,42],)"
                       R"("author": "Nigel Rees",)"
                       R"("title": "Sayings of the Century",)"
@@ -212,21 +203,22 @@ TEST_F(FstTest, GroundTruth)
                       R"("price": 8.95)"
                       R"(}  {} [] [ ])";
 
-  // Repeat input sample 1024x
-  for (std::size_t i = 0; i < 10; i++)
-    input += input;
+  size_t string_size                 = input.size() * (1 << 10);
+  auto d_input_scalar                = cudf::make_string_scalar(input);
+  auto& d_string_scalar              = static_cast<cudf::string_scalar&>(*d_input_scalar);
+  const cudf::size_type repeat_times = string_size / input.size();
+  auto d_input_string                = cudf::strings::repeat_string(d_string_scalar, repeat_times);
+  auto& d_input = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_string);
+  input         = d_input.to_string(stream);
 
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
-  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
   hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
   hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
   hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
-  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream};
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
@@ -235,12 +227,12 @@ TEST_F(FstTest, GroundTruth)
                    out_indexes_gpu.device_ptr(),
                    output_gpu_size.device_ptr(),
                    start_state,
-                   stream);
+                   stream.value());
 
   // Async copy results from device to host
-  output_gpu.device_to_host(stream_view);
-  out_indexes_gpu.device_to_host(stream_view);
-  output_gpu_size.device_to_host(stream_view);
+  output_gpu.device_to_host(stream.view());
+  out_indexes_gpu.device_to_host(stream.view());
+  output_gpu_size.device_to_host(stream.view());
 
   // Prepare CPU-side results for verification
   std::string output_cpu{};
@@ -259,17 +251,12 @@ TEST_F(FstTest, GroundTruth)
                std::back_inserter(out_index_cpu));
 
   // Make sure results have been copied back to host
-  cudaStreamSynchronize(stream);
+  stream.synchronize();
 
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output_cpu.size());
-  ASSERT_EQ(out_indexes_gpu.size(), out_index_cpu.size());
-  for (std::size_t i = 0; i < output_cpu.size(); i++) {
-    ASSERT_EQ(output_gpu[i], output_cpu[i]) << "Mismatch at index #" << i;
-  }
-  for (std::size_t i = 0; i < out_indexes_gpu.size(); i++) {
-    ASSERT_EQ(out_indexes_gpu[i], out_index_cpu[i]) << "Mismatch at index #" << i;
-  }
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output_cpu, output_cpu.size());
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(out_indexes_gpu, out_index_cpu, output_cpu.size());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

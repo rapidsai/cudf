@@ -15,14 +15,13 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/types.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <src/io/fst/logical_stack.cuh>
 
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cstdlib>
@@ -162,8 +161,7 @@ TEST_F(LogicalStackTest, GroundTruth)
   constexpr SymbolT read_symbol = 'x';
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   // Test input,
@@ -186,10 +184,13 @@ TEST_F(LogicalStackTest, GroundTruth)
   for (std::size_t i = 0; i < 10; i++)
     input += input;
 
+  // Input's size
+  std::size_t string_size = input.size();
+
   // Getting the symbols that actually modify the stack (i.e., symbols that push or pop)
   std::string stack_symbols{};
   std::vector<SymbolOffsetT> stack_op_indexes;
-  stack_op_indexes.reserve(input.size());
+  stack_op_indexes.reserve(string_size);
 
   // Get the sparse representation of stack operations
   to_sparse_stack_symbols(std::cbegin(input),
@@ -200,26 +201,20 @@ TEST_F(LogicalStackTest, GroundTruth)
 
   rmm::device_uvector<SymbolT> d_stack_ops{stack_symbols.size(), stream_view};
   rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes{stack_op_indexes.size(), stream_view};
-  hostdevice_vector<SymbolT> top_of_stack_gpu{input.size(), stream_view};
-  cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes.data(),
-                                                       d_stack_op_indexes.size()};
+  hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
+  cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes};
 
   cudaMemcpyAsync(d_stack_ops.data(),
                   stack_symbols.data(),
                   stack_symbols.size() * sizeof(SymbolT),
                   cudaMemcpyHostToDevice,
-                  stream);
+                  stream.value());
 
   cudaMemcpyAsync(d_stack_op_indexes.data(),
                   stack_op_indexes.data(),
                   stack_op_indexes.size() * sizeof(SymbolOffsetT),
                   cudaMemcpyHostToDevice,
-                  stream);
-
-  // Prepare output
-  std::size_t string_size = input.size();
-  SymbolT* d_top_of_stack = nullptr;
-  cudaMalloc(&d_top_of_stack, string_size);
+                  stream.value());
 
   // Run algorithm
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(d_stack_ops.data(),
@@ -229,14 +224,14 @@ TEST_F(LogicalStackTest, GroundTruth)
                                                     empty_stack_symbol,
                                                     read_symbol,
                                                     string_size,
-                                                    stream);
+                                                    stream.value());
 
   // Async copy results from device to host
   top_of_stack_gpu.device_to_host(stream_view);
 
   // Get CPU-side results for verification
   std::string top_of_stack_cpu{};
-  top_of_stack_cpu.reserve(input.size());
+  top_of_stack_cpu.reserve(string_size);
   to_top_of_stack(std::cbegin(input),
                   std::cend(input),
                   JSONToStackOp{},
@@ -244,14 +239,12 @@ TEST_F(LogicalStackTest, GroundTruth)
                   std::back_inserter(top_of_stack_cpu));
 
   // Make sure results have been copied back to host
-  cudaStreamSynchronize(stream);
+  stream.synchronize();
 
   // Verify results
-  ASSERT_EQ(input.size(), top_of_stack_cpu.size());
+  ASSERT_EQ(string_size, top_of_stack_cpu.size());
   ASSERT_EQ(top_of_stack_gpu.size(), top_of_stack_cpu.size());
-  for (size_t i = 0; i < input.size() && i < top_of_stack_cpu.size(); i++) {
-    ASSERT_EQ(top_of_stack_gpu.host_ptr()[i], top_of_stack_cpu[i]) << "Mismatch at index #" << i;
-  }
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(top_of_stack_gpu.host_ptr(), top_of_stack_cpu, string_size);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
