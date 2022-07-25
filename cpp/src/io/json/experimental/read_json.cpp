@@ -20,7 +20,7 @@
 
 namespace cudf::io::detail::json::experimental {
 
-table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
+table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
