@@ -147,7 +147,7 @@ enum PDA_SG_ID {
 };
 
 // Transition table
-const std::vector<std::vector<char>> pda_state_tt = {
+const std::vector<std::vector<DFA_STATES>> pda_state_tt = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
   /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
@@ -164,7 +164,7 @@ const std::vector<std::vector<std::vector<char>>> pda_out_tt = {
 const std::vector<std::string> pda_sgs = {"{", "[", "}", "]", "\"", "\\"};
 
 // The DFA's starting state
-constexpr int32_t start_state = TT_OOS;
+constexpr DFA_STATES start_state = TT_OOS;
 
 }  // namespace
 

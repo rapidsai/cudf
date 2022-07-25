@@ -33,7 +33,7 @@ enum DFA_STATES : char {
   TT_STR,
   // The state being active after encountering an escape symbol (e.g., '\') while being in the
   // TT_STR state.
-  TT_ESC [[maybe_unused]],
+  TT_ESC,
   // Total number of states
   TT_NUM_STATES
 };
@@ -54,12 +54,12 @@ enum PDA_SG_ID {
 const std::vector<std::vector<DFA_STATES>> pda_state_tt = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
-  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR, TT_STR},
+  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
   /* TT_ESC    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}};
 
 // Translation table (i.e., for each transition, what are the symbols that we output)
 const std::vector<std::vector<std::vector<char>>> pda_out_tt = {
-  /* IN_STATE        {      [      }      ]      "      \    OTHER */
+  /* IN_STATE        {      [      }      ]     "  \   OTHER */
   /* TT_OOS    */ {{'{'}, {'['}, {'}'}, {']'}, {'x'}, {'x'}, {'x'}},
   /* TT_STR    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}},
   /* TT_ESC    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}};
@@ -69,4 +69,5 @@ const std::vector<std::string> pda_sgs = {"{", "[", "}", "]", "\"", "\\"};
 
 // The DFA's starting state
 constexpr DFA_STATES start_state = TT_OOS;
+
 }  // namespace

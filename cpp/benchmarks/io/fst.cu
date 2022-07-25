@@ -48,7 +48,7 @@ auto make_test_json_data(nvbench::state& state)
 
   // Test input
   std::string input = R"(  {)"
-                      R"(category": "reference",)"
+                      R"("category": "reference",)"
                       R"("index:" [4,12,42],)"
                       R"("author": "Nigel Rees",)"
                       R"("title": "Sayings of the Century",)"
@@ -73,7 +73,7 @@ using SymbolT = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
 using SymbolOffsetT = uint32_t;
 // Helper class to set up transition table, symbol group lookup table, and translation table
-using DfaFstT = cudf::io::fst::detail::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
+using DfaFstT = cudf::io::fst::detail::Dfa<char, NUM_SYMBOL_GROUPS, TT_NUM_STATES>;
 constexpr std::size_t single_item = 1;
 
 }  // namespace
