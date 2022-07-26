@@ -71,12 +71,15 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
-   * @param row_group_indices TODO
+   * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+   * bounds
+   * @param row_group_indices Lists of row groups to read, one per source
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
+                           bool uses_custom_row_bounds,
                            std::vector<std::vector<size_type>> const& row_group_indices);
 
  private:
@@ -154,17 +157,20 @@ class reader::impl {
    *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
    *
-   * @param[in,out] chunks All chunks to be decoded
-   * @param[in,out] pages All pages to be decoded
-   * @param[in] min_rows crop all rows below min_row
-   * @param[in] total_rows Maximum number of rows to read
-   * @param[in] has_lists Whether or not this data contains lists and requires
+   * @param chunks All chunks to be decoded
+   * @param pages All pages to be decoded
+   * @param min_rows crop all rows below min_row
+   * @param total_rows Maximum number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+   * bounds
+   * @param has_lists Whether or not this data contains lists and requires
    * a preprocess.
    */
   void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                           hostdevice_vector<gpu::PageInfo>& pages,
                           size_t min_row,
                           size_t total_rows,
+                          bool uses_custom_row_bounds,
                           bool has_lists);
 
   /**
