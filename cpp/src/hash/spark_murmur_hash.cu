@@ -30,21 +30,38 @@ namespace detail {
 
 namespace {
 
+// TODO: Spark uses int32_t hash values, but libcudf defines hash_value_type as
+// uint32_t elsewhere. I plan to move the SparkMurmurHash3_32 functor into this
+// file (since it is only used here), and replace its use of hash_value_type
+// with spark_hash_value_type. --bdice
 using spark_hash_value_type = int32_t;
 
 /**
  * @brief Computes the hash value of a row in the given table.
  *
- * This functor uses Spark conventions for MurmurHash3_32 hashing, which
- * differs from the standard MurmurHash3_32 implementation. These differences
+ * This functor uses Spark conventions for Murmur hashing, which differs from
+ * the Murmur implementation used in the rest of libcudf. These differences
  * include:
- * - specialized tail processing in the hash functor
- * - specializations for decimal types
- * - special behavior for serially using the output hash as an input seed for
- *   the next item
- * - ignorance of null values: [1], [1, null], and [null, 1] have the same hash
+ * - Serially using the output hash as an input seed for the next item
+ * - Ignorance of null values
  *
- * @tparam hash_function Hash functor to use for hashing elements.
+ * The serial use of hashes as seeds means that data of different nested types
+ * can exhibit hash collisions. For example, a row of an integer column
+ * containing a 1 will have the same hash as a lists column of integers
+ * containing a list of [1] and a struct column of a single integer column
+ * containing a struct of {1}.
+ *
+ * As a consequence of ignoring null values, inputs like [1], [1, null], and
+ * [null, 1] have the same hash (an expected hash collision). This kind of
+ * collision can also occur across a table of nullable columns and with nulls
+ * in structs ({1, null} and {null, 1} have the same hash). The seed value (the
+ * previous element's hash value) is returned as the hash if an element is
+ * null.
+ *
+ * For additional differences such as special tail processing and decimal type
+ * handling, refer to the SparkMurmurHash3_32 functor.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements. Must be SparkMurmurHash3_32.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
@@ -80,8 +97,9 @@ class spark_murmur_device_row_hasher {
    * When the column is non-nested, this is a simple wrapper around the element_hasher.
    * When the column is nested, this uses a seed value to serially compute each
    * nested element, with the output hash becoming the seed for the next value.
-   * The hash of a null element is the input seed (the previous element's
-   * hash).
+   * This requires constructing a new hash functor for each nested element,
+   * using the new seed from the previous element's hash. The hash of a null
+   * element is the input seed (the previous element's hash).
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
@@ -172,11 +190,6 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  // TODO: Spark uses int32_t hash values, but libcudf defines hash_value_type
-  // as uint32_t elsewhere. I plan to move the SparkMurmurHash3_32 functor into
-  // this file (since it is only used here), and replace its use of
-  // hash_value_type with spark_hash_value_type. --bdice
-
   auto output = make_numeric_column(data_type(type_to_id<spark_hash_value_type>()),
                                     input.num_rows(),
                                     mask_state::UNALLOCATED,
