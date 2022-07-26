@@ -115,20 +115,20 @@ class byte_array_view {
   }
 
   /**
-   * @brief Returns true if this string is ordered before rhs.
+   * @brief Returns true if this byte_array_view is ordered before rhs.
    *
-   * @param rhs Target string to compare with this string.
-   * @return true if this string is ordered before rhs
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if this byte_array_view is ordered before rhs
    */
   [[nodiscard]] __device__ inline bool operator<(const byte_array_view& rhs) const
   {
     return compare(rhs) < 0;
   }
   /**
-   * @brief Returns true if rhs is ordered before this string.
+   * @brief Returns true if rhs is ordered before this byte_array_view.
    *
-   * @param rhs Target string to compare with this string.
-   * @return true if rhs is ordered before this string
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if rhs is ordered before this byte_array_view
    */
   [[nodiscard]] __device__ inline bool operator>(const byte_array_view& rhs) const
   {
@@ -136,20 +136,20 @@ class byte_array_view {
   }
 
   /**
-   * @brief Returns true if this string is ordered before rhs.
+   * @brief Returns true if this byte_array_view is ordered before rhs.
    *
-   * @param rhs Target string to compare with this string.
-   * @return true if this string is ordered before rhs
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if this byte_array_view is ordered before rhs
    */
   [[nodiscard]] __device__ inline bool operator<=(const byte_array_view& rhs) const
   {
     return compare(rhs) <= 0;
   }
   /**
-   * @brief Returns true if rhs is ordered before this string.
+   * @brief Returns true if rhs is ordered before this byte_array_view.
    *
-   * @param rhs Target string to compare with this string.
-   * @return true if rhs is ordered before this string
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if rhs is ordered before this byte_array_view
    */
   [[nodiscard]] __device__ inline bool operator>=(const byte_array_view& rhs) const
   {
@@ -157,23 +157,16 @@ class byte_array_view {
   }
 
   /**
-   * @brief Return minimum value associated with the string type
+   * @brief Return minimum value associated with the byte_array_view type
    *
-   * This function is needed to be host callable because it is called by a host
-   * callable function DeviceMax::identity<byte_array_view>()
-   *
-   * @return An empty string
+   * @return An empty byte_array_view
    */
   [[nodiscard]] __device__ inline static byte_array_view min() { return byte_array_view(); }
 
   /**
-   * @brief Return maximum value associated with the string type
+   * @brief Return a byte_array_view to interpret as maximum value
    *
-   * This function is needed to be host callable because it is called by a host
-   * callable function DeviceMin::identity<byte_array_view>()
-   *
-   * @return A string value which represents the highest possible valid UTF-8 encoded
-   * character.
+   * @return A byte_array_view value which represents the largest possible byte_array_view
    */
   [[nodiscard]] __device__ inline static byte_array_view max()
   {

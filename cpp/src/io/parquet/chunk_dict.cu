@@ -159,7 +159,6 @@ __global__ void __launch_bounds__(block_size)
               // Binary is stored as 4 byte length + bytes
               return 4 + get_element<byte_array_view>(data_col, val_idx).size_bytes();
             }
-            CUDF_UNREACHABLE("Unsupported type for byte array");
           }
           case Type::FIXED_LEN_BYTE_ARRAY:
             if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }

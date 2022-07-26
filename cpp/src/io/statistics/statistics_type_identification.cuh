@@ -199,7 +199,7 @@ class aggregation_type {
   // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> int64_t
-  // byte_array_view         -> int64_t
+  // byte_array        -> int64_t
   // NOTE : timestamps do not have an aggregation type
 
  public:
@@ -255,7 +255,7 @@ __inline__ __device__ constexpr T maximum_identity()
   } else if constexpr (std::is_same_v<T, byte_array_view>) {
     return byte_array_view::min();
   }
-  return cuda::std::numeric_limits<T>::lowest();
+  return cuda::std::numeric_limits<T>::min();
 }
 
 /**
