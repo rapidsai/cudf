@@ -94,9 +94,9 @@ class data_chunk_reader {
                                                             rmm::cuda_stream_view stream) = 0;
 
   /**
-   * @pure @brief Read the next chunk of bytes from the data source in to a specific destination
+   * @pure @brief Copy the next chunk of bytes from the data source in to a specific destination
    *
-   * Performs any necessary work to read underlying data source into the destination device memory.
+   * Performs any necessary work to copy underlying data source into the destination device memory.
    * Common implementations may read from a file, copy data from host memory, allocate temporary
    * memory, perform iterative decompression, or even launch device kernels.
    *
@@ -105,7 +105,7 @@ class data_chunk_reader {
    * @return a copy of the destination span. May return a subspan if reader reaches end of
    * underlying data source before filling the destination.
    */
-  virtual device_span<char> read_next_chunk(device_span<char> destination,
+  virtual device_span<char> copy_next_chunk(device_span<char> destination,
                                             rmm::cuda_stream_view stream) = 0;
 };
 

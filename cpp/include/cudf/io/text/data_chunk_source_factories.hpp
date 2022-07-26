@@ -92,7 +92,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
   void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
 
   template <typename T>
-  auto read_next_chunk_impl(std::size_t read_size, T get_destination, rmm::cuda_stream_view stream)
+  auto copy_next_chunk_impl(std::size_t read_size, T get_destination, rmm::cuda_stream_view stream)
   {
     auto& h_ticket = _tickets[_next_ticket_idx];
 
@@ -133,7 +133,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
   {
     CUDF_FUNC_RANGE();
 
-    auto destination = read_next_chunk_impl(
+    auto destination = copy_next_chunk_impl(
       read_size,
       [](std::size_t read_size, rmm::cuda_stream_view stream) {
         return rmm::device_uvector<char>(read_size, stream);
@@ -144,12 +144,12 @@ class istream_data_chunk_reader : public data_chunk_reader {
     return std::make_unique<device_uvector_data_chunk>(std::move(destination));
   }
 
-  device_span<char> read_next_chunk(device_span<char> const destination,
+  device_span<char> copy_next_chunk(device_span<char> const destination,
                                     rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
 
-    return read_next_chunk_impl(
+    return copy_next_chunk_impl(
       destination.size(),
       [destination](std::size_t read_size, rmm::cuda_stream_view stream) {
         return destination.subspan(0, read_size);
@@ -194,7 +194,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
     return std::make_unique<device_span_data_chunk>(chunk_span);
   }
 
-  device_span<char> read_next_chunk(device_span<char> destination,
+  device_span<char> copy_next_chunk(device_span<char> destination,
                                     rmm::cuda_stream_view stream) override
   {
     auto chunk = this->get_next_chunk(destination.size(), stream);

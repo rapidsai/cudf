@@ -421,7 +421,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   for (int32_t i = 0; i < string_chars_size; i += ITEMS_PER_CHUNK) {
     auto const read_size   = std::min<int64_t>(ITEMS_PER_CHUNK, string_chars_size - i);
     auto const destination = device_span<char>(string_chars).subspan(i, read_size);
-    reader->read_next_chunk(destination, stream);
+    reader->copy_next_chunk(destination, stream);
   }
 
   auto string_count = string_offsets_out.size() - 1;
