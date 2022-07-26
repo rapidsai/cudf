@@ -156,7 +156,6 @@ __global__ void __launch_bounds__(block_size)
               // Strings are stored as 4 byte length + string bytes
               return 4 + data_col.element<string_view>(val_idx).size_bytes();
             }
-            CUDF_UNREACHABLE("Unsupported type for byte array");
           }
           case Type::FIXED_LEN_BYTE_ARRAY:
             if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }

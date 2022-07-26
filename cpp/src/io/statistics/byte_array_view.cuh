@@ -97,36 +97,80 @@ class byte_array_view {
     auto const* ptr1 = this->data();
     auto const* ptr2 = rhs.data();
     if ((ptr1 == ptr2) && (len1 == len2)) { return 0; }
+    // if I am max, I am greater than the argument
+    if (ptr1 == nullptr && len1 == std::numeric_limits<std::size_t>::max()) { return 1; }
+    // if the argument is max, it is greater than me
+    if (ptr2 == nullptr && len2 == std::numeric_limits<std::size_t>::max()) { return -1; }
     std::size_t idx = 0;
     for (; (idx < len1) && (idx < len2); ++idx) {
       if (ptr1[idx] != ptr2[idx]) {
         return static_cast<int32_t>(ptr1[idx]) - static_cast<int32_t>(ptr2[idx]);
       }
     }
+    // if the argument ran out of data, it is less than me
     if (idx < len1) return 1;
+    // if I ran out of data first, I am less than the argument
     if (idx < len2) return -1;
     return 0;
   }
 
   /**
-   * @brief Returns true if this string is ordered before rhs.
+   * @brief Returns true if this byte_array_view is ordered before rhs.
    *
-   * @param rhs Target string to compare with this string.
-   * @return true if this string is ordered before rhs
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if this byte_array_view is ordered before rhs
    */
   [[nodiscard]] __device__ inline bool operator<(const byte_array_view& rhs) const
   {
     return compare(rhs) < 0;
   }
   /**
-   * @brief Returns true if rhs is ordered before this string.
+   * @brief Returns true if rhs is ordered before this byte_array_view.
    *
-   * @param rhs Target string to compare with this string.
-   * @return true if rhs is ordered before this string
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if rhs is ordered before this byte_array_view
    */
   [[nodiscard]] __device__ inline bool operator>(const byte_array_view& rhs) const
   {
     return compare(rhs) > 0;
+  }
+
+  /**
+   * @brief Returns true if this byte_array_view is ordered before rhs.
+   *
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if this byte_array_view is ordered before rhs
+   */
+  [[nodiscard]] __device__ inline bool operator<=(const byte_array_view& rhs) const
+  {
+    return compare(rhs) <= 0;
+  }
+  /**
+   * @brief Returns true if rhs is ordered before this byte_array_view.
+   *
+   * @param rhs Target byte_array_view to compare with this byte_array_view.
+   * @return true if rhs is ordered before this byte_array_view
+   */
+  [[nodiscard]] __device__ inline bool operator>=(const byte_array_view& rhs) const
+  {
+    return compare(rhs) >= 0;
+  }
+
+  /**
+   * @brief Return minimum value associated with the byte_array_view type
+   *
+   * @return An empty byte_array_view
+   */
+  [[nodiscard]] __device__ inline static byte_array_view min() { return byte_array_view(); }
+
+  /**
+   * @brief Return a byte_array_view to interpret as maximum value
+   *
+   * @return A byte_array_view value which represents the largest possible byte_array_view
+   */
+  [[nodiscard]] __device__ inline static byte_array_view max()
+  {
+    return byte_array_view(nullptr, std::numeric_limits<std::size_t>::max());
   }
 
  private:
