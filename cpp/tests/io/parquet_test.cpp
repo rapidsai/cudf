@@ -757,11 +757,7 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-<<<<<<< HEAD
-      .convert_binary_to_strings({false, false, false, false});
-=======
       .convert_binary_to_strings({false, false, false, false, false, false, false, false});
->>>>>>> mwilson/parquet_writer_binary
   auto result = cudf_io::read_parquet(in_opts);
 
   auto original_cols = write_tbl->release();
@@ -4451,7 +4447,7 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   auto const stats0 = parse_statistics(fmd.row_groups[0].columns[0]);
   auto const stats1 = parse_statistics(fmd.row_groups[0].columns[1]);
