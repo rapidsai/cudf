@@ -111,9 +111,9 @@ def _build_option_description(name, opt):
 
 
 def describe_option(name: Optional[str] = None):
-    """Prints a specific option description or all option descriptions.
+    """Prints the description of an option.
 
-    If `name` is unspecified, prints all available option descriptions.
+    If `name` is unspecified, prints the description of all available options.
 
     Parameters
     ----------
