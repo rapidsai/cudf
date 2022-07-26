@@ -25,6 +25,9 @@
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 
+#include <limits>
+#include <string>
+
 using float_type = double;
 using namespace cudf::test::iterators;
 

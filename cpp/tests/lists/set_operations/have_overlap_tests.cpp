@@ -23,6 +23,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/lists/set_operations.hpp>
 
+#include <limits>
+#include <string>
+
 using float_type = double;
 using namespace cudf::test::iterators;
 
