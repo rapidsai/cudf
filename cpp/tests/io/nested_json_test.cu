@@ -55,7 +55,7 @@ void print_tree_representation(std::string const& json_input,
                                nested_json::tree_meta_t const& tree_rep)
 {
   for (std::size_t i = 0; i < tree_rep.node_categories.size(); i++) {
-    std::size_t parent_id                = tree_rep.parent_node_ids[i];
+    std::size_t parent_id = tree_rep.parent_node_ids[i];
     std::stack<std::size_t> path;
     path.push(i);
     while (parent_id != nested_json::parent_node_sentinel) {
