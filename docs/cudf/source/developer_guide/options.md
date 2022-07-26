@@ -1,5 +1,8 @@
 # Options
 
+The usage of options is explained in the [user guide](options_user_guide).
+This document provides more explanations on how developers work with options internally.
+
 Options are stored as a dictionary in the `cudf.options` module.
 Each option name is its key in the dictionary.
 The value of the option is an instance of an `Options` object.

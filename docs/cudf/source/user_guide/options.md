@@ -1,3 +1,5 @@
+(options_user_guide)=
+
 # Options
 
 cuDF has an options API to configure and customize global behavior.
