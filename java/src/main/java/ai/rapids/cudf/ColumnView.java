@@ -3260,12 +3260,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Extracts all strings that match the given regular expression and corresponds to the 
+   * Extracts all strings that match the given regular expression and corresponds to the
    * regular expression group index. Any null inputs also result in null output entries.
-   * 
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
-   
+
    * @param pattern The regex pattern
    * @param idx The regex group index
    * @return A new column vector of extracted matches
@@ -3556,11 +3556,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param rhs The input lists column for the other side
    * @return A column of type BOOL8 containing the check result
    */
-  public static ColumnVector listOverlap(ColumnView lhs, ColumnView rhs) {
+  public static ColumnVector listsHaveOverlap(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
     assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
-    return new ColumnVector(listOverlap(lhs.getNativeView(), rhs.getNativeView()));
+    return new ColumnVector(listsHaveOverlap(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -3576,11 +3576,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param rhs The input lists column for the other side
    * @return A lists column containing the intersection result
    */
-  public static ColumnVector setIntersect(ColumnView lhs, ColumnView rhs) {
+  public static ColumnVector listsIntersectDistinct(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
     assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
-    return new ColumnVector(setIntersect(lhs.getNativeView(), rhs.getNativeView()));
+    return new ColumnVector(listsIntersectDistinct(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -3596,11 +3596,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param rhs The input lists column for the other side
    * @return A lists column containing the union result
    */
-  public static ColumnVector setUnion(ColumnView lhs, ColumnView rhs) {
+  public static ColumnVector listsUnionDistinct(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
     assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
-    return new ColumnVector(setUnion(lhs.getNativeView(), rhs.getNativeView()));
+    return new ColumnVector(listsUnionDistinct(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -3617,11 +3617,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param rhs The input lists column for the other side
    * @return A lists column containing the difference result
    */
-  public static ColumnVector setDifference(ColumnView lhs, ColumnView rhs) {
+  public static ColumnVector listsDifferenceDistinct(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
     assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
-    return new ColumnVector(setDifference(lhs.getNativeView(), rhs.getNativeView()));
+    return new ColumnVector(listsDifferenceDistinct(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -4171,13 +4171,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
 
-  private static native long listOverlap(long lhsViewHandle, long rhsViewHandle);
+  private static native long listsHaveOverlap(long lhsViewHandle, long rhsViewHandle);
 
-  private static native long setIntersect(long lhsViewHandle, long rhsViewHandle);
+  private static native long listsIntersectDistinct(long lhsViewHandle, long rhsViewHandle);
 
-  private static native long setUnion(long lhsViewHandle, long rhsViewHandle);
+  private static native long listsUnionDistinct(long lhsViewHandle, long rhsViewHandle);
 
-  private static native long setDifference(long lhsViewHandle, long rhsViewHandle);
+  private static native long listsDifferenceDistinct(long lhsViewHandle, long rhsViewHandle);
 
   private static native long getElement(long nativeView, int index);
 

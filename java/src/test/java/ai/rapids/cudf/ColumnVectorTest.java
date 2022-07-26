@@ -4897,32 +4897,32 @@ public class ColumnVectorTest extends CudfTestBase {
     try(ColumnVector lhs = makeListsColumn(DType.FLOAT64, lhsList1, lhsList2, lhsList3, lhsList4);
         ColumnVector rhs = makeListsColumn(DType.FLOAT64, rhsList1, rhsList2, rhsList3, rhsList4)) {
 
-      // Test listOverlap:
+      // Test listsHaveOverlap:
       try(ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, null, null);
-          ColumnVector result = ColumnVector.listOverlap(lhs, rhs)) {
+          ColumnVector result = ColumnVector.listsHaveOverlap(lhs, rhs)) {
         assertColumnsAreEqual(expected, result);
       }
 
-      // Test setIntersect:
+      // Test listsIntersectDistinct:
       try(ColumnVector expected = makeListsColumn(DType.FLOAT64, expectedIntersectionList1,
               expectedIntersectionList2, null, null);
-          ColumnVector result = ColumnVector.setIntersect(lhs, rhs);
+          ColumnVector result = ColumnVector.listsIntersectDistinct(lhs, rhs);
           ColumnVector resultSorted = result.listSortRows(false, true)) {
         assertColumnsAreEqual(expected, resultSorted);
       }
 
-      // Test setUnion:
+      // Test listsUnionDistinct:
       try(ColumnVector expected = makeListsColumn(DType.FLOAT64, expectedUnionList1,
           expectedUnionList2, null, null);
-          ColumnVector result = ColumnVector.setUnion(lhs, rhs);
+          ColumnVector result = ColumnVector.listsUnionDistinct(lhs, rhs);
           ColumnVector resultSorted = result.listSortRows(false, true)) {
         assertColumnsAreEqual(expected, resultSorted);
       }
 
-      // Test setDifference:
+      // Test listsDifferenceDistinct:
       try(ColumnVector expected = makeListsColumn(DType.FLOAT64, expectedDifferenceList1,
           expectedDifferenceList2, null, null);
-          ColumnVector result = ColumnVector.setDifference(lhs, rhs);
+          ColumnVector result = ColumnVector.listsDifferenceDistinct(lhs, rhs);
           ColumnVector resultSorted = result.listSortRows(false, true)) {
         assertColumnsAreEqual(expected, resultSorted);
       }
