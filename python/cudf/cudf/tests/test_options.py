@@ -20,7 +20,7 @@ def empty_option_environment():
 def odd_option(empty_option_environment):
     def validator(x):
         if not x % 2 == 1:
-            raise ValueError(f"Invalid option {x}")
+            raise ValueError(f"Invalid option value {x}")
 
     cudf.options._register_option(
         "odd_option",
@@ -36,7 +36,7 @@ def odd_option(empty_option_environment):
 def even_option(empty_option_environment):
     def validator(x):
         if not x % 2 == 0:
-            raise ValueError(f"Invalid option {x}")
+            raise ValueError(f"Invalid option value {x}")
 
     cudf.options._register_option(
         "even_option", 0, "An even option.", validator
@@ -52,7 +52,7 @@ def test_option_get_set(odd_option):
 
 
 def test_option_set_invalid(odd_option):
-    with pytest.raises(ValueError, match="Invalid option 0"):
+    with pytest.raises(ValueError, match="Invalid option value 0"):
         cudf.set_option("odd_option", 0)
 
 
