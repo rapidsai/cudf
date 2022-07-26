@@ -98,7 +98,7 @@ std::unique_ptr<column> intersect_distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- @brief Create a lists column of distinct elements found in either of two input lists columns.
+ * @brief Create a lists column of distinct elements found in either of two input lists columns.
  *
  * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
  * that each of its row `i` contains a list of distinct elements that can be found in either
