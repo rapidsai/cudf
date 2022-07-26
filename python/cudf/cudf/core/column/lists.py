@@ -70,7 +70,7 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[0][
+            current_offset = cudf.Series(current_base_child.base_children[0])[
                 current_offset
             ]
             n += child0_size
