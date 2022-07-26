@@ -32,7 +32,7 @@ def _register_option(
     validator : Callable
         Called on the option value to check its validity. Should raise an
         error if the value is invalid.
-    
+
     Raises
     ------
     ValueError
@@ -42,7 +42,9 @@ def _register_option(
     try:
         validator(default_value)
     except Exception as e:
-        raise ValueError(f"{name}={default_value} is not a valid value.") from e
+        raise ValueError(
+            f"{name}={default_value} is not a valid value."
+        ) from e
 
     _OPTIONS[name] = Option(
         default_value, default_value, description, validator
@@ -122,7 +124,8 @@ def describe_option(name: Optional[str] = None):
     """
     names = _OPTIONS.keys() if name is None else [name]
     for name in names:
-        print(_build_option_description(name, _OPTIONS[name])
+        print(_build_option_description(name, _OPTIONS[name]))
+
 
 def _make_contains_validator(valid_options: Container) -> Callable:
     """Return a validator that checks if a value is in `valid_options`."""
