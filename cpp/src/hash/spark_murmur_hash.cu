@@ -174,11 +174,12 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   // TODO: Spark uses int32_t hash values, but libcudf defines hash_value_type
-  // as uint32_t elsewhere. This should be investigated and unified. I suspect
-  // we should use int32_t everywhere. Also check this for hash seeds. --bdice
-  using hash_value_type = int32_t;
+  // as uint32_t elsewhere. I plan to move the SparkMurmurHash3_32 functor into
+  // this file (since it is only used here), and replace its use of
+  // hash_value_type with spark_hash_value_type. --bdice
+  using spark_hash_value_type = int32_t;
 
-  auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
+  auto output = make_numeric_column(data_type(type_to_id<spark_hash_value_type>()),
                                     input.num_rows(),
                                     mask_state::UNALLOCATED,
                                     stream,
