@@ -89,16 +89,9 @@ def describe_option(name: Optional[str] = None):
     name : Optional[str]
         The name of the option.
     """
-    s = ""
-    if name is None:
-        s = "\n".join(
-            _build_option_description(name, opt)
-            for name, opt in _OPTIONS.items()
-        )
-    else:
-        s = _build_option_description(name, _OPTIONS[name])
-    print(s)
-
+    names = _OPTIONS.keys() if name is None else [name]
+    for name in names:
+        print(_build_option_description(name, _OPTIONS[name])
 
 def _make_categorical_validator(valid_options: Container) -> Callable:
     """Return a validator that checks if a value is in `valid_options`."""
