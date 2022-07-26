@@ -21,11 +21,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using namespace cudf::test;
+using namespace cudf::test::iterators;
 
 constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
 
@@ -768,25 +770,7 @@ TEST_F(SparkMurmurHash3Test, ListValues)
   df2.show(false)
   */
 
-  /*
-  child data: 1, 1, 2, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, null, 2, 3, 1, 2, 3, null, 1, 2, 3
-  23 items
-  validity: i != 13, i != 19
-
-  nested validity: i != 0 && i != 15
-  offsets: 0, 0, 1, 3, 6, 8, 9, 10, 12, 13, 16, 18, 19, 20, 22, 23
-  16 items
-
-  row validity: i != 0
-  row offsets: 0, 0, 0, 1, 2, 3, 4, 6, 8, 10, 13, 16
-  11 items
-  */
-
-  auto const null = -1;
-  auto child_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
-  auto nested_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0 && i != 14; });
+  auto const null  = -1;
   auto nested_list = cudf::test::lists_column_wrapper<int>({{},
                                                             {1},
                                                             {1, 2},
@@ -796,18 +780,17 @@ TEST_F(SparkMurmurHash3Test, ListValues)
                                                             {1},
                                                             {2, 3},
                                                             {1},
-                                                            {{null, 2, 3}, child_validity},
+                                                            {{null, 2, 3}, nulls_at({0})},
                                                             {1, 2},
                                                             {3},
-                                                            {{null}, child_validity},
+                                                            {{null}, nulls_at({0})},
                                                             {1, 2},
                                                             {},
                                                             {3}},
-                                                           nested_validity);
+                                                           nulls_at({0, 14}));
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 1, 2, 3, 4, 6, 8, 10, 13, 16};
-  auto list_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto list_validity        = nulls_at({0});
   auto list_validity_buffer = cudf::test::detail::make_null_mask(list_validity, list_validity + 11);
   auto list_column          = cudf::make_lists_column(11,
                                              offsets.release(),
@@ -828,6 +811,52 @@ TEST_F(SparkMurmurHash3Test, ListValues)
                                                                 -912918097};
 
   auto output = cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3, 42);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
+}
+
+TEST_F(SparkMurmurHash3Test, StructOfListValues)
+{
+  /*
+  import org.apache.spark.sql.functions._
+  import org.apache.spark.sql.types.{ArrayType, IntegerType, StructType}
+  import org.apache.spark.sql.Row
+
+  val schema = new StructType()
+    .add("structs", new StructType()
+        .add("a", ArrayType(IntegerType))
+        .add("b", ArrayType(IntegerType)))
+
+  val data = Seq(
+    Row(Row(List(), List())),
+    Row(Row(List(0), List(0))),
+    Row(Row(List(1, null), null)),
+    Row(Row(List(1, null), List())),
+    Row(Row(List(), List(null, 1))),
+    Row(Row(null, List(1))),
+    Row(Row(List(2, 3), List(4, 5))),
+  )
+
+  val df = spark.createDataFrame(
+    spark.sparkContext.parallelize(data), schema)
+
+  val df2 = df.selectExpr("lists", "hash(lists) as hash")
+  df2.printSchema()
+  df2.show(false)
+  */
+
+  auto const null = -1;
+  auto col1       = cudf::test::lists_column_wrapper<int>(
+    {{}, {0}, {{1, null}, nulls_at({1})}, {{1, null}, nulls_at({1})}, {}, {} /*NULL*/, {2, 3}},
+    nulls_at({5}));
+  auto col2 = cudf::test::lists_column_wrapper<int>(
+    {{}, {0}, {} /*NULL*/, {}, {{null, 1}, nulls_at({0})}, {1}, {4, 5}}, nulls_at({2}));
+  auto struct_column = cudf::test::structs_column_wrapper{{col1, col2}};
+
+  auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{
+    42, 59727262, -559580957, -559580957, -559580957, -559580957, 170038658};
+
+  auto output =
+    cudf::hash(cudf::table_view({struct_column}), cudf::hash_id::HASH_SPARK_MURMUR3, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
