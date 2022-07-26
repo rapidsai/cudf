@@ -10,13 +10,13 @@ import cudf
 
 @pytest.fixture(scope="module", autouse=True)
 def empty_option_environment():
-    old_option_enviorment = cudf.options._OPTIONS
+    old_option_environment = cudf.options._OPTIONS
     cudf.options._OPTIONS = {}
     yield
-    cudf.options._OPTIONS = old_option_enviorment
+    cudf.options._OPTIONS = old_option_environment
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def odd_option(empty_option_environment):
     def validator(x):
         if not x % 2 == 1:
@@ -32,7 +32,7 @@ def odd_option(empty_option_environment):
     del cudf.options._OPTIONS["odd_option"]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def even_option(empty_option_environment):
     def validator(x):
         if not x % 2 == 0:
@@ -49,8 +49,6 @@ def test_option_get_set(odd_option):
     assert cudf.get_option("odd_option") == 1
     cudf.set_option("odd_option", 101)
     assert cudf.get_option("odd_option") == 101
-    # Restore default value for other tests
-    cudf.set_option("odd_option", 1)
 
 
 def test_option_set_invalid(odd_option):

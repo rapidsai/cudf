@@ -1,7 +1,7 @@
 # Options
 
-Options are stored as a dictionary in `cudf.options` module.
-Each option name is also its key in the dictionary.
+Options are stored as a dictionary in the `cudf.options` module.
+Each option name is its key in the dictionary.
 The value of the option is an instance of an `Options` object.
 
 An `Options` object has the following attributes:
