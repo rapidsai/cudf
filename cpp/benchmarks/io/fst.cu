@@ -41,9 +41,6 @@ namespace {
 auto make_test_json_data(nvbench::state& state)
 {
   auto const string_size{size_type(state.get_int64("string_size"))};
-  // auto const depth{size_type(state.get_int64("depth"))};
-  // Basic JSON structure.
-  // number, string, boolean, Array, { "str_key": JSON obj }, null.
 
   // Test input
   std::string input = R"(  {)"
