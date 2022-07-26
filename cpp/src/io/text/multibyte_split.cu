@@ -419,12 +419,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   reader->skip_bytes(relevant_offset_first);
 
   for (int32_t i = 0; i < string_chars_size; i += ITEMS_PER_CHUNK) {
-    auto read_size = std::min(static_cast<int64_t>(ITEMS_PER_CHUNK), string_chars_size - i);
-    auto relevant_bytes = reader->get_next_chunk(read_size, stream);
+    auto const read_size   = std::min<int64_t>(ITEMS_PER_CHUNK, string_chars_size - i);
+    auto const chunk_bytes = reader->get_next_chunk(read_size, stream);
 
     thrust::copy(rmm::exec_policy(stream),
-                 relevant_bytes->data(),  //
-                 relevant_bytes->data() + relevant_bytes->size(),
+                 chunk_bytes->data(),
+                 chunk_bytes->data() + chunk_bytes->size(),
                  string_chars.begin() + i);
   }
 
