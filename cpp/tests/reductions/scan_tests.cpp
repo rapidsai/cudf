@@ -136,14 +136,14 @@ struct ScanTest : public BaseScanTest<T> {
         case aggregation::SUM: return HostType{0};
         case aggregation::PRODUCT: return HostType{1};
         case aggregation::MIN:
-          if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
-            return cuda::std::numeric_limits<T>::infinity();
+          if constexpr (cuda::std::numeric_limits<HostType>::has_infinity) {
+            return cuda::std::numeric_limits<HostType>::infinity();
           } else {
             return std::numeric_limits<HostType>::max();
           }
         case aggregation::MAX:
-          if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
-            return -cuda::std::numeric_limits<T>::infinity();
+          if constexpr (cuda::std::numeric_limits<HostType>::has_infinity) {
+            return -cuda::std::numeric_limits<HostType>::infinity();
           } else {
             return std::numeric_limits<HostType>::lowest();
           }
