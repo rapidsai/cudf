@@ -1897,6 +1897,15 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
       if (out_buf.size == 0) {
         int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
 
+        // if we are not doing a trim pass, handle the corner case where we somehow have columns
+        // that contain more rows than are in the row group.  we have seen explicit examples of
+        // files being created this way.
+        if (!uses_custom_row_bounds &&
+            !(out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) &&
+            size > static_cast<size_type>(num_rows)) {
+          size = static_cast<size_type>(num_rows);
+        }
+
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 
