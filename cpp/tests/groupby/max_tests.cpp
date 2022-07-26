@@ -449,8 +449,11 @@ TEST_F(groupby_max_float_test, values_with_infinity)
   auto const expected_keys = int32s_col{1, 2};
   auto const expected_vals = floats_col{inf, 2.};
 
+  // Related issue: https://github.com/rapidsai/cudf/issues/11352
+  // The issue only occurs in sort-based aggregation.
   auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
-  test_single_agg(keys, vals, expected_keys, expected_vals, std::move(agg));
+  test_single_agg(
+    keys, vals, expected_keys, expected_vals, std::move(agg), force_use_sort_impl::YES);
 }
 
 }  // namespace test
