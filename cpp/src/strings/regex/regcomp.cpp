@@ -60,7 +60,7 @@ static reclass cclass_S(NCCLASS_S);  // \S
 static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
-const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
+const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
 // Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
@@ -466,9 +466,29 @@ class regex_parser {
     // are treated as regex expressions and sometimes they are not.
     if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
 
+    // Check that the previous item can be used with quantifiers.
+    // If the previous item is a capture group, we need to check items inside the
+    // capture group can be used with quantifiers.
+    auto previous_type = _items.back().type;
+    if (previous_type == RBRA) {  // previous item is a capture group
+      // look for matching LBRA
+      auto lbra_itr = std::find_if(_items.rbegin(), _items.rend(), [](auto const& item) {
+        return item.type == LBRA || item.type == LBRA_NC;
+      });
+      // search for the first valid item within the LBRA-RBRA range
+      auto first_valid = std::find_first_of(
+        _items.rbegin() + 1,
+        lbra_itr,
+        valid_preceding_inst_types.begin(),
+        valid_preceding_inst_types.end(),
+        [](auto const item, auto const valid_type) { return item.type == valid_type; });
+      // set previous_type for error report
+      previous_type = (first_valid != lbra_itr) ? first_valid->type : (--lbra_itr)->type;
+    }
+
     if (std::find(valid_preceding_inst_types.begin(),
                   valid_preceding_inst_types.end(),
-                  _items.back().type) == valid_preceding_inst_types.end()) {
+                  previous_type) == valid_preceding_inst_types.end()) {
       CUDF_FAIL("invalid regex pattern: nothing to repeat at position " +
                 std::to_string(_expr_ptr - _pattern_begin - 1));
     }
