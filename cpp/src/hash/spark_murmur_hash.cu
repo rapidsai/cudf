@@ -115,7 +115,7 @@ class spark_murmur_device_row_hasher {
     __device__ spark_hash_value_type operator()(column_device_view const& col,
                                                 size_type row_index) const noexcept
     {
-      auto const hasher = hash_functor(_check_nulls, _seed, _seed);
+      auto const hasher = hash_functor{_check_nulls, _seed, _seed};
       return hasher.template operator()<T>(col, row_index);
     }
 
@@ -139,7 +139,7 @@ class spark_murmur_device_row_hasher {
         thrust::counting_iterator(curr_col.size()),
         _seed,
         [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
-          auto const hasher = hash_functor(nulls, hash, hash);
+          auto const hasher = hash_functor{nulls, hash, hash};
           return cudf::type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
             curr_col.type(), hasher, curr_col, element_index);
         });
