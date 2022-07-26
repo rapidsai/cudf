@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.08.00
+  VERSION 22.10.00
   LANGUAGES C CXX CUDA
 )
 
