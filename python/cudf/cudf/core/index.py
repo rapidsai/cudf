@@ -55,7 +55,7 @@ from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring, doc_apply
-from cudf.utils.dtypes import find_common_type
+from cudf.utils.dtypes import _default_integer_dtype, find_common_type
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
 
 T = TypeVar("T", bound="Frame")
@@ -403,10 +403,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def dtype(self):
         """
         `dtype` of the range of values in RangeIndex.
+
+        By default the dtype is 64 bit signed integer. This is configurable
+        via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
-        if cudf.get_option("default_integer_bitwidth") == 32:
-            return cudf.dtype(np.int32)
-        return cudf.dtype(np.int64)
+        return _default_integer_dtype()
 
     @_cudf_nvtx_annotate
     def find_label_range(self, first=None, last=None):
@@ -549,7 +550,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _as_int_index(self):
         # Convert self to an integer index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
-        # By default, RangeIndex converts to Int64Index.
         return _dtype_to_index[self.dtype.type]._from_data(self._data)
 
     @_cudf_nvtx_annotate

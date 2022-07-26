@@ -71,6 +71,8 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils.dtypes import (
+    _default_floating_dtype,
+    _default_integer_dtype,
     cudf_dtype_from_pa_type,
     get_time_unit,
     min_unsigned_type,
@@ -2077,17 +2079,16 @@ def as_column(
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
                 else:
-                    # Relying on pyarrow's type inference to infer the dtype
-                    # If default 32-bit is set, override as 32-bit
-                    if cudf.get_option("default_integer_bitwidth") == 32:
-                        if infer_dtype(arbitrary) == "integer":
-                            pa_type = pa.int32()
-                    if cudf.get_option("default_float_bitwidth") == 32:
-                        if infer_dtype(arbitrary) in (
-                            "floating",
-                            "mixed-integer-float",
-                        ):
-                            pa_type = pa.float32()
+                    # By default cudf constructs a 64-bit column. Setting
+                    # the `default_*_bitwidth` to 32 will result in a 32-bit
+                    # column being created.
+                    if infer_dtype(arbitrary) == "integer":
+                        pa_type = np_to_pa_dtype(_default_integer_dtype())
+                    if infer_dtype(arbitrary) in (
+                        "floating",
+                        "mixed-integer-float",
+                    ):
+                        pa_type = np_to_pa_dtype(_default_floating_dtype())
 
                 data = as_column(
                     pa.array(

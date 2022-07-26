@@ -662,6 +662,16 @@ def _map_to_default_dtypes(inferred_dtypes: List[np.dtype]) -> List[np.dtype]:
     return [dtype_map.get(dtype, dtype) for dtype in inferred_dtypes]
 
 
+def _default_integer_dtype(signed="i"):
+    return cudf.dtype(
+        f'{signed}{cudf.get_option("default_integer_bitwidth")//8}'
+    )
+
+
+def _default_floating_dtype():
+    return cudf.dtype(f'f{cudf.get_option("default_float_bitwidth")//8}')
+
+
 # Type dispatch loops similar to what are found in `np.add.types`
 # In NumPy, whether or not an op can be performed between two
 # operands is determined by checking to see if NumPy has a c/c++
