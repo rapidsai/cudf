@@ -151,12 +151,12 @@ class MultibyteSplitBenchmark : public cudf::benchmark {
     BM_multibyte_split(state);                                                  \
   }                                                                             \
   BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                           \
-    ->ArgsProduct({{data_chunk_source_type::file},                              \
-                   {                                                            \
-                     1,                                                         \
-                   },                                                           \
-                   {3},                                                         \
-                   {1 << 30}})                                                  \
+    ->ArgsProduct({{data_chunk_source_type::device,                             \
+                    data_chunk_source_type::file,                               \
+                    data_chunk_source_type::host},                              \
+                   {1, 4, 7},                                                   \
+                   {1, 25},                                                     \
+                   {1 << 15, 1 << 30}})                                         \
     ->UseManualTime()                                                           \
     ->Unit(::benchmark::kMillisecond);
 
