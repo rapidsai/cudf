@@ -663,7 +663,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                     return result
 
         # If all the above optimizations don't cater to the inputs,
-        # we materialize RangeIndex's into integer index and
+        # we materialize RangeIndexes into integer indexes and
         # then perform `union`.
         return self._as_int_index()._union(other, sort=sort)
 
@@ -765,8 +765,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def _binaryop(self, other, op: str):
-        # TODO: certain binops doesn't require materializing range index and
-        # use some optimization.
+        # TODO: certain binops don't require materializing range index and
+        # could use some optimization.
         return self._as_int_index()._binaryop(other, op=op)
 
     def join(

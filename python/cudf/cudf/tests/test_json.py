@@ -552,6 +552,7 @@ def test_default_32bit_integer_partial(default_32bit_integer, engine):
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf", "pandas"])
 def test_default_32bit_integer_extremes(default_32bit_integer, engine):
+    # Test that integer columns in json are _inferred_ as 32 bit columns.
     buf = StringIO(
         '{"u8":18446744073709551615, "i8":9223372036854775807}\n'
         '{"u8": 0, "i8": -9223372036854775808}'
@@ -563,6 +564,7 @@ def test_default_32bit_integer_extremes(default_32bit_integer, engine):
 
 
 def test_default_32bit_float(default_32bit_float):
+    # Test that float columns in json are _inferred_ as 32 bit columns.
     df = cudf.read_json(
         '{"a": 1.0, "b": 2.5}\n{"a": 3.5, "b": 4.0}',
         engine="cudf",

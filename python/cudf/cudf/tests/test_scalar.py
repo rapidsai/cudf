@@ -403,10 +403,12 @@ def test_datetime_scalar_from_string(data, dtype):
 
 
 def test_default_32bit_integer_scalar(default_32bit_integer):
+    # Test that integer scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128)
     assert slr.dtype == np.dtype("i4")
 
 
 def test_default_32bit_float_scalar(default_32bit_float):
+    # Test that float scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128.0)
     assert slr.dtype == np.dtype("f4")

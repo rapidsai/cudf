@@ -2067,6 +2067,7 @@ def test_empty_df_no_index():
 
 
 def test_default_32bit_integer(cudf_mixed_dataframe, default_32bit_integer):
+    # Test that integer columns in csv are _inferred_ as 32 bit columns.
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
@@ -2078,6 +2079,7 @@ def test_default_32bit_integer(cudf_mixed_dataframe, default_32bit_integer):
 def test_default_32bit_integer_partial(
     cudf_mixed_dataframe, default_32bit_integer
 ):
+    # Test that integer columns in csv are _inferred_ as 32 bit columns.
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
@@ -2089,6 +2091,7 @@ def test_default_32bit_integer_partial(
 def test_default_32bit_integer_extremes(
     cudf_extreme_numeric_dataframe, default_32bit_integer
 ):
+    # Test that integer columns in csv are _inferred_ as 32 bit columns.
     buf = BytesIO()
     cudf_extreme_numeric_dataframe.to_csv(buf)
     buf.seek(0)
@@ -2100,6 +2103,7 @@ def test_default_32bit_integer_extremes(
 
 
 def test_default_32bit_float(cudf_mixed_dataframe, default_32bit_float):
+    # Test that float columns in csv are _inferred_ as 32 bit columns.
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
@@ -2108,6 +2112,7 @@ def test_default_32bit_float(cudf_mixed_dataframe, default_32bit_float):
 
 
 def test_default_32bit_float_partial(default_32bit_float):
+    # Test that float columns in csv are _inferred_ as 32 bit columns.
     read = cudf.read_csv(
         StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
         dtype={"float2": "float64"},
