@@ -24,6 +24,8 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 
+#include <limits>
+
 using namespace cudf::test::iterators;
 
 namespace cudf {
@@ -428,6 +430,27 @@ TEST_F(groupby_max_struct_test, values_with_null_child)
     auto agg = cudf::make_max_aggregation<groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
   }
+}
+
+struct groupby_max_float_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_max_float_test, values_with_infinity)
+{
+  using T          = double;
+  using int32s_col = fixed_width_column_wrapper<int32_t>;
+  using floats_col = fixed_width_column_wrapper<T, int32_t>;
+
+  auto constexpr inf = std::numeric_limits<T>::infinity();
+
+  auto const keys = int32s_col{1, 2, 1, 2};
+  auto const vals = floats_col{1., 1., inf, 2.};
+
+  auto const expected_keys = int32s_col{1, 2};
+  auto const expected_vals = floats_col{inf, 2.};
+
+  auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(keys, vals, expected_keys, expected_vals, std::move(agg));
 }
 
 }  // namespace test
