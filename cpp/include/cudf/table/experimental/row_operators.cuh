@@ -828,7 +828,7 @@ namespace hash {
 template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher;
 
-template <template <template <typename> class hash_function, typename> class device_row_hasher =
+template <template <template <typename> class hash_function, typename> class DeviceRowHasher =
             device_row_hasher>
 class row_hasher;
 
@@ -1143,7 +1143,7 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
-  template <template <template <typename> class hash_function, typename> class device_row_hasher>
+  template <template <template <typename> class hash_function, typename> class DeviceRowHasher>
   friend class hash::row_hasher;  ///< Allow row_hasher to access private members
 
   using table_device_view_owner =
@@ -1511,7 +1511,7 @@ using preprocessed_table = row::equality::preprocessed_table;
  * @brief Computes the hash value of a row in the given table.
  *
  */
-template <template <template <typename> class, typename> class device_row_hasher>
+template <template <template <typename> class, typename> class DeviceRowHasher>
 class row_hasher {
  public:
   /**
@@ -1550,10 +1550,10 @@ class row_hasher {
    * @return A hash operator to use on the device
    */
   template <template <typename> class hash_function = detail::default_hash, typename Nullate>
-  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
-                                                          uint32_t seed   = DEFAULT_HASH_SEED) const
+  DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
+                                                        uint32_t seed   = DEFAULT_HASH_SEED) const
   {
-    return device_row_hasher<hash_function, Nullate>(nullate, *d_t, seed);
+    return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, seed);
   }
 
  private:
