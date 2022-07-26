@@ -907,11 +907,18 @@ TEST_F(SparkMurmurHash3Test, ListOfStructValues)
                                              cudf::UNKNOWN_NULL_COUNT,
                                              std::move(list_validity_buffer));
 
+  // TODO: Lists of structs are not yet supported. Once support is added,
+  // remove this EXPECT_THROW and uncomment the rest of this test.
+  EXPECT_THROW(cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3, 42),
+               cudf::logic_error);
+
+  /*
   auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{
     59727262, 42, 42, -559580957, -559580957, -912918097, 1092624418, 170038658};
 
   auto output = cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
+  */
 }
 
 class MD5HashTest : public cudf::test::BaseFixture {

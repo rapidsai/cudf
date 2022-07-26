@@ -144,6 +144,28 @@ class spark_device_row_hasher {
   uint32_t const _seed;
 };
 
+void check_hash_compatibility(table_view const& input)
+{
+  using column_checker_fn_t = std::function<void(column_view const&)>;
+
+  column_checker_fn_t check_column = [&](column_view const& c) {
+    if (c.type().id() == type_id::LIST) {
+      auto const& list_col = lists_column_view(c);
+      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
+                   "Cannot compute hash of a table with a LIST of STRUCT columns.");
+      check_column(list_col.child());
+    } else if (c.type().id() == type_id::STRUCT) {
+      for (auto child = c.child_begin(); child != c.child_end(); ++child) {
+        check_column(*child);
+      }
+    }
+  };
+
+  for (column_view const& c : input) {
+    check_column(c);
+  }
+}
+
 }  // namespace
 
 std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
@@ -164,6 +186,9 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
 
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
+
+  // Lists of structs are not supported
+  check_hash_compatibility(input);
 
   bool const nullable = has_nested_nulls(input);
   auto const row_hasher =
