@@ -135,8 +135,18 @@ struct ScanTest : public BaseScanTest<T> {
       switch (agg->kind) {
         case aggregation::SUM: return HostType{0};
         case aggregation::PRODUCT: return HostType{1};
-        case aggregation::MIN: return std::numeric_limits<HostType>::max();
-        case aggregation::MAX: return std::numeric_limits<HostType>::lowest();
+        case aggregation::MIN:
+          if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+            return cuda::std::numeric_limits<T>::infinity();
+          } else {
+            return std::numeric_limits<HostType>::max();
+          }
+        case aggregation::MAX:
+          if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+            return -cuda::std::numeric_limits<T>::infinity();
+          } else {
+            return std::numeric_limits<HostType>::lowest();
+          }
         default: CUDF_FAIL("Unsupported aggregation");
       }
     }
