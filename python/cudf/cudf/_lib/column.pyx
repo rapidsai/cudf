@@ -506,7 +506,7 @@ cdef class Column:
 
         if column_owner:
             data_owner = owner.base_data
-            mask_owner = owner.base_mask
+            mask_owner = mask_owner.base_mask
             base_size = owner.base_size
 
         if data_ptr:
