@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,12 +46,12 @@ namespace {
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
-class device_spark_row_hasher {
+class spark_device_row_hasher {
   friend class cudf::experimental::row::hash::row_hasher<
-    device_spark_row_hasher>;  ///< Allow row_hasher to access private members.
+    spark_device_row_hasher>;  ///< Allow row_hasher to access private members.
 
  public:
-  device_spark_row_hasher() = delete;
+  spark_device_row_hasher() = delete;
 
   /**
    * @brief Return the hash value of a row in the given table.
@@ -132,7 +132,7 @@ class device_spark_row_hasher {
     hash_value_type const _null_hash;  ///< Hash value to use for null elements
   };
 
-  CUDF_HOST_DEVICE device_spark_row_hasher(Nullate check_nulls,
+  CUDF_HOST_DEVICE spark_device_row_hasher(Nullate check_nulls,
                                            table_device_view t,
                                            uint32_t seed = DEFAULT_HASH_SEED) noexcept
     : _check_nulls{check_nulls}, _table{t}, _seed(seed)
@@ -144,6 +144,28 @@ class device_spark_row_hasher {
   uint32_t const _seed;
 };
 
+void check_hash_compatibility(table_view const& input)
+{
+  using column_checker_fn_t = std::function<void(column_view const&)>;
+
+  column_checker_fn_t check_column = [&](column_view const& c) {
+    if (c.type().id() == type_id::LIST) {
+      auto const& list_col = lists_column_view(c);
+      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
+                   "Cannot compute hash of a table with a LIST of STRUCT columns.");
+      check_column(list_col.child());
+    } else if (c.type().id() == type_id::STRUCT) {
+      for (auto child = c.child_begin(); child != c.child_end(); ++child) {
+        check_column(*child);
+      }
+    }
+  };
+
+  for (column_view const& c : input) {
+    check_column(c);
+  }
+}
+
 }  // namespace
 
 std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
@@ -152,11 +174,12 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   // TODO: Spark uses int32_t hash values, but libcudf defines hash_value_type
-  // as uint32_t elsewhere. This should be investigated and unified. I suspect
-  // we should use int32_t everywhere. Also check this for hash seeds. --bdice
-  using hash_value_type = int32_t;
+  // as uint32_t elsewhere. I plan to move the SparkMurmurHash3_32 functor into
+  // this file (since it is only used here), and replace its use of
+  // hash_value_type with spark_hash_value_type. --bdice
+  using spark_hash_value_type = int32_t;
 
-  auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
+  auto output = make_numeric_column(data_type(type_to_id<spark_hash_value_type>()),
                                     input.num_rows(),
                                     mask_state::UNALLOCATED,
                                     stream,
@@ -165,9 +188,12 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  bool const nullable = has_nulls(input);
+  // Lists of structs are not supported
+  check_hash_compatibility(input);
+
+  bool const nullable = has_nested_nulls(input);
   auto const row_hasher =
-    cudf::experimental::row::hash::row_hasher<device_spark_row_hasher>(input, stream);
+    cudf::experimental::row::hash::row_hasher<spark_device_row_hasher>(input, stream);
   auto output_view = output->mutable_view();
 
   // Compute the hash value for each row

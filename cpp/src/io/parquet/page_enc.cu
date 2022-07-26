@@ -57,7 +57,6 @@ constexpr bool enable_bool_rle = false;
 
 using ::cudf::detail::device_2dspan;
 
-constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
@@ -81,7 +80,7 @@ struct page_enc_state_s {
   EncPage page;
   EncColumnChunk ck;
   parquet_column_device_view col;
-  uint16_t vals[rle_buffer_size];
+  uint32_t vals[rle_buffer_size];
 };
 
 /**
@@ -99,30 +98,6 @@ uint32_t __device__ physical_type_len(Type physical_type, type_id id)
     case BOOLEAN: return 1u;
     default: return sizeof(int32_t);
   }
-}
-
-/**
- * @brief Return a 12-bit hash from a byte sequence
- */
-inline __device__ uint32_t hash_string(const string_view& val)
-{
-  char const* ptr = val.data();
-  uint32_t len    = val.size_bytes();
-  if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
-  } else {
-    return 0;
-  }
-}
-
-inline __device__ uint32_t uint32_init_hash(uint32_t v)
-{
-  return (v + (v >> 11) + (v >> 22)) & ((1 << init_hash_bits) - 1);
-}
-
-inline __device__ uint32_t uint64_init_hash(uint64_t v)
-{
-  return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
 // blockDim {512,1,1}
@@ -458,8 +433,9 @@ __global__ void __launch_bounds__(128)
  * @brief Mask table representing how many consecutive repeats are needed to code a repeat run
  *[nbits-1]
  */
-static __device__ __constant__ uint32_t kRleRunMask[16] = {
-  0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3, 0x1, 0x1, 0x1, 0x1};
+static __device__ __constant__ uint32_t kRleRunMask[24] = {
+  0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3,
+  0x1,        0x1,    0x1,    0x1,  0x1,  0x1,  0x1, 0x1, 0x1, 0x1, 0x1, 0x1};
 
 /**
  * @brief Variable-length encode an integer
@@ -480,7 +456,7 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 inline __device__ void PackLiterals(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16) {
+  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 24) {
     if (t <= (count | 0x1f)) {
       if (w == 1 || w == 2 || w == 4) {
         uint32_t mask = 0;
@@ -516,11 +492,18 @@ inline __device__ void PackLiterals(
           dst[t * 2 + 1] = v >> 8;
         }
         return;
+      } else if (w == 24) {
+        if (t < count) {
+          dst[t * 3 + 0] = v;
+          dst[t * 3 + 1] = v >> 8;
+          dst[t * 3 + 2] = v >> 16;
+        }
+        return;
       }
     } else {
       return;
     }
-  } else {
+  } else if (w <= 16) {
     // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
     // words but the destination mem may not be a multiple of 4 bytes.
     // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
@@ -549,6 +532,8 @@ inline __device__ void PackLiterals(
     if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
     if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
     __syncthreads();
+  } else {
+    CUDF_UNREACHABLE("Unsupported bit width");
   }
 }
 
@@ -594,6 +579,7 @@ static __device__ void RleEncode(
           uint8_t* dst           = VlqEncode(s->rle_out, rle_run);
           *dst++                 = run_val;
           if (nbits > 8) { *dst++ = run_val >> 8; }
+          if (nbits > 16) { *dst++ = run_val >> 16; }
           s->rle_out = dst;
         }
         rle_run = 0;

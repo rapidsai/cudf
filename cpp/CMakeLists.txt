@@ -237,7 +237,6 @@ add_library(
   src/column/column_factories.cpp
   src/column/column_factories.cu
   src/column/column_view.cpp
-  src/comms/ipc/ipc.cpp
   src/copying/concatenate.cu
   src/copying/contiguous_split.cu
   src/copying/copy.cpp
@@ -380,7 +379,6 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
-  src/lists/drop_list_duplicates.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
@@ -712,6 +710,8 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+  # Always print verbose output when tests fail if run using `make test`.
+  list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
 endif()
 
@@ -805,13 +805,6 @@ set(common_code_string
 if(NOT TARGET cudf::Thrust)
   thrust_create_target(cudf::Thrust FROM_OPTIONS)
 endif()
-]=]
-)
-
-set(install_code_string
-    [=[
-set(ArrowCUDA_DIR "${Arrow_DIR}")
-find_dependency(ArrowCUDA)
 ]=]
 )
 

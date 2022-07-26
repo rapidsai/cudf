@@ -640,6 +640,7 @@ def test_categorical_set_categories_categoricals(data, new_categories):
         pd.Series([1, 2, 3, -4], dtype="int64"),
         pd.Series([1, 2, 3, 4], dtype="uint64"),
         pd.Series([1, 2.3, 3, 4], dtype="float"),
+        np.asarray([0, 2, 1]),
         [None, 1, None, 2, None],
         [],
     ],

@@ -23,7 +23,6 @@ set(cython_sources
     datetime.pyx
     expressions.pyx
     filling.pyx
-    gpuarrow.pyx
     groupby.pyx
     hash.pyx
     interop.pyx
@@ -65,17 +64,10 @@ rapids_cython_create_modules(
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
 # CMake 3.24, so we can remove the Development component once we upgrade to CMake 3.24.
 find_package(Python REQUIRED COMPONENTS Development NumPy)
-set(targets_using_numpy gpuarrow interop avro csv orc json parquet)
+set(targets_using_numpy interop avro csv orc json parquet)
 foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
 endforeach()
-
-# PyArrow relies on the C++ Arrow library already being installed, so we can just find the C++
-# library directly and link to the same one. We rely on libcudf's exports to provide the
-# arrow_shared_lib and arrow_cuda_shared_lib libraries. That just leaves us to find the ArrowPython
-# library on our own.
-find_library(arrow_python_shared_library arrow_python REQUIRED)
-target_link_libraries(gpuarrow ${arrow_python_shared_library})
 
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/cpp")

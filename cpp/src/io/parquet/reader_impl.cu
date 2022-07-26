@@ -542,7 +542,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters and reduces down to a selection of row groups
    *
-   * @param row_groups Lists of row group to reads, one per source
+   * @param row_groups Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
@@ -1346,6 +1346,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                                       hostdevice_vector<gpu::PageInfo>& pages,
                                       size_t min_row,
                                       size_t total_rows,
+                                      bool uses_custom_row_bounds,
                                       bool has_lists)
 {
   // TODO : we should be selectively preprocessing only columns that have
@@ -1365,8 +1366,15 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     create_columns(_output_columns);
   } else {
     // preprocess per-nesting level sizes by page
-    gpu::PreprocessColumnData(
-      pages, chunks, _input_columns, _output_columns, total_rows, min_row, _stream, _mr);
+    gpu::PreprocessColumnData(pages,
+                              chunks,
+                              _input_columns,
+                              _output_columns,
+                              total_rows,
+                              min_row,
+                              uses_custom_row_bounds,
+                              _stream,
+                              _mr);
     _stream.synchronize();
   }
 }
@@ -1590,6 +1598,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
+                                       bool uses_custom_row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_list)
 {
   // Select only row groups required
@@ -1743,7 +1752,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, has_lists);
+      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, has_lists);
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
@@ -1792,7 +1801,12 @@ reader::~reader() = default;
 // Forward to implementation
 table_with_metadata reader::read(parquet_reader_options const& options)
 {
-  return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_row_groups());
+  // if the user has specified custom row bounds
+  bool const uses_custom_row_bounds = options.get_num_rows() >= 0 || options.get_skip_rows() != 0;
+  return _impl->read(options.get_skip_rows(),
+                     options.get_num_rows(),
+                     uses_custom_row_bounds,
+                     options.get_row_groups());
 }
 
 }  // namespace parquet
