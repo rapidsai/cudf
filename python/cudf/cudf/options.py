@@ -31,7 +31,7 @@ def _register_option(
     validator : Callable
         Called on the option value to check its validity. Should raise an
         error if the value is invalid.
-    
+
     Raises
     ------
     BaseException
@@ -111,4 +111,4 @@ def describe_option(name: Optional[str] = None):
     """
     names = _OPTIONS.keys() if name is None else [name]
     for name in names:
-        print(_build_option_description(name, _OPTIONS[name])
+        print(_build_option_description(name, _OPTIONS[name]))
