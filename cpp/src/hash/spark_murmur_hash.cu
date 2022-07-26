@@ -78,8 +78,10 @@ class spark_device_row_hasher {
    * @brief Computes the hash value of an element in the given column.
    *
    * When the column is non-nested, this is a simple wrapper around the element_hasher.
-   * When the column is nested, this uses the element_hasher to hash the shape and values of the
-   * column.
+   * When the column is nested, this uses a seed value to serially compute each
+   * nested element, with the output hash becoming the seed for the next value.
+   * The hash of a null element is the input seed (the previous element's
+   * hash).
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
