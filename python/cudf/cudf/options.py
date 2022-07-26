@@ -36,17 +36,10 @@ def _register_option(
 
     Raises
     ------
-    ValueError
-        If the provided value fails in validator. May be nested with custom
-        error raised by validator.
+    BaseException
+        Raised by validator if the value is invalid.
     """
-    try:
-        validator(default_value)
-    except Exception as e:
-        raise ValueError(
-            f"{name}={default_value} is not a valid value."
-        ) from e
-
+    validator(default_value)
     _OPTIONS[name] = Option(
         default_value, default_value, description, validator
     )
@@ -72,7 +65,7 @@ def get_option(name: str) -> Any:
     try:
         return _OPTIONS[name].value
     except KeyError:
-        raise KeyError(f'"{name}" is not a valid option.')
+        raise KeyError(f'"{name}" does not exist.')
 
 
 def set_option(name: str, val: Any):
@@ -89,19 +82,14 @@ def set_option(name: str, val: Any):
     ------
     KeyError
         If option ``name`` does not exist.
-    ValueError
-        If the provided value fails in validator. May be nested with custom
-        error raised by validator.
+    BaseException
+        Raised by validator if the value is invalid.
     """
     try:
         option = _OPTIONS[name]
     except KeyError:
         raise KeyError(f'"{name}" does not exist.')
-    try:
-        option.validator(val)
-    except Exception as e:
-        raise ValueError(f"{name}={val} is not a valid value.") from e
-
+    option.validator(val)
     option.value = val
 
 
