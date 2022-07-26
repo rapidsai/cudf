@@ -91,10 +91,8 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
   void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
 
-  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
-                                                    rmm::cuda_stream_view stream) override
-  {
-    CUDF_FUNC_RANGE();
+  template<typename T>
+  auto read_next_chunk_impl(std::size_t read_size, T get_destination, rmm::cuda_stream_view stream) {
 
     auto& h_ticket = _tickets[_next_ticket_idx];
 
@@ -113,11 +111,11 @@ class istream_data_chunk_reader : public data_chunk_reader {
     read_size = _datastream->gcount();
 
     // get a view over some device memory we can use to buffer the read data on to device.
-    auto chunk = rmm::device_uvector<char>(read_size, stream);
+    auto destination = get_destination(read_size, stream);
 
     // copy the host-pinned data on to device
     CUDF_CUDA_TRY(cudaMemcpyAsync(  //
-      chunk.data(),
+      destination.data(),
       h_ticket.buffer.data(),
       read_size,
       cudaMemcpyHostToDevice,
@@ -127,7 +125,34 @@ class istream_data_chunk_reader : public data_chunk_reader {
     CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
-    return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
+    return destination;
+  }
+
+  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
+                                                    rmm::cuda_stream_view stream) override
+  {
+    CUDF_FUNC_RANGE();
+
+    auto destination = read_next_chunk_impl(
+      read_size,
+      [](std::size_t read_size, rmm::cuda_stream_view stream){
+        return rmm::device_uvector<char>(read_size, stream);
+      },
+      stream);
+
+    // return the view over device memory so it can be processed.
+    return std::make_unique<device_uvector_data_chunk>(std::move(destination));
+  }
+
+  device_span<char> read_next_chunk(device_span<char> const destination, rmm::cuda_stream_view stream) override {
+    CUDF_FUNC_RANGE();
+
+    return read_next_chunk_impl(
+      destination.size(),
+      [destination](std::size_t read_size, rmm::cuda_stream_view stream){
+        return destination.subspan(0, read_size);
+      },
+      stream);
   }
 
  private:
@@ -165,6 +190,20 @@ class device_span_data_chunk_reader : public data_chunk_reader {
 
     // return the view over device memory so it can be processed.
     return std::make_unique<device_span_data_chunk>(chunk_span);
+  }
+
+  device_span<char> read_next_chunk(device_span<char> destination, rmm::cuda_stream_view stream) override {
+    auto chunk = this->get_next_chunk(destination.size(), stream);
+
+    // copy the host-pinned data on to device
+    CUDF_CUDA_TRY(cudaMemcpyAsync(  //
+      destination.data(),
+      chunk->data(),
+      chunk->size(),
+      cudaMemcpyHostToDevice,
+      stream.value()));
+
+    return destination.subspan(0, chunk->size());
   }
 
  private:

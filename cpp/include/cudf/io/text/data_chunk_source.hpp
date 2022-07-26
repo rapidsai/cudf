@@ -92,6 +92,21 @@ class data_chunk_reader {
    */
   virtual std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t size,
                                                             rmm::cuda_stream_view stream) = 0;
+
+
+  /**
+   * @pure @brief Read the next chunk of bytes from the data source in to a specific destination
+   *
+   * Performs any necessary work to read underlying data source into the destination device memory.
+   * Common implementations may read from a file, copy data from host memory, allocate temporary
+   * memory, perform iterative decompression, or even launch device kernels.
+   *
+   * @param destination location and size of memory to fill with read data
+   * @param stream stream to associate allocations or perform work required to obtain chunk
+   * @return a copy of the destination span. May return a subspan if reader reaches end of
+   * underlying data source before filling the destination.
+   */
+  virtual device_span<char> read_next_chunk(device_span<char> destination, rmm::cuda_stream_view stream) = 0;
 };
 
 /**
