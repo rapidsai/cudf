@@ -69,14 +69,9 @@ BaseIndexT = TypeVar("BaseIndexT", bound="BaseIndex")
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
-    #
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
-
-    @cached_property
-    def _values(self) -> ColumnBase:
-        raise NotImplementedError
 
     def copy(self, deep: bool = True) -> BaseIndex:
         raise NotImplementedError
@@ -89,18 +84,11 @@ class BaseIndex(Serializable):
         # The size of an index is always its length irrespective of dimension.
         return len(self)
 
-    @property
-    def values(self):
-        return self._values.values
-
     def get_loc(self, key, method=None, tolerance=None):
         raise NotImplementedError
 
     def __getitem__(self, key):
         raise NotImplementedError()
-
-    def __contains__(self, item):
-        return item in self._values
 
     def _copy_type_metadata(self: BaseIndexT, other: BaseIndexT) -> BaseIndexT:
         raise NotImplementedError
@@ -177,22 +165,22 @@ class BaseIndex(Serializable):
 
         self.name = values[0]
 
-    def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
+    # def _clean_nulls_from_index(self):
+    #     """
+    #     Convert all na values(if any) in Index object
+    #     to `<NA>` as a preprocessing step to `__repr__` methods.
 
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
-        if self._values.has_nulls():
-            return cudf.Index(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
-            )
-        else:
-            return self
+    #     This will involve changing type of Index object
+    #     to StringIndex but it is the responsibility of the `__repr__`
+    #     methods using this method to replace or handle representation
+    #     of the actual types correctly.
+    #     """
+    #     if self._values.has_nulls():
+    #         return cudf.Index(
+    #             self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+    #         )
+    #     else:
+    #         return self
 
     @property
     def is_monotonic(self):
@@ -539,131 +527,125 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def to_frame(self, index=True, name=None):
-        """Create a DataFrame with a column containing this Index
+    # def to_frame(self, index=True, name=None):
+    #     """Create a DataFrame with a column containing this Index
 
-        Parameters
-        ----------
-        index : boolean, default True
-            Set the index of the returned DataFrame as the original Index
-        name : str, default None
-            Name to be used for the column
+    #     Parameters
+    #     ----------
+    #     index : boolean, default True
+    #         Set the index of the returned DataFrame as the original Index
+    #     name : str, default None
+    #         Name to be used for the column
 
-        Returns
-        -------
-        DataFrame
-            cudf DataFrame
-        """
+    #     Returns
+    #     -------
+    #     DataFrame
+    #         cudf DataFrame
+    #     """
 
-        if name is not None:
-            col_name = name
-        elif self.name is None:
-            col_name = 0
-        else:
-            col_name = self.name
-        return cudf.DataFrame(
-            {col_name: self._values}, index=self if index else None
-        )
+    #     if name is not None:
+    #         col_name = name
+    #     elif self.name is None:
+    #         col_name = 0
+    #     else:
+    #         col_name = self.name
+    #     return cudf.DataFrame(
+    #         {col_name: self._values}, index=self if index else None
+    #     )
 
-    def any(self):
-        """
-        Return whether any elements is True in Index.
-        """
-        return self._values.any()
+    # def to_pandas(self):
+    #     """
+    #     Convert to a Pandas Index.
 
-    def to_pandas(self):
-        """
-        Convert to a Pandas Index.
+    #     Examples
+    #     --------
+    #     >>> import cudf
+    #     >>> idx = cudf.Index([-3, 10, 15, 20])
+    #     >>> idx
+    #     Int64Index([-3, 10, 15, 20], dtype='int64')
+    #     >>> idx.to_pandas()
+    #     Int64Index([-3, 10, 15, 20], dtype='int64')
+    #     >>> type(idx.to_pandas())
+    #     <class 'pandas.core.indexes.numeric.Int64Index'>
+    #     >>> type(idx)
+    #     <class 'cudf.core.index.Int64Index'>
+    #     """
+    #     return pd.Index(self._values.to_pandas(), name=self.name)
 
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([-3, 10, 15, 20])
-        >>> idx
-        Int64Index([-3, 10, 15, 20], dtype='int64')
-        >>> idx.to_pandas()
-        Int64Index([-3, 10, 15, 20], dtype='int64')
-        >>> type(idx.to_pandas())
-        <class 'pandas.core.indexes.numeric.Int64Index'>
-        >>> type(idx)
-        <class 'cudf.core.index.Int64Index'>
-        """
-        return pd.Index(self._values.to_pandas(), name=self.name)
+    # @ioutils.doc_to_dlpack()
+    # def to_dlpack(self):
+    #     """{docstring}"""
 
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
+    #     return cudf.io.dlpack.to_dlpack(self)
 
-        return cudf.io.dlpack.to_dlpack(self)
+    # def append(self, other):
+    #     """
+    #     Append a collection of Index options together.
 
-    def append(self, other):
-        """
-        Append a collection of Index options together.
+    #     Parameters
+    #     ----------
+    #     other : Index or list/tuple of indices
 
-        Parameters
-        ----------
-        other : Index or list/tuple of indices
+    #     Returns
+    #     -------
+    #     appended : Index
 
-        Returns
-        -------
-        appended : Index
+    #     Examples
+    #     --------
+    #     >>> import cudf
+    #     >>> idx = cudf.Index([1, 2, 10, 100])
+    #     >>> idx
+    #     Int64Index([1, 2, 10, 100], dtype='int64')
+    #     >>> other = cudf.Index([200, 400, 50])
+    #     >>> other
+    #     Int64Index([200, 400, 50], dtype='int64')
+    #     >>> idx.append(other)
+    #     Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
 
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([1, 2, 10, 100])
-        >>> idx
-        Int64Index([1, 2, 10, 100], dtype='int64')
-        >>> other = cudf.Index([200, 400, 50])
-        >>> other
-        Int64Index([200, 400, 50], dtype='int64')
-        >>> idx.append(other)
-        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+    #     append accepts list of Index objects
 
-        append accepts list of Index objects
+    #     >>> idx.append([other, other])
+    #     Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
+    #     """
 
-        >>> idx.append([other, other])
-        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
-        """
+    #     if is_list_like(other):
+    #         to_concat = [self]
+    #         to_concat.extend(other)
+    #     else:
+    #         this = self
+    #         if len(other) == 0:
+    #             # short-circuit and return a copy
+    #             to_concat = [self]
 
-        if is_list_like(other):
-            to_concat = [self]
-            to_concat.extend(other)
-        else:
-            this = self
-            if len(other) == 0:
-                # short-circuit and return a copy
-                to_concat = [self]
+    #         other = cudf.Index(other)
 
-            other = cudf.Index(other)
+    #         if len(self) == 0:
+    #             to_concat = [other]
 
-            if len(self) == 0:
-                to_concat = [other]
+    #         if len(self) and len(other):
+    #             if is_mixed_with_object_dtype(this, other):
+    #                 got_dtype = (
+    #                     other.dtype
+    #                     if this.dtype == cudf.dtype("object")
+    #                     else this.dtype
+    #                 )
+    #                 raise TypeError(
+    #                     f"cudf does not support appending an Index of "
+    #                     f"dtype `{cudf.dtype('object')}` with an Index "
+    #                     f"of dtype `{got_dtype}`, please type-cast "
+    #                     f"either one of them to same dtypes."
+    #                 )
 
-            if len(self) and len(other):
-                if is_mixed_with_object_dtype(this, other):
-                    got_dtype = (
-                        other.dtype
-                        if this.dtype == cudf.dtype("object")
-                        else this.dtype
-                    )
-                    raise TypeError(
-                        f"cudf does not support appending an Index of "
-                        f"dtype `{cudf.dtype('object')}` with an Index "
-                        f"of dtype `{got_dtype}`, please type-cast "
-                        f"either one of them to same dtypes."
-                    )
+    #             if isinstance(self._values, cudf.core.column.NumericalColumn):
+    #                 if self.dtype != other.dtype:
+    #                     this, other = numeric_normalize_types(self, other)
+    #             to_concat = [this, other]
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
-                    if self.dtype != other.dtype:
-                        this, other = numeric_normalize_types(self, other)
-                to_concat = [this, other]
+    #     for obj in to_concat:
+    #         if not isinstance(obj, BaseIndex):
+    #             raise TypeError("all inputs must be Index")
 
-        for obj in to_concat:
-            if not isinstance(obj, BaseIndex):
-                raise TypeError("all inputs must be Index")
-
-        return self._concat(to_concat)
+    #     return self._concat(to_concat)
 
     def difference(self, other, sort=None):
         """
@@ -1118,17 +1100,17 @@ class BaseIndex(Serializable):
         else:
             return index_sorted
 
-    def unique(self):
-        """
-        Return unique values in the index.
+    # def unique(self):
+    #     """
+    #     Return unique values in the index.
 
-        Returns
-        -------
-        Index without duplicates
-        """
-        return cudf.core.index._index_from_data(
-            {self.name: self._values.unique()}, name=self.name
-        )
+    #     Returns
+    #     -------
+    #     Index without duplicates
+    #     """
+    #     return cudf.core.index._index_from_data(
+    #         {self.name: self._values.unique()}, name=self.name
+    #     )
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -1262,29 +1244,29 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
-    def to_series(self, index=None, name=None):
-        """
-        Create a Series with both index and values equal to the index keys.
-        Useful with map for returning an indexer based on an index.
+    # def to_series(self, index=None, name=None):
+    #     """
+    #     Create a Series with both index and values equal to the index keys.
+    #     Useful with map for returning an indexer based on an index.
 
-        Parameters
-        ----------
-        index : Index, optional
-            Index of resulting Series. If None, defaults to original index.
-        name : str, optional
-            Dame of resulting Series. If None, defaults to name of original
-            index.
+    #     Parameters
+    #     ----------
+    #     index : Index, optional
+    #         Index of resulting Series. If None, defaults to original index.
+    #     name : str, optional
+    #         Dame of resulting Series. If None, defaults to name of original
+    #         index.
 
-        Returns
-        -------
-        Series
-            The dtype will be based on the type of the Index values.
-        """
-        return cudf.Series(
-            self._values,
-            index=self.copy(deep=False) if index is None else index,
-            name=self.name if name is None else name,
-        )
+    #     Returns
+    #     -------
+    #     Series
+    #         The dtype will be based on the type of the Index values.
+    #     """
+    #     return cudf.Series(
+    #         self._values,
+    #         index=self.copy(deep=False) if index is None else index,
+    #         name=self.name if name is None else name,
+    #     )
 
     def get_slice_bound(self, label, side, kind=None):
         """
@@ -1338,46 +1320,46 @@ class BaseIndex(Serializable):
         else:
             return NotImplemented
 
-    def isin(self, values):
-        """Return a boolean array where the index values are in values.
+    # def isin(self, values):
+    #     """Return a boolean array where the index values are in values.
 
-        Compute boolean array of whether each index value is found in
-        the passed set of values. The length of the returned boolean
-        array matches the length of the index.
+    #     Compute boolean array of whether each index value is found in
+    #     the passed set of values. The length of the returned boolean
+    #     array matches the length of the index.
 
-        Parameters
-        ----------
-        values : set, list-like, Index
-            Sought values.
+    #     Parameters
+    #     ----------
+    #     values : set, list-like, Index
+    #         Sought values.
 
-        Returns
-        -------
-        is_contained : cupy array
-            CuPy array of boolean values.
+    #     Returns
+    #     -------
+    #     is_contained : cupy array
+    #         CuPy array of boolean values.
 
-        Examples
-        --------
-        >>> idx = cudf.Index([1,2,3])
-        >>> idx
-        Int64Index([1, 2, 3], dtype='int64')
+    #     Examples
+    #     --------
+    #     >>> idx = cudf.Index([1,2,3])
+    #     >>> idx
+    #     Int64Index([1, 2, 3], dtype='int64')
 
-        Check whether each index value in a list of values.
+    #     Check whether each index value in a list of values.
 
-        >>> idx.isin([1, 4])
-        array([ True, False, False])
-        """
+    #     >>> idx.isin([1, 4])
+    #     array([ True, False, False])
+    #     """
 
-        # To match pandas behavior, even though only list-like objects are
-        # supposed to be passed, only scalars throw errors. Other types (like
-        # dicts) just transparently return False (see the implementation of
-        # ColumnBase.isin).
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
+    #     # To match pandas behavior, even though only list-like objects are
+    #     # supposed to be passed, only scalars throw errors. Other types (like
+    #     # dicts) just transparently return False (see the implementation of
+    #     # ColumnBase.isin).
+    #     if is_scalar(values):
+    #         raise TypeError(
+    #             "only list-like objects are allowed to be passed "
+    #             f"to isin(), you passed a {type(values).__name__}"
+    #         )
 
-        return self._values.isin(values).values
+    #     return self._values.isin(values).values
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
