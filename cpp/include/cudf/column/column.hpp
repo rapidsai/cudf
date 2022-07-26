@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
@@ -74,6 +75,21 @@ class column {
    * @param other The column whose contents will be moved into the new column
    */
   column(column&& other) noexcept;
+
+  /**
+   * @brief Move the contents from `other` to create a new column.
+   *
+   * After the move, `other.data() == NULL`
+   *
+   * @param other The device_uvector whose contents will be moved into the new column.
+   */
+  template <typename T>
+  column(rmm::device_uvector<T>&& other) noexcept
+    : _type{cudf::type_to_id<T>()},
+      _size{static_cast<cudf::size_type>(other.size())},
+      _data{other.release()}
+  {
+  }
 
   /**
    * @brief Construct a new column from existing device memory.
