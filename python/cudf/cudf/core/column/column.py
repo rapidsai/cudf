@@ -901,7 +901,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         sr = cudf.Series(self)
 
         # Re-label self w.r.t. the provided categories
-        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+        if (
+            isinstance(dtype, cudf.CategoricalDtype)
+            and dtype._categories is not None
+        ) or (
+            isinstance(dtype, pd.CategoricalDtype)
+            and dtype.categories is not None
+        ):
             labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
@@ -910,7 +916,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
 
             return build_categorical_column(
-                categories=dtype.categories,
+                categories=as_column(dtype.categories),
                 codes=labels._column,
                 mask=self.mask,
                 ordered=dtype.ordered,
@@ -1863,8 +1869,17 @@ def as_column(
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
 
+        delayed_cast = False
         if dtype is not None:
-            arbitrary = arbitrary.astype(np.dtype(dtype))
+            try:
+                dtype = np.dtype(dtype)
+            except TypeError:
+                # Some `dtype`'s can't be parsed by `np.dtype`
+                # for which we will have to cast after the column
+                # has been constructed.
+                delayed_cast = True
+            else:
+                arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
 
@@ -1937,6 +1952,9 @@ def as_column(
             )
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
+
+        if delayed_cast:
+            data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
