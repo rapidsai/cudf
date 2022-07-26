@@ -30,6 +30,8 @@ namespace detail {
 
 namespace {
 
+using spark_hash_value_type = int32_t;
+
 /**
  * @brief Computes the hash value of a row in the given table.
  *
@@ -66,10 +68,8 @@ class spark_murmur_device_row_hasher {
       _table.end(),
       _seed,
       [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
-        return cudf::type_dispatcher(column.type(),
-                                     element_hasher_adapter<hash_function>{nulls, hash, hash},
-                                     column,
-                                     row_index);
+        return cudf::type_dispatcher(
+          column.type(), element_hasher_adapter<hash_function>{nulls, hash}, column, row_index);
       });
   }
 
@@ -86,26 +86,24 @@ class spark_murmur_device_row_hasher {
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
    public:
-    __device__ element_hasher_adapter(Nullate check_nulls,
-                                      uint32_t seed,
-                                      hash_value_type null_hash) noexcept
-      : _check_nulls(check_nulls), _seed(seed), _null_hash(null_hash)
+    __device__ element_hasher_adapter(Nullate check_nulls, uint32_t seed) noexcept
+      : _check_nulls(check_nulls), _seed(seed)
     {
     }
 
     using hash_functor = cudf::experimental::row::hash::element_hasher<hash_fn, Nullate>;
 
     template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
-    __device__ hash_value_type operator()(column_device_view const& col,
-                                          size_type row_index) const noexcept
+    __device__ spark_hash_value_type operator()(column_device_view const& col,
+                                                size_type row_index) const noexcept
     {
-      auto const hasher = hash_functor(_check_nulls, _seed, _null_hash);
+      auto const hasher = hash_functor(_check_nulls, _seed, _seed);
       return hasher.template operator()<T>(col, row_index);
     }
 
     template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
-    __device__ hash_value_type operator()(column_device_view const& col,
-                                          size_type row_index) const noexcept
+    __device__ spark_hash_value_type operator()(column_device_view const& col,
+                                                size_type row_index) const noexcept
     {
       column_device_view curr_col = col.slice(row_index, 1);
       while (is_nested(curr_col.type())) {
@@ -129,9 +127,8 @@ class spark_murmur_device_row_hasher {
         });
     }
 
-    Nullate const _check_nulls;        ///< Whether to check for nulls
-    uint32_t const _seed;              ///< The seed to use for hashing
-    hash_value_type const _null_hash;  ///< Hash value to use for null elements
+    Nullate const _check_nulls;  ///< Whether to check for nulls
+    uint32_t const _seed;        ///< The seed to use for hashing, also returned for null elements
   };
 
   CUDF_HOST_DEVICE spark_murmur_device_row_hasher(Nullate check_nulls,
@@ -179,7 +176,6 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
   // as uint32_t elsewhere. I plan to move the SparkMurmurHash3_32 functor into
   // this file (since it is only used here), and replace its use of
   // hash_value_type with spark_hash_value_type. --bdice
-  using spark_hash_value_type = int32_t;
 
   auto output = make_numeric_column(data_type(type_to_id<spark_hash_value_type>()),
                                     input.num_rows(),
@@ -200,8 +196,8 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
 
   // Compute the hash value for each row
   thrust::tabulate(rmm::exec_policy(stream),
-                   output_view.begin<hash_value_type>(),
-                   output_view.end<hash_value_type>(),
+                   output_view.begin<spark_hash_value_type>(),
+                   output_view.end<spark_hash_value_type>(),
                    row_hasher.device_hasher<SparkMurmurHash3_32>(nullable, seed));
 
   return output;
