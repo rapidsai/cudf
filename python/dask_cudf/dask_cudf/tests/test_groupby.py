@@ -76,7 +76,11 @@ def test_groupby_cumulative(aggregation, pdf, series):
     a = getattr(gdf_grouped, aggregation)()
     b = getattr(ddf_grouped, aggregation)().compute()
 
-    dd.assert_eq(a, b)
+    if aggregation == "cumsum" and series:
+        with pytest.xfail(reason="https://github.com/dask/dask/issues/9313"):
+            dd.assert_eq(a, b)
+    else:
+        dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize(
