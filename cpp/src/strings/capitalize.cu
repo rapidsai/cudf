@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/is_flags.h>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -160,7 +157,7 @@ struct capitalize_fn : base_fn<capitalize_fn> {
 
   __device__ bool capitalize_next(char_utf8 const chr, character_flags_table_type const)
   {
-    return !d_delimiters.empty() && (d_delimiters.find(chr) >= 0);
+    return !d_delimiters.empty() && (d_delimiters.find(chr) != string_view::npos);
   }
 };
 

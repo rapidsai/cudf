@@ -1826,6 +1826,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
         " string type. But got column: " + type + ", scalar: " + delimiters.getType());
   }
+
+  /**
+   * Concatenates all strings in the column into one new string delimited
+   * by an optional separator string.
+   *
+   * This returns a column with one string. Any null entries are ignored unless
+   * the narep parameter specifies a replacement string (not a null value).
+   *
+   * @param separator what to insert to separate each row.
+   * @param narep what to replace nulls with
+   * @return a ColumnVector with a single string in it.
+   */
+  public final ColumnVector joinStrings(Scalar separator, Scalar narep) {
+    if (DType.STRING.equals(type) &&
+        DType.STRING.equals(separator.getType()) &&
+        DType.STRING.equals(narep.getType())) {
+      return new ColumnVector(joinStrings(getNativeView(), separator.getScalarHandle(),
+          narep.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("The column, separator, and narep all need to be STRINGs");
+  }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
   /////////////////////////////////////////////////////////////////////////////
@@ -3246,13 +3267,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    
    * @param pattern The regex pattern
-   * @param idx The regex group index (only 0 is supported currently). 
+   * @param idx The regex group index
    * @return A new column vector of extracted matches
    */
   public final ColumnVector extractAllRecord(String pattern, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
-    assert idx == 0 : "group index > 0 is not supported yet";
 
     return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
   }
@@ -4292,6 +4312,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected static native long title(long handle);
 
   private static native long capitalize(long strsColHandle, long delimitersHandle);
+
+  private static native long joinStrings(long strsHandle, long sepHandle, long narepHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 

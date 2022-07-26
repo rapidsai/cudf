@@ -13,7 +13,7 @@ from cudf._lib.lists import (
     concatenate_rows,
     contains_scalar,
     count_elements,
-    drop_list_duplicates,
+    distinct,
     extract_element_column,
     extract_element_scalar,
     index_of_column,
@@ -603,9 +603,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            drop_list_duplicates(
-                self._column, nulls_equal=True, nans_all_equal=True
-            )
+            distinct(self._column, nulls_equal=True, nans_all_equal=True)
         )
 
     def sort_values(
