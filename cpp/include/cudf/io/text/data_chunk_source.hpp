@@ -93,7 +93,6 @@ class data_chunk_reader {
   virtual std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t size,
                                                             rmm::cuda_stream_view stream) = 0;
 
-
   /**
    * @pure @brief Read the next chunk of bytes from the data source in to a specific destination
    *
@@ -106,7 +105,8 @@ class data_chunk_reader {
    * @return a copy of the destination span. May return a subspan if reader reaches end of
    * underlying data source before filling the destination.
    */
-  virtual device_span<char> read_next_chunk(device_span<char> destination, rmm::cuda_stream_view stream) = 0;
+  virtual device_span<char> read_next_chunk(device_span<char> destination,
+                                            rmm::cuda_stream_view stream) = 0;
 };
 
 /**
