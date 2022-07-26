@@ -196,25 +196,24 @@ std::unique_ptr<cudf::column> make_parquet_list_col(
 
 // given a datasource pointing to a parquet file, read the footer
 // of the file to populate the FileMetaData pointed to by file_meta_data.
-// returns true on success, false if the file metadata cannot be parsed.
-// throws cudf::logic_error if the file is invalid.
-bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
-                 cudf_io::parquet::FileMetaData* file_meta_data)
+// throws cudf::logic_error if the file or metadata is invalid.
+void read_footer(const std::unique_ptr<cudf::io::datasource>& source,
+                 cudf::io::parquet::FileMetaData* file_meta_data)
 {
-  constexpr auto header_len = sizeof(cudf_io::parquet::file_header_s);
-  constexpr auto ender_len  = sizeof(cudf_io::parquet::file_ender_s);
+  constexpr auto header_len = sizeof(cudf::io::parquet::file_header_s);
+  constexpr auto ender_len  = sizeof(cudf::io::parquet::file_ender_s);
 
   const auto len           = source->size();
   const auto header_buffer = source->host_read(0, header_len);
   const auto header =
-    reinterpret_cast<const cudf_io::parquet::file_header_s*>(header_buffer->data());
+    reinterpret_cast<const cudf::io::parquet::file_header_s*>(header_buffer->data());
   const auto ender_buffer = source->host_read(len - ender_len, ender_len);
-  const auto ender = reinterpret_cast<const cudf_io::parquet::file_ender_s*>(ender_buffer->data());
+  const auto ender = reinterpret_cast<const cudf::io::parquet::file_ender_s*>(ender_buffer->data());
 
   // checks for valid header, footer, and file length
   CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-  CUDF_EXPECTS(header->magic == cudf_io::parquet::parquet_magic &&
-                 ender->magic == cudf_io::parquet::parquet_magic,
+  CUDF_EXPECTS(header->magic == cudf::io::parquet::parquet_magic &&
+                 ender->magic == cudf::io::parquet::parquet_magic,
                "Corrupted header or footer");
   CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                "Incorrect footer length");
@@ -223,23 +222,76 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
   // seek backwards from the end of the file (footer_length + 8 bytes of ender)
   const auto footer_buffer =
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-  cudf_io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
+  cudf::io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
 
   // returns true on success
-  return cp.read(file_meta_data);
+  bool res = cp.read(file_meta_data);
+  CUDF_EXPECTS(res, "Cannot parse file metadata");
+}
+
+// read column index from datasource at location indicated by chunk,
+// parse and return as a ColumnIndex struct.
+// throws cudf::logic_error if the chunk data is invalid.
+cudf::io::parquet::ColumnIndex read_column_index(
+  const std::unique_ptr<cudf::io::datasource>& source, const cudf::io::parquet::ColumnChunk& chunk)
+{
+  CUDF_EXPECTS(chunk.column_index_offset > 0, "Cannot find column index");
+  CUDF_EXPECTS(chunk.column_index_length > 0, "Invalid column index length");
+
+  cudf::io::parquet::ColumnIndex colidx;
+  const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+  cudf::io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+  bool res = cp.read(&colidx);
+  CUDF_EXPECTS(res, "Cannot parse column index");
+  return colidx;
+}
+
+// read offset index from datasource at location indicated by chunk,
+// parse and return as an OffsetIndex struct.
+// throws cudf::logic_error if the chunk data is invalid.
+cudf::io::parquet::OffsetIndex read_offset_index(
+  const std::unique_ptr<cudf::io::datasource>& source, const cudf::io::parquet::ColumnChunk& chunk)
+{
+  CUDF_EXPECTS(chunk.offset_index_offset > 0, "Cannot find offset index");
+  CUDF_EXPECTS(chunk.offset_index_length > 0, "Invalid offset index length");
+
+  cudf::io::parquet::OffsetIndex offidx;
+  const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+  cudf::io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
+  bool res = cp.read(&offidx);
+  CUDF_EXPECTS(res, "Cannot parse offset index");
+  return offidx;
 }
 
 // parse the statistics_blob on chunk and return as a Statistics struct.
 // throws cudf::logic_error if the chunk statistics_blob is invalid.
-cudf_io::parquet::Statistics parse_statistics(const cudf_io::parquet::ColumnChunk& chunk)
+cudf::io::parquet::Statistics parse_statistics(const cudf::io::parquet::ColumnChunk& chunk)
 {
   auto& stats_blob = chunk.meta_data.statistics_blob;
   CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
 
-  cudf_io::parquet::Statistics stats;
-  cudf_io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
-  CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
+  cudf::io::parquet::Statistics stats;
+  cudf::io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
+  bool res = cp.read(&stats);
+  CUDF_EXPECTS(res, "Cannot parse column statistics");
   return stats;
+}
+
+// read page header from datasource at location indicated by page_loc,
+// parse and return as a PageHeader struct.
+// throws cudf::logic_error if the page_loc data is invalid.
+cudf::io::parquet::PageHeader read_page_header(const std::unique_ptr<cudf::io::datasource>& source,
+                                               const cudf::io::parquet::PageLocation& page_loc)
+{
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+
+  cudf::io::parquet::PageHeader page_hdr;
+  const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+  cudf::io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
+  bool res = cp.read(&page_hdr);
+  CUDF_EXPECTS(res, "Cannot parse page header");
+  return page_hdr;
 }
 
 // Base test fixture for tests
@@ -257,6 +309,12 @@ struct ParquetWriterStressTest : public cudf::test::BaseFixture {
 // Typed test fixture for numeric type tests
 template <typename T>
 struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+// Typed test fixture for comparable type tests
+template <typename T>
+struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
@@ -282,6 +340,9 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
+using ComparableAndFixedTypes =
+  cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
+TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, ComparableAndFixedTypes);
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 using SupportedTimestampTypes =
   cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
@@ -3389,28 +3450,26 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
-  auto filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  auto const filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .max_page_size_rows(page_rows);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
   // check first page header and make sure it has only page_rows values
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
   CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
-  auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
+  auto const& first_chunk = fmd.row_groups[0].columns[0].meta_data;
   CUDF_EXPECTS(first_chunk.data_page_offset > 0, "Invalid location for first data page");
 
-  // read first data page header.  sizeof(ph) is not exact, but the thrift encoded
+  // read first data page header.  sizeof(PageHeader) is not exact, but the thrift encoded
   // version should be smaller than size of the struct.
-  cudf_io::parquet::PageHeader ph;
-  const auto pg_hdr_buf = source->host_read(first_chunk.data_page_offset, sizeof(ph));
-  cudf_io::parquet::CompactProtocolReader cp(pg_hdr_buf->data(), pg_hdr_buf->size());
-  CUDF_EXPECTS(cp.read(&ph), "Cannot read page header");
+  auto const ph = read_page_header(
+    source, {first_chunk.data_page_offset, sizeof(cudf::io::parquet::PageHeader), 0});
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
@@ -3433,20 +3492,707 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   cols.push_back(col0.release());
   auto expected = std::make_unique<table>(std::move(cols));
 
-  auto filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
-  cudf_io::write_parquet(out_opts);
+  auto const filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view());
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
-  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  read_footer(source, &fmd);
 
   auto const stats = parse_statistics(fmd.row_groups[0].columns[0]);
 
   EXPECT_EQ(expected_min, stats.min_value);
   EXPECT_EQ(expected_max, stats.max_value);
+}
+
+// =============================================================================
+// ---- test data for stats sort order tests
+// need at least 3 pages, and min page count is 5000, so need at least 15000 values.
+// use 20000 to be safe.
+static constexpr int num_ordered_rows            = 20000;
+static constexpr int page_size_for_ordered_tests = 5000;
+
+namespace {
+namespace testdata {
+// ----- most numerics. scale by 100 so all values fit in a single byte
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
+ascending()
+{
+  int start = std::is_signed_v<T> ? -num_ordered_rows / 2 : 0;
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i / 100; });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
+descending()
+{
+  if (std::is_signed_v<T>) {
+    auto elements = cudf::detail::make_counting_transform_iterator(-num_ordered_rows / 2,
+                                                                   [](auto i) { return -i / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+  } else {
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return (num_ordered_rows - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+  }
+}
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
+unordered()
+{
+  if (std::is_signed_v<T>) {
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      -num_ordered_rows / 2, [](auto i) { return (i % 2 ? i : -i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+  } else {
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return (i % 2 ? i : num_ordered_rows - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+  }
+}
+
+// ----- bool
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < num_ordered_rows / 2 ? false : true; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < num_ordered_rows / 2 ? true : false; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    switch (i / page_size_for_ordered_tests) {
+      case 0: return true;
+      case 1: return false;
+      case 2: return true;
+      default: return false;
+    }
+  });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
+}
+
+// ----- fixed point types
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -num_ordered_rows / 2, [](auto i) { return T(i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -num_ordered_rows / 2, [](auto i) { return T(-i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -num_ordered_rows / 2, [](auto i) { return T(i % 2 ? i : -i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+// ----- chrono types
+// ----- timstamp
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(typename T::duration(i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(typename T::duration(num_ordered_rows - i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(typename T::duration(i % 2 ? i : num_ordered_rows - i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+// ----- duration
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return T(i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(num_ordered_rows - i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(i % 2 ? i : num_ordered_rows - i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
+}
+
+// ----- string_view
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+ascending()
+{
+  char buf[10];
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", i);
+    return std::string(buf);
+  });
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+descending()
+{
+  char buf[10];
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", num_ordered_rows - i);
+    return std::string(buf);
+  });
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+unordered()
+{
+  char buf[10];
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
+    return std::string(buf);
+  });
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
+}
+
+}  // namespace testdata
+}  // anonymous namespace
+
+TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
+{
+  using T = TypeParam;
+
+  auto col1 = testdata::ascending<T>();
+  auto col2 = testdata::descending<T>();
+  auto col3 = testdata::unordered<T>();
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  auto const expected = std::make_unique<table>(std::move(cols));
+
+  auto const filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .max_page_size_rows(page_size_for_ordered_tests)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
+
+  auto const& columns = fmd.row_groups[0].columns;
+  CUDF_EXPECTS(columns.size() == static_cast<size_t>(expected->num_columns()),
+               "Invalid number of columns");
+
+  // now check that the boundary order for chunk 1 is ascending,
+  // chunk 2 is descending, and chunk 3 is unordered
+  cudf::io::parquet::BoundaryOrder expected_orders[] = {
+    cudf::io::parquet::BoundaryOrder::ASCENDING,
+    cudf::io::parquet::BoundaryOrder::DESCENDING,
+    cudf::io::parquet::BoundaryOrder::UNORDERED};
+
+  for (std::size_t i = 0; i < columns.size(); i++) {
+    auto const ci = read_column_index(source, columns[i]);
+    EXPECT_EQ(ci.boundary_order, expected_orders[i]);
+  }
+}
+
+// utility functions for column index tests
+
+// compare two values.  return -1 if v1 < v2,
+// 0 if v1 == v2, and 1 if v1 > v2.
+template <typename T>
+int32_t compare(T& v1, T& v2)
+{
+  return (v1 > v2) - (v1 < v2);
+}
+
+// compare two binary statistics blobs based on their physical
+// and converted types. returns -1 if v1 < v2, 0 if v1 == v2, and
+// 1 if v1 > v2.
+int32_t compare_binary(const std::vector<uint8_t>& v1,
+                       const std::vector<uint8_t>& v2,
+                       cudf::io::parquet::Type ptype,
+                       cudf::io::parquet::ConvertedType ctype)
+{
+  switch (ptype) {
+    case cudf::io::parquet::INT32:
+      switch (ctype) {
+        case cudf::io::parquet::UINT_8:
+        case cudf::io::parquet::UINT_16:
+        case cudf::io::parquet::UINT_32:
+          return compare(*(reinterpret_cast<const uint32_t*>(v1.data())),
+                         *(reinterpret_cast<const uint32_t*>(v2.data())));
+        default:
+          return compare(*(reinterpret_cast<const int32_t*>(v1.data())),
+                         *(reinterpret_cast<const int32_t*>(v2.data())));
+      }
+
+    case cudf::io::parquet::INT64:
+      if (ctype == cudf::io::parquet::UINT_64) {
+        return compare(*(reinterpret_cast<const uint64_t*>(v1.data())),
+                       *(reinterpret_cast<const uint64_t*>(v2.data())));
+      }
+      return compare(*(reinterpret_cast<const int64_t*>(v1.data())),
+                     *(reinterpret_cast<const int64_t*>(v2.data())));
+
+    case cudf::io::parquet::FLOAT:
+      return compare(*(reinterpret_cast<const float*>(v1.data())),
+                     *(reinterpret_cast<const float*>(v2.data())));
+
+    case cudf::io::parquet::DOUBLE:
+      return compare(*(reinterpret_cast<const double*>(v1.data())),
+                     *(reinterpret_cast<const double*>(v2.data())));
+
+    case cudf::io::parquet::BYTE_ARRAY: {
+      int32_t v1sz = v1.size();
+      int32_t v2sz = v2.size();
+      int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));
+      if (ret != 0 or v1sz == v2sz) { return ret; }
+      return v1sz - v2sz;
+    }
+
+    default: CUDF_FAIL("Invalid type in compare_binary");
+  }
+
+  return 0;
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
+{
+  constexpr auto num_rows = 100000;
+
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<uint64_t>(num_rows);
+  auto col5_data = random_values<float>(num_rows);
+  auto col6_data = random_values<double>(num_rows);
+
+  auto col1 = cudf::test::fixed_width_column_wrapper<int8_t>(col1_data.begin(), col1_data.end());
+  auto col2 = cudf::test::fixed_width_column_wrapper<int16_t>(col2_data.begin(), col2_data.end());
+  auto col3 = cudf::test::fixed_width_column_wrapper<int32_t>(col3_data.begin(), col3_data.end());
+  auto col4 = cudf::test::fixed_width_column_wrapper<uint64_t>(col4_data.begin(), col4_data.end());
+  auto col5 = cudf::test::fixed_width_column_wrapper<float>(col5_data.begin(), col5_data.end());
+  auto col6 = cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end());
+
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col7          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  auto const expected = std::make_unique<table>(std::move(cols));
+
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndex.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
+      auto const oi = read_offset_index(source, chunk);
+
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        auto const& page_loc = oi.page_locations[o];
+        auto const ph        = read_page_header(source, page_loc);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each page.
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // schema indexing starts at 1
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        // null_pages should always be false
+        EXPECT_FALSE(ci.null_pages[p]);
+        // null_counts should always be 0
+        EXPECT_EQ(ci.null_counts[p], 0);
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
+{
+  constexpr auto num_rows = 100000;
+
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<uint64_t>(num_rows);
+  auto col5_data = random_values<float>(num_rows);
+  auto col6_data = random_values<double>(num_rows);
+
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  // add null values for all but first column
+  auto col1 =
+    cudf::test::fixed_width_column_wrapper<int8_t>(col1_data.begin(), col1_data.end(), valids);
+  auto col2 =
+    cudf::test::fixed_width_column_wrapper<int16_t>(col2_data.begin(), col2_data.end(), valids);
+  auto col3 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col3_data.begin(), col3_data.end(), valids);
+  auto col4 =
+    cudf::test::fixed_width_column_wrapper<uint64_t>(col4_data.begin(), col4_data.end(), valids);
+  auto col5 =
+    cudf::test::fixed_width_column_wrapper<float>(col5_data.begin(), col5_data.end(), valids);
+  auto col6 =
+    cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end(), valids);
+
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col7 = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows, valids);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNulls.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
+      auto const oi = read_offset_index(source, chunk);
+
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        auto const& page_loc = oi.page_locations[o];
+        auto const ph        = read_page_header(source, page_loc);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each page.
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // schema indexing starts at 1
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        EXPECT_FALSE(ci.null_pages[p]);
+        if (c > 0) {  // first column has no nulls
+          EXPECT_GT(ci.null_counts[p], 0);
+        } else {
+          EXPECT_EQ(ci.null_counts[p], 0);
+        }
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++) {
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+      }
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
+{
+  constexpr auto num_rows = 100000;
+
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+
+  auto col1_data = random_values<int32_t>(num_rows);
+  auto col2_data = random_values<int32_t>(num_rows);
+
+  // col1 is all nulls
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto col1 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col1_data.begin(), col1_data.end(), valids);
+  auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end());
+
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col3          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNullColumn.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
+      auto const oi = read_offset_index(source, chunk);
+
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        auto const& page_loc = oi.page_locations[o];
+        auto const ph        = read_page_header(source, page_loc);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each non-empty page.
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // schema indexing starts at 1
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        // check tnat null_pages is true for column 1
+        if (c == 1) {
+          EXPECT_TRUE(ci.null_pages[p]);
+          EXPECT_GT(ci.null_counts[p], 0);
+        }
+        if (not ci.null_pages[p]) {
+          EXPECT_EQ(ci.null_counts[p], 0);
+          EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        }
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++) {
+        if (not ci.null_pages[p]) {
+          EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
+{
+  auto c0 = testdata::ascending<uint32_t>();
+
+  auto sc0 = testdata::ascending<cudf::string_view>();
+  auto sc1 = testdata::descending<int32_t>();
+  auto sc2 = testdata::unordered<int64_t>();
+
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.push_back(sc0.release());
+  struct_children.push_back(sc1.release());
+  struct_children.push_back(sc2.release());
+  cudf::test::structs_column_wrapper c1(std::move(struct_children));
+
+  auto listgen = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? i / 2 : num_ordered_rows - (i / 2); });
+  auto list =
+    cudf::test::fixed_width_column_wrapper<int32_t>(listgen, listgen + 2 * num_ordered_rows);
+  auto offgen = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto offsets =
+    cudf::test::fixed_width_column_wrapper<int32_t>(offgen, offgen + num_ordered_rows + 1);
+
+  auto c2 = cudf::make_lists_column(num_ordered_rows, offsets.release(), list.release(), 0, {});
+
+  table_view expected({c0, c1, *c2});
+
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStruct.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(page_size_for_ordered_tests);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  // hard coded schema indices.
+  // TODO find a way to do this without magic
+  size_t colidxs[] = {1, 3, 4, 5, 8};
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      size_t colidx     = colidxs[c];
+      auto const& chunk = rg.columns[c];
+
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
+      auto const oi = read_offset_index(source, chunk);
+
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        auto const& page_loc = oi.page_locations[o];
+        auto const ph        = read_page_header(source, page_loc);
+        EXPECT_EQ(ph.type, cudf::io::parquet::PageType::DATA_PAGE);
+        // last column has 2 values per row
+        EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each page.
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      auto const ptype = fmd.schema[colidx].type;
+      auto const ctype = fmd.schema[colidx].converted_type;
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++) {
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+      }
+    }
+  }
 }
 
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
