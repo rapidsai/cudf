@@ -39,7 +39,6 @@ def test_groupby_basic(series, aggregation, pdf):
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
 
     if series:
-        breakpoint()
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
