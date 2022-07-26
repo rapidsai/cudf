@@ -88,6 +88,7 @@ union statistics_val {
   double fp_val;         //!< float columns
   int64_t i_val;         //!< integer columns
   uint64_t u_val;        //!< unsigned integer columns
+  __int128_t d128_val;   //!< decimal128 columns
 };
 
 struct statistics_chunk {

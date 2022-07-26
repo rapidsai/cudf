@@ -56,6 +56,9 @@ class BinaryOperation(IntEnum):
     POW = (
         <underlying_type_t_binary_operator> binary_operator.POW
     )
+    INT_POW = (
+        <underlying_type_t_binary_operator> binary_operator.INT_POW
+    )
     EQ = (
         <underlying_type_t_binary_operator> binary_operator.EQUAL
     )
@@ -162,7 +165,7 @@ def binaryop(lhs, rhs, op, dtype):
     """
     # TODO: Shouldn't have to keep special-casing. We need to define a separate
     # pipeline for libcudf binops that don't map to Python binops.
-    if op != "NULL_EQUALS":
+    if op not in {"INT_POW", "NULL_EQUALS"}:
         op = op[2:-2]
 
     op = BinaryOperation[op.upper()]
