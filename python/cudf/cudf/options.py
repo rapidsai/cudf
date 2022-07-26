@@ -124,12 +124,15 @@ def describe_option(name: Optional[str] = None):
     for name in names:
         print(_build_option_description(name, _OPTIONS[name])
 
-def _make_categorical_validator(valid_options: Container) -> Callable:
+def _make_contains_validator(valid_options: Container) -> Callable:
     """Return a validator that checks if a value is in `valid_options`."""
 
     def _validator(val):
         if val not in valid_options:
-            raise ValueError(f"{val} is not a valid option")
+            raise ValueError(
+                f"{val} is not a valid option. "
+                f"Must be one of {set(valid_options)}."
+            )
 
     return _validator
 
@@ -142,7 +145,7 @@ _register_option(
     "is not specified. cudf object constructors when `dtype` is unspecified."
     "Implicit conversion from cudf.RangeIndex to an integer index."
     "Valid values are 32 or 64. Default is 64.",
-    _make_categorical_validator([32, 64]),
+    _make_contains_validator([32, 64]),
 )
 
 
@@ -153,5 +156,5 @@ _register_option(
     "be inferred. This includes: cudf.read_csv, cudf.read_json when `dtype`"
     "is not specified. cudf object constructors when `dtype` is unspecified."
     "Valid values are 32 or 64. Default is 64.",
-    _make_categorical_validator([32, 64]),
+    _make_contains_validator([32, 64]),
 )
