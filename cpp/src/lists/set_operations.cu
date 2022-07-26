@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "lists/utilities.hpp"
+#include "utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.cuh>
