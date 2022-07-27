@@ -131,7 +131,7 @@ struct calculate_group_statistics_functor {
                              std::is_same_v<T, list_view>>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
-    operator()<byte_array_view>(s, t);
+    operator()<statistics::byte_array_view>(s, t);
   }
 
   template <
@@ -218,7 +218,7 @@ struct merge_group_statistics_functor {
                              const uint32_t num_chunks,
                              uint32_t t)
   {
-    operator()<byte_array_view>(s, chunks, num_chunks, t);
+    operator()<statistics::byte_array_view>(s, chunks, num_chunks, t);
   }
 
   template <

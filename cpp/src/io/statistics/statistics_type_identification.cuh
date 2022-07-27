@@ -41,6 +41,8 @@ namespace cudf {
 namespace io {
 namespace detail {
 
+using cudf::io::statistics::byte_array_view;
+
 enum class io_file_format { ORC, PARQUET };
 enum class is_int96_timestamp { YES, NO };
 

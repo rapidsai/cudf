@@ -46,12 +46,12 @@ class union_member {
 
  public:
   template <typename T, typename U>
-  using type =
-    std::conditional_t<std::is_same_v<std::remove_cv_t<T>, string_view>,
-                       reference_type<U, string_stats>,
-                       std::conditional_t<std::is_same_v<std::remove_cv_t<T>, byte_array_view>,
-                                          reference_type<U, byte_array_stats>,
-                                          reference_type<U, T>>>;
+  using type = std::conditional_t<
+    std::is_same_v<std::remove_cv_t<T>, string_view>,
+    reference_type<U, string_stats>,
+    std::conditional_t<std::is_same_v<std::remove_cv_t<T>, statistics::byte_array_view>,
+                       reference_type<U, byte_array_stats>,
+                       reference_type<U, T>>>;
 
   template <typename T, typename U>
   __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T, U>>
@@ -86,7 +86,8 @@ class union_member {
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, byte_array_view>, type<T, U>> get(U& val)
+  __device__ static std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>, type<T, U>>
+  get(U& val)
   {
     return val.byte_val;
   }

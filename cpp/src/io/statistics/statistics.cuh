@@ -85,7 +85,7 @@ struct t_array_stats {
   __host__ __device__ __forceinline__ operator ReturnType() { return ReturnType(ptr, length); }
 };
 using string_stats     = t_array_stats<string_view, char>;
-using byte_array_stats = t_array_stats<byte_array_view, uint8_t>;
+using byte_array_stats = t_array_stats<statistics::byte_array_view, uint8_t>;
 
 union statistics_val {
   string_stats str_val;       //!< string columns
@@ -119,13 +119,13 @@ struct statistics_merge_group {
   uint32_t num_chunks;           //!< Number of chunks in group
 };
 
-template <typename T, std::enable_if_t<!std::is_same_v<T, byte_array_view>>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_same_v<T, statistics::byte_array_view>>* = nullptr>
 __device__ T get_element(column_device_view const& col, uint32_t row)
 {
   return col.element<T>(row);
 }
 
-template <typename T, std::enable_if_t<std::is_same_v<T, byte_array_view>>* = nullptr>
+template <typename T, std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>>* = nullptr>
 __device__ T get_element(column_device_view const& col, uint32_t row)
 {
   using et              = typename T::element_type;
