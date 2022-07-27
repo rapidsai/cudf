@@ -29,24 +29,33 @@
 namespace nested_json = cudf::io::json;
 
 namespace {
+
+// Forward declaration
 void print_column(std::string const& input,
                   nested_json::json_column const& column,
                   uint32_t indent = 0);
-void print_json_string_col(std::string const& input,
-                           nested_json::json_column const& column,
-                           uint32_t indent = 0)
-{
-  for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
-    std::cout << i << ": [" << (column.validity[i]?"1":"0") << "] '" << input.substr(column.string_offsets[i], column.string_lengths[i])
-              << "'\n";
-  }
-}
 
+/**
+ * @brief Helper to generate indentation
+ */
 std::string pad(uint32_t indent = 0)
 {
   std::string pad{};
   if (indent > 0) pad.insert(pad.begin(), indent, ' ');
   return pad;
+}
+
+/**
+ * @brief Prints a string column.
+ */
+void print_json_string_col(std::string const& input,
+                           nested_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
+    std::cout << pad(indent) << i << ": [" << (column.validity[i] ? "1" : "0") << "] '"
+              << input.substr(column.string_offsets[i], column.string_lengths[i]) << "'\n";
+  }
 }
 
 void print_json_list_col(std::string const& input,
@@ -60,8 +69,8 @@ void print_json_list_col(std::string const& input,
   std::cout << pad(indent) << " offsets[]: "
             << "\n";
   for (std::size_t i = 0; i < column.child_offsets.size() - 1; i++) {
-    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i]?"1":"0") << "] [" << column.child_offsets[i] << ", "
-              << column.child_offsets[i + 1] << ")\n";
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "] ["
+              << column.child_offsets[i] << ", " << column.child_offsets[i + 1] << ")\n";
   }
   if (column.child_columns.size() > 0) {
     std::cout << pad(indent) << column.child_columns.begin()->first << "[]: "
@@ -81,11 +90,11 @@ void print_json_struct_col(std::string const& input,
   std::cout << pad(indent) << " -> validity[]: "
             << "\n";
   for (std::size_t i = 0; i < column.current_offset; i++) {
-    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i]?"1":"0") << "]\n";
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "]\n";
   }
   auto it = std::begin(column.child_columns);
   for (std::size_t i = 0; i < column.child_columns.size(); i++) {
-    std::cout << "child #" << i << " '" << it->first << "'[] \n";
+    std::cout << pad(indent + 2) << "child #" << i << " '" << it->first << "'[] \n";
     print_column(input, it->second, indent + 2);
     it++;
   }
@@ -101,22 +110,6 @@ void print_column(std::string const& input, nested_json::json_column const& colu
     default: break;
   }
 }
-
-void print_json_cols(std::string const& input, nested_json::json_column const& column)
-{
-  auto column_type_string = [](nested_json::json_col_t column_type) {
-    switch (column_type) {
-      case nested_json::json_col_t::Unknown: return "Unknown";
-      case nested_json::json_col_t::ListColumn: return "List";
-      case nested_json::json_col_t::StructColumn: return "Struct";
-      case nested_json::json_col_t::StringColumn: return "String";
-      default: return "Unknown";
-    }
-  };
-
-  std::cout << "TYPE: " << column_type_string(column.type) << "\n";
-  print_column(input, column, 0);
-};
 
 }  // namespace
 
@@ -298,8 +291,16 @@ TEST_F(JsonTest, Simple)
 
   //
   // std::string input = R"( ["foo", null, "bar"] )";
-  std::string input = R"( [{"a":0.0, "b":0.1}, {"b":1.1}] )";
-  // std::string input = R"( [[1], [2], null, [3], [4]] )";
+  // std::string input = R"( [{"a":0.0, "c":{"c0":"0.2.0"}}, {"b":1.1}] )";
+  // std::string input = R"( [{"a":0.0}, {"b":1.1, "c":{"c0":"1.2.0"}}] )";
+  std::string input = R"( [{"a":0.0}, {"b":1.1, "c":{"c0":[[1],null,[2]]}}] )";
+  // std::string input =
+  // R"( [{ "col0":[{"field1": 1, "field2": 2 }, null, {"field1": 3, "field2": 4 }, {"field1": 5,
+  // "field2": 6 }], "col1":"foo" }] )";
+  // std::string input = R"( [ {"col1": 1, "col2": 2 }, {"col1": 3, "col2": 4 }, {"col1": 5,
+  // "col2": 6 }] )"; std::string input = R"( [ {"col1": 1, "col2": 2 }, null, {"col1": 3, "col2":
+  // 4 },
+  // {"col1": 5, "col2": 6 }] )"; std::string input = R"( [[1], [2], null, [3], [4]] )";
 
   // String / value
   // std::string input = R"( " Foobar" )";
@@ -313,5 +314,6 @@ TEST_F(JsonTest, Simple)
   auto json_root_col = nested_json::detail::get_json_columns(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
 
-  print_json_cols(input, json_root_col);
+  std::cout << input << "\n";
+  print_column(input, json_root_col);
 }

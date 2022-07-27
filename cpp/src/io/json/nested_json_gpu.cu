@@ -29,6 +29,11 @@
 
 #include <stack>
 
+// Debug print flag
+#ifndef NJP_DEBUG_PRINT
+#define NJP_DEBUG_PRINT
+#endif
+
 namespace cudf::io::json {
 
 //------------------------------------------------------------------------------
@@ -637,9 +642,12 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                stream);
 }
 
+/**
+ * @brief A tree node contains all the information of the data
+ *
+ */
 struct tree_node {
   // The column that this node is associated with
-  // E.g., if this is a struct node, it's the struct's column
   json_column* column;
 
   // The row offset that this node belongs to within the given column
@@ -653,14 +661,6 @@ struct tree_node {
   std::size_t num_children = 0;
 };
 
-/**
- * RULES:
- *
- * if first node type of a column is:
- * --> a list: it becomes list column
- * --> a struct: it becomes struct column
- * --> else (e.g., 'null', '123', '"foo"'): it becomes a string column
- */
 json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_view stream)
 {
   // Default name for a list's child column
@@ -742,6 +742,7 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
     };
   };
 
+#ifdef NJP_DEBUG_PRINT
   auto column_type_string = [](json_col_t column_type) {
     switch (column_type) {
       case json_col_t::Unknown: return "Unknown";
@@ -752,16 +753,33 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
     }
   };
 
-  auto append_row_to_column = [&input, &column_type_string](json_column* column,
-                                                            uint32_t row_index,
-                                                            json_col_t const& row_type,
-                                                            uint32_t string_offset,
-                                                            uint32_t string_end,
-                                                            uint32_t child_count) {
+  auto token_to_string = [](PdaTokenT token_type) {
+    switch (token_type) {
+      case token_t::StructBegin: return "StructBegin";
+      case token_t::StructEnd: return "StructEnd";
+      case token_t::ListBegin: return "ListBegin";
+      case token_t::ListEnd: return "ListEnd";
+      case token_t::FieldNameBegin: return "FieldNameBegin";
+      case token_t::FieldNameEnd: return "FieldNameEnd";
+      case token_t::StringBegin: return "StringBegin";
+      case token_t::StringEnd: return "StringEnd";
+      case token_t::ValueBegin: return "ValueBegin";
+      case token_t::ValueEnd: return "ValueEnd";
+      case token_t::ErrorBegin: return "ErrorBegin";
+      default: return "Unknown";
+    }
+  };
+#endif
 
-    
+  auto append_row_to_column = [&](json_column* column,
+                                  uint32_t row_index,
+                                  json_col_t const& row_type,
+                                  uint32_t string_offset,
+                                  uint32_t string_end,
+                                  uint32_t child_count) {
     CUDF_EXPECTS(column != nullptr, "Encountered invalid JSON token sequence");
 
+#ifdef NJP_DEBUG_PRINT
     std::cout << "  -> append_row_to_column()\n";
     std::cout << "  ---> col@" << column << "\n";
     std::cout << "  ---> row #" << row_index << "\n";
@@ -769,33 +787,20 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
     std::cout << "  ---> row_type: " << column_type_string(row_type) << "\n";
     std::cout << "  ---> string: '"
               << std::string{input.data() + string_offset, (string_end - string_offset)} << "'\n";
+#endif
 
     // If, thus far, the column's type couldn't be inferred, we infer it to the given type
     if (column->type == json_col_t::Unknown) { column->type = row_type; }
 
-    // We shouldn't run into this, as we shouldn't
+    // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
     CUDF_EXPECTS(column->type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
 
-    // Check for the last inserted row offset
-    auto populated_row_count = column->current_offset;
-    if (populated_row_count < row_index) {
+    // Fill all the omitted rows with "empty"/null rows (if needed)
+    column->null_fill(row_index);
 
-      std::cout << "  ---> filling [" << populated_row_count << ", " << row_index << ")\n";
-    }
-
-    // Fill all the omitted rows with "empty"/null rows
-    std::fill_n(std::back_inserter(column->validity), row_index - column->string_offsets.size(), false);
-    std::fill_n(std::back_inserter(column->string_offsets),
-                row_index - column->string_offsets.size(),
-                (column->string_offsets.size() > 0) ? column->string_offsets.back() : 0);
-    std::fill_n(
-      std::back_inserter(column->string_lengths), row_index - column->string_lengths.size(), 0);
-    std::fill_n(std::back_inserter(column->child_offsets),
-                row_index + 1 - column->child_offsets.size(),
-                (column->child_offsets.size() > 0) ? column->child_offsets.back() : 0);
-
-    // Fill all the omitted rows with "empty" rows
-    // col type | row type  =>
+    // Table listing what we intend to use for a given column type and row type combination
+    // col type | row type  => {valid, FAIL, null}
+    // -----------------------------------------------
     // List     | List      => valid
     // List     | Struct    => FAIL
     // List     | String    => null
@@ -815,8 +820,13 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
     column->current_offset++;
   };
 
+  /**
+   * @brief Updates the given row in the given column with a new string_end and child_count. In
+   * particular, updating the child count is relevant for list columns.
+   */
   auto update_row =
     [](json_column* column, uint32_t row_index, uint32_t string_end, uint32_t child_count) {
+#ifdef NJP_DEBUG_PRINT
       std::cout << "  -> update_row()\n";
       std::cout << "  ---> col@" << column << "\n";
       std::cout << "  ---> row #" << row_index << "\n";
@@ -824,6 +834,7 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
                 << "\n";
       std::cout << "  ---> child_offsets = " << (column->child_offsets[row_index + 1] + child_count)
                 << "\n";
+#endif
       column->string_lengths[row_index]    = column->child_offsets[row_index + 1] + child_count;
       column->child_offsets[row_index + 1] = column->child_offsets[row_index + 1] + child_count;
     };
@@ -833,13 +844,11 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
    *
    * That is, if \p current_data_path top-of-stack is
    * (a) a struct, the selected child column corresponds to the child column of the last field name
-   * node encoutnered.
+   * node encountered.
    * (b) a list, the selected child column corresponds to single child column of
    * the list column. In this case, the child column may not exist yet.
-   *
    */
   auto get_selected_column = [&list_child_name](std::stack<tree_node>& current_data_path) {
-    std::cout << "  -> get_selected_column()\n";
     json_column* selected_col = current_data_path.top().current_selected_col;
 
     // If the node does not have a selected column yet
@@ -855,19 +864,26 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
         }
         current_data_path.top().current_selected_col =
           &current_data_path.top().column->child_columns.begin()->second;
-        std::cout << "  ---> selected col@" << current_data_path.top().current_selected_col << "\n";
-        return current_data_path.top().current_selected_col;
+        selected_col = current_data_path.top().current_selected_col;
       } else {
         CUDF_FAIL("Trying to retrieve child column without encountering a field name.");
       }
-    } else {
-      std::cout << "  ---> selected col@" << selected_col << "\n";
-      return selected_col;
     }
+#ifdef NJP_DEBUG_PRINT
+    std::cout << "  -> get_selected_column()\n";
+    std::cout << "  ---> selected col@" << selected_col << "\n";
+#endif
+    return selected_col;
   };
 
+  /**
+   * @brief Returns a pointer to the child column with the given \p field_name within the current
+   * struct column.
+   */
   auto select_column = [](std::stack<tree_node>& current_data_path, std::string const& field_name) {
+#ifdef NJP_DEBUG_PRINT
     std::cout << "  -> select_column(" << field_name << ")\n";
+#endif
     // The field name's parent struct node
     auto& current_struct_node = current_data_path.top();
 
@@ -880,18 +896,30 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
 
     // The field name's column exists already, select that as the struct node's currently selected
     // child column
-    if (child_col_it != struct_col->child_columns.end()) {
-      std::cout << "  ---> selected col@" << &child_col_it->second << "\n";
-      return &child_col_it->second;
-    }
+    if (child_col_it != struct_col->child_columns.end()) { return &child_col_it->second; }
 
     // The field name's column does not exist yet, so we have to append the child column to the
     // struct column
-    json_column* ptr  = &struct_col->child_columns.insert({field_name, {}}).first->second;
-    json_column* ptr2 = &struct_col->child_columns.find(field_name)->second;
-    std::cout << "ptr1: " << static_cast<void*>(ptr) << ", ptr2: " << static_cast<void*>(ptr2)
-              << "\n";
     return &struct_col->child_columns.insert({field_name, {}}).first->second;
+  };
+
+  /**
+   * @brief Gets the row offset at which to insert. I.e., for a child column of a list column, we
+   * just have to append the row to the end. Otherwise we have to propagate the row offset from the
+   * parent struct column.
+   */
+  auto get_target_row_index = [](std::stack<tree_node> const& current_data_path,
+                                 json_column* target_column) {
+#ifdef NJP_DEBUG_PRINT
+    std::cout << " -> target row: "
+              << ((current_data_path.top().column->type == json_col_t::ListColumn)
+                    ? target_column->current_offset
+                    : current_data_path.top().row_index)
+              << "\n";
+#endif
+    return (current_data_path.top().column->type == json_col_t::ListColumn)
+             ? target_column->current_offset
+             : current_data_path.top().row_index;
   };
 
   // The stack represents the path from the JSON root node to the current node being looked at
@@ -901,24 +929,21 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
   std::size_t offset = 0;
 
   // The root column
-  json_column root_column;
+  json_column root_column{};
 
   // Giving names to magic constants
-  constexpr uint32_t row_offset_zero    = 0;
-  constexpr uint32_t zero_child_count   = 0;
+  constexpr uint32_t row_offset_zero  = 0;
+  constexpr uint32_t zero_child_count = 0;
 
   //--------------------------------------------------------------------------------
   // INITIALIZE JSON ROOT NODE
   //--------------------------------------------------------------------------------
-  // The JSON root may only a struct, list, string, or value node
+  // The JSON root may only be a struct, list, string, or value node
   CUDF_EXPECTS(num_tokens_out[0] > 0, "Empty JSON input not supported");
   CUDF_EXPECTS(is_valid_root_token(tokens_gpu[offset]), "Invalid beginning of JSON document");
 
   // The JSON root is either a struct or list
   if (is_nested_token(tokens_gpu[offset])) {
-    std::cout << "Nested value at root. JSON doc with: " << num_tokens_out[0] << " tokens \n";
-    std::cout << (tokens_gpu[offset] == token_t::StructBegin ? "[StructEnd]" : "[ListBegin]")
-              << "\n";
     // Initialize the root column and append this row to it
     append_row_to_column(&root_column,
                          row_offset_zero,
@@ -935,8 +960,6 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
   }
   // The JSON is a simple scalar value -> create simple table and return
   else {
-    std::cout << "Scalar value at root. JSON doc with: " << num_tokens_out[0] << " tokens \n";
-
     constexpr SymbolOffsetT max_tokens_for_scalar_value = 2;
     CUDF_EXPECTS(num_tokens_out[0] <= max_tokens_for_scalar_value,
                  "Invalid JSON format. Expected just a scalar value.");
@@ -957,26 +980,14 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
         ? get_token_index(tokens_gpu[offset + 1], token_indices_gpu[offset + 1])
         : input.size();
 
-    root_column.type = json_col_t::StringColumn;
-    root_column.string_offsets.push_back(token_begin_offset);
-    root_column.string_lengths.push_back(token_end_offset - token_begin_offset);
+    append_row_to_column(&root_column,
+                         row_offset_zero,
+                         json_col_t::StringColumn,
+                         token_begin_offset,
+                         token_end_offset,
+                         zero_child_count);
     return root_column;
   }
-
-  //--------------------------------------------------------------------------------
-  // TRAVERSE JSON TREE
-  //--------------------------------------------------------------------------------
-  auto get_target_row_index = [](std::stack<tree_node> const& current_data_path,
-                                 json_column* target_column) {
-    std::cout << " -> target row: "
-              << ((current_data_path.top().column->type == json_col_t::ListColumn)
-                    ? target_column->current_offset
-                    : current_data_path.top().row_index)
-              << "\n";
-    return (current_data_path.top().column->type == json_col_t::ListColumn)
-             ? target_column->current_offset
-             : current_data_path.top().row_index;
-  };
 
   while (offset < num_tokens_out[0]) {
     // Verify there's at least the JSON root node left on the stack to which we can append data
@@ -990,9 +1001,12 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
     // The token we're currently parsing
     auto const& token = tokens_gpu[offset];
 
+#ifdef NJP_DEBUG_PRINT
+    std::cout << "[" << token_to_string(token) << "]\n";
+#endif
+
     // StructBegin token
     if (token == token_t::StructBegin) {
-      std::cout << "[StructBegin]\n";
       // Get this node's column. That is, the parent node's selected column:
       // (a) if parent is a list, then this will (create and) return the list's only child column
       // (b) if parent is a struct, then this will return the column selected by the last field name
@@ -1017,7 +1031,6 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
 
     // StructEnd token
     else if (token == token_t::StructEnd) {
-      std::cout << "[StructEnd]\n";
       // Verify that this node in fact a struct node (i.e., it was part of a struct column)
       CUDF_EXPECTS(current_data_path.top().column->type == json_col_t::StructColumn,
                    "Broken invariant while parsing JSON");
@@ -1036,7 +1049,6 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
 
     // ListBegin token
     else if (token == token_t::ListBegin) {
-      std::cout << "[ListBegin]\n";
       // Get the selected column
       json_column* selected_col = get_selected_column(current_data_path);
 
@@ -1058,7 +1070,6 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
 
     // ListEnd token
     else if (token == token_t::ListEnd) {
-      std::cout << "[ListEnd]\n";
       // Verify that this node in fact a list node (i.e., it was part of a list column)
       CUDF_EXPECTS(current_data_path.top().column->type == json_col_t::ListColumn,
                    "Broken invariant while parsing JSON");
@@ -1100,7 +1111,6 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
       // For the current struct node in the tree, select the child column corresponding to this
       // field name
       if (token == token_t::FieldNameBegin) {
-        std::cout << "[FieldNameBegin]\n";
         std::string field_name{input.data() + token_begin_offset,
                                (token_end_offset - token_begin_offset)};
         current_data_path.top().current_selected_col = select_column(current_data_path, field_name);
@@ -1109,7 +1119,6 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
       // ValueBegin
       // As we currently parse to string columns there's no further differentiation
       else if (token == token_t::StringBegin or token == token_t::ValueBegin) {
-        std::cout << "[StringBegin/ValueBegin]\n";
         // Get the selected column
         json_column* selected_col = get_selected_column(current_data_path);
 
@@ -1136,10 +1145,13 @@ json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_vi
   }
 
   // Make sure all of a struct's child columns have the same length
-
+  root_column.level_child_cols_recursively(root_column.current_offset);
 
   return root_column;
 }
 
 }  // namespace detail
 }  // namespace cudf::io::json
+
+// Debug print flag
+#undef NJP_DEBUG_PRINT

@@ -128,6 +128,52 @@ struct json_column {
 
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;
+
+  /**
+   * @brief Fills the rows up to the given \p up_to_row_offset with nulls.
+   *
+   * @param up_to_row_offset The row offset up to which to fill with nulls.
+   */
+  void null_fill(row_offset_t up_to_row_offset)
+  {
+    // Fill all the rows up to up_to_row_offset with "empty"/null rows
+    std::fill_n(std::back_inserter(validity), up_to_row_offset - string_offsets.size(), false);
+    std::fill_n(std::back_inserter(string_offsets),
+                up_to_row_offset - string_offsets.size(),
+                (string_offsets.size() > 0) ? string_offsets.back() : 0);
+    std::fill_n(std::back_inserter(string_lengths), up_to_row_offset - string_lengths.size(), 0);
+    std::fill_n(std::back_inserter(child_offsets),
+                up_to_row_offset + 1 - child_offsets.size(),
+                (child_offsets.size() > 0) ? child_offsets.back() : 0);
+    current_offset = up_to_row_offset;
+  }
+
+  /**
+   * @brief Recursively iterates through the tree of columns making sure that all child columns of a
+   * struct column have the same row count, filling missing rows with nulls.
+   *
+   * @param min_row_count The minimum number of rows to be filled.
+   */
+  void level_child_cols_recursively(row_offset_t min_row_count)
+  {
+    // Fill this columns with nulls up to the given row count
+    null_fill(min_row_count);
+
+    // If this is a struct column, we need to level all its child columns
+    if (type == json_col_t::StructColumn) {
+      for (auto it = std::begin(child_columns); it != std::end(child_columns); it++) {
+        it->second.level_child_cols_recursively(min_row_count);
+      }
+    }
+    // If this is a list column, we need to make sure that its child column levels its children
+    else if (type == json_col_t::ListColumn) {
+      auto it = std::begin(child_columns);
+      // Make that child column fill its child columns up to its own row count
+      if (it != std::end(child_columns)) {
+        it->second.level_child_cols_recursively(it->second.current_offset);
+      }
+    }
+  }
 };
 
 /**
