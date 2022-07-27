@@ -42,6 +42,7 @@ constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB
 constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
 constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
+constexpr size_type default_column_index_truncate_length = 64;
 
 class parquet_reader_options_builder;
 
@@ -407,6 +408,8 @@ class parquet_writer_options {
   size_t _max_page_size_bytes = default_max_page_size_bytes;
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
+  // Maximum size of min or max values in column index
+  size_type _column_index_truncate_length = default_column_index_truncate_length;
 
   /**
    * @brief Constructor from sink and table.
@@ -554,6 +557,13 @@ class parquet_writer_options {
   }
 
   /**
+   * @brief Returns maximum length of min or max values in column index, in bytes.
+   *
+   * @return length min/max will be truncated to
+   */
+  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -668,6 +678,17 @@ class parquet_writer_options {
       size_rows >= 5000,
       "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
     _max_page_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the maximum length of min or max values in column index, in bytes.
+   *
+   * @param size_bytes length min/max will be truncated to
+   */
+  auto set_column_index_truncate_length(size_type size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
+    _column_index_truncate_length = size_bytes;
   }
 };
 
@@ -831,6 +852,20 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the maximum size in bytes for min and max values in the column index.
+   * Values exceeding this limit will be truncated, but modified such that they will still
+   * be valid lower and upper bounds. Default value is 64.
+   *
+   * @param val length min/max will be truncated to, with 0 indicating no truncation
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  {
+    options.set_column_index_truncate_length(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps
@@ -917,6 +952,8 @@ class chunked_parquet_writer_options {
   size_t _max_page_size_bytes = default_max_page_size_bytes;
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
+  // Maximum size of min or max values in column index
+  size_type _column_index_truncate_length = default_column_index_truncate_length;
 
   /**
    * @brief Constructor from sink.
@@ -1020,6 +1057,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Returns maximum length of min or max values in column index, in bytes.
+   *
+   * @return length min/max will be truncated to
+   */
+  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1109,6 +1153,17 @@ class chunked_parquet_writer_options {
       size_rows >= 5000,
       "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
     _max_page_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the maximum length of min or max values in column index, in bytes.
+   *
+   * @param size_bytes length min/max will be truncated to
+   */
+  auto set_column_index_truncate_length(size_type size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
+    _column_index_truncate_length = size_bytes;
   }
 
   /**
@@ -1257,6 +1312,20 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& max_page_size_rows(size_type val)
   {
     options.set_max_page_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum size in bytes for min and max values in the column index.
+   * Values exceeding this limit will be truncated, but modified such that they will still
+   * be valid lower and upper bounds. Default value is 64.
+   *
+   * @param val length min/max will be truncated to, with 0 indicating no truncation
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  {
+    options.set_column_index_truncate_length(val);
     return *this;
   }
 
