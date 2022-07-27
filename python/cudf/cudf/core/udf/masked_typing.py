@@ -55,7 +55,6 @@ def _type_to_masked_type(t):
         if isinstance(t, SUPPORTED_NUMBA_TYPES):
             return t
         else:
-            breakpoint()
             return types.Poison(
                 # Unsupported Dtype. Numba tends to print out the type info
                 # for whatever operands and operation failed to type and then
