@@ -765,6 +765,29 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSpark32BitMurmur3HashNestedStruct() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+        "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
+        "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+            "in the MD5 hash function. This string needed to be longer.",
+        null, null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+             0.0, 100.0, -100.0, POSITIVE_DOUBLE_NAN_LOWER_RANGE, POSITIVE_DOUBLE_NAN_UPPER_RANGE, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+             0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
+         ColumnView structs1 = ColumnView.makeStructView(strings, integers);
+         ColumnView structs2 = ColumnView.makeStructView(structs1, doubles);
+         ColumnView structs3 = ColumnView.makeStructView(bools);
+         ColumnView structs = ColumnView.makeStructView(structs2, floats, structs3);
+         ColumnVector expected = ColumnVector.spark32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools})) {
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(1868, new ColumnView[]{structs});
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testSpark32BitMurmur3HashListsAndNestedLists() {
     try (ColumnVector stringListCV = ColumnVector.fromLists(
              new ListType(true, new BasicType(true, DType.STRING)),
