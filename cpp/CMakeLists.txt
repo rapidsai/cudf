@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.08.00
+  VERSION 22.10.00
   LANGUAGES C CXX CUDA
 )
 
@@ -196,26 +196,26 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
+  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/BitwiseAnd.cu
   src/binaryop/compiled/BitwiseOr.cu
   src/binaryop/compiled/BitwiseXor.cu
-  src/binaryop/compiled/Less.cu
-  src/binaryop/compiled/Greater.cu
-  src/binaryop/compiled/LessEqual.cu
-  src/binaryop/compiled/GreaterEqual.cu
   src/binaryop/compiled/Div.cu
-  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/FloorDiv.cu
+  src/binaryop/compiled/Greater.cu
+  src/binaryop/compiled/GreaterEqual.cu
+  src/binaryop/compiled/IntPow.cu
+  src/binaryop/compiled/Less.cu
+  src/binaryop/compiled/LessEqual.cu
   src/binaryop/compiled/LogBase.cu
   src/binaryop/compiled/LogicalAnd.cu
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
-  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullLogicalAnd.cu
+  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -227,6 +227,7 @@ add_library(
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
   src/binaryop/compiled/binary_ops.cu
+  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -377,7 +378,6 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
-  src/lists/drop_list_duplicates.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
@@ -385,6 +385,7 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/set_operations.cu
   src/lists/stream_compaction/apply_boolean_mask.cu
   src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
@@ -710,6 +711,8 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+  # Always print verbose output when tests fail if run using `make test`.
+  list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
 endif()
 
@@ -805,7 +808,6 @@ if(NOT TARGET cudf::Thrust)
 endif()
 ]=]
 )
-
 
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(

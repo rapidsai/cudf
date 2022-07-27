@@ -89,10 +89,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     list(APPEND ARROW_PARQUET_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
   endif()
 
-  # Set this so Arrow correctly finds the CUDA toolkit when the build machine does not have the CUDA
-  # driver installed. This must be an env var.
-  set(ENV{CUDA_LIB_PATH} "${CUDAToolkit_LIBRARY_DIR}/stubs")
-
   rapids_cpm_find(
     Arrow ${VERSION}
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared
@@ -101,7 +97,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     GIT_TAG apache-arrow-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
-            "CUDA_USE_STATIC_CUDA_RUNTIME ${CUDA_STATIC_RUNTIME}"
             "ARROW_IPC ON"
             "ARROW_DATASET ON"
             "ARROW_WITH_BACKTRACE ON"
@@ -156,9 +151,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       # target_include_directories. That defeats ccache.
       file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
            DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
-      )
-      file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/gpu/cuda_version.h"
-           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/gpu"
       )
       if(ENABLE_PARQUET)
         file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
@@ -254,8 +246,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       )
     endif()
   endif()
-  # We generate the arrow-config and arrowcuda-config files when we built arrow locally, so always
-  # do `find_dependency`
+  # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 

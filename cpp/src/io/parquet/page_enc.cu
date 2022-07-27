@@ -57,7 +57,6 @@ constexpr bool enable_bool_rle = false;
 
 using ::cudf::detail::device_2dspan;
 
-constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
@@ -81,7 +80,7 @@ struct page_enc_state_s {
   EncPage page;
   EncColumnChunk ck;
   parquet_column_device_view col;
-  uint16_t vals[rle_buffer_size];
+  uint32_t vals[rle_buffer_size];
 };
 
 /**
@@ -99,30 +98,6 @@ uint32_t __device__ physical_type_len(Type physical_type, type_id id)
     case BOOLEAN: return 1u;
     default: return sizeof(int32_t);
   }
-}
-
-/**
- * @brief Return a 12-bit hash from a byte sequence
- */
-inline __device__ uint32_t hash_string(const string_view& val)
-{
-  char const* ptr = val.data();
-  uint32_t len    = val.size_bytes();
-  if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
-  } else {
-    return 0;
-  }
-}
-
-inline __device__ uint32_t uint32_init_hash(uint32_t v)
-{
-  return (v + (v >> 11) + (v >> 22)) & ((1 << init_hash_bits) - 1);
-}
-
-inline __device__ uint32_t uint64_init_hash(uint64_t v)
-{
-  return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
 // blockDim {512,1,1}
@@ -458,8 +433,9 @@ __global__ void __launch_bounds__(128)
  * @brief Mask table representing how many consecutive repeats are needed to code a repeat run
  *[nbits-1]
  */
-static __device__ __constant__ uint32_t kRleRunMask[16] = {
-  0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3, 0x1, 0x1, 0x1, 0x1};
+static __device__ __constant__ uint32_t kRleRunMask[24] = {
+  0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3,
+  0x1,        0x1,    0x1,    0x1,  0x1,  0x1,  0x1, 0x1, 0x1, 0x1, 0x1, 0x1};
 
 /**
  * @brief Variable-length encode an integer
@@ -480,7 +456,7 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 inline __device__ void PackLiterals(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16) {
+  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 24) {
     if (t <= (count | 0x1f)) {
       if (w == 1 || w == 2 || w == 4) {
         uint32_t mask = 0;
@@ -516,11 +492,18 @@ inline __device__ void PackLiterals(
           dst[t * 2 + 1] = v >> 8;
         }
         return;
+      } else if (w == 24) {
+        if (t < count) {
+          dst[t * 3 + 0] = v;
+          dst[t * 3 + 1] = v >> 8;
+          dst[t * 3 + 2] = v >> 16;
+        }
+        return;
       }
     } else {
       return;
     }
-  } else {
+  } else if (w <= 16) {
     // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
     // words but the destination mem may not be a multiple of 4 bytes.
     // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
@@ -549,6 +532,8 @@ inline __device__ void PackLiterals(
     if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
     if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
     __syncthreads();
+  } else {
+    CUDF_UNREACHABLE("Unsupported bit width");
   }
 }
 
@@ -594,6 +579,7 @@ static __device__ void RleEncode(
           uint8_t* dst           = VlqEncode(s->rle_out, rle_run);
           *dst++                 = run_val;
           if (nbits > 8) { *dst++ = run_val >> 8; }
+          if (nbits > 16) { *dst++ = run_val >> 16; }
           s->rle_out = dst;
         }
         rle_run = 0;
@@ -1171,6 +1157,12 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
 /**
  * Minimal thrift compact protocol support
  */
+inline __device__ uint8_t* cpw_put_uint8(uint8_t* p, uint8_t v)
+{
+  *p++ = v;
+  return p;
+}
+
 inline __device__ uint8_t* cpw_put_uint32(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
@@ -1237,6 +1229,35 @@ class header_encoder {
     current_field_index   = field;
   }
 
+  inline __device__ void field_list_begin(int field, size_t len, int type)
+  {
+    current_header_ptr = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_LIST);
+    current_header_ptr = cpw_put_uint8(
+      current_header_ptr, static_cast<uint8_t>((std::min(len, size_t{0xfu}) << 4) | type));
+    if (len >= 0xf) { current_header_ptr = cpw_put_uint32(current_header_ptr, len); }
+    current_field_index = 0;
+  }
+
+  inline __device__ void field_list_end(int field) { current_field_index = field; }
+
+  inline __device__ void put_bool(bool value)
+  {
+    current_header_ptr = cpw_put_uint8(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
+  }
+
+  inline __device__ void put_binary(const void* value, uint32_t length)
+  {
+    current_header_ptr = cpw_put_uint32(current_header_ptr, length);
+    memcpy(current_header_ptr, value, length);
+    current_header_ptr += length;
+  }
+
+  template <typename T>
+  inline __device__ void put_int64(T value)
+  {
+    current_header_ptr = cpw_put_int64(current_header_ptr, static_cast<int64_t>(value));
+  }
+
   template <typename T>
   inline __device__ void field_int32(int field, T value)
   {
@@ -1274,12 +1295,25 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-__device__ uint8_t* EncodeStatistics(uint8_t* start,
-                                     const statistics_chunk* s,
-                                     uint8_t dtype,
-                                     float* fp_scratch)
+// byteswap 128 bit integer, placing result in dst in network byte order.
+// dst must point to at least 16 bytes of memory.
+static __device__ void byte_reverse128(__int128_t v, void* dst)
 {
-  uint8_t *end, dtype_len;
+  auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
+  auto const d_char_ptr = static_cast<unsigned char*>(dst);
+  thrust::copy(thrust::seq,
+               thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+               thrust::make_reverse_iterator(v_char_ptr),
+               d_char_ptr);
+}
+
+__device__ void get_extremum(const statistics_val* stats_val,
+                             statistics_dtype dtype,
+                             void* scratch,
+                             const void** val,
+                             uint32_t* len)
+{
+  uint8_t dtype_len;
   switch (dtype) {
     case dtype_bool: dtype_len = 1; break;
     case dtype_int8:
@@ -1295,30 +1329,40 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     case dtype_string:
     default: dtype_len = 0; break;
   }
+
+  if (dtype == dtype_string) {
+    *len = stats_val->str_val.length;
+    *val = stats_val->str_val.ptr;
+  } else {
+    *len = dtype_len;
+    if (dtype == dtype_float32) {  // Convert from double to float32
+      auto const fp_scratch = static_cast<float*>(scratch);
+      fp_scratch[0]         = stats_val->fp_val;
+      *val                  = scratch;
+    } else if (dtype == dtype_decimal128) {
+      byte_reverse128(stats_val->d128_val, scratch);
+      *val = scratch;
+    } else {
+      *val = stats_val;
+    }
+  }
+}
+
+__device__ uint8_t* EncodeStatistics(uint8_t* start,
+                                     const statistics_chunk* s,
+                                     statistics_dtype dtype,
+                                     void* scratch)
+{
+  uint8_t* end;
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    if (dtype == dtype_string) {
-      lmin = s->min_value.str_val.length;
-      vmin = s->min_value.str_val.ptr;
-      lmax = s->max_value.str_val.length;
-      vmax = s->max_value.str_val.ptr;
-    } else {
-      lmin = lmax = dtype_len;
-      if (dtype == dtype_float32) {  // Convert from double to float32
-        fp_scratch[0] = s->min_value.fp_val;
-        fp_scratch[1] = s->max_value.fp_val;
-        vmin          = &fp_scratch[0];
-        vmax          = &fp_scratch[1];
-      } else {
-        vmin = &s->min_value;
-        vmax = &s->max_value;
-      }
-    }
+    get_extremum(&s->max_value, dtype, scratch, &vmax, &lmax);
     encoder.field_binary(5, vmax, lmax);
+    get_extremum(&s->min_value, dtype, scratch, &vmin, &lmin);
     encoder.field_binary(6, vmin, lmin);
   }
   encoder.end(&end);
@@ -1336,7 +1380,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) float fp_scratch[2];
+  __shared__ __align__(8) unsigned char scratch[16];
 
   uint32_t t = threadIdx.x;
 
@@ -1351,7 +1395,7 @@ __global__ void __launch_bounds__(128)
     if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
       hdr_end =
-        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
+        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, scratch);
       page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
@@ -1392,8 +1436,8 @@ __global__ void __launch_bounds__(128)
       // Optionally encode page-level statistics
       if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
-        encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
+        encoder.set_ptr(
+          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
@@ -1458,6 +1502,176 @@ __global__ void __launch_bounds__(1024)
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
   }
+}
+
+/**
+ * @brief Tests if statistics are comparable given the column's
+ * physical and converted types
+ */
+static __device__ bool is_comparable(Type ptype, ConvertedType ctype)
+{
+  switch (ptype) {
+    case Type::BOOLEAN:
+    case Type::INT32:
+    case Type::INT64:
+    case Type::FLOAT:
+    case Type::DOUBLE:
+    case Type::BYTE_ARRAY: return true;
+    case Type::FIXED_LEN_BYTE_ARRAY:
+      if (ctype == ConvertedType::DECIMAL) { return true; }
+      [[fallthrough]];
+    default: return false;
+  }
+}
+
+/**
+ * @brief Compares two values.
+ * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+ */
+template <typename T>
+constexpr __device__ int32_t compare(T& v1, T& v2)
+{
+  return (v1 > v2) - (v1 < v2);
+}
+
+/**
+ * @brief Compares two statistics_val structs.
+ * @return < 0 if v1 < v2, 0 if v1 == v2, > 0 if v1 > v2
+ */
+static __device__ int32_t compare_values(Type ptype,
+                                         ConvertedType ctype,
+                                         const statistics_val& v1,
+                                         const statistics_val& v2)
+{
+  switch (ptype) {
+    case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
+    case Type::INT32:
+    case Type::INT64:
+      switch (ctype) {
+        case ConvertedType::UINT_8:
+        case ConvertedType::UINT_16:
+        case ConvertedType::UINT_32:
+        case ConvertedType::UINT_64: return compare(v1.u_val, v2.u_val);
+        default:  // assume everything else is signed
+          return compare(v1.i_val, v2.i_val);
+      }
+    case Type::FLOAT:
+    case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
+    case Type::BYTE_ARRAY: return static_cast<string_view>(v1.str_val).compare(v2.str_val);
+    case Type::FIXED_LEN_BYTE_ARRAY:
+      if (ctype == ConvertedType::DECIMAL) { return compare(v1.d128_val, v2.d128_val); }
+  }
+  // calling is_comparable() should prevent reaching here
+  CUDF_UNREACHABLE("Trying to compare non-comparable type");
+  return 0;
+}
+
+/**
+ * @brief Determine if a set of statstistics are in ascending order.
+ */
+static __device__ bool is_ascending(const statistics_chunk* s,
+                                    Type ptype,
+                                    ConvertedType ctype,
+                                    uint32_t num_pages)
+{
+  for (uint32_t i = 1; i < num_pages; i++) {
+    if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
+        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Determine if a set of statstistics are in descending order.
+ */
+static __device__ bool is_descending(const statistics_chunk* s,
+                                     Type ptype,
+                                     ConvertedType ctype,
+                                     uint32_t num_pages)
+{
+  for (uint32_t i = 1; i < num_pages; i++) {
+    if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
+        compare_values(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @brief Determine the ordering of a set of statistics.
+ */
+static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+                                                   Type ptype,
+                                                   ConvertedType ctype,
+                                                   uint32_t num_pages)
+{
+  if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
+  if (is_ascending(s, ptype, ctype, num_pages)) {
+    return BoundaryOrder::ASCENDING;
+  } else if (is_descending(s, ptype, ctype, num_pages)) {
+    return BoundaryOrder::DESCENDING;
+  }
+  return BoundaryOrder::UNORDERED;
+}
+
+// blockDim(1, 1, 1)
+__global__ void __launch_bounds__(1)
+  gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats)
+{
+  const void *vmin, *vmax;
+  uint32_t lmin, lmax;
+  uint8_t* col_idx_end;
+  unsigned char scratch[16];
+
+  if (column_stats.empty()) { return; }
+
+  EncColumnChunk* ck_g             = &chunks[blockIdx.x];
+  uint32_t num_pages               = ck_g->num_pages;
+  parquet_column_device_view col_g = *ck_g->col_desc;
+  size_t first_data_page           = ck_g->use_dictionary ? 1 : 0;
+  uint32_t pageidx                 = ck_g->first_page;
+
+  header_encoder encoder(ck_g->column_index_blob);
+
+  // null_pages
+  encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
+    encoder.put_bool(column_stats[pageidx + page].non_nulls == 0);
+  }
+  encoder.field_list_end(1);
+  // min_values
+  encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
+    get_extremum(&column_stats[pageidx + page].min_value, col_g.stats_dtype, scratch, &vmin, &lmin);
+    encoder.put_binary(vmin, lmin);
+  }
+  encoder.field_list_end(2);
+  // max_values
+  encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
+    get_extremum(&column_stats[pageidx + page].max_value, col_g.stats_dtype, scratch, &vmax, &lmax);
+    encoder.put_binary(vmax, lmax);
+  }
+  encoder.field_list_end(3);
+  // boundary_order
+  encoder.field_int32(4,
+                      calculate_boundary_order(&column_stats[first_data_page + pageidx],
+                                               col_g.physical_type,
+                                               col_g.converted_type,
+                                               num_pages - first_data_page));
+  // null_counts
+  encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
+    encoder.put_int64(column_stats[pageidx + page].null_count);
+  }
+  encoder.field_list_end(5);
+  encoder.end(&col_idx_end, false);
+
+  ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
 }
 
 /**
@@ -2046,6 +2260,13 @@ void GatherPages(device_span<EncColumnChunk> chunks,
                  rmm::cuda_stream_view stream)
 {
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
+}
+
+void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats,
+                         rmm::cuda_stream_view stream)
+{
+  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats);
 }
 
 }  // namespace gpu
