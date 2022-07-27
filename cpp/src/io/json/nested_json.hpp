@@ -250,6 +250,16 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
  */
 json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
 
+/**
+ * @brief Parses the given JSON string and generates a cudf::column of the given input.
+ *
+ * @param input The JSON input
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return cudf::column of the given input
+ */
+std::unique_ptr<column> parse_json_to_columns(host_span<SymbolT const> input,
+                                              rmm::cuda_stream_view stream);
+
 }  // namespace detail
 
 }  // namespace cudf::io::json
