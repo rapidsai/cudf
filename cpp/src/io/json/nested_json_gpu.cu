@@ -31,7 +31,7 @@
 
 // Debug print flag
 #ifndef NJP_DEBUG_PRINT
-#define NJP_DEBUG_PRINT
+//#define NJP_DEBUG_PRINT
 #endif
 
 namespace cudf::io::json {
