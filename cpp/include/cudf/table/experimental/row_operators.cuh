@@ -336,17 +336,17 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             // TODO: This also needs to account for list_view not,
-                             // or alternatively just remove the `and` since we can
-                             // always override with more specific templates.
-                             not std::is_same_v<Element, cudf::struct_view>)>
+                             not std::is_same_v<Element, cudf::struct_view> and
+                             not std::is_same_v<Element, cudf::list_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
                                                               size_type const) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
-    template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
+    template <typename Element,
+              CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
+                             std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
@@ -420,18 +420,22 @@ class device_row_comparator {
       // element in the child column. The index k is used to keep track of the
       // current child element that we're actually comparing.
       weak_ordering state{weak_ordering::EQUIVALENT};
-      for (int i = l_start, j = r_start, k = 0; i < l_end and j < r_end; ++i, ++j) {
+      for (int left_dremel_index = l_start, right_dremel_index = r_start, element_index = 0;
+           left_dremel_index < l_end and right_dremel_index < r_end;
+           ++left_dremel_index, ++right_dremel_index) {
         // First early exit: the definition levels do not match.
-        if (l_def_levels[i] != r_def_levels[j]) {
-          state =
-            (l_def_levels[i] < r_def_levels[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+        if (l_def_levels[left_dremel_index] != r_def_levels[right_dremel_index]) {
+          state = (l_def_levels[left_dremel_index] < r_def_levels[right_dremel_index])
+                    ? weak_ordering::LESS
+                    : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
         }
 
         // Second early exit: the repetition levels do not match.
-        if (l_rep_levels[i] != r_rep_levels[j]) {
-          state =
-            (l_rep_levels[i] < r_rep_levels[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+        if (l_rep_levels[left_dremel_index] != r_rep_levels[right_dremel_index]) {
+          state = (l_rep_levels[left_dremel_index] < r_rep_levels[right_dremel_index])
+                    ? weak_ordering::LESS
+                    : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
         }
 
@@ -443,14 +447,14 @@ class device_row_comparator {
         // 2) If we are 1 - the maximum definition level and the column is
         //    nullable, we know that we are looking at a element in the child
         //    column. In this case we simply skip to the next element.
-        if (l_def_levels[i] == l_max_def_level) {
-          int last_null_depth = _depth;
-          cuda::std::tie(state, last_null_depth) =
-            cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, k, k);
+        if (l_def_levels[left_dremel_index] == l_max_def_level) {
+          int last_null_depth                    = _depth;
+          cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
+            lcol.type(), comparator, element_index, element_index);
           if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
-          ++k;
-        } else if (lcol.nullable() and l_def_levels[i] == l_max_def_level - 1) {
-          ++k;
+          ++element_index;
+        } else if (lcol.nullable() and l_def_levels[left_dremel_index] == l_max_def_level - 1) {
+          ++element_index;
         }
       }
 
@@ -473,8 +477,8 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    detail::dremel_device_view _l_dremel_device_view;
-    detail::dremel_device_view _r_dremel_device_view;
+    detail::dremel_device_view const _l_dremel_device_view;
+    detail::dremel_device_view const _r_dremel_device_view;
     PhysicalElementComparator const _comparator;
   };
 
@@ -527,8 +531,8 @@ class device_row_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  device_span<detail::dremel_device_view const> _l_dremel_device_views;
-  device_span<detail::dremel_device_view const> _r_dremel_device_views;
+  device_span<detail::dremel_device_view const> const _l_dremel_device_views;
+  device_span<detail::dremel_device_view const> const _r_dremel_device_views;
   Nullate const _check_nulls;
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
