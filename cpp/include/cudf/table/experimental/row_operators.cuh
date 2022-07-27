@@ -385,29 +385,41 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                               size_type rhs_element_index)
     {
-      auto const l_offsets    = _l_dremel_device_view.offsets;
-      auto const r_offsets    = _r_dremel_device_view.offsets;
-      auto l_start            = l_offsets[lhs_element_index];
-      auto l_end              = l_offsets[lhs_element_index + 1];
-      auto r_start            = r_offsets[rhs_element_index];
-      auto r_end              = r_offsets[rhs_element_index + 1];
+      // These are all the values from the Dremel encoding.
+      auto const l_max_def_level = _l_dremel_device_view.max_def_level;
+      auto const l_def_levels    = _l_dremel_device_view.def_levels;
+      auto const r_def_levels    = _r_dremel_device_view.def_levels;
+      auto const l_rep_levels    = _l_dremel_device_view.rep_levels;
+      auto const r_rep_levels    = _r_dremel_device_view.rep_levels;
+
+      // Traverse the nested list hierarchy to get a column device view
+      // pointing to the underlying child data.
       column_device_view lcol = _lhs.slice(lhs_element_index, 1);
       column_device_view rcol = _rhs.slice(rhs_element_index, 1);
       while (lcol.type().id() == type_id::LIST) {
         lcol = detail::lists_column_device_view(lcol).get_sliced_child();
         rcol = detail::lists_column_device_view(rcol).get_sliced_child();
       }
-      auto const l_max_def_level = _l_dremel_device_view.max_def_level;
-      auto const l_def_levels    = _l_dremel_device_view.def_levels;
-      auto const r_def_levels    = _r_dremel_device_view.def_levels;
-      auto const l_rep_levels    = _l_dremel_device_view.rep_levels;
-      auto const r_rep_levels    = _r_dremel_device_view.rep_levels;
-      weak_ordering state{weak_ordering::EQUIVALENT};
+
+      // These start and end values indicate the start and end points of all
+      // the elements of the lists in the current list element
+      // (`[lhs|rhs]_element_index`) that we are comparing.
+      auto const l_offsets = _l_dremel_device_view.offsets;
+      auto const r_offsets = _r_dremel_device_view.offsets;
+      auto l_start         = l_offsets[lhs_element_index];
+      auto l_end           = l_offsets[lhs_element_index + 1];
+      auto r_start         = r_offsets[rhs_element_index];
+      auto r_end           = r_offsets[rhs_element_index + 1];
+
+      // This comparator will be used when we actually need to compare elements
+      auto comparator =
+        element_comparator{_check_nulls, lcol, rcol, _null_precedence, _depth, _comparator};
 
       // Loop over each element in the encoding. Note that this includes nulls
       // and empty lists, so not every index i/j correspondings to an actual
       // element in the child column. The index k is used to keep track of the
       // current child element that we're actually comparing.
+      weak_ordering state{weak_ordering::EQUIVALENT};
       for (int i = l_start, j = r_start, k = 0; i < l_end and j < r_end; ++i, ++j) {
         // First early exit: the definition levels do not match.
         if (l_def_levels[i] != r_def_levels[j]) {
@@ -432,8 +444,6 @@ class device_row_comparator {
         //    nullable, we know that we are looking at a element in the child
         //    column. In this case we simply skip to the next element.
         if (l_def_levels[i] == l_max_def_level) {
-          auto comparator =
-            element_comparator{_check_nulls, lcol, rcol, _null_precedence, _depth, _comparator};
           int last_null_depth = _depth;
           cuda::std::tie(state, last_null_depth) =
             cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, k, k);
@@ -447,7 +457,7 @@ class device_row_comparator {
       // If we have reached this stage, we know that definition levels,
       // repetition levels, and actual elements are identical in both list
       // columns up to the `min(l_end - l_start, r_end - r_start)` element of
-      // the dremel encoding. However, two lists can only compare equivalent if
+      // the Dremel encoding. However, two lists can only compare equivalent if
       // they are of the same length. Otherwise, the shorter of the two is less
       // than the longer. This final check determines the appropriate resulting
       // ordering by checking how many total elements each list is composed of.
