@@ -37,6 +37,7 @@ namespace detail {
 
 template <typename T, int block_size>
 using cub_temp_storage = typename cub::BlockReduce<T, block_size>::TempStorage;
+using statistics::byte_array_view;
 
 #define MEMBER_NAME(TYPE) TYPE##_stats
 

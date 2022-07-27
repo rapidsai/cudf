@@ -41,6 +41,8 @@ namespace cudf {
 namespace io {
 namespace detail {
 
+using cudf::io::statistics::byte_array_view;
+
 enum class io_file_format { ORC, PARQUET };
 enum class is_int96_timestamp { YES, NO };
 
@@ -255,7 +257,7 @@ __inline__ __device__ constexpr T maximum_identity()
   } else if constexpr (std::is_same_v<T, byte_array_view>) {
     return byte_array_view::min();
   }
-  return cuda::std::numeric_limits<T>::min();
+  return cuda::std::numeric_limits<T>::lowest();
 }
 
 /**
@@ -273,9 +275,9 @@ class statistics_type_category {
     (IO == io_file_format::PARQUET) ? false : aggregation_type<T>::is_supported;
 
   // Types for which sum does not make sense, but extrema do
-  static constexpr bool include_extrema = aggregation_type<T>::is_supported or
-                                          cudf::is_timestamp<T>() or
-                                          std::is_same_v<T, cudf::list_view>;
+  static constexpr bool include_extrema =
+    aggregation_type<T>::is_supported or cudf::is_timestamp<T>() or
+    (std::is_same_v<T, cudf::list_view> and IO == io_file_format::PARQUET);
 
   // Types for which only value count makes sense (e.g. nested)
   static constexpr bool include_count = (IO == io_file_format::ORC) ? true : include_extrema;
