@@ -248,26 +248,23 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  device_row_comparator(
-    Nullate check_nulls,
-    table_device_view lhs,
-    table_device_view rhs,
-    std::optional<device_span<int const>> depth                  = std::nullopt,
-    std::optional<device_span<order const>> column_order         = std::nullopt,
-    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-    std::optional<device_span<detail::dremel_device_view const>> l_dremel_device_views =
-      std::nullopt,
-    std::optional<device_span<detail::dremel_device_view const>> r_dremel_device_views =
-      std::nullopt,
-    PhysicalElementComparator comparator = {}) noexcept
+  device_row_comparator(Nullate check_nulls,
+                        table_device_view lhs,
+                        table_device_view rhs,
+                        device_span<detail::dremel_device_view const> l_dremel_device_views,
+                        device_span<detail::dremel_device_view const> r_dremel_device_views,
+                        std::optional<device_span<int const>> depth                  = std::nullopt,
+                        std::optional<device_span<order const>> column_order         = std::nullopt,
+                        std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+                        PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
+      _l_dremel_device_views(l_dremel_device_views),
+      _r_dremel_device_views(r_dremel_device_views),
       _check_nulls{check_nulls},
       _depth{depth},
       _column_order{column_order},
       _null_precedence{null_precedence},
-      _l_dremel_device_views(l_dremel_device_views),
-      _r_dremel_device_views(r_dremel_device_views),
       _comparator{comparator}
   {
   }
@@ -467,15 +464,14 @@ class device_row_comparator {
       null_order const null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
-      auto element_comp = element_comparator{
-        _check_nulls,
-        _lhs.column(i),
-        _rhs.column(i),
-        null_precedence,
-        depth,
-        _comparator,
-        (_l_dremel_device_views ? (*_l_dremel_device_views)[i] : detail::dremel_device_view{}),
-        (_r_dremel_device_views ? (*_r_dremel_device_views)[i] : detail::dremel_device_view{})};
+      auto element_comp = element_comparator{_check_nulls,
+                                             _lhs.column(i),
+                                             _rhs.column(i),
+                                             null_precedence,
+                                             depth,
+                                             _comparator,
+                                             _l_dremel_device_views[i],
+                                             _r_dremel_device_views[i]};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
@@ -493,15 +489,13 @@ class device_row_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
+  device_span<detail::dremel_device_view const> _l_dremel_device_views;
+  device_span<detail::dremel_device_view const> _r_dremel_device_views;
   Nullate const _check_nulls;
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
   PhysicalElementComparator const _comparator;
-
-  // List related members
-  std::optional<device_span<detail::dremel_device_view const>> _l_dremel_device_views;
-  std::optional<device_span<detail::dremel_device_view const>> _r_dremel_device_views;
 };  // class device_row_comparator
 
 /**
@@ -666,12 +660,9 @@ struct preprocessed_table {
   }
 
   // TODO: span of spans?
-  [[nodiscard]] std::optional<device_span<detail::dremel_device_view const>> dremel_device_views()
-    const
+  [[nodiscard]] device_span<detail::dremel_device_view const> dremel_device_views() const
   {
-    return _dremel_device_views.size()
-             ? std::optional<device_span<detail::dremel_device_view const>>(_dremel_device_views)
-             : std::nullopt;
+    return device_span<detail::dremel_device_view const>(_dremel_device_views);
   }
 
  private:
@@ -755,11 +746,11 @@ class self_comparator {
     return less_comparator{device_row_comparator{nullate,
                                                  *d_t,
                                                  *d_t,
+                                                 d_t->dremel_device_views(),
+                                                 d_t->dremel_device_views(),
                                                  d_t->depths(),
                                                  d_t->column_order(),
                                                  d_t->null_precedence(),
-                                                 d_t->dremel_device_views(),
-                                                 d_t->dremel_device_views(),
                                                  comparator}};
   }
 
@@ -772,11 +763,11 @@ class self_comparator {
     return less_equivalent_comparator{device_row_comparator{nullate,
                                                             *d_t,
                                                             *d_t,
+                                                            d_t->dremel_device_views(),
+                                                            d_t->dremel_device_views(),
                                                             d_t->depths(),
                                                             d_t->column_order(),
                                                             d_t->null_precedence(),
-                                                            d_t->dremel_device_views(),
-                                                            d_t->dremel_device_views(),
                                                             comparator}};
   }
 
@@ -902,11 +893,11 @@ class two_table_comparator {
       strong_index_comparator_adapter{device_row_comparator{nullate,
                                                             *d_left_table,
                                                             *d_right_table,
+                                                            d_left_table->dremel_device_views(),
+                                                            d_right_table->dremel_device_views(),
                                                             d_left_table->depths(),
                                                             d_left_table->column_order(),
                                                             d_left_table->null_precedence(),
-                                                            d_left_table->dremel_device_views(),
-                                                            d_right_table->dremel_device_views(),
                                                             comparator}}};
   }
 
@@ -920,11 +911,11 @@ class two_table_comparator {
       strong_index_comparator_adapter{device_row_comparator{nullate,
                                                             *d_left_table,
                                                             *d_right_table,
+                                                            d_left_table->dremel_device_views(),
+                                                            d_right_table->dremel_device_views(),
                                                             d_left_table->depths(),
                                                             d_left_table->column_order(),
                                                             d_left_table->null_precedence(),
-                                                            d_left_table->dremel_device_views(),
-                                                            d_right_table->dremel_device_views(),
                                                             comparator}}};
   }
 
