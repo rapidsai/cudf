@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
 #include <thrust/optional.h>
