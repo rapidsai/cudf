@@ -30,6 +30,18 @@ namespace strings {
 namespace detail {
 
 /**
+ * @brief This will return true if passed a continuation byte of a UTF-8 character.
+ *
+ * @param byte Any byte from a valid UTF-8 character
+ * @return true if this is not the first byte of the character
+ */
+constexpr bool is_utf8_continuation_char(uint8_t byte)
+{
+  // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
+  return (byte & 0xC0) == 0x80;
+}
+
+/**
  * @brief This will return true if passed the first byte of a UTF-8 character.
  *
  * @param byte Any byte from a valid UTF-8 character
@@ -37,8 +49,7 @@ namespace detail {
  */
 constexpr bool is_begin_utf8_char(uint8_t byte)
 {
-  // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
-  return (byte & 0xC0) != 0x80;
+  return not is_utf8_continuation_char(byte);
 }
 
 /**
@@ -178,6 +189,58 @@ constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
     utf8 |= (unsigned)0xF0808080;
   }
   return utf8;
+}
+
+/**
+ * @brief This will return true if the passed in byte could be the start of
+ * a valid UTF-8 character.
+ *
+ * @param byte The byte to be tested
+ * @return true if this can be the first byte of a character
+ */
+constexpr bool is_valid_begin_utf8_char(uint8_t byte)
+{
+  // to be the first byte of a valid (up to 4 byte) UTF-8 char, byte must be one of:
+  //  0b0vvvvvvv a 1 byte character
+  //  0b110vvvvv start of a 2 byte character
+  //  0b1110vvvv start of a 3 byte character
+  //  0b11110vvv start of a 4 byte character
+  return (byte & 0x80) == 0 || (byte & 0xE0) == 0xC0 || (byte & 0xF0) == 0xE0 ||
+         (byte & 0xF8) == 0xF0;
+}
+
+/**
+ * @brief Test to see if a char array contains a valid UTF-8 string.
+ *
+ * @param str Char array to test.
+ * @param length Length of array.
+ * @return true if the array contains a valid UTF-8 string.
+ */
+constexpr bool is_valid_utf8_string(const char* str, size_type length)
+{
+  bool ret      = true;
+  size_type idx = 0;
+
+  if (length > 0) {
+    do {
+      // check for valid beginning byte
+      if (is_valid_begin_utf8_char(str[idx])) {
+        size_type width = bytes_in_utf8_byte(str[idx++]);
+        for (size_type i = 1; i < width && idx < length; i++, idx++) {
+          // check for valid continuation byte
+          if (not is_utf8_continuation_char(str[idx])) {
+            ret = false;
+            break;
+          }
+        }
+      } else {
+        ret = false;
+      }
+    } while (ret && idx < length);
+  }
+
+  // check that str ends at a UTF-8 char boundary
+  return ret and idx == length;
 }
 
 }  // namespace detail
