@@ -262,18 +262,11 @@ auto decompose_structs(table_view table,
 auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
 {
   std::vector<detail::dremel_data> dremel_data;
+  std::vector<detail::dremel_device_view> dremel_device_views;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
       dremel_data.push_back(detail::get_dremel_data(col, {}, stream));
-    }
-  }
-
-  std::vector<detail::dremel_device_view> dremel_device_views;
-  size_type c = 0;
-  for (auto const& col : table) {
-    if (col.type().id() == type_id::LIST) {
-      dremel_device_views.push_back(dremel_data[c]);
-      ++c;
+      dremel_device_views.push_back(dremel_data.back());
     } else {
       dremel_device_views.emplace_back();
     }
