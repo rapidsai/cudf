@@ -18,7 +18,7 @@
 
 #include <cudf/utilities/span.hpp>
 
-namespace cudf::io {
+namespace cudf::io::statistics {
 
 /**
  * @brief Wrapper for a row of a list<int8> or list<uint8> column. This is analagous to
@@ -177,4 +177,4 @@ class byte_array_view {
   device_span<element_type> _data{};
 };
 
-}  // namespace cudf::io
+}  // namespace cudf::io::statistics
