@@ -341,6 +341,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   CUDF_EXPECTS(trie.size() < multistate::max_segment_value,
                "delimiter contains too many total tokens to produce a deterministic result.");
 
+  // Empty byte ranges could still produce output if the beginning overlapped with the beginning of
+  // a field with the logic below. Best disallow them instead.
+  CUDF_EXPECTS(byte_range.size() > 0, "byte range cannot be empty");
+
   auto concurrency = 2;
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
