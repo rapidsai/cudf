@@ -88,7 +88,7 @@ const std::vector<std::vector<std::vector<char>>> translation_table = {
   /* TT_ESC    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}};
 
 // The DFA's starting state
-constexpr int32_t start_state = TT_OOS;
+constexpr auto start_state = TT_OOS;
 }  // namespace to_stack_op
 
 //------------------------------------------------------------------------------
@@ -216,13 +216,15 @@ enum pda_state_t : StateT {
 };
 
 // The starting state of the pushdown automaton
-constexpr StateT start_state = PD_BOV;
+constexpr auto start_state = PD_BOV;
 
 // Identity symbol to symbol group lookup table
 const std::vector<std::vector<char>> pda_sgids{
   {0},  {1},  {2},  {3},  {4},  {5},  {6},  {7},  {8},  {9},  {10}, {11}, {12}, {13}, {14},
   {15}, {16}, {17}, {18}, {19}, {20}, {21}, {22}, {23}, {24}, {25}, {26}, {27}, {28}, {29}};
 
+
+// TODO: make these tables as static __constant__ or constexpr std::array
 /**
  * @brief Getting the transition table
  */
@@ -580,7 +582,7 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
                                   to_stack_op::start_state,
                                   stream);
 
-  // Request temporary storage requirements
+  // stack operations with indices are converted to top of the stack for each character in the input
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
     d_stack_ops.data(),
     device_span<SymbolOffsetT>{d_stack_op_indices.data(), d_stack_op_indices.size()},
@@ -592,6 +594,7 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
     stream);
 }
 
+// TODO: return pair of device_uvector instead of passing pre-allocated pointers.
 void get_token_stream(device_span<SymbolT const> d_json_in,
                       PdaTokenT* d_tokens,
                       SymbolOffsetT* d_tokens_indices,
