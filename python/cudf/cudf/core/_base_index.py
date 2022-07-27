@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pickle
-from functools import cached_property
 from typing import Any, Set, TypeVar
 
 import pandas as pd
@@ -24,13 +23,10 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core.abc import Serializable
-from cudf.core.column import ColumnBase, column
+from cudf.core.column import column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
-from cudf.utils.dtypes import (
-    is_mixed_with_object_dtype,
-    numeric_normalize_types,
-)
+from cudf.utils.dtypes import is_mixed_with_object_dtype
 
 _index_astype_docstring = """\
 Create an Index with values cast to dtypes.
