@@ -152,6 +152,10 @@ class spark_murmur_device_row_hasher {
                                                   uint32_t seed = DEFAULT_HASH_SEED) noexcept
     : _check_nulls{check_nulls}, _table{t}, _seed(seed)
   {
+    // Error out if passed an unsupported hash_function
+    static_assert(
+      std::is_base_of_v<SparkMurmurHash3_32<int>, hash_function<int>>,
+      "spark_murmur_device_row_hasher only supports the SparkMurmurHash3_32 hash function");
   }
 
   Nullate const _check_nulls;
