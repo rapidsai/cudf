@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
+from collections import abc
 from io import BytesIO, StringIO
 
 from pyarrow.lib import NativeFile
@@ -107,11 +108,16 @@ def read_csv(
         index_col=index_col,
     )
 
-    dtype = {} if dtype is None else dtype
-    _unspecified_col = [name for name in df._column_names if name not in dtype]
-    _inferred_dtypes = [df._dtypes[name] for name in _unspecified_col]
-    _default_dtypes = _map_to_default_dtypes(_inferred_dtypes)
-    df = df.astype(dict(zip(_unspecified_col, _default_dtypes)))
+    if dtype is None or isinstance(dtype, abc.Mapping):
+        # There exists some dtypes in the result columns that is inferred.
+        # Find them and map them to the default dtypes.
+        dtype = {} if dtype is None else dtype
+        _unspecified_col = [
+            name for name in df._column_names if name not in dtype
+        ]
+        _inferred_dtypes = [df._dtypes[name] for name in _unspecified_col]
+        _default_dtypes = _map_to_default_dtypes(_inferred_dtypes)
+        df = df.astype(dict(zip(_unspecified_col, _default_dtypes)))
 
     return df
 
