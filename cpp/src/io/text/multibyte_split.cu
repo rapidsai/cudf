@@ -383,16 +383,30 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     stream,
     streams);
 
+  // String offsets point to the first character of a field
+  // This finds the first field whose first character starts inside or after the byte range
   auto relevant_offsets_begin = thrust::lower_bound(rmm::exec_policy(stream),
                                                     string_offsets.begin(),
                                                     string_offsets.end() - 1,
                                                     byte_range.offset());
 
-  auto relevant_offsets_end = thrust::upper_bound(rmm::exec_policy(stream),
+  // This finds the first field beginning after the byte range.
+  // We shift it by 1 to also copy this last offset
+  auto relevant_offsets_end = thrust::lower_bound(rmm::exec_policy(stream),
                                                   string_offsets.begin(),
                                                   string_offsets.end() - 1,
                                                   byte_range.offset() + byte_range.size()) +
                               1;
+
+  // The above logic works if there are no duplicate string_offsets entries.
+  // The only way we can get duplicates is if the input ends with a delimiter.
+  // relevant_offsets_end should then point to the last entry, not the second-to-last, which can
+  // happen if byte_range.offset() + byte_range.size() matches the input size exactly.
+  // Without this adjustment, string_offsets_out would be missing the last element.
+  bool last_field_empty = string_offsets.size() > 2 &&
+                          string_offsets.element(string_offsets.size() - 2, stream) == bytes_total;
+  bool byte_range_exact_end = byte_range.offset() + byte_range.size() == bytes_total;
+  if (last_field_empty && byte_range_exact_end) { ++relevant_offsets_end; }
 
   auto string_offsets_out_size = relevant_offsets_end - relevant_offsets_begin;
 
