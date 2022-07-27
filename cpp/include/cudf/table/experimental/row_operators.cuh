@@ -1403,8 +1403,6 @@ class device_row_hasher {
   friend class row_hasher<device_row_hasher>;  ///< Allow row_hasher to access private members.
 
  public:
-  device_row_hasher() = delete;
-
   /**
    * @brief Return the hash value of a row in the given table.
    *
