@@ -66,8 +66,8 @@ using spark_hash_value_type = int32_t;
  */
 template <template <typename> class hash_function, typename Nullate>
 class spark_murmur_device_row_hasher {
-  friend class cudf::experimental::row::hash::row_hasher<
-    spark_murmur_device_row_hasher>;  ///< Allow row_hasher to access private members.
+  friend class cudf::experimental::row::hash::row_hasher;  ///< Allow row_hasher to access private
+                                                           ///< members.
 
  public:
   /**
@@ -204,16 +204,16 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
   // Lists of structs are not supported
   check_hash_compatibility(input);
 
-  bool const nullable = has_nested_nulls(input);
-  auto const row_hasher =
-    cudf::experimental::row::hash::row_hasher<spark_murmur_device_row_hasher>(input, stream);
-  auto output_view = output->mutable_view();
+  bool const nullable   = has_nested_nulls(input);
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(input, stream);
+  auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row
-  thrust::tabulate(rmm::exec_policy(stream),
-                   output_view.begin<spark_hash_value_type>(),
-                   output_view.end<spark_hash_value_type>(),
-                   row_hasher.device_hasher<SparkMurmurHash3_32>(nullable, seed));
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_view.begin<spark_hash_value_type>(),
+    output_view.end<spark_hash_value_type>(),
+    row_hasher.device_hasher<SparkMurmurHash3_32, spark_murmur_device_row_hasher>(nullable, seed));
 
   return output;
 }
