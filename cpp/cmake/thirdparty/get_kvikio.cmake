@@ -20,7 +20,7 @@ function(find_and_configure_kvikio VERSION)
     GLOBAL_TARGETS kvikio::kvikio
     CPM_ARGS
     GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
-    GIT_TAG b6ec25872fd6426a642b308806d5630ec1c6a598
+    GIT_TAG branch-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
   )
