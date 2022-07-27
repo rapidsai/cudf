@@ -432,22 +432,25 @@ TEST_F(groupby_max_struct_test, values_with_null_child)
   }
 }
 
-struct groupby_max_float_test : public cudf::test::BaseFixture {
+template <typename V>
+struct groupby_max_floating_point_test : public cudf::test::BaseFixture {
 };
 
-TEST_F(groupby_max_float_test, values_with_infinity)
+TYPED_TEST_SUITE(groupby_max_floating_point_test, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(groupby_max_floating_point_test, values_with_infinity)
 {
-  using T          = double;
+  using T          = TypeParam;
   using int32s_col = fixed_width_column_wrapper<int32_t>;
   using floats_col = fixed_width_column_wrapper<T, int32_t>;
 
   auto constexpr inf = std::numeric_limits<T>::infinity();
 
   auto const keys = int32s_col{1, 2, 1, 2};
-  auto const vals = floats_col{1., 1., inf, 2.};
+  auto const vals = floats_col{static_cast<T>(1), static_cast<T>(1), inf, static_cast<T>(1)};
 
   auto const expected_keys = int32s_col{1, 2};
-  auto const expected_vals = floats_col{inf, 2.};
+  auto const expected_vals = floats_col{inf, static_cast<T>(2)};
 
   // Related issue: https://github.com/rapidsai/cudf/issues/11352
   // The issue only occurs in sort-based aggregation.
