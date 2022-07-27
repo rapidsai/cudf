@@ -734,7 +734,7 @@ struct preprocessed_table {
   rmm::device_uvector<null_order> const _null_precedence;
   rmm::device_uvector<size_type> const _depths;
 
-  // List related pre-computation
+  // Dremel encoding of list columns used for the comparison algorithm
   std::vector<detail::dremel_data> _dremel_data;
   rmm::device_uvector<detail::dremel_device_view> _dremel_device_views;
 };
