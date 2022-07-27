@@ -706,10 +706,11 @@ class CategoricalColumn(column.ColumnBase):
         if self._children is None:
             codes_column = self.base_children[0]
 
-            buf = Buffer(codes_column.base_data)
-            buf.ptr = buf.ptr + (self.offset * codes_column.dtype.itemsize)
-            buf.size = self.size * codes_column.dtype.itemsize
-
+            buf = Buffer.from_buffer(
+                buffer=codes_column.base_data,
+                size=self.size * codes_column.dtype.itemsize,
+                offset=self.offset * codes_column.dtype.itemsize,
+            )
             codes_column = cast(
                 cudf.core.column.NumericalColumn,
                 column.build_column(

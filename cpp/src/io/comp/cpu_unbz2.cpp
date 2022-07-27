@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,8 +79,8 @@ Jon L. Bentley
 For more information on these sources, see the manual.
 --*/
 
-#include "io_uncomp.h"
-#include "unbz2.h"
+#include "io_uncomp.hpp"
+#include "unbz2.hpp"
 
 #include <cstdio>
 #include <cstdlib>

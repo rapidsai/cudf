@@ -6,6 +6,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_130
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -164,13 +165,32 @@ def test_max_precision(decimal_type, max_precision):
         decimal_type(scale=0, precision=max_precision + 1)
 
 
-@pytest.mark.parametrize("fields", ["int64", "int32"])
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-def test_interval_dtype_pyarrow_round_trip(fields, closed):
-    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(fields, closed)
+@pytest.fixture(params=["int64", "int32"])
+def subtype(request):
+    return request.param
+
+
+@pytest.fixture(params=["left", "right", "both", "neither"])
+def closed(request):
+    return request.param
+
+
+def test_interval_dtype_pyarrow_round_trip(subtype, closed):
+    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(subtype, closed)
     expect = pa_array
     got = IntervalDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GE_130,
+    reason="pandas<1.3.0 doesn't have a closed argument for IntervalDtype",
+)
+def test_interval_dtype_from_pandas(subtype, closed):
+    expect = cudf.IntervalDtype(subtype, closed=closed)
+    pd_type = pd.IntervalDtype(subtype, closed=closed)
+    got = cudf.IntervalDtype.from_pandas(pd_type)
+    assert expect == got
 
 
 def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):

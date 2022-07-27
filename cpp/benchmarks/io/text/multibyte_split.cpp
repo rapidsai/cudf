@@ -27,8 +27,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/transform.h>
@@ -106,7 +105,7 @@ static void BM_multibyte_split(benchmark::State& state)
                   device_input.data(),
                   device_input.size() * sizeof(char),
                   cudaMemcpyDeviceToHost,
-                  rmm::cuda_stream_default);
+                  cudf::default_stream_value);
 
   auto temp_file_name = random_file_in_dir(temp_dir.path());
 

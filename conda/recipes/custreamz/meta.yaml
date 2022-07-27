@@ -19,23 +19,20 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
-    - CC
-    - CXX
-    - CUDAHOSTCXX
 
 requirements:
   host:
     - python
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf_kafka {{ version }}
+    - cudf_kafka ={{ version }}
   run:
     - python
     - streamz
-    - cudf {{ version }}
-    - dask>=2022.03.0
-    - distributed>=2022.03.0
+    - cudf ={{ version }}
+    - dask>=2022.05.2
+    - distributed>=2022.05.2
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf_kafka {{ version }}
+    - cudf_kafka ={{ version }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]
@@ -44,8 +41,8 @@ test:                                   # [linux64]
     - custreamz                         # [linux64]
 
 about:
-  home: http://rapids.ai/
+  home: https://rapids.ai/
   license: Apache-2.0
-  license_family: Apache
+  license_family: APACHE
   license_file: LICENSE
   summary: cuStreamz library

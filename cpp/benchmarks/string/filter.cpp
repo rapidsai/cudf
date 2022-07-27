@@ -25,6 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/translate.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
 #include <vector>
@@ -49,7 +50,7 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
     {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (api) {
       case filter: cudf::strings::filter_characters_of_type(input, types); break;
       case filter_chars: cudf::strings::filter_characters(input, filter_table); break;

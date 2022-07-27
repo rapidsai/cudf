@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 #include <cudf/table/table_device_view.cuh>
 #include <io/utilities/block_utils.cuh>
@@ -306,7 +306,7 @@ __global__ void __launch_bounds__(block_size, 2)
  * @param[in] num_columns Number of columns
  */
 // blockDim {1024,1,1}
-extern "C" __global__ void __launch_bounds__(1024)
+__global__ void __launch_bounds__(1024)
   gpuCompactChunkDictionaries(device_2dspan<StripeDictionary> stripes,
                               device_2dspan<DictionaryChunk const> chunks)
 {

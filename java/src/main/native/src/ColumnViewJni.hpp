@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::jni {
@@ -49,6 +50,6 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
  */
 std::unique_ptr<cudf::column>
 generate_list_offsets(cudf::column_view const &list_length,
-                      rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                      rmm::cuda_stream_view stream = cudf::default_stream_value);
 
 } // namespace cudf::jni

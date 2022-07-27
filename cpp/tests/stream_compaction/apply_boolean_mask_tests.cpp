@@ -21,6 +21,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -271,7 +272,7 @@ TEST_F(ApplyBooleanMask, CorrectNullCount)
   auto got     = cudf::apply_boolean_mask(input, boolean_mask);
   auto out_col = got->get_column(0).view();
   auto expected_null_count =
-    cudf::detail::null_count(out_col.null_mask(), 0, out_col.size(), rmm::cuda_stream_default);
+    cudf::detail::null_count(out_col.null_mask(), 0, out_col.size(), cudf::default_stream_value);
 
   ASSERT_EQ(out_col.null_count(), expected_null_count);
 }

@@ -43,8 +43,8 @@ misrepresented as being the original software.
 Mark Adler    madler@alumni.caltech.edu
 */
 
-#include "gpuinflate.h"
-#include "io_uncomp.h"
+#include "gpuinflate.hpp"
+#include "io_uncomp.hpp"
 
 #include <io/utilities/block_utils.cuh>
 

@@ -775,3 +775,34 @@ def test_groupby_nested_dict(func):
     b.name = None
 
     dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby(["x", "y"]).min(),
+        pytest.param(
+            lambda df: df.groupby(["x", "y"]).agg("min"),
+            marks=pytest.mark.skip(
+                reason="https://github.com/dask/dask/issues/9093"
+            ),
+        ),
+        lambda df: df.groupby(["x", "y"]).y.min(),
+        lambda df: df.groupby(["x", "y"]).y.agg("min"),
+    ],
+)
+def test_groupby_all_columns(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=5)
+    gddf = ddf.map_partitions(cudf.from_pandas)
+
+    expect = func(ddf)
+    actual = func(gddf)
+
+    dd.assert_eq(expect, actual)

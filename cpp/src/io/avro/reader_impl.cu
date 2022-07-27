@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "avro.h"
-#include "avro_gpu.h"
+#include "avro.hpp"
+#include "avro_gpu.hpp"
 
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 

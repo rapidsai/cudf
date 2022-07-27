@@ -681,10 +681,13 @@ def _groupby_supported(gb):
     )
 
 
-def _make_name(*args, sep="_"):
-    """Combine elements of `args` into a new string"""
-    _args = (arg for arg in args if arg != "")
-    return sep.join(_args)
+def _make_name(col_name, sep="_"):
+    """Combine elements of `col_name` into a single string, or no-op if
+    `col_name` is already a string
+    """
+    if isinstance(col_name, str):
+        return col_name
+    return sep.join(name for name in col_name if name != "")
 
 
 @_dask_cudf_nvtx_annotate
@@ -714,14 +717,14 @@ def _groupby_partition_agg(
                 _agg_dict[col].add(agg)
         _agg_dict[col] = list(_agg_dict[col])
         if set(agg_list).intersection({"std", "var"}):
-            pow2_name = _make_name(col, "pow2", sep=sep)
+            pow2_name = _make_name((col, "pow2"), sep=sep)
             df[pow2_name] = df[col].astype("float64").pow(2)
             _agg_dict[pow2_name] = ["sum"]
 
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
         _agg_dict
     )
-    gb.columns = [_make_name(*name, sep=sep) for name in gb.columns]
+    gb.columns = [_make_name(name, sep=sep) for name in gb.columns]
 
     if split_out == 1:
         output = {0: gb.copy(deep=False)}
@@ -776,7 +779,10 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     )
 
     # Don't include the last aggregation in the column names
-    gb.columns = [_make_name(*name[:-1], sep=sep) for name in gb.columns]
+    gb.columns = [
+        _make_name(name[:-1] if isinstance(name, tuple) else name, sep=sep)
+        for name in gb.columns
+    ]
     return gb
 
 
@@ -829,27 +835,27 @@ def _finalize_gb_agg(
         agg_list = aggs.get(col, [])
         agg_set = set(agg_list)
         if agg_set.intersection({"mean", "std", "var"}):
-            count_name = _make_name(col, "count", sep=sep)
-            sum_name = _make_name(col, "sum", sep=sep)
+            count_name = _make_name((col, "count"), sep=sep)
+            sum_name = _make_name((col, "sum"), sep=sep)
             if agg_set.intersection({"std", "var"}):
-                pow2_sum_name = _make_name(col, "pow2", "sum", sep=sep)
+                pow2_sum_name = _make_name((col, "pow2", "sum"), sep=sep)
                 var = _var_agg(gb, col, count_name, sum_name, pow2_sum_name)
                 if "var" in agg_list:
-                    name_var = _make_name(col, "var", sep=sep)
+                    name_var = _make_name((col, "var"), sep=sep)
                     gb[name_var] = var
                 if "std" in agg_list:
-                    name_std = _make_name(col, "std", sep=sep)
+                    name_std = _make_name((col, "std"), sep=sep)
                     gb[name_std] = np.sqrt(var)
                 gb.drop(columns=[pow2_sum_name], inplace=True)
             if "mean" in agg_list:
-                mean_name = _make_name(col, "mean", sep=sep)
+                mean_name = _make_name((col, "mean"), sep=sep)
                 gb[mean_name] = gb[sum_name] / gb[count_name]
             if "sum" not in agg_list:
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
         if "collect" in agg_list:
-            collect_name = _make_name(col, "collect", sep=sep)
+            collect_name = _make_name((col, "collect"), sep=sep)
             gb[collect_name] = gb[collect_name].list.concat()
 
     # Ensure sorted keys if `sort=True`

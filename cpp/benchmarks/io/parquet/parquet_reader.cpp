@@ -93,6 +93,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
                        static_cast<int32_t>(type_group_id::FLOATING_POINT),
                        static_cast<int32_t>(type_group_id::FIXED_POINT),
                        static_cast<int32_t>(type_group_id::TIMESTAMP),
+                       static_cast<int32_t>(type_group_id::DURATION),
                        static_cast<int32_t>(cudf::type_id::STRING)}),
     col_sel);
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
@@ -164,6 +165,7 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_i
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, durations, type_group_id::DURATION);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, struct, cudf::type_id::STRUCT);

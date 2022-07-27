@@ -208,6 +208,120 @@ TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack)
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
+TEST_F(DLPackUntypedTests, UnsupportedBroadcast1DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 1;
+  // Broadcasted (stride-0) 1D tensor
+  auto const data       = cudf::test::make_type_param_vector<T>({1});
+  int64_t shape[ndim]   = {5};
+  int64_t strides[ndim] = {0};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedStrided1DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 1;
+  // Strided 1D tensor
+  auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  int64_t shape[ndim]   = {2};
+  int64_t strides[ndim] = {2};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedImplicitRowMajor2DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 2;
+  // Row major 2D tensor
+  auto const data     = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  int64_t shape[ndim] = {2, 2};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = nullptr;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedExplicitRowMajor2DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 2;
+  // Row major 2D tensor with explicit strides
+  auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  int64_t shape[ndim]   = {2, 2};
+  int64_t strides[ndim] = {2, 1};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedStridedColMajor2DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 2;
+  // Column major, but strided in fastest dimension
+  auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6, 7, 8});
+  int64_t shape[ndim]   = {2, 2};
+  int64_t strides[ndim] = {2, 4};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
 template <typename T>
 class DLPackTimestampTests : public BaseFixture {
 };

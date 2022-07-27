@@ -26,6 +26,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -127,8 +128,8 @@ mixed_join(
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
     compute_hash_table_size(build.num_rows()),
-    std::numeric_limits<hash_value_type>::max(),
-    cudf::detail::JoinNoneValue,
+    cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
     stream.value(),
     detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
 
@@ -375,8 +376,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
     compute_hash_table_size(build.num_rows()),
-    std::numeric_limits<hash_value_type>::max(),
-    cudf::detail::JoinNoneValue,
+    cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
     stream.value(),
     detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
 
@@ -457,7 +458,7 @@ mixed_inner_join(
                             compare_nulls,
                             detail::join_kind::INNER_JOIN,
                             output_size_data,
-                            rmm::cuda_stream_default,
+                            cudf::default_stream_value,
                             mr);
 }
 
@@ -478,7 +479,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::INNER_JOIN,
-                                                rmm::cuda_stream_default,
+                                                cudf::default_stream_value,
                                                 mr);
 }
 
@@ -503,7 +504,7 @@ mixed_left_join(
                             compare_nulls,
                             detail::join_kind::LEFT_JOIN,
                             output_size_data,
-                            rmm::cuda_stream_default,
+                            cudf::default_stream_value,
                             mr);
 }
 
@@ -524,7 +525,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::LEFT_JOIN,
-                                                rmm::cuda_stream_default,
+                                                cudf::default_stream_value,
                                                 mr);
 }
 
@@ -549,7 +550,7 @@ mixed_full_join(
                             compare_nulls,
                             detail::join_kind::FULL_JOIN,
                             output_size_data,
-                            rmm::cuda_stream_default,
+                            cudf::default_stream_value,
                             mr);
 }
 

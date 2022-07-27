@@ -71,6 +71,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
                                                    int32_t(type_group_id::FLOATING_POINT),
                                                    int32_t(type_group_id::FIXED_POINT),
                                                    int32_t(type_group_id::TIMESTAMP),
+                                                   int32_t(type_group_id::DURATION),
                                                    int32_t(cudf::type_id::STRING)}),
                                 col_sel);
   auto const cols_to_read = select_column_indexes(data_types.size(), col_sel);
@@ -146,6 +147,7 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, integral, type_group_id
 RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, durations, type_group_id::DURATION);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 
 BENCHMARK_DEFINE_F(CsvRead, column_selection)

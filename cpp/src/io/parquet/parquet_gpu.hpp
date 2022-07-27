@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/gpuinflate.h"
+#include "io/comp/gpuinflate.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
@@ -24,7 +24,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -305,9 +305,9 @@ inline size_type __device__ row_to_value_idx(size_type idx, column_device_view c
       idx += col.offset();
       col = col.child(0);
     } else {
-      auto offset_col = col.child(lists_column_view::offsets_column_index);
-      idx             = offset_col.element<size_type>(idx + col.offset());
-      col             = col.child(lists_column_view::child_column_index);
+      auto list_col = cudf::detail::lists_column_device_view(col);
+      idx           = list_col.offset_at(idx);
+      col           = list_col.child();
     }
   }
   return idx;
@@ -573,11 +573,14 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
+                      device_span<size_type> page_sizes,
+                      device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
+                      size_t max_page_size_bytes,
+                      size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
-                      size_t max_page_comp_data_size,
                       rmm::cuda_stream_view stream);
 
 /**

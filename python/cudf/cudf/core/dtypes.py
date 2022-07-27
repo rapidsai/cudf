@@ -18,6 +18,7 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core._compat import PANDAS_GE_130
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 
@@ -545,7 +546,7 @@ class IntervalDtype(StructDtype):
     """
     subtype: str, np.dtype
         The dtype of the Interval bounds.
-    closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+    closed: {'right', 'left', 'both', 'neither'}, default 'right'
         Whether the interval is closed on the left-side, right-side,
         both or neither. See the Notes for more detailed explanation.
     """
@@ -555,6 +556,8 @@ class IntervalDtype(StructDtype):
     def __init__(self, subtype, closed="right"):
         super().__init__(fields={"left": subtype, "right": subtype})
 
+        if closed is None:
+            closed = "right"
         if closed in ["left", "right", "neither", "both"]:
             self.closed = closed
         else:
@@ -565,7 +568,7 @@ class IntervalDtype(StructDtype):
         return self.fields["left"]
 
     def __repr__(self):
-        return f"interval[{self.fields['left']}]"
+        return f"interval[{self.subtype}, {self.closed}]"
 
     @classmethod
     def from_arrow(cls, typ):
@@ -579,9 +582,23 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        return cls(
-            subtype=pd_dtype.subtype
-        )  # TODO: needs `closed` when we upgrade Pandas
+        if PANDAS_GE_130:
+            return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
+        else:
+            return cls(subtype=pd_dtype.subtype)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            # This means equality isn't transitive but mimics pandas
+            return other == self.name
+        return (
+            type(self) == type(other)
+            and self.subtype == other.subtype
+            and self.closed == other.closed
+        )
+
+    def __hash__(self):
+        return hash((self.subtype, self.closed))
 
     def serialize(self) -> Tuple[dict, list]:
         header = {

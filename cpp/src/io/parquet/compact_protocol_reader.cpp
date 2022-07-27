@@ -281,6 +281,41 @@ bool CompactProtocolReader::read(KeyValue* k)
   return function_builder(this, op);
 }
 
+bool CompactProtocolReader::read(PageLocation* p)
+{
+  auto op = std::make_tuple(ParquetFieldInt64(1, p->offset),
+                            ParquetFieldInt32(2, p->compressed_page_size),
+                            ParquetFieldInt64(3, p->first_row_index));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(OffsetIndex* o)
+{
+  auto op = std::make_tuple(ParquetFieldStructList(1, o->page_locations));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(ColumnIndex* c)
+{
+  auto op = std::make_tuple(ParquetFieldBoolList(1, c->null_pages),
+                            ParquetFieldBinaryList(2, c->min_values),
+                            ParquetFieldBinaryList(3, c->max_values),
+                            ParquetFieldEnum<BoundaryOrder>(4, c->boundary_order),
+                            ParquetFieldInt64List(5, c->null_counts));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(Statistics* s)
+{
+  auto op = std::make_tuple(ParquetFieldBinary(1, s->max),
+                            ParquetFieldBinary(2, s->min),
+                            ParquetFieldInt64(3, s->null_count),
+                            ParquetFieldInt64(4, s->distinct_count),
+                            ParquetFieldBinary(5, s->max_value),
+                            ParquetFieldBinary(6, s->min_value));
+  return function_builder(this, op);
+}
+
 /**
  * @brief Constructs the schema from the file-level metadata
  *

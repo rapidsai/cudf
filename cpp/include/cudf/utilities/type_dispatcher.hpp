@@ -51,6 +51,7 @@ namespace cudf {
  * ```
  *
  * @tparam T The type to map to a `cudf::type_id`
+ * @return The `cudf::type_id` corresponding to the specified type
  */
 template <typename T>
 inline constexpr type_id type_to_id()
@@ -58,7 +59,16 @@ inline constexpr type_id type_to_id()
   return type_id::EMPTY;
 };
 
+/**
+ * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
+ *
+ */
 struct type_to_name {
+  /**
+   * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
+   *
+   * @return The C++ type name as string
+   */
   template <typename T>
   inline std::string operator()()
   {
@@ -124,6 +134,7 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
 /**
  * @brief Checks if `id` is fixed_point (DECIMAL32/64/128)
  *
+ * @param id The `data_type::id` to check
  * @return    `true` if `id` is `DECIMAL32`, `DECIMAL64` or `DECIMAL128`
  * @return    `false` otherwise
  */
@@ -199,7 +210,7 @@ CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT)
  */
 template <cudf::type_id Id>
 struct dispatch_storage_type {
-  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;
+  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;  ///< The underlying type
 };
 
 template <typename T>
@@ -334,6 +345,11 @@ MAP_DURATION_SCALAR(duration_ns)
 template <typename T>
 using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 
+/**
+ * @brief Maps a C++ type to the scalar device type required to hold its value
+ *
+ * @tparam T The concrete C++ type to map
+ */
 template <typename T>
 using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
@@ -534,6 +550,7 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
   }
 }
 
+// @cond
 namespace detail {
 template <typename T1>
 struct double_type_dispatcher_second_type {
@@ -560,6 +577,7 @@ struct double_type_dispatcher_first_type {
   }
 };
 }  // namespace detail
+// @endcond
 
 /**
  * @brief Dispatches two type template parameters to a callable.
@@ -573,6 +591,8 @@ struct double_type_dispatcher_first_type {
  * parameter of the callable `F`
  * @param f The callable whose `operator()` template is invoked
  * @param args Parameter pack forwarded to the `operator()` invocation `F`.
+ *
+ * @return The result of invoking `f.template operator<T1, T2>(args)`
  */
 #pragma nv_exec_check_disable
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>
