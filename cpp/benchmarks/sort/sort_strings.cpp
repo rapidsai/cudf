@@ -20,6 +20,7 @@
 
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class Sort : public cudf::benchmark {
 };
@@ -31,7 +32,7 @@ static void BM_sort(benchmark::State& state)
   auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::sort(table->view());
   }
 }

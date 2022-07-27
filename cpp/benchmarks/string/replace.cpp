@@ -25,6 +25,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
 
@@ -48,7 +49,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   cudf::test::strings_column_wrapper repls({"", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (rt) {
       case scalar: cudf::strings::replace(input, target, repl); break;
       case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;

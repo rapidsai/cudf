@@ -20,8 +20,8 @@
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -56,13 +56,13 @@ struct InsertTest : public cudf::test::BaseFixture {
     // prevent overflow of small types
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
-    pairs.resize(input_size, rmm::cuda_stream_default);
+    pairs.resize(input_size, cudf::default_stream_value);
     map = std::move(map_type::create(compute_hash_table_size(size)));
-    rmm::cuda_stream_default.synchronize();
+    cudf::default_stream_value.synchronize();
   }
 
   const cudf::size_type size{10000};
-  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), rmm::cuda_stream_default};
+  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), cudf::default_stream_value};
   std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
 

@@ -2,6 +2,7 @@
 
 import itertools
 import pickle
+import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
@@ -38,8 +39,107 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-class GroupBy(Serializable, Reducible, Scannable):
+groupby_doc_template = textwrap.dedent(
+    """Group using a mapper or by a Series of columns.
 
+A groupby operation involves some combination of splitting the object,
+applying a function, and combining the results. This can be used to
+group large amounts of data and compute operations on these groups.
+
+Parameters
+----------
+by : mapping, function, label, or list of labels
+    Used to determine the groups for the groupby. If by is a
+    function, it’s called on each value of the object’s index.
+    If a dict or Series is passed, the Series or dict VALUES will
+    be used to determine the groups (the Series’ values are first
+    aligned; see .align() method). If an cupy array is passed, the
+    values are used as-is determine the groups. A label or list
+    of labels may be passed to group by the columns in self.
+    Notice that a tuple is interpreted as a (single) key.
+level : int, level name, or sequence of such, default None
+    If the axis is a MultiIndex (hierarchical), group by a particular
+    level or levels.
+as_index : bool, default True
+    For aggregated output, return object with group labels as
+    the index. Only relevant for DataFrame input.
+    as_index=False is effectively “SQL-style” grouped output.
+sort : bool, default False
+    Sort result by group key. Differ from Pandas, cudf defaults to
+    ``False`` for better performance. Note this does not influence
+    the order of observations within each group. Groupby preserves
+    the order of rows within each group.
+{ret}
+Examples
+--------
+**Series**
+
+>>> ser = cudf.Series([390., 350., 30., 20.],
+...                 index=['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+...                 name="Max Speed")
+>>> ser
+Falcon    390.0
+Falcon    350.0
+Parrot     30.0
+Parrot     20.0
+Name: Max Speed, dtype: float64
+>>> ser.groupby(level=0).mean()
+Falcon    370.0
+Parrot     25.0
+Name: Max Speed, dtype: float64
+>>> ser.groupby(ser > 100).mean()
+Max Speed
+False     25.0
+True     370.0
+Name: Max Speed, dtype: float64
+
+**DataFrame**
+
+>>> import cudf
+>>> import pandas as pd
+>>> df = cudf.DataFrame({{
+...     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+...     'Max Speed': [380., 370., 24., 26.],
+... }})
+>>> df
+    Animal  Max Speed
+0  Falcon      380.0
+1  Falcon      370.0
+2  Parrot       24.0
+3  Parrot       26.0
+>>> df.groupby(['Animal']).mean()
+        Max Speed
+Animal
+Falcon      375.0
+Parrot       25.0
+
+>>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+...           ['Captive', 'Wild', 'Captive', 'Wild']]
+>>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
+>>> df = cudf.DataFrame({{'Max Speed': [390., 350., 30., 20.]}},
+...     index=index)
+>>> df
+                Max Speed
+Animal Type
+Falcon Captive      390.0
+        Wild         350.0
+Parrot Captive       30.0
+        Wild          20.0
+>>> df.groupby(level=0).mean()
+        Max Speed
+Animal
+Falcon      370.0
+Parrot       25.0
+>>> df.groupby(level="Type").mean()
+        Max Speed
+Type
+Wild         185.0
+Captive      210.0
+"""
+)
+
+
+class GroupBy(Serializable, Reducible, Scannable):
     obj: "cudf.core.indexed_frame.IndexedFrame"
 
     _VALID_REDUCTIONS = {
@@ -201,11 +301,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             cudf.Series(
                 cudf.core.column.column_empty(
                     len(self.obj), "int8", masked=False
-                )
+                ),
+                index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
-            .reset_index(drop=True)
         )
 
     def rank(
@@ -343,7 +443,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not self._as_index:
             result = result.reset_index()
-
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
@@ -1417,6 +1516,48 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
+    def pct_change(
+        self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
+    ):
+        """
+        Calculates the percent change between sequential elements
+        in the group.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for forming percent change.
+        fill_method : str, default 'ffill'
+            How to handle NAs before computing percent changes.
+        limit : int, optional
+            The number of consecutive NAs to fill before stopping.
+            Not yet implemented.
+        freq : str, optional
+            Increment to use from time series API.
+            Not yet implemented.
+
+        Returns
+        -------
+        Series or DataFrame
+            Percentage changes within each group
+        """
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+        if limit is not None:
+            raise NotImplementedError("limit parameter not supported yet.")
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+            raise ValueError(
+                "fill_method must be one of 'ffill', 'pad', "
+                "'bfill', or 'backfill'."
+            )
+
+        filled = self.fillna(method=fill_method, limit=limit)
+        fill_grp = filled.groupby(self.grouping)
+        shifted = fill_grp.shift(periods=periods, freq=freq)
+        return (filled / shifted) - 1
+
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
     ) -> DataFrameOrSeries:
@@ -1435,89 +1576,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
-    """
-    Group DataFrame using a mapper or by a Series of columns.
-
-    A groupby operation involves some combination of splitting the object,
-    applying a function, and combining the results. This can be used to
-    group large amounts of data and compute operations on these groups.
-
-    Parameters
-    ----------
-    by : mapping, function, label, or list of labels
-        Used to determine the groups for the groupby. If by is a
-        function, it’s called on each value of the object’s index.
-        If a dict or Series is passed, the Series or dict VALUES will
-        be used to determine the groups (the Series’ values are first
-        aligned; see .align() method). If a cupy array is passed, the
-        values are used as-is determine the groups. A label or list
-        of labels may be passed to group by the columns in self.
-        Notice that a tuple is interpreted as a (single) key.
-    level : int, level name, or sequence of such, default None
-        If the axis is a MultiIndex (hierarchical), group by a particular
-        level or levels.
-    as_index : bool, default True
-        For aggregated output, return object with group labels as
-        the index. Only relevant for DataFrame input.
-        as_index=False is effectively “SQL-style” grouped output.
-    sort : bool, default False
-        Sort result by group key. Differ from Pandas, cudf defaults to
-        ``False`` for better performance. Note this does not influence
-        the order of observations within each group. Groupby preserves
-        the order of rows within each group.
-    dropna : bool, optional
-        If True (default), do not include the "null" group.
-
-    Returns
-    -------
-        DataFrameGroupBy
-            Returns a groupby object that contains information
-            about the groups.
-
-    Examples
-    --------
-    >>> import cudf
-    >>> import pandas as pd
-    >>> df = cudf.DataFrame({
-    ...     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-    ...     'Max Speed': [380., 370., 24., 26.],
-    ... })
-    >>> df
-       Animal  Max Speed
-    0  Falcon      380.0
-    1  Falcon      370.0
-    2  Parrot       24.0
-    3  Parrot       26.0
-    >>> df.groupby(['Animal']).mean()
-            Max Speed
-    Animal
-    Falcon      375.0
-    Parrot       25.0
-
-    >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-    ...           ['Captive', 'Wild', 'Captive', 'Wild']]
-    >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
-    >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
-    ...     index=index)
-    >>> df
-                    Max Speed
-    Animal Type
-    Falcon Captive      390.0
-           Wild         350.0
-    Parrot Captive       30.0
-           Wild          20.0
-    >>> df.groupby(level=0).mean()
-            Max Speed
-    Animal
-    Falcon      370.0
-    Parrot       25.0
-    >>> df.groupby(level="Type").mean()
-            Max Speed
-    Type
-    Wild         185.0
-    Captive      210.0
-    """
-
     obj: "cudf.core.dataframe.DataFrame"
 
     _PROTECTED_KEYS = frozenset(("obj",))
@@ -1528,66 +1586,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         )
 
 
+DataFrameGroupBy.__doc__ = groupby_doc_template.format(ret="")
+
+
 class SeriesGroupBy(GroupBy):
-    """
-    Group Series using a mapper or by a Series of columns.
-
-    A groupby operation involves some combination of splitting the object,
-    applying a function, and combining the results. This can be used to
-    group large amounts of data and compute operations on these groups.
-
-    Parameters
-    ----------
-    by : mapping, function, label, or list of labels
-        Used to determine the groups for the groupby. If by is a
-        function, it’s called on each value of the object’s index.
-        If a dict or Series is passed, the Series or dict VALUES will
-        be used to determine the groups (the Series’ values are first
-        aligned; see .align() method). If an cupy array is passed, the
-        values are used as-is determine the groups. A label or list
-        of labels may be passed to group by the columns in self.
-        Notice that a tuple is interpreted as a (single) key.
-    level : int, level name, or sequence of such, default None
-        If the axis is a MultiIndex (hierarchical), group by a particular
-        level or levels.
-    as_index : bool, default True
-        For aggregated output, return object with group labels as
-        the index. Only relevant for DataFrame input.
-        as_index=False is effectively “SQL-style” grouped output.
-    sort : bool, default False
-        Sort result by group key. Differ from Pandas, cudf defaults to
-        ``False`` for better performance. Note this does not influence
-        the order of observations within each group. Groupby preserves
-        the order of rows within each group.
-
-    Returns
-    -------
-        SeriesGroupBy
-            Returns a groupby object that contains information
-            about the groups.
-
-    Examples
-    --------
-    >>> ser = cudf.Series([390., 350., 30., 20.],
-    ...                 index=['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-    ...                 name="Max Speed")
-    >>> ser
-    Falcon    390.0
-    Falcon    350.0
-    Parrot     30.0
-    Parrot     20.0
-    Name: Max Speed, dtype: float64
-    >>> ser.groupby(level=0).mean()
-    Falcon    370.0
-    Parrot     25.0
-    Name: Max Speed, dtype: float64
-    >>> ser.groupby(ser > 100).mean()
-    Max Speed
-    False     25.0
-    True     370.0
-    Name: Max Speed, dtype: float64
-    """
-
     obj: "cudf.core.series.Series"
 
     def agg(self, func):
@@ -1611,6 +1613,9 @@ class SeriesGroupBy(GroupBy):
         result.name = self.obj.name
 
         return result
+
+
+SeriesGroupBy.__doc__ = groupby_doc_template.format(ret="")
 
 
 # TODO: should we define this as a dataclass instead?

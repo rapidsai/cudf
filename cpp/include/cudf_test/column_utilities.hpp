@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
@@ -233,11 +234,11 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   auto const scv     = strings_column_view(c);
   auto const h_chars = cudf::detail::make_std_vector_sync<char>(
     cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-    rmm::cuda_stream_default);
+    cudf::default_stream_value);
   auto const h_offsets = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-    rmm::cuda_stream_default);
+    cudf::default_stream_value);
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;

@@ -159,6 +159,8 @@ cdef compression_type _get_comp_type(object compression):
         return compression_type.NONE
     elif compression == "snappy":
         return compression_type.SNAPPY
+    elif compression == "ZLIB":
+        return compression_type.ZLIB
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 

@@ -19,6 +19,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 #include <vector>
 

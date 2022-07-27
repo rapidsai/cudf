@@ -21,6 +21,7 @@
 
 #include "writer_impl.hpp"
 
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 
@@ -46,8 +47,6 @@
 #include <thrust/optional.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <nvcomp/snappy.h>
 
 #include <algorithm>
 #include <cstring>
@@ -88,8 +87,23 @@ orc::CompressionKind to_orc_compression(compression_type compression)
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::SNAPPY: return orc::CompressionKind::SNAPPY;
+    case compression_type::ZLIB: return orc::CompressionKind::ZLIB;
     case compression_type::NONE: return orc::CompressionKind::NONE;
     default: CUDF_FAIL("Unsupported compression type"); return orc::CompressionKind::NONE;
+  }
+}
+
+/**
+ * @brief Returns the block size for a given compression kind.
+ *
+ * The nvCOMP ZLIB compression is limited to blocks up to 64KiB.
+ */
+constexpr size_t compression_block_size(orc::CompressionKind compression)
+{
+  switch (compression) {
+    case orc::CompressionKind::NONE: return 0;
+    case orc::CompressionKind::ZLIB: return 64 * 1024;
+    default: return 256 * 1024;
   }
 }
 
@@ -1353,10 +1367,10 @@ void writer::impl::write_index_stream(int32_t stripe_id,
       record.pos += stream.lengths[type];
       while ((record.pos >= 0) && (record.blk_pos >= 0) &&
              (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
-             (record.comp_pos + BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written <
+             (record.comp_pos + block_header_size + comp_out[record.blk_pos].bytes_written <
               static_cast<size_t>(record.comp_size))) {
         record.pos -= compression_blocksize_;
-        record.comp_pos += BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written;
+        record.comp_pos += block_header_size + comp_out[record.blk_pos].bytes_written;
         record.blk_pos += 1;
       }
     }
@@ -1474,6 +1488,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
+    compression_blocksize_(compression_block_size(compression_kind_)),
     stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
@@ -1495,6 +1510,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
+    compression_blocksize_(compression_block_size(compression_kind_)),
     stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
@@ -1986,6 +2002,22 @@ __global__ void copy_string_data(char* string_pool,
   }
 }
 
+auto to_nvcomp_compression_type(CompressionKind compression_kind)
+{
+  if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
+  if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
+  CUDF_FAIL("Unsupported compression type");
+}
+
+size_t get_compress_max_output_chunk_size(CompressionKind compression_kind,
+                                          uint32_t compression_blocksize)
+{
+  if (compression_kind == NONE) return 0;
+
+  return batched_compress_get_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
+                                                    compression_blocksize);
+}
+
 void writer::impl::persisted_statistics::persist(int num_table_rows,
                                                  bool single_write_mode,
                                                  intermediate_statistics& intermediate_stats,
@@ -2101,13 +2133,11 @@ void writer::impl::write(table_view const& table)
 
   if (num_rows > 0) {
     // Allocate intermediate output stream buffer
-    size_t compressed_bfr_size       = 0;
-    size_t num_compressed_blocks     = 0;
-    size_t max_compressed_block_size = 0;
-    if (compression_kind_ != NONE) {
-      nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-        compression_blocksize_, nvcompBatchedSnappyDefaultOpts, &max_compressed_block_size);
-    }
+    size_t compressed_bfr_size   = 0;
+    size_t num_compressed_blocks = 0;
+    auto const max_compressed_block_size =
+      get_compress_max_output_chunk_size(compression_kind_, compression_blocksize_);
+
     auto stream_output = [&]() {
       size_t max_stream_size = 0;
       bool all_device_write  = true;
@@ -2121,9 +2151,9 @@ void writer::impl::write(table_view const& table)
 
           auto num_blocks = std::max<uint32_t>(
             (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
-          stream_size += num_blocks * BLOCK_HEADER_SIZE;
+          stream_size += num_blocks * block_header_size;
           num_compressed_blocks += num_blocks;
-          compressed_bfr_size += (max_compressed_block_size + BLOCK_HEADER_SIZE) * num_blocks;
+          compressed_bfr_size += compressed_block_size(max_compressed_block_size) * num_blocks;
         }
         max_stream_size = std::max(max_stream_size, stream_size);
       }

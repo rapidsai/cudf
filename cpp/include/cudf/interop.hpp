@@ -17,11 +17,14 @@
 #pragma once
 
 #include <arrow/api.h>
+
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 struct DLManagedTensor;
 

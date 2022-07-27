@@ -15,7 +15,6 @@ from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
-    from cudf.core.frame import Frame
 
 
 class _Indexer:
@@ -35,24 +34,19 @@ class _Indexer:
 
 
 class _ColumnIndexer(_Indexer):
-    def get(self, obj: Frame) -> ColumnBase:
+    def get(self, obj: cudf.DataFrame) -> ColumnBase:
         return obj._data[self.name]
 
-    def set(self, obj: Frame, value: ColumnBase, validate=False):
+    def set(self, obj: cudf.DataFrame, value: ColumnBase, validate=False):
         obj._data.set_by_label(self.name, value, validate=validate)
 
 
 class _IndexIndexer(_Indexer):
-    def get(self, obj: Frame) -> ColumnBase:
-        if obj._index is not None:
-            return obj._index._data[self.name]
-        raise KeyError
+    def get(self, obj: cudf.DataFrame) -> ColumnBase:
+        return obj._index._data[self.name]
 
-    def set(self, obj: Frame, value: ColumnBase, validate=False):
-        if obj._index is not None:
-            obj._index._data.set_by_label(self.name, value, validate=validate)
-        else:
-            raise KeyError
+    def set(self, obj: cudf.DataFrame, value: ColumnBase, validate=False):
+        obj._index._data.set_by_label(self.name, value, validate=validate)
 
 
 def _match_join_keys(

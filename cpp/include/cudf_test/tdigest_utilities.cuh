@@ -20,6 +20,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -121,7 +122,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
   auto expected_min = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, spans.size(), mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                     spans.begin(),
                     spans.end(),
                     expected_min->mutable_view().template begin<double>(),
@@ -131,7 +132,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
   auto expected_max = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, spans.size(), mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                     spans.begin(),
                     spans.end(),
                     expected_max->mutable_view().template begin<double>(),

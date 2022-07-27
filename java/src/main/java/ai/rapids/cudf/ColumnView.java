@@ -1826,6 +1826,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
         " string type. But got column: " + type + ", scalar: " + delimiters.getType());
   }
+
+  /**
+   * Concatenates all strings in the column into one new string delimited
+   * by an optional separator string.
+   *
+   * This returns a column with one string. Any null entries are ignored unless
+   * the narep parameter specifies a replacement string (not a null value).
+   *
+   * @param separator what to insert to separate each row.
+   * @param narep what to replace nulls with
+   * @return a ColumnVector with a single string in it.
+   */
+  public final ColumnVector joinStrings(Scalar separator, Scalar narep) {
+    if (DType.STRING.equals(type) &&
+        DType.STRING.equals(separator.getType()) &&
+        DType.STRING.equals(narep.getType())) {
+      return new ColumnVector(joinStrings(getNativeView(), separator.getScalarHandle(),
+          narep.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("The column, separator, and narep all need to be STRINGs");
+  }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
   /////////////////////////////////////////////////////////////////////////////
@@ -3239,6 +3260,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Extracts all strings that match the given regular expression and corresponds to the 
+   * regular expression group index. Any null inputs also result in null output entries.
+   * 
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   
+   * @param pattern The regex pattern
+   * @param idx The regex group index
+   * @return A new column vector of extracted matches
+   */
+  public final ColumnVector extractAllRecord(String pattern, int idx) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert idx >= 0 : "group index must be at least 0";
+
+    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+  }
+
+
+  /**
    * Converts all character sequences starting with '%' into character code-points
    * interpreting the 2 following characters as hex values to create the code-point.
    * For example, the sequence '%20' is converted into byte (0x20) which is a single
@@ -3278,6 +3318,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
   }
 
+  /**
+   * Given a column of type List<Struct<X, Y>> and a key column of type X, return a column of type Y,
+   * where each row in the output column is the Y value corresponding to the X key.
+   * If the key is not found, the corresponding output value is null.
+   * @param keys the column view with keys to lookup in the column
+   * @return a column of values or nulls based on the lookup result
+   */
+  public final ColumnVector getMapValue(ColumnView keys) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert keys != null : "Lookup key may not be null";
+    return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));
+  }
+
   /** 
    * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
@@ -3303,6 +3356,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert key != null : "Lookup key may not be null";
     assertIsSupportedMapKeyType(key.getType());
     return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
+
+  /** For a column of type List<Struct<_, _>> and a passed in key column, return a boolean
+   * column for all keys in the map. Each output row is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
+   * @param keys the keys to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
+  public final ColumnVector getMapKeyExistence(ColumnView keys) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert keys != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(keys.getType());
+    return new ColumnVector(mapContainsKeys(getNativeView(), keys.getNativeView()));
   }
 
   /**
@@ -3900,6 +3966,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
+  /**
+   * Native method for extracting all results corresponding to group idx from a regular expression.
+   *
+   * @param nativeHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param idx Regex group index. A 0 value means matching the entire regex.
+   * @return Native handle of a string column of the result.
+   */
+  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
+
   private static native long urlDecode(long cudfViewHandle);
 
   private static native long urlEncode(long cudfViewHandle);
@@ -3912,6 +3988,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * The lookup column must have as many rows as the map column,
+   * and must match the key-type of the map.
+   * A column of values is returned, with the same number of rows as the map column.
+   * If a key is repeated in a map row, the value corresponding to the last matching
+   * key is returned.
+   * If a lookup key is null or not found, the corresponding value is null.
+   * @param columnView the column view handle of the map
+   * @param keys       the column view holding the keys
+   * @return a column of values corresponding the value of the lookup key.
+   * @throws CudfException
+   */
+  private static native long mapLookupForKeys(long columnView, long keys) throws CudfException;
+
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<_, _>>
+   * @param columnView the column view handle of the map
+   * @param key the column view holding the keys
+   * @return boolean column handle of the result
+   * @throws CudfException
+   */
+  private static native long mapContainsKeys(long columnView, long key) throws CudfException;
 
   /**
    * Native method for check the existence of a key over a column of List<Struct<String,String>>
@@ -4122,6 +4222,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected static native long title(long handle);
 
   private static native long capitalize(long strsColHandle, long delimitersHandle);
+
+  private static native long joinStrings(long strsHandle, long sepHandle, long narepHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 

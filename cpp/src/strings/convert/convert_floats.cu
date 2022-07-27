@@ -25,6 +25,7 @@
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -227,7 +228,7 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_floats(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::to_floats(strings, output_type, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -552,7 +553,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_floats(floats, rmm::cuda_stream_default, mr);
+  return detail::from_floats(floats, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -591,7 +592,7 @@ std::unique_ptr<column> is_float(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_float(strings, rmm::cuda_stream_default, mr);
+  return detail::is_float(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

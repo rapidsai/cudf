@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -214,7 +215,7 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
 {
   auto d_thrust_vector = thrust::device_vector<int>(1);
   auto d_vector        = rmm::device_vector<int>(1);
-  auto d_uvector       = rmm::device_uvector<int>(1, rmm::cuda_stream_default);
+  auto d_uvector       = rmm::device_uvector<int>(1, cudf::default_stream_value);
 
   (void)device_span<int>(d_thrust_vector);
   (void)device_span<int>(d_vector);
@@ -251,9 +252,9 @@ class MdSpanTest : public cudf::test::BaseFixture {
 
 TEST(MdSpanTest, CanDetermineEmptiness)
 {
-  auto const vector            = hostdevice_2dvector<int>(1, 2, rmm::cuda_stream_default);
-  auto const no_rows_vector    = hostdevice_2dvector<int>(0, 2, rmm::cuda_stream_default);
-  auto const no_columns_vector = hostdevice_2dvector<int>(1, 0, rmm::cuda_stream_default);
+  auto const vector            = hostdevice_2dvector<int>(1, 2, cudf::default_stream_value);
+  auto const no_rows_vector    = hostdevice_2dvector<int>(0, 2, cudf::default_stream_value);
+  auto const no_columns_vector = hostdevice_2dvector<int>(1, 0, cudf::default_stream_value);
 
   EXPECT_FALSE(host_2dspan<int const>{vector}.is_empty());
   EXPECT_FALSE(device_2dspan<int const>{vector}.is_empty());
@@ -274,17 +275,17 @@ __global__ void readwrite_kernel(device_2dspan<int> result)
 
 TEST(MdSpanTest, DeviceReadWrite)
 {
-  auto vector = hostdevice_2dvector<int>(11, 23, rmm::cuda_stream_default);
+  auto vector = hostdevice_2dvector<int>(11, 23, cudf::default_stream_value);
 
   readwrite_kernel<<<1, 1>>>(vector);
   readwrite_kernel<<<1, 1>>>(vector);
-  vector.device_to_host(rmm::cuda_stream_default, true);
+  vector.device_to_host(cudf::default_stream_value, true);
   EXPECT_EQ(vector[5][6], 30);
 }
 
 TEST(MdSpanTest, HostReadWrite)
 {
-  auto vector = hostdevice_2dvector<int>(11, 23, rmm::cuda_stream_default);
+  auto vector = hostdevice_2dvector<int>(11, 23, cudf::default_stream_value);
   auto span   = host_2dspan<int>{vector};
   span[5][6]  = 5;
   if (span[5][6] == 5) { span[5][6] *= 6; }
@@ -294,7 +295,7 @@ TEST(MdSpanTest, HostReadWrite)
 
 TEST(MdSpanTest, CanGetSize)
 {
-  auto const vector = hostdevice_2dvector<int>(1, 2, rmm::cuda_stream_default);
+  auto const vector = hostdevice_2dvector<int>(1, 2, cudf::default_stream_value);
 
   EXPECT_EQ(host_2dspan<int const>{vector}.size(), vector.size());
   EXPECT_EQ(device_2dspan<int const>{vector}.size(), vector.size());
@@ -302,7 +303,7 @@ TEST(MdSpanTest, CanGetSize)
 
 TEST(MdSpanTest, CanGetCount)
 {
-  auto const vector = hostdevice_2dvector<int>(11, 23, rmm::cuda_stream_default);
+  auto const vector = hostdevice_2dvector<int>(11, 23, cudf::default_stream_value);
 
   EXPECT_EQ(host_2dspan<int const>{vector}.count(), 11ul * 23);
   EXPECT_EQ(device_2dspan<int const>{vector}.count(), 11ul * 23);
