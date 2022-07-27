@@ -64,8 +64,9 @@ struct dremel_data {
  * Dremel encoding is built around two concepts, the repetition and definition levels.
  * Since describing them thoroughly is out of scope for this docstring, here are a couple of
  * blogs that provide useful background:
- *   - http://www.goldsborough.me/distributed-systems/2019/05/18/21-09-00-a_look_at_dremel/
- *   - https://akshays-blog.medium.com/wrapping-head-around-repetition-and-definition-levels-in-dremel-powering-bigquery-c1a33c9695da
+ * http://www.goldsborough.me/distributed-systems/2019/05/18/21-09-00-a_look_at_dremel/
+ * https://akshays-blog.medium.com/wrapping-head-around-repetition-and-definition-levels-in-dremel-powering-bigquery-c1a33c9695da
+ *
  * The remainder of this documentation assumes familiarity with the Dremel concepts.
  *
  * Dremel offsets are the per row offsets into the repetition and definition level arrays for a
