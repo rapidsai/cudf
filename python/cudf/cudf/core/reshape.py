@@ -1163,6 +1163,9 @@ def _length_check_params(obj, columns, name):
 
 
 def _get_names(arrs, names, prefix: str = "row"):
+    """
+    Generates unique names for rows/columns
+    """
     if names is None:
         names = []
         for i, arr in enumerate(arrs):
