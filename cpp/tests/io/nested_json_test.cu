@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
+#include "cudf_test/column_wrapper.hpp"
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+
+#include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -37,8 +41,8 @@ void print_json_string_col(std::string const& input,
                            uint32_t indent = 0)
 {
   for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
-    std::cout << i << ": [" << (column.validity[i]?"1":"0") << "] '" << input.substr(column.string_offsets[i], column.string_lengths[i])
-              << "'\n";
+    std::cout << i << ": [" << (column.validity[i] ? "1" : "0") << "] '"
+              << input.substr(column.string_offsets[i], column.string_lengths[i]) << "'\n";
   }
 }
 
@@ -60,8 +64,8 @@ void print_json_list_col(std::string const& input,
   std::cout << pad(indent) << " offsets[]: "
             << "\n";
   for (std::size_t i = 0; i < column.child_offsets.size() - 1; i++) {
-    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i]?"1":"0") << "] [" << column.child_offsets[i] << ", "
-              << column.child_offsets[i + 1] << ")\n";
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "] ["
+              << column.child_offsets[i] << ", " << column.child_offsets[i + 1] << ")\n";
   }
   if (column.child_columns.size() > 0) {
     std::cout << pad(indent) << column.child_columns.begin()->first << "[]: "
@@ -81,7 +85,7 @@ void print_json_struct_col(std::string const& input,
   std::cout << pad(indent) << " -> validity[]: "
             << "\n";
   for (std::size_t i = 0; i < column.current_offset; i++) {
-    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i]?"1":"0") << "]\n";
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "]\n";
   }
   auto it = std::begin(column.child_columns);
   for (std::size_t i = 0; i < column.child_columns.size(); i++) {
@@ -314,4 +318,37 @@ TEST_F(JsonTest, Simple)
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
 
   print_json_cols(input, json_root_col);
+}
+
+TEST_F(JsonTest, ExtractColumn)
+{
+  using nested_json::PdaTokenT;
+  using nested_json::SymbolOffsetT;
+  using nested_json::SymbolT;
+
+  // Prepare cuda stream for data transfers & kernels
+  cudaStream_t stream = nullptr;
+  cudaStreamCreate(&stream);
+  rmm::cuda_stream_view stream_view(stream);
+
+  std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
+  // Get the JSON's tree representation
+  auto cudf_column = nested_json::detail::parse_json_to_columns(
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+
+  std::cout << std::endl << "=== PARSED COLUMN ===" << std::endl;
+  cudf::test::print(*cudf_column);
+  cudf::column_view cudf_struct_view =
+    cudf_column->child(cudf::lists_column_view::child_column_index);
+
+  auto expected_col1            = cudf::test::strings_column_wrapper({"0.0", "0.1", "0.2"});
+  auto expected_col2            = cudf::test::strings_column_wrapper({"1.0", "1.1", "1.2"});
+  cudf::column_view parsed_col1 = cudf_struct_view.child(0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
+  std::cout << "*parsed_col1:\n";
+  cudf::test::print(parsed_col1);
+  cudf::column_view parsed_col2 = cudf_struct_view.child(1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
+  std::cout << "*parsed_col2:\n";
+  cudf::test::print(parsed_col2);
 }
