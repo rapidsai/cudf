@@ -336,6 +336,9 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
+                             // TODO: This also needs to account for list_view not,
+                             // or alternatively just remove the `and` since we can
+                             // always override with more specific templates.
                              not std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
                                                               size_type const) const noexcept
@@ -400,17 +403,34 @@ class device_row_comparator {
       auto const l_rep_levels    = _l_dremel_device_view.rep_levels;
       auto const r_rep_levels    = _r_dremel_device_view.rep_levels;
       weak_ordering state{weak_ordering::EQUIVALENT};
+
+      // Loop over each element in the encoding. Note that this includes nulls
+      // and empty lists, so not every index i/j correspondings to an actual
+      // element in the child column. The index k is used to keep track of the
+      // current child element that we're actually comparing.
       for (int i = l_start, j = r_start, k = 0; i < l_end and j < r_end; ++i, ++j) {
+        // First early exit: the definition levels do not match.
         if (l_def_levels[i] != r_def_levels[j]) {
           state =
             (l_def_levels[i] < r_def_levels[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
         }
+
+        // Second early exit: the repetition levels do not match.
         if (l_rep_levels[i] != r_rep_levels[j]) {
           state =
             (l_rep_levels[i] < r_rep_levels[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
         }
+
+        // Third early exit: This case has two branches.
+        // 1) If we are at the maximum definition level, then we actually have
+        //    an underlying element to compare, not just an empty list or a
+        //    null. Therefore, we access the kth element of each list and
+        //    compare the values.
+        // 2) If we are 1 - the maximum definition level and the column is
+        //    nullable, we know that we are looking at a element in the child
+        //    column. In this case we simply skip to the next element.
         if (l_def_levels[i] == l_max_def_level) {
           auto comparator =
             element_comparator{_check_nulls, lcol, rcol, _null_precedence, _depth, _comparator};
@@ -423,6 +443,14 @@ class device_row_comparator {
           ++k;
         }
       }
+
+      // If we have reached this stage, we know that definition levels,
+      // repetition levels, and actual elements are identical in both list
+      // columns up to the `min(l_end - l_start, r_end - r_start)` element of
+      // the dremel encoding. However, two lists can only compare equivalent if
+      // they are of the same length. Otherwise, the shorter of the two is less
+      // than the longer. This final check determines the appropriate resulting
+      // ordering by checking how many total elements each list is composed of.
       state = (l_end - l_start < r_end - r_start)   ? weak_ordering::LESS
               : (l_end - l_start > r_end - r_start) ? weak_ordering::GREATER
                                                     : weak_ordering::EQUIVALENT;
