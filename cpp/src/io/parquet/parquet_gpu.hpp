@@ -236,8 +236,8 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  Type physical_type;      //!< physical data type
-  uint8_t converted_type;  //!< logical data type
+  Type physical_type;            //!< physical data type
+  ConvertedType converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
   constexpr uint8_t num_def_level_bits() { return level_bits & 0xf; }
@@ -357,6 +357,8 @@ struct EncColumnChunk {
   size_type* dict_index;  //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
+  uint8_t* column_index_blob;  //!< Binary blob containing encoded column index for this chunk
+  uint32_t column_index_size;  //!< Size of column index blob
 };
 
 /**
@@ -633,6 +635,17 @@ void EncodePageHeaders(device_span<EncPage> pages,
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel to calculate ColumnIndex information per chunk
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] column_stats Page-level statistics to be encoded
+ * @param[in] stream CUDA stream to use
+ */
+void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats,
+                         rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace parquet
