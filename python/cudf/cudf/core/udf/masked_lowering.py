@@ -11,8 +11,6 @@ from numba.cuda.cudaimpl import (
 )
 from numba.extending import lower_builtin, types
 
-from strings_udf._typing import string_view
-
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -281,7 +279,6 @@ def pack_return_masked_impl(context, builder, sig, args):
 @cuda_lower(api.pack_return, types.Number)
 @cuda_lower(api.pack_return, types.NPDatetime)
 @cuda_lower(api.pack_return, types.NPTimedelta)
-@cuda_lower(api.pack_return, string_view)
 def pack_return_scalar_impl(context, builder, sig, args):
     outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     outdata.value = args[0]
@@ -353,7 +350,6 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 @lower_builtin(api.Masked, types.Number, types.boolean)
 @lower_builtin(api.Masked, types.NPDatetime, types.boolean)
 @lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
-@lower_builtin(api.Masked, string_view, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args

@@ -10,8 +10,12 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 
 from strings_udf._typing import StringView, string_view
 
+from cudf.core.udf import masked_typing
 from cudf.core.udf._ops import comparison_ops
 from cudf.core.udf.masked_typing import MaskedType
+
+masked_typing.MASKED_INIT_MAP[types.pyobject] = string_view
+masked_typing.MASKED_INIT_MAP[string_view] = string_view
 
 
 # String functions
