@@ -23,7 +23,102 @@
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
+#include <stack>
+#include <string>
+
 namespace nested_json = cudf::io::json;
+
+namespace {
+void print_column(std::string const& input,
+                  nested_json::json_column const& column,
+                  uint32_t indent = 0);
+void print_json_string_col(std::string const& input,
+                           nested_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
+    std::cout << i << ": [" << (column.validity[i]?"1":"0") << "] '" << input.substr(column.string_offsets[i], column.string_lengths[i])
+              << "'\n";
+  }
+}
+
+std::string pad(uint32_t indent = 0)
+{
+  std::string pad{};
+  if (indent > 0) pad.insert(pad.begin(), indent, ' ');
+  return pad;
+}
+
+void print_json_list_col(std::string const& input,
+                         nested_json::json_column const& column,
+                         uint32_t indent = 0)
+{
+  std::cout << pad(indent) << " [LIST]\n";
+  std::cout << pad(indent) << " -> num. child-columns: " << column.child_columns.size() << "\n";
+  std::cout << pad(indent) << " -> num. rows: " << column.current_offset << "\n";
+  std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
+  std::cout << pad(indent) << " offsets[]: "
+            << "\n";
+  for (std::size_t i = 0; i < column.child_offsets.size() - 1; i++) {
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i]?"1":"0") << "] [" << column.child_offsets[i] << ", "
+              << column.child_offsets[i + 1] << ")\n";
+  }
+  if (column.child_columns.size() > 0) {
+    std::cout << pad(indent) << column.child_columns.begin()->first << "[]: "
+              << "\n";
+    print_column(input, column.child_columns.begin()->second, indent + 2);
+  }
+}
+
+void print_json_struct_col(std::string const& input,
+                           nested_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  std::cout << pad(indent) << " [STRUCT]\n";
+  std::cout << pad(indent) << " -> num. child-columns: " << column.child_columns.size() << "\n";
+  std::cout << pad(indent) << " -> num. rows: " << column.current_offset << "\n";
+  std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
+  std::cout << pad(indent) << " -> validity[]: "
+            << "\n";
+  for (std::size_t i = 0; i < column.current_offset; i++) {
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i]?"1":"0") << "]\n";
+  }
+  auto it = std::begin(column.child_columns);
+  for (std::size_t i = 0; i < column.child_columns.size(); i++) {
+    std::cout << "child #" << i << " '" << it->first << "'[] \n";
+    print_column(input, it->second, indent + 2);
+    it++;
+  }
+}
+
+void print_column(std::string const& input, nested_json::json_column const& column, uint32_t indent)
+{
+  switch (column.type) {
+    case nested_json::json_col_t::StringColumn: print_json_string_col(input, column, indent); break;
+    case nested_json::json_col_t::ListColumn: print_json_list_col(input, column, indent); break;
+    case nested_json::json_col_t::StructColumn: print_json_struct_col(input, column, indent); break;
+    case nested_json::json_col_t::Unknown: std::cout << pad(indent) << "[UNKNOWN]\n"; break;
+    default: break;
+  }
+}
+
+void print_json_cols(std::string const& input, nested_json::json_column const& column)
+{
+  auto column_type_string = [](nested_json::json_col_t column_type) {
+    switch (column_type) {
+      case nested_json::json_col_t::Unknown: return "Unknown";
+      case nested_json::json_col_t::ListColumn: return "List";
+      case nested_json::json_col_t::StructColumn: return "Struct";
+      case nested_json::json_col_t::StringColumn: return "String";
+      default: return "Unknown";
+    }
+  };
+
+  std::cout << "TYPE: " << column_type_string(column.type) << "\n";
+  print_column(input, column, 0);
+};
+
+}  // namespace
 
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {
@@ -188,4 +283,35 @@ TEST_F(JsonTest, TokenStream)
     // Ensure the token category is correct
     EXPECT_EQ(golden_token_stream[i].second, tokens_gpu[i]) << "Mismatch at #" << i;
   }
+}
+
+TEST_F(JsonTest, Simple)
+{
+  using nested_json::PdaTokenT;
+  using nested_json::SymbolOffsetT;
+  using nested_json::SymbolT;
+
+  // Prepare cuda stream for data transfers & kernels
+  cudaStream_t stream = nullptr;
+  cudaStreamCreate(&stream);
+  rmm::cuda_stream_view stream_view(stream);
+
+  //
+  // std::string input = R"( ["foo", null, "bar"] )";
+  std::string input = R"( [{"a":0.0, "b":0.1}, {"b":1.1}] )";
+  // std::string input = R"( [[1], [2], null, [3], [4]] )";
+
+  // String / value
+  // std::string input = R"( " Foobar" )";
+  // std::string input = R"(  123.456  )";
+  // std::string input = R"(  123.456)";
+  // std::string input = R"(null)";
+  // std::string input = R"( [null, [2], null, [3], [4]] )"; // <= will fail because col will be
+  // inferred as string/val column
+
+  // Get the JSON's tree representation
+  auto json_root_col = nested_json::detail::get_json_columns(
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+
+  print_json_cols(input, json_root_col);
 }

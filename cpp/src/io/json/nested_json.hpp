@@ -16,9 +16,15 @@
 
 #pragma once
 
+#include <cudf/io/types.hpp>
+
+#include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <variant>
+#include <vector>
 
 namespace cudf::io::json {
 
@@ -45,6 +51,84 @@ using PdaSymbolGroupIdT = char;
 
 /// Type being emitted by the pushdown automaton transducer
 using PdaTokenT = char;
+
+/// Type used to represent the class of a node (or a node "category") within the tree representation
+using NodeT = char;
+
+/// Type used to index into the nodes within the tree of structs, lists, field names, and value
+/// nodes
+using NodeIndexT = uint32_t;
+
+/// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
+using TreeDepthT = StackLevelT;
+
+/**
+ * @brief Struct that encapsulate all information of a columnar tree representation.
+ */
+struct tree_meta_t {
+  std::vector<NodeT> node_categories;
+  std::vector<NodeIndexT> parent_node_ids;
+  std::vector<TreeDepthT> node_levels;
+  std::vector<SymbolOffsetT> node_range_begin;
+  std::vector<SymbolOffsetT> node_range_end;
+};
+
+constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
+
+/**
+ * @brief Class of a node (or a node "category") within the tree representation
+ */
+enum node_t : NodeT {
+  /// A node representing a struct
+  NC_STRUCT,
+  /// A node representing a list
+  NC_LIST,
+  /// A node representing a field name
+  NC_FN,
+  /// A node representing a string value
+  NC_STR,
+  /// A node representing a numeric or literal value (e.g., true, false, null)
+  NC_VAL,
+  /// A node representing a parser error
+  NC_ERR,
+  /// Total number of node classes
+  NUM_NODE_CLASSES
+};
+
+/**
+ * @brief A column type
+ */
+enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
+
+/**
+ * @brief
+ *
+ */
+struct json_column {
+  // Type used to count number of rows
+  using row_offset_t = uint32_t;
+
+  // The inferred type of this column (list, struct, or value/string column)
+  json_col_t type = json_col_t::Unknown;
+
+  std::vector<row_offset_t> string_offsets;
+  std::vector<row_offset_t> string_lengths;
+
+  // Row offsets
+  std::vector<row_offset_t> child_offsets;
+
+  // Validity bitmap
+  std::vector<bool> validity;
+  row_offset_t valid_count = 0;
+
+  // Map of child columns, if applicable.
+  // Following "items" as the default child column's name of a list column
+  // Using the struct's field names
+  std::map<std::string, json_column> child_columns;
+
+  // Counting the current number of items in this column
+  row_offset_t current_offset = 0;
+};
 
 /**
  * @brief Tokens emitted while parsing a JSON input
@@ -110,6 +194,16 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
+
+/**
+ * @brief Parses the given JSON string and generates a tree representation of the given input.
+ *
+ * @param input The JSON input
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return
+ */
+json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
+
 }  // namespace detail
 
 }  // namespace cudf::io::json

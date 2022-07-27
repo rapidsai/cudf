@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/utilities/error.hpp"
 #include "nested_json.hpp"
 
 #include <io/fst/logical_stack.cuh>
@@ -23,7 +24,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <iterator>
 #include <rmm/exec_policy.hpp>
+
+#include <stack>
 
 namespace cudf::io::json {
 
@@ -633,6 +637,509 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                stream);
 }
 
-}  // namespace detail
+struct tree_node {
+  // The column that this node is associated with
+  // E.g., if this is a struct node, it's the struct's column
+  json_column* column;
 
+  // The row offset that this node belongs to within the given column
+  uint32_t row_index;
+
+  // Selected child column
+  // E.g., if this is a struct node, and we subsequently encountered the field name "a", then this
+  // point's to the struct's "a" child column
+  json_column* current_selected_col = nullptr;
+
+  std::size_t num_children = 0;
+};
+
+/**
+ * RULES:
+ *
+ * if first node type of a column is:
+ * --> a list: it becomes list column
+ * --> a struct: it becomes struct column
+ * --> else (e.g., 'null', '123', '"foo"'): it becomes a string column
+ */
+json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_view stream)
+{
+  // Default name for a list's child column
+  std::string const list_child_name = "items";
+
+  constexpr std::size_t single_item = 1;
+  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
+  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
+  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
+
+  // Allocate device memory for the JSON input & copy over to device
+  rmm::device_uvector<SymbolT> d_input{input.size(), stream};
+  cudaMemcpyAsync(
+    d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
+
+  // Parse the JSON and get the token stream
+  get_token_stream(cudf::device_span<SymbolT>{d_input.data(), d_input.size()},
+                   tokens_gpu.device_ptr(),
+                   token_indices_gpu.device_ptr(),
+                   num_tokens_out.device_ptr(),
+                   stream);
+
+  // Copy the JSON tokens to the host
+  token_indices_gpu.device_to_host(stream);
+  tokens_gpu.device_to_host(stream);
+  num_tokens_out.device_to_host(stream);
+
+  // Make sure tokens have been copied to the host
+  stream.synchronize();
+
+  // Whether this token is the valid token to begin the JSON document with
+  auto is_valid_root_token = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructBegin:
+      case token_t::ListBegin:
+      case token_t::StringBegin:
+      case token_t::ValueBegin: return true;
+      default: return false;
+    };
+  };
+
+  // Returns the token's corresponding column type
+  auto token_to_column_type = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructBegin: return json_col_t::StructColumn;
+      case token_t::ListBegin: return json_col_t::ListColumn;
+      case token_t::StringBegin: return json_col_t::StringColumn;
+      case token_t::ValueBegin: return json_col_t::StringColumn;
+      default: return json_col_t::Unknown;
+    };
+  };
+
+  // Whether this token is a beginning-of-list or beginning-of-struct token
+  auto is_nested_token = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructBegin:
+      case token_t::ListBegin: return true;
+      default: return false;
+    };
+  };
+
+  // Skips the quote char if the token is a beginning-of-string or beginning-of-field-name token
+  auto get_token_index = [](PdaTokenT const token, SymbolOffsetT const token_index) {
+    constexpr SymbolOffsetT skip_quote_char = 1;
+    switch (token) {
+      case token_t::StringBegin: return token_index + skip_quote_char;
+      case token_t::FieldNameBegin: return token_index + skip_quote_char;
+      default: return token_index;
+    };
+  };
+
+  // The end-of-* partner token for a given beginning-of-* token
+  auto end_of_partner = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StringBegin: return token_t::StringEnd;
+      case token_t::ValueBegin: return token_t::ValueEnd;
+      case token_t::FieldNameBegin: return token_t::FieldNameEnd;
+      default: return token_t::ErrorBegin;
+    };
+  };
+
+  auto column_type_string = [](json_col_t column_type) {
+    switch (column_type) {
+      case json_col_t::Unknown: return "Unknown";
+      case json_col_t::ListColumn: return "List";
+      case json_col_t::StructColumn: return "Struct";
+      case json_col_t::StringColumn: return "String";
+      default: return "Unknown";
+    }
+  };
+
+  auto append_row_to_column = [&input, &column_type_string](json_column* column,
+                                                            uint32_t row_index,
+                                                            json_col_t const& row_type,
+                                                            uint32_t string_offset,
+                                                            uint32_t string_end,
+                                                            uint32_t child_count) {
+
+    
+    CUDF_EXPECTS(column != nullptr, "Encountered invalid JSON token sequence");
+
+    std::cout << "  -> append_row_to_column()\n";
+    std::cout << "  ---> col@" << column << "\n";
+    std::cout << "  ---> row #" << row_index << "\n";
+    std::cout << "  ---> col.type: " << column_type_string(column->type) << "\n";
+    std::cout << "  ---> row_type: " << column_type_string(row_type) << "\n";
+    std::cout << "  ---> string: '"
+              << std::string{input.data() + string_offset, (string_end - string_offset)} << "'\n";
+
+    // If, thus far, the column's type couldn't be inferred, we infer it to the given type
+    if (column->type == json_col_t::Unknown) { column->type = row_type; }
+
+    // We shouldn't run into this, as we shouldn't
+    CUDF_EXPECTS(column->type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
+
+    // Check for the last inserted row offset
+    auto populated_row_count = column->current_offset;
+    if (populated_row_count < row_index) {
+
+      std::cout << "  ---> filling [" << populated_row_count << ", " << row_index << ")\n";
+    }
+
+    // Fill all the omitted rows with "empty"/null rows
+    std::fill_n(std::back_inserter(column->validity), row_index - column->string_offsets.size(), false);
+    std::fill_n(std::back_inserter(column->string_offsets),
+                row_index - column->string_offsets.size(),
+                (column->string_offsets.size() > 0) ? column->string_offsets.back() : 0);
+    std::fill_n(
+      std::back_inserter(column->string_lengths), row_index - column->string_lengths.size(), 0);
+    std::fill_n(std::back_inserter(column->child_offsets),
+                row_index + 1 - column->child_offsets.size(),
+                (column->child_offsets.size() > 0) ? column->child_offsets.back() : 0);
+
+    // Fill all the omitted rows with "empty" rows
+    // col type | row type  =>
+    // List     | List      => valid
+    // List     | Struct    => FAIL
+    // List     | String    => null
+    // Struct   | List      => FAIL
+    // Struct   | Struct    => valid
+    // Struct   | String    => null
+    // String   | List      => null
+    // String   | Struct    => null
+    // String   | String    => valid
+    bool is_valid = (column->type == row_type);
+    column->validity.push_back(is_valid);
+    column->valid_count += (is_valid) ? 1U : 0U;
+    column->string_offsets.push_back(string_offset);
+    column->string_lengths.push_back(string_end - string_offset);
+    column->child_offsets.push_back(
+      (column->child_offsets.size() > 0) ? column->child_offsets.back() + child_count : 0);
+    column->current_offset++;
+  };
+
+  auto update_row =
+    [](json_column* column, uint32_t row_index, uint32_t string_end, uint32_t child_count) {
+      std::cout << "  -> update_row()\n";
+      std::cout << "  ---> col@" << column << "\n";
+      std::cout << "  ---> row #" << row_index << "\n";
+      std::cout << "  ---> string_lengths = " << (string_end - column->string_offsets[row_index])
+                << "\n";
+      std::cout << "  ---> child_offsets = " << (column->child_offsets[row_index + 1] + child_count)
+                << "\n";
+      column->string_lengths[row_index]    = column->child_offsets[row_index + 1] + child_count;
+      column->child_offsets[row_index + 1] = column->child_offsets[row_index + 1] + child_count;
+    };
+
+  /**
+   * @brief Gets the currently selected child column given a \p current_data_path.
+   *
+   * That is, if \p current_data_path top-of-stack is
+   * (a) a struct, the selected child column corresponds to the child column of the last field name
+   * node encoutnered.
+   * (b) a list, the selected child column corresponds to single child column of
+   * the list column. In this case, the child column may not exist yet.
+   *
+   */
+  auto get_selected_column = [&list_child_name](std::stack<tree_node>& current_data_path) {
+    std::cout << "  -> get_selected_column()\n";
+    json_column* selected_col = current_data_path.top().current_selected_col;
+
+    // If the node does not have a selected column yet
+    if (selected_col == nullptr) {
+      // We're looking at the child column of a list column
+      if (current_data_path.top().column->type == json_col_t::ListColumn) {
+        CUDF_EXPECTS(current_data_path.top().column->child_columns.size() <= 1,
+                     "Encountered a list column with more than a single child column");
+        // The child column has yet to be created
+        if (current_data_path.top().column->child_columns.size() == 0) {
+          current_data_path.top().column->child_columns.insert(
+            {list_child_name, {json_col_t::Unknown}});
+        }
+        current_data_path.top().current_selected_col =
+          &current_data_path.top().column->child_columns.begin()->second;
+        std::cout << "  ---> selected col@" << current_data_path.top().current_selected_col << "\n";
+        return current_data_path.top().current_selected_col;
+      } else {
+        CUDF_FAIL("Trying to retrieve child column without encountering a field name.");
+      }
+    } else {
+      std::cout << "  ---> selected col@" << selected_col << "\n";
+      return selected_col;
+    }
+  };
+
+  auto select_column = [](std::stack<tree_node>& current_data_path, std::string const& field_name) {
+    std::cout << "  -> select_column(" << field_name << ")\n";
+    // The field name's parent struct node
+    auto& current_struct_node = current_data_path.top();
+
+    // Verify that the field name node is actually a child of a struct
+    CUDF_EXPECTS(current_data_path.top().column->type == json_col_t::StructColumn,
+                 "Invalid JSON token sequence");
+
+    json_column* struct_col  = current_struct_node.column;
+    auto const& child_col_it = struct_col->child_columns.find(field_name);
+
+    // The field name's column exists already, select that as the struct node's currently selected
+    // child column
+    if (child_col_it != struct_col->child_columns.end()) {
+      std::cout << "  ---> selected col@" << &child_col_it->second << "\n";
+      return &child_col_it->second;
+    }
+
+    // The field name's column does not exist yet, so we have to append the child column to the
+    // struct column
+    json_column* ptr  = &struct_col->child_columns.insert({field_name, {}}).first->second;
+    json_column* ptr2 = &struct_col->child_columns.find(field_name)->second;
+    std::cout << "ptr1: " << static_cast<void*>(ptr) << ", ptr2: " << static_cast<void*>(ptr2)
+              << "\n";
+    return &struct_col->child_columns.insert({field_name, {}}).first->second;
+  };
+
+  // The stack represents the path from the JSON root node to the current node being looked at
+  std::stack<tree_node> current_data_path;
+
+  // The offset of the token currently being processed
+  std::size_t offset = 0;
+
+  // The root column
+  json_column root_column;
+
+  // Giving names to magic constants
+  constexpr uint32_t row_offset_zero    = 0;
+  constexpr uint32_t zero_child_count   = 0;
+
+  //--------------------------------------------------------------------------------
+  // INITIALIZE JSON ROOT NODE
+  //--------------------------------------------------------------------------------
+  // The JSON root may only a struct, list, string, or value node
+  CUDF_EXPECTS(num_tokens_out[0] > 0, "Empty JSON input not supported");
+  CUDF_EXPECTS(is_valid_root_token(tokens_gpu[offset]), "Invalid beginning of JSON document");
+
+  // The JSON root is either a struct or list
+  if (is_nested_token(tokens_gpu[offset])) {
+    std::cout << "Nested value at root. JSON doc with: " << num_tokens_out[0] << " tokens \n";
+    std::cout << (tokens_gpu[offset] == token_t::StructBegin ? "[StructEnd]" : "[ListBegin]")
+              << "\n";
+    // Initialize the root column and append this row to it
+    append_row_to_column(&root_column,
+                         row_offset_zero,
+                         token_to_column_type(tokens_gpu[offset]),
+                         get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                         get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                         0);
+
+    // Push the root node onto the stack for the data path
+    current_data_path.push({&root_column, row_offset_zero, nullptr, zero_child_count});
+
+    // Continue with the next token from the token stream
+    offset++;
+  }
+  // The JSON is a simple scalar value -> create simple table and return
+  else {
+    std::cout << "Scalar value at root. JSON doc with: " << num_tokens_out[0] << " tokens \n";
+
+    constexpr SymbolOffsetT max_tokens_for_scalar_value = 2;
+    CUDF_EXPECTS(num_tokens_out[0] <= max_tokens_for_scalar_value,
+                 "Invalid JSON format. Expected just a scalar value.");
+
+    // If this isn't the only token, verify the subsequent token is the correct end-of-* partner
+    if ((offset + 1) < num_tokens_out[0]) {
+      CUDF_EXPECTS(tokens_gpu[offset + 1] == end_of_partner(tokens_gpu[offset]),
+                   "Invalid JSON token sequence");
+    }
+
+    // The offset to the first symbol from the JSON input associated with the current token
+    auto const& token_begin_offset = get_token_index(tokens_gpu[offset], token_indices_gpu[offset]);
+
+    // The offset to one past the last symbol associated with the current token
+    // Literals without trailing space are missing the corresponding end-of-* counterpart.
+    auto const& token_end_offset =
+      (offset + 1 < num_tokens_out[0])
+        ? get_token_index(tokens_gpu[offset + 1], token_indices_gpu[offset + 1])
+        : input.size();
+
+    root_column.type = json_col_t::StringColumn;
+    root_column.string_offsets.push_back(token_begin_offset);
+    root_column.string_lengths.push_back(token_end_offset - token_begin_offset);
+    return root_column;
+  }
+
+  //--------------------------------------------------------------------------------
+  // TRAVERSE JSON TREE
+  //--------------------------------------------------------------------------------
+  auto get_target_row_index = [](std::stack<tree_node> const& current_data_path,
+                                 json_column* target_column) {
+    std::cout << " -> target row: "
+              << ((current_data_path.top().column->type == json_col_t::ListColumn)
+                    ? target_column->current_offset
+                    : current_data_path.top().row_index)
+              << "\n";
+    return (current_data_path.top().column->type == json_col_t::ListColumn)
+             ? target_column->current_offset
+             : current_data_path.top().row_index;
+  };
+
+  while (offset < num_tokens_out[0]) {
+    // Verify there's at least the JSON root node left on the stack to which we can append data
+    CUDF_EXPECTS(current_data_path.size() > 0, "Invalid JSON structure");
+
+    // Verify that the current node in the tree (which becomes this nodes parent) can have children
+    CUDF_EXPECTS(current_data_path.top().column->type == json_col_t::ListColumn or
+                   current_data_path.top().column->type == json_col_t::StructColumn,
+                 "Invalid JSON structure");
+
+    // The token we're currently parsing
+    auto const& token = tokens_gpu[offset];
+
+    // StructBegin token
+    if (token == token_t::StructBegin) {
+      std::cout << "[StructBegin]\n";
+      // Get this node's column. That is, the parent node's selected column:
+      // (a) if parent is a list, then this will (create and) return the list's only child column
+      // (b) if parent is a struct, then this will return the column selected by the last field name
+      // encountered.
+      json_column* selected_col = get_selected_column(current_data_path);
+
+      // Get the row offset at which to insert
+      auto target_row_index = get_target_row_index(current_data_path, selected_col);
+
+      // Increment parent's child count and insert this struct node into the data path
+      current_data_path.top().num_children++;
+      current_data_path.push({selected_col, target_row_index, nullptr, zero_child_count});
+
+      // Add this struct node to the current column
+      append_row_to_column(selected_col,
+                           target_row_index,
+                           token_to_column_type(tokens_gpu[offset]),
+                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                           zero_child_count);
+    }
+
+    // StructEnd token
+    else if (token == token_t::StructEnd) {
+      std::cout << "[StructEnd]\n";
+      // Verify that this node in fact a struct node (i.e., it was part of a struct column)
+      CUDF_EXPECTS(current_data_path.top().column->type == json_col_t::StructColumn,
+                   "Broken invariant while parsing JSON");
+      CUDF_EXPECTS(current_data_path.top().column != nullptr,
+                   "Broken invariant while parsing JSON");
+
+      // Update row to account for string offset
+      update_row(current_data_path.top().column,
+                 current_data_path.top().row_index,
+                 get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                 current_data_path.top().num_children);
+
+      // Pop struct from the path stack
+      current_data_path.pop();
+    }
+
+    // ListBegin token
+    else if (token == token_t::ListBegin) {
+      std::cout << "[ListBegin]\n";
+      // Get the selected column
+      json_column* selected_col = get_selected_column(current_data_path);
+
+      // Get the row offset at which to insert
+      auto target_row_index = get_target_row_index(current_data_path, selected_col);
+
+      // Increment parent's child count and insert this struct node into the data path
+      current_data_path.top().num_children++;
+      current_data_path.push({selected_col, target_row_index, nullptr, zero_child_count});
+
+      // Add this struct node to the current column
+      append_row_to_column(selected_col,
+                           target_row_index,
+                           token_to_column_type(tokens_gpu[offset]),
+                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                           zero_child_count);
+    }
+
+    // ListEnd token
+    else if (token == token_t::ListEnd) {
+      std::cout << "[ListEnd]\n";
+      // Verify that this node in fact a list node (i.e., it was part of a list column)
+      CUDF_EXPECTS(current_data_path.top().column->type == json_col_t::ListColumn,
+                   "Broken invariant while parsing JSON");
+      CUDF_EXPECTS(current_data_path.top().column != nullptr,
+                   "Broken invariant while parsing JSON");
+
+      // Update row to account for string offset
+      update_row(current_data_path.top().column,
+                 current_data_path.top().row_index,
+                 get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                 current_data_path.top().num_children);
+
+      // Pop list from the path stack
+      current_data_path.pop();
+    }
+
+    // Error token
+    else if (token == token_t::ErrorBegin) {
+      std::cout << "[ErrorBegin]\n";
+      CUDF_FAIL("Parser encountered an invalid format.");
+    }
+
+    // FieldName, String, or Value (begin, end)-pair
+    else if (token == token_t::FieldNameBegin or token == token_t::StringBegin or
+             token == token_t::ValueBegin) {
+      // Verify that this token has the right successor to build a correct (being, end) token pair
+      CUDF_EXPECTS((offset + 1) < num_tokens_out[0], "Invalid JSON token sequence");
+      CUDF_EXPECTS(tokens_gpu[offset + 1] == end_of_partner(token), "Invalid JSON token sequence");
+
+      // The offset to the first symbol from the JSON input associated with the current token
+      auto const& token_begin_offset =
+        get_token_index(tokens_gpu[offset], token_indices_gpu[offset]);
+
+      // The offset to one past the last symbol associated with the current token
+      auto const& token_end_offset =
+        get_token_index(tokens_gpu[offset + 1], token_indices_gpu[offset + 1]);
+
+      // FieldNameBegin
+      // For the current struct node in the tree, select the child column corresponding to this
+      // field name
+      if (token == token_t::FieldNameBegin) {
+        std::cout << "[FieldNameBegin]\n";
+        std::string field_name{input.data() + token_begin_offset,
+                               (token_end_offset - token_begin_offset)};
+        current_data_path.top().current_selected_col = select_column(current_data_path, field_name);
+      }
+      // StringBegin
+      // ValueBegin
+      // As we currently parse to string columns there's no further differentiation
+      else if (token == token_t::StringBegin or token == token_t::ValueBegin) {
+        std::cout << "[StringBegin/ValueBegin]\n";
+        // Get the selected column
+        json_column* selected_col = get_selected_column(current_data_path);
+
+        // Get the row offset at which to insert
+        auto target_row_index = get_target_row_index(current_data_path, selected_col);
+
+        current_data_path.top().num_children++;
+
+        append_row_to_column(selected_col,
+                             target_row_index,
+                             token_to_column_type(token),
+                             token_begin_offset,
+                             token_end_offset,
+                             zero_child_count);
+      } else {
+        CUDF_FAIL("Unknown JSON token");
+      }
+
+      // As we've also consumed the end-of-* token, we advance the processed token offset by one
+      offset++;
+    }
+
+    offset++;
+  }
+
+  // Make sure all of a struct's child columns have the same length
+
+
+  return root_column;
+}
+
+}  // namespace detail
 }  // namespace cudf::io::json
