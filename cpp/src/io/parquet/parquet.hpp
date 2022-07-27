@@ -362,6 +362,12 @@ struct ColumnIndex {
   std::vector<int64_t> null_counts;  // Optional count of null values per page
 };
 
+// bit space we are reserving in column_buffer::user_data
+constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
+constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
+// if this column has a list parent anywhere above it in the hierarchy
+constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT = (1 << 25);
+
 /**
  * @brief Count the number of leading zeros in an unsigned integer
  */
