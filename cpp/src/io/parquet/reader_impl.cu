@@ -630,7 +630,7 @@ class aggregate_reader_metadata {
       build_column = [&](column_name_info const* col_name_info,
                          int schema_idx,
                          std::vector<column_buffer>& out_col_array,
-                         bool list_parent) {
+                         bool has_list_parent) {
         if (schema_idx < 0) { return false; }
         auto const& schema_elem = get_schema(schema_idx);
 
@@ -641,7 +641,7 @@ class aggregate_reader_metadata {
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
           return build_column(
-            child_col_name_info, schema_elem.children_idx[0], out_col_array, list_parent);
+            child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
         }
 
         // if we're at the root, this is a new output column
@@ -652,7 +652,7 @@ class aggregate_reader_metadata {
         auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
-        if (list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
+        if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
         // store the index of this element if inserted in out_col_array
         nesting.push_back(static_cast<int>(out_col_array.size()));
         output_col.name = schema_elem.name;
@@ -666,7 +666,7 @@ class aggregate_reader_metadata {
             path_is_valid |= build_column(nullptr,
                                           schema_elem.children_idx[idx],
                                           output_col.children,
-                                          list_parent || col_type == type_id::LIST);
+                                          has_list_parent || col_type == type_id::LIST);
           }
         } else {
           for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
@@ -674,7 +674,7 @@ class aggregate_reader_metadata {
               build_column(&col_name_info->children[idx],
                            find_schema_child(schema_elem, col_name_info->children[idx].name),
                            output_col.children,
-                           list_parent || col_type == type_id::LIST);
+                           has_list_parent || col_type == type_id::LIST);
           }
         }
 
@@ -692,7 +692,7 @@ class aggregate_reader_metadata {
             auto const element_dtype = to_data_type(element_type, schema_elem);
 
             column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
-            if (list_parent || col_type == type_id::LIST) {
+            if (has_list_parent || col_type == type_id::LIST) {
               element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
             }
             // store the index of this element
