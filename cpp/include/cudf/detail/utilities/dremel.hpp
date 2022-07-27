@@ -22,6 +22,11 @@
 
 namespace cudf::detail {
 
+/**
+ * @brief Device view for `dremel_data`.
+ *
+ * @see the `dremel_data` struct for more info.
+ */
 struct dremel_device_view {
   size_type* offsets;
   uint8_t* rep_levels;
@@ -33,7 +38,7 @@ struct dremel_device_view {
 /**
  * @brief Dremel data that describes one nested type column
  *
- * @see get_dremel_data()
+ * @see get_dremel_data() for more info.
  */
 struct dremel_data {
   rmm::device_uvector<size_type> dremel_offsets;

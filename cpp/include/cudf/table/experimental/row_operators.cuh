@@ -599,6 +599,28 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
+  /**
+   * @brief Construct a preprocessed table for use with lexicographical comparison
+   *
+   * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
+   * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
+   *
+   * @param table The table to preprocess
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If it is nullptr, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param depths The depths of each column resulting from decomposing struct columns.
+   * @param dremel_data The dremel data for each list column. The length of this object is the
+   * number of list columns in the table.
+   * @param dremel_device_views Device views into the dremel_data structs contained in the
+   * `dremel_data` parameter. For columns that are not list columns, this uvector will should
+   * contain an empty `dremel_device_view`. As such, this uvector has as many elements as there are
+   * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
+   * of list columns).
+   */
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
@@ -659,7 +681,6 @@ struct preprocessed_table {
     return _depths.size() ? std::optional<device_span<int const>>(_depths) : std::nullopt;
   }
 
-  // TODO: span of spans?
   [[nodiscard]] device_span<detail::dremel_device_view const> dremel_device_views() const
   {
     return device_span<detail::dremel_device_view const>(_dremel_device_views);

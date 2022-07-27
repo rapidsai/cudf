@@ -259,6 +259,10 @@ auto decompose_structs(table_view table,
                          std::move(verticalized_col_depths));
 }
 
+/*
+ * This helper function generates dremel data for any list-type columns in a
+ * table. This data is necessary for lexicographic comparisons.
+ */
 auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
 {
   std::vector<detail::dremel_data> dremel_data;
