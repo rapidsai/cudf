@@ -200,16 +200,15 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
 
 TEST_F(MultibyteSplitTest, SmallInputAllPossibleRanges)
 {
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
+  using namespace cudf::io::text;
 
+  auto host_input = std::string();
   for (auto i = 0; i < 5; i++) {
     host_input += "::";
   }
 
   auto delimiter = std::string("::");
-  auto source    = cudf::io::text::make_source(host_input);
-  using namespace cudf::io::text;
+  auto source    = make_source(host_input);
 
   // for all possible ways to split the input, check that each field is only output once
   int size = static_cast<int>(host_input.size());
@@ -224,7 +223,7 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRanges)
       auto out_views = std::vector<cudf::column_view>({out1->view(), out2->view(), out3->view()});
       auto out       = cudf::concatenate(out_views);
 
-      auto expected = cudf::io::text::multibyte_split(*source, delimiter);
+      auto expected = multibyte_split(*source, delimiter);
 
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
     }
