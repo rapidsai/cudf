@@ -47,10 +47,7 @@ constexpr bool is_utf8_continuation_char(uint8_t byte)
  * @param byte Any byte from a valid UTF-8 character
  * @return true if this the first byte of the character
  */
-constexpr bool is_begin_utf8_char(uint8_t byte)
-{
-  return not is_utf8_continuation_char(byte);
-}
+constexpr bool is_begin_utf8_char(uint8_t byte) { return not is_utf8_continuation_char(byte); }
 
 /**
  * @brief Returns the number of bytes in the specified character.

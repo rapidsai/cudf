@@ -1313,19 +1313,27 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
                d_char_ptr);
 }
 
+/**
+ * @brief increment part of a UTF-8 character.
+ *
+ * Attempt to increment the byte pointed to by ptr, which is assumed
+ * to be part of a valid UTF-8 character. Returns true if successful,
+ * false if the increment caused an overflow, in which case the data
+ * at ptr will be set to the lowest valid UTF-8 byte (start or continuation).
+ * Will halt execution if passed invalid UTF-8.
+ */
 static __device__ bool increment_utf8_at(uint8_t* ptr)
 {
   uint8_t elem = *ptr;
-  // elem is one of:
+  // elem is one of (no 5 or 6 byte chars allowed):
   //  0b0vvvvvvv 1 byte
   //  0b10vvvvvv continuation
   //  0b110vvvvv 2 byte
   //  0b1110vvvv 3 byte
   //  0b11110vvv 4 byte
-  //  og spec, but no longer used? anyway, cudf is only 4 byte
-  //  0b111110vv 5 byte
-  //  0b1111110v 6 byte
 
+  // TODO starting at 4 byte and working down.  Should
+  // probably start low and work higher.
   uint8_t mask  = 0xF8;
   uint8_t valid = 0xF0;
 
@@ -1343,8 +1351,9 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
     valid <<= 1;
   } while (mask > 0);
 
-  // was not a valid utf-8 character, leave it alone
-  return false;
+  // should not reach since we test for valid UTF-8
+  // higher up
+  CUDF_UNREACHABLE("Trying to increment non-utf8");
 }
 
 // truncates a UTF-8 string contained in str to at most
@@ -1357,14 +1366,12 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
 // returns the length of the truncated string.
 // NOTE: this will return the original string if it cannot
 // be truncated.
-__device__ uint32_t truncate_utf8(
-  const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+__device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
+                                  const void** res,
+                                  bool is_min,
+                                  void* scratch,
+                                  size_type truncate_length)
 {
-  if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
-    *res = str.data();
-    return str.size_bytes();
-  }
-
   // if truncating a max value, then copy desired number of bytes,
   // truncate to the position of the last symbol, and then increment that.
   // for min value can just return original buffer with new length.
@@ -1409,14 +1416,12 @@ __device__ uint32_t truncate_utf8(
 // returns the length of the truncated string.
 // NOTE: this will return the original array if it cannot
 // be truncated.
-__device__ uint32_t truncate_binary(
-  const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+__device__ uint32_t truncate_binary(device_span<uint8_t const> str,
+                                    const void** res,
+                                    bool is_min,
+                                    void* scratch,
+                                    size_type truncate_length)
 {
-  if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
-    *res = str.data();
-    return str.size_bytes();
-  }
-
   // if truncating a max value, then copy desired number of bytes,
   // and then increment final byte.
   // for min value can just return original buffer with new length.
@@ -1457,13 +1462,39 @@ __device__ uint32_t truncate_binary(
 __device__ uint32_t truncate_string(
   const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
-  // if str is all 8-bit chars, then can juse use truncate_binary()
-  // TODO change if #11303 is merged
-  if (str.size_bytes() != str.length() && str.is_valid_utf8()) {
-    return truncate_utf8(str, res, is_min, scratch, truncate_length);
+  if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
+    *res = str.data();
+    return str.size_bytes();
   }
-  return truncate_binary(str, res, is_min, scratch, truncate_length);
+
+  // both UTF-8 and binary should be treated as bytes.  uint8_t for now,
+  // maybe std::byte in the future (excepth std::byte cannot be incremented).
+  auto const span =
+    device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes());
+
+  // if str is all 8-bit chars, then can just use truncate_binary()
+  // TODO change if #11303 is merged.  test for valid utf8 since string
+  // columns might be used for binary data
+  if (str.size_bytes() != str.length() and
+      strings::detail::is_valid_utf8_string(str.data(), str.size_bytes())) {
+    return truncate_utf8(span, res, is_min, scratch, truncate_length);
+  }
+  return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
+
+#if 0  // waiting on #11303
+__device__ uint32_t truncate_binary(
+  const byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+{
+  if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
+    *res = str.data();
+    return str.size_bytes();
+  }
+
+  auto const span = device_span<uint8_t const>(str.data(), str.size_bytes());
+  return truncate_binary(span, res, is_min, scratch, truncate_length);
+}
+#endif
 
 __device__ void get_extremum(const statistics_val* stats_val,
                              statistics_dtype dtype,
