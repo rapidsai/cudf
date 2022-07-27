@@ -70,8 +70,6 @@ class spark_murmur_device_row_hasher {
     spark_murmur_device_row_hasher>;  ///< Allow row_hasher to access private members.
 
  public:
-  spark_murmur_device_row_hasher() = delete;
-
   /**
    * @brief Return the hash value of a row in the given table.
    *
