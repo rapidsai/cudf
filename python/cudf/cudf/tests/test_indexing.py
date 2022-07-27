@@ -1690,4 +1690,5 @@ def test_iloc_single_row_with_nullable_column():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.4]})
     df = cudf.from_pandas(pdf)
 
+    df.iloc[0]  # before the fix for #11349 this would segfault
     assert_eq(pdf.iloc[0], df.iloc[0])
