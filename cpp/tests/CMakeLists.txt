@@ -481,6 +481,10 @@ ConfigureTest(
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
+  lists/set_operations/difference_distinct_tests.cpp
+  lists/set_operations/have_overlap_tests.cpp
+  lists/set_operations/intersect_distinct_tests.cpp
+  lists/set_operations/union_distinct_tests.cpp
   lists/sort_lists_tests.cpp
   lists/stream_compaction/apply_boolean_mask_tests.cpp
   lists/stream_compaction/distinct_tests.cpp
