@@ -536,7 +536,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
       };
 
-      auto last_list_child = [](cudf::detail::LinkedColPtr col) {
+      auto is_last_list_child = [](cudf::detail::LinkedColPtr col) {
         if (col->type().id() != type_id::LIST) { return false; }
         auto const child_col_type =
           col->children[lists_column_view::child_column_index]->type().id();
@@ -548,14 +548,12 @@ std::vector<schema_tree_node> construct_schema_tree(
       // more efficient storage mechanism for a single-depth list of bytes, but is a departure from
       // original cuIO behavior so it is locked behind the option. If the option is selected on a
       // column that isn't a single-depth list<int8> the code will throw.
-      if (col_meta.is_enabled_output_as_binary() && last_list_child(col)) {
+      if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
                      "Binary column's corresponding metadata should have zero or two children!");
         if (col_meta.num_children() > 0) {
           auto const data_col_type =
             col->children[lists_column_view::child_column_index]->type().id();
-          CUDF_EXPECTS(data_col_type == type_id::INT8 || data_col_type == type_id::UINT8,
-                       "Binary column's type must be INT8 or UINT8!");
 
           CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.size() == 0,
                        "Binary column must not be nested!");
