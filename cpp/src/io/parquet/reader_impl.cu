@@ -183,7 +183,7 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::INT64: return type_id::INT64;
     case parquet::FLOAT: return type_id::FLOAT32;
     case parquet::DOUBLE: return type_id::FLOAT64;
-    case parquet::BYTE_ARRAY: [[fallthrough]];
+    case parquet::BYTE_ARRAY:
     case parquet::FIXED_LEN_BYTE_ARRAY:
       // Can be mapped to INT32 (32-bit hash) or STRING
       return strings_to_categorical ? type_id::INT32 : type_id::STRING;

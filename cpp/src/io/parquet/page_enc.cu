@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "cudf/detail/utilities/assert.cuh"
 #include "parquet_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
