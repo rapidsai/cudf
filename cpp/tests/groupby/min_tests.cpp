@@ -446,7 +446,7 @@ TYPED_TEST(groupby_min_floating_point_test, values_with_infinity)
   auto constexpr inf = std::numeric_limits<T>::infinity();
 
   auto const keys = int32s_col{1, 2, 1, 2};
-  auto const vals = floats_col{static_cast<T>(1), static_cast<T>(1), -inf, static_cast<T>(1)};
+  auto const vals = floats_col{static_cast<T>(1), static_cast<T>(1), -inf, static_cast<T>(2)};
 
   auto const expected_keys = int32s_col{1, 2};
   auto const expected_vals = floats_col{-inf, static_cast<T>(1)};
