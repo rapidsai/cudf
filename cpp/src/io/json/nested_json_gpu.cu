@@ -802,7 +802,7 @@ json_column get_json_columns(host_span<SymbolT const> input,
                              rmm::cuda_stream_view stream)
 {
   // Default name for a list's child column
-  std::string const list_child_name = "items";
+  std::string const list_child_name = "elements";
 
   constexpr std::size_t single_item = 1;
   hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
