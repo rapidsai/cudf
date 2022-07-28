@@ -1335,9 +1335,7 @@ static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
       auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
       for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
         // check for valid continuation byte
-        if (not strings::detail::is_utf8_continuation_char(str[idx])) {
-          return false;
-        }
+        if (not strings::detail::is_utf8_continuation_char(str[idx])) { return false; }
       }
     } else {
       return false;
@@ -1410,8 +1408,8 @@ __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
   // we know at this point that truncate_length < size_bytes, so
   // there is a character at [len]. work backwards until we find
   // the start of a unicode character.
-  auto len        = truncate_length;
-  auto const dptr = &str.data()[len]);
+  auto len  = truncate_length;
+  auto dptr = &str.data()[len];
   while (not strings::detail::is_begin_utf8_char(*dptr) && len > 0) {
     dptr--;
     len--;
@@ -1460,7 +1458,7 @@ __device__ uint32_t truncate_binary(device_span<uint8_t const> str,
   }
   memcpy(scratch, str.data(), truncate_length);
   auto const ptr = static_cast<uint8_t*>(scratch);
-  for (int32_t i = len - 1; i >= 0; i--) {
+  for (int32_t i = truncate_length - 1; i >= 0; i--) {
     uint8_t elem = ptr[i];
     elem++;
     ptr[i] = elem;
@@ -1479,14 +1477,17 @@ __device__ uint32_t truncate_binary(device_span<uint8_t const> str,
  * @brief Truncate a UTF-8 string to at most truncate_length bytes.
  */
 __device__ uint32_t truncate_string(
-  const statistics::byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+  const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
     *res = str.data();
     return str.size_bytes();
   }
 
-  auto const span = device_span<uint8_t const>(str.data(), str.size_bytes());
+  // convert char to uint8_t since UTF-8 is just bytes, not chars.  can't use std::byte because
+  // that can't be incremented.
+  auto const span =
+    device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes());
 
   // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
   if (str.size_bytes() != str.length() and is_valid_utf8_string(span)) {
@@ -1498,8 +1499,11 @@ __device__ uint32_t truncate_string(
 /**
  * @brief Truncate a binary array to at most truncate_length bytes.
  */
-__device__ uint32_t truncate_byte_array(
-  const statistics::byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+__device__ uint32_t truncate_byte_array(const statistics::byte_array_view& str,
+                                        const void** res,
+                                        bool is_min,
+                                        void* scratch,
+                                        size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
     *res = str.data();
@@ -1537,9 +1541,7 @@ __device__ void get_extremum(const statistics_val* stats_val,
   }
 
   if (dtype == dtype_string) {
-    // pass byte_val rather than str_val so we can use the uint8_t pointer, since UTF-8
-    // is bytes rather than chars.
-    *len = truncate_string(stats_val->byte_val, val, is_min, scratch, truncate_length);
+    *len = truncate_string(stats_val->str_val, val, is_min, scratch, truncate_length);
   } else if (dtype == dtype_byte_array) {
     *len = truncate_byte_array(stats_val->byte_val, val, is_min, scratch, truncate_length);
   } else {
