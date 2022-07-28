@@ -1351,10 +1351,9 @@ static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
 /**
  * @brief increment part of a UTF-8 character.
  *
- * Attempt to increment the byte pointed to by ptr, which is assumed
- * to be part of a valid UTF-8 character. Returns true if successful,
- * false if the increment caused an overflow, in which case the data
- * at ptr will be set to the lowest valid UTF-8 byte (start or continuation).
+ * Attempt to increment the byte pointed to by ptr, which is assumed to be part of a valid UTF-8
+ * character. Returns true if successful, false if the increment caused an overflow, in which case
+ * the data at ptr will be set to the lowest valid UTF-8 byte (start or continuation).
  * Will halt execution if passed invalid UTF-8.
  */
 static __device__ bool increment_utf8_at(uint8_t* ptr)
@@ -1391,30 +1390,28 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
   CUDF_UNREACHABLE("Trying to increment non-utf8");
 }
 
-// truncates a UTF-8 string contained in str to at most
-// truncate_length bytes.  on return res will point to the
-// truncated string.  If is_min is false, then the final
-// character (or characters if there is overflow) will be
-// incremented so that the resultant string will still be
-// a valid maximum.  scratch is only used when is_min is
-// false, and must be at least truncate_length bytes in size.
-// returns the length of the truncated string.
-// NOTE: this will return the original string if it cannot
-// be truncated.
+/**
+ * @brief Truncate a UTF-8 string to at most truncate_length bytes.
+ *
+ * On return res will point to the truncated string. If is_min is false, then the final
+ * character (or characters if there is overflow) will be incremented so that the resultant
+ * string will still be a valid maximum. scratch is only used when is_min is false, and must be at
+ * least truncate_length bytes in size.
+ * NOTE: this will return the original string if it cannot be truncated.
+ *
+ * @return The length of the truncated string.
+ */
 __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
                                   const void** res,
                                   bool is_min,
                                   void* scratch,
                                   size_type truncate_length)
 {
-  // if truncating a max value, then copy desired number of bytes,
-  // truncate to the position of the last symbol, and then increment that.
-  // for min value can just return original buffer with new length.
   // we know at this point that truncate_length < size_bytes, so
-  // there is a character at [len].  work backwards until we find
+  // there is a character at [len]. work backwards until we find
   // the start of a unicode character.
-  uint32_t len = truncate_length;
-  auto dptr    = reinterpret_cast<const uint8_t*>(&str.data()[len]);
+  auto len        = truncate_length;
+  auto const dptr = &str.data()[len]);
   while (not strings::detail::is_begin_utf8_char(*dptr) && len > 0) {
     dptr--;
     len--;
@@ -1423,57 +1420,13 @@ __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
     if (is_min) {
       *res = str.data();
       return len;
-    } else {
-      memcpy(scratch, str.data(), len);
-      *res         = scratch;
-      uint8_t* ptr = static_cast<uint8_t*>(scratch);
-      for (int32_t i = len - 1; i >= 0; i--) {
-        if (increment_utf8_at(&ptr[i])) {  // true if didn't overflow
-          return len;
-        }
-      }
-      // cannot increment, so fall through
     }
-  }
-
-  // couldn't truncate, return original value
-  *res = str.data();
-  return str.size_bytes();
-}
-
-// truncates a binary array contained in str to at most
-// truncate_length bytes.  on return res will point to the
-// truncated array.  If is_min is false, then the final
-// byte (or bytes if there is overflow) will be
-// incremented so that the resultant string will still be
-// a valid maximum.  scratch is only used when is_min is
-// false, and must be at least truncate_length bytes in size.
-// returns the length of the truncated string.
-// NOTE: this will return the original array if it cannot
-// be truncated.
-__device__ uint32_t truncate_binary(device_span<uint8_t const> str,
-                                    const void** res,
-                                    bool is_min,
-                                    void* scratch,
-                                    size_type truncate_length)
-{
-  // if truncating a max value, then copy desired number of bytes,
-  // and then increment final byte.
-  // for min value can just return original buffer with new length.
-  uint32_t len = truncate_length;
-  if (is_min) {
-    *res = str.data();
-    return len;
-  } else {
     memcpy(scratch, str.data(), len);
     auto const ptr = static_cast<uint8_t*>(scratch);
     for (int32_t i = len - 1; i >= 0; i--) {
-      uint8_t elem = ptr[i];
-      elem++;
-      ptr[i] = elem;
-      if (elem != 0) {  // no overflow
+      if (increment_utf8_at(&ptr[i])) {  // true if no overflow
         *res = scratch;
-        return i + 1;
+        return len;
       }
     }
     // cannot increment, so fall through
@@ -1484,40 +1437,69 @@ __device__ uint32_t truncate_binary(device_span<uint8_t const> str,
   return str.size_bytes();
 }
 
-// truncates a the string or binary contained in str to at most
-// truncate_length bytes.  on return res will point to the
-// truncated string.  If is_min is false, then the final
-// character (or characters if there is overflow) will be
-// incremented so that the resultant string will still be
-// a valid maximum.  scratch is only used when is_min is
-// false, and must be at least truncate_length bytes in size.
-// returns the length of the truncated string.
-// NOTE: this will return the original string if it cannot
-// be truncated.
+/**
+ * @brief Truncate a binary array to at most truncate_length bytes.
+ *
+ * On return res will point to the truncated array. If is_min is false, then the final
+ * character (or characters if there is overflow) will be incremented so that the resultant
+ * array will still be a valid maximum. scratch is only used when is_min is false, and must be at
+ * least truncate_length bytes in size.
+ * NOTE: this will return the original array if it cannot be truncated.
+ *
+ * @return The length of the truncated array.
+ */
+__device__ uint32_t truncate_binary(device_span<uint8_t const> str,
+                                    const void** res,
+                                    bool is_min,
+                                    void* scratch,
+                                    size_type truncate_length)
+{
+  if (is_min) {
+    *res = str.data();
+    return truncate_length;
+  }
+  memcpy(scratch, str.data(), truncate_length);
+  auto const ptr = static_cast<uint8_t*>(scratch);
+  for (int32_t i = len - 1; i >= 0; i--) {
+    uint8_t elem = ptr[i];
+    elem++;
+    ptr[i] = elem;
+    if (elem != 0) {  // no overflow
+      *res = scratch;
+      return i + 1;
+    }
+  }
+
+  // couldn't truncate, return original value
+  *res = str.data();
+  return str.size_bytes();
+}
+
+/**
+ * @brief Truncate a UTF-8 string to at most truncate_length bytes.
+ */
 __device__ uint32_t truncate_string(
-  const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+  const statistics::byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
     *res = str.data();
     return str.size_bytes();
   }
 
-  // both UTF-8 and binary should be treated as bytes.  uint8_t for now,
-  // maybe std::byte in the future (excepth std::byte cannot be incremented).
-  auto const span =
-    device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes());
+  auto const span = device_span<uint8_t const>(str.data(), str.size_bytes());
 
-  // if str is all 8-bit chars, then can just use truncate_binary()
-  // TODO change if #11303 is merged.  test for valid utf8 since string
-  // columns might be used for binary data
+  // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
   if (str.size_bytes() != str.length() and is_valid_utf8_string(span)) {
     return truncate_utf8(span, res, is_min, scratch, truncate_length);
   }
   return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
 
-__device__ uint32_t truncate_binary(
-  const byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+/**
+ * @brief Truncate a binary array to at most truncate_length bytes.
+ */
+__device__ uint32_t truncate_byte_array(
+  const statistics::byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
     *res = str.data();
@@ -1555,9 +1537,11 @@ __device__ void get_extremum(const statistics_val* stats_val,
   }
 
   if (dtype == dtype_string) {
-    *len = truncate_string(stats_val->str_val, val, is_min, scratch, truncate_length);
+    // pass byte_val rather than str_val so we can use the uint8_t pointer, since UTF-8
+    // is bytes rather than chars.
+    *len = truncate_string(stats_val->byte_val, val, is_min, scratch, truncate_length);
   } else if (dtype == dtype_byte_array) {
-    *len = truncate_binary(stats_val->byte_val, val, is_min, scratch, truncate_length);
+    *len = truncate_byte_array(stats_val->byte_val, val, is_min, scratch, truncate_length);
   } else {
     *len = dtype_len;
     if (dtype == dtype_float32) {  // Convert from double to float32
