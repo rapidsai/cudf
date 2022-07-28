@@ -503,9 +503,12 @@ cdef class Column:
         data = None
         base_size = size + offset
         data_owner = owner
+
         if column_owner:
             data_owner = owner.base_data
+            mask_owner = mask_owner.base_mask
             base_size = owner.base_size
+
         if data_ptr:
             if data_owner is None:
                 data = Buffer(
@@ -523,18 +526,38 @@ cdef class Column:
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)
             )
 
-        mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
+        mask_ptr = <uintptr_t>(cv.null_mask())
         if mask_ptr:
-            if column_owner:
-                mask_owner = mask_owner.base_mask
             if mask_owner is None:
-                mask = Buffer(
-                    rmm.DeviceBuffer(
-                        ptr=mask_ptr,
-                        size=bitmask_allocation_size_bytes(size+offset)
+                if column_owner:
+                    # if we reached here, it means `owner` is a `Column`
+                    # that does not have a null mask, but `cv` thinks it
+                    # should have a null mask. This can happen in the
+                    # following sequence of events:
+                    #
+                    # 1) `cv` is constructed as a view into a
+                    #    `cudf::column` that is nullable (i.e., it has
+                    #    a null mask), but contains no nulls.
+                    # 2) `owner`, a `Column`, is constructed from the
+                    #    same `cudf::column`. Because `cudf::column`
+                    #    is memory owning, `owner` takes ownership of
+                    #    the memory owned by the
+                    #    `cudf::column`. Because the column has a null
+                    #    count of 0, it may choose to discard the null
+                    #    mask.
+                    # 3) Now, `cv` points to a discarded null mask.
+                    #
+                    # TL;DR: we should not include a null mask in the
+                    # result:
+                    mask = None
+                else:
+                    mask = Buffer(
+                        rmm.DeviceBuffer(
+                            ptr=mask_ptr,
+                            size=bitmask_allocation_size_bytes(size+offset)
+                        )
                     )
-                )
             else:
                 mask = Buffer(
                     data=mask_ptr,
