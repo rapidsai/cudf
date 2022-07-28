@@ -1494,7 +1494,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         Int64Index([200, 400, 50], dtype='int64')
         >>> idx.append(other)
         Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+
         append accepts list of Index objects
+
         >>> idx.append([other, other])
         Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
         """
