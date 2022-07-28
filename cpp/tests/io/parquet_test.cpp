@@ -4221,9 +4221,8 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
     // max 4-byte UTF8 (U+1FFFFF). should not truncate
     "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
 
-  // NOTE: UTF8 min is initialized with 0xf7bfbfbf.  Binary values larger
-  // than that will not become minimum value.  this will be sorted out
-  // when full binary support is available.  Waiting on #11160
+  // NOTE: UTF8 min is initialized with 0xf7bfbfbf. Binary values larger
+  // than that will not become minimum value.
   const char* truncated_min[] = {"yyyyyyyy",
                                  "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
                                  "\xf7\xbf\xbf\xbf",
