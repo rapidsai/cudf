@@ -1325,10 +1325,8 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
  */
 static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
 {
-  if (str.size_bytes() == 0) { return true; }
-
   auto idx = 0;
-  do {
+  while (idx < str.size_bytes()) {
     // UTF-8 character should start with valid beginning byte
     if (not strings::detail::is_valid_begin_utf8_char(str[idx])) { return false; }
     // subsequent bytes in the characater should be continuation bytes
@@ -1336,7 +1334,7 @@ static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
     for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
       if (not strings::detail::is_utf8_continuation_char(str[idx])) { return false; }
     }
-  } while (idx < str.size_bytes());
+  }
 
   return true;
 }
@@ -1363,7 +1361,7 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
   uint8_t mask  = 0xF8;
   uint8_t valid = 0xF0;
 
-  do {
+  while (mask != 0) {
     if ((elem & mask) == valid) {
       elem++;
       if ((elem & mask) != mask) {  // no overflow
@@ -1375,7 +1373,7 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
     }
     mask <<= 1;
     valid <<= 1;
-  } while (mask > 0);
+  }
 
   // should not reach here since we test for valid UTF-8 higher up the call chain
   CUDF_UNREACHABLE("Trying to increment non-utf8");
@@ -1392,11 +1390,11 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
  *
  * @return The length of the truncated string.
  */
-__device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
-                                  const void** res,
-                                  bool is_min,
-                                  void* scratch,
-                                  size_type truncate_length)
+static __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
+                                         const void** res,
+                                         bool is_min,
+                                         void* scratch,
+                                         size_type truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is a character at [len]. work backwards until we find
@@ -1440,17 +1438,17 @@ __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
  *
  * @return The length of the truncated array.
  */
-__device__ uint32_t truncate_binary(device_span<uint8_t const> str,
-                                    const void** res,
-                                    bool is_min,
-                                    void* scratch,
-                                    size_type truncate_length)
+static __device__ uint32_t truncate_binary(device_span<uint8_t const> arr,
+                                           const void** res,
+                                           bool is_min,
+                                           void* scratch,
+                                           size_type truncate_length)
 {
   if (is_min) {
-    *res = str.data();
+    *res = arr.data();
     return truncate_length;
   }
-  memcpy(scratch, str.data(), truncate_length);
+  memcpy(scratch, arr.data(), truncate_length);
   // increment last byte, working backwards if the byte overflows
   auto const ptr = static_cast<uint8_t*>(scratch);
   for (int32_t i = truncate_length - 1; i >= 0; i--) {
@@ -1462,14 +1460,18 @@ __device__ uint32_t truncate_binary(device_span<uint8_t const> str,
   }
 
   // couldn't truncate, return original value
-  *res = str.data();
-  return str.size_bytes();
+  *res = arr.data();
+  return arr.size_bytes();
 }
 
+// TODO (ets): the assumption here is that string columns might have UTF-8 or plain binary,
+// while binary columns are assumed to be binary and will be treated as such.  If this assumption
+// is incorrect, then truncate_byte_array() and truncate_string() should just be combined into
+// a single function.
 /**
  * @brief Truncate a UTF-8 string to at most truncate_length bytes.
  */
-__device__ uint32_t truncate_string(
+static __device__ uint32_t truncate_string(
   const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
@@ -1492,28 +1494,28 @@ __device__ uint32_t truncate_string(
 /**
  * @brief Truncate a binary array to at most truncate_length bytes.
  */
-__device__ uint32_t truncate_byte_array(const statistics::byte_array_view& str,
-                                        const void** res,
-                                        bool is_min,
-                                        void* scratch,
-                                        size_type truncate_length)
+static __device__ uint32_t truncate_byte_array(const statistics::byte_array_view& arr,
+                                               const void** res,
+                                               bool is_min,
+                                               void* scratch,
+                                               size_type truncate_length)
 {
-  if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
-    *res = str.data();
-    return str.size_bytes();
+  if (truncate_length == NO_TRUNC or arr.size_bytes() <= truncate_length) {
+    *res = arr.data();
+    return arr.size_bytes();
   }
 
-  device_span<uint8_t const> const span{str.data(), str.size_bytes()};
+  device_span<uint8_t const> const span{arr.data(), arr.size_bytes()};
   return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
 
-__device__ void get_extremum(const statistics_val* stats_val,
-                             statistics_dtype dtype,
-                             void* scratch,
-                             const void** val,
-                             uint32_t* len,
-                             bool is_min,
-                             size_type truncate_length)
+static __device__ void get_extremum(const statistics_val* stats_val,
+                                    statistics_dtype dtype,
+                                    void* scratch,
+                                    const void** val,
+                                    uint32_t* len,
+                                    bool is_min,
+                                    size_type truncate_length)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1552,22 +1554,22 @@ __device__ void get_extremum(const statistics_val* stats_val,
   }
 }
 
-__device__ void get_min(const statistics_val* stats_val,
-                        statistics_dtype dtype,
-                        void* scratch,
-                        const void** val,
-                        uint32_t* len,
-                        size_type truncate_length)
+static __device__ void get_min(const statistics_val* stats_val,
+                               statistics_dtype dtype,
+                               void* scratch,
+                               const void** val,
+                               uint32_t* len,
+                               size_type truncate_length)
 {
   return get_extremum(stats_val, dtype, scratch, val, len, true, truncate_length);
 }
 
-__device__ void get_max(const statistics_val* stats_val,
-                        statistics_dtype dtype,
-                        void* scratch,
-                        const void** val,
-                        uint32_t* len,
-                        size_type truncate_length)
+static __device__ void get_max(const statistics_val* stats_val,
+                               statistics_dtype dtype,
+                               void* scratch,
+                               const void** val,
+                               uint32_t* len,
+                               size_type truncate_length)
 {
   return get_extremum(stats_val, dtype, scratch, val, len, false, truncate_length);
 }
