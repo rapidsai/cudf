@@ -27,8 +27,6 @@ public class ParquetOptions extends ColumnFilterOptions {
 
   private final DType unit;
 
-
-
   private ParquetOptions(Builder builder) {
     super(builder);
     unit = builder.unit;

@@ -29,18 +29,26 @@ public abstract class ColumnFilterOptions {
   // Names of the columns to be returned (other columns are skipped)
   // If empty all columns are returned.
   private final String[] includeColumnNames;
+  private final Boolean[] binaryRead;
 
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
         new String[builder.includeColumnNames.size()]);
+    binaryRead = builder.binaryColumns.toArray(
+        new Boolean[builder.binaryColumns.size()]);
   }
 
   String[] getIncludeColumnNames() {
     return includeColumnNames;
   }
 
+  Boolean[] getIsBinaryRead() {
+    return binaryRead;
+  }
+
   public static class Builder<T extends Builder> {
     final List<String> includeColumnNames = new ArrayList<>();
+    final List<Boolean> binaryColumns = new ArrayList<>();
 
     /**
      * Include one or more specific columns.  Any column not included will not be read.
@@ -49,7 +57,19 @@ public abstract class ColumnFilterOptions {
     public T includeColumn(String... names) {
       for (String name : names) {
         includeColumnNames.add(name);
+        binaryColumns.add(false);
       }
+      return (T) this;
+    }
+
+    /**
+     * Include this column.
+     * @param name the name of the column
+     * @param isBinary whether this column is to be read in as binary
+     */
+    public T includeColumn(String name, boolean isBinary) {
+      includeColumnNames.add(name);
+      binaryColumns.add(isBinary);
       return (T) this;
     }
 
@@ -58,7 +78,10 @@ public abstract class ColumnFilterOptions {
      * @param names the name of the column, or more than one if you want.
      */
     public T includeColumn(Collection<String> names) {
-      includeColumnNames.addAll(names);
+      for (String name: names) {
+        includeColumnNames.add(name);
+        binaryColumns.add(false);
+      }
       return (T) this;
     }
   }
