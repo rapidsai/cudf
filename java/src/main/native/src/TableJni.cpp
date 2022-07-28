@@ -1467,7 +1467,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
     cudf::io::parquet_reader_options opts =
         builder.convert_strings_to_categories(false)
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
-            .convert_binary_to_strings(true)
             .build();
     return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
   }
