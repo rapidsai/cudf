@@ -18,8 +18,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/dremel.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -72,7 +72,7 @@ struct def_level_fn {
   }
 };
 
-dremel_data get_dremel_data(column_view const& h_col,
+dremel_data get_dremel_data(column_view h_col,
                             std::vector<uint8_t> nullability,
                             rmm::cuda_stream_view stream)
 {
