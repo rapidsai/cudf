@@ -82,6 +82,12 @@ from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
+from cudf.options import (
+    get_option,
+    set_option,
+    describe_option,
+)
+
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed
 except ImportError:
@@ -144,11 +150,13 @@ __all__ = [
     "concat",
     "cut",
     "date_range",
+    "describe_option",
     "factorize",
     "from_dataframe",
     "from_dlpack",
     "from_pandas",
     "get_dummies",
+    "get_option",
     "interval_range",
     "isclose",
     "melt",
@@ -163,6 +171,7 @@ __all__ = [
     "read_parquet",
     "read_text",
     "set_allocator",
+    "set_option",
     "testing",
     "to_datetime",
     "to_numeric",
