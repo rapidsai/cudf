@@ -4277,7 +4277,7 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
   auto seq_col3 = random_values<int8_t>(num_rows);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::no_nulls();
 
   column_wrapper<int> int_col{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<cudf::string_view> string_col{strings.begin(), strings.end()};

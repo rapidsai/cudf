@@ -188,6 +188,20 @@ class reader::impl {
                         size_t min_row,
                         size_t total_rows);
 
+  /**
+   * @brief Indicates if a column should be written as a byte array
+   *
+   * @param col column to check
+   * @return true if the column should be written as a byte array
+   * @return false if the column should be written as normal for that type
+   */
+  bool should_write_byte_array(int col)
+  {
+    return _output_columns[col].type.id() == type_id::STRING &&
+           _force_binary_columns_as_strings.has_value() &&
+           !_force_binary_columns_as_strings.value()[col];
+  }
+
  private:
   rmm::cuda_stream_view _stream;
   rmm::mr::device_memory_resource* _mr = nullptr;
