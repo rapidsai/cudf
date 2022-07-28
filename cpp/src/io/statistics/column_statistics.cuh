@@ -81,6 +81,12 @@ struct calculate_group_statistics_functor {
     // No-op for unsupported aggregation types
   }
 
+  template <typename T>
+  __device__ T get_element(stats_state_s const& s, uint32_t row)
+  {
+    return cudf::io::get_element<T>(*s.col.leaf_column, row);
+  }
+
   /**
    * @brief Iterates through the rows specified by statistics group and stores the combined
    * statistics into the statistics chunk.
@@ -90,7 +96,9 @@ struct calculate_group_statistics_functor {
    * @param t thread id
    */
   template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
+                             (IO == detail::io_file_format::ORC or
+                              !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
@@ -104,7 +112,7 @@ struct calculate_group_statistics_functor {
       uint32_t row = r + s.group.start_row;
       if (r < s.group.num_rows) {
         if (s.col.leaf_column->is_valid(row)) {
-          auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
+          auto converted_value = type_convert::convert(get_element<T>(s, row));
           chunk.reduce(converted_value);
         } else {
           chunk.null_count++;
@@ -115,6 +123,15 @@ struct calculate_group_statistics_functor {
     chunk = block_reduce(chunk, storage);
 
     if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+  }
+
+  template <typename T,
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
+                             IO == detail::io_file_format::PARQUET and
+                             std::is_same_v<T, list_view>>* = nullptr>
+  __device__ void operator()(stats_state_s& s, uint32_t t)
+  {
+    operator()<statistics::byte_array_view>(s, t);
   }
 
   template <
@@ -170,7 +187,9 @@ struct merge_group_statistics_functor {
   }
 
   template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
+                             (IO == detail::io_file_format::ORC or
+                              !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(merge_state_s& s,
                              const statistics_chunk* chunks,
                              const uint32_t num_chunks,
@@ -188,6 +207,18 @@ struct merge_group_statistics_functor {
     chunk = block_reduce(chunk, storage);
 
     if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+  }
+
+  template <typename T,
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
+                             IO == detail::io_file_format::PARQUET and
+                             std::is_same_v<T, list_view>>* = nullptr>
+  __device__ void operator()(merge_state_s& s,
+                             const statistics_chunk* chunks,
+                             const uint32_t num_chunks,
+                             uint32_t t)
+  {
+    operator()<statistics::byte_array_view>(s, chunks, num_chunks, t);
   }
 
   template <
