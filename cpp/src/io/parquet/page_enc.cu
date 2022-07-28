@@ -1321,29 +1321,27 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
  */
 static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
 {
-  bool ret      = true;
   size_type idx = 0;
 
-  if (str.size_bytes() > 0) {
-    do {
-      // check for valid beginning byte
-      if (strings::detail::is_valid_begin_utf8_char(str[idx])) {
-        auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
-        for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
-          // check for valid continuation byte
-          if (not strings::detail::is_utf8_continuation_char(str[idx])) {
-            ret = false;
-            break;
-          }
+  if (str.size_bytes() == 0) return true;
+
+  do {
+    // check for valid beginning byte
+    if (strings::detail::is_valid_begin_utf8_char(str[idx])) {
+      auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
+      for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
+        // check for valid continuation byte
+        if (not strings::detail::is_utf8_continuation_char(str[idx])) {
+          return false;
         }
-      } else {
-        ret = false;
       }
-    } while (ret && idx < str.size_bytes());
-  }
+    } else {
+      return false;
+    }
+  } while (idx < str.size_bytes());
 
   // check that str ends at a UTF-8 char boundary
-  return ret and idx == str.size_bytes();
+  return idx == str.size_bytes();
 }
 
 /**
