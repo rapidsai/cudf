@@ -1325,29 +1325,24 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
  */
 static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
 {
-  size_type idx = 0;
+  if (str.size_bytes() == 0) { return true; }
 
-  if (str.size_bytes() == 0) return true;
-
+  auto idx = 0;
   do {
-    // check for valid beginning byte
-    if (strings::detail::is_valid_begin_utf8_char(str[idx])) {
-      auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
-      for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
-        // check for valid continuation byte
-        if (not strings::detail::is_utf8_continuation_char(str[idx])) { return false; }
-      }
-    } else {
-      return false;
+    // UTF-8 character should start with valid beginning byte
+    if (not strings::detail::is_valid_begin_utf8_char(str[idx])) { return false; }
+    // subsequent bytes in the characater should be continuation bytes
+    auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
+    for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
+      if (not strings::detail::is_utf8_continuation_char(str[idx])) { return false; }
     }
   } while (idx < str.size_bytes());
 
-  // check that str ends at a UTF-8 char boundary
-  return idx == str.size_bytes();
+  return true;
 }
 
 /**
- * @brief increment part of a UTF-8 character.
+ * @brief Increment part of a UTF-8 character.
  *
  * Attempt to increment the byte pointed to by ptr, which is assumed to be part of a valid UTF-8
  * character. Returns true if successful, false if the increment caused an overflow, in which case
@@ -1364,8 +1359,7 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
   //  0b1110vvvv 3 byte
   //  0b11110vvv 4 byte
 
-  // TODO starting at 4 byte and working down.  Should
-  // probably start low and work higher.
+  // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
   uint8_t mask  = 0xF8;
   uint8_t valid = 0xF0;
 
@@ -1383,8 +1377,7 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
     valid <<= 1;
   } while (mask > 0);
 
-  // should not reach since we test for valid UTF-8
-  // higher up
+  // should not reach here since we test for valid UTF-8 higher up the call chain
   CUDF_UNREACHABLE("Trying to increment non-utf8");
 }
 
@@ -1394,8 +1387,8 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
  * On return res will point to the truncated string. If is_min is false, then the final
  * character (or characters if there is overflow) will be incremented so that the resultant
  * string will still be a valid maximum. scratch is only used when is_min is false, and must be at
- * least truncate_length bytes in size.
- * NOTE: this will return the original string if it cannot be truncated.
+ * least truncate_length bytes in size. If the string cannot be truncated, leave it untouched and
+ * return the original length.
  *
  * @return The length of the truncated string.
  */
@@ -1420,6 +1413,7 @@ __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
       return len;
     }
     memcpy(scratch, str.data(), len);
+    // increment last byte, working backwards if the byte overflows
     auto const ptr = static_cast<uint8_t*>(scratch);
     for (int32_t i = len - 1; i >= 0; i--) {
       if (increment_utf8_at(&ptr[i])) {  // true if no overflow
@@ -1441,8 +1435,8 @@ __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
  * On return res will point to the truncated array. If is_min is false, then the final
  * character (or characters if there is overflow) will be incremented so that the resultant
  * array will still be a valid maximum. scratch is only used when is_min is false, and must be at
- * least truncate_length bytes in size.
- * NOTE: this will return the original array if it cannot be truncated.
+ * least truncate_length bytes in size. If the array cannot be truncated, leave it untouched and
+ * return the original length.
  *
  * @return The length of the truncated array.
  */
@@ -1457,12 +1451,11 @@ __device__ uint32_t truncate_binary(device_span<uint8_t const> str,
     return truncate_length;
   }
   memcpy(scratch, str.data(), truncate_length);
+  // increment last byte, working backwards if the byte overflows
   auto const ptr = static_cast<uint8_t*>(scratch);
   for (int32_t i = truncate_length - 1; i >= 0; i--) {
-    uint8_t elem = ptr[i];
-    elem++;
-    ptr[i] = elem;
-    if (elem != 0) {  // no overflow
+    ptr[i]++;
+    if (ptr[i] != 0) {  // no overflow
       *res = scratch;
       return i + 1;
     }
@@ -1490,7 +1483,7 @@ __device__ uint32_t truncate_string(
     device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes());
 
   // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
-  if (str.size_bytes() != str.length() and is_valid_utf8_string(span)) {
+  if (str.size_bytes() != str.length() and is_valid_utf8_string(span.first(truncate_length))) {
     return truncate_utf8(span, res, is_min, scratch, truncate_length);
   }
   return truncate_binary(span, res, is_min, scratch, truncate_length);
@@ -1510,7 +1503,7 @@ __device__ uint32_t truncate_byte_array(const statistics::byte_array_view& str,
     return str.size_bytes();
   }
 
-  auto const span = device_span<uint8_t const>(str.data(), str.size_bytes());
+  device_span<uint8_t const> const span{str.data(), str.size_bytes()};
   return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
 
@@ -1848,12 +1841,10 @@ static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
   return BoundaryOrder::UNORDERED;
 }
 
-// align ptr to an 8-byte boundary.  address returned will be
-// <= ptr.
+// align ptr to an 8-byte boundary. address returned will be <= ptr.
 static constexpr __device__ void* align8(void* ptr)
 {
-  // it's ok to round down because we have an extra 7 bytes
-  // in the buffer
+  // it's ok to round down because we have an extra 7 bytes in the buffer
   auto algn = 3 & reinterpret_cast<std::uintptr_t>(ptr);
   return static_cast<char*>(ptr) - algn;
 }
