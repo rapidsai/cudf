@@ -206,40 +206,6 @@ constexpr bool is_valid_begin_utf8_char(uint8_t byte)
          (byte & 0xF8) == 0xF0;
 }
 
-/**
- * @brief Test to see if a char array contains a valid UTF-8 string.
- *
- * @param str Char array to test.
- * @param length Length of array.
- * @return true if the array contains a valid UTF-8 string.
- */
-constexpr bool is_valid_utf8_string(const char* str, size_type length)
-{
-  bool ret      = true;
-  size_type idx = 0;
-
-  if (length > 0) {
-    do {
-      // check for valid beginning byte
-      if (is_valid_begin_utf8_char(str[idx])) {
-        size_type width = bytes_in_utf8_byte(str[idx++]);
-        for (size_type i = 1; i < width && idx < length; i++, idx++) {
-          // check for valid continuation byte
-          if (not is_utf8_continuation_char(str[idx])) {
-            ret = false;
-            break;
-          }
-        }
-      } else {
-        ret = false;
-      }
-    } while (ret && idx < length);
-  }
-
-  // check that str ends at a UTF-8 char boundary
-  return ret and idx == length;
-}
-
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf

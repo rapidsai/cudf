@@ -1314,6 +1314,39 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
 }
 
 /**
+ * @brief Test to see if an array contains a valid UTF-8 string.
+ *
+ * @param str device_span containing array to test.
+ * @return true if the array contains a valid UTF-8 string.
+ */
+static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
+{
+  bool ret      = true;
+  size_type idx = 0;
+
+  if (str.size_bytes() > 0) {
+    do {
+      // check for valid beginning byte
+      if (strings::detail::is_valid_begin_utf8_char(str[idx])) {
+        auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
+        for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
+          // check for valid continuation byte
+          if (not strings::detail::is_utf8_continuation_char(str[idx])) {
+            ret = false;
+            break;
+          }
+        }
+      } else {
+        ret = false;
+      }
+    } while (ret && idx < str.size_bytes());
+  }
+
+  // check that str ends at a UTF-8 char boundary
+  return ret and idx == str.size_bytes();
+}
+
+/**
  * @brief increment part of a UTF-8 character.
  *
  * Attempt to increment the byte pointed to by ptr, which is assumed
@@ -1475,8 +1508,7 @@ __device__ uint32_t truncate_string(
   // if str is all 8-bit chars, then can just use truncate_binary()
   // TODO change if #11303 is merged.  test for valid utf8 since string
   // columns might be used for binary data
-  if (str.size_bytes() != str.length() and
-      strings::detail::is_valid_utf8_string(str.data(), str.size_bytes())) {
+  if (str.size_bytes() != str.length() and is_valid_utf8_string(span)) {
     return truncate_utf8(span, res, is_min, scratch, truncate_length);
   }
   return truncate_binary(span, res, is_min, scratch, truncate_length);
