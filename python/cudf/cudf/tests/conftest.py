@@ -144,15 +144,17 @@ def pytest_sessionfinish(session, exitstatus):
         pass
 
 
-@pytest.fixture(scope="module")
-def default_32bit_integer():
-    cudf.set_option("default_integer_bitwidth", 32)
-    yield
-    cudf.set_option("default_integer_bitwidth", 64)
+@pytest.fixture(params=[32, 64])
+def default_integer_bitwidth(request):
+    old_default = cudf.get_option("default_integer_bitwidth")
+    cudf.set_option("default_integer_bitwidth", request.param)
+    yield request.param
+    cudf.set_option("default_integer_bitwidth", old_default)
 
 
-@pytest.fixture(scope="module")
-def default_32bit_float():
-    cudf.set_option("default_float_bitwidth", 32)
-    yield
-    cudf.set_option("default_float_bitwidth", 64)
+@pytest.fixture(params=[32, 64])
+def default_float_bitwidth(request):
+    old_default = cudf.get_option("default_float_bitwidth")
+    cudf.set_option("default_float_bitwidth", request.param)
+    yield request.param
+    cudf.set_option("default_float_bitwidth", old_default)
