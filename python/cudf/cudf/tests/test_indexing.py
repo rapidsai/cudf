@@ -1683,3 +1683,12 @@ def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
             "(10, 3) could not be broadcast to indexing "
             "result of shape (10, 2)",
         )
+
+
+def test_iloc_single_row_with_nullable_column():
+    # see https://github.com/rapidsai/cudf/issues/11349
+    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.4]})
+    df = cudf.from_pandas(pdf)
+
+    df.iloc[0]  # before the fix for #11349 this would segfault
+    assert_eq(pdf.iloc[0], df.iloc[0])
