@@ -251,6 +251,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
+
         This will involve changing type of Index object
         to StringIndex but it is the responsibility of the `__repr__`
         methods using this method to replace or handle representation
