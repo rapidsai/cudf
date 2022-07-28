@@ -22,6 +22,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -669,7 +670,7 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                stream);
 }
 
-std::pair<std::unique_ptr<column>, std::vector<std::string>> json_column_to_cudf_column(
+std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column(
   json_column const& json_col, device_span<SymbolT const> d_input, rmm::cuda_stream_view stream)
 {
   std::unique_ptr<column> cudf_col;
@@ -703,16 +704,17 @@ std::pair<std::unique_ptr<column>, std::vector<std::string>> json_column_to_cudf
     case json_col_t::StructColumn: {
       // Create empty struct column
       std::vector<std::unique_ptr<column>> child_columns;
-      std::vector<std::string> column_names{};
+      std::vector<column_name_info> column_names{};
       size_type num_rows{-1};
       // Create children columns
       for (auto const& col : json_col.child_columns) {
-        column_names.push_back(col.first);
-        auto const& child_col     = col.second;
-        auto [child_column, name] = json_column_to_cudf_column(child_col, d_input, stream);
-        num_rows                  = child_column->size();
+        column_names.emplace_back(col.first);
+        auto const& child_col      = col.second;
+        auto [child_column, names] = json_column_to_cudf_column(child_col, d_input, stream);
+        num_rows                   = child_column->size();
         // TODO add to struct column
         child_columns.push_back(std::move(child_column));
+        column_names.back().children = names;
       }
       return {make_structs_column(num_rows,
                                   std::move(child_columns),
@@ -724,7 +726,8 @@ std::pair<std::unique_ptr<column>, std::vector<std::string>> json_column_to_cudf
     }
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size();
-      std::vector<std::string> cn{};
+      std::vector<column_name_info> column_names{};
+      column_names.emplace_back(json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets(num_rows, stream);
       cudaMemcpyAsync(d_offsets.data(),
@@ -735,33 +738,63 @@ std::pair<std::unique_ptr<column>, std::vector<std::string>> json_column_to_cudf
       auto offsets_column =
         std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
       // Create children column
-      auto [child_column, name] =
+      auto [child_column, names] =
         json_column_to_cudf_column(json_col.child_columns.begin()->second, d_input, stream);
+      column_names.back().children = names;
       return {make_lists_column(num_rows - 1,
                                 std::move(offsets_column),
                                 std::move(child_column),
                                 cudf::UNKNOWN_NULL_COUNT,
                                 rmm::device_buffer{},
                                 stream),
-              std::move(cn)};
+              std::move(column_names)};
       break;
     }
     default: CUDF_FAIL("Unsupported column type, yet to be implemented"); break;
   }
-  std::vector<std::string> cn{};
-  return {std::move(cudf_col), std::move(cn)};
+
+  return {std::move(cudf_col), std::vector<column_name_info>{}};
 }
 
-std::unique_ptr<column> parse_json_to_columns(host_span<SymbolT const> input,
-                                              rmm::cuda_stream_view stream)
+table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
+                                          rmm::cuda_stream_view stream)
 {
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input{input.size(), stream};
   cudaMemcpyAsync(
     d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
+
+  // Get internal JSON column
   auto root_column = get_json_columns(input, {d_input.data(), d_input.size()}, stream);
-  return std::move(
-    json_column_to_cudf_column(root_column, {d_input.data(), d_input.size()}, stream).first);
+
+  // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
+  auto constexpr single_child_col_count = 1;
+  CUDF_EXPECTS(root_column.type == json_col_t::ListColumn and
+                 root_column.child_columns.size() == single_child_col_count and
+                 root_column.child_columns.begin()->second.type == json_col_t::StructColumn,
+               "Currently the nested JSON parser only supports an array of (nested) objects");
+
+  // Slice off the root list column, which has only a single row that contains all the structs
+  auto const& root_struct_col = root_column.child_columns.begin()->second;
+
+  // Initialize meta data to be populated while recursing through the tree of columns
+  std::vector<std::unique_ptr<column>> out_columns;
+  std::vector<column_name_info> out_column_names;
+
+  // Iterate over the struct's child columns and convert to cudf column
+  for (auto const& [col_name, json_col] : root_struct_col.child_columns) {
+    // Insert this columns name into the schema
+    out_column_names.emplace_back(col_name);
+
+    // Get this JSON column's cudf column and schema info
+    auto [cudf_col, col_name_info] =
+      json_column_to_cudf_column(json_col, {d_input.data(), d_input.size()}, stream);
+    out_column_names.back().children = std::move(col_name_info);
+    out_columns.emplace_back(std::move(cudf_col));
+  }
+
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
+                             {{}, out_column_names}};
 }
 
 json_column get_json_columns(host_span<SymbolT const> input,

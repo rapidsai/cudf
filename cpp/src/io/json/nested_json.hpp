@@ -260,8 +260,8 @@ json_column get_json_columns(host_span<SymbolT const> input,
  * @param stream The CUDA stream to which kernels are dispatched
  * @return cudf::column of the given input
  */
-std::unique_ptr<column> parse_json_to_columns(host_span<SymbolT const> input,
-                                              rmm::cuda_stream_view stream);
+table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
+                                          rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

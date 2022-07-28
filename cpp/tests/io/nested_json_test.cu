@@ -348,21 +348,27 @@ TEST_F(JsonTest, ExtractColumn)
 
   std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
-  auto cudf_column = nested_json::detail::parse_json_to_columns(
+  auto const cudf_table = nested_json::detail::parse_json_to_columns(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
 
+  auto const expected_col_count  = 2;
+  auto const first_column_index  = 0;
+  auto const second_column_index = 1;
+  EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
+
   std::cout << std::endl << "=== PARSED COLUMN ===" << std::endl;
-  cudf::test::print(*cudf_column);
-  cudf::column_view cudf_struct_view =
-    cudf_column->child(cudf::lists_column_view::child_column_index);
+  for (std::size_t col = 0; col < expected_col_count; col++) {
+    std::cout << std::left << std::setw(20) << cudf_table.metadata.schema_info[col].name << ": ";
+    cudf::test::print(cudf_table.tbl->get_column(col));
+  }
 
   auto expected_col1            = cudf::test::strings_column_wrapper({"0.0", "0.1", "0.2"});
   auto expected_col2            = cudf::test::strings_column_wrapper({"1.0", "1.1", "1.2"});
-  cudf::column_view parsed_col1 = cudf_struct_view.child(0);
+  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
   std::cout << "*parsed_col1:\n";
   cudf::test::print(parsed_col1);
-  cudf::column_view parsed_col2 = cudf_struct_view.child(1);
+  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
   std::cout << "*parsed_col2:\n";
   cudf::test::print(parsed_col2);
