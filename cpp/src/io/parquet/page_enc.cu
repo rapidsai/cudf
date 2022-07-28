@@ -1516,7 +1516,6 @@ __device__ uint32_t truncate_string(
   return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
 
-#if 0  // waiting on #11303
 __device__ uint32_t truncate_binary(
   const byte_array_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
@@ -1528,7 +1527,6 @@ __device__ uint32_t truncate_binary(
   auto const span = device_span<uint8_t const>(str.data(), str.size_bytes());
   return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
-#endif
 
 __device__ void get_extremum(const statistics_val* stats_val,
                              statistics_dtype dtype,
@@ -1559,8 +1557,7 @@ __device__ void get_extremum(const statistics_val* stats_val,
   if (dtype == dtype_string) {
     *len = truncate_string(stats_val->str_val, val, is_min, scratch, truncate_length);
   } else if (dtype == dtype_byte_array) {
-    *len = stats_val->byte_val.length;
-    *val = stats_val->byte_val.ptr;
+    *len = truncate_binary(stats_val->byte_val, val, is_min, scratch, truncate_length);
   } else {
     *len = dtype_len;
     if (dtype == dtype_float32) {  // Convert from double to float32
