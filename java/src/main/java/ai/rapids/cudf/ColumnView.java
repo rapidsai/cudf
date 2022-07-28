@@ -3265,7 +3265,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
-
    * @param pattern The regex pattern
    * @param idx The regex group index
    * @return A new column vector of extracted matches
