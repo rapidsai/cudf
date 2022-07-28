@@ -136,8 +136,8 @@ __global__ void __launch_bounds__(block_size)
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
 
-    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, &s->col);
-    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, &s->col);
+    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, s->col);
+    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
     s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {
@@ -915,8 +915,8 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    s->page_start_val  = row_to_value_idx(s->page.start_row, &s->col);
-    s->chunk_start_val = row_to_value_idx(s->ck.start_row, &s->col);
+    s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {

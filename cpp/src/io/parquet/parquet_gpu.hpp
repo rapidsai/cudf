@@ -299,10 +299,10 @@ inline uint32_t __device__ int32_logical_len(type_id id)
  * they only have one immediate child.
  */
 inline size_type __device__ row_to_value_idx(size_type idx,
-                                             parquet_column_device_view const* parquet_col)
+                                             parquet_column_device_view const& parquet_col)
 {
-  if (!parquet_col->output_as_byte_array) {
-    auto col = *parquet_col->parent_column;
+  if (!parquet_col.output_as_byte_array) {
+    auto col = *parquet_col.parent_column;
     while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
       if (col.type().id() == type_id::STRUCT) {
         idx += col.offset();
