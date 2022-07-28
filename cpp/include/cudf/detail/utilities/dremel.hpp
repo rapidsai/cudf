@@ -28,11 +28,15 @@ namespace cudf::detail {
  * @see the `dremel_data` struct for more info.
  */
 struct dremel_device_view {
-  size_type* offsets;
-  uint8_t* rep_levels;
-  uint8_t* def_levels;
-  size_type leaf_data_size;
-  uint8_t max_def_level;
+  // TODO: These elements are default initializable to support default
+  // initialization of the object. This is currently exploited to create views
+  // that will never actually be used. We should consider whether this
+  // represents a serious issue that should be worked around more robustly.
+  size_type const* offsets{};
+  uint8_t const* rep_levels{};
+  uint8_t const* def_levels{};
+  size_type const leaf_data_size{};
+  uint8_t const max_def_level{};
 };
 
 /**
@@ -45,10 +49,10 @@ struct dremel_data {
   rmm::device_uvector<uint8_t> rep_level;
   rmm::device_uvector<uint8_t> def_level;
 
-  size_type leaf_data_size;
-  uint8_t max_def_level;
+  size_type const leaf_data_size;
+  uint8_t const max_def_level;
 
-  operator dremel_device_view()
+  operator dremel_device_view() const
   {
     return dremel_device_view{
       dremel_offsets.data(), rep_level.data(), def_level.data(), leaf_data_size, max_def_level};
@@ -69,8 +73,10 @@ struct dremel_data {
  * Dremel encoding is built around two concepts, the repetition and definition levels.
  * Since describing them thoroughly is out of scope for this docstring, here are a couple of
  * blogs that provide useful background:
+ *
  * http://www.goldsborough.me/distributed-systems/2019/05/18/21-09-00-a_look_at_dremel/
  * https://akshays-blog.medium.com/wrapping-head-around-repetition-and-definition-levels-in-dremel-powering-bigquery-c1a33c9695da
+ * https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet
  *
  * The remainder of this documentation assumes familiarity with the Dremel concepts.
  *
@@ -188,7 +194,7 @@ struct dremel_data {
  *
  * @return A struct containing dremel data
  */
-dremel_data get_dremel_data(column_view h_col,
+dremel_data get_dremel_data(column_view const& h_col,
                             std::vector<uint8_t> nullability,
                             rmm::cuda_stream_view stream);
 

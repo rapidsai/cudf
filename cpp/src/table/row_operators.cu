@@ -272,6 +272,9 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
       dremel_data.push_back(detail::get_dremel_data(col, {}, stream));
       dremel_device_views.push_back(dremel_data.back());
     } else {
+      // TODO: Note that this constructs a device view that is in an invalid
+      // state, i.e. dereferencing any of its pointer members will lead to a
+      // seg fault. We may instead wish to create a vector of optionals.
       dremel_device_views.emplace_back();
     }
   }

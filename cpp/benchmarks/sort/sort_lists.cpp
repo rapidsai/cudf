@@ -27,7 +27,7 @@ void nvbench_sort_lists(nvbench::state& state)
 
   const size_t size_bytes(state.get_int64("size_bytes"));
   const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("depth"))};
-  const double null_frequency{state.get_float64("null_frequency")};
+  auto const null_frequency{state.get_float64("null_frequency")};
 
   data_profile table_profile;
   table_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);

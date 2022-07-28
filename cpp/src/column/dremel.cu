@@ -72,7 +72,7 @@ struct def_level_fn {
   }
 };
 
-dremel_data get_dremel_data(column_view h_col,
+dremel_data get_dremel_data(column_view const& h_col,
                             std::vector<uint8_t> nullability,
                             rmm::cuda_stream_view stream)
 {
