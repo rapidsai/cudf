@@ -781,8 +781,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnView structs2 = ColumnView.makeStructView(structs1, doubles);
          ColumnView structs3 = ColumnView.makeStructView(bools);
          ColumnView structs = ColumnView.makeStructView(structs2, floats, structs3);
-         ColumnVector expected = ColumnVector.spark32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools})) {
-         ColumnVector result = ColumnVector.spark32BitMurmurHash3(1868, new ColumnView[]{structs});
+         ColumnVector expected = ColumnVector.spark32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools});
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(1868, new ColumnView[]{structs})) {
       assertColumnsAreEqual(expected, result);
     }
   }
