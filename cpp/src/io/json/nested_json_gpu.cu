@@ -564,7 +564,7 @@ struct JSONToStackOp {
 
 namespace detail {
 
-void get_stack_context(device_span<SymbolT const> d_json_in,
+void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream)
 {
@@ -576,11 +576,11 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  hostdevice_vector<SymbolOffsetT> d_num_stack_ops(single_item, stream);
+  hostdevice_vector<SymbolOffsetT> num_stack_ops(single_item, stream);
 
   // Sequence of stack symbols and their position in the original input (sparse representation)
-  rmm::device_uvector<StackSymbolT> d_stack_ops{d_json_in.size(), stream};
-  rmm::device_uvector<SymbolOffsetT> d_stack_op_indices{d_json_in.size(), stream};
+  rmm::device_uvector<StackSymbolT> stack_ops{json_in.size(), stream};
+  rmm::device_uvector<SymbolOffsetT> stack_op_indices{json_in.size(), stream};
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   using ToStackOpFstT =
@@ -595,46 +595,46 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
   // structs/lists
-  json_to_stack_ops_fst.Transduce(d_json_in.begin(),
-                                  static_cast<SymbolOffsetT>(d_json_in.size()),
-                                  d_stack_ops.data(),
-                                  d_stack_op_indices.data(),
-                                  d_num_stack_ops.device_ptr(),
+  json_to_stack_ops_fst.Transduce(json_in.begin(),
+                                  static_cast<SymbolOffsetT>(json_in.size()),
+                                  stack_ops.data(),
+                                  stack_op_indices.data(),
+                                  num_stack_ops.device_ptr(),
                                   to_stack_op::start_state,
                                   stream);
 
   // stack operations with indices are converted to top of the stack for each character in the input
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
-    d_stack_ops.data(),
-    device_span<SymbolOffsetT>{d_stack_op_indices.data(), d_stack_op_indices.size()},
+    stack_ops.data(),
+    device_span<SymbolOffsetT>{stack_op_indices.data(), stack_op_indices.size()},
     JSONToStackOp{},
     d_top_of_stack,
     root_symbol,
     read_symbol,
-    d_json_in.size(),
+    json_in.size(),
     stream);
 }
 
 // TODO: return pair of device_uvector instead of passing pre-allocated pointers.
-void get_token_stream(device_span<SymbolT const> d_json_in,
+void get_token_stream(device_span<SymbolT const> json_in,
                       PdaTokenT* d_tokens,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream)
 {
   // Memory holding the top-of-stack stack context for the input
-  rmm::device_uvector<StackSymbolT> d_top_of_stack{d_json_in.size(), stream};
+  rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
   // Identify what is the stack context for each input character (is it: JSON-root, struct, or list)
-  get_stack_context(d_json_in, d_top_of_stack.data(), stream);
+  get_stack_context(json_in, stack_op_indices.data(), stream);
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
-  rmm::device_uvector<PdaSymbolGroupIdT> d_pda_sgids{d_json_in.size(), stream};
-  auto zip_in = thrust::make_zip_iterator(d_json_in.data(), d_top_of_stack.data());
+  rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
+  auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
   thrust::transform(rmm::exec_policy(stream),
                     zip_in,
-                    zip_in + d_json_in.size(),
-                    d_pda_sgids.data(),
+                    zip_in + json_in.size(),
+                    pda_sgids.data(),
                     tokenizer_pda::PdaSymbolToSymbolGroupId{});
 
   // PDA transducer alias
@@ -648,8 +648,8 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                        stream};
 
   // Perform a PDA-transducer pass
-  json_to_tokens_fst.Transduce(d_pda_sgids.begin(),
-                               static_cast<SymbolOffsetT>(d_json_in.size()),
+  json_to_tokens_fst.Transduce(pda_sgids.begin(),
+                               static_cast<SymbolOffsetT>(json_in.size()),
                                d_tokens,
                                d_tokens_indices,
                                d_num_written_tokens,
