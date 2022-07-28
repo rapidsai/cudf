@@ -734,20 +734,31 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
                                                 {'F', 'r', 'i', 'd', 'a', 'y'},
                                                 {'F', 'r', 'i', 'd', 'a', 'y'},
                                                 {'F', 'u', 'n', 'd', 'a', 'y'}};
+  cudf::test::lists_column_wrapper<int8_t> col4{
+    {'M', 'o', 'n', 'd', 'a', 'y'},
+    {'W', -56, -123, 'd', 'n', -56, -123, 's', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'M', 'o', 'n', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'F', 'u', 'n', 'd', 'a', 'y'}};
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col0.release());
   cols.push_back(col1.release());
   cols.push_back(col2.release());
   cols.push_back(col3.release());
+  cols.push_back(col4.release());
   auto write_tbl = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(4, write_tbl->num_columns());
+  EXPECT_EQ(5, write_tbl->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*write_tbl);
   expected_metadata.column_metadata[0].set_name("col_single").set_output_as_binary(true);
-  expected_metadata.column_metadata[1].set_name("col_string");
+  expected_metadata.column_metadata[1].set_name("col_string").set_output_as_binary(true);
   expected_metadata.column_metadata[2].set_name("col_another").set_output_as_binary(true);
   expected_metadata.column_metadata[3].set_name("col_binary");
+  expected_metadata.column_metadata[4].set_name("col_binary");
 
   auto filepath = temp_env->get_temp_filepath("BinaryStrings.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -757,12 +768,13 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({false, false, false, false, false, false, false, false});
+      .convert_binary_to_strings({false, false, false, false, false, false, false, false, false});
   auto result = cudf_io::read_parquet(in_opts);
 
   auto original_cols = write_tbl->release();
   original_cols[0]   = std::make_unique<column>(original_cols[3]->view());
   original_cols[2]   = std::make_unique<column>(original_cols[3]->view());
+  original_cols[1]   = std::make_unique<column>(original_cols[4]->view());
   auto expected      = cudf::table(std::move(original_cols));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected.view(), result.tbl->view());
