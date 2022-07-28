@@ -34,6 +34,7 @@ from cudf.api.types import (
     is_dtype_equal,
     is_interval_dtype,
     is_list_like,
+    is_scalar,
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
@@ -1555,6 +1556,47 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
         )
+
+    def isin(self, values):
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index
+            Sought values.
+
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
+        """
+
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
+        return self._values.isin(values).values
 
 
 class NumericIndex(GenericIndex):
