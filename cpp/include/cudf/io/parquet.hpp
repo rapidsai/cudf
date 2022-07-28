@@ -121,12 +121,13 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
-   * @brief Returns true/false depending on whether binary data should be converted to strings or
-   * not.
+   * @brief Returns optional vector of true/false values depending on whether binary data should be
+   * converted to strings or not.
    *
-   * @return `true` if binary data should be converted to strings
+   * @return vector with ith value `true` if binary data should be converted to strings for the ith
+   * column
    */
-  [[nodiscard]] std::optional<std::vector<bool>> is_enabled_convert_binary_to_strings() const
+  [[nodiscard]] std::optional<std::vector<bool>> get_convert_binary_to_strings() const
   {
     return _convert_binary_to_strings;
   }
@@ -210,7 +211,10 @@ class parquet_reader_options {
    * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
    * Note default is to convert to string columns.
    */
-  void set_convert_binary_to_strings(std::vector<bool> val) { _convert_binary_to_strings = val; }
+  void set_convert_binary_to_strings(std::vector<bool> val)
+  {
+    _convert_binary_to_strings = std::move(val);
+  }
 
   /**
    * @brief Sets number of rows to skip.
