@@ -50,6 +50,27 @@ constexpr bool is_utf8_continuation_char(uint8_t byte)
 constexpr bool is_begin_utf8_char(uint8_t byte) { return not is_utf8_continuation_char(byte); }
 
 /**
+ * @brief This will return true if the passed in byte could be the start of
+ * a valid UTF-8 character.
+ *
+ * This differs from is_begin_utf8_char(uint8_t) in that byte may not be valid
+ * UTF-8, so a more rigorous check is performed.
+ *
+ * @param byte The byte to be tested
+ * @return true if this can be the first byte of a character
+ */
+constexpr bool is_valid_begin_utf8_char(uint8_t byte)
+{
+  // to be the first byte of a valid (up to 4 byte) UTF-8 char, byte must be one of:
+  //  0b0vvvvvvv a 1 byte character
+  //  0b110vvvvv start of a 2 byte character
+  //  0b1110vvvv start of a 3 byte character
+  //  0b11110vvv start of a 4 byte character
+  return (byte & 0x80) == 0 || (byte & 0xE0) == 0xC0 || (byte & 0xF0) == 0xE0 ||
+         (byte & 0xF8) == 0xF0;
+}
+
+/**
  * @brief Returns the number of bytes in the specified character.
  *
  * @param character Single character
@@ -186,24 +207,6 @@ constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
     utf8 |= (unsigned)0xF0808080;
   }
   return utf8;
-}
-
-/**
- * @brief This will return true if the passed in byte could be the start of
- * a valid UTF-8 character.
- *
- * @param byte The byte to be tested
- * @return true if this can be the first byte of a character
- */
-constexpr bool is_valid_begin_utf8_char(uint8_t byte)
-{
-  // to be the first byte of a valid (up to 4 byte) UTF-8 char, byte must be one of:
-  //  0b0vvvvvvv a 1 byte character
-  //  0b110vvvvv start of a 2 byte character
-  //  0b1110vvvv start of a 3 byte character
-  //  0b11110vvv start of a 4 byte character
-  return (byte & 0x80) == 0 || (byte & 0xE0) == 0xC0 || (byte & 0xF0) == 0xE0 ||
-         (byte & 0xF8) == 0xF0;
 }
 
 }  // namespace detail
