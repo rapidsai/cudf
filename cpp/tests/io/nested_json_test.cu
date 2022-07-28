@@ -289,53 +289,6 @@ TEST_F(JsonTest, TokenStream)
   }
 }
 
-TEST_F(JsonTest, Simple)
-{
-  using nested_json::PdaTokenT;
-  using nested_json::SymbolOffsetT;
-  using nested_json::SymbolT;
-
-  // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
-
-  //
-  // std::string input = R"( ["foo", null, "bar"] )";
-  // std::string input = R"( [{"a":0.0, "c":{"c0":"0.2.0"}}, {"b":1.1}] )";
-  // std::string input = R"( [{"a":0.0}, {"b":1.1, "c":{"c0":"1.2.0"}}] )";
-  std::string input = R"( [{"a":0.0}, {"b":1.1, "c":{"c0":[[1],null,[2]]}}] )";
-  // std::string input =
-  // R"( [{ "col0":[{"field1": 1, "field2": 2 }, null, {"field1": 3, "field2": 4 }, {"field1": 5,
-  // "field2": 6 }], "col1":"foo" }] )";
-  // std::string input = R"( [ {"col1": 1, "col2": 2 }, {"col1": 3, "col2": 4 }, {"col1": 5,
-  // "col2": 6 }] )"; std::string input = R"( [ {"col1": 1, "col2": 2 }, null, {"col1": 3, "col2":
-  // 4 },
-  // {"col1": 5, "col2": 6 }] )"; std::string input = R"( [[1], [2], null, [3], [4]] )";
-
-  // String / value
-  // std::string input = R"( " Foobar" )";
-  // std::string input = R"(  123.456  )";
-  // std::string input = R"(  123.456)";
-  // std::string input = R"(null)";
-  // std::string input = R"( [null, [2], null, [3], [4]] )"; // <= will fail because col will be
-  // inferred as string/val column
-
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input{input.size(), stream_view};
-  cudaMemcpyAsync(d_input.data(),
-                  input.data(),
-                  input.size() * sizeof(input[0]),
-                  cudaMemcpyHostToDevice,
-                  stream.value());
-
-  // Get the JSON's tree representation
-  auto json_root_col = nested_json::detail::get_json_columns(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, d_input, stream_view);
-
-  std::cout << input << "\n";
-  print_column(input, json_root_col);
-}
-
 TEST_F(JsonTest, ExtractColumn)
 {
   using nested_json::PdaTokenT;
