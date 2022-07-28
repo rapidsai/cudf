@@ -326,7 +326,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& convert_binary_to_strings(std::vector<bool> val)
   {
-    options._convert_binary_to_strings = val;
+    options._convert_binary_to_strings = std::move(val);
     return *this;
   }
 
