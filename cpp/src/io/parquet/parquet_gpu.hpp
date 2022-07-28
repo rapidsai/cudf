@@ -45,9 +45,8 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
-// Total number of unsigned 16 bit values
-constexpr size_type MAX_DICT_SIZE =
-  std::numeric_limits<uint16_t>::max() - std::numeric_limits<uint16_t>::min() + 1;
+// Total number of unsigned 24 bit values
+constexpr size_type MAX_DICT_SIZE = (1 << 24) - 1;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -237,8 +236,8 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  Type physical_type;      //!< physical data type
-  uint8_t converted_type;  //!< logical data type
+  Type physical_type;            //!< physical data type
+  ConvertedType converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
   constexpr uint8_t num_def_level_bits() { return level_bits & 0xf; }
@@ -298,8 +297,10 @@ inline uint32_t __device__ int32_logical_len(type_id id)
  * Only works in the context of parquet writer where struct columns are previously modified s.t.
  * they only have one immediate child.
  */
-inline size_type __device__ row_to_value_idx(size_type idx, column_device_view col)
+inline size_type __device__ row_to_value_idx(size_type idx,
+                                             parquet_column_device_view const& parquet_col)
 {
+  auto col = *parquet_col.parent_column;
   while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
     if (col.type().id() == type_id::STRUCT) {
       idx += col.offset();
@@ -355,9 +356,11 @@ struct EncColumnChunk {
     uniq_data_size;  //!< Size of dictionary page (set of all unique values) if dict enc is used
   size_type plain_data_size;  //!< Size of data in this chunk if plain encoding is used
   size_type* dict_data;       //!< Dictionary data (unique row indices)
-  uint16_t* dict_index;   //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
+  size_type* dict_index;  //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
+  uint8_t* column_index_blob;  //!< Binary blob containing encoded column index for this chunk
+  uint32_t column_index_size;  //!< Size of column index blob
 };
 
 /**
@@ -413,13 +416,15 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  *
  * Note : this function is where output device memory is allocated for nested columns.
  *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in,out] input_columns Input column information
- * @param[in,out] output_columns Output column information
- * @param[in] num_rows Maximum number of rows to read
- * @param[in] min_rows crop all rows below min_row
- * @param[in] stream Cuda stream
+ * @param pages All pages to be decoded
+ * @param chunks All chunks to be decoded
+ * @param input_columns Input column information
+ * @param output_columns Output column information
+ * @param num_rows Maximum number of rows to read
+ * @param min_rows crop all rows below min_row
+ * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+ * bounds
+ * @param stream Cuda stream
  */
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           hostdevice_vector<ColumnChunkDesc> const& chunks,
@@ -427,6 +432,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
                           size_t min_row,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
@@ -631,6 +637,17 @@ void EncodePageHeaders(device_span<EncPage> pages,
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel to calculate ColumnIndex information per chunk
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] column_stats Page-level statistics to be encoded
+ * @param[in] stream CUDA stream to use
+ */
+void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats,
+                         rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace parquet
