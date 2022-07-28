@@ -276,31 +276,6 @@ std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
 }
 }  // namespace
 
-std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::table>&& flattened,
-                                                      table_view const& blueprint)
-{
-  // Bail, if LISTs are present.
-  auto const has_lists = std::any_of(blueprint.begin(), blueprint.end(), is_or_has_nested_lists);
-  CUDF_EXPECTS(not has_lists, "Unflattening LIST columns is not supported.");
-
-  // If there are no STRUCTs, unflattening is a NOOP.
-  auto const has_structs = std::any_of(blueprint.begin(), blueprint.end(), is_struct);
-  if (not has_structs) {
-    return std::move(flattened);  // Unchanged.
-  }
-
-  // There be struct columns.
-  // Note: Requires null vectors for all struct input columns.
-  auto flattened_columns = flattened->release();
-  auto current_idx       = column_index_t{0};
-
-  auto unflattening_iter =
-    thrust::make_transform_iterator(blueprint.begin(), unflattener{flattened_columns, current_idx});
-
-  return std::make_unique<cudf::table>(
-    vector_of_columns{unflattening_iter, unflattening_iter + blueprint.num_columns()});
-}
-
 // Helper function to superimpose validity of parent struct
 // over the specified member (child) column.
 void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
