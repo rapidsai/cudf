@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "cudf/detail/utilities/assert.cuh"
 #include "parquet_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
@@ -1077,23 +1078,25 @@ __global__ void __launch_bounds__(128, 8)
             memcpy(dst + pos, &v, 8);
           } break;
           case BYTE_ARRAY: {
-            if (type_id == type_id::STRING) {
-              auto str     = s->col.leaf_column->element<string_view>(val_idx);
-              uint32_t v   = len - 4;  // string length
-              dst[pos + 0] = v;
-              dst[pos + 1] = v >> 8;
-              dst[pos + 2] = v >> 16;
-              dst[pos + 3] = v >> 24;
-              if (v != 0) memcpy(dst + pos + 4, str.data(), v);
-            } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
-              auto bytes   = get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx);
-              uint32_t v   = len - 4;  // byte length
-              dst[pos + 0] = v;
-              dst[pos + 1] = v >> 8;
-              dst[pos + 2] = v >> 16;
-              dst[pos + 3] = v >> 24;
-              if (v != 0) memcpy(dst + pos + 4, bytes.data(), v);
-            }
+            auto bytes = [](cudf::type_id const type_id,
+                            column_device_view const* leaf_column,
+                            uint32_t const val_idx) -> void const* {
+              switch (type_id) {
+                case type_id::STRING:
+                  return reinterpret_cast<void const*>(
+                    leaf_column->element<string_view>(val_idx).data());
+                case type_id::LIST:
+                  return reinterpret_cast<void const*>(
+                    get_element<statistics::byte_array_view>(*(leaf_column), val_idx).data());
+                default: CUDF_UNREACHABLE("invalid type id for byte array writing!");
+              }
+            }(type_id, s->col.leaf_column, val_idx);
+            uint32_t v   = len - 4;  // string length
+            dst[pos + 0] = v;
+            dst[pos + 1] = v >> 8;
+            dst[pos + 2] = v >> 16;
+            dst[pos + 3] = v >> 24;
+            if (v != 0) memcpy(dst + pos + 4, bytes, v);
           } break;
           case FIXED_LEN_BYTE_ARRAY: {
             if (type_id == type_id::DECIMAL128) {

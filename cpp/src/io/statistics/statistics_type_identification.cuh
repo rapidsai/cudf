@@ -140,7 +140,7 @@ class extrema_type {
   // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
-  // byte_array_view         -> byte_array_view
+  // byte_array_view   -> byte_array_view
   // timestamp_[T]     -> int64_t
 
  public:

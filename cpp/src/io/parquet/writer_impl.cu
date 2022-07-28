@@ -879,6 +879,8 @@ column_view parquet_column_view::leaf_column_view() const
     }
     return col;
   } else {
+    // TODO: investigate why the leaf node is computed twice instead of using the schema leaf node
+    // for everything
     return *schema_node.leaf_column;
   }
 }
