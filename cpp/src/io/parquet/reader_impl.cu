@@ -58,10 +58,6 @@ namespace parquet {
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-// bit space we are reserving in column_buffer::user_data
-constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
-constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
-
 namespace {
 
 parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const& logical)
@@ -630,10 +626,11 @@ class aggregate_reader_metadata {
     // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
     // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
     // not a child of "struct1" then the function will return false for "struct1"
-    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&)> build_column =
-      [&](column_name_info const* col_name_info,
-          int schema_idx,
-          std::vector<column_buffer>& out_col_array) {
+    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&, bool)>
+      build_column = [&](column_name_info const* col_name_info,
+                         int schema_idx,
+                         std::vector<column_buffer>& out_col_array,
+                         bool has_list_parent) {
         if (schema_idx < 0) { return false; }
         auto const& schema_elem = get_schema(schema_idx);
 
@@ -643,7 +640,8 @@ class aggregate_reader_metadata {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-          return build_column(child_col_name_info, schema_elem.children_idx[0], out_col_array);
+          return build_column(
+            child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
         }
 
         // if we're at the root, this is a new output column
@@ -654,6 +652,7 @@ class aggregate_reader_metadata {
         auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+        if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
         // store the index of this element if inserted in out_col_array
         nesting.push_back(static_cast<int>(out_col_array.size()));
         output_col.name = schema_elem.name;
@@ -664,15 +663,18 @@ class aggregate_reader_metadata {
           // add all children of schema_elem.
           // At this point, we can no longer pass a col_name_info to build_column
           for (int idx = 0; idx < schema_elem.num_children; idx++) {
-            path_is_valid |=
-              build_column(nullptr, schema_elem.children_idx[idx], output_col.children);
+            path_is_valid |= build_column(nullptr,
+                                          schema_elem.children_idx[idx],
+                                          output_col.children,
+                                          has_list_parent || col_type == type_id::LIST);
           }
         } else {
           for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
             path_is_valid |=
               build_column(&col_name_info->children[idx],
                            find_schema_child(schema_elem, col_name_info->children[idx].name),
-                           output_col.children);
+                           output_col.children,
+                           has_list_parent || col_type == type_id::LIST);
           }
         }
 
@@ -690,6 +692,9 @@ class aggregate_reader_metadata {
             auto const element_dtype = to_data_type(element_type, schema_elem);
 
             column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            if (has_list_parent || col_type == type_id::LIST) {
+              element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
+            }
             // store the index of this element
             nesting.push_back(static_cast<int>(output_col.children.size()));
             // TODO: not sure if we should assign a name or leave it blank
@@ -736,7 +741,7 @@ class aggregate_reader_metadata {
     auto const& root = get_schema(0);
     if (not use_names.has_value()) {
       for (auto const& schema_idx : root.children_idx) {
-        build_column(nullptr, schema_idx, output_columns);
+        build_column(nullptr, schema_idx, output_columns, false);
         output_column_schemas.push_back(schema_idx);
       }
     } else {
@@ -840,7 +845,7 @@ class aggregate_reader_metadata {
       }
       for (auto& col : selected_columns) {
         auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
-        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns);
+        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
         if (valid_column) output_column_schemas.push_back(top_level_col_schema_idx);
       }
     }

@@ -9,6 +9,7 @@ import numbers
 import pickle
 import re
 import sys
+import textwrap
 import warnings
 from collections import abc, defaultdict
 from typing import (
@@ -66,7 +67,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.groupby.groupby import DataFrameGroupBy
+from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
     BaseIndex,
     Index,
@@ -616,6 +617,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _accessors: Set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
+    _groupby = DataFrameGroupBy
+    _resampler = DataFrameResampler
 
     @_cudf_nvtx_annotate
     def __init__(
@@ -3824,7 +3827,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @_cudf_nvtx_annotate
-    @copy_docstring(DataFrameGroupBy)
+    @docutils.doc_apply(
+        groupby_doc_template.format(
+            ret=textwrap.dedent(
+                """
+                Returns
+                -------
+                DataFrameGroupBy
+                    Returns a DataFrameGroupBy object that contains
+                    information about the groups.
+                """
+            )
+        )
+    )
     def groupby(
         self,
         by=None,
@@ -3837,40 +3852,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         observed=False,
         dropna=True,
     ):
-        if axis not in (0, "index"):
-            raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
-
-        if observed is not False:
-            raise NotImplementedError(
-                "observed parameter is not yet implemented"
-            )
-
-        if by is None and level is None:
-            raise TypeError(
-                "groupby() requires either by or level to be specified."
-            )
-
-        return (
-            DataFrameResampler(self, by=by)
-            if isinstance(by, cudf.Grouper) and by.freq
-            else DataFrameGroupBy(
-                self,
-                by=by,
-                level=level,
-                as_index=as_index,
-                dropna=dropna,
-                sort=sort,
-            )
+        return super().groupby(
+            by,
+            axis,
+            level,
+            as_index,
+            sort,
+            group_keys,
+            squeeze,
+            observed,
+            dropna,
         )
 
     def query(self, expr, local_dict=None):
@@ -5217,12 +5208,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If q is a float, a Series will be returned where the index is
             the columns of self and the values are the quantiles.
 
-        Notes
-        -----
-        One notable difference from Pandas is when DataFrame is of
-        non-numeric types and result is expected to be a Series in case of
-        Pandas. cuDF will return a DataFrame as it doesn't support mixed
-        types under Series.
+        .. pandas-compat::
+            **DataFrame.quantile**
+
+            One notable difference from Pandas is when DataFrame is of
+            non-numeric types and result is expected to be a Series in case of
+            Pandas. cuDF will return a DataFrame as it doesn't support mixed
+            types under Series.
 
         Examples
         --------
@@ -5248,47 +5240,41 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
+        data_df = self
         if numeric_only:
-            data_df = self.select_dtypes(
+            data_df = data_df.select_dtypes(
                 include=[np.number], exclude=["datetime64", "timedelta64"]
             )
-        else:
-            data_df = self
 
         if columns is None:
             columns = data_df._data.names
 
-        result = DataFrame()
-
+        # Ensure that qs is non-scalar so that we always get a column back.
+        qs = [q] if is_scalar(q) else q
+        result = {}
         for k in data_df._data.names:
-
             if k in columns:
-                res = data_df[k].quantile(
-                    q,
+                ser = data_df[k]
+                res = ser.quantile(
+                    qs,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
-                )
-                if (
-                    not isinstance(
-                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
-                    )
-                    and len(res) == 0
-                ):
+                )._column
+                if len(res) == 0:
                     res = column.column_empty_like(
-                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
+                        qs, dtype=ser.dtype, masked=True, newsize=len(qs)
                     )
-                result[k] = column.as_column(res)
+                result[k] = res
 
+        result = DataFrame._from_data(result)
         if isinstance(q, numbers.Number) and numeric_only:
-            result = result.fillna(np.nan)
-            result = result.iloc[0]
+            result = result.fillna(np.nan).iloc[0]
             result.index = data_df._data.to_pandas_index()
             result.name = q
             return result
         else:
-            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
-            result.index = q
+            result.index = list(map(float, qs))
             return result
 
     @_cudf_nvtx_annotate
