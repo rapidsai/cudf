@@ -1078,7 +1078,7 @@ __global__ void __launch_bounds__(128, 8)
             memcpy(dst + pos, &v, 8);
           } break;
           case BYTE_ARRAY: {
-            auto bytes = [](cudf::type_id const type_id,
+            auto const bytes = [](cudf::type_id const type_id,
                             column_device_view const* leaf_column,
                             uint32_t const val_idx) -> void const* {
               switch (type_id) {
