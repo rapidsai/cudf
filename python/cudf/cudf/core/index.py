@@ -247,6 +247,22 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        if self._values.has_nulls():
+            return cudf.Index(
+                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+            )
+        else:
+            return self
+
     def is_numeric(self):
         return True
 
