@@ -301,22 +301,20 @@ inline uint32_t __device__ int32_logical_len(type_id id)
 inline size_type __device__ row_to_value_idx(size_type idx,
                                              parquet_column_device_view const& parquet_col)
 {
-  if (!parquet_col.output_as_byte_array) {
-    auto col = *parquet_col.parent_column;
-    while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-      if (col.type().id() == type_id::STRUCT) {
-        idx += col.offset();
-        col = col.child(0);
-      } else {
-        auto list_col = cudf::detail::lists_column_device_view(col);
-        auto child    = list_col.child();
-        if (parquet_col->output_as_byte_array &&
-            (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
-          break;
-        }
-        idx = list_col.offset_at(idx);
-        col = child;
+  auto col = *parquet_col.parent_column;
+  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+    if (col.type().id() == type_id::STRUCT) {
+      idx += col.offset();
+      col = col.child(0);
+    } else {
+      auto list_col = cudf::detail::lists_column_device_view(col);
+      auto child    = list_col.child();
+      if (parquet_col.output_as_byte_array &&
+          (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+        break;
       }
+      idx = list_col.offset_at(idx);
+      col = child;
     }
   }
   return idx;
