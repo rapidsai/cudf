@@ -385,6 +385,7 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/set_operations.cu
   src/lists/stream_compaction/apply_boolean_mask.cu
   src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
