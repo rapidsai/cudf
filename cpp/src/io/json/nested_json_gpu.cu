@@ -38,7 +38,7 @@ using StateT = char;
 /**
  * @brief Definition of the DFA's states
  */
-enum DFA_STATES : StateT {
+enum dfa_states : StateT {
   // The state being active while being outside of a string. When encountering an opening bracket
   // or curly brace, we push it onto the stack. When encountering a closing bracket or brace, we
   // pop from the stack.
@@ -59,15 +59,15 @@ enum DFA_STATES : StateT {
 /**
  * @brief Definition of the symbol groups
  */
-enum class DFASymbolGroupID : uint32_t {
-  OpenBrace,         ///< Opening brace SG: {
-  OpenBracket,       ///< Opening bracket SG: [
-  CloseBrace,        ///< Closing brace SG: }
-  CloseBracket,      ///< Closing bracket SG: ]
-  Quote,             ///< Quote character SG: "
-  Escape,            ///< Escape character SG: '\'
-  Other,             ///< SG implicitly matching all other characters
-  NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
+enum class dfa_symbol_group_id : uint32_t {
+  OPENING_BRACE_SG,    ///< Opening brace SG: {
+  OPENING_BRACKET_SG,  ///< Opening bracket SG: [
+  CLOSING_BRACKET_SG,  ///< Closing brace SG: }
+  CLOSING_BRACKET,     ///< Closing bracket SG: ]
+  QUOTE_CHAR,          ///< Quote character SG: "
+  ESCAPE_CHAR,         ///< Escape character SG: '\'
+  OTHER_SYMBOLS,       ///< SG implicitly matching all other characters
+  NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
 };
 
 // The i-th string representing all the characters of a symbol group
@@ -82,7 +82,7 @@ const std::vector<std::vector<StateT>> transition_table = {
 
 // Translation table (i.e., for each transition, what are the symbols that we output)
 const std::vector<std::vector<std::vector<char>>> translation_table = {
-  /* IN_STATE        {      [      }      ]     "  \   OTHER */
+  /* IN_STATE        {      [      }      ]      "      \    OTHER */
   /* TT_OOS    */ {{'{'}, {'['}, {'}'}, {']'}, {'x'}, {'x'}, {'x'}},
   /* TT_STR    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}},
   /* TT_ESC    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}};
@@ -91,9 +91,7 @@ const std::vector<std::vector<std::vector<char>>> translation_table = {
 constexpr auto start_state = TT_OOS;
 }  // namespace to_stack_op
 
-//------------------------------------------------------------------------------
-// JSON TOKENIZER PUSHDOWN AUTOMATON
-//------------------------------------------------------------------------------
+// JSON tokenizer pushdown automaton
 namespace tokenizer_pda {
 
 // Type used to represent the target state in the transition table
@@ -102,27 +100,27 @@ using StateT = char;
 /**
  * @brief Symbol groups for the input alphabet for the pushdown automaton
  */
-enum SGID : PdaSymbolGroupIdT {
+enum symbol_group_id : PdaSymbolGroupIdT {
   /// Opening brace
-  OBC,
+  OPENING_BRACE_SG,
   /// Opening bracket
-  OBT,
+  OPENING_BRACKET_SG,
   /// Closing brace
-  CBC,
+  CLOSING_BRACE_SG,
   /// Closing bracket
-  CBT,
+  CLOSING_BRACKET_SG,
   /// Quote
-  QTE,
+  QUOTE_SG,
   /// Escape
-  ESC,
+  ESCAPE_SG,
   /// Comma
-  CMA,
+  COMMA_SG,
   /// Colon
-  CLN,
+  COLON_SG,
   /// Whitespace
-  WSP,
+  WHITE_SPACE_SG,
   /// Other (any input symbol not assigned to one of the above symbol groups)
-  OTR,
+  OTHER_SG,
   /// Total number of symbol groups amongst which to differentiate
   NUM_PDA_INPUT_SGS
 };
@@ -130,7 +128,7 @@ enum SGID : PdaSymbolGroupIdT {
 /**
  * @brief Symbols in the stack alphabet
  */
-enum STACK_SGID : PdaStackSymbolGroupIdT {
+enum stack_symbol_group_id : PdaStackSymbolGroupIdT {
   /// Symbol representing the JSON-root (i.e., we're at nesting level '0')
   STACK_ROOT = 0,
 
@@ -149,13 +147,38 @@ constexpr PdaSymbolGroupIdT NUM_PDA_SGIDS = NUM_PDA_INPUT_SGS * NUM_STACK_SGS;
 
 /// Mapping a input symbol to the symbol group id
 static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
-  OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, WSP, WSP, OTR, OTR, WSP, OTR, OTR, OTR, OTR, OTR,
-  OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, WSP, OTR, QTE, OTR, OTR, OTR,
-  OTR, OTR, OTR, OTR, OTR, OTR, CMA, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR,
-  OTR, CLN, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR,
-  OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OBT, ESC, CBT, OTR,
-  OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR,
-  OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OTR, OBC, OTR, CBC, OTR};
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       WHITE_SPACE_SG,     WHITE_SPACE_SG, OTHER_SG,
+  OTHER_SG,       WHITE_SPACE_SG,     OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  WHITE_SPACE_SG, OTHER_SG,           QUOTE_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  COMMA_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           COLON_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OPENING_BRACKET_SG,
+  ESCAPE_SG,      CLOSING_BRACKET_SG, OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
+  OTHER_SG,       OTHER_SG,           OTHER_SG,       OPENING_BRACE_SG,
+  OTHER_SG,       CLOSING_BRACE_SG,   OTHER_SG};
 
 /**
  * @brief Maps a (top-of-stack symbol, input symbol)-pair to a symbol group id of the deterministic
@@ -219,7 +242,7 @@ enum pda_state_t : StateT {
 constexpr auto start_state = PD_BOV;
 
 // Identity symbol to symbol group lookup table
-const std::vector<std::vector<char>> pda_sgids{
+std::vector<std::vector<char>> const pda_sgids{
   {0},  {1},  {2},  {3},  {4},  {5},  {6},  {7},  {8},  {9},  {10}, {11}, {12}, {13}, {14},
   {15}, {16}, {17}, {18}, {19}, {20}, {21}, {22}, {23}, {24}, {25}, {26}, {27}, {28}, {29}};
 
@@ -528,7 +551,6 @@ std::vector<std::vector<std::vector<char>>> get_translation_table()
 /**
  * @brief Function object used to filter for brackets and braces that represent push and pop
  * operations
- *
  */
 struct JSONToStackOp {
   template <typename StackSymbolT>
@@ -564,8 +586,8 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
   using ToStackOpFstT =
     cudf::io::fst::detail::Dfa<StackSymbolT,
                                static_cast<int32_t>(
-                                 to_stack_op::DFASymbolGroupID::NUM_SYMBOL_GROUPS),
-                               to_stack_op::DFA_STATES::TT_NUM_STATES>;
+                                 to_stack_op::dfa_symbol_group_id::NUM_SYMBOL_GROUPS),
+                               to_stack_op::dfa_states::TT_NUM_STATES>;
   ToStackOpFstT json_to_stack_ops_fst{to_stack_op::symbol_groups,
                                       to_stack_op::transition_table,
                                       to_stack_op::translation_table,
