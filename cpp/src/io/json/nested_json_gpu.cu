@@ -39,6 +39,28 @@
 //#define NJP_DEBUG_PRINT
 #endif
 
+namespace {
+
+/**
+ * @brief While parsing the token stream, we use a stack of tree_nodes to maintain all the
+ * information about the data path that is relevant.
+ */
+struct tree_node {
+  // The column that this node is associated with
+  cudf::io::json::json_column* column;
+
+  // The row offset that this node belongs to within the given column
+  uint32_t row_index;
+
+  // Selected child column
+  // E.g., if this is a struct node, and we subsequently encountered the field name "a", then this
+  // point's to the struct's "a" child column
+  cudf::io::json::json_column* current_selected_col = nullptr;
+
+  std::size_t num_children = 0;
+};
+}  // namespace
+
 namespace cudf::io::json {
 
 //------------------------------------------------------------------------------
@@ -647,25 +669,6 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                stream);
 }
 
-/**
- * @brief A tree node contains all the information of the data
- *
- */
-struct tree_node {
-  // The column that this node is associated with
-  json_column* column;
-
-  // The row offset that this node belongs to within the given column
-  uint32_t row_index;
-
-  // Selected child column
-  // E.g., if this is a struct node, and we subsequently encountered the field name "a", then this
-  // point's to the struct's "a" child column
-  json_column* current_selected_col = nullptr;
-
-  std::size_t num_children = 0;
-};
-
 std::pair<std::unique_ptr<column>, std::vector<std::string>> json_column_to_cudf_column(
   json_column const& json_col, device_span<SymbolT const> d_input, rmm::cuda_stream_view stream)
 {
@@ -748,10 +751,7 @@ std::pair<std::unique_ptr<column>, std::vector<std::string>> json_column_to_cudf
   std::vector<std::string> cn{};
   return {std::move(cudf_col), std::move(cn)};
 }
-// TODO cleanup.
-json_column get_json_columns2(host_span<SymbolT const> input,
-                              device_span<SymbolT const> d_input,
-                              rmm::cuda_stream_view stream);
+
 std::unique_ptr<column> parse_json_to_columns(host_span<SymbolT const> input,
                                               rmm::cuda_stream_view stream)
 {
@@ -759,31 +759,14 @@ std::unique_ptr<column> parse_json_to_columns(host_span<SymbolT const> input,
   rmm::device_uvector<SymbolT> d_input{input.size(), stream};
   cudaMemcpyAsync(
     d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
-  auto root_column = get_json_columns2(input, {d_input.data(), d_input.size()}, stream);
+  auto root_column = get_json_columns(input, {d_input.data(), d_input.size()}, stream);
   return std::move(
     json_column_to_cudf_column(root_column, {d_input.data(), d_input.size()}, stream).first);
 }
 
-/**
- * RULES:
- *
- * if first node type of a column is:
- * --> a list: it becomes list column
- * --> a struct: it becomes struct column
- * --> else (e.g., 'null', '123', '"foo"'): it becomes a string column
- */
-json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_view stream)
-{
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input{input.size(), stream};
-  cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
-  return get_json_columns2(input, {d_input.data(), d_input.size()}, stream);
-}
-
-json_column get_json_columns2(host_span<SymbolT const> input,
-                              device_span<SymbolT const> d_input,
-                              rmm::cuda_stream_view stream)
+json_column get_json_columns(host_span<SymbolT const> input,
+                             device_span<SymbolT const> d_input,
+                             rmm::cuda_stream_view stream)
 {
   // Default name for a list's child column
   std::string const list_child_name = "items";

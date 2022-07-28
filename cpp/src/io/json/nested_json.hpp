@@ -244,11 +244,14 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
- * @param input The JSON input
+ * @param input The JSON input in host memory
+ * @param d_input The JSON input in device memory
  * @param stream The CUDA stream to which kernels are dispatched
  * @return
  */
-json_column get_json_columns(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
+json_column get_json_columns(host_span<SymbolT const> input,
+                             device_span<SymbolT const> d_input,
+                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates a cudf::column of the given input.

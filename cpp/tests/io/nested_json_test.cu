@@ -15,6 +15,7 @@
  */
 
 #include "cudf_test/column_wrapper.hpp"
+
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -27,13 +28,11 @@
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-#include <stack>
 #include <string>
 
 namespace nested_json = cudf::io::json;
 
 namespace {
-
 // Forward declaration
 void print_column(std::string const& input,
                   nested_json::json_column const& column,
@@ -62,6 +61,9 @@ void print_json_string_col(std::string const& input,
   }
 }
 
+/**
+ * @brief Prints a list column.
+ */
 void print_json_list_col(std::string const& input,
                          nested_json::json_column const& column,
                          uint32_t indent = 0)
@@ -83,6 +85,9 @@ void print_json_list_col(std::string const& input,
   }
 }
 
+/**
+ * @brief Prints a struct column.
+ */
 void print_json_struct_col(std::string const& input,
                            nested_json::json_column const& column,
                            uint32_t indent = 0)
@@ -104,6 +109,9 @@ void print_json_struct_col(std::string const& input,
   }
 }
 
+/**
+ * @brief Prints the column's data and recurses through and prints all the child columns.
+ */
 void print_column(std::string const& input, nested_json::json_column const& column, uint32_t indent)
 {
   switch (column.type) {
@@ -114,7 +122,6 @@ void print_column(std::string const& input, nested_json::json_column const& colu
     default: break;
   }
 }
-
 }  // namespace
 
 // Base test fixture for tests
@@ -289,8 +296,7 @@ TEST_F(JsonTest, Simple)
   using nested_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   //
@@ -314,9 +320,17 @@ TEST_F(JsonTest, Simple)
   // std::string input = R"( [null, [2], null, [3], [4]] )"; // <= will fail because col will be
   // inferred as string/val column
 
+  // Allocate device memory for the JSON input & copy over to device
+  rmm::device_uvector<SymbolT> d_input{input.size(), stream_view};
+  cudaMemcpyAsync(d_input.data(),
+                  input.data(),
+                  input.size() * sizeof(input[0]),
+                  cudaMemcpyHostToDevice,
+                  stream.value());
+
   // Get the JSON's tree representation
   auto json_root_col = nested_json::detail::get_json_columns(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, d_input, stream_view);
 
   std::cout << input << "\n";
   print_column(input, json_root_col);
@@ -329,8 +343,7 @@ TEST_F(JsonTest, ExtractColumn)
   using nested_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
