@@ -853,10 +853,9 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.rep_values    = _rep_level.data();
     desc.def_values    = _def_level.data();
   }
-  desc.num_rows             = cudf_col.size();
-  desc.physical_type        = physical_type();
-  desc.converted_type       = converted_type();
-  desc.output_as_byte_array = schema_node.output_as_byte_array;
+  desc.num_rows       = cudf_col.size();
+  desc.physical_type  = physical_type();
+  desc.converted_type = converted_type();
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());

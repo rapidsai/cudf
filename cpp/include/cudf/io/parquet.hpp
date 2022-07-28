@@ -125,7 +125,8 @@ class parquet_reader_options {
    * converted to strings or not.
    *
    * @return vector with ith value `true` if binary data should be converted to strings for the ith
-   * column
+   * column. Will return std::nullopt if the user did not set this option, which defaults to all
+   * binary data being converted to strings.
    */
   [[nodiscard]] std::optional<std::vector<bool>> get_convert_binary_to_strings() const
   {

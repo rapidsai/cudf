@@ -301,6 +301,8 @@ inline uint32_t __device__ int32_logical_len(type_id id)
 inline size_type __device__ row_to_value_idx(size_type idx,
                                              parquet_column_device_view const& parquet_col)
 {
+  // with a byte array, we can't go all the way down to the leaf node, but instead we want to leave
+  // the size at the parent level because we are writing out parent row byte arrays.
   if (!parquet_col.output_as_byte_array) {
     auto col = *parquet_col.parent_column;
     while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {

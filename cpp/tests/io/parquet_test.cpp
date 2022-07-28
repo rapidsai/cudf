@@ -4276,7 +4276,7 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::no_nulls();
 
   column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
@@ -4307,6 +4307,14 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 
+  // test default options result the same as all true
+  cudf_io::parquet_reader_options binary_in_default_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  result = cudf_io::read_parquet(binary_in_default_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+
+  // test all false results in binary
   cudf_io::parquet_reader_options binary_in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
       .convert_binary_to_strings({false, false, false, false, false, false, false, false});

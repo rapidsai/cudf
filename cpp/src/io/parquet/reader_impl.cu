@@ -1767,9 +1767,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       auto make_output_column = [&](column_buffer& buf, column_name_info* schema_info, int i) {
         auto col = make_column(buf, schema_info, _stream, _mr);
-        if (_output_columns[i].type.id() == type_id::STRING &&
-            _force_binary_columns_as_strings.has_value() &&
-            !_force_binary_columns_as_strings.value()[i]) {
+        if (should_write_byte_array(i)) {
           auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
           if (schema.converted_type == parquet::UNKNOWN) {
             auto const num_rows = col->size();
