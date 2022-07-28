@@ -287,8 +287,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(
-            array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
+        elif (
+            isinstance(array, pa.ExtensionArray)
+            and array.type.extension_name == "pandas.interval"
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 

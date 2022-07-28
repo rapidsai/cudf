@@ -655,13 +655,8 @@ def from_dataframe(
     if not hasattr(df, "__dataframe__"):
         raise ValueError("`df` does not support __dataframe__")
 
-    return _from_dataframe(df.__dataframe__(allow_copy=allow_copy))
+    df = df.__dataframe__(allow_copy=allow_copy)
 
-
-def _from_dataframe(df: DataFrameObject) -> _CuDFDataFrame:
-    """
-    Create a cudf DataFrame object from DataFrameObject.
-    """
     # Check number of chunks, if there's more than one we need to iterate
     if df.num_chunks() > 1:
         raise NotImplementedError("More than one chunk not handled yet")
@@ -678,13 +673,19 @@ def _from_dataframe(df: DataFrameObject) -> _CuDFDataFrame:
             _DtypeKind.FLOAT,
             _DtypeKind.BOOL,
         ):
-            columns[name], _buf = _protocol_to_cudf_column_numeric(col)
+            columns[name], _buf = _protocol_to_cudf_column_numeric(
+                col, allow_copy
+            )
 
         elif col.dtype[0] == _DtypeKind.CATEGORICAL:
-            columns[name], _buf = _protocol_to_cudf_column_categorical(col)
+            columns[name], _buf = _protocol_to_cudf_column_categorical(
+                col, allow_copy
+            )
 
         elif col.dtype[0] == _DtypeKind.STRING:
-            columns[name], _buf = _protocol_to_cudf_column_string(col)
+            columns[name], _buf = _protocol_to_cudf_column_string(
+                col, allow_copy
+            )
 
         else:
             raise NotImplementedError(
@@ -699,7 +700,7 @@ def _from_dataframe(df: DataFrameObject) -> _CuDFDataFrame:
 
 
 def _protocol_to_cudf_column_numeric(
-    col: _CuDFColumn,
+    col: _CuDFColumn, allow_copy: bool
 ) -> Tuple[
     cudf.core.column.ColumnBase,
     Mapping[str, Optional[Tuple[_CuDFBuffer, ProtoDtype]]],
@@ -714,7 +715,7 @@ def _protocol_to_cudf_column_numeric(
     buffers = col.get_buffers()
     assert buffers["data"] is not None, "data buffer should not be None"
     _dbuffer, _ddtype = buffers["data"]
-    _check_buffer_is_on_gpu(_dbuffer)
+    _check_buffer_is_on_gpu(_dbuffer, allow_copy)
     cudfcol_num = build_column(
         Buffer(_dbuffer.ptr, _dbuffer.bufsize),
         protocol_dtype_to_cupy_dtype(_ddtype),
@@ -722,17 +723,14 @@ def _protocol_to_cudf_column_numeric(
     return _set_missing_values(col, cudfcol_num), buffers
 
 
-def _check_buffer_is_on_gpu(buffer: _CuDFBuffer) -> None:
-    if (
-        buffer.__dlpack_device__()[0] != _Device.CUDA
-        and not buffer._allow_copy
-    ):
+def _check_buffer_is_on_gpu(buffer: _CuDFBuffer, allow_copy: bool) -> None:
+    if buffer.__dlpack_device__()[0] != _Device.CUDA and not allow_copy:
         raise TypeError(
             "This operation must copy data from CPU to GPU. "
             "Set `allow_copy=True` to allow it."
         )
 
-    elif buffer.__dlpack_device__()[0] != _Device.CUDA and buffer._allow_copy:
+    elif buffer.__dlpack_device__()[0] != _Device.CUDA and allow_copy:
         raise NotImplementedError(
             "Only cuDF/GPU dataframes are supported for now. "
             "CPU (like `Pandas`) dataframes will be supported shortly."
@@ -763,7 +761,7 @@ def protocol_dtype_to_cupy_dtype(_dtype: ProtoDtype) -> cp.dtype:
 
 
 def _protocol_to_cudf_column_categorical(
-    col: _CuDFColumn,
+    col: _CuDFColumn, allow_copy: bool
 ) -> Tuple[
     cudf.core.column.ColumnBase,
     Mapping[str, Optional[Tuple[_CuDFBuffer, ProtoDtype]]],
@@ -781,7 +779,7 @@ def _protocol_to_cudf_column_categorical(
     buffers = col.get_buffers()
     assert buffers["data"] is not None, "data buffer should not be None"
     codes_buffer, codes_dtype = buffers["data"]
-    _check_buffer_is_on_gpu(codes_buffer)
+    _check_buffer_is_on_gpu(codes_buffer, allow_copy)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(
         Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype
@@ -799,7 +797,7 @@ def _protocol_to_cudf_column_categorical(
 
 
 def _protocol_to_cudf_column_string(
-    col: _CuDFColumn,
+    col: _CuDFColumn, allow_copy: bool
 ) -> Tuple[
     cudf.core.column.ColumnBase,
     Mapping[str, Optional[Tuple[_CuDFBuffer, ProtoDtype]]],
@@ -813,7 +811,7 @@ def _protocol_to_cudf_column_string(
     # Retrieve the data buffer containing the UTF-8 code units
     assert buffers["data"] is not None, "data buffer should never be None"
     data_buffer, data_dtype = buffers["data"]
-    _check_buffer_is_on_gpu(data_buffer)
+    _check_buffer_is_on_gpu(data_buffer, allow_copy)
     encoded_string = build_column(
         Buffer(data_buffer.ptr, data_buffer.bufsize),
         protocol_dtype_to_cupy_dtype(data_dtype),
@@ -823,7 +821,7 @@ def _protocol_to_cudf_column_string(
     # the beginning and end of each string
     assert buffers["offsets"] is not None, "not possible for string column"
     offset_buffer, offset_dtype = buffers["offsets"]
-    _check_buffer_is_on_gpu(offset_buffer)
+    _check_buffer_is_on_gpu(offset_buffer, allow_copy)
     offsets = build_column(
         Buffer(offset_buffer.ptr, offset_buffer.bufsize),
         protocol_dtype_to_cupy_dtype(offset_dtype),

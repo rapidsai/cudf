@@ -10,7 +10,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
-from pandas.core.arrays._arrow_utils import ArrowIntervalType
 from pandas.core.dtypes.dtypes import (
     CategoricalDtype as pd_CategoricalDtype,
     CategoricalDtypeType as pd_CategoricalDtypeType,
@@ -575,6 +574,7 @@ class IntervalDtype(StructDtype):
         return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
+        from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_LT_150
 from cudf.core.buffer import Buffer
 from cudf.core.column import build_column
 from cudf.core.df_protocol import (
@@ -14,10 +15,15 @@ from cudf.core.df_protocol import (
     _CuDFBuffer,
     _CuDFColumn,
     _DtypeKind,
-    _from_dataframe,
+    from_dataframe,
     protocol_dtype_to_cupy_dtype,
 )
 from cudf.testing._utils import assert_eq
+
+
+@pytest.fixture
+def pandas_df():
+    return pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
 
 
 def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
@@ -90,31 +96,31 @@ def assert_dataframe_equal(dfo: DataFrameObject, df: cudf.DataFrame):
         assert_column_equal(dfo.get_column_by_name(col), df[col]._column)
 
 
-def assert_from_dataframe_equals(dfobj):
-    df2 = _from_dataframe(dfobj)
+def assert_from_dataframe_equals(dfobj, allow_copy):
+    df2 = from_dataframe(dfobj, allow_copy=allow_copy)
 
-    assert_dataframe_equal(dfobj, df2)
-    if isinstance(dfobj._df, cudf.DataFrame):
-        assert_eq(dfobj._df, df2)
+    assert_dataframe_equal(dfobj.__dataframe__(allow_copy), df2)
+    if isinstance(dfobj, cudf.DataFrame):
+        assert_eq(dfobj, df2)
 
-    elif isinstance(dfobj._df, pd.DataFrame):
-        assert_eq(cudf.DataFrame(dfobj._df), df2)
+    elif isinstance(dfobj, pd.DataFrame):
+        assert_eq(cudf.DataFrame(dfobj), df2)
 
     else:
-        raise TypeError(f"{type(dfobj._df)} not supported yet.")
+        raise TypeError(f"{type(dfobj)} not supported yet.")
 
 
-def assert_from_dataframe_exception(dfobj):
+def test_from_dataframe_exception(pandas_df):
     exception_msg = "This operation must copy data from CPU to GPU."
     " Set `allow_copy=True` to allow it."
     with pytest.raises(TypeError, match=exception_msg):
-        _from_dataframe(dfobj)
+        from_dataframe(pandas_df)
 
 
 def assert_df_unique_dtype_cols(data):
     cdf = cudf.DataFrame(data=data)
-    assert_from_dataframe_equals(cdf.__dataframe__(allow_copy=False))
-    assert_from_dataframe_equals(cdf.__dataframe__(allow_copy=True))
+    assert_from_dataframe_equals(cdf, allow_copy=False)
+    assert_from_dataframe_equals(cdf, allow_copy=True)
 
 
 def test_from_dataframe():
@@ -140,8 +146,8 @@ def test_categorical_dtype():
     col = cdf.__dataframe__().get_column_by_name("A")
     assert col.dtype[0] == _DtypeKind.CATEGORICAL
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
-    assert_from_dataframe_equals(cdf.__dataframe__(allow_copy=False))
-    assert_from_dataframe_equals(cdf.__dataframe__(allow_copy=True))
+    assert_from_dataframe_equals(cdf, allow_copy=False)
+    assert_from_dataframe_equals(cdf, allow_copy=True)
 
 
 def test_bool_dtype():
@@ -195,8 +201,8 @@ def test_NA_categorical_dtype():
     assert col.describe_null == (3, 0)
     assert col.num_chunks() == 1
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
-    assert_from_dataframe_equals(df.__dataframe__(allow_copy=False))
-    assert_from_dataframe_equals(df.__dataframe__(allow_copy=True))
+    assert_from_dataframe_equals(df, allow_copy=False)
+    assert_from_dataframe_equals(df, allow_copy=True)
 
 
 def test_NA_bool_dtype():
@@ -215,8 +221,8 @@ def test_NA_string_dtype():
     assert col.null_count == 1
     assert col.describe_null == (3, 0)
     assert col.num_chunks() == 1
-    assert_from_dataframe_equals(df.__dataframe__(allow_copy=False))
-    assert_from_dataframe_equals(df.__dataframe__(allow_copy=True))
+    assert_from_dataframe_equals(df, allow_copy=False)
+    assert_from_dataframe_equals(df, allow_copy=True)
 
 
 def test_NA_mixed_dtype():
@@ -228,3 +234,13 @@ def test_NA_mixed_dtype():
         string=[None, None, None, "df protocol", None],
     )
     assert_df_unique_dtype_cols(data_mixed)
+
+
+@pytest.mark.skipif(
+    PANDAS_LT_150,
+    reason="Pandas versions < 1.5.0 do not support interchange protocol",
+)
+def test_from_cpu_df(pandas_df):
+    df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    with pytest.raises(NotImplementedError):
+        cudf.from_dataframe(df, allow_copy=True)
