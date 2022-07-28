@@ -3,13 +3,14 @@
 from collections import abc
 from io import BytesIO, StringIO
 
+import numpy as np
 from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
-from cudf.utils.dtypes import _map_to_default_dtypes
+from cudf.utils.dtypes import _to_default_dtype
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 
@@ -112,12 +113,21 @@ def read_csv(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         dtype = {} if dtype is None else dtype
-        _unspecified_col = [
-            name for name in df._column_names if name not in dtype
-        ]
-        _inferred_dtypes = [df._dtypes[name] for name in _unspecified_col]
-        _default_dtypes = _map_to_default_dtypes(_inferred_dtypes)
-        df = df.astype(dict(zip(_unspecified_col, _default_dtypes)))
+        unspecified_dtypes = {
+            name: df._dtypes[name]
+            for name in df._column_names
+            if name not in dtype
+        }
+        default_dtypes = {}
+
+        for name, dt in unspecified_dtypes.items():
+            if dt == np.dtype("i1"):
+                # csv reader reads all null column as int8.
+                # The dtype should remain int8.
+                default_dtypes[name] = dt
+            else:
+                default_dtypes[name] = _to_default_dtype(dt)
+        df = df.astype(default_dtypes)
 
     return df
 

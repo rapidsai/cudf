@@ -3,7 +3,6 @@
 import datetime
 from collections import namedtuple
 from decimal import Decimal
-from typing import List
 
 import cupy as cp
 import numpy as np
@@ -270,9 +269,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    inferred_dtype = cudf.api.types.pandas_dtype(type(val))
-    default_dtype = _map_to_default_dtypes([inferred_dtype])[0]
-    val = default_dtype.type(val)
+    dtype = _to_default_dtype(cudf.api.types.pandas_dtype(type(val)))
+    val = dtype.type(val)
 
     if dtype is not None:
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
@@ -643,33 +641,22 @@ def _can_cast(from_dtype, to_dtype):
         return np.can_cast(from_dtype, to_dtype)
 
 
-def _map_to_default_dtypes(inferred_dtypes: List[np.dtype]) -> List[np.dtype]:
-    """Given a list of inferred dtypes, map them to the default dtypes."""
-    dtype_map = {}
-    if cudf.get_option("default_integer_bitwidth") == 32:
-        dtype_map.update(
-            {
-                np.dtype("i8"): np.dtype("i4"),
-                np.dtype("u8"): np.dtype("u4"),
-            }
-        )
-    if cudf.get_option("default_float_bitwidth") == 32:
-        dtype_map.update({np.dtype("f8"): np.dtype("f4")})
+def _to_default_dtype(dtype):
+    if cudf.get_option("default_integer_bitwidth"):
+        if cudf.api.types.is_signed_integer_dtype(dtype):
+            return cudf.dtype(
+                f'i{cudf.get_option("default_integer_bitwidth")//8}'
+            )
+        elif cudf.api.types.is_unsigned_integer_dtype(dtype):
+            return cudf.dtype(
+                f'u{cudf.get_option("default_integer_bitwidth")//8}'
+            )
+    elif cudf.get_option(
+        "default_float_bitwidth"
+    ) and cudf.api.types.is_float_dtype(dtype):
+        return cudf.dtype(f'f{cudf.get_option("default_float_bitwidth")//8}')
 
-    if len(dtype_map) == 0:
-        return inferred_dtypes
-
-    return [dtype_map.get(dtype, dtype) for dtype in inferred_dtypes]
-
-
-def _default_integer_dtype(signed="i"):
-    return cudf.dtype(
-        f'{signed}{cudf.get_option("default_integer_bitwidth")//8}'
-    )
-
-
-def _default_floating_dtype():
-    return cudf.dtype(f'f{cudf.get_option("default_float_bitwidth")//8}')
+    return dtype
 
 
 # Type dispatch loops similar to what are found in `np.add.types`

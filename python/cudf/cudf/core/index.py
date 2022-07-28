@@ -55,7 +55,7 @@ from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring, doc_apply
-from cudf.utils.dtypes import _default_integer_dtype, find_common_type
+from cudf.utils.dtypes import _to_default_dtype, find_common_type
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
 
 T = TypeVar("T", bound="Frame")
@@ -407,7 +407,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         By default the dtype is 64 bit signed integer. This is configurable
         via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
-        return _default_integer_dtype()
+        dtype = np.dtype(np.int64)
+        return _to_default_dtype(dtype)
 
     @_cudf_nvtx_annotate
     def find_label_range(self, first=None, last=None):

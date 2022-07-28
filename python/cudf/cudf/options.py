@@ -131,33 +131,35 @@ def _make_contains_validator(valid_options: Container) -> Callable:
 
 _register_option(
     "default_integer_bitwidth",
-    64,
+    None,
     textwrap.dedent(
         """
-        Default integer bitwidth when the dtype of the integer needs to be
-        inferred. APIs that respect this option include:
+        Default bitwidth when the dtype of an integer needs to be
+        inferred. If set to `None`, the API will align dtype with pandas.
+        APIs that respect this option include:
         \t- cudf object constructors
         \t- cudf.read_csv and cudf.read_json when `dtype` is not specified.
         \t- APIs that require implicit conversion of cudf.RangeIndex to an
         \t  integer index.
-        \tValid values are 32 or 64. Default is 64.
+        \tValid values are  None, 32 or 64. Default is None.
     """
     ),
-    _make_contains_validator([32, 64]),
+    _make_contains_validator([None, 32, 64]),
 )
 
 
 _register_option(
     "default_float_bitwidth",
-    64,
+    None,
     textwrap.dedent(
         """
-        Default integer bitwidth when the dtype of the integer needs to be
-        inferred. APIs that respect this option include:
+        Default bitwidth when the dtype of a float needs to be
+        inferred. If set to `None`, the API will align dtype with pandas.
+        APIs that respect this option include:
         \t- cudf object constructors
         \t- cudf.read_csv and cudf.read_json when `dtype` is not specified.
-        \tValid values are 32 or 64. Default is 64.
+        \tValid values are None, 32 or 64. Default is None.
     """
     ),
-    _make_contains_validator([32, 64]),
+    _make_contains_validator([None, 32, 64]),
 )
