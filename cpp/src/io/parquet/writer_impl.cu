@@ -562,7 +562,6 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
 
         schema_tree_node col_schema{};
-
         col_schema.type            = Type::BYTE_ARRAY;
         col_schema.converted_type  = ConvertedType::UNKNOWN;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
