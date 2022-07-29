@@ -4334,14 +4334,14 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
   cols.push_back(col9.release());
   auto expected = std::make_unique<table>(std::move(cols));
 
-  auto filepath = temp_env->get_temp_filepath("CheckColumnIndexTruncation.parquet");
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnIndexTruncation.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .column_index_truncate_length(8);
   cudf::io::write_parquet(out_opts);
 
-  auto source = cudf::io::datasource::create(filepath);
+  auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
@@ -4395,7 +4395,7 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
   ouput_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
   ouput_metadata.column_metadata[2].set_name("col_binary2").set_output_as_binary(true);
 
-  auto filepath = temp_env->get_temp_filepath("BinaryColumnIndexTruncation.parquet");
+  auto const filepath = temp_env->get_temp_filepath("BinaryColumnIndexTruncation.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .metadata(&ouput_metadata)
@@ -4403,7 +4403,7 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
       .column_index_truncate_length(8);
   cudf::io::write_parquet(out_opts);
 
-  auto source = cudf::io::datasource::create(filepath);
+  auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
