@@ -18,7 +18,6 @@
 #include "stream_compaction_common.hpp"
 
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -62,16 +61,6 @@ class compaction_hash {
   {
     auto hash = _hash(i);
     return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
-  }
-
-  __device__ auto operator()(cudf::experimental::row::lhs_index_type row_index) const noexcept
-  {
-    return this->operator()(static_cast<size_type>(row_index));
-  }
-
-  __device__ auto operator()(cudf::experimental::row::rhs_index_type row_index) const noexcept
-  {
-    return this->operator()(static_cast<size_type>(row_index));
   }
 
  private:
