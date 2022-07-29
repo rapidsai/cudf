@@ -4370,7 +4370,7 @@ TEST_F(ParquetReaderTest, NestedByteArray)
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
   auto seq_col3 = random_values<int8_t>(num_rows);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto const validity = cudf::test::iterators::no_nulls();
 
   column_wrapper<int> int_col{seq_col0.begin(), seq_col0.end(), validity};
   column_wrapper<float> float_col{seq_col2.begin(), seq_col2.end(), validity};
@@ -4396,11 +4396,7 @@ TEST_F(ParquetReaderTest, NestedByteArray)
      {'F', 'r', 'i', 'd', 'a', 'y'}},
     {{'M', 'o', 'n', 'd', 'a', 'y'}, {'F', 'r', 'i', 'd', 'a', 'y'}}};
 
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(int_col.release());
-  cols.push_back(float_col.release());
-  cols.push_back(list_list_int_col.release());
-  auto expected = std::make_unique<table>(std::move(cols));
+  auto const expected = table_view{{int_col, float_col, list_list_int_col}};
   EXPECT_EQ(3, expected->num_columns());
   cudf_io::table_input_metadata ouput_metadata(*expected);
   ouput_metadata.column_metadata[0].set_name("col_other");
