@@ -4288,28 +4288,125 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
+  auto seq_col3 = random_values<int8_t>(num_rows);
   auto validity = cudf::test::iterators::no_nulls();
 
-  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
-  column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
-  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
+  column_wrapper<int> int_col{seq_col0.begin(), seq_col0.end(), validity};
+  column_wrapper<cudf::string_view> string_col{strings.begin(), strings.end()};
+  column_wrapper<float> float_col{seq_col2.begin(), seq_col2.end(), validity};
+  cudf::test::lists_column_wrapper<int8_t> list_int_col{
+    {'M', 'o', 'n', 'd', 'a', 'y'},
+    {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'M', 'o', 'n', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'F', 'r', 'i', 'd', 'a', 'y'},
+    {'F', 'u', 'n', 'd', 'a', 'y'}};
 
   std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col0.release());
-  cols.push_back(col1.release());
-  cols.push_back(col2.release());
-  auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(3, expected->num_columns());
-
-  cudf_io::table_input_metadata expected_metadata(*expected);
-  expected_metadata.column_metadata[0].set_name("col_other");
-  expected_metadata.column_metadata[1].set_name("col_string").set_output_as_binary(true);
-  expected_metadata.column_metadata[2].set_name("col_another");
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(int_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(float_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(list_int_col)));
+  auto ouput = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(5, ouput->num_columns());
+  cudf_io::table_input_metadata ouput_metadata(*ouput);
+  ouput_metadata.column_metadata[0].set_name("col_other");
+  ouput_metadata.column_metadata[1].set_name("col_string");
+  ouput_metadata.column_metadata[2].set_name("col_float");
+  ouput_metadata.column_metadata[3].set_name("col_string2").set_output_as_binary(true);
+  ouput_metadata.column_metadata[4].set_name("col_binary").set_output_as_binary(true);
 
   auto filepath = temp_env->get_temp_filepath("BinaryReadStrings.parquet");
   cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
-      .metadata(&expected_metadata);
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, ouput->view())
+      .metadata(&ouput_metadata);
+  cudf_io::write_parquet(out_opts);
+
+  cols.clear();
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(int_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(float_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
+  auto expected_string = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(5, expected_string->num_columns());
+  cols.clear();
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(int_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(float_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(list_int_col)));
+  cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(list_int_col)));
+  auto expected_mixed = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(5, expected_mixed->num_columns());
+
+  cudf_io::parquet_reader_options in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+      .convert_binary_to_strings({true, true, true, true, true});
+  auto result = cudf_io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_string->view(), result.tbl->view());
+
+  cudf_io::parquet_reader_options default_in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  result = cudf_io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_string->view(), result.tbl->view());
+
+  cudf_io::parquet_reader_options mixed_in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+      .convert_binary_to_strings({true, true, true, false, false});
+  result = cudf_io::read_parquet(mixed_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_mixed->view(), result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, NestedByteArray)
+{
+  constexpr auto num_rows = 8;
+
+  auto seq_col0       = random_values<int>(num_rows);
+  auto seq_col2       = random_values<float>(num_rows);
+  auto seq_col3       = random_values<int8_t>(num_rows);
+  auto const validity = cudf::test::iterators::no_nulls();
+
+  column_wrapper<int> int_col{seq_col0.begin(), seq_col0.end(), validity};
+  column_wrapper<float> float_col{seq_col2.begin(), seq_col2.end(), validity};
+  cudf::test::lists_column_wrapper<int8_t> list_list_int_col{
+    {{'M', 'o', 'n', 'd', 'a', 'y'},
+     {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
+     {'F', 'r', 'i', 'd', 'a', 'y'}},
+    {{'M', 'o', 'n', 'd', 'a', 'y'}, {'F', 'r', 'i', 'd', 'a', 'y'}},
+    {{'M', 'o', 'n', 'd', 'a', 'y'},
+     {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
+     {'F', 'r', 'i', 'd', 'a', 'y'}},
+    {{'F', 'r', 'i', 'd', 'a', 'y'},
+     {'F', 'r', 'i', 'd', 'a', 'y'},
+     {'F', 'u', 'n', 'd', 'a', 'y'}},
+    {{'M', 'o', 'n', 'd', 'a', 'y'},
+     {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
+     {'F', 'r', 'i', 'd', 'a', 'y'}},
+    {{'F', 'r', 'i', 'd', 'a', 'y'},
+     {'F', 'r', 'i', 'd', 'a', 'y'},
+     {'F', 'u', 'n', 'd', 'a', 'y'}},
+    {{'M', 'o', 'n', 'd', 'a', 'y'},
+     {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
+     {'F', 'r', 'i', 'd', 'a', 'y'}},
+    {{'M', 'o', 'n', 'd', 'a', 'y'}, {'F', 'r', 'i', 'd', 'a', 'y'}}};
+
+  auto const expected = table_view{{int_col, float_col, list_list_int_col}};
+  EXPECT_EQ(3, expected.num_columns());
+  cudf_io::table_input_metadata ouput_metadata(expected);
+  ouput_metadata.column_metadata[0].set_name("col_other");
+  ouput_metadata.column_metadata[1].set_name("col_float");
+  ouput_metadata.column_metadata[2].set_name("col_binary").set_output_as_binary(true);
+
+  auto filepath = temp_env->get_temp_filepath("NestedByteArray.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .metadata(&ouput_metadata);
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
@@ -4317,35 +4414,56 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
       .convert_binary_to_strings({true, true, true, true, true, true, true, true});
   auto result = cudf_io::read_parquet(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
 
-  // test default options result the same as all true
-  cudf_io::parquet_reader_options binary_in_default_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
-  result = cudf_io::read_parquet(binary_in_default_opts);
+TEST_F(ParquetWriterTest, ByteArrayStats)
+{
+  // check that byte array min and max statistics are written as expected. If a byte array is
+  // written as a string, max utf8 is 0xf7bfbfbf and so the minimum value will be set to that value
+  // instead of a potential minimum higher than that.
+  std::vector<uint8_t> expected_col0_min{0xf0};
+  std::vector<uint8_t> expected_col0_max{0xf0, 0xf5, 0xf5};
+  std::vector<uint8_t> expected_col1_min{0xfe, 0xfe, 0xfe};
+  std::vector<uint8_t> expected_col1_max{0xfe, 0xfe, 0xfe};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  cudf::test::lists_column_wrapper<uint8_t> list_int_col0{
+    {0xf0}, {0xf0, 0xf5, 0xf3}, {0xf0, 0xf5, 0xf5}};
+  cudf::test::lists_column_wrapper<uint8_t> list_int_col1{
+    {0xfe, 0xfe, 0xfe}, {0xfe, 0xfe, 0xfe}, {0xfe, 0xfe, 0xfe}};
 
-  // test all false results in binary
-  cudf_io::parquet_reader_options binary_in_opts =
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(list_int_col0.release());
+  cols.push_back(list_int_col1.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(2, expected->num_columns());
+  cudf_io::table_input_metadata ouput_metadata(*expected);
+  ouput_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
+  ouput_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
+
+  auto filepath = temp_env->get_temp_filepath("ByteArrayStats.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .metadata(&ouput_metadata);
+  cudf_io::write_parquet(out_opts);
+
+  cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({false, false, false, false, false, false, false, false});
-  result = cudf_io::read_parquet(binary_in_opts);
+      .convert_binary_to_strings({true, true});
+  auto result = cudf_io::read_parquet(in_opts);
 
-  auto original_cols = expected->release();
-  original_cols[1] =
-    cudf::test::lists_column_wrapper<int8_t>{{'M', 'o', 'n', 'd', 'a', 'y'},
-                                             {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
-                                             {'F', 'r', 'i', 'd', 'a', 'y'},
-                                             {'M', 'o', 'n', 'd', 'a', 'y'},
-                                             {'F', 'r', 'i', 'd', 'a', 'y'},
-                                             {'F', 'r', 'i', 'd', 'a', 'y'},
-                                             {'F', 'r', 'i', 'd', 'a', 'y'},
-                                             {'F', 'u', 'n', 'd', 'a', 'y'}}
-      .release();
-  expected = std::make_unique<cudf::table>(std::move(original_cols));
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  read_footer(source, &fmd);
+
+  auto const stats0 = parse_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats1 = parse_statistics(fmd.row_groups[0].columns[1]);
+
+  EXPECT_EQ(expected_col0_min, stats0.min_value);
+  EXPECT_EQ(expected_col0_max, stats0.max_value);
+  EXPECT_EQ(expected_col1_min, stats1.min_value);
+  EXPECT_EQ(expected_col1_max, stats1.max_value);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
