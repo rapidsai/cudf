@@ -1413,16 +1413,6 @@ class device_row_hasher {
     });
   }
 
-  __device__ auto operator()(lhs_index_type row_index) const noexcept
-  {
-    return this->operator()(static_cast<size_type>(row_index));
-  }
-
-  __device__ auto operator()(rhs_index_type row_index) const noexcept
-  {
-    return this->operator()(static_cast<size_type>(row_index));
-  }
-
  private:
   /**
    * @brief Computes the hash value of an element in the given column.
