@@ -1593,6 +1593,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
+  // Binary columns can be read as binary or strings
+  _force_binary_columns_as_strings = options.get_convert_binary_to_strings();
+
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),
@@ -1762,10 +1765,28 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
 
+      auto make_output_column = [&](column_buffer& buf, column_name_info* schema_info, int i) {
+        auto col = make_column(buf, schema_info, _stream, _mr);
+        if (should_write_byte_array(i)) {
+          auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
+          if (schema.converted_type == parquet::UNKNOWN) {
+            auto const num_rows = col->size();
+            auto data           = col->release();
+            return make_lists_column(
+              num_rows,
+              std::move(data.children[strings_column_view::offsets_column_index]),
+              std::move(data.children[strings_column_view::chars_column_index]),
+              UNKNOWN_NULL_COUNT,
+              std::move(*data.null_mask));
+          }
+        }
+        return col;
+      };
+
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        out_columns.emplace_back(make_column(_output_columns[i], &col_name, _stream, _mr));
+        out_columns.emplace_back(make_output_column(_output_columns[i], &col_name, i));
       }
     }
   }
