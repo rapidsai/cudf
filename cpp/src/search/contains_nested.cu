@@ -15,6 +15,8 @@
  */
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
@@ -61,6 +63,26 @@ bool contains_nested_element(column_view const& haystack,
            rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
              return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
            }) > 0;
+}
+
+std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
+                                                       column_view const& needles,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
+{
+  auto result_v = contains(table_view{{haystack}},
+                           table_view{{needles}},
+                           null_equality::EQUAL,
+                           nan_equality::ALL_EQUAL,
+                           stream,
+                           mr);
+
+  // todo: https://github.com/rapidsai/cudf/pull/11356
+  auto result =
+    std::make_unique<column>(data_type{type_to_id<bool>()}, needles.size(), result_v.release());
+  result->set_null_mask(copy_bitmask(needles, stream, mr), needles.null_count());
+
+  return result;
 }
 
 }  // namespace cudf::detail

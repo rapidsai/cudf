@@ -17,6 +17,7 @@
 #include <hash/unordered_multiset.cuh>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
@@ -155,7 +156,7 @@ struct multi_contains_dispatch {
   {
     auto result = make_numeric_column(data_type{type_to_id<bool>()},
                                       needles.size(),
-                                      copy_bitmask(needles),
+                                      copy_bitmask(needles, stream, mr),
                                       needles.null_count(),
                                       stream,
                                       mr);
