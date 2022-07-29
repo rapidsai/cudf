@@ -72,6 +72,7 @@ cdef extern from "cudf/io/types.hpp" \
         column_in_metadata& set_int96_timestamps(bool req)
         column_in_metadata& set_decimal_precision(uint8_t precision)
         column_in_metadata& child(size_type i)
+        column_in_metadata& set_output_as_binary(bool binary)
 
     cdef cppclass table_input_metadata:
         table_input_metadata() except +
