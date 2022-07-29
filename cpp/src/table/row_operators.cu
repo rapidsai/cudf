@@ -358,13 +358,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 {
   check_eq_compatibility(t);
 
-  auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
-  auto struct_offset_removed_table    = remove_struct_child_offsets(std::get<0>(null_pushed_table));
-  auto [verticalized_lhs, _, __, ___] = decompose_structs(struct_offset_removed_table);
+  auto [null_pushed_table, null_masks] = structs::detail::superimpose_parent_nulls(t, stream);
+  auto struct_offset_removed_table     = remove_struct_child_offsets(null_pushed_table);
+  auto [verticalized_lhs, _, __, ___]  = decompose_structs(struct_offset_removed_table);
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
   return std::shared_ptr<preprocessed_table>(
-    new preprocessed_table(std::move(d_t), std::move(std::get<1>(null_pushed_table))));
+    new preprocessed_table(std::move(d_t), std::move(null_masks)));
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,

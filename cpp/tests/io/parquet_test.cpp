@@ -4367,9 +4367,9 @@ TEST_F(ParquetReaderTest, NestedByteArray)
 {
   constexpr auto num_rows = 8;
 
-  auto seq_col0 = random_values<int>(num_rows);
-  auto seq_col2 = random_values<float>(num_rows);
-  auto seq_col3 = random_values<int8_t>(num_rows);
+  auto seq_col0       = random_values<int>(num_rows);
+  auto seq_col2       = random_values<float>(num_rows);
+  auto seq_col3       = random_values<int8_t>(num_rows);
   auto const validity = cudf::test::iterators::no_nulls();
 
   column_wrapper<int> int_col{seq_col0.begin(), seq_col0.end(), validity};
