@@ -39,10 +39,10 @@ namespace io {
  */
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
-constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
-constexpr size_type default_column_index_truncate_length = 64; ///< truncate to 64 bytes
+constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million rows per row group
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
+constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
 
 class parquet_reader_options_builder;
 
