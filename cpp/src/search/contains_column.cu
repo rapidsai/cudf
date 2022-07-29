@@ -59,10 +59,10 @@ __device__ auto inline get_scalar_value(ScalarDView d_scalar)
 }
 
 struct contains_scalar_dispatch {
-  template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
-  bool operator()(column_view const& haystack,
-                  scalar const& needle,
-                  rmm::cuda_stream_view stream) const
+  template <typename Type>
+  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
+                                                        scalar const& needle,
+                                                        rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
@@ -95,10 +95,10 @@ struct contains_scalar_dispatch {
     }
   }
 
-  template <typename Type, CUDF_ENABLE_IF(is_nested<Type>())>
-  bool operator()(column_view const& haystack,
-                  scalar const& needle,
-                  rmm::cuda_stream_view stream) const
+  template <typename Type>
+  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& haystack,
+                                                       scalar const& needle,
+                                                       rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
     // Haystack and needle structure compatibility will be checked by the table comparator
