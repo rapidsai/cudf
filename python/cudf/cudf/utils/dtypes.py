@@ -269,8 +269,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    dtype = _to_default_dtype(cudf.api.types.pandas_dtype(type(val)))
-    val = dtype.type(val)
+    val = _to_default_dtype(cudf.api.types.pandas_dtype(type(val))).type(val)
 
     if dtype is not None:
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
