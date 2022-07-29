@@ -61,10 +61,10 @@ using ::cudf::detail::device_2dspan;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 // do not truncate statistics
-constexpr int32_t NO_TRUNC = 0;
+constexpr int32_t NO_TRUNC_STATS = 0;
 
 // minimum scratch space required for encoding statistics
-constexpr size_t min_stats_scratch = sizeof(__int128_t);
+constexpr size_t min_stats_scratch_size = sizeof(__int128_t);
 
 struct frag_init_state_s {
   parquet_column_device_view col;
@@ -1500,7 +1500,7 @@ static __device__ uint32_t truncate_binary(device_span<uint8_t const> arr,
 static __device__ uint32_t truncate_string(
   const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
 {
-  if (truncate_length == NO_TRUNC or str.size_bytes() <= truncate_length) {
+  if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
     *res = str.data();
     return str.size_bytes();
   }
@@ -1526,7 +1526,7 @@ static __device__ uint32_t truncate_byte_array(const statistics::byte_array_view
                                                void* scratch,
                                                size_type truncate_length)
 {
-  if (truncate_length == NO_TRUNC or arr.size_bytes() <= truncate_length) {
+  if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
     *res = arr.data();
     return arr.size_bytes();
   }
@@ -1612,9 +1612,9 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    get_max(&s->max_value, dtype, scratch, &vmax, &lmax, NO_TRUNC);
+    get_max(&s->max_value, dtype, scratch, &vmax, &lmax, NO_TRUNC_STATS);
     encoder.field_binary(5, vmax, lmax);
-    get_min(&s->min_value, dtype, scratch, &vmin, &lmin, NO_TRUNC);
+    get_min(&s->min_value, dtype, scratch, &vmin, &lmin, NO_TRUNC_STATS);
     encoder.field_binary(6, vmin, lmin);
   }
   encoder.end(&end);
@@ -1632,7 +1632,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) unsigned char scratch[min_stats_scratch];
+  __shared__ __align__(8) unsigned char scratch[min_stats_scratch_size];
 
   uint32_t t = threadIdx.x;
 
@@ -1883,7 +1883,7 @@ __global__ void __launch_bounds__(1)
                          device_span<statistics_chunk const> column_stats,
                          size_type column_index_truncate_length)
 {
-  __align__(8) unsigned char s_scratch[min_stats_scratch];
+  __align__(8) unsigned char s_scratch[min_stats_scratch_size];
   const void *vmin, *vmax;
   uint32_t lmin, lmax;
   uint8_t* col_idx_end;
@@ -1903,7 +1903,7 @@ __global__ void __launch_bounds__(1)
   // how much scratch space is available for this chunk, including space for
   // truncation scratch + padding for alignment.
   scratch =
-    column_index_truncate_length < min_stats_scratch
+    column_index_truncate_length < min_stats_scratch_size
       ? s_scratch
       : align8(ck_g->column_index_blob + ck_g->column_index_size - column_index_truncate_length);
 

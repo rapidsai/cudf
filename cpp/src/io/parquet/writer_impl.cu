@@ -1654,8 +1654,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
           ck.column_index_size = column_index_buffer_size(&ck);
           bfr_i += ck.column_index_size;
-        } else {
-          ck.column_index_size = 0;
         }
       }
     }

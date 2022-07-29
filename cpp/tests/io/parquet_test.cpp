@@ -4287,7 +4287,7 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
     "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
 
   // NOTE: UTF8 min is initialized with 0xf7bfbfbf. Binary values larger
-  // than that will not become minimum value.
+  // than that will not become minimum value (when written as UTF-8).
   const char* truncated_min[] = {"yyyyyyyy",
                                  "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
                                  "\xf7\xbf\xbf\xbf",
@@ -4335,48 +4335,96 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnIndexTruncation.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .column_index_truncate_length(8);
-  cudf_io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts);
 
-  auto source = cudf_io::datasource::create(filepath);
-  cudf_io::parquet::FileMetaData fmd;
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
-    auto& rg = fmd.row_groups[r];
+    auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
-      auto& chunk = rg.columns[c];
+      auto const& chunk = rg.columns[c];
 
-      // read column index
-      cudf_io::parquet::ColumnIndex ci;
-      cudf_io::parquet::CompactProtocolReader cp;
-      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
-      // printf("col %ld\n", c);
-      // printHex(ci_buf->data(), ci_buf->size());
-      cp.init(ci_buf->data(), ci_buf->size());
-      CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
-      auto& chunk_meta = chunk.meta_data;
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
 
-      // decode min and max from statistics blob
-      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
-      cudf_io::parquet::Statistics stats;
-      CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
+      // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
 
-      // loop over page stats. trunc(page.min) <= stats.min && trun(page.max) >= stats.max
-      cudf::io::parquet::Type ptype          = fmd.schema[c + 1].type;
-      cudf::io::parquet::ConvertedType ctype = fmd.schema[c + 1].converted_type;
-      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
-      for (size_t p = 0; p < ci.min_values.size(); p++)
-        EXPECT_TRUE(compare_binary(ci.min_values[p], stats.min_value, ptype, ctype) <= 0);
-      for (size_t p = 0; p < ci.max_values.size(); p++)
-        EXPECT_TRUE(compare_binary(ci.max_values[p], stats.max_value, ptype, ctype) >= 0);
-
+      // check that truncated values == expected
       EXPECT_EQ(memcmp(ci.min_values[0].data(), truncated_min[c], ci.min_values[0].size()), 0);
       EXPECT_EQ(memcmp(ci.max_values[0].data(), truncated_max[c], ci.max_values[0].size()), 0);
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
+{
+  std::vector<uint8_t> truncated_min[] = {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe},
+                                          {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+                                          {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+
+  std::vector<uint8_t> truncated_max[] = {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xff},
+                                          {0xff},
+                                          {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+
+  cudf::test::lists_column_wrapper<uint8_t> col0{
+    {0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe}};
+  cudf::test::lists_column_wrapper<uint8_t> col1{
+    {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+  cudf::test::lists_column_wrapper<uint8_t> col2{
+    {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  cudf::io::table_input_metadata ouput_metadata(*expected);
+  ouput_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
+  ouput_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
+  ouput_metadata.column_metadata[2].set_name("col_binary2").set_output_as_binary(true);
+
+  auto filepath = temp_env->get_temp_filepath("BinaryColumnIndexTruncation.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .metadata(&ouput_metadata)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .column_index_truncate_length(8);
+  cudf::io::write_parquet(out_opts);
+
+  auto source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+
+      // check that truncated values == expected
+      EXPECT_EQ(ci.min_values[0], truncated_min[c]);
+      EXPECT_EQ(ci.max_values[0], truncated_max[c]);
     }
   }
 }
