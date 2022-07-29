@@ -323,6 +323,7 @@ add_library(
   src/io/functions.cpp
   src/io/json/json_gpu.cu
   src/io/json/reader_impl.cu
+  src/io/json/experimental/read_json.cpp
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp

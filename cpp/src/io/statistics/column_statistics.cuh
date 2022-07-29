@@ -97,7 +97,7 @@ struct calculate_group_statistics_functor {
    */
   template <typename T,
             std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
-                             (IO == detail::io_file_format::ORC or
+                             (IO != detail::io_file_format::PARQUET or
                               !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {

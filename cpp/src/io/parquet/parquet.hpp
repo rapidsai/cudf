@@ -148,6 +148,7 @@ struct SchemaElement {
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
   thrust::optional<int32_t> field_id  = thrust::nullopt;
+  bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
