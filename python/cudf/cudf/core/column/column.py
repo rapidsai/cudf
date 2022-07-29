@@ -2103,14 +2103,18 @@ def as_column(
                         cudf.get_option("default_integer_bitwidth")
                         and infer_dtype(arbitrary) == "integer"
                     ):
-                        pa_type = np_to_pa_dtype(_maybe_convert_to_default_type("int"))
+                        pa_type = np_to_pa_dtype(
+                            _maybe_convert_to_default_type("int")
+                        )
                     if cudf.get_option(
                         "default_float_bitwidth"
                     ) and infer_dtype(arbitrary) in (
                         "floating",
                         "mixed-integer-float",
                     ):
-                        pa_type = np_to_pa_dtype(_maybe_convert_to_default_type("float"))
+                        pa_type = np_to_pa_dtype(
+                            _maybe_convert_to_default_type("float")
+                        )
 
                 data = as_column(
                     pa.array(
