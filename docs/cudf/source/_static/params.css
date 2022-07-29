@@ -87,7 +87,3 @@ html[data-theme="dark"] {
 div.cell_output table{
     background: var(--pst-table-background-color);
 }
-
-img.logo__image.only-dark{
-    background: var(--pst-color-text-muted);
-}
