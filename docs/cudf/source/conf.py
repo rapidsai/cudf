@@ -269,6 +269,7 @@ nitpick_ignore = [("py:class", "SeriesOrIndex"),]
 
 def setup(app):
     app.add_css_file("params.css")
+    app.add_js_file("custom.js")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
     app.connect("autodoc-process-docstring", process_class_docstrings)
