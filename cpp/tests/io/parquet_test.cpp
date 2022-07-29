@@ -4397,15 +4397,15 @@ TEST_F(ParquetReaderTest, NestedByteArray)
     {{'M', 'o', 'n', 'd', 'a', 'y'}, {'F', 'r', 'i', 'd', 'a', 'y'}}};
 
   auto const expected = table_view{{int_col, float_col, list_list_int_col}};
-  EXPECT_EQ(3, expected->num_columns());
-  cudf_io::table_input_metadata ouput_metadata(*expected);
+  EXPECT_EQ(3, expected.num_columns());
+  cudf_io::table_input_metadata ouput_metadata(expected);
   ouput_metadata.column_metadata[0].set_name("col_other");
   ouput_metadata.column_metadata[1].set_name("col_float");
   ouput_metadata.column_metadata[2].set_name("col_binary").set_output_as_binary(true);
 
   auto filepath = temp_env->get_temp_filepath("NestedByteArray.parquet");
   cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
       .metadata(&ouput_metadata);
   cudf_io::write_parquet(out_opts);
 
@@ -4414,7 +4414,7 @@ TEST_F(ParquetReaderTest, NestedByteArray)
       .convert_binary_to_strings({true, true, true, true, true, true, true, true});
   auto result = cudf_io::read_parquet(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(ParquetWriterTest, ByteArrayStats)
