@@ -71,7 +71,7 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils.dtypes import (
-    _to_default_dtype,
+    _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     get_time_unit,
     min_unsigned_type,
@@ -2103,14 +2103,14 @@ def as_column(
                         cudf.get_option("default_integer_bitwidth")
                         and infer_dtype(arbitrary) == "integer"
                     ):
-                        pa_type = np_to_pa_dtype(_to_default_dtype("int"))
+                        pa_type = np_to_pa_dtype(_maybe_convert_to_default_type("int"))
                     if cudf.get_option(
                         "default_float_bitwidth"
                     ) and infer_dtype(arbitrary) in (
                         "floating",
                         "mixed-integer-float",
                     ):
-                        pa_type = np_to_pa_dtype(_to_default_dtype("float"))
+                        pa_type = np_to_pa_dtype(_maybe_convert_to_default_type("float"))
 
                 data = as_column(
                     pa.array(

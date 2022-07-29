@@ -269,7 +269,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    val = _to_default_dtype(cudf.api.types.pandas_dtype(type(val))).type(val)
+    val = _maybe_convert_to_default_type(cudf.api.types.pandas_dtype(type(val))).type(val)
 
     if dtype is not None:
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
@@ -640,7 +640,9 @@ def _can_cast(from_dtype, to_dtype):
         return np.can_cast(from_dtype, to_dtype)
 
 
-def _to_default_dtype(dtype):
+def _maybe_convert_to_default_type(dtype):
+    """Convert `dtype` to default if specified by user, otherwise return as is.
+    """
     if cudf.get_option("default_integer_bitwidth"):
         if cudf.api.types.is_signed_integer_dtype(dtype):
             return cudf.dtype(

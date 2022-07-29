@@ -10,7 +10,7 @@ import cudf
 from cudf._lib import json as libjson
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import _to_default_dtype
+from cudf.utils.dtypes import _maybe_convert_to_default_type
 
 
 @ioutils.doc_read_json()
@@ -121,7 +121,7 @@ def read_json(
                 # The dtype should remain int8.
                 default_dtypes[name] = dt
             else:
-                default_dtypes[name] = _to_default_dtype(dt)
+                default_dtypes[name] = _maybe_convert_to_default_type(dt)
         df = df.astype(default_dtypes)
 
     return df
