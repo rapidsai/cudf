@@ -268,7 +268,7 @@ def process_class_docstrings(app, what, name, obj, options, lines):
 nitpick_ignore = [("py:class", "SeriesOrIndex"),]
 
 def setup(app):
-    app.add_css_file("custom.css")
+    app.add_css_file("custom_styles.css")
     app.add_js_file("custom.js")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
