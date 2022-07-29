@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import platform
 from distutils.spawn import find_executable
 
 import versioneer
@@ -23,6 +24,7 @@ install_requires = [
     "pandas>=1.0,<1.6.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
+    "pyarrow==8.0.0",
 ]
 
 extras_require = {
@@ -77,11 +79,15 @@ if not os.path.isdir(CUDA_HOME):
     raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
-install_requires.append(
-    "cupy-cuda"
-    + get_cuda_version_from_header(cuda_include_dir)
-    + ">=9.5.0,<12.0.0a0"
-)
+
+myplat = platform.machine()
+
+if myplat == 'x86_64':
+    install_requires.append(
+        "cupy-cuda"
+        + get_cuda_version_from_header(cuda_include_dir)
+        + ">=9.5.0,<11.0.0a0"
+    )
 
 
 class build_ext_and_proto(build_ext):
@@ -128,7 +134,7 @@ cmdclass = versioneer.get_cmdclass()
 cmdclass["build_ext"] = build_ext_and_proto
 
 setup(
-    name="cudf",
+    name="cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
     version=versioneer.get_version(),
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",

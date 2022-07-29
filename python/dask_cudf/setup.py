@@ -3,12 +3,12 @@
 import os
 import re
 import shutil
+import platform
 
 import versioneer
 from setuptools import find_packages, setup
 
 install_requires = [
-    "cudf",
     "dask>=2022.7.1",
     "distributed>=2022.7.1",
     "fsspec>=0.6.0",
@@ -64,15 +64,19 @@ if not os.path.isdir(CUDA_HOME):
     raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
-install_requires.append(
-    "cupy-cuda"
-    + get_cuda_version_from_header(cuda_include_dir)
-    + ">=9.5.0,<12.0.0a0"
-)
+
+myplat = platform.machine()
+
+if myplat == 'x86_64':
+    install_requires.append(
+        "cupy-cuda"
+        + get_cuda_version_from_header(cuda_include_dir)
+        + ">=9.5.0,<11.0.0a0"
+    )
 
 
 setup(
-    name="dask-cudf",
+    name="dask-cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
     version=versioneer.get_version(),
     description="Utilities for Dask and cuDF interactions",
     url="https://github.com/rapidsai/cudf",

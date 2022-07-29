@@ -312,6 +312,11 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   )
 endif()
 
+if(SKBUILD)
+  message(VERBOSE "calling find_package(Python3) with correct arguments to help arrow find it later on")
+  find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
+endif()
+
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
   ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET}
