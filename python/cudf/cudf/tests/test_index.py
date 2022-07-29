@@ -2567,6 +2567,20 @@ def test_rangeindex_max(rangeindex):
     assert_eq(expected, actual)
 
 
+def test_index_constructor_integer(default_integer_bitwidth):
+    got = cudf.Index([1, 2, 3])
+    expect = cudf.Index([1, 2, 3], dtype=f"int{default_integer_bitwidth}")
+
+    assert_eq(expect, got)
+
+
+def test_index_constructor_float(default_float_bitwidth):
+    got = cudf.Index([1., 2., 3.])
+    expect = cudf.Index([1., 2., 3.], dtype=f"float{default_float_bitwidth}")
+
+    assert_eq(expect, got)
+
+
 def test_rangeindex_union_default_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for union operation.
