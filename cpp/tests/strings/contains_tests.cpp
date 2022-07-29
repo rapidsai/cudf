@@ -437,6 +437,10 @@ TEST_F(StringsContainsTests, QuantifierErrors)
   EXPECT_THROW(cudf::strings::count_re(sv, "\\Z+"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::contains_re(sv, "(\\A)+"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::contains_re(sv, "(\\Z)+"), cudf::logic_error);
+
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(^($))+"), cudf::logic_error);
+  EXPECT_NO_THROW(cudf::strings::contains_re(sv, "(^a($))+"));
+  EXPECT_NO_THROW(cudf::strings::count_re(sv, "(^(a$))+"));
 }
 
 TEST_F(StringsContainsTests, OverlappedClasses)

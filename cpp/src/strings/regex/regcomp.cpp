@@ -459,7 +459,7 @@ class regex_parser {
     }
 
     // The quantifiers require at least one "real" previous item.
-    // We are throwing an error in these two if-checks for invalid quantifiers.
+    // We are throwing an errors for invalid quantifiers.
     // Another option is to just return CHAR silently here which effectively
     // treats the chr character as a literal instead as a quantifier.
     // This could lead to confusion where sometimes unescaped quantifier characters
@@ -468,13 +468,17 @@ class regex_parser {
 
     // Check that the previous item can be used with quantifiers.
     // If the previous item is a capture group, we need to check items inside the
-    // capture group can be used with quantifiers.
+    // capture group can be used with quantifiers too.
+    // (Note that capture groups can be nested).
     auto previous_type = _items.back().type;
     if (previous_type == RBRA) {  // previous item is a capture group
       // look for matching LBRA
-      auto lbra_itr = std::find_if(_items.rbegin(), _items.rend(), [](auto const& item) {
-        return item.type == LBRA || item.type == LBRA_NC;
-      });
+      auto nested_count = 0;
+      auto lbra_itr =
+        std::find_if(_items.rbegin(), _items.rend(), [nested_count](auto const& item) mutable {
+          nested_count += (item.type == RBRA);
+          return (item.type == LBRA || item.type == LBRA_NC) && (nested_count-- == 0);
+        });
       // search for the first valid item within the LBRA-RBRA range
       auto first_valid = std::find_first_of(
         _items.rbegin() + 1,
@@ -482,7 +486,7 @@ class regex_parser {
         valid_preceding_inst_types.begin(),
         valid_preceding_inst_types.end(),
         [](auto const item, auto const valid_type) { return item.type == valid_type; });
-      // set previous_type for error report
+      // set previous_type to be checked in next if-statement
       previous_type = (first_valid != lbra_itr) ? first_valid->type : (--lbra_itr)->type;
     }
 
