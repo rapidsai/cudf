@@ -337,9 +337,14 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
   {
-    col_schema.type           = Type::BYTE_ARRAY;
-    col_schema.converted_type = ConvertedType::UTF8;
-    col_schema.stats_dtype    = statistics_dtype::dtype_string;
+    col_schema.type = Type::BYTE_ARRAY;
+    if (col_meta.is_enabled_output_as_binary()) {
+      col_schema.converted_type = ConvertedType::UNKNOWN;
+      col_schema.stats_dtype    = statistics_dtype::dtype_byte_array;
+    } else {
+      col_schema.converted_type = ConvertedType::UTF8;
+      col_schema.stats_dtype    = statistics_dtype::dtype_string;
+    }
   }
 
   template <typename T>

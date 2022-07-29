@@ -386,7 +386,7 @@ class column_in_metadata {
   thrust::optional<bool> _nullable;
   bool _list_column_is_map  = false;
   bool _use_int96_timestamp = false;
-  // bool _output_as_binary = false;
+  bool _output_as_binary    = false;
   thrust::optional<uint8_t> _decimal_precision;
   thrust::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
@@ -490,6 +490,20 @@ class column_in_metadata {
   }
 
   /**
+   * @brief Specifies whether this column should be written as binary or string data
+   * Only valid for the following column types:
+   * string
+   *
+   * @param binary True = use binary data type. False = use string data type
+   * @return this for chaining
+   */
+  column_in_metadata& set_output_as_binary(bool binary)
+  {
+    _output_as_binary = binary;
+    return *this;
+  }
+
+  /**
    * @brief Get reference to a child of this column
    *
    * @param i Index of the child to get
@@ -581,6 +595,13 @@ class column_in_metadata {
    * @return The number of children of this column
    */
   [[nodiscard]] size_type num_children() const { return children.size(); }
+
+  /**
+   * @brief Get whether to encode this column as binary or string data
+   *
+   * @return Boolean indicating whether to encode this column as binary data
+   */
+  [[nodiscard]] bool is_enabled_output_as_binary() const { return _output_as_binary; }
 };
 
 /**
