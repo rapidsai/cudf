@@ -1214,24 +1214,10 @@ def crosstab(
         If passed, must match number of column arrays passed.
     aggfunc : function, optional
         If specified, requires `values` be specified as well.
-    margins : bool, default False
-        margins is not supported yet
-        Add row/column margins (subtotals).
-    margins_name : str, default 'All'
-        margins_name is not supported yet
-        Name of the row/column that will contain the totals
-        when margins is True.
-    dropna : bool, default True
-        dropna is not supported yet
-        Do not include columns whose entries are all NaN.
-    normalize : bool, {'all', 'index', 'columns'}, or {0,1}, default False
-        normalize is not supported yet
-        Normalize by dividing all values by the sum of values.
-
-        - If passed 'all' or `True`, will normalize over all values.
-        - If passed 'index' will normalize over each row.
-        - If passed 'columns' will normalize over each column.
-        - If margins is `True`, will also normalize margin values.
+    margins : Not supported
+    margins_name : Not supported
+    dropna : Not supported
+    normalize : Not supported
 
     Returns
     -------
@@ -1330,6 +1316,31 @@ def pivot_table(
 ):
     """
     Create a spreadsheet-style pivot table as a DataFrame.
+
+    Parameters
+    ----------
+    data : DataFrame
+    values : column name or list of column names to aggregate, optional
+    index : list of column names
+            Values to group by in the rows.
+    columns : list of column names
+            Values to group by in the columns.
+    aggfunc : str or dict, default "mean"
+            If dict is passed, the key is column to aggregate
+            and value is function name.
+    fill_value : scalar, default None
+        Value to replace missing values with
+        (in the resulting pivot table, after aggregation).
+    margins : Not supported
+    dropna : Not supported
+    margins_name : Not supported
+    observed : Not supported
+    sort : Not supported
+
+    Returns
+    -------
+    DataFrame
+        An Excel style pivot table.
     """
     if margins is not None:
         raise NotImplementedError("margins is not supported yet")

@@ -531,16 +531,23 @@ def test_pivot_duplicate_error():
         gdf.pivot(index="b", columns="a")
 
 
-@pytest.mark.parametrize("aggfunc", ["mean", "count"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "A": ["one", "one", "two", "three"] * 6,
+            "B": ["A", "B", "C"] * 8,
+            "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+            "D": np.random.randn(24),
+            "E": np.random.randn(24),
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
 @pytest.mark.parametrize("fill_value", [0])
-def test_pivot_table_simple(aggfunc, fill_value):
-    data = {
-        "A": ["one", "one", "two", "three"] * 6,
-        "B": ["A", "B", "C"] * 8,
-        "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-        "D": np.random.randn(24),
-        "E": np.random.randn(24),
-    }
+def test_pivot_table_simple(data, aggfunc, fill_value):
     pdf = pd.DataFrame(data)
     ref = pd.pivot_table(
         pdf,
