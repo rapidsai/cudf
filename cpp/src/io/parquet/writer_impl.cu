@@ -536,7 +536,41 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
       };
 
-      if (col->type().id() == type_id::STRUCT) {
+      auto is_last_list_child = [](cudf::detail::LinkedColPtr col) {
+        if (col->type().id() != type_id::LIST) { return false; }
+        auto const child_col_type =
+          col->children[lists_column_view::child_column_index]->type().id();
+        return child_col_type == type_id::INT8 or child_col_type == type_id::UINT8;
+      };
+
+      // There is a special case for a list<int8> column with one byte column child. This column can
+      // have a special flag that indicates we write this out as binary instead of a list. This is a
+      // more efficient storage mechanism for a single-depth list of bytes, but is a departure from
+      // original cuIO behavior so it is locked behind the option. If the option is selected on a
+      // column that isn't a single-depth list<int8> the code will throw.
+      if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
+        CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                     "Binary column's corresponding metadata should have zero or two children!");
+        if (col_meta.num_children() > 0) {
+          auto const data_col_type =
+            col->children[lists_column_view::child_column_index]->type().id();
+
+          CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.size() == 0,
+                       "Binary column must not be nested!");
+        }
+
+        schema_tree_node col_schema{};
+        col_schema.type            = Type::BYTE_ARRAY;
+        col_schema.converted_type  = ConvertedType::UNKNOWN;
+        col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
+        col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
+        col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
+        col_schema.parent_idx  = parent_idx;
+        col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
+        col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
+        schema.push_back(col_schema);
+      } else if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
         struct_schema.repetition_type =
@@ -814,11 +848,12 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // size of the leaf column
     // Calculate row offset into dremel data (repetition/definition values) and the respective
     // definition and repetition levels
-    gpu::dremel_data dremel = gpu::get_dremel_data(cudf_col, _d_nullability, _nullability, stream);
-    _dremel_offsets         = std::move(dremel.dremel_offsets);
-    _rep_level              = std::move(dremel.rep_level);
-    _def_level              = std::move(dremel.def_level);
-    _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
+    gpu::dremel_data dremel = gpu::get_dremel_data(
+      cudf_col, _d_nullability, _nullability, schema_node.output_as_byte_array, stream);
+    _dremel_offsets = std::move(dremel.dremel_offsets);
+    _rep_level      = std::move(dremel.rep_level);
+    _def_level      = std::move(dremel.def_level);
+    _data_count     = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
 
     stream.synchronize();
   } else {
@@ -829,15 +864,21 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
 column_view parquet_column_view::leaf_column_view() const
 {
-  auto col = cudf_col;
-  while (cudf::is_nested(col.type())) {
-    if (col.type().id() == type_id::LIST) {
-      col = col.child(lists_column_view::child_column_index);
-    } else if (col.type().id() == type_id::STRUCT) {
-      col = col.child(0);  // Stored cudf_col has only one child if struct
+  if (!schema_node.output_as_byte_array) {
+    auto col = cudf_col;
+    while (cudf::is_nested(col.type())) {
+      if (col.type().id() == type_id::LIST) {
+        col = col.child(lists_column_view::child_column_index);
+      } else if (col.type().id() == type_id::STRUCT) {
+        col = col.child(0);  // Stored cudf_col has only one child if struct
+      }
     }
+    return col;
+  } else {
+    // TODO: investigate why the leaf node is computed twice instead of using the schema leaf node
+    // for everything
+    return *schema_node.leaf_column;
   }
-  return col;
 }
 
 gpu::parquet_column_device_view parquet_column_view::get_device_view(
@@ -853,9 +894,10 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.rep_values    = _rep_level.data();
     desc.def_values    = _def_level.data();
   }
-  desc.num_rows       = cudf_col.size();
-  desc.physical_type  = physical_type();
-  desc.converted_type = converted_type();
+  desc.num_rows             = cudf_col.size();
+  desc.physical_type        = physical_type();
+  desc.converted_type       = converted_type();
+  desc.output_as_byte_array = schema_node.output_as_byte_array;
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
@@ -986,7 +1028,9 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
-    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
+    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN ||
+        (col_desc[chunk.col_desc_id].output_as_byte_array &&
+         col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;

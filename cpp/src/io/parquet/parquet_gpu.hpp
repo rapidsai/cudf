@@ -303,17 +303,20 @@ inline size_type __device__ row_to_value_idx(size_type idx,
 {
   // with a byte array, we can't go all the way down to the leaf node, but instead we want to leave
   // the size at the parent level because we are writing out parent row byte arrays.
-  if (!parquet_col.output_as_byte_array) {
-    auto col = *parquet_col.parent_column;
-    while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-      if (col.type().id() == type_id::STRUCT) {
-        idx += col.offset();
-        col = col.child(0);
-      } else {
-        auto list_col = cudf::detail::lists_column_device_view(col);
-        idx           = list_col.offset_at(idx);
-        col           = list_col.child();
+  auto col = *parquet_col.parent_column;
+  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+    if (col.type().id() == type_id::STRUCT) {
+      idx += col.offset();
+      col = col.child(0);
+    } else {
+      auto list_col = cudf::detail::lists_column_device_view(col);
+      auto child    = list_col.child();
+      if (parquet_col.output_as_byte_array &&
+          (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+        break;
       }
+      idx = list_col.offset_at(idx);
+      col = child;
     }
   }
   return idx;
@@ -494,6 +497,7 @@ struct dremel_data {
 dremel_data get_dremel_data(column_view h_col,
                             rmm::device_uvector<uint8_t> const& d_nullability,
                             std::vector<uint8_t> const& nullability,
+                            bool output_as_byte_array,
                             rmm::cuda_stream_view stream);
 
 /**
