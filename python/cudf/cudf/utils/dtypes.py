@@ -651,7 +651,9 @@ def _to_default_dtype(dtype):
             return cudf.dtype(
                 f'u{cudf.get_option("default_integer_bitwidth")//8}'
             )
-    if cudf.get_option("default_float_bitwidth") and cudf.api.types.is_float_dtype(dtype):
+    if cudf.get_option(
+        "default_float_bitwidth"
+    ) and cudf.api.types.is_float_dtype(dtype):
         return cudf.dtype(f'f{cudf.get_option("default_float_bitwidth")//8}')
 
     return dtype
