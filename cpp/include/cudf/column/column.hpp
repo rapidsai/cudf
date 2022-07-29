@@ -77,18 +77,18 @@ class column {
   column(column&& other) noexcept;
 
   /**
-   * @brief Move the contents from `other` to create a new column.
-   *
-   * After the move, `other.data() == NULL`
+   * @brief Construct a new column by taking ownership of the contents of a device_uvector.
    *
    * @param other The device_uvector whose contents will be moved into the new column.
    */
-  template <typename T>
-  column(rmm::device_uvector<T>&& other) noexcept
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  column(rmm::device_uvector<T>&& other)
     : _type{cudf::type_to_id<T>()},
       _size{static_cast<cudf::size_type>(other.size())},
       _data{other.release()}
   {
+    CUDF_EXPECTS(_size < std::numeric_limits<size_type>::max(),
+                 "Input vector exceeds maximum column capacity");
   }
 
   /**
