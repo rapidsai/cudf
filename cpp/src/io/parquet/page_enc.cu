@@ -18,6 +18,7 @@
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -117,6 +118,7 @@ __global__ void __launch_bounds__(block_size)
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
   int frag_y                 = blockIdx.y;
+  auto const physical_type   = col_desc[blockIdx.x].physical_type;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
   __syncthreads();
@@ -135,9 +137,8 @@ __global__ void __launch_bounds__(block_size)
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
 
-    auto col                = *(s->col.parent_column);
-    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col);
-    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, col);
+    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, s->col);
+    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
     s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {
@@ -151,8 +152,8 @@ __global__ void __launch_bounds__(block_size)
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  auto const physical_type = s->col.physical_type;
-  auto const dtype_len     = physical_type_len(physical_type, s->col.leaf_column->type().id());
+  auto const leaf_type = s->col.leaf_column->type().id();
+  auto const dtype_len = physical_type_len(physical_type, leaf_type);
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
@@ -166,10 +167,18 @@ __global__ void __launch_bounds__(block_size)
     uint32_t len;
     if (is_valid) {
       len = dtype_len;
-      if (physical_type != BOOLEAN) {
-        if (physical_type == BYTE_ARRAY) {
-          auto str = s->col.leaf_column->element<string_view>(val_idx);
-          len += str.size_bytes();
+      if (physical_type == BYTE_ARRAY) {
+        switch (leaf_type) {
+          case type_id::STRING: {
+            auto str = s->col.leaf_column->element<string_view>(val_idx);
+            len += str.size_bytes();
+          } break;
+          case type_id::LIST: {
+            auto list_element =
+              get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx);
+            len += list_element.size_bytes();
+          } break;
+          default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
         }
       }
     } else {
@@ -301,9 +310,14 @@ __global__ void __launch_bounds__(128)
       __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
-        if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
-          minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
-                           ck_g.stats[fragments_in_chunk].max_value.str_val.length);
+        if (!t && ck_g.stats) {
+          if (col_g.stats_dtype == dtype_string) {
+            minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
+                             ck_g.stats[fragments_in_chunk].max_value.str_val.length);
+          } else if (col_g.stats_dtype == dtype_byte_array) {
+            minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.byte_val.length,
+                             ck_g.stats[fragments_in_chunk].max_value.byte_val.length);
+          }
         }
       } else if (!t) {
         frag_g.fragment_data_size = 0;
@@ -338,7 +352,7 @@ __global__ void __launch_bounds__(128)
           page_g.max_hdr_size  = 32;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
-            if (col_g.stats_dtype == dtype_string) {
+            if (col_g.stats_dtype == dtype_string || col_g.stats_dtype == dtype_byte_array) {
               stats_hdr_len += 5 * 3 + 2 * max_stats_len;
             } else {
               stats_hdr_len += ((col_g.stats_dtype >= dtype_int64) ? 10 : 5) * 3;
@@ -903,9 +917,8 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    auto col           = *(s->col.parent_column);
-    s->page_start_val  = row_to_value_idx(s->page.start_row, col);
-    s->chunk_start_val = row_to_value_idx(s->ck.start_row, col);
+    s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
@@ -969,7 +982,12 @@ __global__ void __launch_bounds__(128, 8)
       if (is_valid) {
         len = dtype_len_out;
         if (physical_type == BYTE_ARRAY) {
-          len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
+          if (type_id == type_id::STRING) {
+            len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
+          } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
+            len +=
+              get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx).size_bytes();
+          }
         }
       } else {
         len = 0;
@@ -1060,13 +1078,25 @@ __global__ void __launch_bounds__(128, 8)
             memcpy(dst + pos, &v, 8);
           } break;
           case BYTE_ARRAY: {
-            auto str     = s->col.leaf_column->element<string_view>(val_idx);
+            auto const bytes = [](cudf::type_id const type_id,
+                                  column_device_view const* leaf_column,
+                                  uint32_t const val_idx) -> void const* {
+              switch (type_id) {
+                case type_id::STRING:
+                  return reinterpret_cast<void const*>(
+                    leaf_column->element<string_view>(val_idx).data());
+                case type_id::LIST:
+                  return reinterpret_cast<void const*>(
+                    get_element<statistics::byte_array_view>(*(leaf_column), val_idx).data());
+                default: CUDF_UNREACHABLE("invalid type id for byte array writing!");
+              }
+            }(type_id, s->col.leaf_column, val_idx);
             uint32_t v   = len - 4;  // string length
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
             dst[pos + 3] = v >> 24;
-            if (v != 0) memcpy(dst + pos + 4, str.data(), v);
+            if (v != 0) memcpy(dst + pos + 4, bytes, v);
           } break;
           case FIXED_LEN_BYTE_ARRAY: {
             if (type_id == type_id::DECIMAL128) {
@@ -1327,12 +1357,16 @@ __device__ void get_extremum(const statistics_val* stats_val,
     case dtype_decimal64: dtype_len = 8; break;
     case dtype_decimal128: dtype_len = 16; break;
     case dtype_string:
+    case dtype_byte_array:
     default: dtype_len = 0; break;
   }
 
   if (dtype == dtype_string) {
     *len = stats_val->str_val.length;
     *val = stats_val->str_val.ptr;
+  } else if (dtype == dtype_byte_array) {
+    *len = stats_val->byte_val.length;
+    *val = stats_val->byte_val.ptr;
   } else {
     *len = dtype_len;
     if (dtype == dtype_float32) {  // Convert from double to float32
@@ -1814,6 +1848,7 @@ dremel_data get_dremel_data(column_view h_col,
                             // TODO(cp): use device_span once it is converted to a single hd_vec
                             rmm::device_uvector<uint8_t> const& d_nullability,
                             std::vector<uint8_t> const& nullability,
+                            bool output_as_byte_array,
                             rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
@@ -1921,7 +1956,13 @@ dremel_data get_dremel_data(column_view h_col,
       curr_col = curr_col.child(0);
     }
     if (curr_col.type().id() == type_id::LIST) {
-      curr_col = curr_col.child(lists_column_view::child_column_index);
+      auto child = curr_col.child(lists_column_view::child_column_index);
+      if ((child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8) &&
+          output_as_byte_array) {
+        // consider this the bottom
+        break;
+      }
+      curr_col = child;
       if (not is_nested(curr_col.type())) {
         // Special case: when the leaf data column is the immediate child of the list col then we
         // want it to be included right away. Otherwise the struct containing it will be included in
