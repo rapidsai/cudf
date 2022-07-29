@@ -196,6 +196,7 @@ struct dremel_data {
  */
 dremel_data get_dremel_data(column_view h_col,
                             std::vector<uint8_t> nullability,
+                            bool output_as_byte_array,
                             rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail

@@ -251,6 +251,7 @@ struct parquet_column_device_view : stats_column_desc {
   uint8_t const* nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
                                //!< nullability of parent_column. May be different from
                                //!< col.nullable() in case of chunked writing.
+  bool output_as_byte_array;   //!< Indicates this list column is being written as a byte array
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -297,16 +298,25 @@ inline uint32_t __device__ int32_logical_len(type_id id)
  * Only works in the context of parquet writer where struct columns are previously modified s.t.
  * they only have one immediate child.
  */
-inline size_type __device__ row_to_value_idx(size_type idx, column_device_view col)
+inline size_type __device__ row_to_value_idx(size_type idx,
+                                             parquet_column_device_view const& parquet_col)
 {
+  // with a byte array, we can't go all the way down to the leaf node, but instead we want to leave
+  // the size at the parent level because we are writing out parent row byte arrays.
+  auto col = *parquet_col.parent_column;
   while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
     if (col.type().id() == type_id::STRUCT) {
       idx += col.offset();
       col = col.child(0);
     } else {
       auto list_col = cudf::detail::lists_column_device_view(col);
-      idx           = list_col.offset_at(idx);
-      col           = list_col.child();
+      auto child    = list_col.child();
+      if (parquet_col.output_as_byte_array &&
+          (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+        break;
+      }
+      idx = list_col.offset_at(idx);
+      col = child;
     }
   }
   return idx;

@@ -4871,6 +4871,65 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSetOperations() {
+    List<Double> lhsList1 = Arrays.asList(Double.NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 0.0);
+    List<Double> lhsList2 = Arrays.asList(Double.NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0);
+    List<Double> lhsList3 = null;
+    List<Double> lhsList4 = Arrays.asList(Double.NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0);
+
+    List<Double> rhsList1 = Arrays.asList(1.0, 0.5, null, 0.0, 0.0, null, Double.NaN);
+    List<Double> rhsList2 = Arrays.asList(2.0, 1.0, null, 0.0, 0.0, null);
+    List<Double> rhsList3 = Arrays.asList(2.0, 1.0, null, 0.0, 0.0, null);
+    List<Double> rhsList4 = null;
+
+    // Set intersection result:
+    List<Double> expectedIntersectionList1 = Arrays.asList(null, 0.0, Double.NaN);
+    List<Double> expectedIntersectionList2 = Arrays.asList(null, 0.0, 1.0);
+
+    // Set union result:
+    List<Double> expectedUnionList1 = Arrays.asList(null, 0.0, 0.5, 1.0, 5.0, Double.NaN);
+    List<Double> expectedUnionList2 = Arrays.asList(null, 0.0, 1.0, 2.0, 5.0, Double.NaN);
+
+    // Set difference result:
+    List<Double> expectedDifferenceList1 = Arrays.asList(5.0);
+    List<Double> expectedDifferenceList2 = Arrays.asList(5.0, Double.NaN);
+
+    try(ColumnVector lhs = makeListsColumn(DType.FLOAT64, lhsList1, lhsList2, lhsList3, lhsList4);
+        ColumnVector rhs = makeListsColumn(DType.FLOAT64, rhsList1, rhsList2, rhsList3, rhsList4)) {
+
+      // Test listsHaveOverlap:
+      try(ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, null, null);
+          ColumnVector result = ColumnVector.listsHaveOverlap(lhs, rhs)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Test listsIntersectDistinct:
+      try(ColumnVector expected = makeListsColumn(DType.FLOAT64, expectedIntersectionList1,
+              expectedIntersectionList2, null, null);
+          ColumnVector result = ColumnVector.listsIntersectDistinct(lhs, rhs);
+          ColumnVector resultSorted = result.listSortRows(false, true)) {
+        assertColumnsAreEqual(expected, resultSorted);
+      }
+
+      // Test listsUnionDistinct:
+      try(ColumnVector expected = makeListsColumn(DType.FLOAT64, expectedUnionList1,
+          expectedUnionList2, null, null);
+          ColumnVector result = ColumnVector.listsUnionDistinct(lhs, rhs);
+          ColumnVector resultSorted = result.listSortRows(false, true)) {
+        assertColumnsAreEqual(expected, resultSorted);
+      }
+
+      // Test listsDifferenceDistinct:
+      try(ColumnVector expected = makeListsColumn(DType.FLOAT64, expectedDifferenceList1,
+          expectedDifferenceList2, null, null);
+          ColumnVector result = ColumnVector.listsDifferenceDistinct(lhs, rhs);
+          ColumnVector resultSorted = result.listSortRows(false, true)) {
+        assertColumnsAreEqual(expected, resultSorted);
+      }
+    }
+  }
+
+  @Test
   void testStringSplit() {
     String pattern = " ";
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",

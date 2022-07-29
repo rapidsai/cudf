@@ -74,6 +74,7 @@ struct def_level_fn {
 
 dremel_data get_dremel_data(column_view h_col,
                             std::vector<uint8_t> nullability,
+                            bool output_as_byte_array,
                             rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
@@ -190,7 +191,13 @@ dremel_data get_dremel_data(column_view h_col,
       curr_col = curr_col.child(0);
     }
     if (curr_col.type().id() == type_id::LIST) {
-      curr_col = curr_col.child(lists_column_view::child_column_index);
+      auto child = curr_col.child(lists_column_view::child_column_index);
+      if ((child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8) &&
+          output_as_byte_array) {
+        // consider this the bottom
+        break;
+      }
+      curr_col = child;
       if (not is_nested(curr_col.type())) {
         // Special case: when the leaf data column is the immediate child of the list col then we
         // want it to be included right away. Otherwise the struct containing it will be included in
