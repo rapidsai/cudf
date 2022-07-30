@@ -1199,7 +1199,7 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes length min/max will be truncated to
    */
-  auto set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(size_type size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
