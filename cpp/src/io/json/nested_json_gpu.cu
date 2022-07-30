@@ -714,7 +714,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto str_col_ptr                  = make_strings_column(d_string_data, stream);
       auto [result_bitmask, null_count] = make_validity(json_col);
       str_col_ptr->set_null_mask(result_bitmask, null_count);
-      return {std::move(str_col_ptr), {}};
+      return {std::move(str_col_ptr), {{"offsets"}, {"chars"}}};
       break;
     }
     case json_col_t::StructColumn: {
@@ -742,6 +742,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size();
       std::vector<column_name_info> column_names{};
+      column_names.emplace_back("offsets");
       column_names.emplace_back(json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
@@ -813,7 +814,7 @@ json_column get_json_columns(host_span<SymbolT const> input,
                              rmm::cuda_stream_view stream)
 {
   // Default name for a list's child column
-  std::string const list_child_name = "elements";
+  std::string const list_child_name = "element";
 
   constexpr std::size_t single_item = 1;
   hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
