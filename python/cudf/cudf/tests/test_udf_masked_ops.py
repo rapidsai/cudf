@@ -8,6 +8,7 @@ from numba import cuda
 
 import cudf
 from cudf.core.missing import NA
+from cudf.core.udf import _STRING_UDFS_ENABLED
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
@@ -20,6 +21,14 @@ from cudf.testing._utils import (
     assert_eq,
     parametrize_numeric_dtypes_pairwise,
 )
+
+
+# only run string udf tests if library exists and is enabled
+def string_udf_test(f):
+    if _STRING_UDFS_ENABLED:
+        return f
+    else:
+        return pytest.mark.skip(reason="String UDFs not enabled")(f)
 
 
 def run_masked_udf_test(func, data, args=(), **kwargs):
@@ -674,6 +683,7 @@ def test_masked_udf_caching():
     assert precompiled.currsize == 1
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022"]}]
 )
@@ -688,6 +698,7 @@ def test_string_udf_len(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022", "cuDF"]}]
 )
@@ -703,6 +714,7 @@ def test_string_udf_startswith(data, substr):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -731,6 +743,7 @@ def test_string_udf_endswith(data, substr):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -759,6 +772,7 @@ def test_string_udf_find(data, substr):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -787,6 +801,7 @@ def test_string_udf_rfind(data, substr):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -815,6 +830,7 @@ def test_string_udf_contains(data, substr):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -843,6 +859,7 @@ def test_string_udf_cmpops(data, other, cmpop):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -869,6 +886,7 @@ def test_string_udf_isalnum(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -895,6 +913,7 @@ def test_string_udf_isalpha(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -921,6 +940,7 @@ def test_string_udf_isdigit(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -950,6 +970,7 @@ def test_string_udf_isdecimal(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -978,6 +999,7 @@ def test_string_udf_isupper(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
@@ -1006,6 +1028,7 @@ def test_string_udf_islower(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize(
     "data",
     [
