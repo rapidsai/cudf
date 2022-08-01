@@ -2565,3 +2565,131 @@ def test_rangeindex_max(rangeindex):
     expected = pidx.max()
 
     assert_eq(expected, actual)
+
+
+def test_index_constructor_integer(default_integer_bitwidth):
+    got = cudf.Index([1, 2, 3])
+    expect = cudf.Index([1, 2, 3], dtype=f"int{default_integer_bitwidth}")
+
+    assert_eq(expect, got)
+
+
+def test_index_constructor_float(default_float_bitwidth):
+    got = cudf.Index([1.0, 2.0, 3.0])
+    expect = cudf.Index(
+        [1.0, 2.0, 3.0], dtype=f"float{default_float_bitwidth}"
+    )
+
+    assert_eq(expect, got)
+
+
+def test_rangeindex_union_default_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for union operation.
+    idx1 = cudf.RangeIndex(0, 2)
+    idx2 = cudf.RangeIndex(5, 6)
+
+    expected = cudf.Index([0, 1, 5], dtype=f"int{default_integer_bitwidth}")
+    actual = idx1.union(idx2)
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_intersection_default_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for intersection operation.
+    idx1 = cudf.RangeIndex(0, 100)
+    # Intersecting two RangeIndex will _always_ result in a RangeIndex, use
+    # regular index here to force materializing.
+    idx2 = cudf.Index([50, 102])
+
+    expected = cudf.Index([50], dtype=f"int{default_integer_bitwidth}")
+    actual = idx1.intersection(idx2)
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_take_default_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for take operation.
+    idx = cudf.RangeIndex(0, 100)
+    actual = idx.take([0, 3, 7, 62])
+    expected = cudf.Index(
+        [0, 3, 7, 62], dtype=f"int{default_integer_bitwidth}"
+    )
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_apply_boolean_mask_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for apply boolean mask operation.
+    idx = cudf.RangeIndex(0, 8)
+    mask = [True, True, True, False, False, False, True, False]
+    actual = idx[mask]
+    expected = cudf.Index([0, 1, 2, 6], dtype=f"int{default_integer_bitwidth}")
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_repeat_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for repeat operation.
+    idx = cudf.RangeIndex(0, 3)
+    actual = idx.repeat(3)
+    expected = cudf.Index(
+        [0, 0, 0, 1, 1, 1, 2, 2, 2], dtype=f"int{default_integer_bitwidth}"
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "op, expected, expected_kind",
+    [
+        (lambda idx: 2**idx, [2, 4, 8, 16], "int"),
+        (lambda idx: idx**2, [1, 4, 9, 16], "int"),
+        (lambda idx: idx / 2, [0.5, 1, 1.5, 2], "float"),
+        (lambda idx: 2 / idx, [2, 1, 2 / 3, 0.5], "float"),
+        (lambda idx: idx % 3, [1, 2, 0, 1], "int"),
+        (lambda idx: 3 % idx, [0, 1, 0, 3], "int"),
+    ],
+)
+def test_rangeindex_binops_user_option(
+    op, expected, expected_kind, default_integer_bitwidth
+):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for binary operation.
+    idx = cudf.RangeIndex(1, 5)
+    actual = op(idx)
+    expected = cudf.Index(
+        expected, dtype=f"{expected_kind}{default_integer_bitwidth}"
+    )
+    assert_eq(
+        expected,
+        actual,
+    )
+
+
+def test_rangeindex_join_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for join.
+    idx1 = cudf.RangeIndex(0, 10)
+    idx2 = cudf.RangeIndex(5, 15)
+
+    actual = idx1.join(idx2, how="inner")
+    expected = cudf.Index(
+        [5, 6, 7, 8, 9], dtype=f"int{default_integer_bitwidth}", name=0
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_where_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for where operation.
+    idx = cudf.RangeIndex(0, 10)
+    mask = [True, False, True, False, True, False, True, False, True, False]
+    actual = idx.where(mask, -1)
+    expected = cudf.Index(
+        [0, -1, 2, -1, 4, -1, 6, -1, 8, -1],
+        dtype=f"int{default_integer_bitwidth}",
+    )
+    assert_eq(expected, actual)
