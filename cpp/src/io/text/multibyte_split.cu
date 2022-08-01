@@ -396,11 +396,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   // This finds the first field beginning after the byte range.
   // We shift it by 1 to also copy this last offset
-  auto relevant_offsets_end = thrust::lower_bound(rmm::exec_policy(stream),
-                                                  string_offsets.begin(),
-                                                  string_offsets.end() - 1,
-                                                  byte_range.offset() + byte_range.size()) +
-                              1;
+  auto relevant_offsets_end = 1 + thrust::lower_bound(rmm::exec_policy(stream),
+                                                      string_offsets.begin(),
+                                                      string_offsets.end() - 1,
+                                                      byte_range.offset() + byte_range.size());
 
   // The above logic works if there are no duplicate string_offsets entries.
   // The only way we can get duplicates is if the input ends with a delimiter.
