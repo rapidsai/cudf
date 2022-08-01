@@ -1614,6 +1614,36 @@ def test_axes(data):
         assert_eq(e, a)
 
 
+def test_series_truncate():
+    csr = cudf.Series([1, 2, 3, 4])
+    psr = csr.to_pandas()
+
+    assert_eq(csr.truncate(), psr.truncate())
+    assert_eq(csr.truncate(1, 2), psr.truncate(1, 2))
+    assert_eq(csr.truncate(before=1, after=2), psr.truncate(before=1, after=2))
+
+
+def test_series_truncate_invalid_axis():
+    csr = cudf.Series([1, 2, 3, 4])
+    with pytest.raises(ValueError):
+        csr.truncate(axis=1)
+
+
+def test_series_truncate_datetimeindex():
+    dates = cudf.date_range("2021-01-01", "2021-01-02", freq="s")
+    csr = cudf.Series(range(len(dates)), index=dates)
+    psr = csr.to_pandas()
+
+    assert_eq(
+        csr.truncate(
+            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ),
+        psr.truncate(
+            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "data",
     [

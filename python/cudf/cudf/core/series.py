@@ -662,6 +662,87 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return [self.index]
 
     @_cudf_nvtx_annotate
+    def truncate(self, before=None, after=None, axis=0, copy=True):
+        """
+        Truncate a Series before and after some index value.
+        This is a useful shorthand for boolean indexing based on index
+        values above or below certain thresholds.
+        Parameters
+        ----------
+        before : date, str, int
+            Truncate all rows before this index value.
+        after : date, str, int
+            Truncate all rows after this index value.
+        axis : {0 or 'index'}, optional
+            Axis to truncate. Truncates the index (rows) by default.
+        copy : bool, default is True,
+            Return a copy of the truncated section.
+        Returns
+        -------
+        type of caller
+            The truncated Series.
+        Notes
+        -----
+        If the index being truncated contains only datetime values,
+        `before` and `after` may be specified as strings instead of
+        Timestamps.
+        Examples
+        --------
+        >>> import cudf
+        >>> cs1 = cudf.Series([1, 2, 3, 4])
+        >>> cs1.truncate(before=1, after=2)
+        1    2
+        2    3
+        dtype: int64
+
+        >>> import cudf
+        >>> dates = cudf.date_range('2021-01-01', '2021-01-02', freq='s')
+        >>> cs2 = cudf.Series(range(len(dates)), index=dates)
+        >>> cs2.truncate(
+            ... before="2021-01-01 23:45:18",
+            ... after="2021-01-01 23:45:27"
+            )
+        2021-01-01 23:45:18    85518
+        2021-01-01 23:45:19    85519
+        2021-01-01 23:45:20    85520
+        2021-01-01 23:45:21    85521
+        2021-01-01 23:45:22    85522
+        2021-01-01 23:45:23    85523
+        2021-01-01 23:45:24    85524
+        2021-01-01 23:45:25    85525
+        2021-01-01 23:45:26    85526
+        2021-01-01 23:45:27    85527
+        dtype: int64
+        """
+        # check axis, if axis is not 0 or index, throws an error in that case
+        if axis not in (0, "index"):
+            raise ValueError(f"No axis named {axis} for object type Series")
+        ax = self.index
+
+        if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
+            raise ValueError("truncate requires a sorted index")
+
+        if ax is cudf.core.index.DatetimeIndex:
+            before = pd.to_datetime(before)
+            after = pd.to_datetime(after)
+
+        if before is not None and after is not None and before > after:
+            raise ValueError(f"Truncate: {after} must be after {before}")
+
+        if len(ax) > 1 and ax.is_monotonic_decreasing and ax.nunique() > 1:
+            before, after = after, before
+
+        # if ax is multiIndex - how do we deal with that
+
+        slicer = slice(before, after)
+        result = self.loc[slicer]
+
+        if copy:
+            result = result.copy()
+
+        return result
+
+    @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()
 
