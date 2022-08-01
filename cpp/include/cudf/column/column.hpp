@@ -80,6 +80,11 @@ class column {
    * @brief Construct a new column by taking ownership of the contents of a device_uvector.
    *
    * @param other The device_uvector whose contents will be moved into the new column.
+   * @param[in] null_mask Optional, column's null value indicator bitmask. May
+   * be empty if `null_count` is 0 or `UNKNOWN_NULL_COUNT`.
+   * @param null_count Optional, the count of null elements. If unknown, specify
+   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
+   * the first invocation of `null_count()`.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
   column(rmm::device_uvector<T>&& other,
