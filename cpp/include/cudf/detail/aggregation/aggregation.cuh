@@ -146,8 +146,8 @@ struct update_target_element<
 
     auto const source_element = source.element<Source>(source_index);
 
-    // If the source element is a NaN, the result will be undefined, which means it can remain
-    // unchanged. Thus, we just ignore updating the target.
+    // If the source element is a NaN, the result will be undefined, which means the target element
+    // can remain unchanged. Thus, we just ignore updating the target.
     if constexpr (std::numeric_limits<Source>::has_quiet_NaN) {
       if (std::isnan(source_element)) { return; }
     }
@@ -201,8 +201,8 @@ struct update_target_element<
 
     auto const source_element = source.element<Source>(source_index);
 
-    // If the source element is a NaN, the result will be undefined, which means it can remain
-    // unchanged. Thus, we just ignore updating the target.
+    // If the source element is a NaN, the result will be undefined, which means the target element
+    // can remain unchanged. Thus, we just ignore updating the target.
     if constexpr (std::numeric_limits<Source>::has_quiet_NaN) {
       if (std::isnan(source_element)) { return; }
     }
