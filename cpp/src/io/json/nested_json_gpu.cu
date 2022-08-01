@@ -22,6 +22,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -682,14 +683,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     return cudf::detail::valid_if(d_validity.begin(), d_validity.end(), thrust::identity<bool>{});
   };
 
-  auto device_uvector_from_vector = [stream](auto const& vec) {
-    using T    = typename std::decay_t<decltype(vec)>::value_type;
-    auto d_vec = rmm::device_uvector<T>(vec.size(), stream);
-    cudaMemcpyAsync(
-      d_vec.data(), vec.data(), vec.size() * sizeof(vec[0]), cudaMemcpyHostToDevice, stream);
-    return d_vec;
-  };
-
   switch (json_col.type) {
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
@@ -699,9 +692,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                    "string offset, string length mismatch");
       rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
-        device_uvector_from_vector(json_col.string_offsets);
+        cudf::detail::make_device_uvector_async(json_col.string_offsets, stream);
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
-        device_uvector_from_vector(json_col.string_lengths);
+        cudf::detail::make_device_uvector_async(json_col.string_lengths, stream);
       auto offset_length_it =
         thrust::make_zip_iterator(d_string_offsets.begin(), d_string_lengths.begin());
       thrust::transform(rmm::exec_policy(stream),
@@ -746,7 +739,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       column_names.emplace_back(json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
-        device_uvector_from_vector(json_col.child_offsets);
+        cudf::detail::make_device_uvector_async(json_col.child_offsets, stream);
       auto offsets_column = std::make_unique<column>(
         data_type{type_id::INT32}, num_rows, d_offsets.release());  // TODO mr.
       // Create children column
@@ -773,9 +766,7 @@ table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
                                           rmm::cuda_stream_view stream)
 {
   // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input{input.size(), stream};
-  cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
+  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
   // Get internal JSON column
   auto root_column = get_json_columns(input, d_input, stream);
