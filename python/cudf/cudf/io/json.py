@@ -54,10 +54,8 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        return cudf.DataFrame._from_data(
-            *libjson.read_json(
-                filepaths_or_buffers, dtype, lines, compression, byte_range
-            )
+        return libjson.read_json(
+            filepaths_or_buffers, dtype, lines, compression, byte_range
         )
     else:
         warnings.warn(
