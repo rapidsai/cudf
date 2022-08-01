@@ -555,9 +555,11 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
   // Reset STRUCT<STRUCT>'s null-mask. Mark third row as null.
   mark_row_as_null(struct_structs_column->mutable_view(), 2);
 
-  // The null masks should now look as follows, with the STRUCT<STRUCT> null mask *not* pushed
-  // down: STRUCT<STRUCT>: 1111011 STRUCT:         1111101 nums_member:    0110101 lists_member:
-  // 1001101
+  // The null masks should now look as follows, with the STRUCT<STRUCT> null mask *not* pushed down:
+  // STRUCT<STRUCT>: 1111011
+  // STRUCT:         1111101
+  // nums_member:    0110101
+  // lists_member:   1001101
 
   // Slice off the first and last rows.
   auto sliced_structs = slice_off_first_and_last_rows(struct_structs_column->view());
