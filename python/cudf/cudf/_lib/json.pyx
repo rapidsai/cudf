@@ -22,7 +22,7 @@ from cudf._lib.cpp.io.json cimport (
     read_json as libcudf_read_json,
 )
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.io.utils cimport make_source_info
+from cudf._lib.io.utils cimport make_source_info, update_struct_field_names
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -106,14 +106,20 @@ cpdef read_json(object filepaths_or_buffers,
         opts.set_dtypes(c_dtypes_map)
 
     # Read JSON
-    cdef cudf_io_types.table_with_metadata c_out_table
+    cdef cudf_io_types.table_with_metadata c_result
 
     with nogil:
-        c_out_table = move(libcudf_read_json(opts))
+        c_result = move(libcudf_read_json(opts))
 
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
-    return data_from_unique_ptr(move(c_out_table.tbl),
-                                column_names=column_names)
+    meta_names = [name.decode() for name in c_result.metadata.column_names]
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+        move(c_result.tbl),
+        column_names=meta_names
+    ))
+
+    update_struct_field_names(df, c_result.metadata.schema_info)
+
+    return df
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
     if cudf.api.types.is_categorical_dtype(dtype):
