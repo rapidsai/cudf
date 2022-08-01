@@ -673,20 +673,25 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
 }
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column(
-  json_column const& json_col, device_span<SymbolT const> d_input, rmm::cuda_stream_view stream)
+  json_column const& json_col,
+  device_span<SymbolT const> d_input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
-  auto make_validity = [](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
+  auto make_validity =
+    [stream, mr](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
     if (json_col.current_offset == json_col.valid_count) { return {rmm::device_buffer{}, 0}; }
 
     thrust::device_vector<json_column::row_offset_t> d_validity(
       json_col.validity);  // TODO device_uvector.
-    return cudf::detail::valid_if(d_validity.begin(), d_validity.end(), thrust::identity<bool>{});
+    return cudf::detail::valid_if(
+      d_validity.begin(), d_validity.end(), thrust::identity<bool>{}, stream, mr);
   };
 
   switch (json_col.type) {
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
-      auto const col_size            = json_col.string_offsets.size();
+      auto const col_size      = json_col.string_offsets.size();
       using char_length_pair_t = thrust::pair<const char*, size_type>;
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
@@ -704,7 +709,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                         [data = d_input.data()] __device__(auto ip) {
                           return char_length_pair_t{data + thrust::get<0>(ip), thrust::get<1>(ip)};
                         });
-      auto str_col_ptr                  = make_strings_column(d_string_data, stream);
+      auto str_col_ptr                  = make_strings_column(d_string_data, stream, mr);
       auto [result_bitmask, null_count] = make_validity(json_col);
       str_col_ptr->set_null_mask(result_bitmask, null_count);
       return {std::move(str_col_ptr), {{"offsets"}, {"chars"}}};
@@ -718,18 +723,18 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       for (auto const& col : json_col.child_columns) {
         column_names.emplace_back(col.first);
         auto const& child_col      = col.second;
-        auto [child_column, names] = json_column_to_cudf_column(child_col, d_input, stream);
-        num_rows                   = child_column->size();
+        auto [child_column, names] = json_column_to_cudf_column(child_col, d_input, stream, mr);
+        if (num_rows < 0) num_rows = child_column->size();
+        CUDF_EXPECTS(num_rows == child_column->size(),
+                     "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {make_structs_column(num_rows,
-                                  std::move(child_columns),
-                                  null_count,
-                                  std::move(result_bitmask),
-                                  stream),  // TODO mr.
-              column_names};
+      return {
+        make_structs_column(
+          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
+        column_names};
       break;
     }
     case json_col_t::ListColumn: {
@@ -739,12 +744,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       column_names.emplace_back(json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
-        cudf::detail::make_device_uvector_async(json_col.child_offsets, stream);
-      auto offsets_column = std::make_unique<column>(
-        data_type{type_id::INT32}, num_rows, d_offsets.release());  // TODO mr.
+        cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
+      auto offsets_column =
+        std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
       // Create children column
       auto [child_column, names] =
-        json_column_to_cudf_column(json_col.child_columns.begin()->second, d_input, stream);
+        json_column_to_cudf_column(json_col.child_columns.begin()->second, d_input, stream, mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows - 1,
@@ -752,7 +757,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                 std::move(child_column),
                                 null_count,
                                 std::move(result_bitmask),
-                                stream),  // TODO mr.
+                                stream,
+                                mr),
               std::move(column_names)};
       break;
     }
@@ -763,7 +769,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 }
 
 table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
-                                          rmm::cuda_stream_view stream)
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
 {
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
@@ -791,7 +798,7 @@ table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
     out_column_names.emplace_back(col_name);
 
     // Get this JSON column's cudf column and schema info
-    auto [cudf_col, col_name_info]   = json_column_to_cudf_column(json_col, d_input, stream);
+    auto [cudf_col, col_name_info]   = json_column_to_cudf_column(json_col, d_input, stream, mr);
     out_column_names.back().children = std::move(col_name_info);
     out_columns.emplace_back(std::move(cudf_col));
   }

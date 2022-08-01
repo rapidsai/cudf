@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -260,8 +261,10 @@ json_column get_json_columns(host_span<SymbolT const> input,
  * @param stream The CUDA stream to which kernels are dispatched
  * @return cudf::column of the given input
  */
-table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
-                                          rmm::cuda_stream_view stream);
+table_with_metadata parse_json_to_columns(
+  host_span<SymbolT const> input,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 
