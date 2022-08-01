@@ -61,18 +61,6 @@ constexpr auto abs(T value)
   return value >= 0 ? value : -value;
 }
 
-template <typename T>
-CUDF_HOST_DEVICE inline auto min(T lhs, T rhs)
-{
-  return lhs < rhs ? lhs : rhs;
-}
-
-template <typename T>
-CUDF_HOST_DEVICE inline auto max(T lhs, T rhs)
-{
-  return lhs > rhs ? lhs : rhs;
-}
-
 template <typename BaseType>
 constexpr auto exp10(int32_t exponent)
 {
