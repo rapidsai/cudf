@@ -1,13 +1,16 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import warnings
+from collections import abc
 from io import BytesIO, StringIO
 
+import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
+from cudf.utils.dtypes import _maybe_convert_to_default_type
 
 
 @ioutils.doc_read_json()
@@ -54,7 +57,7 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        return cudf.DataFrame._from_data(
+        df = cudf.DataFrame._from_data(
             *libjson.read_json(
                 filepaths_or_buffers, dtype, lines, compression, byte_range
             )
@@ -100,6 +103,26 @@ def read_json(
                 **kwargs,
             )
         df = cudf.from_pandas(pd_value)
+
+    if dtype is True or isinstance(dtype, abc.Mapping):
+        # There exists some dtypes in the result columns that is inferred.
+        # Find them and map them to the default dtypes.
+        dtype = {} if dtype is True else dtype
+        unspecified_dtypes = {
+            name: df._dtypes[name]
+            for name in df._column_names
+            if name not in dtype
+        }
+        default_dtypes = {}
+
+        for name, dt in unspecified_dtypes.items():
+            if dt == np.dtype("i1"):
+                # csv reader reads all null column as int8.
+                # The dtype should remain int8.
+                default_dtypes[name] = dt
+            else:
+                default_dtypes[name] = _maybe_convert_to_default_type(dt)
+        df = df.astype(default_dtypes)
 
     return df
 

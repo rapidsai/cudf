@@ -812,3 +812,10 @@ def test_list_astype():
     s2 = s.list.astype("string")
     assert s2.dtype == cudf.ListDtype(cudf.ListDtype("string"))
     assert_eq(s.list.leaves.astype("string"), s2.list.leaves)
+
+
+def test_memory_usage():
+    s1 = cudf.Series([[1, 2], [3, 4]])
+    assert s1.memory_usage() == 44
+    s2 = cudf.Series([[[[1, 2]]], [[[3, 4]]]])
+    assert s2.memory_usage() == 68
