@@ -10,6 +10,7 @@ import pytest
 
 import rmm  # noqa: F401
 
+import cudf
 from cudf.testing._utils import assert_eq
 
 _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
@@ -141,3 +142,19 @@ def pytest_sessionfinish(session, exitstatus):
         del os.environ["_CUDF_TEST_ROOT"]
     except KeyError:
         pass
+
+
+@pytest.fixture(params=[32, 64])
+def default_integer_bitwidth(request):
+    old_default = cudf.get_option("default_integer_bitwidth")
+    cudf.set_option("default_integer_bitwidth", request.param)
+    yield request.param
+    cudf.set_option("default_integer_bitwidth", old_default)
+
+
+@pytest.fixture(params=[32, 64])
+def default_float_bitwidth(request):
+    old_default = cudf.get_option("default_float_bitwidth")
+    cudf.set_option("default_float_bitwidth", request.param)
+    yield request.param
+    cudf.set_option("default_float_bitwidth", old_default)

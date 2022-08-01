@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import textwrap
+from collections.abc import Container
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -112,3 +114,52 @@ def describe_option(name: Optional[str] = None):
     names = _OPTIONS.keys() if name is None else [name]
     for name in names:
         print(_build_option_description(name, _OPTIONS[name]))
+
+
+def _make_contains_validator(valid_options: Container) -> Callable:
+    """Return a validator that checks if a value is in `valid_options`."""
+
+    def _validator(val):
+        if val not in valid_options:
+            raise ValueError(
+                f"{val} is not a valid option. "
+                f"Must be one of {set(valid_options)}."
+            )
+
+    return _validator
+
+
+_register_option(
+    "default_integer_bitwidth",
+    None,
+    textwrap.dedent(
+        """
+        Default bitwidth when the dtype of an integer needs to be
+        inferred. If set to `None`, the API will align dtype with pandas.
+        APIs that respect this option include:
+        \t- cudf object constructors
+        \t- cudf.read_csv and cudf.read_json when `dtype` is not specified.
+        \t- APIs that require implicit conversion of cudf.RangeIndex to an
+        \t  integer index.
+        \tValid values are  None, 32 or 64. Default is None.
+    """
+    ),
+    _make_contains_validator([None, 32, 64]),
+)
+
+
+_register_option(
+    "default_float_bitwidth",
+    None,
+    textwrap.dedent(
+        """
+        Default bitwidth when the dtype of a float needs to be
+        inferred. If set to `None`, the API will align dtype with pandas.
+        APIs that respect this option include:
+        \t- cudf object constructors
+        \t- cudf.read_csv and cudf.read_json when `dtype` is not specified.
+        \tValid values are None, 32 or 64. Default is None.
+    """
+    ),
+    _make_contains_validator([None, 32, 64]),
+)
