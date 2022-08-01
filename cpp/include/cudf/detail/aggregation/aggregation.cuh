@@ -142,12 +142,18 @@ struct update_target_element<
                              size_type source_index) const noexcept
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+
+    auto const source_element = source.element<Source>(source_index);
+
+    // If the source element is a NaN, the result will be undefined.
+    // Thus, we just set the target value to be the same as before it is updated.
+    if constexpr (std::numeric_limits<Source>::has_quiet_NaN) {
+      if (std::isnan(source_element)) { return; }
+    }
 
     using Target = target_type_t<Source, aggregation::MIN>;
-    atomicMin(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+    atomicMin(&target.element<Target>(target_index), static_cast<Target>(source_element));
   }
 };
 
@@ -191,12 +197,18 @@ struct update_target_element<
                              size_type source_index) const noexcept
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+
+    auto const source_element = source.element<Source>(source_index);
+
+    // If the source element is a NaN, the result will be undefined.
+    // Thus, we just set the target value to be the same as before it is updated.
+    if constexpr (std::numeric_limits<Source>::has_quiet_NaN) {
+      if (std::isnan(source_element)) { return; }
+    }
 
     using Target = target_type_t<Source, aggregation::MAX>;
-    atomicMax(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+    atomicMax(&target.element<Target>(target_index), static_cast<Target>(source_element));
   }
 };
 
