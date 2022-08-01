@@ -299,6 +299,7 @@ add_library(
   src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmur_hash.cu
+  src/hash/spark_murmur_hash.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -386,6 +387,7 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/set_operations.cu
   src/lists/stream_compaction/apply_boolean_mask.cu
   src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
@@ -710,6 +712,8 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+  # Always print verbose output when tests fail if run using `make test`.
+  list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
 endif()
 

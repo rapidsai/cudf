@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <vector>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -22,12 +24,17 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/lists/list_device_view.cuh>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <thrust/functional.h>
+#include <thrust/logical.h>
 #include <thrust/scan.h>
+#include <thrust/tabulate.h>
 
 #include "ColumnViewJni.hpp"
 
@@ -79,6 +86,89 @@ std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const &lis
   CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
 
   return offsets_column;
+}
+
+namespace {
+
+/**
+ * @brief Check if the input list has any null elements.
+ *
+ * @param list The input list.
+ * @return The boolean result indicating if the input list has null elements.
+ */
+__device__ bool list_has_nulls(list_device_view list) {
+  return thrust::any_of(thrust::seq, thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(list.size()),
+                        [&list](auto const idx) { return list.is_null(idx); });
+}
+
+} // namespace
+
+void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view const &rhs,
+                               std::unique_ptr<cudf::column> const &overlap_result,
+                               rmm::cuda_stream_view stream) {
+  // If both of the input columns do not have nulls, we don't need to do anything here.
+  if (!lists_column_view{lhs}.child().has_nulls() && !lists_column_view{rhs}.child().has_nulls()) {
+    return;
+  }
+
+  auto const overlap_cv = overlap_result->view();
+  auto const lhs_cdv_ptr = column_device_view::create(lhs, stream);
+  auto const rhs_cdv_ptr = column_device_view::create(rhs, stream);
+  auto const overlap_cdv_ptr = column_device_view::create(overlap_cv, stream);
+
+  // Create a new bitmask to satisfy Spark's arrays_overlap's special behavior.
+  auto validity = rmm::device_uvector<bool>(overlap_cv.size(), stream);
+  thrust::tabulate(rmm::exec_policy(stream), validity.begin(), validity.end(),
+                   [lhs = cudf::detail::lists_column_device_view{*lhs_cdv_ptr},
+                    rhs = cudf::detail::lists_column_device_view{*rhs_cdv_ptr},
+                    overlap_result = *overlap_cdv_ptr] __device__(auto const idx) {
+                     if (overlap_result.is_null(idx) ||
+                         overlap_result.template element<bool>(idx)) {
+                       return true;
+                     }
+
+                     // `lhs_list` and `rhs_list` should not be null, otherwise
+                     // `overlap_result[idx]` is null and that has been handled above.
+                     auto const lhs_list = list_device_view{lhs, idx};
+                     auto const rhs_list = list_device_view{rhs, idx};
+
+                     // Only proceed if both lists are non-empty.
+                     if (lhs_list.size() == 0 || rhs_list.size() == 0) {
+                       return true;
+                     }
+
+                     // Only proceed if at least one list has nulls.
+                     if (!list_has_nulls(lhs_list) && !list_has_nulls(rhs_list)) {
+                       return true;
+                     }
+
+                     // Here, the input lists satisfy all the conditions below so we output a
+                     // null:
+                     //  - Both of the the input lists have no non-null common element, and
+                     //  - They are both non-empty, and
+                     //  - Either of them contains null elements.
+                     return false;
+                   });
+
+  // Create a new nullmask from the validity data.
+  auto [new_null_mask, new_null_count] =
+      cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{});
+
+  if (new_null_count > 0) {
+    // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the
+    // new nullmask.
+    if (overlap_cv.nullable()) {
+      auto [null_mask, null_count] = cudf::detail::bitmask_and(
+          std::vector<bitmask_type const *>{
+              overlap_cv.null_mask(), static_cast<bitmask_type const *>(new_null_mask.data())},
+          std::vector<cudf::size_type>{0, 0}, overlap_cv.size(), stream);
+      overlap_result->set_null_mask(std::move(null_mask), null_count);
+    } else {
+      // Just set the output nullmask as the new nullmask.
+      overlap_result->set_null_mask(std::move(new_null_mask), new_null_count);
+    }
+  }
 }
 
 std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view const &input,

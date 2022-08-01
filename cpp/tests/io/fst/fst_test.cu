@@ -16,6 +16,7 @@
 
 #include <io/fst/lookup_tables.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
+#include <tests/io/fst/common.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -116,56 +117,7 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
   return {out_tape, out_index_tape};
 }
 
-//------------------------------------------------------------------------------
-// TEST FST SPECIFICATIONS
-//------------------------------------------------------------------------------
-enum DFA_STATES : char {
-  // The state being active while being outside of a string. When encountering an opening bracket or
-  // curly brace, we push it onto the stack. When encountering a closing bracket or brace, we pop it
-  // from the stack.
-  TT_OOS = 0U,
-  // The state being active while being within a string (e.g., field name or a string value). We do
-  // not push or pop from the stack while being in this state.
-  TT_STR,
-  // The state being active after encountering an escape symbol (e.g., '\') while being in the
-  // TT_STR state.
-  TT_ESC,
-  // Total number of states
-  TT_NUM_STATES
-};
-
-// Definition of the symbol groups
-enum PDA_SG_ID {
-  OBC = 0U,          ///< Opening brace SG: {
-  OBT,               ///< Opening bracket SG: [
-  CBC,               ///< Closing brace SG: }
-  CBT,               ///< Closing bracket SG: ]
-  QTE,               ///< Quote character SG: "
-  ESC,               ///< Escape character SG: '\'
-  OTR,               ///< SG implicitly matching all other characters
-  NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
-};
-
-// Transition table
-const std::vector<std::vector<char>> pda_state_tt = {
-  /* IN_STATE         {       [       }       ]       "       \    OTHER */
-  /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
-  /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
-  /* TT_ESC    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR, TT_STR}};
-
-// Translation table (i.e., for each transition, what are the symbols that we output)
-const std::vector<std::vector<std::vector<char>>> pda_out_tt = {
-  /* IN_STATE        {      [      }      ]     "  \   OTHER */
-  /* TT_OOS    */ {{'{'}, {'['}, {'}'}, {']'}, {'x'}, {'x'}, {'x'}},
-  /* TT_STR    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}},
-  /* TT_ESC    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}};
-
-// The i-th string representing all the characters of a symbol group
-const std::vector<std::string> pda_sgs = {"{", "[", "}", "]", "\"", "\\"};
-
-// The DFA's starting state
-constexpr int32_t start_state = TT_OOS;
-
+using namespace cudf::test::io::json;
 }  // namespace
 
 // Base test fixture for tests
