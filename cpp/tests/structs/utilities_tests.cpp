@@ -44,7 +44,8 @@ using nums = fixed_width_column_wrapper<T, int32_t>;
 template <typename T>
 using lists = lists_column_wrapper<T, int32_t>;
 
-struct StructUtilitiesTest : BaseFixture {};
+struct StructUtilitiesTest : BaseFixture {
+};
 
 template <typename T>
 struct TypedStructUtilitiesTest : StructUtilitiesTest {
@@ -312,7 +313,8 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
                cudf::logic_error);
 }
 
-struct SuperimposeTest : StructUtilitiesTest {};
+struct SuperimposeTest : StructUtilitiesTest {
+};
 
 template <typename T>
 struct TypedSuperimposeTest : StructUtilitiesTest {
