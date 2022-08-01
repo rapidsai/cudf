@@ -23,10 +23,10 @@ def data_size_expectation_builder(data, nan_null_param=False):
     if nan_null_param and np.isnan(data).any():
         return pytest.raises((ValueError,))
 
-    if data.size > 0:
-        return does_not_raise()
-    else:
+    if len(data.shape) == 2 and data.size == 0:
         return pytest.raises((ValueError, IndexError))
+    else:
+        return does_not_raise()
 
 
 @pytest.fixture(params=params_1d)
@@ -187,3 +187,22 @@ def test_to_dlpack_mixed_dtypes():
     cupy_host_array = cupy_array.get()
 
     assert_eq(cudf_host_array, cupy_host_array)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (0, 3),
+        pytest.param(
+            (3, 0),
+            marks=pytest.mark.xfail(
+                reason="Index information not available via from_dlpack"
+            ),
+        ),
+        (0, 0),
+    ],
+)
+def test_from_dlpack_zero_sizes(shape):
+    arr = cupy.empty(shape, dtype=float)
+    df = cudf.io.dlpack.from_dlpack(arr.__dlpack__())
+    assert_eq(df, cudf.DataFrame(arr))
