@@ -504,7 +504,7 @@ TEST_F(StringsContainsTests, DotAll)
 
 TEST_F(StringsContainsTests, ASCII)
 {
-  auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aé 3❽", ""});
+  auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
   auto view = cudf::strings_column_view(input);
 
   std::string patterns[] = {"\\w+[\\s]+\\d+",
@@ -518,7 +518,7 @@ TEST_F(StringsContainsTests, ASCII)
     auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
     results           = cudf::strings::contains_re(view, ptn);
-    expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0});
+    expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   }
 }
