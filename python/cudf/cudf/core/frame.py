@@ -83,6 +83,12 @@ class Frame(BinaryOperand, Scannable):
     def _columns(self) -> Tuple[Any, ...]:  # TODO: Tuple[Column]?
         return tuple(self._data.columns)
 
+    @property
+    def _dtypes(self):
+        return dict(
+            zip(self._data.names, (col.dtype for col in self._data.columns))
+        )
+
     def serialize(self):
         header = {
             "type-serialized": pickle.dumps(type(self)),

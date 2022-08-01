@@ -41,7 +41,7 @@ enum Type : int8_t {
  */
 enum ConvertedType {
   UNKNOWN = -1,  // No type information present
-  UTF8    = 0,   // a BYTE_ARRAY actually contains UTF8 encoded chars
+  UTF8    = 0,   // a BYTE_ARRAY may contain UTF8 encoded chars
   MAP     = 1,   // a map is converted as an optional field containing a repeated key/value pair
   MAP_KEY_VALUE = 2,  // a key/value pair is converted into a group of two fields
   LIST =

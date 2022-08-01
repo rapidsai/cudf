@@ -99,8 +99,7 @@ std::unique_ptr<column> hash(table_view const& input,
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_SERIAL_MURMUR3):
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
-    case (hash_id::HASH_SPARK_MURMUR3):
-      return serial_murmur_hash3_32<SparkMurmurHash3_32>(input, seed, stream, mr);
+    case (hash_id::HASH_SPARK_MURMUR3): return spark_murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");
   }
