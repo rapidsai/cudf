@@ -82,10 +82,14 @@ class column {
    * @param other The device_uvector whose contents will be moved into the new column.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
-  column(rmm::device_uvector<T>&& other)
+  column(rmm::device_uvector<T>&& other,
+         rmm::device_buffer&& null_mask = {},
+         size_type null_count           = cudf::UNKNOWN_NULL_COUNT)
     : _type{cudf::type_to_id<T>()},
-      _size{static_cast<cudf::size_type>(other.size())},
-      _data{other.release()}
+      _size{static_cast<size_type>(other.size())},
+      _data{other.release()},
+      _null_mask{std::forward<rmm::device_buffer>(null_mask)},
+      _null_count{null_count}
   {
     CUDF_EXPECTS(_size < std::numeric_limits<size_type>::max(),
                  "Input vector exceeds maximum column capacity");

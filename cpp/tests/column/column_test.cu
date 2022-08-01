@@ -345,7 +345,7 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
   EXPECT_EQ(original_mask, moved_to_view.null_mask());
 }
 
-TYPED_TEST(TypedColumnTest, DeviceUvectorConstructor)
+TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
 {
   rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
                                           cudf::default_stream_value};
@@ -360,6 +360,25 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructor)
   // Verify move
   cudf::column_view moved_to_view = moved_to;
   EXPECT_EQ(original_data, moved_to_view.head());
+}
+
+TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
+{
+  rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
+                                          cudf::default_stream_value};
+  thrust::copy(thrust::device,
+               static_cast<TypeParam*>(this->data.data()),
+               static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
+               original.begin());
+  auto original_data = original.data();
+  auto original_mask = this->all_valid_mask.data();
+  cudf::column moved_to{std::move(original), std::move(this->all_valid_mask)};
+  verify_column_views(moved_to);
+
+  // Verify move
+  cudf::column_view moved_to_view = moved_to;
+  EXPECT_EQ(original_data, moved_to_view.head());
+  EXPECT_EQ(original_mask, moved_to_view.null_mask());
 }
 
 TYPED_TEST(TypedColumnTest, ConstructWithChildren)
