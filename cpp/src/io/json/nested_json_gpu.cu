@@ -686,7 +686,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   switch (json_col.type) {
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
-      auto col_size            = json_col.string_offsets.size();
+      auto const col_size            = json_col.string_offsets.size();
       using char_length_pair_t = thrust::pair<const char*, size_type>;
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
@@ -946,7 +946,7 @@ json_column get_json_columns(host_span<SymbolT const> input,
     // String   | List      => null
     // String   | Struct    => null
     // String   | String    => valid
-    bool is_valid = (column->type == row_type);
+    bool const is_valid = (column->type == row_type);
     column->validity.push_back(is_valid);
     column->valid_count += (is_valid) ? 1U : 0U;
     column->string_offsets.push_back(string_offset);
@@ -1150,7 +1150,7 @@ json_column get_json_columns(host_span<SymbolT const> input,
       json_column* selected_col = get_selected_column(current_data_path);
 
       // Get the row offset at which to insert
-      auto target_row_index = get_target_row_index(current_data_path, selected_col);
+      auto const target_row_index = get_target_row_index(current_data_path, selected_col);
 
       // Increment parent's child count and insert this struct node into the data path
       current_data_path.top().num_children++;
@@ -1189,7 +1189,7 @@ json_column get_json_columns(host_span<SymbolT const> input,
       json_column* selected_col = get_selected_column(current_data_path);
 
       // Get the row offset at which to insert
-      auto target_row_index = get_target_row_index(current_data_path, selected_col);
+      auto const target_row_index = get_target_row_index(current_data_path, selected_col);
 
       // Increment parent's child count and insert this struct node into the data path
       current_data_path.top().num_children++;
@@ -1259,7 +1259,7 @@ json_column get_json_columns(host_span<SymbolT const> input,
         json_column* selected_col = get_selected_column(current_data_path);
 
         // Get the row offset at which to insert
-        auto target_row_index = get_target_row_index(current_data_path, selected_col);
+        auto const target_row_index = get_target_row_index(current_data_path, selected_col);
 
         current_data_path.top().num_children++;
 
