@@ -679,7 +679,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Return a copy of the truncated section.
         Returns
         -------
-        type of caller
             The truncated Series.
         Notes
         -----
@@ -690,6 +689,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         --------
         >>> import cudf
         >>> cs1 = cudf.Series([1, 2, 3, 4])
+        >>> cs1
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+
         >>> cs1.truncate(before=1, after=2)
         1    2
         2    3
@@ -698,10 +704,22 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import cudf
         >>> dates = cudf.date_range('2021-01-01', '2021-01-02', freq='s')
         >>> cs2 = cudf.Series(range(len(dates)), index=dates)
+        >>> cs2
+        2021-01-01 00:00:00        0
+        2021-01-01 00:00:01        1
+        2021-01-01 00:00:02        2
+        2021-01-01 00:00:03        3
+        2021-01-01 00:00:04        4
+        ...
+        2021-01-01 23:59:55    86395
+        2021-01-01 23:59:56    86396
+        2021-01-01 23:59:57    86397
+        2021-01-01 23:59:58    86398
+        2021-01-01 23:59:59    86399
+        Length: 86400, dtype: int64
+
         >>> cs2.truncate(
-            ... before="2021-01-01 23:45:18",
-            ... after="2021-01-01 23:45:27"
-            )
+        ... before="2021-01-01 23:45:18", after="2021-01-01 23:45:27")
         2021-01-01 23:45:18    85518
         2021-01-01 23:45:19    85519
         2021-01-01 23:45:20    85520
@@ -712,6 +730,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2021-01-01 23:45:25    85525
         2021-01-01 23:45:26    85526
         2021-01-01 23:45:27    85527
+        dtype: int64
+
+        >>> cs3 = cudf.Series({'A':1, 'B':2, 'C':3, 'D':4})
+        >>> cs3
+        A    1
+        B    2
+        C    3
+        D    4
+        dtype: int64
+
+        >>> cs3.truncate(before='B', after='C')
+        B    2
+        C    3
         dtype: int64
         """
         # check axis, if axis is not 0 or index, throws an error in that case
