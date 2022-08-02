@@ -51,8 +51,8 @@ class orc_reader_options_builder;
 class orc_reader_options {
   source_info _source;
 
-  // Names of column to read; empty is all
-  std::vector<std::string> _columns;
+  // Names of column to read; `nullptr` is all
+  std::optional<std::vector<std::string>> _columns;
 
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
@@ -105,11 +105,14 @@ class orc_reader_options {
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns names of the columns to read.
+   * @brief Returns names of the columns to read, if set.
    *
-   * @return Names of the columns to read
+   * @return Names of the columns to read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
+  {
+    return _columns;
+  }
 
   /**
    * @brief Returns vector of vectors, stripes to read for each input source
