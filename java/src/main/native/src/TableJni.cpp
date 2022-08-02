@@ -1326,7 +1326,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
     cudf::jni::auto_set_device(env);
 
     auto source = cudf::io::source_info{reinterpret_cast<char *>(buffer),
-        static_cast<std::size_t>(buffer_length)};
+                                        static_cast<std::size_t>(buffer_length)};
 
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
@@ -1350,24 +1350,27 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_TableWithMeta_close(JNIEnv *env, jcla
   CATCH_STD(env, );
 }
 
-JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getColumnNames(JNIEnv *env, jclass, jlong handle) {
+JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getColumnNames(JNIEnv *env, jclass,
+                                                                                jlong handle) {
   JNI_NULL_CHECK(env, handle, "handle is null", nullptr);
 
   try {
     cudf::jni::auto_set_device(env);
     auto ptr = reinterpret_cast<cudf::io::table_with_metadata *>(handle);
     auto length = ptr->metadata.column_names.size();
-    auto ret = static_cast<jobjectArray>(env->NewObjectArray(length, env->FindClass("java/lang/String"), nullptr));
+    auto ret = static_cast<jobjectArray>(
+        env->NewObjectArray(length, env->FindClass("java/lang/String"), nullptr));
     for (size_t i = 0; i < length; i++) {
       env->SetObjectArrayElement(ret, i, env->NewStringUTF(ptr->metadata.column_names[i].c_str()));
     }
-    
+
     return ret;
   }
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIEnv *env, jclass, jlong handle) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIEnv *env, jclass,
+                                                                            jlong handle) {
   JNI_NULL_CHECK(env, handle, "handle is null", nullptr);
 
   try {
@@ -1376,7 +1379,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
     if (ptr->tbl) {
       return convert_table_for_return(env, ptr->tbl);
     } else {
-        return nullptr;
+      return nullptr;
     }
   }
   CATCH_STD(env, nullptr);
