@@ -38,10 +38,7 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
     ROWGROUP(1),
 
     /** Generate column statistics for each page */
-    PAGE(2),
-
-    /** Generate column statistics and column indexes for each rowgroup */
-    COLUMN(3);
+    PAGE(2);
 
     final int nativeId;
 
