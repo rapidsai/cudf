@@ -383,7 +383,7 @@ constexpr inline bool is_floating_point(data_type type)
 template <typename T>
 constexpr inline bool is_byte()
 {
-  return std::is_same_v<std::remove_const_t<T>, std::byte>;
+  return std::is_same_v<std::remove_cv_t<T>, std::byte>;
 }
 
 /**
