@@ -9,7 +9,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, as_buffer, buffer_from_pointer
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -516,8 +516,8 @@ cdef class Column:
                                      size=(size+offset) * dtype.itemsize)
                 )
             else:
-                data = Buffer(
-                    data=data_ptr,
+                data = buffer_from_pointer(
+                    ptr=data_ptr,
                     size=(base_size) * dtype.itemsize,
                     owner=data_owner
                 )
@@ -559,8 +559,8 @@ cdef class Column:
                         )
                     )
             else:
-                mask = Buffer(
-                    data=mask_ptr,
+                mask = buffer_from_pointer(
+                    ptr=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner
                 )

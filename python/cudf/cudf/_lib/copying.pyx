@@ -14,7 +14,7 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, buffer_from_pointer
 
 from cudf._lib.column cimport Column
 
@@ -718,7 +718,11 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        gpu_data = buffer_from_pointer(
+            ptr=self.gpu_data_ptr,
+            size=self.gpu_data_size,
+            owner=self
+        )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header
         frames.extend(data_frames)

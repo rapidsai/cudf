@@ -63,7 +63,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, as_buffer, buffer_from_pointer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -2209,7 +2209,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
         typecode = typestr[1]
         if typecode == "t":
             mask_size = bitmask_allocation_size_bytes(nelem)
-            mask = Buffer(data=ptr, size=mask_size, owner=obj)
+            mask = buffer_from_pointer(ptr=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
             col = as_column(mask)
             mask = bools_to_mask(col)

@@ -3,7 +3,7 @@ import cupy as cp
 import pytest
 from cupy.testing import assert_array_equal
 
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import as_buffer, buffer_from_pointer
 
 arr_len = 10
 
@@ -22,10 +22,12 @@ arr_len = 10
 def test_buffer_from_cuda_iface_contiguous(data):
     data, expect_success = data
     if expect_success:
-        buf = Buffer(data=data.view("|u1"), size=data.size)  # noqa: F841
+        buffer_from_pointer(ptr=data.view("|u1"), size=data.size, owner=None)
     else:
         with pytest.raises(ValueError):
-            buf = Buffer(data=data.view("|u1"), size=data.size)  # noqa: F841
+            buffer_from_pointer(
+                ptr=data.view("|u1"), size=data.size, owner=None
+            )
 
 
 @pytest.mark.parametrize(
@@ -41,7 +43,7 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
-    Buffer(data=data, size=data.size)
+    buffer_from_pointer(ptr=data, size=data.size, owner=None)
 
 
 @pytest.mark.parametrize("size", [0, 1, 10, 100, 1000, 10_000])
