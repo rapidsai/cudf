@@ -55,7 +55,7 @@ from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring, doc_apply
-from cudf.utils.dtypes import find_common_type
+from cudf.utils.dtypes import _maybe_convert_to_default_type, find_common_type
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
 
 T = TypeVar("T", bound="Frame")
@@ -313,9 +313,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     @doc_apply(_index_astype_docstring)
     def astype(self, dtype, copy: bool = True):
-        if is_dtype_equal(dtype, np.int64):
+        if is_dtype_equal(dtype, self.dtype):
             return self
-        return self._as_int64().astype(dtype, copy=copy)
+        return self._as_int_index().astype(dtype, copy=copy)
 
     @_cudf_nvtx_annotate
     def drop_duplicates(self, keep="first"):
@@ -355,7 +355,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             if not (0 <= index < len_self):
                 raise IndexError("Index out of bounds")
             return self._start + index * self._step
-        return self._as_int64()[index]
+        return self._as_int_index()[index]
 
     @_cudf_nvtx_annotate
     def equals(self, other):
@@ -366,7 +366,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 other._step,
             ):
                 return True
-        return self._as_int64().equals(other)
+        return self._as_int_index().equals(other)
 
     @_cudf_nvtx_annotate
     def serialize(self):
@@ -403,8 +403,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def dtype(self):
         """
         `dtype` of the range of values in RangeIndex.
+
+        By default the dtype is 64 bit signed integer. This is configurable
+        via `default_integer_bitwidth` as 32 bit in `cudf.options`
         """
-        return cudf.dtype(np.int64)
+        dtype = np.dtype(np.int64)
+        return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
     def find_label_range(self, first=None, last=None):
@@ -536,7 +540,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return RangeIndex(
                 self.start * other, self.stop * other, self.step * other
             )
-        return self._as_int64().__mul__(other)
+        return self._as_int_index().__mul__(other)
 
     @_cudf_nvtx_annotate
     def __rmul__(self, other):
@@ -544,14 +548,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self.__mul__(other)
 
     @_cudf_nvtx_annotate
-    def _as_int64(self):
-        # Convert self to an Int64Index. This method is used to perform ops
+    def _as_int_index(self):
+        # Convert self to an integer index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
-        return Int64Index._from_data(self._data)
+        return _dtype_to_index[self.dtype.type]._from_data(self._data)
 
     @_cudf_nvtx_annotate
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        return self._as_int64().__array_ufunc__(
+        return self._as_int_index().__array_ufunc__(
             ufunc, method, *inputs, **kwargs
         )
 
@@ -660,9 +664,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
                     return result
 
         # If all the above optimizations don't cater to the inputs,
-        # we materialize RangeIndex's into `Int64Index` and
+        # we materialize RangeIndexes into integer indexes and
         # then perform `union`.
-        return Int64Index(self._values)._union(other, sort=sort)
+        return self._as_int_index()._union(other, sort=sort)
 
     @_cudf_nvtx_annotate
     def _intersection(self, other, sort=False):
@@ -743,26 +747,28 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return Int64Index._from_columns(
+        return _dtype_to_index[self.dtype.type]._from_columns(
             [self._values.take(gather_map, nullify, check_bounds)], [self.name]
         )
 
     @_cudf_nvtx_annotate
     def _apply_boolean_mask(self, boolean_mask):
-        return Int64Index._from_columns(
+        return _dtype_to_index[self.dtype.type]._from_columns(
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
     def repeat(self, repeats, axis=None):
-        return self._as_int64().repeat(repeats, axis)
+        return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return Int64Index._from_columns(
-            [self._values.columns_split(splits)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_columns(
+            [self._as_int_index()._split(splits)], [self.name]
         )
 
     def _binaryop(self, other, op: str):
-        return self._as_int64()._binaryop(other, op=op)
+        # TODO: certain binops don't require materializing range index and
+        # could use some optimization.
+        return self._as_int_index()._binaryop(other, op=op)
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -770,17 +776,19 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # TODO: pandas supports directly merging RangeIndex objects and can
         # intelligently create RangeIndex outputs depending on the type of
         # join. We need to implement that for the supported special cases.
-        return self._as_int64().join(other, how, level, return_indexers, sort)
+        return self._as_int_index().join(
+            other, how, level, return_indexers, sort
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _column(self):
-        return self._as_int64()._column
+        return self._as_int_index()._column
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _columns(self):
-        return self._as_int64()._columns
+        return self._as_int_index()._columns
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -805,7 +813,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
-        return self._as_int64().where(cond, other, inplace)
+        return self._as_int_index().where(cond, other, inplace)
 
     @_cudf_nvtx_annotate
     def to_numpy(self):
@@ -813,7 +821,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def to_arrow(self):
-        return self._as_int64().to_arrow()
+        return self._as_int_index().to_arrow()
 
     def __array__(self, dtype=None):
         raise TypeError(
