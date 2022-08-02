@@ -28,30 +28,23 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<FloatType>)
 
   const auto size = static_cast<cudf::size_type>(state.get_int64("NumRows"));
 
-  auto const keys_table = [&] {
+  auto const input_table = [&] {
     data_profile profile;
     profile.set_null_frequency(std::nullopt);
     profile.set_cardinality(0);
     profile.set_distribution_params<int32_t>(
       cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, 100);
-
-    return create_random_table({cudf::type_to_id<int32_t>()}, row_count{size}, profile);
-  }();
-
-  auto const vals_table = [&] {
-    data_profile profile;
-    profile.set_null_frequency(std::nullopt);
-    profile.set_cardinality(0);
     profile.set_distribution_params<FloatType>(cudf::type_to_id<FloatType>(),
                                                distribution_id::UNIFORM,
                                                static_cast<FloatType>(0),
                                                static_cast<FloatType>(1000));
 
-    return create_random_table({cudf::type_to_id<FloatType>()}, row_count{size}, profile);
+    return create_random_table(
+      {cudf::type_to_id<int32_t>(), cudf::type_to_id<FloatType>()}, row_count{size}, profile);
   }();
 
-  auto const keys = keys_table->get_column(0);
-  auto const vals = vals_table->get_column(0);
+  auto const& keys = input_table->get_column(0);
+  auto const& vals = input_table->get_column(1);
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
 
