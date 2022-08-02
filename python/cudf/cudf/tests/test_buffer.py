@@ -2,7 +2,7 @@ import cupy as cp
 import pytest
 from cupy.testing import assert_array_equal
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, as_buffer
 
 arr_len = 10
 
@@ -50,7 +50,7 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
 @pytest.mark.parametrize("size", [0, 1, 10, 100, 1000, 10_000])
 def test_buffer_copy(size):
     data = cp.random.randint(low=0, high=100, size=size, dtype="u1")
-    buf = Buffer(data=data)
+    buf = as_buffer(data)
     got = buf.copy()
     assert got.size == buf.size
     if size > 0:

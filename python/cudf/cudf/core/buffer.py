@@ -15,6 +15,33 @@ import cudf
 from cudf.core.abc import Serializable
 
 
+def as_buffer(obj: Any) -> Buffer:
+    """
+    Factory function to wrap `obj` in a Buffer object.
+
+    If `obj` isn't a Buffer already, a new Buffer that points to the
+    memory of `obj` is created. If `obj` represents host memory, it is
+    copied to a new `rmm.DeviceBuffer` device allocation. Otherwise,
+    the data of `obj` is **not** copied.
+
+    The returned Buffer keeps a reference to `obj` in order to
+    retain the lifetime of `obj`.
+
+    Parameters
+    ----------
+    obj : buffer-like
+        An object that exposes either device or host memory through
+        `__array_interface__`, `__cuda_array_interface__`, or the
+        buffer protocol. Only when `obj` represents host memory are
+        data copied.
+    Return
+    ------
+    Buffer
+        A Buffer that represents the device memory of `obj`
+    """
+    return Buffer(data=obj)
+
+
 class Buffer(Serializable):
     """
     A Buffer represents a device memory allocation.

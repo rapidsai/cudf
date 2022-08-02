@@ -26,6 +26,8 @@ import pandas as pd
 import pyarrow as pa
 from numba import cuda
 
+import rmm
+
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
@@ -61,7 +63,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -1277,7 +1279,11 @@ def column_empty(
         data = None
         children = (
             build_column(
-                data=Buffer.empty(row_count * cudf.dtype("int32").itemsize),
+                data=as_buffer(
+                    rmm.DeviceBuffer(
+                        size=row_count * cudf.dtype("int32").itemsize
+                    )
+                ),
                 dtype="int32",
             ),
         )
@@ -1286,12 +1292,16 @@ def column_empty(
         children = (
             full(row_count + 1, 0, dtype="int32"),
             build_column(
-                data=Buffer.empty(row_count * cudf.dtype("int8").itemsize),
+                data=as_buffer(
+                    rmm.DeviceBuffer(
+                        size=row_count * cudf.dtype("int8").itemsize
+                    )
+                ),
                 dtype="int8",
             ),
         )
     else:
-        data = Buffer.empty(row_count * dtype.itemsize)
+        data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
     if masked:
         mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
@@ -1647,7 +1657,7 @@ def _make_copy_replacing_NaT_with_null(column):
     out_col = cudf._lib.replace.replace(
         column,
         build_column(
-            Buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
+            as_buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
             dtype=column.dtype,
         ),
         null,
@@ -1890,7 +1900,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
-            buffer = Buffer(arbitrary.view("|u1"))
+            buffer = as_buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
@@ -1908,7 +1918,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
-            buffer = Buffer(arbitrary.view("|u1"))
+            buffer = as_buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)

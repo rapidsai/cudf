@@ -35,7 +35,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_number,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -266,7 +266,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
-                    data=Buffer(ary),
+                    data=as_buffer(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )
