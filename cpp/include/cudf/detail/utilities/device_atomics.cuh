@@ -145,7 +145,7 @@ struct genericAtomicOperationImpl<T, Op, 8> {
     T_int ret;
 
     do {
-      const T_int new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
+      T_int const new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
 
       assumed   = type_reinterpret<T_int, T>(old_value);
       ret       = atomicCAS(reinterpret_cast<T_int*>(addr), assumed, new_value);
