@@ -957,7 +957,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getConvertToBinaryRead(),
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
@@ -1017,7 +1017,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getConvertToBinaryRead(),
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 

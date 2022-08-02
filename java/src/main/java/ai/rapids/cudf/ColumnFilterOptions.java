@@ -44,7 +44,7 @@ public abstract class ColumnFilterOptions {
     return includeColumnNames;
   }
 
-  boolean[] getConvertToBinaryRead() {
+  boolean[] getReadBinaryAsString() {
     return readBinaryAsString;
   }
 
