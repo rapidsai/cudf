@@ -33,7 +33,6 @@ public abstract class ColumnFilterOptions {
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
         new String[builder.includeColumnNames.size()]);
-
   }
 
   String[] getIncludeColumnNames() {
@@ -55,23 +54,11 @@ public abstract class ColumnFilterOptions {
     }
 
     /**
-     * Include this column.
-     * @param name the name of the column
-     * @param isBinary whether this column is to be read in as binary
-     */
-    public T includeColumn(String name, boolean isBinary) {
-      includeColumnNames.add(name);
-      return (T) this;
-    }
-
-    /**
      * Include one or more specific columns.  Any column not included will not be read.
      * @param names the name of the column, or more than one if you want.
      */
     public T includeColumn(Collection<String> names) {
-      for (String name: names) {
-        includeColumnNames.add(name);
-      }
+      includeColumnNames.addAll(names);
       return (T) this;
     }
   }

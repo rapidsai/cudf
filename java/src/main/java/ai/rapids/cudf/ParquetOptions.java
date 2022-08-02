@@ -49,7 +49,7 @@ public class ParquetOptions extends ColumnFilterOptions {
     return readBinaryAsString;
   }
 
-  public static Builder builder() {
+  public static ParquetOptions.Builder builder() {
     return new Builder();
   }
 
