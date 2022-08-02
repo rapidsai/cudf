@@ -291,8 +291,6 @@ TEST_F(JsonTest, TokenStream)
 
 TEST_F(JsonTest, ExtractColumn)
 {
-  using nested_json::PdaTokenT;
-  using nested_json::SymbolOffsetT;
   using nested_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
@@ -325,4 +323,44 @@ TEST_F(JsonTest, ExtractColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
   std::cout << "*parsed_col2:\n";
   cudf::test::print(parsed_col2);
+}
+
+TEST_F(JsonTest, UTF_JSON)
+{
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Only ASCII string
+  std::string ascii_pass = R"([
+  {"a":1,"b":2,"c":[3], "d": {}},
+  {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
+  {"a":1,"b":6.0,"c":[5, 7], "d": null},
+  {"a":1,"b":8.0,"c":null, "d": {}},
+  {"a":1,"b":null,"c":null},
+  {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
+
+  CUDF_EXPECT_NO_THROW(nested_json::detail::parse_json_to_columns(ascii_pass, stream_view));
+
+  // utf-8 string that fails parsing.
+  std::string utf_failed = R"([
+  {"a":1,"b":2,"c":[3], "d": {}},
+  {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
+  {"a":1,"b":6.0,"c":[5, 7], "d": null},
+  {"a":1,"b":8.0,"c":null, "d": {}},
+  {"a":1,"b":null,"c":null},
+  {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
+  CUDF_EXPECT_THROW_MESSAGE(nested_json::detail::parse_json_to_columns(utf_failed, stream_view),
+                            "Parser encountered an invalid format.");
+
+  // utf-8 string that passes parsing.
+  std::string utf_pass = R"([
+  {"a":1,"b":2,"c":[3], "d": {}},
+  {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
+  {"a":1,"b":6.0,"c":[5, 7], "d": null},
+  {"a":1,"b":8.0,"c":null, "d": {}},
+  {"a":1,"b":null,"c":null},
+  {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
+  {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
+  CUDF_EXPECT_NO_THROW(nested_json::detail::parse_json_to_columns(utf_pass, stream_view));
 }
