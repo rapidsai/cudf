@@ -21,7 +21,10 @@
 
 #pragma once
 
+#include "byte_array_view.cuh"
+
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
 
@@ -46,6 +49,7 @@ enum statistics_dtype {
   dtype_float32,
   dtype_float64,
   dtype_string,
+  dtype_byte_array,
 };
 
 struct stats_column_desc {
@@ -59,36 +63,37 @@ struct stats_column_desc {
   column_device_view const* parent_column;  //!< Pointer to parent column; nullptr if not list type
 };
 
-struct string_stats {
-  const char* ptr;  //!< ptr to character data
-  uint32_t length;  //!< length of string
-  __host__ __device__ __forceinline__ volatile string_stats& operator=(
-    const string_view& val) volatile
+template <typename ReturnType, typename InternalType>
+struct t_array_stats {
+  const InternalType* ptr;  //!< ptr to data
+  size_type length;         //!< length of data
+  __host__ __device__ __forceinline__ volatile t_array_stats& operator=(
+    const ReturnType& val) volatile
   {
     ptr    = val.data();
     length = val.size_bytes();
     return *this;
   }
-  __host__ __device__ __forceinline__ operator string_view() volatile
+  __host__ __device__ __forceinline__ operator ReturnType() volatile
   {
-    return string_view(ptr, static_cast<size_type>(length));
+    return ReturnType(ptr, length);
   }
-  __host__ __device__ __forceinline__ operator string_view() const
+  __host__ __device__ __forceinline__ operator ReturnType() const
   {
-    return string_view(ptr, static_cast<size_type>(length));
+    return ReturnType(ptr, length);
   }
-  __host__ __device__ __forceinline__ operator string_view()
-  {
-    return string_view(ptr, static_cast<size_type>(length));
-  }
+  __host__ __device__ __forceinline__ operator ReturnType() { return ReturnType(ptr, length); }
 };
+using string_stats     = t_array_stats<string_view, char>;
+using byte_array_stats = t_array_stats<statistics::byte_array_view, uint8_t>;
 
 union statistics_val {
-  string_stats str_val;  //!< string columns
-  double fp_val;         //!< float columns
-  int64_t i_val;         //!< integer columns
-  uint64_t u_val;        //!< unsigned integer columns
-  __int128_t d128_val;   //!< decimal128 columns
+  string_stats str_val;       //!< string columns
+  byte_array_stats byte_val;  //!< byte array columns
+  double fp_val;              //!< float columns
+  int64_t i_val;              //!< integer columns
+  uint64_t u_val;             //!< unsigned integer columns
+  __int128_t d128_val;        //!< decimal128 columns
 };
 
 struct statistics_chunk {
@@ -113,6 +118,23 @@ struct statistics_merge_group {
   uint32_t start_chunk;          //!< Start chunk of this group
   uint32_t num_chunks;           //!< Number of chunks in group
 };
+
+template <typename T, std::enable_if_t<!std::is_same_v<T, statistics::byte_array_view>>* = nullptr>
+__device__ T get_element(column_device_view const& col, uint32_t row)
+{
+  return col.element<T>(row);
+}
+
+template <typename T, std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>>* = nullptr>
+__device__ T get_element(column_device_view const& col, uint32_t row)
+{
+  using et              = typename T::element_type;
+  size_type index       = row + col.offset();  // account for this view's _offset
+  auto const* d_offsets = col.child(lists_column_view::offsets_column_index).data<offset_type>();
+  auto const* d_data    = col.child(lists_column_view::child_column_index).data<et>();
+  offset_type offset    = d_offsets[index];
+  return T(d_data + offset, d_offsets[index + 1] - offset);
+}
 
 }  // namespace io
 }  // namespace cudf

@@ -129,8 +129,13 @@ struct DeviceMin {
   {
     // chrono types do not have std::numeric_limits specializations and should use T::max()
     // https://eel.is/c++draft/numeric.limits.general#6
-    if constexpr (cudf::is_chrono<T>()) return T::max();
-    return cuda::std::numeric_limits<T>::max();
+    if constexpr (cudf::is_chrono<T>()) {
+      return T::max();
+    } else if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+      return cuda::std::numeric_limits<T>::infinity();
+    } else {
+      return cuda::std::numeric_limits<T>::max();
+    }
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
@@ -172,8 +177,13 @@ struct DeviceMax {
   {
     // chrono types do not have std::numeric_limits specializations and should use T::min()
     // https://eel.is/c++draft/numeric.limits.general#6
-    if constexpr (cudf::is_chrono<T>()) return T::min();
-    return cuda::std::numeric_limits<T>::lowest();
+    if constexpr (cudf::is_chrono<T>()) {
+      return T::min();
+    } else if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+      return -cuda::std::numeric_limits<T>::infinity();
+    } else {
+      return cuda::std::numeric_limits<T>::lowest();
+    }
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
