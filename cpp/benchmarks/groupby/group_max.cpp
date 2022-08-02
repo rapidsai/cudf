@@ -60,10 +60,9 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<FloatType>)
   requests[0].values = vals;
   requests[0].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto const result = gb_obj.aggregate(requests);
-  });
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
 }
 
 NVBENCH_BENCH_TYPES(bench_groupby_max, NVBENCH_TYPE_AXES(nvbench::type_list<float, double>))
