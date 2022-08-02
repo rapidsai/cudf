@@ -29,28 +29,19 @@ public abstract class ColumnFilterOptions {
   // Names of the columns to be returned (other columns are skipped)
   // If empty all columns are returned.
   private final String[] includeColumnNames;
-  private final boolean[] readBinaryAsString;
 
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
         new String[builder.includeColumnNames.size()]);
-    readBinaryAsString = new boolean[builder.binaryAsStringColumns.size()];
-    for (int i = 0 ; i < builder.binaryAsStringColumns.size() ; i++) {
-      readBinaryAsString[i] = builder.binaryAsStringColumns.get(i);
-    }
+
   }
 
   String[] getIncludeColumnNames() {
     return includeColumnNames;
   }
 
-  boolean[] getReadBinaryAsString() {
-    return readBinaryAsString;
-  }
-
   public static class Builder<T extends Builder> {
     final List<String> includeColumnNames = new ArrayList<>();
-    final List<Boolean> binaryAsStringColumns = new ArrayList<>();
 
     /**
      * Include one or more specific columns.  Any column not included will not be read.
@@ -59,7 +50,6 @@ public abstract class ColumnFilterOptions {
     public T includeColumn(String... names) {
       for (String name : names) {
         includeColumnNames.add(name);
-        binaryAsStringColumns.add(true);
       }
       return (T) this;
     }
@@ -71,7 +61,6 @@ public abstract class ColumnFilterOptions {
      */
     public T includeColumn(String name, boolean isBinary) {
       includeColumnNames.add(name);
-      binaryAsStringColumns.add(!isBinary);
       return (T) this;
     }
 
@@ -82,7 +71,6 @@ public abstract class ColumnFilterOptions {
     public T includeColumn(Collection<String> names) {
       for (String name: names) {
         includeColumnNames.add(name);
-        binaryAsStringColumns.add(true);
       }
       return (T) this;
     }
