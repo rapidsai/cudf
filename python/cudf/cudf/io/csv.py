@@ -1,13 +1,16 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
+from collections import abc
 from io import BytesIO, StringIO
 
+import numpy as np
 from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
+from cudf.utils.dtypes import _maybe_convert_to_default_type
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 
@@ -71,7 +74,7 @@ def read_csv(
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
 
-    return libcudf.csv.read_csv(
+    df = libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
         quotechar=quotechar,
@@ -105,6 +108,28 @@ def read_csv(
         prefix=prefix,
         index_col=index_col,
     )
+
+    if dtype is None or isinstance(dtype, abc.Mapping):
+        # There exists some dtypes in the result columns that is inferred.
+        # Find them and map them to the default dtypes.
+        dtype = {} if dtype is None else dtype
+        unspecified_dtypes = {
+            name: df._dtypes[name]
+            for name in df._column_names
+            if name not in dtype
+        }
+        default_dtypes = {}
+
+        for name, dt in unspecified_dtypes.items():
+            if dt == np.dtype("i1"):
+                # csv reader reads all null column as int8.
+                # The dtype should remain int8.
+                default_dtypes[name] = dt
+            else:
+                default_dtypes[name] = _maybe_convert_to_default_type(dt)
+        df = df.astype(default_dtypes)
+
+    return df
 
 
 @_cudf_nvtx_annotate
