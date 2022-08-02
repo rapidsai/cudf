@@ -4,7 +4,6 @@ from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.cpp.column.column cimport column

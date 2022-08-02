@@ -2,42 +2,113 @@
 
 import operator
 
-from numba import types
+from numba import cuda, types
 from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudadrv import nvvm
-from numba.cuda.cudaimpl import (
-    lower as cuda_lower,
-    registry as cuda_lowering_registry,
-)
-
+from numba.cuda.cudaimpl import lower as cuda_lower
+from numba.cuda.cudaimpl import registry as cuda_lowering_registry
 from strings_udf._lib.tables import get_character_flags_table_ptr
-from strings_udf._typing import (
-    _string_view_contains,
-    _string_view_count,
-    _string_view_endswith,
-    _string_view_eq,
-    _string_view_find,
-    _string_view_ge,
-    _string_view_gt,
-    _string_view_isalnum,
-    _string_view_isalpha,
-    _string_view_isdecimal,
-    _string_view_isdigit,
-    _string_view_islower,
-    _string_view_isnumeric,
-    _string_view_isspace,
-    _string_view_isupper,
-    _string_view_le,
-    _string_view_len,
-    _string_view_lt,
-    _string_view_ne,
-    _string_view_rfind,
-    _string_view_startswith,
-    string_view,
-)
+from strings_udf._typing import string_view
 
 character_flags_table_ptr = get_character_flags_table_ptr()
+
+
+_string_view_len = cuda.declare_device(
+    "len", types.int32(types.CPointer(string_view))
+)
+
+_string_view_contains = cuda.declare_device(
+    "contains",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+
+_string_view_eq = cuda.declare_device(
+    "eq",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+_string_view_ne = cuda.declare_device(
+    "ne",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_ge = cuda.declare_device(
+    "ge",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_le = cuda.declare_device(
+    "le",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+_string_view_gt = cuda.declare_device(
+    "gt",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_lt = cuda.declare_device(
+    "lt",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_startswith = cuda.declare_device(
+    "startswith",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_endswith = cuda.declare_device(
+    "endswith",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_find = cuda.declare_device(
+    "find",
+    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_rfind = cuda.declare_device(
+    "rfind",
+    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_isdigit = cuda.declare_device(
+    "pyisdigit", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+
+_string_view_isalnum = cuda.declare_device(
+    "pyisalnum", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_isalpha = cuda.declare_device(
+    "pyisalpha", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_isdecimal = cuda.declare_device(
+    "pyisdecimal", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_isnumeric = cuda.declare_device(
+    "pyisnumeric", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_isspace = cuda.declare_device(
+    "pyisspace", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_isupper = cuda.declare_device(
+    "pyisupper", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_islower = cuda.declare_device(
+    "pyislower", types.boolean(types.CPointer(string_view), types.int64)
+)
+
+_string_view_count = cuda.declare_device(
+    "pycount",
+    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+)
 
 
 # String function implementations

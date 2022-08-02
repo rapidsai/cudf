@@ -3,7 +3,7 @@
 import operator
 
 import llvmlite.binding as ll
-from numba import cuda, types
+from numba import types
 from numba.core.datamodel import default_manager
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
@@ -119,11 +119,6 @@ class StringLength(AbstractTemplate):
             return nb_signature(types.int32, args[0])
 
 
-_string_view_len = cuda.declare_device(
-    "len", types.int32(types.CPointer(string_view))
-)
-
-
 @cuda_decl_registry.register_global(operator.contains)
 class StringViewContains(AbstractTemplate):
     """
@@ -135,12 +130,6 @@ class StringViewContains(AbstractTemplate):
             args[0], (StringView, DString, types.StringLiteral)
         ) and isinstance(args[1], (StringView, DString, types.StringLiteral)):
             return nb_signature(types.boolean, string_view, string_view)
-
-
-_string_view_contains = cuda.declare_device(
-    "contains",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
 
 
 @cuda_decl_registry.register_global(operator.eq)
@@ -158,12 +147,6 @@ class StringViewEq(AbstractTemplate):
             return nb_signature(types.boolean, string_view, string_view)
 
 
-_string_view_eq = cuda.declare_device(
-    "eq",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-
 @cuda_decl_registry.register_global(operator.ne)
 class StringViewNe(AbstractTemplate):
     """
@@ -177,12 +160,6 @@ class StringViewNe(AbstractTemplate):
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
-
-
-_string_view_ne = cuda.declare_device(
-    "ne",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
 
 
 @cuda_decl_registry.register_global(operator.ge)
@@ -200,12 +177,6 @@ class StringViewGe(AbstractTemplate):
             return nb_signature(types.boolean, string_view, string_view)
 
 
-_string_view_ge = cuda.declare_device(
-    "ge",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-
 @cuda_decl_registry.register_global(operator.le)
 class StringViewLe(AbstractTemplate):
     """
@@ -219,12 +190,6 @@ class StringViewLe(AbstractTemplate):
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
-
-
-_string_view_le = cuda.declare_device(
-    "le",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
 
 
 @cuda_decl_registry.register_global(operator.gt)
@@ -242,12 +207,6 @@ class StringViewGt(AbstractTemplate):
             return nb_signature(types.boolean, string_view, string_view)
 
 
-_string_view_gt = cuda.declare_device(
-    "gt",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-
 @cuda_decl_registry.register_global(operator.lt)
 class StringViewLt(AbstractTemplate):
     """
@@ -261,12 +220,6 @@ class StringViewLt(AbstractTemplate):
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
-
-
-_string_view_lt = cuda.declare_device(
-    "lt",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
 
 
 class StringViewStartsWith(AbstractTemplate):
@@ -402,62 +355,3 @@ class StringViewAttrs(AttributeTemplate):
 
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
-
-
-_string_view_startswith = cuda.declare_device(
-    "startswith",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-_string_view_endswith = cuda.declare_device(
-    "endswith",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-_string_view_find = cuda.declare_device(
-    "find",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-_string_view_rfind = cuda.declare_device(
-    "rfind",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
-)
-
-_string_view_isdigit = cuda.declare_device(
-    "pyisdigit", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-
-_string_view_isalnum = cuda.declare_device(
-    "pyisalnum", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_isalpha = cuda.declare_device(
-    "pyisalpha", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_isdecimal = cuda.declare_device(
-    "pyisdecimal", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_isnumeric = cuda.declare_device(
-    "pyisnumeric", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_isspace = cuda.declare_device(
-    "pyisspace", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_isupper = cuda.declare_device(
-    "pyisupper", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_islower = cuda.declare_device(
-    "pyislower", types.boolean(types.CPointer(string_view), types.int64)
-)
-
-_string_view_count = cuda.declare_device(
-    "pycount",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
-)

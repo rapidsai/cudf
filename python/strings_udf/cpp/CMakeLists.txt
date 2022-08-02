@@ -30,8 +30,8 @@ include(cmake/thirdparty/get_jitify.cmake)
 
 # set the project name and version
 project(
-  cudf_strings_udf 
-  VERSION 0.1 
+  cudf_strings_udf
+  VERSION 0.1
   DESCRIPTION "cudf strings-udf library"
   LANGUAGES C CXX CUDA
 )
@@ -40,7 +40,7 @@ if(NOT CONDA_PREFIX)
   message(FATAL_ERROR " CONDA_PREFIX must be set")
 endif()
 
-message(STATUS "CONDA_PREFIX=${CONDA_PREFIX}" )
+message(STATUS "CONDA_PREFIX=${CONDA_PREFIX}")
 
 find_package(CUDAToolkit REQUIRED)
 
@@ -58,15 +58,9 @@ set(SHIM_CUDA_FLAGS "")
 list(APPEND UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -keep)
 
-add_library(
-  cudf_strings_udf SHARED
-  src/strings/udf/udf_apis.cu
-)
+add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
 
-add_library(
-  shim OBJECT
-  src/strings/udf/shim.cu
-)
+add_library(shim OBJECT src/strings/udf/shim.cu)
 
 set_property(TARGET shim PROPERTY CUDA_PTX_COMPILATION ON)
 
@@ -82,64 +76,40 @@ target_include_directories(
   PUBLIC ${CONDA_PREFIX}/include
 )
 
-
 set_target_properties(
-  cudf_strings_udf 
-  PROPERTIES 
-    BUILD_RPATH "\$ORIGIN"
-    INSTALL_RPATH "\$ORIGIN"
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-    CUDA_STANDARD 17
-    CUDA_STANDARD_REQUIRED ON
-    POSITION_INDEPENDENT_CODE ON
-    INTERFACE_POSITION_INDEPENDENT_CODE ON
+  cudf_strings_udf
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN"
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
 target_compile_options(
-  cudf_strings_udf PRIVATE 
-  "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
-  "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
+  cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
 
-target_compile_options(
-  shim PRIVATE 
-  "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>"
-)
+target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
 
 target_include_directories(
   cudf_strings_udf
   PRIVATE include
   PUBLIC ${UDF_INCLUDES}
 )
-target_link_libraries(
-  cudf_strings_udf 
-  PUBLIC ${UDF_LIBS}
-)
+target_link_libraries(cudf_strings_udf PUBLIC ${UDF_LIBS})
 
-add_executable(
-  udf_cli 
-  src/strings/udf/udf_cli.cpp
-)
+add_executable(udf_cli src/strings/udf/udf_cli.cpp)
 target_include_directories(
   udf_cli
   PRIVATE include
-  PUBLIC ${UDF_INCLUDES} 
-  CUDA::cudart
+  PUBLIC ${UDF_INCLUDES} CUDA::cudart
 )
-target_link_libraries(
-  udf_cli 
-  PUBLIC cudf_strings_udf
-  PUBLIC ${UDF_LIBS}
-  CUDA::cudart
-)
-set_target_properties(
-  udf_cli
-  PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-)
-
+target_link_libraries(udf_cli PUBLIC cudf_strings_udf ${UDF_LIBS} CUDA::cudart)
+set_target_properties(udf_cli PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
 install(TARGETS cudf_strings_udf)
 install(TARGETS udf_cli)
