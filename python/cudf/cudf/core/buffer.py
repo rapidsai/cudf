@@ -34,6 +34,7 @@ def as_buffer(obj: Any) -> Buffer:
         `__array_interface__`, `__cuda_array_interface__`, or the
         buffer protocol. Only when `obj` represents host memory are
         data copied.
+
     Return
     ------
     Buffer
@@ -153,7 +154,6 @@ class Buffer(Serializable):
     def _init_from_array_like(self, data, owner):
 
         if hasattr(data, "__cuda_array_interface__"):
-            confirm_1d_contiguous(data.__cuda_array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__cuda_array_interface__
             )
@@ -161,7 +161,6 @@ class Buffer(Serializable):
             self._size = size
             self._owner = owner or data
         elif hasattr(data, "__array_interface__"):
-            confirm_1d_contiguous(data.__array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
@@ -215,26 +214,13 @@ class Buffer(Serializable):
 
 
 def _buffer_data_from_array_interface(array_interface):
-    ptr = array_interface["data"][0]
-    if ptr is None:
-        ptr = 0
+    shape = array_interface["shape"] or (1,)
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    shape = (
-        array_interface["shape"] if len(array_interface["shape"]) > 0 else (1,)
-    )
+    ptr = array_interface["data"][0] or 0
+    if not get_c_contiguity(shape, array_interface["strides"], itemsize):
+        raise ValueError("Buffer data must be 1D C-contiguous")
     size = functools.reduce(operator.mul, shape)
     return ptr, size * itemsize
-
-
-def confirm_1d_contiguous(array_interface):
-    strides = array_interface["strides"]
-    shape = array_interface["shape"]
-    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    typestr = array_interface["typestr"]
-    if typestr not in ("|i1", "|u1", "|b1"):
-        raise TypeError("Buffer data must be of uint8 type")
-    if not get_c_contiguity(shape, strides, itemsize):
-        raise ValueError("Buffer data must be 1D C-contiguous")
 
 
 def get_c_contiguity(shape, strides, itemsize):

@@ -1752,7 +1752,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = _data_from_cuda_array_interface_desc(arbitrary)
+        data = as_buffer(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -2195,16 +2195,6 @@ def _construct_array(
             else np.dtype(native_dtype),
         )
     return arbitrary
-
-
-def _data_from_cuda_array_interface_desc(obj) -> Buffer:
-    desc = obj.__cuda_array_interface__
-    ptr = desc["data"][0]
-    nelem = desc["shape"][0] if len(desc["shape"]) > 0 else 1
-    dtype = cudf.dtype(desc["typestr"])
-
-    data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
-    return data
 
 
 def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
