@@ -1531,6 +1531,7 @@ static __device__ uint32_t truncate_byte_array(const statistics::byte_array_view
     return arr.size_bytes();
   }
 
+  // TODO: this will need to change when #11424 merges
   device_span<uint8_t const> const span{arr.data(), arr.size_bytes()};
   return truncate_binary(span, res, is_min, scratch, truncate_length);
 }
