@@ -61,7 +61,6 @@ from cudf.core.reshape import (
     concat,
     get_dummies,
     melt,
-    merge_sorted,
     pivot,
     unstack,
 )
@@ -82,6 +81,12 @@ from cudf.io import (
 from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
+
+from cudf.options import (
+    get_option,
+    set_option,
+    describe_option,
+)
 
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed
@@ -145,16 +150,17 @@ __all__ = [
     "concat",
     "cut",
     "date_range",
+    "describe_option",
     "factorize",
     "from_dataframe",
     "from_dlpack",
     "from_pandas",
     "get_dummies",
+    "get_option",
     "interval_range",
     "isclose",
     "melt",
     "merge",
-    "merge_sorted",
     "pivot",
     "read_avro",
     "read_csv",
@@ -165,6 +171,7 @@ __all__ = [
     "read_parquet",
     "read_text",
     "set_allocator",
+    "set_option",
     "testing",
     "to_datetime",
     "to_numeric",

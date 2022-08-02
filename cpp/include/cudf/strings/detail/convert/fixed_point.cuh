@@ -122,7 +122,7 @@ __device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const
  * @brief Converts the string in the range [iter, iter_end) into a decimal.
  *
  * @tparam DecimalType The decimal type to be returned
- * @param iter The beginning of the string. Unless iter >= iter_end, iter is dereferenced
+ * @param iter The beginning of the string
  * @param iter_end The end of the characters to parse
  * @param scale The scale to be applied
  * @return

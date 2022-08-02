@@ -127,16 +127,22 @@ class column_view_base {
 
   /**
    * @brief Returns the number of elements in the column
+   *
+   * @return The number of elements in the column
    */
   [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
+   *
+   * @return True if `size()` returns zero, or false otherwise
    */
-  [[nodiscard]] size_type is_empty() const noexcept { return size() == 0; }
+  [[nodiscard]] bool is_empty() const noexcept { return size() == 0; }
 
   /**
    * @brief Returns the element `data_type`
+   *
+   * @return The `data_type` of the elements in the column
    */
   [[nodiscard]] data_type type() const noexcept { return _type; }
 
@@ -158,6 +164,8 @@ class column_view_base {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
+   *
+   * @return The count of null elements
    */
   [[nodiscard]] size_type null_count() const;
 
@@ -173,6 +181,7 @@ class column_view_base {
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
+   * @return The count of null elements in the given range
    */
   [[nodiscard]] size_type null_count(size_type begin, size_type end) const;
 
@@ -208,12 +217,15 @@ class column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
+   * @return Raw pointer to the bitmask
    */
   [[nodiscard]] bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
+   *
+   * @return The index of the first element relative to `head<T>()`
    */
   [[nodiscard]] size_type offset() const noexcept { return _offset; }
 
@@ -230,9 +242,19 @@ class column_view_base {
 
   column_view_base()                        = default;
   ~column_view_base()                       = default;
-  column_view_base(column_view_base const&) = default;
-  column_view_base(column_view_base&&)      = default;
+  column_view_base(column_view_base const&) = default;  ///< Copy constructor
+  column_view_base(column_view_base&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   column_view_base& operator=(column_view_base const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object (after transferring ownership)
+   */
   column_view_base& operator=(column_view_base&&) = default;
 
   /**
@@ -310,10 +332,19 @@ class column_view : public detail::column_view_base {
 #pragma nv_exec_check_disable
   ~column_view() = default;
 #pragma nv_exec_check_disable
-  column_view(column_view const& c) = default;
-
-  column_view(column_view&&) = default;
+  column_view(column_view const&) = default;  ///< Copy constructor
+  column_view(column_view&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   column_view& operator=(column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object
+   */
   column_view& operator=(column_view&&) = default;
 
   /**
@@ -367,16 +398,22 @@ class column_view : public detail::column_view_base {
 
   /**
    * @brief Returns the number of child columns.
+   *
+   * @return The number of child columns
    */
   [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `column_view` referencing the first child column
    */
   auto child_begin() const noexcept { return _children.cbegin(); }
 
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `column_view` one past the end of the child columns
    */
   auto child_end() const noexcept { return _children.cend(); }
 
@@ -451,10 +488,19 @@ class mutable_column_view : public detail::column_view_base {
 
   ~mutable_column_view() = default;
 
-  mutable_column_view(mutable_column_view const&) = default;
-
-  mutable_column_view(mutable_column_view&&) = default;
+  mutable_column_view(mutable_column_view const&) = default;  ///< Copy constructor
+  mutable_column_view(mutable_column_view&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   mutable_column_view& operator=(mutable_column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object (after transferring ownership)
+   */
   mutable_column_view& operator=(mutable_column_view&&) = default;
 
   /**
@@ -572,6 +618,8 @@ class mutable_column_view : public detail::column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
+   *
+   * @return Raw pointer to the underlying bitmask allocation
    */
   [[nodiscard]] bitmask_type* null_mask() const noexcept
   {
@@ -600,16 +648,22 @@ class mutable_column_view : public detail::column_view_base {
 
   /**
    * @brief Returns the number of child columns.
+   *
+   * @return The number of child columns
    */
   [[nodiscard]] size_type num_children() const noexcept { return mutable_children.size(); }
 
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `mutable_column_view` referencing the first child column
    */
   auto child_begin() const noexcept { return mutable_children.begin(); }
 
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `mutable_column_view` to the element following the last child column
    */
   auto child_end() const noexcept { return mutable_children.end(); }
 

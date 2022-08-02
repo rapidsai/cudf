@@ -19,6 +19,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -320,7 +321,7 @@ std::unique_ptr<column> segmented_gather(
   lists_column_view const& source_column,
   lists_column_view const& gather_map_list,
   out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

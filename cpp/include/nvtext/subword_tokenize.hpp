@@ -31,17 +31,22 @@ namespace nvtext {
  * @brief The vocabulary data for use with the subword_tokenize function.
  */
 struct hashed_vocabulary {
-  uint16_t first_token_id{};
-  uint16_t separator_token_id{};
-  uint16_t unknown_token_id{};
-  uint32_t outer_hash_a{};
-  uint32_t outer_hash_b{};
-  uint16_t num_bins{};
-  std::unique_ptr<cudf::column> table;             // uint64
-  std::unique_ptr<cudf::column> bin_coefficients;  // uint64
-  std::unique_ptr<cudf::column> bin_offsets;       // uint16
-  std::unique_ptr<cudf::column> cp_metadata;       // uint32
-  std::unique_ptr<cudf::column> aux_cp_table;      // uint64
+  uint16_t first_token_id{};            ///< The first token id in the vocabulary
+  uint16_t separator_token_id{};        ///< The separator token id in the vocabulary
+  uint16_t unknown_token_id{};          ///< The unknown token id in the vocabulary
+  uint32_t outer_hash_a{};              ///< The a parameter for the outer hash
+  uint32_t outer_hash_b{};              ///< The b parameter for the outer hash
+  uint16_t num_bins{};                  ///< Number of bins
+  std::unique_ptr<cudf::column> table;  ///< uint64 column, the flattened hash table with key, value
+                                        ///< pairs packed in 64-bits
+  std::unique_ptr<cudf::column> bin_coefficients;  ///< uint64 column, containing the hashing
+                                                   ///< parameters for each hash bin on the GPU
+  std::unique_ptr<cudf::column> bin_offsets;  ///< uint16 column, containing the start index of each
+                                              ///< bin in the flattened hash table
+  std::unique_ptr<cudf::column>
+    cp_metadata;  ///< uint32 column, The code point metadata table to use for normalization
+  std::unique_ptr<cudf::column>
+    aux_cp_table;  ///< uint64 column, The auxiliary code point table to use for normalization
 };
 
 /**

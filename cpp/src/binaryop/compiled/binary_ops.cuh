@@ -272,10 +272,7 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
-namespace detail {
-template <class T, class... Ts>
-inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
-}
+
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_view& out,
                      column_view const& lhs,

@@ -26,6 +26,7 @@
 
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -51,7 +52,7 @@ class parquet_reader_options {
   source_info _source;
 
   // Path in schema of column to read; empty is all
-  std::vector<std::string> _columns;
+  std::optional<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -66,6 +67,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Whether to store binary data as a string column
+  std::optional<std::vector<bool>> _convert_binary_to_strings{std::nullopt};
 
   /**
    * @brief Constructor from source info.
@@ -118,6 +121,19 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
+   * @brief Returns optional vector of true/false values depending on whether binary data should be
+   * converted to strings or not.
+   *
+   * @return vector with ith value `true` if binary data should be converted to strings for the ith
+   * column. Will return std::nullopt if the user did not set this option, which defaults to all
+   * binary data being converted to strings.
+   */
+  [[nodiscard]] std::optional<std::vector<bool>> get_convert_binary_to_strings() const
+  {
+    return _convert_binary_to_strings;
+  }
+
+  /**
    * @brief Returns number of rows to skip from the start.
    *
    * @return Number of rows to skip from the start
@@ -132,11 +148,14 @@ class parquet_reader_options {
   [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
-   * @brief Returns names of column to be read.
+   * @brief Returns names of column to be read, if set.
    *
-   * @return Names of column to be read
+   * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
+  {
+    return _columns;
+  }
 
   /**
    * @brief Returns list of individual row groups to be read.
@@ -186,6 +205,17 @@ class parquet_reader_options {
    * @param val Boolean value whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+
+  /**
+   * @brief Sets to enable/disable conversion of binary to strings per column.
+   *
+   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
+   * Note default is to convert to string columns.
+   */
+  void set_convert_binary_to_strings(std::vector<bool> val)
+  {
+    _convert_binary_to_strings = std::move(val);
+  }
 
   /**
    * @brief Sets number of rows to skip.
@@ -289,6 +319,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
     options._use_pandas_metadata = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets enable/disable conversion of binary to strings per column.
+   *
+   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
+   * Note default is to convert to string columns.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& convert_binary_to_strings(std::vector<bool> val)
+  {
+    options._convert_binary_to_strings = std::move(val);
     return *this;
   }
 
@@ -526,8 +569,11 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns the maximum uncompressed page size, in bytes. If set larger than the row group
-   * size, then this will return the row group size.
+   * @brief Returns the maximum uncompressed page size, in bytes.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -535,8 +581,11 @@ class parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -638,6 +687,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -647,6 +698,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
+   * @param size_rows Maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -788,9 +841,11 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
-   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
-   * bytes, and will be adjusted to match if it is.
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * Serves as a hint to the writer, * and can be exceeded under certain circumstances.
+   * Cannot be larger than the row group size in bytes, and will be adjusted to
+   * match if it is.
    *
    * @param val maximum page size
    * @return this for chaining
@@ -979,8 +1034,12 @@ class chunked_parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns maximum uncompressed page size, in bytes. If set larger than the row group size,
-   * then this will return the row group size.
+   * @brief Returns maximum uncompressed page size, in bytes.
+   *
+   * If set larger than the row group size, then this will return the
+   * row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -988,8 +1047,11 @@ class chunked_parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -1030,8 +1092,9 @@ class chunked_parquet_writer_options {
   void set_compression(compression_type compression) { _compression = compression; }
 
   /**
-   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
-   * if `true` and TIMESTAMP_MICROS will be written if `false`.
+   * @brief Sets timestamp writing preferences.
+   *
+   * INT96 timestamps will be written if `true` and TIMESTAMP_MICROS will be written if `false`.
    *
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
@@ -1065,6 +1128,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -1074,6 +1139,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
+   * @param size_rows The maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -1205,9 +1272,10 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
-   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
-   * bytes, and will be adjusted to match if it is.
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * Serves as a hint to the writer, and can be exceeded under certain circumstances. Cannot be
+   * larger than the row group size in bytes, and will be adjusted to match if it is.
    *
    * @param val maximum page size
    * @return this for chaining

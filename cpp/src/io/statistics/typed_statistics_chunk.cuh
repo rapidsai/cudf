@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "byte_array_view.cuh"
 #include "statistics.cuh"
 #include "statistics_type_identification.cuh"
 #include "temp_storage_wrapper.cuh"
@@ -45,9 +46,12 @@ class union_member {
 
  public:
   template <typename T, typename U>
-  using type = std::conditional_t<std::is_same_v<std::remove_cv_t<T>, string_view>,
-                                  reference_type<U, string_stats>,
-                                  reference_type<U, T>>;
+  using type = std::conditional_t<
+    std::is_same_v<std::remove_cv_t<T>, string_view>,
+    reference_type<U, string_stats>,
+    std::conditional_t<std::is_same_v<std::remove_cv_t<T>, statistics::byte_array_view>,
+                       reference_type<U, byte_array_stats>,
+                       reference_type<U, T>>>;
 
   template <typename T, typename U>
   __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T, U>>
@@ -64,6 +68,12 @@ class union_member {
   }
 
   template <typename T, typename U>
+  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(U& val)
+  {
+    return val.d128_val;
+  }
+
+  template <typename T, typename U>
   __device__ static std::enable_if_t<std::is_floating_point_v<T>, type<T, U>> get(U& val)
   {
     return val.fp_val;
@@ -73,6 +83,13 @@ class union_member {
   __device__ static std::enable_if_t<std::is_same_v<T, string_view>, type<T, U>> get(U& val)
   {
     return val.str_val;
+  }
+
+  template <typename T, typename U>
+  __device__ static std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>, type<T, U>>
+  get(U& val)
+  {
+    return val.byte_val;
   }
 };
 
@@ -126,9 +143,7 @@ struct typed_statistics_chunk<T, true> {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
       maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
     }
-    if (chunk.has_sum) {
-      aggregate += detail::aggregation_type<A>::convert(union_member::get<A>(chunk.sum));
-    }
+    if (chunk.has_sum) { aggregate += union_member::get<A>(chunk.sum); }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
   }

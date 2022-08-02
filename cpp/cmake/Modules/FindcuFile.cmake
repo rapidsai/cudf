@@ -54,22 +54,24 @@ pkg_check_modules(PKG_cuFile QUIET cuFile)
 set(cuFile_COMPILE_OPTIONS ${PKG_cuFile_CFLAGS_OTHER})
 set(cuFile_VERSION ${PKG_cuFile_VERSION})
 
+# Find the location of the CUDA Toolkit
+find_package(CUDAToolkit QUIET)
 find_path(
   cuFile_INCLUDE_DIR
   NAMES cufile.h
-  HINTS ${PKG_cuFile_INCLUDE_DIRS} /usr/local/cuda/include /usr/local/cuda/lib64
+  HINTS ${PKG_cuFile_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 find_library(
   cuFile_LIBRARY
   NAMES cufile
-  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64
+  HINTS ${PKG_cuFile_LIBRARY_DIRS} ${CUDAToolkit_LIBRARY_DIR}
 )
 
 find_library(
   cuFileRDMA_LIBRARY
   NAMES cufile_rdma
-  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64
+  HINTS ${PKG_cuFile_LIBRARY_DIRS} ${CUDAToolkit_LIBRARY_DIR}
 )
 
 include(FindPackageHandleStandardArgs)

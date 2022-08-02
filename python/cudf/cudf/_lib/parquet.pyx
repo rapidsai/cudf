@@ -5,7 +5,6 @@
 import errno
 import io
 import os
-from collections import OrderedDict
 
 import pyarrow as pa
 
@@ -17,6 +16,7 @@ except ImportError:
     import json
 
 import numpy as np
+
 from cython.operator cimport dereference
 
 from cudf.api.types import (
@@ -38,6 +38,7 @@ from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
+from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -110,6 +111,19 @@ cdef class BufferArrayFromVector:
         pass
 
 
+def _parse_metadata(meta):
+    file_is_range_index = False
+    file_index_cols = None
+
+    if 'index_columns' in meta and len(meta['index_columns']) > 0:
+        file_index_cols = meta['index_columns']
+
+        if isinstance(file_index_cols[0], dict) and \
+                file_index_cols[0]['kind'] == 'range':
+            file_is_range_index = True
+    return file_is_range_index, file_index_cols
+
+
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
@@ -135,7 +149,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef vector[string] cpp_columns
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
     cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
@@ -145,10 +158,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         cudf_types.type_id.EMPTY
     )
 
-    if columns is not None:
-        cpp_columns.reserve(len(columns))
-        for col in columns or []:
-            cpp_columns.push_back(str(col).encode())
     if row_groups is not None:
         cpp_row_groups = row_groups
 
@@ -156,7 +165,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Setup parquet reader arguments
     args = move(
         parquet_reader_options.builder(source)
-        .columns(cpp_columns)
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
@@ -165,6 +173,15 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .timestamp_type(cpp_timestamp_type)
         .build()
     )
+    cdef vector[string] cpp_columns
+    allow_range_index = True
+    if columns is not None:
+        cpp_columns.reserve(len(columns))
+        if len(cpp_columns) == 0:
+            allow_range_index = False
+        for col in columns or []:
+            cpp_columns.push_back(str(col).encode())
+        args.set_columns(cpp_columns)
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
@@ -174,25 +191,29 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
 
-    # Access the Parquet user_data json to find the index
+    # Access the Parquet per_file_user_data to find the index
     index_col = None
-    is_range_index = False
-    cdef map[string, string] user_data = c_out_table.metadata.user_data
-    json_str = user_data[b'pandas'].decode('utf-8')
-    meta = None
-    if json_str != "":
-        meta = json.loads(json_str)
-        if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
-                is_range_index = True
-            else:
-                index_col_names = OrderedDict()
+    cdef vector[unordered_map[string, string]] per_file_user_data = \
+        c_out_table.metadata.per_file_user_data
+
+    index_col_names = None
+    is_range_index = True
+    for single_file in per_file_user_data:
+        json_str = single_file[b'pandas'].decode('utf-8')
+        meta = None
+        if json_str != "":
+            meta = json.loads(json_str)
+            file_is_range_index, index_col = _parse_metadata(meta)
+            is_range_index &= file_is_range_index
+
+            if not file_is_range_index and index_col is not None \
+                    and index_col_names is None:
+                index_col_names = {}
                 for idx_col in index_col:
                     for c in meta['columns']:
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
+
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_out_table.tbl),
         column_names=column_names
@@ -218,7 +239,20 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
-            range_index_meta = index_col[0]
+            if not allow_range_index:
+                return df
+
+            if len(per_file_user_data) > 1:
+                range_index_meta = {
+                    "kind": "range",
+                    "name": None,
+                    "start": 0,
+                    "stop": len(df),
+                    "step": 1
+                }
+            else:
+                range_index_meta = index_col[0]
+
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
@@ -410,6 +444,26 @@ cdef class ParquetWriter:
     ParquetWriter lets you incrementally write out a Parquet file from a series
     of cudf tables
 
+    Parameters
+    ----------
+    filepath_or_buffer : str, io.IOBase, os.PathLike, or list
+        File path or buffer to write to. The argument may also correspond
+        to a list of file paths or buffers.
+    index : bool or None, default None
+        If ``True``, include a dataframe's index(es) in the file output.
+        If ``False``, they will not be written to the file. If ``None``,
+        index(es) other than RangeIndex will be saved as columns.
+    compression : {'snappy', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
+    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+        Level at which column statistics should be included in file.
+    row_group_size_bytes: int, default 134217728
+        Maximum size of each stripe of the output.
+        By default, 134217728 (128MB) will be used.
+    row_group_size_rows: int, default 1000000
+        Maximum number of rows of each stripe of the output.
+        By default, 1000000 (10^6 rows) will be used.
+
     See Also
     --------
     cudf.io.parquet.write_parquet
@@ -422,19 +476,25 @@ cdef class ParquetWriter:
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
+    cdef size_t row_group_size_bytes
+    cdef size_type row_group_size_rows
 
-    def __cinit__(self, object filepaths_or_buffers, object index=None,
-                  object compression=None, str statistics="ROWGROUP"):
+    def __cinit__(self, object filepath_or_buffer, object index=None,
+                  object compression=None, str statistics="ROWGROUP",
+                  int row_group_size_bytes=134217728,
+                  int row_group_size_rows=1000000):
         filepaths_or_buffers = (
-            list(filepaths_or_buffers)
-            if is_list_like(filepaths_or_buffers)
-            else [filepaths_or_buffers]
+            list(filepath_or_buffer)
+            if is_list_like(filepath_or_buffer)
+            else [filepath_or_buffer]
         )
         self.sink = make_sinks_info(filepaths_or_buffers, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
+        self.row_group_size_bytes = row_group_size_bytes
+        self.row_group_size_rows = row_group_size_rows
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -547,6 +607,8 @@ cdef class ParquetWriter:
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
+                .row_group_size_bytes(self.row_group_size_bytes)
+                .row_group_size_rows(self.row_group_size_rows)
                 .build()
             )
             self.writer.reset(new cpp_parquet_chunked_writer(args))

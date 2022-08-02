@@ -354,7 +354,7 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
     fname = tmpdir.join("test_pq_reader_index_col.parquet")
 
     # PANDAS' PyArrow backend always writes the index unless disabled
-    df.to_parquet(fname, index=(False if index_col is None else True))
+    df.to_parquet(fname, index=(index_col is not None))
     assert os.path.exists(fname)
 
     pdf = pd.read_parquet(fname, columns=columns)
@@ -618,6 +618,12 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
     assert_eq(ref_df, gdf)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
+@pytest.mark.filterwarnings(
+    "ignore:num_rows is deprecated and will be removed."
+)
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     if len(pdf) > 100:
@@ -702,6 +708,12 @@ def test_parquet_reader_invalids(tmpdir):
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
+@pytest.mark.filterwarnings(
+    "ignore:num_rows is deprecated and will be removed."
+)
 def test_parquet_chunked_skiprows(tmpdir):
     processed = 0
     batch = 10000
@@ -1120,6 +1132,9 @@ def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
 @pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 10
@@ -1142,6 +1157,12 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
         assert pa.Table.from_pandas(expect).equals(got.to_arrow())
 
 
+@pytest.mark.filterwarnings(
+    "ignore:skiprows is deprecated and will be removed."
+)
+@pytest.mark.filterwarnings(
+    "ignore:num_rows is deprecated and will be removed."
+)
 @pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 20
@@ -1619,6 +1640,39 @@ def test_parquet_writer_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), cudf.concat([simple_gdf, simple_gdf]))
 
 
+@pytest.mark.parametrize(
+    "row_group_size_kwargs",
+    [
+        {"row_group_size_bytes": 4 * 1024},
+        {"row_group_size_rows": 5000},
+    ],
+)
+def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
+    # Check that row_group_size options are exposed in Python
+    # See https://github.com/rapidsai/cudf/issues/10978
+
+    size = 20000
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
+
+    fname = tmpdir.join("gdf.parquet")
+    with ParquetWriter(fname, **row_group_size_kwargs) as writer:
+        writer.write_table(gdf)
+
+    # Simple check for multiple row-groups
+    nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
+    assert nrows == size
+    assert nrow_groups > 1
+    assert columns == ["a", "b"]
+
+    # Know the specific row-group count for row_group_size_rows
+    if "row_group_size_rows" in row_group_size_kwargs:
+        assert (
+            nrow_groups == size // row_group_size_kwargs["row_group_size_rows"]
+        )
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+
+
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):
@@ -1927,7 +1981,7 @@ def test_write_read_cudf(tmpdir, pdf):
     gdf.to_parquet(file_path)
     gdf = cudf.read_parquet(file_path)
 
-    assert_eq(gdf, pdf, check_index_type=False if pdf.empty else True)
+    assert_eq(gdf, pdf, check_index_type=not pdf.empty)
 
 
 def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
@@ -1945,7 +1999,7 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
     cudf_res = pd.read_parquet(cudf_path)
     pd_res = pd.read_parquet(pandas_path)
 
-    assert_eq(pd_res, cudf_res, check_index_type=False if pdf.empty else True)
+    assert_eq(pd_res, cudf_res, check_index_type=not pdf.empty)
 
     cudf_res = pa.parquet.read_table(
         cudf_path, use_pandas_metadata=True
@@ -1954,7 +2008,7 @@ def test_write_cudf_read_pandas_pyarrow(tmpdir, pdf):
         pandas_path, use_pandas_metadata=True
     ).to_pandas()
 
-    assert_eq(cudf_res, pd_res, check_index_type=False if pdf.empty else True)
+    assert_eq(cudf_res, pd_res, check_index_type=not pdf.empty)
 
 
 def test_parquet_writer_criteo(tmpdir):
@@ -2397,7 +2451,7 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    nullable = True if num_rows > 0 else False
+    nullable = num_rows > 0
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
@@ -2475,7 +2529,7 @@ def test_parquet_reader_one_level_list2(datadir):
 
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
 @pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
-def test_parquet_writer_row_group_size(
+def test_to_parquet_row_group_size(
     tmpdir, large_int64_gdf, size_bytes, size_rows
 ):
     fname = tmpdir.join("row_group_size.parquet")
@@ -2517,3 +2571,34 @@ def test_parquet_reader_zstd_compression(datadir):
         assert_eq(df, pdf)
     except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_read_parquet_multiple_files(tmpdir):
+    df_1_path = tmpdir / "df_1.parquet"
+    df_2_path = tmpdir / "df_2.parquet"
+    df_1 = cudf.DataFrame({"id": range(100), "a": [1] * 100})
+    df_1.to_parquet(df_1_path)
+
+    df_2 = cudf.DataFrame({"id": range(200, 2200), "a": [2] * 2000})
+    df_2.to_parquet(df_2_path)
+
+    expected = pd.read_parquet([df_1_path, df_2_path])
+    actual = cudf.read_parquet([df_1_path, df_2_path])
+    assert_eq(expected, actual)
+
+    expected = pd.read_parquet([df_2_path, df_1_path])
+    actual = cudf.read_parquet([df_2_path, df_1_path])
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_parquet_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_parquet(buffer, index=index)
+
+    expected = pd.read_parquet(buffer, columns=columns)
+    got = cudf.read_parquet(buffer, columns=columns)
+
+    assert_eq(expected, got, check_index_type=True)

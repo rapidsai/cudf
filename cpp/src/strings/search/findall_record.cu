@@ -26,6 +26,7 @@
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -138,7 +139,7 @@ std::unique_ptr<column> findall_record(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall_record(input, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::findall_record(input, pattern, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

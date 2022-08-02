@@ -18,8 +18,7 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/lists/drop_list_duplicates.hpp>
-#include <cudf/lists/lists_column_factories.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -27,25 +26,28 @@
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<scalar> drop_duplicates(list_scalar const& scalar,
-                                        null_equality nulls_equal,
-                                        nan_equality nans_equal,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+namespace {
+
+/**
+ * @brief Check if we need to handle nulls in the input column.
+ *
+ * @param input The input column
+ * @param null_handling The null handling policy
+ * @return A boolean value indicating if we need to handle nulls
+ */
+bool need_handle_nulls(column_view const& input, null_policy null_handling)
 {
-  auto list_wrapper   = lists::detail::make_lists_column_from_scalar(scalar, 1, stream, mr);
-  auto lcw            = lists_column_view(list_wrapper->view());
-  auto no_dup_wrapper = lists::drop_list_duplicates(lcw, nulls_equal, nans_equal, mr);
-  auto no_dup         = lists_column_view(no_dup_wrapper->view()).get_sliced_child(stream);
-  return make_list_scalar(no_dup, stream, mr);
+  return null_handling == null_policy::EXCLUDE && input.has_nulls();
 }
+
+}  // namespace
 
 std::unique_ptr<scalar> collect_list(column_view const& col,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  if (null_handling == null_policy::EXCLUDE && col.has_nulls()) {
+  if (need_handle_nulls(col, null_handling)) {
     auto d_view             = column_device_view::create(col, stream);
     auto filter             = detail::validity_accessor(*d_view);
     auto null_purged_table  = detail::copy_if(table_view{{col}}, filter, stream, mr);
@@ -72,9 +74,27 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto scalar = collect_list(col, null_handling, stream, mr);
-  auto ls     = dynamic_cast<list_scalar*>(scalar.get());
-  return drop_duplicates(*ls, nulls_equal, nans_equal, stream, mr);
+  // `input_as_collect_list` is the result of the input column that has been processed to obey
+  // the given null handling behavior.
+  [[maybe_unused]] auto const [input_as_collect_list, unused_scalar] = [&] {
+    if (need_handle_nulls(col, null_handling)) {
+      // Only call `collect_list` when we need to handle nulls.
+      auto scalar = collect_list(col, null_handling, stream, mr);
+      return std::pair(static_cast<list_scalar*>(scalar.get())->view(), std::move(scalar));
+    }
+
+    return std::pair(col, std::unique_ptr<scalar>(nullptr));
+  }();
+
+  auto distinct_table = detail::distinct(table_view{{input_as_collect_list}},
+                                         std::vector<size_type>{0},
+                                         duplicate_keep_option::KEEP_ANY,
+                                         nulls_equal,
+                                         nans_equal,
+                                         stream,
+                                         mr);
+
+  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
 }
 
 std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
@@ -83,9 +103,15 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  auto flatten_col = col.get_sliced_child(stream);
-  auto scalar      = std::make_unique<list_scalar>(flatten_col, true, stream, mr);
-  return drop_duplicates(*scalar, nulls_equal, nans_equal, stream, mr);
+  auto flatten_col    = col.get_sliced_child(stream);
+  auto distinct_table = detail::distinct(table_view{{flatten_col}},
+                                         std::vector<size_type>{0},
+                                         duplicate_keep_option::KEEP_ANY,
+                                         nulls_equal,
+                                         nans_equal,
+                                         stream,
+                                         mr);
+  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
 }
 
 }  // namespace reduction

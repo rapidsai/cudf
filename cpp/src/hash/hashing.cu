@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -98,8 +99,7 @@ std::unique_ptr<column> hash(table_view const& input,
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_SERIAL_MURMUR3):
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
-    case (hash_id::HASH_SPARK_MURMUR3):
-      return serial_murmur_hash3_32<SparkMurmurHash3_32>(input, seed, stream, mr);
+    case (hash_id::HASH_SPARK_MURMUR3): return spark_murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");
   }
@@ -113,7 +113,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, seed, rmm::cuda_stream_default, mr);
+  return detail::hash(input, hash_function, seed, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

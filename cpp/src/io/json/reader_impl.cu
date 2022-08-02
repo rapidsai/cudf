@@ -16,6 +16,8 @@
 
 #include "json_gpu.hpp"
 
+#include "experimental/read_json.hpp"
+
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <io/comp/io_uncomp.hpp>
@@ -571,6 +573,10 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  if (reader_opts.is_enabled_experimental()) {
+    return experimental::read_json(sources, reader_opts, stream, mr);
+  }
+
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
 
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");

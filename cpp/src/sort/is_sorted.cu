@@ -21,6 +21,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -83,7 +84,7 @@ bool is_sorted(cudf::table_view const& in,
   }
 
   return detail::is_sorted(
-    in, column_order, has_nulls(in), null_precedence, rmm::cuda_stream_default);
+    in, column_order, has_nulls(in), null_precedence, cudf::default_stream_value);
 }
 
 }  // namespace cudf

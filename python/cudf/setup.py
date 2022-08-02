@@ -15,7 +15,7 @@ import versioneer
 
 install_requires = [
     "cachetools",
-    "cuda-python>=11.5,<12.0",
+    "cuda-python>=11.5,<11.7.1",
     "fsspec>=0.6.0",
     "numba>=0.53.1",
     "numpy",
@@ -79,7 +79,9 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 install_requires.append(
-    "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
+    "cupy-cuda"
+    + get_cuda_version_from_header(cuda_include_dir)
+    + ">=9.5.0,<12.0.0a0"
 )
 
 

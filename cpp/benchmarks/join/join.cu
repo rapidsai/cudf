@@ -44,12 +44,10 @@ void nvbench_inner_join(nvbench::state& state,
 
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
-                 std::vector<cudf::size_type> const& left_on,
-                 std::vector<cudf::size_type> const& right_on,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(left_input.select(left_on), compare_nulls, stream);
-    return hj_obj.inner_join(right_input.select(right_on), std::nullopt, stream);
+    cudf::hash_join hj_obj(left_input, compare_nulls, stream);
+    return hj_obj.inner_join(right_input, std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
@@ -66,12 +64,10 @@ void nvbench_left_join(nvbench::state& state,
 
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
-                 std::vector<cudf::size_type> const& left_on,
-                 std::vector<cudf::size_type> const& right_on,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(left_input.select(left_on), compare_nulls, stream);
-    return hj_obj.left_join(right_input.select(right_on), std::nullopt, stream);
+    cudf::hash_join hj_obj(left_input, compare_nulls, stream);
+    return hj_obj.left_join(right_input, std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
@@ -88,12 +84,10 @@ void nvbench_full_join(nvbench::state& state,
 
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
-                 std::vector<cudf::size_type> const& left_on,
-                 std::vector<cudf::size_type> const& right_on,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(left_input.select(left_on), compare_nulls, stream);
-    return hj_obj.full_join(right_input.select(right_on), std::nullopt, stream);
+    cudf::hash_join hj_obj(left_input, compare_nulls, stream);
+    return hj_obj.full_join(right_input, std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
