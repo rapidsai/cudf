@@ -248,9 +248,9 @@ class regex_parser {
   }
 
   // for \d and \D
-  void add_ascii_digit_class(std::vector<reclass_range>& ranges, bool negate = false)
+  void add_ascii_digit_class(std::vector<reclass_range>& ranges, bool negated = false)
   {
-    if (!negate) {
+    if (!negated) {
       ranges.push_back({'0', '9'});
     } else {
       ranges.push_back({0, '0' - 1});
@@ -259,9 +259,9 @@ class regex_parser {
   }
 
   // for \s and \S
-  void add_ascii_space_class(std::vector<reclass_range>& ranges, bool negate = false)
+  void add_ascii_space_class(std::vector<reclass_range>& ranges, bool negated = false)
   {
-    if (!negate) {
+    if (!negated) {
       ranges.push_back({'\t', ' '});
     } else {
       ranges.push_back({0, '\t' - 1});
@@ -270,15 +270,15 @@ class regex_parser {
   }
 
   // for \w and \W
-  void add_ascii_word_class(std::vector<reclass_range>& ranges, bool negate = false)
+  void add_ascii_word_class(std::vector<reclass_range>& ranges, bool negated = false)
   {
-    if (!negate) {
+    if (!negated) {
       ranges.push_back({'a', 'z'});
       ranges.push_back({'A', 'Z'});
       ranges.push_back({'_', '_'});
-      add_ascii_digit_class(ranges, negate);
+      add_ascii_digit_class(ranges, negated);
     } else {
-      add_ascii_digit_class(ranges, negate);
+      add_ascii_digit_class(ranges, negated);
       ranges.back().last = 'A' - 1;
       ranges.push_back({'Z' + 1, 'a' - 1});  // {'_'-1, '_' + 1}
       ranges.push_back({'z' + 1, std::numeric_limits<char32_t>::max()});
