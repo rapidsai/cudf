@@ -3060,3 +3060,19 @@ def test_binop_integer_power_int_scalar():
     expected = base**exponent.value
     got = base**exponent
     utils.assert_eq(expected, got)
+
+
+def test_series_floordiv_by_zero():
+    # https://github.com/rapidsai/cudf/issues/7389
+    gsr = cudf.Series([1, 2, 3])
+    psr = gsr.to_pandas()
+
+    expect = psr // 0
+    got = gsr // 0
+
+    utils.assert_eq(expect, got)
+
+    expect = psr // pd.Series([0, 0, 0], dtype=pd.Int64Dtype())
+    got = (gsr // cudf.Series([0, 0, 0])).to_pandas(nullable=True)
+
+    utils.assert_eq(expect, got)

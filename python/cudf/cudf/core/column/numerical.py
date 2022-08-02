@@ -228,8 +228,17 @@ class NumericalColumn(NumericalBaseColumn):
             op = "INT_POW"
 
         lhs, rhs = (other, self) if reflect else (self, other)
-
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if op == "__floordiv__" and not cudf.api.types.is_scalar(rhs):
+            # https://github.com/rapidsai/cudf/issues/7389
+            zero = result.dtype.type(0)
+            zeroes = libcudf.binaryop.binaryop(
+                rhs, zero, "__eq__", np.dtype("bool")
+            )
+            result = libcudf.copying.boolean_mask_scatter(
+                [zero], [result], zeroes
+            )[0]
+        return result
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
         # Only floats can contain nan.
