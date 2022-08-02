@@ -60,6 +60,8 @@ __device__ auto inline get_scalar_value(ScalarDView d_scalar)
 }
 
 struct contains_scalar_dispatch {
+  // SFINAE with conditional return type because we need to support device lambda in this function.
+  // This is required due to a limitation of nvcc.
   template <typename Type>
   std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
                                                         scalar const& needle,
