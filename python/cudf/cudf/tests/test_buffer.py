@@ -1,3 +1,4 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import cupy as cp
 import pytest
 from cupy.testing import assert_array_equal
