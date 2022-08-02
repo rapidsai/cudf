@@ -1064,12 +1064,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return pd.Series(self._dtypes)
 
     @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
-
-    @property
     def ndim(self):
         """Dimension of the data. DataFrame ndim is always 2."""
         return 2
