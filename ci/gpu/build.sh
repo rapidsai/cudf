@@ -32,7 +32,7 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 # ucx-py version
 export UCX_PY_VERSION='0.27.*'
@@ -92,8 +92,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.7.1 conda-forge::distributed==2022.7.1 conda-forge::dask-core==2022.7.1 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask==2022.7.1 conda-forge::distributed==2022.7.1 conda-forge::dask-core==2022.7.1 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
