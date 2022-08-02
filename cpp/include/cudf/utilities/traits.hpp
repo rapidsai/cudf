@@ -376,7 +376,7 @@ constexpr inline bool is_floating_point(data_type type)
 /**
  * @brief Indicates whether `T` is a std::byte type.
  *
- * @param type The `data_type` to verify
+ * @tparam T The type to verify
  * @return true `type` is std::byte
  * @return false `type` is not std::byte
  */
