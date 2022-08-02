@@ -80,7 +80,6 @@ repos:
                 stages: [commit]
                 entry: python ./ci/checks/copyright.py --git-modified-only
                 language: python
-                verbose: true
               - id: doxygen-check
                 name: doxygen-check
                 entry: ./ci/checks/doxygen.sh
