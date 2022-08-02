@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -107,7 +107,7 @@ def test_to_dlpack_cupy_1d(data_1d):
         cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy.from_dlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -121,7 +121,7 @@ def test_to_dlpack_cupy_2d(data_2d):
         cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy.from_dlpack(dlt)
         cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -157,7 +157,7 @@ def test_to_dlpack_cupy_2d_null(data_2d):
         cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy.from_dlpack(dlt)
         cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -171,7 +171,7 @@ def test_to_dlpack_cupy_1d_null(data_1d):
         cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy.from_dlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -183,7 +183,7 @@ def test_to_dlpack_mixed_dtypes():
     cudf_host_array = df.to_numpy()
     dlt = df.to_dlpack()
 
-    cupy_array = cupy.fromDlpack(dlt)
+    cupy_array = cupy.from_dlpack(dlt)
     cupy_host_array = cupy_array.get()
 
     assert_eq(cudf_host_array, cupy_host_array)
