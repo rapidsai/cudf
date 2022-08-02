@@ -116,7 +116,8 @@ struct genericAtomicOperationImpl<T, Op, 4> {
     using T_int = unsigned int;
 
     T old_value = *addr;
-    T_int assumed, ret;
+    T_int assumed;
+    T_int ret;
 
     do {
       const T_int new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
