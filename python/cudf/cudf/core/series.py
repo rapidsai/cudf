@@ -745,7 +745,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         C    3
         dtype: int64
         """
-        # check axis, if axis is not 0 or index, throws an error in that case
         if axis not in (0, "index"):
             raise ValueError(f"No axis named {axis} for object type Series")
         ax = self.index
@@ -762,8 +761,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         if len(ax) > 1 and ax.is_monotonic_decreasing and ax.nunique() > 1:
             before, after = after, before
-
-        # if ax is multiIndex - how do we deal with that
 
         slicer = slice(before, after)
         result = self.loc[slicer]

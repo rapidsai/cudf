@@ -2970,8 +2970,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis = self._get_axis_from_axis_arg(axis)
         ax = self._index if axis == 0 else self.columns
 
-        # if ax is multiIndex - how do we deal with it
-        # pandas throws an exception when ax is a MultiIndex
         if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
             raise ValueError("truncate requires a sorted index")
 
