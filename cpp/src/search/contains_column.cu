@@ -69,7 +69,7 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
-    // In case the input scalar is invalid, it should be handled at the caller site before
+    // If the input scalar is invalid, it should be handled by the caller before
     // dispatching to this function.
     // (Handling such case is very simple: just check if the input haystack column has nulls).
 
@@ -107,7 +107,7 @@ struct contains_scalar_dispatch {
     // Haystack and needle structure compatibility will be checked by the table comparator
     // constructor during call to `contains_nested_element`.
 
-    // In case the input scalar is invalid, it should be handled at the caller site before
+    // If the input scalar is invalid, it should be handled by the caller before
     // dispatching to this function.
     // (Handling such case is very simple: just check if the input haystack column has nulls).
 
