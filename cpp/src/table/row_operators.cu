@@ -26,6 +26,8 @@
 
 #include <jit/type.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace experimental {
 
