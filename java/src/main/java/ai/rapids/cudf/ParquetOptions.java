@@ -72,9 +72,10 @@ public class ParquetOptions extends ColumnFilterOptions {
      * Include one or more specific columns.  Any column not included will not be read.
      * @param names the name of the column, or more than one if you want.
      */
+    @Override
     public Builder includeColumn(String... names) {
-      for (String name : names) {
-        includeColumnNames.add(name);
+      super.includeColumn(names);
+      for (int i = 0 ; i < names.length ; i++) {
         binaryAsStringColumns.add(true);
       }
       return this;
@@ -95,9 +96,10 @@ public class ParquetOptions extends ColumnFilterOptions {
      * Include one or more specific columns.  Any column not included will not be read.
      * @param names the name of the column, or more than one if you want.
      */
+    @Override
     public Builder includeColumn(Collection<String> names) {
-      for (String name: names) {
-        includeColumnNames.add(name);
+      super.includeColumn(names);
+      for (int i = 0 ; i < names.size() ; i++) {
         binaryAsStringColumns.add(true);
       }
       return this;
