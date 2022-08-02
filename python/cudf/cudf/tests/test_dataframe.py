@@ -288,6 +288,54 @@ def test_axes(data):
         assert_eq(e, a)
 
 
+def test_dataframe_truncate_axis_0():
+    cdf1 = cudf.DataFrame(
+        {
+            "A": ["a", "b", "c", "d", "e"],
+            "B": ["f", "g", "h", "i", "j"],
+            "C": ["k", "l", "m", "n", "o"],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    pdf1 = cdf1.to_pandas()
+    expected = pdf1.truncate(before=2, after=4, axis="index")
+    actual = cdf1.truncate(before=2, after=4, axis="index")
+
+    assert_eq(actual, expected)
+    assert_eq(pdf1.truncate(1, 4, 0), cdf1.truncate(1, 4, 0))
+
+
+def test_dataframe_truncate_axis_1():
+    cdf1 = cudf.DataFrame(
+        {
+            "A": ["a", "b", "c", "d", "e"],
+            "B": ["f", "g", "h", "i", "j"],
+            "C": ["k", "l", "m", "n", "o"],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    pdf1 = cdf1.to_pandas()
+    expected = pdf1.truncate(before="A", after="B", axis="columns")
+    actual = cdf1.truncate(before="A", after="B", axis="columns")
+
+    assert_eq(actual, expected)
+    assert_eq(pdf1.truncate("A", "B", 1), cdf1.truncate("A", "B", 1))
+
+
+def test_dataframe_truncate_datetimeindex():
+    dates = cudf.date_range("2021-01-01", "2021-01-02", freq="s")
+    cdf1 = cudf.DataFrame(data={"A": 1, "B": 2}, index=dates)
+    pdf1 = cdf1.to_pandas()
+    expected = pdf1.truncate(
+        before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+    )
+    actual = cdf1.truncate(
+        before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+    )
+
+    assert_eq(actual, expected)
+
+
 def test_series_init_none():
 
     # test for creating empty series

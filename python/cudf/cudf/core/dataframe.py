@@ -2886,6 +2886,114 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         return [self._index, self._data.to_pandas_index()]
 
+    @_cudf_nvtx_annotate
+    def truncate(self, before=None, after=None, axis=0, copy=True):
+        """
+        Truncate a DataFrame before and after some index value.
+        This is a useful shorthand for boolean indexing based on index
+        values above or below certain thresholds.
+
+        Parameters
+        ----------
+        before : date, str, int
+            Truncate all rows before this index value.
+        after : date, str, int
+            Truncate all rows after this index value.
+        axis : {0 or 'index', 1 or 'columns'}, optional
+            Axis to truncate. Truncates the index (rows) by default.
+        copy : bool, default is True,
+            Return a copy of the truncated section.
+
+        Returns
+        -------
+            The truncated Series or DataFrame.
+
+        Notes
+        -----
+        If the index being truncated contains only datetime values,
+        `before` and `after` may be specified as strings instead of
+        Timestamps.
+
+        Examples
+        --------
+        >>> cdf1 = cudf.DataFrame({'A': ['a', 'b', 'c', 'd', 'e'],
+        ...                       'B': ['f', 'g', 'h', 'i', 'j'],
+        ...                       'C': ['k', 'l', 'm', 'n', 'o']},
+        ...                             index=[1, 2, 3, 4, 5])
+        >>> cdf1
+            A	B	C
+        1	a	f	k
+        2	b	g	l
+        3	c	h	m
+        4	d	i	n
+        5	e	j	o
+
+        >>> cdf1.truncate(before=2, after=4)
+            A	B	C
+        2	b	g	l
+        3	c	h	m
+        4	d	i	n
+
+        >>> cdf1.truncate(before="A", after="B", axis="columns")
+            A	B
+        1	a	f
+        2	b	g
+        3	c	h
+        4	d	i
+        5	e	j
+
+        >>> import cudf
+        >>> dates = cudf.date_range('2021-01-01', '2021-01-02', freq='s')
+        >>> cdf2 = cudf.DataFrame(data={'A': 1, 'B': 2}, index=dates)
+        >>> cdf2.head()
+                            A	B
+        2021-01-01 00:00:00	1	2
+        2021-01-01 00:00:01	1	2
+        2021-01-01 00:00:02	1	2
+        2021-01-01 00:00:03	1	2
+        2021-01-01 00:00:04	1	2
+
+        >>> cdf2.truncate(
+        ... before="2021-01-01 23:45:18", after="2021-01-01 23:45:27")
+                            A	B
+        2021-01-01 23:45:18	1	2
+        2021-01-01 23:45:19	1	2
+        2021-01-01 23:45:20	1	2
+        2021-01-01 23:45:21	1	2
+        2021-01-01 23:45:22	1	2
+        2021-01-01 23:45:23	1	2
+        2021-01-01 23:45:24	1	2
+        2021-01-01 23:45:25	1	2
+        2021-01-01 23:45:26	1	2
+        2021-01-01 23:45:27	1	2
+        """
+        axis = self._get_axis_from_axis_arg(axis)
+        ax = self._index if axis == 0 else self.columns
+
+        # if ax is multiIndex - how do we deal with it
+        # pandas throws an exception when ax is a MultiIndex
+        if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
+            raise ValueError("truncate requires a sorted index")
+
+        if type(ax) is cudf.core.index.DatetimeIndex:
+            before = pd.to_datetime(before)
+            after = pd.to_datetime(after)
+
+        if before is not None and after is not None and before > after:
+            raise ValueError(f"Truncate: {after} must be after {before}")
+
+        if len(ax) > 1 and ax.is_monotonic_decreasing and ax.nunique() > 1:
+            before, after = after, before
+
+        slicer = [slice(None, None)] * self.ndim
+        slicer[axis] = slice(before, after)
+        result = self.loc[tuple(slicer)]
+
+        if copy:
+            result = result.copy()
+
+        return result
+
     def diff(self, periods=1, axis=0):
         """
         First discrete difference of element.
