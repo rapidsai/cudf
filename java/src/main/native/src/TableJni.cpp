@@ -1429,8 +1429,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
-    JNIEnv *env, jclass, jobjectArray filter_col_names, jbooleanArray col_binary_read,
+    JNIEnv *env, jclass, jobjectArray filter_col_names, jbooleanArray j_col_binary_read,
     jstring inputfilepath, jlong buffer, jlong buffer_length, jint unit) {
+
+  JNI_NULL_CHECK(env, j_col_binary_read, "null col_binary_read", 0);
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -1452,7 +1454,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
-    cudf::jni::native_jbooleanArray n_col_binary_read(env, col_binary_read);
+    cudf::jni::native_jbooleanArray n_col_binary_read(env, j_col_binary_read);
 
     auto source = read_buffer ? cudf::io::source_info(reinterpret_cast<char *>(buffer),
                                                       static_cast<std::size_t>(buffer_length)) :

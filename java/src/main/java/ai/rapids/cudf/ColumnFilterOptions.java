@@ -29,26 +29,28 @@ public abstract class ColumnFilterOptions {
   // Names of the columns to be returned (other columns are skipped)
   // If empty all columns are returned.
   private final String[] includeColumnNames;
-  private final Boolean[] binaryRead;
+  private final boolean[] readBinaryAsString;
 
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
         new String[builder.includeColumnNames.size()]);
-    binaryRead = builder.binaryColumns.toArray(
-        new Boolean[builder.binaryColumns.size()]);
+    readBinaryAsString = new boolean[builder.binaryAsStringColumns.size()];
+    for (int i = 0 ; i < builder.binaryAsStringColumns.size() ; i++) {
+      readBinaryAsString[i] = builder.binaryAsStringColumns.get(i);
+    }
   }
 
   String[] getIncludeColumnNames() {
     return includeColumnNames;
   }
 
-  Boolean[] getIsBinaryRead() {
-    return binaryRead;
+  boolean[] getConvertToBinaryRead() {
+    return readBinaryAsString;
   }
 
   public static class Builder<T extends Builder> {
     final List<String> includeColumnNames = new ArrayList<>();
-    final List<Boolean> binaryColumns = new ArrayList<>();
+    final List<Boolean> binaryAsStringColumns = new ArrayList<>();
 
     /**
      * Include one or more specific columns.  Any column not included will not be read.
@@ -57,7 +59,7 @@ public abstract class ColumnFilterOptions {
     public T includeColumn(String... names) {
       for (String name : names) {
         includeColumnNames.add(name);
-        binaryColumns.add(false);
+        binaryAsStringColumns.add(true);
       }
       return (T) this;
     }
@@ -69,7 +71,7 @@ public abstract class ColumnFilterOptions {
      */
     public T includeColumn(String name, boolean isBinary) {
       includeColumnNames.add(name);
-      binaryColumns.add(isBinary);
+      binaryAsStringColumns.add(!isBinary);
       return (T) this;
     }
 
@@ -80,7 +82,7 @@ public abstract class ColumnFilterOptions {
     public T includeColumn(Collection<String> names) {
       for (String name: names) {
         includeColumnNames.add(name);
-        binaryColumns.add(false);
+        binaryAsStringColumns.add(true);
       }
       return (T) this;
     }
