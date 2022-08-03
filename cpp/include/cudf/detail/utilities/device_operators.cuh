@@ -119,7 +119,7 @@ struct DeviceMin {
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs)
     -> decltype(cudf::detail::min(lhs, rhs))
   {
-    return cudf::detail::min(lhs, rhs);
+    return numeric::detail::min(lhs, rhs);
   }
 
   template <typename T,
@@ -167,7 +167,7 @@ struct DeviceMax {
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs)
     -> decltype(cudf::detail::max(lhs, rhs))
   {
-    return cudf::detail::max(lhs, rhs);
+    return numeric::detail::max(lhs, rhs);
   }
 
   template <typename T,
