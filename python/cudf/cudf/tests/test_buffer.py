@@ -1,9 +1,8 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import cupy as cp
 import pytest
-from cupy.testing import assert_array_equal
 
-from cudf.core.buffer import as_buffer, buffer_from_pointer
+from cudf.core.buffer import buffer_from_pointer
 
 arr_len = 10
 
@@ -44,14 +43,3 @@ def test_buffer_from_cuda_iface_contiguous(data):
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
     buffer_from_pointer(ptr=data, size=data.size, owner=None)
-
-
-@pytest.mark.parametrize("size", [0, 1, 10, 100, 1000, 10_000])
-def test_buffer_copy(size):
-    data = cp.random.randint(low=0, high=100, size=size, dtype="u1")
-    buf = as_buffer(data)
-    got = buf.copy()
-    assert got.size == buf.size
-    if size > 0:
-        assert got.ptr != buf.ptr
-    assert_array_equal(cp.asarray(buf), cp.asarray(got))
