@@ -6,8 +6,11 @@ from numba import cuda, types
 from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudadrv import nvvm
-from numba.cuda.cudaimpl import lower as cuda_lower
-from numba.cuda.cudaimpl import registry as cuda_lowering_registry
+from numba.cuda.cudaimpl import (
+    lower as cuda_lower,
+    registry as cuda_lowering_registry,
+)
+
 from strings_udf._lib.tables import get_character_flags_table_ptr
 from strings_udf._typing import string_view
 
