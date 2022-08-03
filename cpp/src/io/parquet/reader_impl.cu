@@ -1596,6 +1596,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   // Binary columns can be read as binary or strings
   _force_binary_columns_as_strings = options.get_convert_binary_to_strings();
 
+  _force_all_binary_columns_as_strings = options.is_enabled_convert_all_binary_to_strings();
+
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),

@@ -69,6 +69,8 @@ class parquet_reader_options {
   data_type _timestamp_type{type_id::EMPTY};
   // Whether to store binary data as a string column
   std::optional<std::vector<bool>> _convert_binary_to_strings{std::nullopt};
+  // Whether to convert all binary columns to strings
+  bool _convert_all_binary_to_strings = true;
 
   /**
    * @brief Constructor from source info.
@@ -131,6 +133,17 @@ class parquet_reader_options {
   [[nodiscard]] std::optional<std::vector<bool>> get_convert_binary_to_strings() const
   {
     return _convert_binary_to_strings;
+  }
+
+  /**
+   * @brief Returns true/false values depending on whether all binary data should be
+   * converted to strings or not.
+   *
+   * @return `true` if all binary data should be converted to strings
+   */
+  [[nodiscard]] bool is_enabled_convert_all_binary_to_strings() const
+  {
+    return _convert_all_binary_to_strings;
   }
 
   /**
@@ -216,6 +229,14 @@ class parquet_reader_options {
   {
     _convert_binary_to_strings = std::move(val);
   }
+
+  /**
+   * @brief Sets to enable/disable conversion of binary to strings.
+   *
+   * @param val Boolean value to enable/disable conversion of binary to string columns. Note default
+   * is to convert to string columns.
+   */
+  void enable_convert_all_binary_to_strings(bool val) { _convert_all_binary_to_strings = val; }
 
   /**
    * @brief Sets number of rows to skip.
@@ -332,6 +353,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& convert_binary_to_strings(std::vector<bool> val)
   {
     options._convert_binary_to_strings = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets enable/disable conversion of binary to strings.
+   *
+   * @param val Boolean value to enable/disable conversion of binary to string columns. Note default
+   * is to convert to string columns.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& convert_all_binary_to_strings(bool val)
+  {
+    options._convert_all_binary_to_strings = val;
     return *this;
   }
 
