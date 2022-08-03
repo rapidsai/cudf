@@ -156,7 +156,6 @@ def typeof_masked(val, c):
 # type in a kernel.
 def register_masked_constructor(supported_masked_types):
     class MaskedConstructor(ConcreteTemplate):
-        from cudf.core.udf.strings_typing import string_view
 
         key = api.Masked
         units = ["ns", "ms", "us", "s"]
