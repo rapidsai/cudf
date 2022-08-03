@@ -64,7 +64,7 @@ constexpr uint32_t rle_buffer_size = (1 << 9);
 constexpr int32_t NO_TRUNC_STATS = 0;
 
 // minimum scratch space required for encoding statistics
-constexpr size_t min_stats_scratch_size = sizeof(__int128_t);
+constexpr size_t MIN_STATS_SCRATCH_SIZE = sizeof(__int128_t);
 
 struct frag_init_state_s {
   parquet_column_device_view col;
@@ -1408,19 +1408,17 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
 /**
  * @brief Truncate a UTF-8 string to at most truncate_length bytes.
  *
- * On return res will point to the truncated string. If is_min is false, then the final
- * character (or characters if there is overflow) will be incremented so that the resultant
- * string will still be a valid maximum. scratch is only used when is_min is false, and must be at
- * least truncate_length bytes in size. If the string cannot be truncated, leave it untouched and
- * return the original length.
+ * If is_min is false, then the final character (or characters if there is overflow) will be
+ * incremented so that the resultant string will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the string cannot be
+ * truncated, leave it untouched and return the original length.
  *
- * @return The length of the truncated string.
+ * @return Pair object containing a pointer to the truncate string and its length.
  */
-static __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
-                                         const void** res,
-                                         bool is_min,
-                                         void* scratch,
-                                         size_type truncate_length)
+static __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t const> str,
+                                                                 bool is_min,
+                                                                 void* scratch,
+                                                                 size_type truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is a character at [len]. work backwards until we find
@@ -1432,62 +1430,50 @@ static __device__ uint32_t truncate_utf8(device_span<uint8_t const> str,
     len--;
   }
   if (len != 0) {
-    if (is_min) {
-      *res = str.data();
-      return len;
-    }
+    if (is_min) { return {str.data(), len}; }
     memcpy(scratch, str.data(), len);
     // increment last byte, working backwards if the byte overflows
     auto const ptr = static_cast<uint8_t*>(scratch);
     for (int32_t i = len - 1; i >= 0; i--) {
       if (increment_utf8_at(&ptr[i])) {  // true if no overflow
-        *res = scratch;
-        return len;
+        return {scratch, len};
       }
     }
     // cannot increment, so fall through
   }
 
   // couldn't truncate, return original value
-  *res = str.data();
-  return str.size_bytes();
+  return {str.data(), str.size_bytes()};
 }
 
 /**
  * @brief Truncate a binary array to at most truncate_length bytes.
  *
- * On return res will point to the truncated array. If is_min is false, then the final
- * character (or characters if there is overflow) will be incremented so that the resultant
- * array will still be a valid maximum. scratch is only used when is_min is false, and must be at
- * least truncate_length bytes in size. If the array cannot be truncated, leave it untouched and
- * return the original length.
+ * If is_min is false, then the final character (or characters if there is overflow) will be
+ * incremented so that the resultant array will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the array cannot be
+ * truncated, leave it untouched and return the original length.
  *
- * @return The length of the truncated array.
+ * @return Pair object containing a pointer to the truncated array and its length.
  */
-static __device__ uint32_t truncate_binary(device_span<uint8_t const> arr,
-                                           const void** res,
-                                           bool is_min,
-                                           void* scratch,
-                                           size_type truncate_length)
+static __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+                                                                   bool is_min,
+                                                                   void* scratch,
+                                                                   size_type truncate_length)
 {
-  if (is_min) {
-    *res = arr.data();
-    return truncate_length;
-  }
+  if (is_min) { return {arr.data(), truncate_length}; }
   memcpy(scratch, arr.data(), truncate_length);
   // increment last byte, working backwards if the byte overflows
   auto const ptr = static_cast<uint8_t*>(scratch);
   for (int32_t i = truncate_length - 1; i >= 0; i--) {
     ptr[i]++;
     if (ptr[i] != 0) {  // no overflow
-      *res = scratch;
-      return i + 1;
+      return {scratch, i + 1};
     }
   }
 
   // couldn't truncate, return original value
-  *res = arr.data();
-  return arr.size_bytes();
+  return {arr.data(), arr.size_bytes()};
 }
 
 // TODO (ets): the assumption here is that string columns might have UTF-8 or plain binary,
@@ -1497,12 +1483,13 @@ static __device__ uint32_t truncate_binary(device_span<uint8_t const> arr,
 /**
  * @brief Truncate a UTF-8 string to at most truncate_length bytes.
  */
-static __device__ uint32_t truncate_string(
-  const string_view& str, const void** res, bool is_min, void* scratch, size_type truncate_length)
+static __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
+                                                                   bool is_min,
+                                                                   void* scratch,
+                                                                   size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
-    *res = str.data();
-    return str.size_bytes();
+    return {str.data(), str.size_bytes()};
   }
 
   // convert char to uint8_t since UTF-8 is just bytes, not chars.  can't use std::byte because
@@ -1512,37 +1499,39 @@ static __device__ uint32_t truncate_string(
 
   // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
   if (str.size_bytes() != str.length() and is_valid_utf8_string(span.first(truncate_length))) {
-    return truncate_utf8(span, res, is_min, scratch, truncate_length);
+    return truncate_utf8(span, is_min, scratch, truncate_length);
   }
-  return truncate_binary(span, res, is_min, scratch, truncate_length);
+  return truncate_binary(span, is_min, scratch, truncate_length);
 }
 
 /**
  * @brief Truncate a binary array to at most truncate_length bytes.
  */
-static __device__ uint32_t truncate_byte_array(const statistics::byte_array_view& arr,
-                                               const void** res,
-                                               bool is_min,
-                                               void* scratch,
-                                               size_type truncate_length)
+static __device__ std::pair<const void*, uint32_t> truncate_byte_array(
+  const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
-    *res = arr.data();
-    return arr.size_bytes();
+    return {arr.data(), arr.size_bytes()};
   }
 
   // TODO: this will need to change when #11424 merges
   device_span<uint8_t const> const span{arr.data(), arr.size_bytes()};
-  return truncate_binary(span, res, is_min, scratch, truncate_length);
+  return truncate_binary(span, is_min, scratch, truncate_length);
 }
 
-static __device__ void get_extremum(const statistics_val* stats_val,
-                                    statistics_dtype dtype,
-                                    void* scratch,
-                                    const void** val,
-                                    uint32_t* len,
-                                    bool is_min,
-                                    size_type truncate_length)
+/**
+ * @brief Find a min or max value of the proper form to be included in Parquet statistics
+ * structures.
+ *
+ * Given a statistics_val union and a data type, perform any transformations needed to produce a
+ * valid min or max binary value.  String and byte array types will be truncated if they exceed
+ * truncate_length.
+ */
+static __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
+                                                                statistics_dtype dtype,
+                                                                void* scratch,
+                                                                bool is_min,
+                                                                size_type truncate_length)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1563,42 +1552,42 @@ static __device__ void get_extremum(const statistics_val* stats_val,
   }
 
   if (dtype == dtype_string) {
-    *len = truncate_string(stats_val->str_val, val, is_min, scratch, truncate_length);
+    return truncate_string(stats_val->str_val, is_min, scratch, truncate_length);
   } else if (dtype == dtype_byte_array) {
-    *len = truncate_byte_array(stats_val->byte_val, val, is_min, scratch, truncate_length);
+    return truncate_byte_array(stats_val->byte_val, is_min, scratch, truncate_length);
   } else {
-    *len = dtype_len;
     if (dtype == dtype_float32) {  // Convert from double to float32
       auto const fp_scratch = static_cast<float*>(scratch);
       fp_scratch[0]         = stats_val->fp_val;
-      *val                  = scratch;
+      return {scratch, dtype_len};
     } else if (dtype == dtype_decimal128) {
       byte_reverse128(stats_val->d128_val, scratch);
-      *val = scratch;
-    } else {
-      *val = stats_val;
+      return {scratch, dtype_len};
     }
+    return {stats_val, dtype_len};
   }
 }
 
-static __device__ void get_min(const statistics_val* stats_val,
-                               statistics_dtype dtype,
-                               void* scratch,
-                               const void** val,
-                               uint32_t* len,
-                               size_type truncate_length)
+/**
+ * @brief Find a min value of the proper form to be included in Parquet statistics structures.
+ */
+static __device__ std::pair<const void*, uint32_t> get_min(const statistics_val* stats_val,
+                                                           statistics_dtype dtype,
+                                                           void* scratch,
+                                                           size_type truncate_length)
 {
-  return get_extremum(stats_val, dtype, scratch, val, len, true, truncate_length);
+  return get_extremum(stats_val, dtype, scratch, true, truncate_length);
 }
 
-static __device__ void get_max(const statistics_val* stats_val,
-                               statistics_dtype dtype,
-                               void* scratch,
-                               const void** val,
-                               uint32_t* len,
-                               size_type truncate_length)
+/**
+ * @brief Find a max value of the proper form to be included in Parquet statistics structures.
+ */
+static __device__ std::pair<const void*, uint32_t> get_max(const statistics_val* stats_val,
+                                                           statistics_dtype dtype,
+                                                           void* scratch,
+                                                           size_type truncate_length)
 {
-  return get_extremum(stats_val, dtype, scratch, val, len, false, truncate_length);
+  return get_extremum(stats_val, dtype, scratch, false, truncate_length);
 }
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
@@ -1610,13 +1599,10 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
-    const void *vmin, *vmax;
-    uint32_t lmin, lmax;
-
-    get_max(&s->max_value, dtype, scratch, &vmax, &lmax, NO_TRUNC_STATS);
-    encoder.field_binary(5, vmax, lmax);
-    get_min(&s->min_value, dtype, scratch, &vmin, &lmin, NO_TRUNC_STATS);
-    encoder.field_binary(6, vmin, lmin);
+    auto const max = get_max(&s->max_value, dtype, scratch, NO_TRUNC_STATS);
+    encoder.field_binary(5, max.first, max.second);
+    auto const min = get_min(&s->min_value, dtype, scratch, NO_TRUNC_STATS);
+    encoder.field_binary(6, min.first, min.second);
   }
   encoder.end(&end);
   return end;
@@ -1633,7 +1619,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) unsigned char scratch[min_stats_scratch_size];
+  __shared__ __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
 
   uint32_t t = threadIdx.x;
 
@@ -1884,11 +1870,8 @@ __global__ void __launch_bounds__(1)
                          device_span<statistics_chunk const> column_stats,
                          size_type column_index_truncate_length)
 {
-  __align__(8) unsigned char s_scratch[min_stats_scratch_size];
-  const void *vmin, *vmax;
-  uint32_t lmin, lmax;
+  __align__(8) unsigned char s_scratch[MIN_STATS_SCRATCH_SIZE];
   uint8_t* col_idx_end;
-  void* scratch;
 
   if (column_stats.empty()) { return; }
 
@@ -1903,8 +1886,8 @@ __global__ void __launch_bounds__(1)
   // make sure scratch is aligned properly. here column_index_size indicates
   // how much scratch space is available for this chunk, including space for
   // truncation scratch + padding for alignment.
-  scratch =
-    column_index_truncate_length < min_stats_scratch_size
+  void* scratch =
+    column_index_truncate_length < MIN_STATS_SCRATCH_SIZE
       ? s_scratch
       : align8(ck_g->column_index_blob + ck_g->column_index_size - column_index_truncate_length);
 
@@ -1917,25 +1900,21 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_min(&column_stats[pageidx + page].min_value,
-            col_g.stats_dtype,
-            scratch,
-            &vmin,
-            &lmin,
-            column_index_truncate_length);
-    encoder.put_binary(vmin, lmin);
+    auto const min = get_min(&column_stats[pageidx + page].min_value,
+                             col_g.stats_dtype,
+                             scratch,
+                             column_index_truncate_length);
+    encoder.put_binary(min.first, min.second);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_max(&column_stats[pageidx + page].max_value,
-            col_g.stats_dtype,
-            scratch,
-            &vmax,
-            &lmax,
-            column_index_truncate_length);
-    encoder.put_binary(vmax, lmax);
+    auto const max = get_max(&column_stats[pageidx + page].max_value,
+                             col_g.stats_dtype,
+                             scratch,
+                             column_index_truncate_length);
+    encoder.put_binary(max.first, max.second);
   }
   encoder.field_list_end(3);
   // boundary_order
