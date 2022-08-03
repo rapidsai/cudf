@@ -1516,8 +1516,9 @@ __device__ std::pair<const void*, uint32_t> truncate_byte_array(
     return {arr.data(), arr.size_bytes()};
   }
 
-  // TODO: this will need to change when #11424 merges
-  device_span<uint8_t const> const span{arr.data(), arr.size_bytes()};
+  // convert std::byte to uint8_t since bytes can't be incremented
+  device_span<uint8_t const> const span{reinterpret_cast<uint8_t const*>(arr.data()),
+                                        arr.size_bytes()};
   return truncate_binary(span, is_min, scratch, truncate_length);
 }
 
