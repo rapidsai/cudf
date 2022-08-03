@@ -400,8 +400,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
                     [] __device__(auto const i) {
-                      // position == NOT_FOUND_SENTINEL: the list does not contain the search
-                      // key.
+                      // position == NOT_FOUND_SENTINEL: the list does not contain the search key.
                       return i != NOT_FOUND_SENTINEL;
                     });
 
