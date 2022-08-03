@@ -60,7 +60,7 @@ static reclass cclass_S(NCCLASS_S);  // \S
 static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
-const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
+const std::array<int, 5> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
 // Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
@@ -473,11 +473,13 @@ class regex_parser {
     auto previous_type = _items.back().type;
     if (previous_type == RBRA) {  // previous item is a capture group
       // look for matching LBRA
-      auto nested_count = 0;
+      auto nested_count = 1;
       auto lbra_itr =
         std::find_if(_items.rbegin(), _items.rend(), [nested_count](auto const& item) mutable {
-          nested_count += (item.type == RBRA);
-          return (item.type == LBRA || item.type == LBRA_NC) && (nested_count-- == 0);
+          auto const is_closing = (item.type == RBRA);
+          auto const is_opening = (item.type == LBRA || item.type == LBRA_NC);
+          nested_count += is_closing - is_opening;
+          return is_opening && (nested_count == 0);
         });
       // search for the first valid item within the LBRA-RBRA range
       auto first_valid = std::find_first_of(
@@ -487,7 +489,7 @@ class regex_parser {
         valid_preceding_inst_types.end(),
         [](auto const item, auto const valid_type) { return item.type == valid_type; });
       // set previous_type to be checked in next if-statement
-      previous_type = (first_valid != lbra_itr) ? first_valid->type : (--lbra_itr)->type;
+      previous_type = (first_valid == lbra_itr) ? (--lbra_itr)->type : first_valid->type;
     }
 
     if (std::find(valid_preceding_inst_types.begin(),
