@@ -1332,8 +1332,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
                                                      .dayfirst(static_cast<bool>(day_first))
                                                      .lines(static_cast<bool>(lines));
 
-    auto result = std::make_unique<cudf::io::table_with_metadata>();
-    *result = cudf::io::read_json(opts.build());
+    auto result = std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build());
 
     return reinterpret_cast<jlong>(result.release());
   }
