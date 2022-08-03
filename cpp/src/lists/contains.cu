@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/list_device_view.cuh>
@@ -31,10 +30,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/logical.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
