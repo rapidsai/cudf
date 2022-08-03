@@ -21,12 +21,10 @@
 
 #include <nvbench/nvbench.cuh>
 
-template <typename FloatType>
-void bench_groupby_max(nvbench::state& state, nvbench::type_list<FloatType>)
+template <typename Type>
+void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 {
   cudf::rmm_pool_raii pool_raii;
-
-  const auto size = static_cast<cudf::size_type>(state.get_int64("NumRows"));
 
   auto const input_table = [&] {
     data_profile profile;
@@ -34,13 +32,14 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<FloatType>)
     profile.set_cardinality(0);
     profile.set_distribution_params<int32_t>(
       cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, 100);
-    profile.set_distribution_params<FloatType>(cudf::type_to_id<FloatType>(),
-                                               distribution_id::UNIFORM,
-                                               static_cast<FloatType>(0),
-                                               static_cast<FloatType>(1000));
+    profile.set_distribution_params<Type>(cudf::type_to_id<Type>(),
+                                          distribution_id::UNIFORM,
+                                          static_cast<Type>(0),
+                                          static_cast<Type>(1000));
 
+    const auto size = static_cast<cudf::size_type>(state.get_int64("NumRows"));
     return create_random_table(
-      {cudf::type_to_id<int32_t>(), cudf::type_to_id<FloatType>()}, row_count{size}, profile);
+      {cudf::type_to_id<int32_t>(), cudf::type_to_id<Type>()}, row_count{size}, profile);
   }();
 
   auto const& keys = input_table->get_column(0);
@@ -59,5 +58,10 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<FloatType>)
 }
 
 NVBENCH_BENCH_TYPES(bench_groupby_max, NVBENCH_TYPE_AXES(nvbench::type_list<float, double>))
-  .set_name("groupby_max")
+  .set_name("groupby_max_floating_point")
+  .add_int64_power_of_two_axis("NumRows", {12, 16, 20, 24});
+
+NVBENCH_BENCH_TYPES(bench_groupby_max,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<int16_t, int32_t, int64_t>))
+  .set_name("groupby_max_integer")
   .add_int64_power_of_two_axis("NumRows", {12, 16, 20, 24});
