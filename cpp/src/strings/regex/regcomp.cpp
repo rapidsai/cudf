@@ -459,7 +459,7 @@ class regex_parser {
     }
 
     // The quantifiers require at least one "real" previous item.
-    // We are throwing an errors for invalid quantifiers.
+    // We are throwing errors for invalid quantifiers.
     // Another option is to just return CHAR silently here which effectively
     // treats the chr character as a literal instead as a quantifier.
     // This could lead to confusion where sometimes unescaped quantifier characters
