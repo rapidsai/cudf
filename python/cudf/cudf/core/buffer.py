@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import operator
 import pickle
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Mapping, Tuple
 
 import numpy as np
 
@@ -27,6 +27,8 @@ def as_buffer(obj: Any) -> Buffer:
     The returned Buffer keeps a reference to `obj` in order to
     retain the lifetime of `obj`.
 
+    Raises ValueError if the data of `obj` isn't c-contiguous.
+
     Parameters
     ----------
     obj : buffer-like
@@ -38,9 +40,21 @@ def as_buffer(obj: Any) -> Buffer:
     Return
     ------
     Buffer
-        A Buffer that represents the device memory of `obj`
+        A Buffer instance that represents the device memory of `obj`
     """
-    return Buffer(data=obj)
+
+    if isinstance(obj, Buffer):
+        return obj
+    if isinstance(obj, rmm.DeviceBuffer):
+        return Buffer(obj.ptr, obj.size, obj)
+    iface = getattr(obj, "__cuda_array_interface__", None)
+    if iface:
+        ptr, size = _get_ptr_and_size(iface)
+        return Buffer(ptr, size, obj)
+
+    host_ary = np.asarray(obj)
+    ptr, size = _get_ptr_and_size(host_ary.__array_interface__)
+    return as_buffer(rmm.DeviceBuffer(ptr=ptr, size=size))
 
 
 def buffer_from_pointer(ptr: int, size: int, owner: object) -> Buffer:
@@ -65,9 +79,9 @@ def buffer_from_pointer(ptr: int, size: int, owner: object) -> Buffer:
     Return
     ------
     Buffer
-        A Buffer that represents the device memory of `ptr`
+        A Buffer instance that represents the device memory of `ptr`
     """
-    return Buffer(data=ptr, size=size, owner=owner)
+    return Buffer(ptr, size, owner)
 
 
 class Buffer(Serializable):
@@ -76,55 +90,23 @@ class Buffer(Serializable):
 
     Parameters
     ----------
-    data : Buffer, array_like, int
-        An array-like object or integer representing a
-        device or host pointer to pre-allocated memory.
-    size : int, optional
-        Size of memory allocation. Required if a pointer
-        is passed for `data`.
-    owner : object, optional
-        Python object to which the lifetime of the memory
-        allocation is tied. If provided, a reference to this
-        object is kept in this Buffer.
+    ptr : int
+        An integer representing a pointer to device memory.
+    size : int
+        Size of device memory in bytes.
+    owner : object
+        Python object to which the lifetime of the memory allocation is tied.
+        A reference to this object is kept in the returned Buffer.
     """
 
     _ptr: int
     _size: int
     _owner: object
 
-    def __init__(
-        self, data: Any = None, size: int = None, owner: object = None
-    ):
-        if isinstance(data, Buffer):
-            self._ptr = data._ptr
-            self._size = data.size
-            self._owner = owner or data._owner
-        elif isinstance(data, rmm.DeviceBuffer):
-            self._ptr = data.ptr
-            self._size = data.size
-            self._owner = data
-        elif hasattr(data, "__array_interface__") or hasattr(
-            data, "__cuda_array_interface__"
-        ):
-            self._init_from_array_like(data, owner)
-        elif isinstance(data, memoryview):
-            self._init_from_array_like(np.asarray(data), owner)
-        elif isinstance(data, int):
-            if not isinstance(size, int):
-                raise TypeError("size must be integer")
-            self._ptr = data
-            self._size = size
-            self._owner = owner
-        elif data is None:
-            self._ptr = 0
-            self._size = 0
-            self._owner = None
-        else:
-            try:
-                data = memoryview(data)
-            except TypeError:
-                raise TypeError("data must be Buffer, array-like or integer")
-            self._init_from_array_like(np.asarray(data), owner)
+    def __init__(self, ptr: int, size: int, owner: object):
+        self._ptr = ptr
+        self._size = size
+        self._owner = owner
 
     @classmethod
     def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
@@ -141,12 +123,11 @@ class Buffer(Serializable):
         offset : int, optional
             Start offset relative to `buffer.ptr`.
         """
-
-        ret = cls()
-        ret._ptr = buffer._ptr + offset
-        ret._size = buffer.size if size is None else size
-        ret._owner = buffer
-        return ret
+        return cls(
+            ptr=buffer._ptr + offset,
+            size=buffer.size if size is None else size,
+            owner=buffer,
+        )
 
     def __len__(self) -> int:
         return self._size
@@ -158,6 +139,10 @@ class Buffer(Serializable):
     @property
     def size(self) -> int:
         return self._size
+
+    @property
+    def owner(self) -> object:
+        return self._owner
 
     @property
     def nbytes(self) -> int:
@@ -177,26 +162,6 @@ class Buffer(Serializable):
         data = np.empty((self.size,), "u1")
         rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data)
         return data
-
-    def _init_from_array_like(self, data, owner):
-
-        if hasattr(data, "__cuda_array_interface__"):
-            ptr, size = _buffer_data_from_array_interface(
-                data.__cuda_array_interface__
-            )
-            self._ptr = ptr
-            self._size = size
-            self._owner = owner or data
-        elif hasattr(data, "__array_interface__"):
-            ptr, size = _buffer_data_from_array_interface(
-                data.__array_interface__
-            )
-            dbuf = rmm.DeviceBuffer(ptr=ptr, size=size)
-            self._init_from_array_like(dbuf, owner)
-        else:
-            raise TypeError(
-                f"Cannot construct Buffer from {data.__class__.__name__}"
-            )
 
     def serialize(self) -> Tuple[dict, list]:
         header = {}  # type: Dict[Any, Any]
@@ -224,49 +189,39 @@ class Buffer(Serializable):
 
         return buf
 
-    @classmethod
-    def empty(cls, size: int) -> Buffer:
-        return Buffer(rmm.DeviceBuffer(size=size))
 
-    def copy(self) -> Buffer:
-        """
-        Create a new Buffer containing a copy of the data contained
-        in this Buffer.
-        """
-        from rmm._lib.device_buffer import copy_device_to_ptr
+def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
+    """
+    Return the pointer and size of an array interface.
 
-        out = Buffer.empty(size=self.size)
-        copy_device_to_ptr(self.ptr, out.ptr, self.size)
-        return out
+    Raises ValueError if array isn't c-contiguous
+    """
 
+    def is_c_contiguous(shape, strides, itemsize):
+        ndim = len(shape)
+        assert strides is None or ndim == len(strides)
 
-def _buffer_data_from_array_interface(array_interface):
+        if (
+            ndim == 0
+            or strides is None
+            or (ndim == 1 and strides[0] == itemsize)
+        ):
+            return True
+
+        # any dimension zero, trivial case
+        for dim in shape:
+            if dim == 0:
+                return True
+
+        for this_dim, this_stride in zip(shape, strides):
+            if this_stride != this_dim * itemsize:
+                return False
+        return True
+
     shape = array_interface["shape"] or (1,)
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
     ptr = array_interface["data"][0] or 0
-    if not get_c_contiguity(shape, array_interface["strides"], itemsize):
+    if not is_c_contiguous(shape, array_interface["strides"], itemsize):
         raise ValueError("Buffer data must be 1D C-contiguous")
     size = functools.reduce(operator.mul, shape)
     return ptr, size * itemsize
-
-
-def get_c_contiguity(shape, strides, itemsize):
-    """
-    Determine if combination of array parameters represents a
-    c-contiguous array.
-    """
-    ndim = len(shape)
-    assert strides is None or ndim == len(strides)
-
-    if ndim == 0 or strides is None or (ndim == 1 and strides[0] == itemsize):
-        return True
-
-    # any dimension zero, trivial case
-    for dim in shape:
-        if dim == 0:
-            return True
-
-    for this_dim, this_stride in zip(shape, strides):
-        if this_stride != this_dim * itemsize:
-            return False
-    return True
