@@ -474,7 +474,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cv      = lists.parent();
   auto output              = make_numeric_column(data_type{type_to_id<bool>()},
                                     lists.size(),
-                                    copy_bitmask(lists_cv),
+                                    copy_bitmask(lists_cv, stream, mr),
                                     lists_cv.null_count(),
                                     stream,
                                     mr);
