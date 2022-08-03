@@ -193,35 +193,28 @@ struct search_list_nested_types_fn {
 };
 
 /**
- * @brief Create a `table_view` from the search key(s).
+ * @brief Function to search for key element(s) in the corresponding rows of a lists column,
+ * specialized for non-nested types.
  *
- * If the input search key is a (nested type) scalar, a new column is materialized from that scalar
- * before a `table_view` is generated from it. As such, the new created column will also be
- * returned.
+ * @param input_it The iterator pointing to lists of the input lists column
+ * @param num_rows The number of input rows
+ * @param output_it The iterator pointing to the output array to store the search result
+ * @param search_keys The key(s) to search
+ * @param search_keys_have_nulls Boolean flag indicating if the input key(s) have nulls
+ * @param find_option Option to specify whether to return the position of the first or last match
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-template <typename SearchKeyType>
-std::pair<table_view, std::unique_ptr<column>> get_table_view_from_nested_keys(
-  SearchKeyType const& search_keys, rmm::cuda_stream_view stream)
-{
-  if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
-    auto tmp_column = make_column_from_scalar(search_keys, 1, stream);
-    return {table_view{{tmp_column->view()}}, std::move(tmp_column)};
-  } else {
-    return {table_view{{search_keys}}, nullptr};
-  }
-}
-
 template <bool search_key_is_scalar,
           typename Element,
           typename InputIterator,
           typename SearchKeyType>
-void dispatch_index_of_non_nested(InputIterator input_it,
-                                  size_type num_rows,
-                                  size_type* output_it,
-                                  SearchKeyType const& search_keys,
-                                  bool search_keys_have_nulls,
-                                  duplicate_find_option find_option,
-                                  rmm::cuda_stream_view stream)
+void index_of_non_nested(InputIterator input_it,
+                         size_type num_rows,
+                         size_type* output_it,
+                         SearchKeyType const& search_keys,
+                         bool search_keys_have_nulls,
+                         duplicate_find_option find_option,
+                         rmm::cuda_stream_view stream)
 {
   auto const do_search = [&](auto const keys_iter) {
     thrust::transform(rmm::exec_policy(stream),
@@ -244,19 +237,43 @@ void dispatch_index_of_non_nested(InputIterator input_it,
   }
 }
 
+/**
+ * @brief Function to search for key element(s) in the corresponding rows of a lists column,
+ * specialized for nested types.
+ *
+ * @param input_it The iterator pointing to lists of the input lists column
+ * @param num_rows The number of input rows
+ * @param output_it The iterator pointing to the output array to store the search result
+ * @param child The child column of the input lists column
+ * @param search_keys The key(s) to search
+ * @param find_option Option to specify whether to return the position of the first or last match
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 template <bool search_key_is_scalar, typename InputIterator, typename SearchKeyType>
-void dispatch_index_of_nested_types(InputIterator input_it,
-                                    size_type num_rows,
-                                    size_type* output_it,
-                                    column_view const& child,
-                                    SearchKeyType const& search_keys,
-                                    duplicate_find_option find_option,
-                                    rmm::cuda_stream_view stream)
+void index_of_nested_types(InputIterator input_it,
+                           size_type num_rows,
+                           size_type* output_it,
+                           column_view const& child,
+                           SearchKeyType const& search_keys,
+                           duplicate_find_option find_option,
+                           rmm::cuda_stream_view stream)
 {
-  auto const child_tview = table_view{{child}};
+  // Create a `table_view` from the search key(s).
+  // If the input search key is a (nested type) scalar, a new column is materialized from that
+  // scalar before a `table_view` is generated from it. As such, the new created column will also be
+  // returned to keep the result `table_view` valid.
   [[maybe_unused]] auto const [keys_tview, unused_column] =
-    get_table_view_from_nested_keys(search_keys, stream);
-  auto const has_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
+    [&]() -> std::pair<table_view, std::unique_ptr<column>> {
+    if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
+      auto tmp_column       = make_column_from_scalar(search_keys, 1, stream);
+      auto const keys_tview = tmp_column->view();
+      return {table_view{{keys_tview}}, std::move(tmp_column)};
+    } else {
+      return {table_view{{search_keys}}, nullptr};
+    }
+  }();
+  auto const child_tview = table_view{{child}};
+  auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
   auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
@@ -333,11 +350,11 @@ struct dispatch_index_of {
       data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
     auto const output_it = out_positions->mutable_view().template begin<size_type>();
 
-    if constexpr (not cudf::is_nested<Element>()) {  // supported types that are not nested
-      dispatch_index_of_non_nested<search_key_is_scalar, Element>(
+    if constexpr (not cudf::is_nested<Element>()) {
+      index_of_non_nested<search_key_is_scalar, Element>(
         input_it, num_rows, output_it, search_keys, search_keys_have_nulls, find_option, stream);
     } else {  // list + struct
-      dispatch_index_of_nested_types<search_key_is_scalar>(
+      index_of_nested_types<search_key_is_scalar>(
         input_it, num_rows, output_it, child, search_keys, find_option, stream);
     }
 
