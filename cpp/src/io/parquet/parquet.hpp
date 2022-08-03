@@ -18,7 +18,6 @@
 
 #include "parquet_common.hpp"
 
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -147,7 +146,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  std::optional<int32_t> field_id  = std::nullopt;
+  std::optional<int32_t> field_id     = std::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
