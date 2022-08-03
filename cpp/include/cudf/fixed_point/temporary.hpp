@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,18 @@ template <typename T>
 constexpr auto abs(T value)
 {
   return value >= 0 ? value : -value;
+}
+
+template <typename T>
+CUDF_HOST_DEVICE inline auto min(T lhs, T rhs)
+{
+  return lhs < rhs ? lhs : rhs;
+}
+
+template <typename T>
+CUDF_HOST_DEVICE inline auto max(T lhs, T rhs)
+{
+  return lhs > rhs ? lhs : rhs;
 }
 
 template <typename BaseType>
