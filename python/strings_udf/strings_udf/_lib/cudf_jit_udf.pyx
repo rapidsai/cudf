@@ -12,7 +12,12 @@ from libcpp.vector cimport vector
 
 from cudf.core.buffer import Buffer
 
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.types cimport size_type
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
 from strings_udf._lib.cpp.strings_udf cimport call_udf as cpp_call_udf
 from strings_udf._lib.cpp.\
     strings_udf cimport create_udf_module as cpp_create_udf_module
@@ -21,11 +26,6 @@ from strings_udf._lib.cpp.\
 from strings_udf._lib.cpp.\
     strings_udf cimport to_string_view_array as cpp_to_string_view_array
 from strings_udf._lib.cpp.strings_udf cimport udf_module as cpp_udf_module
-
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport size_type
 
 import numpy as np
 

@@ -1,17 +1,17 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import cudf
 import numba
 import numpy as np
 import pandas as pd
+from cudf.testing._utils import assert_eq
 from numba import cuda
 from numba.core.typing import signature as nb_signature
 from numba.types import CPointer, void
+
 from strings_udf import ptxpath
 from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view
-
-import cudf
-from cudf.testing._utils import assert_eq
 
 
 def run_udf_test(data, func, dtype):
