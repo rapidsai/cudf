@@ -2674,7 +2674,7 @@ def test_rangeindex_join_user_option(default_integer_bitwidth):
     idx1 = cudf.RangeIndex(0, 10)
     idx2 = cudf.RangeIndex(5, 15)
 
-    actual = idx1.join(idx2, how="inner")
+    actual = idx1.join(idx2, how="inner", sort=True)
     expected = cudf.Index(
         [5, 6, 7, 8, 9], dtype=f"int{default_integer_bitwidth}", name=0
     )
