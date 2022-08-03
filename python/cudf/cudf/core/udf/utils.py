@@ -216,3 +216,14 @@ def _get_kernel(kernel_string, globals_, sig, func):
     kernel = cuda.jit(sig)(_kernel)
 
     return kernel
+
+
+def _get_kernel_groupby_apply(kernel_string, globals_, func, dev_func_ptx):
+    """template kernel compilation helper function for groupby apply"""
+    f_ = cuda.jit(device=True)(func)
+    globals_["f_"] = f_
+    exec(kernel_string, globals_)
+    _kernel = globals_["_kernel"]
+    kernel = cuda.jit(link=[dev_func_ptx])(_kernel)
+
+    return kernel

@@ -20,6 +20,7 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
+from cudf.core.udf.groupby_function import jit_groupby_apply
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -540,7 +541,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function, *args):
+    def apply(self, function, *args, engine="nonjit"):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -609,6 +610,17 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, _, grouped_values = self._grouped()
 
+        # jit groupby apply only returns Series
+        if engine == "jit":
+            chunk_results = jit_groupby_apply(
+                offsets, grouped_values, function, *args
+            )
+            result = cudf.Series(chunk_results, index=group_names)
+            result.index.names = self.grouping.names
+            if self._sort:
+                result = result.sort_index()
+            return result
+
         ngroups = len(offsets) - 1
         if ngroups > self._MAX_GROUPS_BEFORE_WARN:
             warnings.warn(
@@ -620,6 +632,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
         chunk_results = [function(chk, *args) for chk in chunks]
+
         if not len(chunk_results):
             return self.obj.head(0)
 

@@ -364,6 +364,63 @@ def test_groupby_apply_grouped():
     assert_groupby_results_equal(expect, got)
 
 
+def test_groupby_apply_jit():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df["key1"] = np.random.randint(0, 3, nelem)
+    df["key2"] = np.random.randint(0, 2, nelem)
+    df["val1"] = np.random.random(nelem)
+    df["val2"] = np.random.random(nelem)
+
+    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
+    got_grpby = df.groupby(["key1", "key2"])
+
+    def foo(df):
+        return df["val1"].max() + df["val2"].min()
+
+    expect = expect_grpby.apply(foo)
+    got_nonjit = got_grpby.apply(foo)
+    got_jit = got_grpby.apply(foo, engine="jit")
+    assert_groupby_results_equal(expect, got_nonjit)
+    assert_groupby_results_equal(expect, got_jit)
+
+
+def create_test_groupby_apply_jit_args_params():
+    def f1(df, k):
+        return df["val1"].max() + df["val2"].min() + k
+
+    def f2(df, k, L):
+        return df["val1"].sum() - df["val2"].var() + (k / L)
+
+    def f3(df, k, L, m):
+        return ((k * df["val1"].mean()) + (L * df["val2"].std())) / m
+
+    return [(f1, (42,)), (f2, (42, 119)), (f3, (42, 119, 212.1))]
+
+
+@pytest.mark.parametrize(
+    "func,args", create_test_groupby_apply_jit_args_params()
+)
+def test_groupby_apply_jit_args(func, args):
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df["key1"] = np.random.randint(0, 3, nelem)
+    df["key2"] = np.random.randint(0, 2, nelem)
+    df["val1"] = np.random.random(nelem)
+    df["val2"] = np.random.random(nelem)
+
+    expect_grpby = df.to_pandas().groupby(["key1", "key2"])
+    got_grpby = df.groupby(["key1", "key2"])
+
+    expect = expect_grpby.apply(func, *args)
+    got_nonjit = got_grpby.apply(func, *args)
+    got_jit = got_grpby.apply(func, *args, engine="jit")
+    assert_groupby_results_equal(expect, got_nonjit)
+    assert_groupby_results_equal(expect, got_jit)
+
+
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
