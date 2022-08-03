@@ -726,40 +726,6 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a new vector containing the murmur3 hash of each row in the table.
-   *
-   * @param seed integer seed for the murmur3 hash function
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32-bit values representing each row's hash value.
-   */
-  public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
-    if (columns.length < 1) {
-      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
-    }
-    long[] columnViews = new long[columns.length];
-    long size = columns[0].getRowCount();
-
-    for(int i = 0; i < columns.length; i++) {
-      assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
-      columnViews[i] = columns[i].getNativeView();
-    }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), seed));
-  }
-
-  /**
-   * Create a new vector containing the murmur3 hash of each row in the table, seed defaulted to 0.
-   *
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32-bit values representing each row's hash value.
-   */
-  public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
-    return serial32BitMurmurHash3(0, columns);
-  }
-
-  /**
    * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table.
    * Spark's murmur3 hash uses a different tail processing algorithm.
    *
