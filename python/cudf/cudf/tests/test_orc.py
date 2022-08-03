@@ -1759,6 +1759,7 @@ def test_orc_writer_zlib_compression(list_struct_buff):
         else:
             raise e
 
+
 @pytest.mark.parametrize("index", [True, False, None])
 @pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
 def test_orc_columns_and_index_param(index, columns):
