@@ -1678,11 +1678,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
                       cudf::io::source_info(reinterpret_cast<char *>(buffer), buffer_length) :
                       cudf::io::source_info(filename.get());
 
+    auto builder = cudf::io::parquet_reader_options::builder(source);
+    if (n_filter_col_names.size() > 0) {
+      builder = builder.columns(n_filter_col_names.as_cpp_vector());
+    }
+
     cudf::io::orc_reader_options opts =
-        cudf::io::orc_reader_options::builder(source)
-            .columns(n_filter_col_names.as_cpp_vector())
-            .use_index(false)
-            .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
+        builder.convert_strings_to_categories(false)
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
             .decimal128_columns(n_dec128_col_names.as_cpp_vector())
             .build();
