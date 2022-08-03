@@ -23,7 +23,6 @@ supported_masked_types = (
 
 _STRING_UDFS_ENABLED = False
 try:
-    import strings_udf
     from . import strings_typing
     from . import strings_lowering
 
