@@ -212,24 +212,13 @@ def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     """
 
     def is_c_contiguous(shape, strides, itemsize):
-        ndim = len(shape)
-        assert strides is None or ndim == len(strides)
-
-        if (
-            ndim == 0
-            or strides is None
-            or (ndim == 1 and strides[0] == itemsize)
-        ):
+        if strides is None or any(dim == 0 for dim in shape):
             return True
-
-        # any dimension zero, trivial case
-        for dim in shape:
-            if dim == 0:
-                return True
-
-        for this_dim, this_stride in zip(shape, strides):
-            if this_stride != this_dim * itemsize:
+        sd = itemsize
+        for dim, stride in zip(reversed(shape), reversed(strides)):
+            if dim > 1 and stride != sd:
                 return False
+            sd *= dim
         return True
 
     shape = array_interface["shape"] or (1,)
