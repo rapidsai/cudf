@@ -2007,3 +2007,31 @@ def test_last(idx, offset):
     got = g.last(offset=offset)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-01-31",
+            "2020-02-15",
+            "2020-02-29",
+            "2020-03-15",
+            "2020-03-31",
+            "2020-04-15",
+            "2020-04-30",
+        ],
+        [43534, 43543, 37897, 2000],
+    ],
+)
+@pytest.mark.parametrize("dtype", [None, "datetime64[ns]"])
+def test_datetime_constructor(data, dtype):
+    expected = pd.DatetimeIndex(data=data, dtype=dtype)
+    actual = cudf.DatetimeIndex(data=data, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+    expected = pd.DatetimeIndex(data=pd.Series(data), dtype=dtype)
+    actual = cudf.DatetimeIndex(data=cudf.Series(data), dtype=dtype)
+
+    assert_eq(expected, actual)

@@ -17,7 +17,7 @@ gtest_version:
   - "=1.10.0"
 
 arrow_cpp_version:
-  - "=8.0.0"
+  - "=8"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"

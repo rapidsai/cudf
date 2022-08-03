@@ -5,30 +5,12 @@ repos:
         rev: 5.10.1
         hooks:
               - id: isort
-                alias: isort-cudf
-                name: isort-cudf
-                args: ["--settings-path=python/cudf/setup.cfg"]
-                files: python/cudf/.*
-                exclude: __init__.py$
-                types: [text]
+                # Use the config file specific to each subproject so that each
+                # project can specify its own first/third-party packages.
+                args: ["--config-root=python/", "--resolve-all-configs"]
+                files: python/.*
+                exclude: (__init__.py|setup.py)$
                 types_or: [python, cython, pyi]
-              - id: isort
-                alias: isort-cudf-kafka
-                name: isort-cudf-kafka
-                args: ["--settings-path=python/cudf_kafka/setup.cfg"]
-                files: python/cudf_kafka/.*
-                types: [text]
-                types_or: [python, cython]
-              - id: isort
-                alias: isort-custreamz
-                name: isort-custreamz
-                args: ["--settings-path=python/custreamz/setup.cfg"]
-                files: python/custreamz/.*
-              - id: isort
-                alias: isort-dask-cudf
-                name: isort-dask-cudf
-                args: ["--settings-path=python/dask_cudf/setup.cfg"]
-                files: python/dask_cudf/.*
       - repo: https://github.com/psf/black
         rev: 22.3.0
         hooks:
@@ -40,8 +22,6 @@ repos:
         rev: 3.8.3
         hooks:
               - id: flake8
-                alias: flake8
-                name: flake8
                 args: ["--config=setup.cfg"]
                 files: python/.*\.(py|pyx|pxd)$
                 types: [file]
@@ -56,15 +36,6 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=setup.cfg"]
-                exclude: |
-                    (?x)^(
-                    ci|
-                    cpp|
-                    conda|
-                    docs|
-                    java|
-                    notebooks
-                    )
       - repo: https://github.com/pre-commit/mirrors-clang-format
         rev: v11.1.0
         hooks:
