@@ -1,8 +1,10 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
+from typing import Callable
+
 import cupy as cp
 import pytest
 
-from cudf.core.buffer import buffer_from_pointer
+from cudf.core.buffer import Buffer, as_buffer, buffer_from_pointer
 
 arr_len = 10
 
@@ -43,3 +45,16 @@ def test_buffer_from_cuda_iface_contiguous(data):
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
     buffer_from_pointer(ptr=data, size=data.size, owner=None)
+
+
+@pytest.mark.parametrize("creator", [Buffer, as_buffer])
+def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
+    ary = cp.arange(arr_len)
+    b = creator(ary)
+    assert ary.__cuda_array_interface__["data"][0] == b.ptr
+    assert ary.nbytes == b.size
+
+    with pytest.raises(
+        ValueError, match="size must be specified when `ptr` is an integer"
+    ):
+        Buffer(42)
