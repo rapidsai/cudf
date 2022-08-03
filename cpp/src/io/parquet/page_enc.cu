@@ -1331,9 +1331,11 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
+namespace {
+
 // byteswap 128 bit integer, placing result in dst in network byte order.
 // dst must point to at least 16 bytes of memory.
-static __device__ void byte_reverse128(__int128_t v, void* dst)
+__device__ void byte_reverse128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   auto const d_char_ptr = static_cast<unsigned char*>(dst);
@@ -1349,7 +1351,7 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
  * @param str device_span containing array to test.
  * @return true if the array contains a valid UTF-8 string.
  */
-static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
+__device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
 {
   auto idx = 0;
   while (idx < str.size_bytes()) {
@@ -1373,7 +1375,7 @@ static __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
  * the data at ptr will be set to the lowest valid UTF-8 byte (start or continuation).
  * Will halt execution if passed invalid UTF-8.
  */
-static __device__ bool increment_utf8_at(uint8_t* ptr)
+__device__ bool increment_utf8_at(uint8_t* ptr)
 {
   uint8_t elem = *ptr;
   // elem is one of (no 5 or 6 byte chars allowed):
@@ -1415,10 +1417,10 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
  *
  * @return Pair object containing a pointer to the truncate string and its length.
  */
-static __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t const> str,
-                                                                 bool is_min,
-                                                                 void* scratch,
-                                                                 size_type truncate_length)
+__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t const> str,
+                                                          bool is_min,
+                                                          void* scratch,
+                                                          size_type truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is a character at [len]. work backwards until we find
@@ -1456,10 +1458,10 @@ static __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uin
  *
  * @return Pair object containing a pointer to the truncated array and its length.
  */
-static __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
-                                                                   bool is_min,
-                                                                   void* scratch,
-                                                                   size_type truncate_length)
+__device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+                                                            bool is_min,
+                                                            void* scratch,
+                                                            size_type truncate_length)
 {
   if (is_min) { return {arr.data(), truncate_length}; }
   memcpy(scratch, arr.data(), truncate_length);
@@ -1483,10 +1485,10 @@ static __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<u
 /**
  * @brief Truncate a UTF-8 string to at most truncate_length bytes.
  */
-static __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
-                                                                   bool is_min,
-                                                                   void* scratch,
-                                                                   size_type truncate_length)
+__device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
+                                                            bool is_min,
+                                                            void* scratch,
+                                                            size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
     return {str.data(), str.size_bytes()};
@@ -1507,7 +1509,7 @@ static __device__ std::pair<const void*, uint32_t> truncate_string(const string_
 /**
  * @brief Truncate a binary array to at most truncate_length bytes.
  */
-static __device__ std::pair<const void*, uint32_t> truncate_byte_array(
+__device__ std::pair<const void*, uint32_t> truncate_byte_array(
   const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
@@ -1527,11 +1529,11 @@ static __device__ std::pair<const void*, uint32_t> truncate_byte_array(
  * valid min or max binary value.  String and byte array types will be truncated if they exceed
  * truncate_length.
  */
-static __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
-                                                                statistics_dtype dtype,
-                                                                void* scratch,
-                                                                bool is_min,
-                                                                size_type truncate_length)
+__device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
+                                                         statistics_dtype dtype,
+                                                         void* scratch,
+                                                         bool is_min,
+                                                         size_type truncate_length)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1571,10 +1573,10 @@ static __device__ std::pair<const void*, uint32_t> get_extremum(const statistics
 /**
  * @brief Find a min value of the proper form to be included in Parquet statistics structures.
  */
-static __device__ std::pair<const void*, uint32_t> get_min(const statistics_val* stats_val,
-                                                           statistics_dtype dtype,
-                                                           void* scratch,
-                                                           size_type truncate_length)
+__device__ std::pair<const void*, uint32_t> get_min(const statistics_val* stats_val,
+                                                    statistics_dtype dtype,
+                                                    void* scratch,
+                                                    size_type truncate_length)
 {
   return get_extremum(stats_val, dtype, scratch, true, truncate_length);
 }
@@ -1582,13 +1584,15 @@ static __device__ std::pair<const void*, uint32_t> get_min(const statistics_val*
 /**
  * @brief Find a max value of the proper form to be included in Parquet statistics structures.
  */
-static __device__ std::pair<const void*, uint32_t> get_max(const statistics_val* stats_val,
-                                                           statistics_dtype dtype,
-                                                           void* scratch,
-                                                           size_type truncate_length)
+__device__ std::pair<const void*, uint32_t> get_max(const statistics_val* stats_val,
+                                                    statistics_dtype dtype,
+                                                    void* scratch,
+                                                    size_type truncate_length)
 {
   return get_extremum(stats_val, dtype, scratch, false, truncate_length);
 }
+
+}  // namespace
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
@@ -1743,11 +1747,13 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
+namespace {
+
 /**
  * @brief Tests if statistics are comparable given the column's
  * physical and converted types
  */
-static __device__ bool is_comparable(Type ptype, ConvertedType ctype)
+__device__ bool is_comparable(Type ptype, ConvertedType ctype)
 {
   switch (ptype) {
     case Type::BOOLEAN:
@@ -1777,10 +1783,10 @@ constexpr __device__ int32_t compare(T& v1, T& v2)
  * @brief Compares two statistics_val structs.
  * @return < 0 if v1 < v2, 0 if v1 == v2, > 0 if v1 > v2
  */
-static __device__ int32_t compare_values(Type ptype,
-                                         ConvertedType ctype,
-                                         const statistics_val& v1,
-                                         const statistics_val& v2)
+__device__ int32_t compare_values(Type ptype,
+                                  ConvertedType ctype,
+                                  const statistics_val& v1,
+                                  const statistics_val& v2)
 {
   switch (ptype) {
     case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
@@ -1808,10 +1814,10 @@ static __device__ int32_t compare_values(Type ptype,
 /**
  * @brief Determine if a set of statstistics are in ascending order.
  */
-static __device__ bool is_ascending(const statistics_chunk* s,
-                                    Type ptype,
-                                    ConvertedType ctype,
-                                    uint32_t num_pages)
+__device__ bool is_ascending(const statistics_chunk* s,
+                             Type ptype,
+                             ConvertedType ctype,
+                             uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
@@ -1825,10 +1831,10 @@ static __device__ bool is_ascending(const statistics_chunk* s,
 /**
  * @brief Determine if a set of statstistics are in descending order.
  */
-static __device__ bool is_descending(const statistics_chunk* s,
-                                     Type ptype,
-                                     ConvertedType ctype,
-                                     uint32_t num_pages)
+__device__ bool is_descending(const statistics_chunk* s,
+                              Type ptype,
+                              ConvertedType ctype,
+                              uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
@@ -1842,10 +1848,10 @@ static __device__ bool is_descending(const statistics_chunk* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
-                                                   Type ptype,
-                                                   ConvertedType ctype,
-                                                   uint32_t num_pages)
+__device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+                                            Type ptype,
+                                            ConvertedType ctype,
+                                            uint32_t num_pages)
 {
   if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
   if (is_ascending(s, ptype, ctype, num_pages)) {
@@ -1857,12 +1863,14 @@ static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
 }
 
 // align ptr to an 8-byte boundary. address returned will be <= ptr.
-static constexpr __device__ void* align8(void* ptr)
+constexpr __device__ void* align8(void* ptr)
 {
   // it's ok to round down because we have an extra 7 bytes in the buffer
   auto algn = 3 & reinterpret_cast<std::uintptr_t>(ptr);
   return static_cast<char*>(ptr) - algn;
 }
+
+}  // namespace
 
 // blockDim(1, 1, 1)
 __global__ void __launch_bounds__(1)
