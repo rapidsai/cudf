@@ -248,7 +248,7 @@ def _init_buffer_from_any(buf: Buffer, obj: object) -> None:
     Parameters
     ----------
     buf : Buffer
-        The buffer to initiate.
+        The buffer to initialize.
     obj : buffer-like
         An object that exposes either device or host memory through
         `__array_interface__`, `__cuda_array_interface__`, or the
