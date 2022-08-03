@@ -23,6 +23,7 @@ supported_masked_types = (
 
 _STRING_UDFS_ENABLED = False
 try:
+    import strings_udf
     from . import strings_typing
     from . import strings_lowering
 
@@ -38,7 +39,8 @@ try:
 
     supported_masked_types |= {strings_typing.string_view}
     _STRING_UDFS_ENABLED = True
-except NotImplementedError:
+except (NotImplementedError, ImportError):
+    # allow cuDF to work without strings_udf
     pass
 
 masked_typing.register_masked_constructor(supported_masked_types)
