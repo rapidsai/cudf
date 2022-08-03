@@ -24,6 +24,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -109,17 +110,14 @@ class orc_reader_options {
    *
    * @return Names of the columns to read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
-  {
-    return _columns;
-  }
+  [[nodiscard]] auto const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns vector of vectors, stripes to read for each input source
    *
    * @return Vector of vectors, stripes to read for each input source
    */
-  std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
+  [[nodiscard]] auto const& get_stripes() const { return _stripes; }
 
   /**
    * @brief Returns number of rows to skip from the start.
