@@ -273,7 +273,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
 endfunction()
 
-set(CUDF_VERSION_Arrow 8.0.0)
+if(NOT DEFINED CUDF_VERSION_Arrow)
+  set(CUDF_VERSION_Arrow
+      8.0.0
+      CACHE STRING "The version of Arrow to find (or build)"
+  )
+endif()
 
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
