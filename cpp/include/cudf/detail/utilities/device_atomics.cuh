@@ -116,17 +116,17 @@ struct genericAtomicOperationImpl<T, Op, 4> {
     using T_int = unsigned int;
 
     T old_value = *addr;
+    T_int assumed;
+    T_int ret;
 
     do {
-      const T_int assumed   = type_reinterpret<T_int, T>(old_value);
-      const T_int new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
+      T_int const new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
 
-      const T_int ret = atomicCAS(reinterpret_cast<T_int*>(addr), assumed, new_value);
-      old_value       = type_reinterpret<T, T_int>(ret);
+      assumed   = type_reinterpret<T_int, T>(old_value);
+      ret       = atomicCAS(reinterpret_cast<T_int*>(addr), assumed, new_value);
+      old_value = type_reinterpret<T, T_int>(ret);
 
-      if (assumed == ret) { break; }
-
-    } while (true);
+    } while (assumed != ret);
 
     return old_value;
   }
@@ -141,17 +141,17 @@ struct genericAtomicOperationImpl<T, Op, 8> {
     static_assert(sizeof(T) == sizeof(T_int));
 
     T old_value = *addr;
+    T_int assumed;
+    T_int ret;
 
     do {
-      const T_int assumed   = type_reinterpret<T_int, T>(old_value);
-      const T_int new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
+      T_int const new_value = type_reinterpret<T_int, T>(op(old_value, update_value));
 
-      const T_int ret = atomicCAS(reinterpret_cast<T_int*>(addr), assumed, new_value);
-      old_value       = type_reinterpret<T, T_int>(ret);
+      assumed   = type_reinterpret<T_int, T>(old_value);
+      ret       = atomicCAS(reinterpret_cast<T_int*>(addr), assumed, new_value);
+      old_value = type_reinterpret<T, T_int>(ret);
 
-      if (assumed == ret) { break; }
-
-    } while (true);
+    } while (assumed != ret);
 
     return old_value;
   }
