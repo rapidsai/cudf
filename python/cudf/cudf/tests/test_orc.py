@@ -1770,4 +1770,13 @@ def test_orc_columns_and_index_param(index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    assert_eq(expected, got, check_index_type=True)
+    if columns:
+        # TODO: Remove workaround after this issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/47944
+        assert_eq(
+            expected.sort_index(axis=1),
+            got.sort_index(axis=1),
+            check_index_type=True,
+        )
+    else:
+        assert_eq(expected, got, check_index_type=True)
