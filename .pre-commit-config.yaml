@@ -7,7 +7,7 @@ repos:
               - id: isort
                 # Use the config file specific to each subproject so that each
                 # project can specify its own first/third-party packages.
-                args: ["--config-root=python/", "--resolve-all-configs", "--profile", "black", "--filter-files"]
+                args: ["--config-root=python/", "--resolve-all-configs"]
                 files: python/.*
                 exclude: (__init__.py|setup.py)$
                 types_or: [python, cython, pyi]
