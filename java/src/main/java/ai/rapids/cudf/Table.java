@@ -239,6 +239,9 @@ public final class Table implements AutoCloseable {
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines) throws CudfException;
 
+  private static native long readAndInferJSON(long address, long length,
+      boolean dayFirst, boolean lines) throws CudfException;
+
   /**
    * Read in Parquet formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
@@ -916,6 +919,26 @@ public final class Table implements AutoCloseable {
       newBuf.setBytes(0, buffer, offset, len);
       return readJSON(schema, opts, newBuf, 0, len);
     }
+  }
+
+  /**
+   * Read JSON formatted data and infer the column names and schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU and the metadata for the table returned.
+   */
+  public static TableWithMeta readJSON(JSONOptions opts, HostMemoryBuffer buffer,
+      long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
   }
 
   /**
