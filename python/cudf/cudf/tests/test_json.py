@@ -573,3 +573,9 @@ def test_default_float_bitwidth(default_float_bitwidth):
     )
     assert df["a"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
     assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_json_experimental():
+    # should raise an exception, for now
+    with pytest.raises(RuntimeError):
+        cudf.read_json("", engine="cudf_experimental")
