@@ -8,9 +8,6 @@ from numba.cuda.cudaimpl import (
 )
 from cudf.core.udf import api
 
-driver_maj, driver_min = cuda.cudadrv.driver.get_version()
-runtime_maj, runtime_min = cuda.cudadrv.runtime.runtime.get_version()
-
 units = ["ns", "ms", "us", "s"]
 datetime_cases = {types.NPDatetime(u) for u in units}
 timedelta_cases = {types.NPTimedelta(u) for u in units}
@@ -25,7 +22,7 @@ supported_masked_types = (
 )
 
 _STRING_UDFS_ENABLED = False
-if driver_maj >= runtime_maj and driver_min >= runtime_min:
+try:
     from . import strings_typing
     from . import strings_lowering
 
@@ -41,6 +38,7 @@ if driver_maj >= runtime_maj and driver_min >= runtime_min:
 
     supported_masked_types |= {strings_typing.string_view}
     _STRING_UDFS_ENABLED = True
-
+except NotImplementedError:
+    pass
 
 masked_typing.register_masked_constructor(supported_masked_types)
