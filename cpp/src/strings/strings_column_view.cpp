@@ -17,6 +17,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 //
 strings_column_view::strings_column_view(column_view strings_column) : column_view(strings_column)

@@ -34,6 +34,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/partition.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,

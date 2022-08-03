@@ -211,6 +211,7 @@ __global__ void multibyte_split_kernel(
 
 }  // namespace
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace text {

@@ -86,6 +86,7 @@ For more information on these sources, see the manual.
 #include <cstdlib>
 #include <vector>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 

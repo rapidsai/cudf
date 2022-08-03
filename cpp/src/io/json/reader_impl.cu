@@ -56,6 +56,7 @@
 
 using cudf::host_span;
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace detail {

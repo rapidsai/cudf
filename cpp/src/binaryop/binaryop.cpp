@@ -46,6 +46,7 @@
 
 #include <thrust/optional.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace binops {
 

@@ -29,6 +29,7 @@
 #include <numeric>
 #include <vector>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 column_view_base::column_view_base(data_type type,

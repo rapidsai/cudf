@@ -47,6 +47,7 @@
 #include <numeric>
 #include <utility>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

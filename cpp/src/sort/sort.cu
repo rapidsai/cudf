@@ -27,6 +27,7 @@
 
 #include <thrust/functional.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> sorted_order(table_view const& input,

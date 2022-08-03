@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <memory>
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 /// Column factory that adopts child columns.

@@ -19,6 +19,7 @@
 #include <cstring>
 #include <unordered_map>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace avro {

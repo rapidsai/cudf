@@ -40,6 +40,7 @@
 
 using namespace cudf::tdigest;
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 namespace tdigest {

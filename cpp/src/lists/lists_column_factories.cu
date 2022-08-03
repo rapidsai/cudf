@@ -25,6 +25,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/sequence.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace lists {
 namespace detail {

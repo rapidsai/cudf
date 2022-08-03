@@ -30,6 +30,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace groupby {
 namespace detail {

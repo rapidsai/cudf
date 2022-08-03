@@ -29,6 +29,7 @@
 
 #include <string>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 scalar::scalar(data_type type,

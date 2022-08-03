@@ -33,6 +33,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 namespace {
@@ -169,6 +170,7 @@ struct normalize_nans_and_zeros_kernel_forwarder {
 
 }  // end anonymous namespace
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 void normalize_nans_and_zeros(mutable_column_view in_out, rmm::cuda_stream_view stream)

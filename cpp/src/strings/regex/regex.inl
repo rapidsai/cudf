@@ -19,6 +19,7 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

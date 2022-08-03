@@ -18,6 +18,7 @@
 
 #include <cudf/detail/reduction_functions.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace reduction {
 

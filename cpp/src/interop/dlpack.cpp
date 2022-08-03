@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cudf/utilities/traits.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace {
 struct get_column_data_impl {

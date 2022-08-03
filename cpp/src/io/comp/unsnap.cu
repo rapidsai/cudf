@@ -22,6 +22,7 @@
 
 #include <cub/cub.cuh>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 constexpr int32_t batch_size    = (1 << 5);

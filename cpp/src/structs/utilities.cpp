@@ -34,6 +34,7 @@
 #include <bitset>
 #include <iterator>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace structs {
 namespace detail {

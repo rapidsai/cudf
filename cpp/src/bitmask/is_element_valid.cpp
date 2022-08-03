@@ -19,6 +19,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
+// using namespace THRUST_WRAPPED_NAMESPACE;
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {

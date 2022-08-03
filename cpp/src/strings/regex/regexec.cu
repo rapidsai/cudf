@@ -28,6 +28,7 @@
 #include <functional>
 #include <numeric>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

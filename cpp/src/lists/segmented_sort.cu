@@ -41,6 +41,7 @@
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace lists {
 namespace detail {

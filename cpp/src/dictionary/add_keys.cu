@@ -30,6 +30,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace dictionary {
 namespace detail {

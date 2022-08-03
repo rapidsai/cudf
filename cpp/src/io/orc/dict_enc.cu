@@ -27,6 +27,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace orc {

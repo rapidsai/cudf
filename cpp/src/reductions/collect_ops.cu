@@ -23,6 +23,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace reduction {
 

@@ -99,6 +99,7 @@ struct count_checker {
 
 }  // namespace
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,

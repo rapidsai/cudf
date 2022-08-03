@@ -36,6 +36,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

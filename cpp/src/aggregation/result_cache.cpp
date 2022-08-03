@@ -16,6 +16,7 @@
 
 #include <cudf/detail/aggregation/result_cache.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

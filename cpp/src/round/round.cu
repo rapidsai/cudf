@@ -39,6 +39,7 @@
 #include <thrust/uninitialized_fill.h>
 #include <type_traits>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 namespace {  // anonymous

@@ -30,6 +30,7 @@
 #include <tuple>
 #include <vector>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

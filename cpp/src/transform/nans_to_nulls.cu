@@ -29,6 +29,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 struct dispatch_nan_to_null {

@@ -18,6 +18,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 structs_column_view::structs_column_view(column_view const& rhs) : column_view{rhs}

@@ -45,6 +45,7 @@
 #include <utility>
 #include <vector>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> unique(table_view const& input,

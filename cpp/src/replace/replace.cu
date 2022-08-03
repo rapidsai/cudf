@@ -483,6 +483,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
 
 }  // end anonymous namespace
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,

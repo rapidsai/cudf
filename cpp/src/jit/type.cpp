@@ -21,6 +21,7 @@
 
 #include <string>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace jit {
 struct get_data_ptr_functor {

@@ -45,6 +45,7 @@
 #include <numeric>
 #include <type_traits>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
 {

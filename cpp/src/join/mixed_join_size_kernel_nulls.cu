@@ -16,6 +16,7 @@
 
 #include "mixed_join_size_kernel.cuh"
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

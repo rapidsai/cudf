@@ -79,6 +79,7 @@ struct valid_table_filter {
 
 }  // namespace
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 /*

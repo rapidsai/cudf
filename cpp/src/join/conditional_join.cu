@@ -32,6 +32,7 @@
 
 #include <optional>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

@@ -31,6 +31,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

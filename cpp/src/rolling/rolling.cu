@@ -21,6 +21,7 @@
 
 #include <thrust/iterator/constant_iterator.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 // Applies a fixed-size rolling window function to the values in a column, with default output

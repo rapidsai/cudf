@@ -45,6 +45,7 @@ inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
 
 inline __device__ int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace parquet {

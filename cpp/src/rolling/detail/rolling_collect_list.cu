@@ -32,6 +32,7 @@
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

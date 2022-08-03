@@ -22,6 +22,7 @@
 #include "column_buffer.hpp"
 #include <cudf/detail/utilities/vector_factories.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace detail {

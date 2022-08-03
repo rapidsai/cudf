@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 lists_column_view::lists_column_view(column_view const& lists_column) : column_view(lists_column)

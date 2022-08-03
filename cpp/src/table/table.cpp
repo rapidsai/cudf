@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 // Copy the columns from another table

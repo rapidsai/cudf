@@ -32,6 +32,7 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> reverse(table_view const& source_table,

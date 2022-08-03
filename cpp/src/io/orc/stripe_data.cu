@@ -21,6 +21,7 @@
 #include "orc_common.hpp"
 #include "orc_gpu.hpp"
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace orc {

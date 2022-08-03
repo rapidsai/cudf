@@ -50,6 +50,7 @@
 #include <numeric>
 #include <regex>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace detail {

@@ -20,6 +20,9 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 
+#ifdef THRUST_WRAPPED_NAMESPACE
+using namespace THRUST_WRAPPED_NAMESPACE;
+#endif
 namespace cudf {
 namespace {
 

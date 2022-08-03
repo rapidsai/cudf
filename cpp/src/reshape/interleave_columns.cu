@@ -34,6 +34,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 namespace {

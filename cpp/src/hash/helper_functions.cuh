@@ -138,7 +138,7 @@ __global__ void init_hashtbl(value_type* __restrict__ const hashtbl_values,
 {
   const size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < n) {
-    store_pair_vectorized(hashtbl_values + idx, thrust::make_pair(key_val, elem_val));
+    store_pair_vectorized(hashtbl_values + idx, THRUST_NS_QUALIFIER::make_pair(key_val, elem_val));
   }
 }
 

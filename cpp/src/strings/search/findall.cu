@@ -35,6 +35,7 @@
 #include <thrust/pair.h>
 #include <thrust/reduce.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

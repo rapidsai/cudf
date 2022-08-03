@@ -39,6 +39,7 @@
 #include <iterator>
 #include <memory>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace {
 inline bool __device__ out_of_bounds(size_type size, size_type idx)

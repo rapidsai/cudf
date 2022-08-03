@@ -19,6 +19,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace tdigest {
 

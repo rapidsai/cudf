@@ -29,6 +29,7 @@
 
 #include <algorithm>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::vector<column_view> slice(column_view const& input,

@@ -29,6 +29,7 @@
 #include <functional>
 #include <iterator>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 namespace ast {

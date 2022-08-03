@@ -22,7 +22,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-using position_pair = thrust::pair<size_type, size_type>;
+using position_pair = THRUST_NS_QUALIFIER::pair<size_type, size_type>;
 
 /**
  * @brief Instantiated for each string to manage navigating tokens from

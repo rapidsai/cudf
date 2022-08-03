@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 void initialize_with_identity(mutable_table_view& table,

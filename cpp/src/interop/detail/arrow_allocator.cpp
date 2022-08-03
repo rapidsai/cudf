@@ -16,6 +16,7 @@
 
 #include <cudf/detail/interop.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

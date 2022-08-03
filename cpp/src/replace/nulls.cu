@@ -403,6 +403,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 
 }  // end anonymous namespace
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

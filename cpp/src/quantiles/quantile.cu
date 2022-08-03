@@ -42,6 +42,7 @@
 #include <memory>
 #include <vector>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 template <bool exact, typename SortMapIterator>

@@ -63,6 +63,7 @@ using cudf::device_span;
 using cudf::host_span;
 using cudf::detail::make_device_uvector_async;
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace detail {

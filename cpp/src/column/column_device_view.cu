@@ -26,6 +26,7 @@
 
 #include <numeric>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)

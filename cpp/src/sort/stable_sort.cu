@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> stable_sorted_order(table_view const& input,

@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(

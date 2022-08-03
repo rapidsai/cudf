@@ -21,6 +21,7 @@
 
 #include "column_statistics.cuh"
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 namespace detail {

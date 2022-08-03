@@ -29,6 +29,7 @@
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace dictionary {
 namespace detail {

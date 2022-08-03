@@ -51,8 +51,8 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
   if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
 #ifndef CUDF_JIT_UDF
-  return thrust::count_if(
-    thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
+  return THRUST_NS_QUALIFIER::count_if(
+    THRUST_NS_QUALIFIER::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 #else
   size_type chars = 0;
   auto const end  = ptr + bytes;

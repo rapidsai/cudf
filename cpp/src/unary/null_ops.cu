@@ -24,6 +24,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {

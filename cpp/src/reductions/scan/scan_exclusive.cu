@@ -28,6 +28,7 @@
 
 #include <thrust/scan.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 namespace {

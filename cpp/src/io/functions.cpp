@@ -34,6 +34,7 @@
 #include <cudf/utilities/error.hpp>
 #include <io/orc/orc.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 // Returns builder for csv_reader_options

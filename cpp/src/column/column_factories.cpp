@@ -27,6 +27,7 @@
 
 #include <thrust/iterator/constant_iterator.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace {
 struct size_of_helper {

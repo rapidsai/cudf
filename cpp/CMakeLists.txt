@@ -585,6 +585,7 @@ target_include_directories(
 target_compile_definitions(
   cudf PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
               "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
+       PRIVATE "THRUST_WRAPPED_NAMESPACE=rapids"
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79

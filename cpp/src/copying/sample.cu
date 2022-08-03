@@ -31,6 +31,7 @@
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/shuffle.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

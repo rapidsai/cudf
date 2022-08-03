@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace ast {
 

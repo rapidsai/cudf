@@ -35,6 +35,7 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/pair.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

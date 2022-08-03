@@ -44,6 +44,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace strings {
 namespace detail {

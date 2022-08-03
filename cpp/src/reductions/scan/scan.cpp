@@ -21,6 +21,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 
 std::unique_ptr<column> scan(column_view const& input,

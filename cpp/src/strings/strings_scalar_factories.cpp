@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 // Create a strings-type column from array of pointer/size pairs
 std::unique_ptr<scalar> make_string_scalar(std::string const& string,

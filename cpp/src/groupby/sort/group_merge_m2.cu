@@ -34,6 +34,7 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace groupby {
 namespace detail {

@@ -44,6 +44,7 @@
 #include <memory>
 #include <utility>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace groupby {
 // Constructor

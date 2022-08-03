@@ -41,6 +41,7 @@
 #include <memory>
 #include <type_traits>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace detail {
 

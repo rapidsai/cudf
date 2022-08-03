@@ -63,6 +63,7 @@ THE SOFTWARE.
 
 #include <rmm/cuda_stream_view.hpp>
 
+using namespace THRUST_WRAPPED_NAMESPACE;
 namespace cudf {
 namespace io {
 constexpr uint32_t huffman_lookup_table_width      = 8;
