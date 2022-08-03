@@ -31,7 +31,8 @@ cpdef read_json(object filepaths_or_buffers,
                 object dtype,
                 bool lines,
                 object compression,
-                object byte_range):
+                object byte_range,
+                bool experimental):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -98,6 +99,7 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
+        .experimental(experimental)
         .build()
     )
     if is_list_like_dtypes:
