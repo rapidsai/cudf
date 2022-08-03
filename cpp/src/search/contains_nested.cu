@@ -76,13 +76,8 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
                            nan_equality::ALL_EQUAL,
                            stream,
                            mr);
-
-  // todo: https://github.com/rapidsai/cudf/pull/11356
-  auto result =
-    std::make_unique<column>(data_type{type_to_id<bool>()}, needles.size(), result_v.release());
-  result->set_null_mask(copy_bitmask(needles, stream, mr), needles.null_count());
-
-  return result;
+  return std::make_unique<column>(
+    std::move(result_v), copy_bitmask(needles, stream, mr), needles.null_count());
 }
 
 }  // namespace cudf::detail
