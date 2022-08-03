@@ -80,6 +80,9 @@ class json_reader_options {
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
+  // Whether to use the experimental reader
+  bool _experimental = false;
+
   /**
    * @brief Constructor from source info.
    *
@@ -194,6 +197,13 @@ class json_reader_options {
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
+   * @brief Whether the experimental reader should be used.
+   *
+   * @returns true if the experimental reader will be used, false otherwise
+   */
+  bool is_enabled_experimental() const { return _experimental; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -241,6 +251,13 @@ class json_reader_options {
    * @param val Boolean value to enable/disable day first parsing format
    */
   void enable_dayfirst(bool val) { _dayfirst = val; }
+
+  /**
+   * @brief Set whether to use the experimental reader.
+   *
+   * @param val Boolean value to enable/disable the experimental reader
+   */
+  void enable_experimental(bool val) { _experimental = val; }
 };
 
 /**
@@ -345,6 +362,18 @@ class json_reader_options_builder {
   json_reader_options_builder& dayfirst(bool val)
   {
     options._dayfirst = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to use the experimental reader.
+   *
+   * @param val Boolean value to enable/disable experimental parsing
+   * @return this for chaining
+   */
+  json_reader_options_builder& experimental(bool val)
+  {
+    options._experimental = val;
     return *this;
   }
 
