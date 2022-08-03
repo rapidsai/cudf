@@ -1603,10 +1603,10 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
-    auto const max = get_max(&s->max_value, dtype, scratch, NO_TRUNC_STATS);
-    encoder.field_binary(5, max.first, max.second);
-    auto const min = get_min(&s->min_value, dtype, scratch, NO_TRUNC_STATS);
-    encoder.field_binary(6, min.first, min.second);
+    auto const [max_ptr, max_size] = get_max(&s->max_value, dtype, scratch, NO_TRUNC_STATS);
+    encoder.field_binary(5, max_ptr, max_size);
+    auto const [min_ptr, min_size] = get_min(&s->min_value, dtype, scratch, NO_TRUNC_STATS);
+    encoder.field_binary(6, min_ptr, min_size);
   }
   encoder.end(&end);
   return end;
@@ -1908,21 +1908,21 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    auto const min = get_min(&column_stats[pageidx + page].min_value,
-                             col_g.stats_dtype,
-                             scratch,
-                             column_index_truncate_length);
-    encoder.put_binary(min.first, min.second);
+    auto const [min_ptr, min_size] = get_min(&column_stats[pageidx + page].min_value,
+                                             col_g.stats_dtype,
+                                             scratch,
+                                             column_index_truncate_length);
+    encoder.put_binary(min_ptr, min_size);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    auto const max = get_max(&column_stats[pageidx + page].max_value,
-                             col_g.stats_dtype,
-                             scratch,
-                             column_index_truncate_length);
-    encoder.put_binary(max.first, max.second);
+    auto const [max_ptr, max_size] = get_max(&column_stats[pageidx + page].max_value,
+                                             col_g.stats_dtype,
+                                             scratch,
+                                             column_index_truncate_length);
+    encoder.put_binary(max_ptr, max_size);
   }
   encoder.field_list_end(3);
   // boundary_order
