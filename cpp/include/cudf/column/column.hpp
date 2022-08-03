@@ -91,7 +91,8 @@ class column {
          rmm::device_buffer&& null_mask = {},
          size_type null_count           = UNKNOWN_NULL_COUNT)
   {
-    CUDF_EXPECTS(other.size() <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()));
+    CUDF_EXPECTS(other.size() <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                 "The device_uvector size exceeds the maximum size_type.");
     _type       = cudf::type_to_id<T>();
     _size       = static_cast<size_type>(other.size());
     _data       = other.release();
