@@ -52,7 +52,7 @@ class orc_reader_options_builder;
 class orc_reader_options {
   source_info _source;
 
-  // Names of column to read; `nullptr` is all
+  // Names of column to read; `nullopt` is all
   std::optional<std::vector<std::string>> _columns;
 
   // List of individual stripes to read (ignored if empty)
