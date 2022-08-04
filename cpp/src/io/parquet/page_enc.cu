@@ -1408,7 +1408,7 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
 }
 
 /**
- * @brief Truncate a span of UTF-8 characters to at most truncate_length bytes.
+ * @brief Attempt to truncate a span of UTF-8 characters to at most truncate_length_bytes.
  *
  * If is_min is false, then the final character (or characters if there is overflow) will be
  * incremented so that the resultant UTF-8 will still be a valid maximum. scratch is only used when
@@ -1424,7 +1424,7 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned c
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is data at [len]. work backwards until we find
-  // the start of a UTF-8 encoded character.
+  // the start of a UTF-8 encoded character, since UTF-8 characters may be multi-byte.
   auto len = truncate_length;
   while (not strings::detail::is_begin_utf8_char(span[len]) && len > 0) {
     len--;
