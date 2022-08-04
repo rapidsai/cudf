@@ -29,6 +29,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 

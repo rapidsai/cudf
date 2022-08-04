@@ -23,11 +23,11 @@
 
 #include <cudf/types.hpp>
 
-#include <thrust/optional.h>
-
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // Forward declarations
@@ -383,12 +383,12 @@ class table_input_metadata;
 class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
-  thrust::optional<bool> _nullable;
+  std::optional<bool> _nullable;
   bool _list_column_is_map  = false;
   bool _use_int96_timestamp = false;
   bool _output_as_binary    = false;
-  thrust::optional<uint8_t> _decimal_precision;
-  thrust::optional<int32_t> _parquet_field_id;
+  std::optional<uint8_t> _decimal_precision;
+  std::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
 
  public:

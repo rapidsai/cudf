@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 
 namespace {

@@ -32,9 +32,15 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/detail/use_default.h>
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/iterator_adaptor.h>
+#include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/iterator_facade.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>

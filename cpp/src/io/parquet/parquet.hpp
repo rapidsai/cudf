@@ -18,9 +18,8 @@
 
 #include "parquet_common.hpp"
 
-#include <thrust/optional.h>
-
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -147,7 +146,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  thrust::optional<int32_t> field_id  = thrust::nullopt;
+  std::optional<int32_t> field_id     = std::nullopt;
   bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
