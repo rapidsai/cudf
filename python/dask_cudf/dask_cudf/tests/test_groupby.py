@@ -11,12 +11,11 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
+from dask_cudf.groupby import AGGS, CUMULATIVE_AGGS, _aggs_supported
 
 
-@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
-@pytest.mark.parametrize("series", [False, True])
-def test_groupby_basic(series, aggregation):
+@pytest.fixture
+def pdf():
     np.random.seed(0)
 
     # note that column name "x" is a substring of the groupby key;
@@ -28,6 +27,12 @@ def test_groupby_basic(series, aggregation):
             "y": np.random.normal(size=10000),
         }
     )
+    return pdf
+
+
+@pytest.mark.parametrize("aggregation", AGGS)
+@pytest.mark.parametrize("series", [False, True])
+def test_groupby_basic(series, aggregation, pdf):
 
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdf_grouped = gdf.groupby("xx")
@@ -50,6 +55,29 @@ def test_groupby_basic(series, aggregation):
 
     if aggregation == "count":
         dd.assert_eq(a, b, check_dtype=False)
+    else:
+        dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize("series", [True, False])
+@pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
+def test_groupby_cumulative(aggregation, pdf, series):
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    gdf_grouped = gdf.groupby("xx")
+    ddf_grouped = ddf.groupby("xx")
+
+    if series:
+        gdf_grouped = gdf_grouped.xx
+        ddf_grouped = ddf_grouped.xx
+
+    a = getattr(gdf_grouped, aggregation)()
+    b = getattr(ddf_grouped, aggregation)().compute()
+
+    if aggregation == "cumsum" and series:
+        with pytest.xfail(reason="https://github.com/dask/dask/issues/9313"):
+            dd.assert_eq(a, b)
     else:
         dd.assert_eq(a, b)
 
@@ -679,7 +707,7 @@ def test_groupby_agg_redirect(aggregations):
     ],
 )
 def test_is_supported(arg, supported):
-    assert _aggs_supported(arg, SUPPORTED_AGGS) is supported
+    assert _aggs_supported(arg, AGGS) is supported
 
 
 def test_groupby_unique_lists():

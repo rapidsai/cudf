@@ -88,51 +88,6 @@ inner_join(cudf::table_view const& left_keys,
            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Performs an inner join on the specified columns of two
- * tables (`left`, `right`)
- *
- * Inner Join returns rows from both tables as long as the values
- * in the columns being joined on match.
- *
- * @code{.pseudo}
- * Left: {{0, 1, 2}}
- * Right: {{4, 9, 3}, {1, 2, 5}}
- * left_on: {0}
- * right_on: {1}
- * Result: {{1, 2}, {4, 9}, {1, 2}}
- * @endcode
- *
- * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
- * mismatch.
- * @throw cudf::logic_error if number of columns in either `left` or `right`
- * table is 0 or exceeds MAX_JOIN_SIZE
- * @throw std::out_of_range if element of `left_on` or `right_on` exceed the
- * number of columns in the left or right table.
- *
- * @param[in] left The left table
- * @param[in] right The right table
- * @param[in] left_on The column indices from `left` to join on.
- * The column from `left` indicated by `left_on[i]` will be compared against the column
- * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column indices from `right` to join on.
- * The column from `right` indicated by `right_on[i]` will be compared against the column
- * from `left` indicated by `left_on[i]`.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
- * @param mr Device memory resource used to allocate the returned table and columns' device memory
- *
- * @return Result of joining `left` and `right` tables on the columns
- * specified by `left_on` and `right_on`.
- */
-std::unique_ptr<cudf::table> inner_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Returns a pair of row index vectors corresponding to a
  * left join between the specified tables.
  *
@@ -171,59 +126,6 @@ left_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
           null_equality compare_nulls         = null_equality::EQUAL,
           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Performs a left join (also known as left outer join) on the
- * specified columns of two tables (`left`, `right`)
- *
- * Left join returns all the rows from the left table and those rows from the
- * right table that match on the joined columns.
- * For rows from the right table that do not have a match, the corresponding
- * values in the left columns will be null.
- *
- * @code{.pseudo}
- * Left: {{0, 1, 2}}
- * Right: {{1, 2, 3}, {1, 2 ,5}}
- * left_on: {0}
- * right_on: {1}
- * Result: { {0, 1, 2}, {NULL, 1, 2}, {NULL, 1, 2} }
- *
- * Left: {{0, 1, 2}}
- * Right {{1, 2, 3}, {1, 2, 5}}
- * left_on: {0}
- * right_on: {0}
- * Result: { {0, 1, 2}, {NULL, 1, 2}, {NULL, 1, 2} }
- * @endcode
- *
- * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
- * mismatch.
- * @throw cudf::logic_error if number of columns in either `left` or `right`
- * table is 0 or exceeds MAX_JOIN_SIZE
- * @throw std::out_of_range if element of `left_on` or `right_on` exceed the
- * number of columns in the left or right table.
- *
- * @param[in] left The left table
- * @param[in] right The right table
- * @param[in] left_on The column indices from `left` to join on.
- * The column from `left` indicated by `left_on[i]` will be compared against the column
- * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column indices from `right` to join on.
- * The column from `right` indicated by `right_on[i]` will be compared against the column
- * from `left` indicated by `left_on[i]`.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
- * @param mr Device memory resource used to allocate the returned table and columns' device memory
- *
- * @return Result of joining `left` and `right` tables on the columns
- * specified by `left_on` and `right_on`.
- */
-std::unique_ptr<cudf::table> left_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -265,59 +167,6 @@ full_join(cudf::table_view const& left_keys,
           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Performs a full join (also known as full outer join) on the
- * specified columns of two tables (`left`, `right`)
- *
- * Full Join returns the rows that would be returned by a left join and those
- * rows from the right table that do not have a match.
- * For rows from the right table that do not have a match, the corresponding
- * values in the left columns will be null.
- *
- * @code{.pseudo}
- * Left: {{0, 1, 2}}
- * Right: {{1, 2, 3}, {1, 2, 5}}
- * left_on: {0}
- * right_on: {1}
- * Result: { {0, 1, 2, NULL}, {NULL, 1, 2, 3}, {NULL, 1, 2, 5} }
- *
- * Left: {{0, 1, 2}}
- * Right: {{1, 2, 3}, {1, 2, 5}}
- * left_on: {0}
- * right_on: {0}
- * Result: { {0, 1, 2, NULL}, {NULL, 1, 2, 3}, {NULL, 1, 2, 5} }
- * @endcode
- *
- * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
- * mismatch.
- * @throw cudf::logic_error if number of columns in either `left` or `right`
- * table is 0 or exceeds MAX_JOIN_SIZE
- * @throw std::out_of_range if element of `left_on` or `right_on` exceed the
- * number of columns in the left or right table.
- *
- * @param[in] left The left table
- * @param[in] right The right table
- * @param[in] left_on The column indices from `left` to join on.
- * The column from `left` indicated by `left_on[i]` will be compared against the column
- * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column indices from `right` to join on.
- * The column from `right` indicated by `right_on[i]` will be compared against the column
- * from `left` indicated by `left_on[i]`.
- * @param[in] compare_nulls controls whether null join-key values
- * should match or not.
- * @param mr Device memory resource used to allocate the returned table and columns' device memory
- *
- * @return Result of joining `left` and `right` tables on the columns
- * specified by `left_on` and `right_on`.
- */
-std::unique_ptr<cudf::table> full_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Returns a vector of row indices corresponding to a left semi join
  * between the specified tables.
  *
@@ -350,54 +199,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Performs a left semi join on the specified columns of two
- * tables (`left`, `right`)
- *
- * A left semi join only returns data from the left table, and only
- * returns rows that exist in the right table.
- *
- * @code{.pseudo}
- * TableA: {{0, 1, 2}}
- * TableB: {{1, 2, 3}, {1, 2, 5}}
- * left_on: {0}
- * right_on: {1}
- * Result: { {1, 2} }
- *
- * TableA {{0, 1, 2}, {1, 2, 5}}
- * TableB {{1, 2, 3}}
- * left_on: {0}
- * right_on: {0}
- * Result: { {1, 2}, {2, 5} }
- * @endcode
- *
- * @throw cudf::logic_error if the number of columns in either `left_keys` or `right_keys` is 0
- *
- * @param[in] left             The left table
- * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on.
- *                             The column from `left` indicated by `left_on[i]`
- *                             will be compared against the column from `right`
- *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on.
- *                             The column from `right` indicated by `right_on[i]`
- *                             will be compared against the column from `left`
- *                             indicated by `left_on[i]`.
- * @param[in] compare_nulls    Controls whether null join-key values should match or not
- * @param[in] mr               Device memory resource used to allocate the returned table's
- *                             device memory
- *
- * @return                     Result of joining `left` and `right` tables on the columns
- *                             specified by `left_on` and `right_on`.
- */
-std::unique_ptr<cudf::table> left_semi_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Returns a vector of row indices corresponding to a left anti join
  * between the specified tables.
  *
@@ -425,57 +226,6 @@ std::unique_ptr<cudf::table> left_semi_join(
 std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Performs a left anti join on the specified columns of two
- * tables (`left`, `right`)
- *
- * A left anti join only returns data from the left table, and only
- * returns rows that do not exist in the right table.
- *
- * @code{.pseudo}
- * TableA: {{0, 1, 2}}
- * TableB: {{1, 2, 3},  {1, 2, 5}}
- * left_on: {0}
- * right_on: {1}
- * Result: {{0}}
- *
- * TableA: {{0, 1, 2}, {1, 2, 5}}
- * TableB: {{1, 2, 3}}
- * left_on: {0}
- * right_on: {0}
- * Result: { {0}, {1} }
- * @endcode
- *
- * @throw cudf::logic_error if number of elements in `left_on` or `right_on`
- * mismatch.
- * @throw cudf::logic_error if number of columns in either `left` or `right`
- * table is 0 or exceeds MAX_JOIN_SIZE
- *
- * @param[in] left             The left table
- * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on.
- *                             The column from `left` indicated by `left_on[i]`
- *                             will be compared against the column from `right`
- *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on.
- *                             The column from `right` indicated by `right_on[i]`
- *                             will be compared against the column from `left`
- *                             indicated by `left_on[i]`.
- * @param[in] compare_nulls    Controls whether null join-key values should match or not
- * @param[in] mr               Device memory resource used to allocate the returned table's
- *                             device memory
- *
- * @return                     Result of joining `left` and `right` tables on the columns
- *                             specified by `left_on` and `right_on`.
- */
-std::unique_ptr<cudf::table> left_anti_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
   null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
