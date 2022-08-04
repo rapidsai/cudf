@@ -1346,21 +1346,21 @@ __device__ void byte_reverse128(__int128_t v, void* dst)
 }
 
 /**
- * @brief Test to see if an array contains a valid UTF-8 string.
+ * @brief Test to see if a span contains all valid UTF-8 characters.
  *
- * @param str device_span containing array to test.
- * @return true if the array contains a valid UTF-8 string.
+ * @param span device_span to test.
+ * @return true if the span contains all valid UTF-8 characters.
  */
-__device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
+__device__ bool is_valid_utf8(device_span<unsigned char const> span)
 {
   auto idx = 0;
-  while (idx < str.size_bytes()) {
-    // UTF-8 character should start with valid beginning byte
-    if (not strings::detail::is_valid_begin_utf8_char(str[idx])) { return false; }
-    // subsequent bytes in the characater should be continuation bytes
-    auto const width = strings::detail::bytes_in_utf8_byte(str[idx++]);
-    for (size_type i = 1; i < width && idx < str.size_bytes(); i++, idx++) {
-      if (not strings::detail::is_utf8_continuation_char(str[idx])) { return false; }
+  while (idx < span.size_bytes()) {
+    // UTF-8 character should start with valid beginning bit pattern
+    if (not strings::detail::is_valid_begin_utf8_char(span[idx])) { return false; }
+    // subsequent elements of the character should be continuation chars
+    auto const width = strings::detail::bytes_in_utf8_byte(span[idx++]);
+    for (size_type i = 1; i < width && idx < span.size_bytes(); i++, idx++) {
+      if (not strings::detail::is_utf8_continuation_char(span[idx])) { return false; }
     }
   }
 
@@ -1370,14 +1370,14 @@ __device__ bool is_valid_utf8_string(device_span<uint8_t const> str)
 /**
  * @brief Increment part of a UTF-8 character.
  *
- * Attempt to increment the byte pointed to by ptr, which is assumed to be part of a valid UTF-8
+ * Attempt to increment the char pointed to by ptr, which is assumed to be part of a valid UTF-8
  * character. Returns true if successful, false if the increment caused an overflow, in which case
- * the data at ptr will be set to the lowest valid UTF-8 byte (start or continuation).
+ * the data at ptr will be set to the lowest valid UTF-8 bit pattern (start or continuation).
  * Will halt execution if passed invalid UTF-8.
  */
-__device__ bool increment_utf8_at(uint8_t* ptr)
+__device__ bool increment_utf8_at(unsigned char* ptr)
 {
-  uint8_t elem = *ptr;
+  unsigned char elem = *ptr;
   // elem is one of (no 5 or 6 byte chars allowed):
   //  0b0vvvvvvv a 1 byte character
   //  0b10vvvvvv a continuation byte
@@ -1408,33 +1408,33 @@ __device__ bool increment_utf8_at(uint8_t* ptr)
 }
 
 /**
- * @brief Truncate a UTF-8 string to at most truncate_length bytes.
+ * @brief Truncate a span of UTF-8 characters to at most truncate_length bytes.
  *
  * If is_min is false, then the final character (or characters if there is overflow) will be
- * incremented so that the resultant string will still be a valid maximum. scratch is only used when
- * is_min is false, and must be at least truncate_length bytes in size. If the string cannot be
+ * incremented so that the resultant UTF-8 will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the span cannot be
  * truncated, leave it untouched and return the original length.
  *
- * @return Pair object containing a pointer to the truncate string and its length.
+ * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t const> str,
+__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
                                                           bool is_min,
                                                           void* scratch,
                                                           size_type truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
-  // there is a character at [len]. work backwards until we find
-  // the start of a unicode character.
+  // there is data at [len]. work backwards until we find
+  // the start of a UTF-8 encoded character.
   auto len = truncate_length;
-  while (not strings::detail::is_begin_utf8_char(str[len]) && len > 0) {
+  while (not strings::detail::is_begin_utf8_char(span[len]) && len > 0) {
     len--;
   }
 
   if (len != 0) {
-    if (is_min) { return {str.data(), len}; }
-    memcpy(scratch, str.data(), len);
+    if (is_min) { return {span.data(), len}; }
+    memcpy(scratch, span.data(), len);
     // increment last byte, working backwards if the byte overflows
-    auto const ptr = static_cast<uint8_t*>(scratch);
+    auto const ptr = static_cast<unsigned char*>(scratch);
     for (int32_t i = len - 1; i >= 0; i--) {
       if (increment_utf8_at(&ptr[i])) {  // true if no overflow
         return {scratch, len};
@@ -1444,18 +1444,18 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t co
   }
 
   // couldn't truncate, return original value
-  return {str.data(), str.size_bytes()};
+  return {span.data(), span.size_bytes()};
 }
 
 /**
- * @brief Truncate a binary array to at most truncate_length bytes.
+ * @brief Truncate a span of binary data to at most truncate_length bytes.
  *
- * If is_min is false, then the final character (or characters if there is overflow) will be
- * incremented so that the resultant array will still be a valid maximum. scratch is only used when
- * is_min is false, and must be at least truncate_length bytes in size. If the array cannot be
+ * If is_min is false, then the final byte (or bytes if there is overflow) will be
+ * incremented so that the resultant binary will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the span cannot be
  * truncated, leave it untouched and return the original length.
  *
- * @return Pair object containing a pointer to the truncated array and its length.
+ * @return Pair object containing a pointer to the truncated data and its length.
  */
 __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
                                                             bool is_min,
@@ -1493,13 +1493,13 @@ __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& s
     return {str.data(), str.size_bytes()};
   }
 
-  // convert char to uint8_t since UTF-8 is just bytes, not chars.  can't use std::byte because
+  // convert char to unsigned since UTF-8 is just bytes, not chars.  can't use std::byte because
   // that can't be incremented.
-  auto const span =
-    device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes());
+  auto const span = device_span<unsigned char const>(
+    reinterpret_cast<unsigned char const*>(str.data()), str.size_bytes());
 
   // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
-  if (str.size_bytes() != str.length() and is_valid_utf8_string(span.first(truncate_length))) {
+  if (str.size_bytes() != str.length() and is_valid_utf8(span.first(truncate_length))) {
     return truncate_utf8(span, is_min, scratch, truncate_length);
   }
   return truncate_binary(span, is_min, scratch, truncate_length);
