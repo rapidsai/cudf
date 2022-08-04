@@ -51,7 +51,7 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Path in schema of column to read; empty is all
+  // Path in schema of column to read; `nullopt` is all
   std::optional<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
@@ -152,17 +152,14 @@ class parquet_reader_options {
    *
    * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
-  {
-    return _columns;
-  }
+  [[nodiscard]] auto const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read.
    *
    * @return List of individual row groups to be read
    */
-  std::vector<std::vector<size_type>> const& get_row_groups() const { return _row_groups; }
+  [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
 
   /**
    * @brief Returns timestamp type used to cast timestamp columns.

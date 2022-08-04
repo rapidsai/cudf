@@ -1514,4 +1514,23 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
                                       result.tbl->view().column(0).child(1).child(0).child(1));
 }
 
+TEST_F(OrcReaderTest, EmptyColumnsParam)
+{
+  srand(31337);
+  auto const expected = create_random_fixed_table<int>(2, 4, false);
+
+  std::vector<char> out_buffer;
+  cudf_io::orc_writer_options args =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected);
+  cudf_io::write_orc(args);
+
+  cudf_io::orc_reader_options read_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{out_buffer.data(), out_buffer.size()})
+      .columns({});
+  auto const result = cudf_io::read_orc(read_opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 0);
+  EXPECT_EQ(result.tbl->num_rows(), 0);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
