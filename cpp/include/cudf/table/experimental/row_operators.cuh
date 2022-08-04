@@ -205,6 +205,62 @@ struct sorting_physical_element_comparator {
   }
 };
 
+template <typename Nullate,
+          typename PhysicalElementComparator = sorting_physical_element_comparator>
+struct primitive_element_comparator {
+  // (const cudf::column_device_view, const cudf::column_device_view, const cudf::nullate::DYNAMIC,
+  // const cudf::null_order, const int, const
+  // cudf::experimental::row::lexicographic::sorting_physical_element_comparator)
+
+  __device__ primitive_element_comparator(Nullate const check_nulls,
+                                          column_device_view const lhs,
+                                          column_device_view const rhs,
+                                          null_order const null_precedence = null_order::BEFORE,
+                                          int const depth                  = 0,
+                                          PhysicalElementComparator const comparator = {})
+    : _lhs{lhs},
+      _rhs{rhs},
+      _check_nulls{check_nulls},
+      _null_precedence{null_precedence},
+      _depth{depth},
+      _comparator{comparator}
+  {
+  }
+
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
+  __device__ cuda::std::pair<weak_ordering, int> operator()(
+    size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+  {
+    if (_check_nulls) {
+      bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
+
+      if (lhs_is_null or rhs_is_null) {  // at least one is null
+        return cuda::std::pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
+      }
+    }
+
+    return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
+                                       _rhs.element<Element>(rhs_element_index)),
+                           std::numeric_limits<int>::max());
+  }
+
+  template <typename Element,
+            CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>())>
+  __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
+                                                            size_type const) const noexcept
+  {
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+  }
+
+  column_device_view const _lhs;
+  column_device_view const _rhs;
+  Nullate const _check_nulls;
+  null_order const _null_precedence;
+  int const _depth;
+  PhysicalElementComparator const _comparator;
+};
+
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -320,18 +376,9 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
-      if (_check_nulls) {
-        bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
-        bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
-
-        if (lhs_is_null or rhs_is_null) {  // at least one is null
-          return cuda::std::pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
-        }
-      }
-
-      return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
-                                         _rhs.element<Element>(rhs_element_index)),
-                             std::numeric_limits<int>::max());
+      return primitive_element_comparator{
+        _check_nulls, _lhs, _rhs, _null_precedence, _depth, _comparator}
+        .template operator()<Element>(lhs_element_index, rhs_element_index);
     }
 
     template <typename Element,
@@ -374,7 +421,8 @@ class device_row_comparator {
 
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         lcol.type(),
-        element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth, _comparator},
+        primitive_element_comparator{
+          _check_nulls, _lhs, _rhs, _null_precedence, _depth, _comparator},
         lhs_element_index,
         rhs_element_index);
     }
@@ -412,8 +460,8 @@ class device_row_comparator {
       auto r_end           = r_offsets[rhs_element_index + 1];
 
       // This comparator will be used when we actually need to compare elements
-      auto comparator =
-        element_comparator{_check_nulls, lcol, rcol, _null_precedence, _depth, _comparator};
+      auto comparator = primitive_element_comparator{
+        _check_nulls, _lhs, _rhs, _null_precedence, _depth, _comparator};
 
       // Loop over each element in the encoding. Note that this includes nulls
       // and empty lists, so not every index i/j correspondings to an actual
