@@ -21,6 +21,22 @@
 
 #include <nvbench/nvbench.cuh>
 
+namespace {
+
+template <typename... Args>
+auto make_aggregation_request_vector(cudf::column_view const& values, Args&&... args)
+{
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  (aggregations.emplace_back(std::forward<Args>(args)), ...);
+
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request{values, std::move(aggregations)});
+
+  return requests;
+}
+
+}  // namespace
+
 template <typename Type>
 void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 {
@@ -54,12 +70,9 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
   auto const& keys = keys_table->get_column(0);
   auto const& vals = vals_table->get_column(0);
 
-  auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
-
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
+  auto gb_obj         = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
+  auto const requests = make_aggregation_request_vector(
+    vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync,
