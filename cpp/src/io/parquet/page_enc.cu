@@ -1379,11 +1379,11 @@ __device__ bool increment_utf8_at(uint8_t* ptr)
 {
   uint8_t elem = *ptr;
   // elem is one of (no 5 or 6 byte chars allowed):
-  //  0b0vvvvvvv 1 byte
-  //  0b10vvvvvv continuation
-  //  0b110vvvvv 2 byte
-  //  0b1110vvvv 3 byte
-  //  0b11110vvv 4 byte
+  //  0b0vvvvvvv a 1 byte character
+  //  0b10vvvvvv a continuation byte
+  //  0b110vvvvv start of a 2 byte characther
+  //  0b1110vvvv start of a 3 byte characther
+  //  0b11110vvv start of a 4 byte characther
 
   // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
   uint8_t mask  = 0xF8;
@@ -1426,11 +1426,8 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t co
   // there is a character at [len]. work backwards until we find
   // the start of a unicode character.
   auto len  = truncate_length;
-  auto dptr = &str.data()[len];
-  while (not strings::detail::is_begin_utf8_char(*dptr) && len > 0) {
-    dptr--;
-    len--;
-  }
+  while (not strings::detail::is_begin_utf8_char(str[len]) && len > 0) { len--; }
+
   if (len != 0) {
     if (is_min) { return {str.data(), len}; }
     memcpy(scratch, str.data(), len);
