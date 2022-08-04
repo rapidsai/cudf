@@ -59,8 +59,6 @@ auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
 /**
  * @brief Check if the given type is a supported non-nested type in `cudf::lists::contains`.
- *
- * @tparam Element
  */
 template <typename Element>
 static auto constexpr is_supported_non_nested_type()
@@ -70,8 +68,6 @@ static auto constexpr is_supported_non_nested_type()
 
 /**
  * @brief Check if the given type is supported in `cudf::lists::contains`.
- *
- * @tparam Element
  */
 template <typename Element>
 auto constexpr is_supported_type()
@@ -148,9 +144,6 @@ struct search_list_non_nested_fn {
 /**
  * @brief Functor to perform searching for index of a key element in a given list, specialized
  * for nested types.
- *
- * @tparam KeyValidityIter
- * @tparam EqComparator
  */
 template <typename KeyValidityIter, typename EqComparator>
 struct search_list_nested_types_fn {
@@ -201,18 +194,6 @@ struct search_list_nested_types_fn {
 /**
  * @brief Function to search for key element(s) in the corresponding rows of a lists column,
  * specialized for non-nested types.
- *
- * @tparam search_key_is_scalar A boolean flag indicating if the search key(s) is a scalar
- * @tparam Element
- * @tparam InputIterator
- * @tparam SearchKeyType
- * @param input_it The iterator pointing to lists of the input lists column
- * @param num_rows The number of input rows
- * @param output_it The iterator pointing to the output array to store the search result
- * @param search_keys The key(s) to search
- * @param search_keys_have_nulls Boolean flag indicating if the input key(s) have nulls
- * @param find_option Option to specify whether to return the position of the first or last match
- * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <bool search_key_is_scalar,
           typename Element,
@@ -250,17 +231,6 @@ void index_of_non_nested(InputIterator input_it,
 /**
  * @brief Function to search for index of key element(s) in the corresponding rows of a lists
  * column, specialized for nested types.
- *
- * @tparam search_key_is_scalar A boolean flag indicating if the search key(s) is a scalar
- * @tparam InputIterator
- * @tparam SearchKeyType
- * @param input_it The iterator pointing to lists of the input lists column
- * @param num_rows The number of input rows
- * @param output_it The iterator pointing to the output array to store the search result
- * @param child The child column of the input lists column
- * @param search_keys The key(s) to search
- * @param find_option Option to specify whether to return the position of the first or last match
- * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <bool search_key_is_scalar, typename InputIterator, typename SearchKeyType>
 void index_of_nested_types(InputIterator input_it,
@@ -398,7 +368,7 @@ struct dispatch_index_of {
 
 /**
  * @brief Converts key-positions vector (from `index_of()`) to a BOOL8 vector, indicating if
- *        the search key(s) were found.
+ * the search key(s) were found.
  */
 std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                                     rmm::cuda_stream_view stream,
