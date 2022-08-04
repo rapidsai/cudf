@@ -44,8 +44,7 @@ namespace cudf::lists {
 namespace {
 
 /**
- * @brief A sentinel value used for marking that a given key has not been found in the search
- * list.
+ * @brief A sentinel value used for marking that a given key has not been found in the search list.
  *
  * The value should be `-1` as indicated in the public API documentation.
  */
@@ -53,12 +52,13 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 
 /**
  * @brief A sentinel value used for marking that a given output row should be null.
+ *
+ * This value should be different from `NOT_FOUND_SENTINEL`.
  */
 auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
 /**
- * @brief Indicate the current supported non-nested types in `cudf::lists::contains`.
- *
+ * @brief Check if the given type is a supported non-nested type in `cudf::lists::contains`.
  */
 template <typename Element>
 static auto constexpr is_supported_non_nested_type()
@@ -67,8 +67,7 @@ static auto constexpr is_supported_non_nested_type()
 }
 
 /**
- * @brief Indicate the all current supported types in `cudf::lists::contains`.
- *
+ * @brief Check if the given type is supported in `cudf::lists::contains`.
  */
 template <typename Element>
 auto constexpr is_supported_type()
@@ -87,7 +86,7 @@ auto constexpr is_supported_type()
  * Note that the element indices always restart to `0` at the first position in each list.
  *
  * @tparam forward A boolean value indicating whether we want to iterate elements in the list
- * by forward or reverse order.
+ *         by forward or reverse order.
  * @param size The number of elements in the list.
  * @return A pair of {begin, end} iterators to iterate through the range `[0, size)`.
  */
