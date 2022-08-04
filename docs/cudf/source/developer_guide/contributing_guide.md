@@ -7,9 +7,6 @@ This document focuses on a high-level overview of best practices in cuDF.
 cuDF generally presents the same importable modules and subpackages as pandas.
 All Cython code is contained in `python/cudf/cudf/_lib`.
 
-**Open question**: Should we start enforcing a stricter file/directory layout? Any suggestions?
-
-
 ## Code style
 
 cuDF employs a number of linters to ensure consistent style across the code base.
@@ -36,8 +33,7 @@ However, differences between tools and the different packages in the repo result
 Additionally, our use of `versioneer` means that each project must have a `setup.cfg`.
 As a result, we maintain both root and project-level `pyproject.toml` and `setup.cfg` files.
 
-
-For more information, see the
+For more information on how to use pre-commit hooks, see the code formatting section of the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
 
 ## Deprecating and removing code
@@ -57,8 +53,8 @@ Additionally, when removing an API, make sure to remove all tests and documentat
 
 Deprecation messages should:
 - emit a FutureWarning;
-- consist of a single line with no newline characters.
-- indicate a replacement API, if any exists
+- consist of a single line with no newline characters;
+- indicate replacement APIs, if any exist
   (deprecation messages are an opportunity to show users better ways to do things);
 - not specify a version when removal will occur (this gives us more flexibility).
 
