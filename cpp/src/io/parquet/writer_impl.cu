@@ -30,8 +30,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/column.hpp>
+#include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -46,6 +47,7 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -80,6 +82,35 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
+}
+
+/**
+ * @brief Function to calculate the memory needed to encode the column index of the given
+ * column chunk
+ */
+size_t column_index_buffer_size(gpu::EncColumnChunk* ck)
+{
+  // encoding the column index for a given chunk requires:
+  //   each list (4 of them) requires 6 bytes of overhead
+  //     (1 byte field header, 1 byte type, 4 bytes length)
+  //   1 byte overhead for boundary_order
+  //   1 byte overhead for termination
+  //   sizeof(char) for boundary_order
+  //   sizeof(bool) * num_pages for null_pages
+  //   (ck_max_stats_len + 4) * num_pages * 2 for min/max values
+  //     (each binary requires 4 bytes length + ck_max_stats_len)
+  //   sizeof(int64_t) * num_pages for null_counts
+  //
+  // so 26 bytes overhead + sizeof(char) +
+  //    (sizeof(bool) + sizeof(int64_t) + 2 * (4 + ck_max_stats_len)) * num_pages
+  //
+  // we already have ck->ck_stat_size = 48 + 2 * ck_max_stats_len
+  // all of the overhead and non-stats data can fit in under 48 bytes
+  //
+  // so we can simply use ck_stat_size * num_pages
+  //
+  // calculating this per-chunk because the sizes can be wildly different
+  return ck->ck_stat_size * ck->num_pages;
 }
 
 }  // namespace
@@ -185,6 +216,8 @@ struct aggregate_writer_metadata {
     int64_t num_rows = 0;
     std::vector<RowGroup> row_groups;
     std::vector<KeyValue> key_value_metadata;
+    std::vector<OffsetIndex> offset_indexes;
+    std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
   std::string created_by         = "";
@@ -244,15 +277,17 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
-    col_schema.type        = Type::INT32;
-    col_schema.stats_dtype = statistics_dtype::dtype_int32;
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::INT_32;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
-    col_schema.type        = Type::INT64;
-    col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::INT_64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
@@ -304,9 +339,14 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
   {
-    col_schema.type           = Type::BYTE_ARRAY;
-    col_schema.converted_type = ConvertedType::UTF8;
-    col_schema.stats_dtype    = statistics_dtype::dtype_string;
+    col_schema.type = Type::BYTE_ARRAY;
+    if (col_meta.is_enabled_output_as_binary()) {
+      col_schema.converted_type = ConvertedType::UNKNOWN;
+      col_schema.stats_dtype    = statistics_dtype::dtype_byte_array;
+    } else {
+      col_schema.converted_type = ConvertedType::UTF8;
+      col_schema.stats_dtype    = statistics_dtype::dtype_string;
+    }
   }
 
   template <typename T>
@@ -498,7 +538,41 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
       };
 
-      if (col->type().id() == type_id::STRUCT) {
+      auto is_last_list_child = [](cudf::detail::LinkedColPtr col) {
+        if (col->type().id() != type_id::LIST) { return false; }
+        auto const child_col_type =
+          col->children[lists_column_view::child_column_index]->type().id();
+        return child_col_type == type_id::INT8 or child_col_type == type_id::UINT8;
+      };
+
+      // There is a special case for a list<int8> column with one byte column child. This column can
+      // have a special flag that indicates we write this out as binary instead of a list. This is a
+      // more efficient storage mechanism for a single-depth list of bytes, but is a departure from
+      // original cuIO behavior so it is locked behind the option. If the option is selected on a
+      // column that isn't a single-depth list<int8> the code will throw.
+      if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
+        CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                     "Binary column's corresponding metadata should have zero or two children!");
+        if (col_meta.num_children() > 0) {
+          auto const data_col_type =
+            col->children[lists_column_view::child_column_index]->type().id();
+
+          CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.size() == 0,
+                       "Binary column must not be nested!");
+        }
+
+        schema_tree_node col_schema{};
+        col_schema.type            = Type::BYTE_ARRAY;
+        col_schema.converted_type  = ConvertedType::UNKNOWN;
+        col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
+        col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
+        col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
+        col_schema.parent_idx  = parent_idx;
+        col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
+        col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
+        schema.push_back(col_schema);
+      } else if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
         struct_schema.repetition_type =
@@ -659,6 +733,7 @@ struct parquet_column_view {
 
   [[nodiscard]] column_view cudf_column_view() const { return cudf_col; }
   [[nodiscard]] parquet::Type physical_type() const { return schema_node.type; }
+  [[nodiscard]] parquet::ConvertedType converted_type() const { return schema_node.converted_type; }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
@@ -775,11 +850,12 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // size of the leaf column
     // Calculate row offset into dremel data (repetition/definition values) and the respective
     // definition and repetition levels
-    gpu::dremel_data dremel = gpu::get_dremel_data(cudf_col, _d_nullability, _nullability, stream);
-    _dremel_offsets         = std::move(dremel.dremel_offsets);
-    _rep_level              = std::move(dremel.rep_level);
-    _def_level              = std::move(dremel.def_level);
-    _data_count = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
+    cudf::detail::dremel_data dremel =
+      get_dremel_data(cudf_col, _nullability, schema_node.output_as_byte_array, stream);
+    _dremel_offsets = std::move(dremel.dremel_offsets);
+    _rep_level      = std::move(dremel.rep_level);
+    _def_level      = std::move(dremel.def_level);
+    _data_count     = dremel.leaf_data_size;  // Needed for knowing what size dictionary to allocate
 
     stream.synchronize();
   } else {
@@ -790,15 +866,21 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
 
 column_view parquet_column_view::leaf_column_view() const
 {
-  auto col = cudf_col;
-  while (cudf::is_nested(col.type())) {
-    if (col.type().id() == type_id::LIST) {
-      col = col.child(lists_column_view::child_column_index);
-    } else if (col.type().id() == type_id::STRUCT) {
-      col = col.child(0);  // Stored cudf_col has only one child if struct
+  if (!schema_node.output_as_byte_array) {
+    auto col = cudf_col;
+    while (cudf::is_nested(col.type())) {
+      if (col.type().id() == type_id::LIST) {
+        col = col.child(lists_column_view::child_column_index);
+      } else if (col.type().id() == type_id::STRUCT) {
+        col = col.child(0);  // Stored cudf_col has only one child if struct
+      }
     }
+    return col;
+  } else {
+    // TODO: investigate why the leaf node is computed twice instead of using the schema leaf node
+    // for everything
+    return *schema_node.leaf_column;
   }
-  return col;
 }
 
 gpu::parquet_column_device_view parquet_column_view::get_device_view(
@@ -814,8 +896,10 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.rep_values    = _rep_level.data();
     desc.def_values    = _def_level.data();
   }
-  desc.num_rows      = cudf_col.size();
-  desc.physical_type = physical_type();
+  desc.num_rows             = cudf_col.size();
+  desc.physical_type        = physical_type();
+  desc.converted_type       = converted_type();
+  desc.output_as_byte_array = schema_node.output_as_byte_array;
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
@@ -938,7 +1022,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   auto h_chunks = chunks.host_view().flat_view();
 
   std::vector<rmm::device_uvector<size_type>> dict_data;
-  std::vector<rmm::device_uvector<uint16_t>> dict_index;
+  std::vector<rmm::device_uvector<size_type>> dict_index;
 
   if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
@@ -946,11 +1030,15 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
-    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
+    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN ||
+        (col_desc[chunk.col_desc_id].output_as_byte_array &&
+         col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
+      // cuCollections suggests using a hash map of size N * (1/0.7) = num_values * 1.43
+      // https://github.com/NVIDIA/cuCollections/blob/3a49fc71/include/cuco/static_map.cuh#L190-L193
+      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values * 1.43, stream);
       chunk.dict_map_slots = inserted_map.data();
       chunk.dict_map_size  = inserted_map.size();
     }
@@ -974,14 +1062,14 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
       auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
 
-      // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
+      // We don't use dictionary if the indices are > 24 bits because that's the maximum bitpacking
       // bitsize we efficiently support
-      if (nbits > 16) { return std::pair(false, 0); }
+      if (nbits > 24) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-      constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
+      constexpr auto allowed_bitsizes = std::array<size_type, 7>{1, 2, 4, 8, 12, 16, 24};
 
-      // ceil to (1/2/4/8/12/16)
+      // ceil to (1/2/4/8/12/16/24)
       auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 
@@ -1136,7 +1224,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
                                 uint32_t rowgroups_in_batch,
                                 uint32_t first_rowgroup,
                                 const statistics_chunk* page_stats,
-                                const statistics_chunk* chunk_stats)
+                                const statistics_chunk* chunk_stats,
+                                const statistics_chunk* column_stats)
 {
   auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
 
@@ -1169,6 +1258,12 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
   EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
+
+  if (column_stats != nullptr) {
+    auto batch_column_stats =
+      device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch);
+    EncodeColumnIndexes(d_chunks_in_batch.flat_view(), batch_column_stats, stream);
+  }
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
@@ -1492,6 +1587,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   size_type max_pages_in_batch = 0;
   size_t bytes_in_batch        = 0;
   size_t comp_bytes_in_batch   = 0;
+  size_t column_index_bfr_size = 0;
   for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
     size_t rowgroup_size      = 0;
     size_t comp_rowgroup_size = 0;
@@ -1505,6 +1601,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         comp_rowgroup_size += ck->compressed_size;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
+        if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+          column_index_bfr_size += column_index_buffer_size(ck);
+        }
       }
     }
     // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
@@ -1534,6 +1633,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+  rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
@@ -1541,13 +1641,18 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
+    auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
     for (auto j = 0; j < batch_list[b]; j++, r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk& ck = chunks[r][i];
         ck.uncompressed_bfr     = bfr;
         ck.compressed_bfr       = bfr_c;
+        ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
+        if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+          bfr_i += column_index_buffer_size(&ck);
+        }
       }
     }
   }
@@ -1584,7 +1689,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       r,
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
-                                                               : nullptr);
+                                                               : nullptr,
+      (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) ? page_stats.data() : nullptr);
+
     std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++) {
       int p           = rg_to_part[r];
@@ -1651,6 +1758,58 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       task.wait();
     }
   }
+
+  if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+    // need pages on host to create offset_indexes
+    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_async(pages, stream);
+    stream.synchronize();
+
+    // add column and offset indexes to metadata
+    for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+      auto const rnext   = r + batch_list[b];
+      auto curr_page_idx = chunks[r][0].first_page;
+      for (; r < rnext; r++) {
+        int p                 = rg_to_part[r];
+        int global_r          = global_rowgroup_base[p] + r - first_rg_in_part[p];
+        auto const& row_group = md->file(p).row_groups[global_r];
+        for (auto i = 0; i < num_columns; i++) {
+          gpu::EncColumnChunk const& ck = chunks[r][i];
+          auto const& column_chunk_meta = row_group.columns[i].meta_data;
+
+          // start transfer of the column index
+          std::vector<uint8_t> column_idx;
+          column_idx.resize(ck.column_index_size);
+          CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.data(),
+                                        ck.column_index_blob,
+                                        ck.column_index_size,
+                                        cudaMemcpyDeviceToHost,
+                                        stream.value()));
+
+          // calculate offsets while the column index is transfering
+          int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
+
+          OffsetIndex offset_idx;
+          for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
+            auto const& enc_page = h_pages[curr_page_idx++];
+
+            // skip dict pages
+            if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
+
+            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            // first_row_idx is relative to start of row group
+            PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
+            offset_idx.page_locations.push_back(loc);
+            curr_pg_offset += this_page_size;
+          }
+
+          stream.synchronize();
+          md->file(p).offset_indexes.push_back(offset_idx);
+          md->file(p).column_indexes.push_back(column_idx);
+        }
+      }
+    }
+  }
+
   last_write_successful = true;
 }
 
@@ -1664,6 +1823,35 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
+
+    if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+      auto& fmd = md->file(p);
+
+      // write column indices, updating column metadata along the way
+      int chunkidx = 0;
+      for (auto& r : fmd.row_groups) {
+        for (auto& c : r.columns) {
+          auto const& index     = fmd.column_indexes[chunkidx++];
+          c.column_index_offset = out_sink_[p]->bytes_written();
+          c.column_index_length = index.size();
+          out_sink_[p]->host_write(index.data(), index.size());
+        }
+      }
+
+      // write offset indices, updating column metadata along the way
+      chunkidx = 0;
+      for (auto& r : fmd.row_groups) {
+        for (auto& c : r.columns) {
+          auto const& offsets = fmd.offset_indexes[chunkidx++];
+          buffer.resize(0);
+          int32_t len           = cpw.write(offsets);
+          c.offset_index_offset = out_sink_[p]->bytes_written();
+          c.offset_index_length = len;
+          out_sink_[p]->host_write(buffer.data(), buffer.size());
+        }
+      }
+    }
+
     buffer.resize(0);
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md->get_metadata(p)));
     fendr.magic      = parquet_magic;

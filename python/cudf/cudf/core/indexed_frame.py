@@ -46,9 +46,11 @@ from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import GroupBy
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
+from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
@@ -231,6 +233,8 @@ class IndexedFrame(Frame):
     _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
     _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
     _index: cudf.core.index.BaseIndex
+    _groupby = GroupBy
+    _resampler = _Resampler
 
     _VALID_SCANS = {
         "cumsum",
@@ -3527,6 +3531,55 @@ class IndexedFrame(Frame):
             ),
             column_names=self._column_names,
             index_names=self._index_names,
+        )
+
+    @_cudf_nvtx_annotate
+    def groupby(
+        self,
+        by=None,
+        axis=0,
+        level=None,
+        as_index=True,
+        sort=False,
+        group_keys=True,
+        squeeze=False,
+        observed=False,
+        dropna=True,
+    ):
+        if axis not in (0, "index"):
+            raise NotImplementedError("axis parameter is not yet implemented")
+
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
+
+        if squeeze is not False:
+            raise NotImplementedError(
+                "squeeze parameter is not yet implemented"
+            )
+
+        if observed is not False:
+            raise NotImplementedError(
+                "observed parameter is not yet implemented"
+            )
+
+        if by is None and level is None:
+            raise TypeError(
+                "groupby() requires either by or level to be specified."
+            )
+
+        return (
+            self.__class__._resampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else self.__class__._groupby(
+                self,
+                by=by,
+                level=level,
+                as_index=as_index,
+                dropna=dropna,
+                sort=sort,
+            )
         )
 
     @_cudf_nvtx_annotate

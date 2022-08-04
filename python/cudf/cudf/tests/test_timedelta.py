@@ -1389,3 +1389,17 @@ def test_create_TimedeltaIndex(dtype, name):
     )
     pdi = gdi.to_pandas()
     assert_eq(pdi, gdi)
+
+
+@pytest.mark.parametrize("data", [[43534, 43543, 37897, 2000]])
+@pytest.mark.parametrize("dtype", ["timedelta64[ns]"])
+def test_timedelta_constructor(data, dtype):
+    expected = pd.TimedeltaIndex(data=data, dtype=dtype)
+    actual = cudf.TimedeltaIndex(data=data, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+    expected = pd.TimedeltaIndex(data=pd.Series(data), dtype=dtype)
+    actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
+
+    assert_eq(expected, actual)

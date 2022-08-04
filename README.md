@@ -21,7 +21,7 @@ cuDF provides a pandas-like API that will be familiar to data engineers & data s
 
 For example, the following snippet downloads a CSV, then uses the GPU to parse it into rows and columns and run calculations:
 ```python
-import cudf, io, requests
+import cudf, requests
 from io import StringIO
 
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"

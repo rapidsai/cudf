@@ -83,16 +83,13 @@ TEST(StreamCheck, CatchFailedKernel)
                             "invalid configuration argument");
 }
 
-__global__ void kernel(int* p) { *p = 42; }
+__global__ void kernel() { asm("trap;"); }
 
 TEST(DeathTest, CudaFatalError)
 {
   testing::FLAGS_gtest_death_test_style = "threadsafe";
   auto call_kernel                      = []() {
-    int* p;
-    cudaMalloc(&p, 2 * sizeof(int));
-    int* misaligned = (int*)(reinterpret_cast<char*>(p) + 1);
-    kernel<<<1, 1>>>(misaligned);
+    kernel<<<1, 1>>>();
     try {
       CUDF_CUDA_TRY(cudaDeviceSynchronize());
     } catch (const cudf::fatal_cuda_error& fe) {
