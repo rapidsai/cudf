@@ -33,6 +33,7 @@
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 #include <thrust/tabulate.h>
