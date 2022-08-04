@@ -432,7 +432,7 @@ class data_profile_builder {
     return *this;
   }
 
-  data_profile_builder& exclude_validity()
+  data_profile_builder& no_validity()
   {
     profile.set_null_frequency(std::nullopt);
     return *this;

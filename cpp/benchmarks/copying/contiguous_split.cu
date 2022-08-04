@@ -79,7 +79,7 @@ void BM_contiguous_split(benchmark::State& state)
   // generate input table
   auto builder = data_profile_builder().cardinality(0).distribution<int>(cudf::type_id::INT32,
                                                                          distribution_id::UNIFORM);
-  if (not include_validity) builder.exclude_validity();
+  if (not include_validity) builder.no_validity();
 
   auto src_cols = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
                                       row_count{static_cast<cudf::size_type>(num_rows)},
@@ -112,7 +112,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
   int64_t const num_rows      = col_len_bytes / string_len;
 
   // generate input table
-  data_profile profile = data_profile_builder().exclude_validity().cardinality(0).distribution(
+  data_profile profile = data_profile_builder().no_validity().cardinality(0).distribution(
     cudf::type_id::INT32,
     distribution_id::UNIFORM,
     0ul,
