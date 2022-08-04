@@ -1,4 +1,4 @@
-# libcudf C++ Developer Guide
+# libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
