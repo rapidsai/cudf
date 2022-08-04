@@ -269,7 +269,7 @@ nitpick_ignore = [("py:class", "SeriesOrIndex"),]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
-    app.add_js_file("https://docs.rapids.ai/assets/js/custom.js")
+    app.add_js_file("https://docs.rapids.ai/assets/js/custom.js", loading_method="defer")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
     app.connect("autodoc-process-docstring", process_class_docstrings)
