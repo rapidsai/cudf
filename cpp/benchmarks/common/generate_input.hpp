@@ -400,6 +400,71 @@ class data_profile {
 };
 
 /**
+ * @brief Builder to build data profile for the random data generator.
+ */
+class data_profile_builder {
+  data_profile profile;
+
+ public:
+  template <class... T>
+  data_profile_builder& distribution(T&&... t)
+  {
+    profile.set_distribution_params(std::forward<T>(t)...);
+    return *this;
+  }
+
+  data_profile_builder& bool_probability(double p)
+  {
+    profile.set_bool_probability(p);
+    return *this;
+  }
+  data_profile_builder& null_frequency(std::optional<double> f)
+  {
+    profile.set_null_frequency(f);
+    return *this;
+  }
+  data_profile_builder& cardinality(cudf::size_type c)
+  {
+    profile.set_cardinality(c);
+    return *this;
+  }
+  data_profile_builder& avg_run_length(cudf::size_type avg_rl)
+  {
+    profile.set_avg_run_length(avg_rl);
+    return *this;
+  }
+
+  data_profile_builder& list_depth(cudf::size_type max_depth)
+  {
+    profile.set_list_depth(max_depth);
+    return *this;
+  }
+
+  data_profile_builder& list_type(cudf::type_id type)
+  {
+    profile.set_list_type(type);
+    return *this;
+  }
+
+  data_profile_builder& struct_depth(cudf::size_type max_depth)
+  {
+    profile.set_struct_depth(max_depth);
+    return *this;
+  }
+
+  data_profile_builder& struct_types(std::vector<cudf::type_id> const& types)
+  {
+    profile.set_struct_types(types);
+    return *this;
+  }
+
+  /**
+   * @brief move data_profile member once it's built.
+   */
+  operator data_profile&&() { return std::move(profile); }
+};
+
+/**
  * @brief Strongly typed table size in bytes. Used to disambiguate overloads of
  * `create_random_table`.
  */
