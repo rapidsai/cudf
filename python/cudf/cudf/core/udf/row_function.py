@@ -1,12 +1,11 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import math
+from typing import Any, Dict
 
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
 from numba.types import Record
-
-from strings_udf._typing import DString
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType
@@ -26,7 +25,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-dstring = DString()
+itemsizes: Dict[Any, Any] = {}
 
 
 def _get_frame_row_type(dtype):
@@ -50,12 +49,6 @@ def _get_frame_row_type(dtype):
     offset = 0
 
     sizes = []
-    for field in dtype.fields.values():
-        if field[0] == np.dtype("object"):
-            sizes.append(dstring.size_bytes)
-        else:
-            sizes.append(field[0].itemsize)
-
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.
@@ -72,10 +65,8 @@ def _get_frame_row_type(dtype):
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        if elemdtype == np.dtype("object"):
-            itemsize = dstring.size_bytes
-        else:
-            itemsize = elemdtype.itemsize
+        itemsize = itemsizes.get(elemdtype) or elemdtype.itemsize
+        sizes.append(itemsize)
         offset += itemsize + 1
 
         # Align the next member of the struct to be a multiple of the

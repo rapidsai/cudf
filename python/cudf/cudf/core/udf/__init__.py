@@ -8,6 +8,7 @@ from numba.cuda.cudaimpl import (
 )
 from cudf.core.udf import api
 from cudf.core.udf import utils
+from cudf.core.udf import row_function
 from cudf.core.dtypes import dtype
 import numpy as np
 
@@ -47,6 +48,7 @@ try:
     utils.masked_array_types[dtype("O")] = string_view
     utils.files.append(ptxpath)
     utils.arg_handlers.append(str_view_arg_handler)
+    row_function.itemsizes[dtype("O")] = string_view.size_bytes
 
     _STRING_UDFS_ENABLED = True
 except (NotImplementedError, ImportError):
