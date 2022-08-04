@@ -459,5 +459,30 @@ TYPED_TEST(groupby_max_floating_point_test, values_with_infinity)
     keys, vals, expected_keys, expected_vals, std::move(agg), force_use_sort_impl::YES);
 }
 
+TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
+{
+  using T          = TypeParam;
+  using int32s_col = fixed_width_column_wrapper<int32_t>;
+  using floats_col = fixed_width_column_wrapper<T, int32_t>;
+
+  auto constexpr nan = std::numeric_limits<T>::quiet_NaN();
+
+  auto const keys = int32s_col{1, 1};
+  auto const vals = floats_col{nan, nan};
+
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = vals;
+  requests[0].aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+
+  // Without properly handling NaN, this will hang forever in hash-based aggregate (which is the
+  // default back-end for min/max in groupby context).
+  // This test is just to verify that the aggregate operation does not hang.
+  auto gb_obj       = groupby::groupby(table_view({keys}));
+  auto const result = gb_obj.aggregate(requests);
+
+  EXPECT_EQ(result.first->num_rows(), 1);
+}
+
 }  // namespace test
 }  // namespace cudf
