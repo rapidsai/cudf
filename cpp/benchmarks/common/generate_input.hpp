@@ -426,7 +426,7 @@ class data_profile_builder {
     profile.set_bool_probability(p);
     return *this;
   }
-  data_profile_builder& null_frequency(double f)
+  data_profile_builder& null_frequency(std::optional<double> f)
   {
     profile.set_null_frequency(f);
     return *this;
@@ -434,7 +434,7 @@ class data_profile_builder {
 
   data_profile_builder& exclude_validity()
   {
-    profile.set_null_frequency(nullopt);
+    profile.set_null_frequency(std::nullopt);
     return *this;
   }
 
@@ -443,7 +443,7 @@ class data_profile_builder {
     profile.set_cardinality(c);
     return *this;
   }
-  
+
   data_profile_builder& avg_run_length(cudf::size_type avg_rl)
   {
     profile.set_avg_run_length(avg_rl);
