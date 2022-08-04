@@ -60,7 +60,7 @@ static reclass cclass_S(NCCLASS_S);  // \S
 static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
-const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
+const std::array<int, 5> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
 // Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
@@ -459,16 +459,42 @@ class regex_parser {
     }
 
     // The quantifiers require at least one "real" previous item.
-    // We are throwing an error in these two if-checks for invalid quantifiers.
+    // We are throwing errors for invalid quantifiers.
     // Another option is to just return CHAR silently here which effectively
     // treats the chr character as a literal instead as a quantifier.
     // This could lead to confusion where sometimes unescaped quantifier characters
     // are treated as regex expressions and sometimes they are not.
     if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
 
+    // Check that the previous item can be used with quantifiers.
+    // If the previous item is a capture group, we need to check items inside the
+    // capture group can be used with quantifiers too.
+    // (Note that capture groups can be nested).
+    auto previous_type = _items.back().type;
+    if (previous_type == RBRA) {  // previous item is a capture group
+      // look for matching LBRA
+      auto nested_count = 1;
+      auto lbra_itr =
+        std::find_if(_items.rbegin(), _items.rend(), [nested_count](auto const& item) mutable {
+          auto const is_closing = (item.type == RBRA);
+          auto const is_opening = (item.type == LBRA || item.type == LBRA_NC);
+          nested_count += is_closing - is_opening;
+          return is_opening && (nested_count == 0);
+        });
+      // search for the first valid item within the LBRA-RBRA range
+      auto first_valid = std::find_first_of(
+        _items.rbegin() + 1,
+        lbra_itr,
+        valid_preceding_inst_types.begin(),
+        valid_preceding_inst_types.end(),
+        [](auto const item, auto const valid_type) { return item.type == valid_type; });
+      // set previous_type to be checked in next if-statement
+      previous_type = (first_valid == lbra_itr) ? (--lbra_itr)->type : first_valid->type;
+    }
+
     if (std::find(valid_preceding_inst_types.begin(),
                   valid_preceding_inst_types.end(),
-                  _items.back().type) == valid_preceding_inst_types.end()) {
+                  previous_type) == valid_preceding_inst_types.end()) {
       CUDF_FAIL("invalid regex pattern: nothing to repeat at position " +
                 std::to_string(_expr_ptr - _pattern_begin - 1));
     }
