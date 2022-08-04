@@ -22,6 +22,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/reduce.h>
 
 namespace cudf {

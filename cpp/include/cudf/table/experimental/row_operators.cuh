@@ -32,9 +32,15 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/detail/use_default.h>
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/iterator_adaptor.h>
+#include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/iterator_facade.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
@@ -825,7 +831,7 @@ class two_table_comparator {
 
 namespace hash {
 class row_hasher;
-}
+}  // namespace hash
 
 namespace equality {
 
@@ -1378,9 +1384,9 @@ class element_hasher {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
+  Nullate _check_nulls;        ///< Whether to check for nulls
   uint32_t _seed;              ///< The seed to use for hashing
   hash_value_type _null_hash;  ///< Hash value to use for null elements
-  Nullate _check_nulls;        ///< Whether to check for nulls
 };
 
 /**
@@ -1394,8 +1400,6 @@ class device_row_hasher {
   friend class row_hasher;  ///< Allow row_hasher to access private members.
 
  public:
-  device_row_hasher() = delete;
-
   /**
    * @brief Return the hash value of a row in the given table.
    *
@@ -1484,12 +1488,12 @@ class device_row_hasher {
   CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
                                      table_device_view t,
                                      uint32_t seed = DEFAULT_HASH_SEED) noexcept
-    : _table{t}, _seed(seed), _check_nulls{check_nulls}
+    : _check_nulls{check_nulls}, _table{t}, _seed(seed)
   {
   }
 
-  table_device_view const _table;
   Nullate const _check_nulls;
+  table_device_view const _table;
   uint32_t const _seed;
 };
 
@@ -1539,11 +1543,14 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = detail::default_hash, typename Nullate>
-  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
-                                                          uint32_t seed   = DEFAULT_HASH_SEED) const
+  template <template <typename> class hash_function = detail::default_hash,
+            template <template <typename> class, typename>
+            class DeviceRowHasher = device_row_hasher,
+            typename Nullate>
+  DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
+                                                        uint32_t seed   = DEFAULT_HASH_SEED) const
   {
-    return device_row_hasher<hash_function, Nullate>(nullate, *d_t, seed);
+    return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, seed);
   }
 
  private:
