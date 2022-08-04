@@ -25,25 +25,34 @@ template <typename Type>
 void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 {
   cudf::rmm_pool_raii pool_raii;
+  const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
-  auto const input_table = [&] {
+  auto const keys_table = [&] {
     data_profile profile;
     profile.set_null_frequency(std::nullopt);
     profile.set_cardinality(0);
     profile.set_distribution_params<int32_t>(
       cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, 100);
+    return create_random_table({cudf::type_to_id<int32_t>()}, row_count{size}, profile);
+  }();
+
+  auto const vals_table = [&] {
+    data_profile profile;
+    if (const auto null_freq = state.get_float64("null_frequency"); null_freq > 0) {
+      profile.set_null_frequency({null_freq});
+    } else {
+      profile.set_null_frequency(std::nullopt);
+    }
+    profile.set_cardinality(0);
     profile.set_distribution_params<Type>(cudf::type_to_id<Type>(),
                                           distribution_id::UNIFORM,
                                           static_cast<Type>(0),
                                           static_cast<Type>(1000));
-
-    const auto size = static_cast<cudf::size_type>(state.get_int64("NumRows"));
-    return create_random_table(
-      {cudf::type_to_id<int32_t>(), cudf::type_to_id<Type>()}, row_count{size}, profile);
+    return create_random_table({cudf::type_to_id<Type>()}, row_count{size}, profile);
   }();
 
-  auto const& keys = input_table->get_column(0);
-  auto const& vals = input_table->get_column(1);
+  auto const& keys = keys_table->get_column(0);
+  auto const& vals = vals_table->get_column(0);
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
 
@@ -58,6 +67,7 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 }
 
 NVBENCH_BENCH_TYPES(bench_groupby_max,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int16_t, int32_t, int64_t, float, double>))
+                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
   .set_name("groupby_max")
-  .add_int64_power_of_two_axis("NumRows", {12, 16, 20, 24});
+  .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
+  .add_float64_axis("null_frequency", {0, 0.1, 0.9});
