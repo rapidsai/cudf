@@ -62,6 +62,18 @@ struct aggregation_request {
 };
 
 /**
+ * @brief
+ */
+template <typename... Args>
+auto make_aggregation_request(column_view const& values, Args&&... args)
+{
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  (aggregations.emplace_back(std::forward<Args>(args)), ...);
+
+  return cudf::groupby::aggregation_request{values, std::move(aggregations)};
+}
+
+/**
  * @brief Request for groupby aggregation(s) for scanning a column.
  *
  * The group membership of each `value[i]` is determined by the corresponding
@@ -75,6 +87,18 @@ struct scan_request {
   column_view values;  ///< The elements to aggregate
   std::vector<std::unique_ptr<groupby_scan_aggregation>> aggregations;  ///< Desired aggregations
 };
+
+/**
+ * @brief
+ */
+template <typename... Args>
+auto make_scan_request(column_view const& values, Args&&... args)
+{
+  std::vector<std::unique_ptr<cudf::groupby_scan_aggregation>> aggregations;
+  (aggregations.emplace_back(std::forward<Args>(args)), ...);
+
+  return cudf::groupby::scan_request{values, std::move(aggregations)};
+}
 
 /**
  * @brief The result(s) of an `aggregation_request`
