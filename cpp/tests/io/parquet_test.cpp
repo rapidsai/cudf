@@ -768,7 +768,7 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({false, false, false, false, false, false, false, false, false});
+      .convert_binary_to_strings(false);
   auto result = cudf_io::read_parquet(in_opts);
 
   auto original_cols = write_tbl->release();
@@ -4342,22 +4342,25 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   auto expected_mixed = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(5, expected_mixed->num_columns());
 
+  // verify we can convert to strings
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({true, true, true, true, true});
+      .convert_binary_to_strings(true);
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_string->view(), result.tbl->view());
 
+  // verify default is to read as binary
   cudf_io::parquet_reader_options default_in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
   result = cudf_io::read_parquet(default_in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_string->view(), result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_mixed->view(), result.tbl->view());
 
+  // verify we can read as binary
   cudf_io::parquet_reader_options mixed_in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({true, true, true, false, false});
+      .convert_binary_to_strings(false);
   result = cudf_io::read_parquet(mixed_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_mixed->view(), result.tbl->view());
@@ -4411,7 +4414,7 @@ TEST_F(ParquetReaderTest, NestedByteArray)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({true, true, true, true, true, true, true, true});
+      .convert_binary_to_strings(true);
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
@@ -4449,7 +4452,7 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .convert_binary_to_strings({true, true});
+      .convert_binary_to_strings(true);
   auto result = cudf_io::read_parquet(in_opts);
 
   auto source = cudf_io::datasource::create(filepath);

@@ -197,10 +197,7 @@ class reader::impl {
    */
   bool should_write_byte_array(int col)
   {
-    return _output_columns[col].type.id() == type_id::STRING &&
-           (!_force_all_binary_columns_as_strings ||
-            (_force_binary_columns_as_strings.has_value() &&
-             !_force_binary_columns_as_strings.value()[col]));
+    return _output_columns[col].type.id() == type_id::STRING && !_force_binary_columns_as_strings;
   }
 
  private:
@@ -217,9 +214,8 @@ class reader::impl {
   // _output_columns associated schema indices
   std::vector<int> _output_column_schemas;
 
-  bool _strings_to_categorical = false;
-  std::optional<std::vector<bool>> _force_binary_columns_as_strings;
-  bool _force_all_binary_columns_as_strings = false;
+  bool _strings_to_categorical          = false;
+  bool _force_binary_columns_as_strings = false;
   data_type _timestamp_type{type_id::EMPTY};
 };
 
