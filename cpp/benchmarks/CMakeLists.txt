@@ -289,6 +289,7 @@ ConfigureBench(
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
+ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
