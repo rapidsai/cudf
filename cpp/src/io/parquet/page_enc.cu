@@ -1535,38 +1535,28 @@ __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* s
                                                          bool is_min,
                                                          size_type truncate_length)
 {
-  uint8_t dtype_len;
   switch (dtype) {
-    case dtype_bool: dtype_len = 1; break;
+    case dtype_bool: return {stats_val, sizeof(bool)};
     case dtype_int8:
     case dtype_int16:
     case dtype_int32:
-    case dtype_date32:
-    case dtype_float32: dtype_len = 4; break;
+    case dtype_date32: return {stats_val, sizeof(int32_t)};
+    case dtype_float32: {
+      auto const fp_scratch = static_cast<float*>(scratch);
+      fp_scratch[0]         = stats_val->fp_val;
+      return {scratch, sizeof(float)};
+    }
     case dtype_int64:
     case dtype_timestamp64:
     case dtype_float64:
-    case dtype_decimal64: dtype_len = 8; break;
-    case dtype_decimal128: dtype_len = 16; break;
-    case dtype_string:
-    case dtype_byte_array:
-    default: dtype_len = 0; break;
-  }
-
-  if (dtype == dtype_string) {
-    return truncate_string(stats_val->str_val, is_min, scratch, truncate_length);
-  } else if (dtype == dtype_byte_array) {
-    return truncate_byte_array(stats_val->byte_val, is_min, scratch, truncate_length);
-  } else {
-    if (dtype == dtype_float32) {  // Convert from double to float32
-      auto const fp_scratch = static_cast<float*>(scratch);
-      fp_scratch[0]         = stats_val->fp_val;
-      return {scratch, dtype_len};
-    } else if (dtype == dtype_decimal128) {
+    case dtype_decimal64: return {stats_val, sizeof(int64_t)};
+    case dtype_decimal128:
       byte_reverse128(stats_val->d128_val, scratch);
-      return {scratch, dtype_len};
-    }
-    return {stats_val, dtype_len};
+      return {scratch, sizeof(__int128_t)};
+    case dtype_string: return truncate_string(stats_val->str_val, is_min, scratch, truncate_length);
+    case dtype_byte_array:
+      return truncate_byte_array(stats_val->byte_val, is_min, scratch, truncate_length);
+    default: CUDF_UNREACHABLE("Invalid statistics data type");
   }
 }
 
