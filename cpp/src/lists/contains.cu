@@ -150,7 +150,7 @@ struct search_list_nested_types_fn {
   duplicate_find_option const find_option;
   KeyValidityIter const key_validity_iter;
   EqComparator const d_comp;
-  bool search_key_is_scalar;
+  bool const search_key_is_scalar;
 
   search_list_nested_types_fn(duplicate_find_option const find_option,
                               KeyValidityIter const& key_validity_iter,
