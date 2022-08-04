@@ -259,8 +259,8 @@ class device_row_comparator {
                         PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
-      _l_dremel_device_views(l_dremel_device_views),
-      _r_dremel_device_views(r_dremel_device_views),
+      _l_dremel(l_dremel_device_views),
+      _r_dremel(r_dremel_device_views),
       _check_nulls{check_nulls},
       _depth{depth},
       _column_order{column_order},
@@ -336,8 +336,7 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::struct_view> and
-                             not std::is_same_v<Element, cudf::list_view>)>
+                             not cudf::is_nested<Element>())>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
                                                               size_type const) const noexcept
     {
@@ -411,14 +410,14 @@ class device_row_comparator {
       auto r_start         = r_offsets[rhs_element_index];
       auto r_end           = r_offsets[rhs_element_index + 1];
 
-      // This comparator will be used when we actually need to compare elements
+      // This comparator will be used to compare leaf (non-nested) data types.
       auto comparator =
         element_comparator{_check_nulls, lcol, rcol, _null_precedence, _depth, _comparator};
 
       // Loop over each element in the encoding. Note that this includes nulls
-      // and empty lists, so not every index i/j correspondings to an actual
-      // element in the child column. The index k is used to keep track of the
-      // current child element that we're actually comparing.
+      // and empty lists, so not every index corresponds to an actual element
+      // in the child column. The element_index is used to keep track of the current
+      // child element that we're actually comparing.
       weak_ordering state{weak_ordering::EQUIVALENT};
       for (int left_dremel_index = l_start, right_dremel_index = r_start, element_index = 0;
            left_dremel_index < l_end and right_dremel_index < r_end;
@@ -442,11 +441,11 @@ class device_row_comparator {
         // Third early exit: This case has two branches.
         // 1) If we are at the maximum definition level, then we actually have
         //    an underlying element to compare, not just an empty list or a
-        //    null. Therefore, we access the kth element of each list and
-        //    compare the values.
+        //    null. Therefore, we access the element_index element of each list
+        //    and compare the values.
         // 2) If we are 1 - the maximum definition level and the column is
-        //    nullable, we know that we are looking at a element in the child
-        //    column. In this case we simply skip to the next element.
+        //    nullable, the current element must be a null in the leaf data.
+        //    In this case we ignore the null and skip to the next element.
         if (l_def_levels[left_dremel_index] == l_max_def_level) {
           int last_null_depth                    = _depth;
           cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
@@ -465,10 +464,7 @@ class device_row_comparator {
       // they are of the same length. Otherwise, the shorter of the two is less
       // than the longer. This final check determines the appropriate resulting
       // ordering by checking how many total elements each list is composed of.
-      state = (l_end - l_start < r_end - r_start)   ? weak_ordering::LESS
-              : (l_end - l_start > r_end - r_start) ? weak_ordering::GREATER
-                                                    : weak_ordering::EQUIVALENT;
-      return cuda::std::pair(state, _depth);
+      return cuda::std::pair(detail::compare_elements(l_end - l_start, r_end - r_start), _depth);
     }
 
    private:
@@ -512,8 +508,8 @@ class device_row_comparator {
                                              null_precedence,
                                              depth,
                                              _comparator,
-                                             _l_dremel_device_views[i],
-                                             _r_dremel_device_views[i]};
+                                             _l_dremel[i],
+                                             _r_dremel[i]};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
@@ -531,8 +527,8 @@ class device_row_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  device_span<detail::dremel_device_view const> const _l_dremel_device_views;
-  device_span<detail::dremel_device_view const> const _r_dremel_device_views;
+  device_span<detail::dremel_device_view const> const _l_dremel;
+  device_span<detail::dremel_device_view const> const _r_dremel;
   Nullate const _check_nulls;
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
@@ -648,7 +644,7 @@ struct preprocessed_table {
    * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
    *
    * @param table The table to preprocess
-   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * @param column_order Optional, device array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If empty, it is assumed all columns are
    * sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
