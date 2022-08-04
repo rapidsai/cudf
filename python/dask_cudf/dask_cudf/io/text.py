@@ -39,7 +39,7 @@ def read_text(path, chunksize="256 MiB", **kwargs):
                 kwargs1 = kwargs.copy()
                 kwargs1["byte_range"] = (
                     start,
-                    chunksize - 1,
+                    chunksize,
                 )  # specify which chunk of the file we care about
 
                 dsk[(name, i)] = (apply, cudf.read_text, [fn], kwargs1)
