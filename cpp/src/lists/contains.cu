@@ -237,8 +237,8 @@ void index_of_non_nested(InputIterator input_it,
 }
 
 /**
- * @brief Function to search for key element(s) in the corresponding rows of a lists column,
- * specialized for nested types.
+ * @brief Function to search for index of key element(s) in the corresponding rows of a lists
+ * column, specialized for nested types.
  *
  * @param input_it The iterator pointing to lists of the input lists column
  * @param num_rows The number of input rows
@@ -297,7 +297,8 @@ void index_of_nested_types(InputIterator input_it,
 }
 
 /**
- * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
+ * @brief Dispatch functor to search for index of key element(s) in the corresponding rows of a
+ * lists column.
  */
 struct dispatch_index_of {
   template <typename Element, typename SearchKeyType>
