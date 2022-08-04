@@ -285,6 +285,8 @@ void index_of_nested_types(InputIterator input_it,
  * lists column.
  */
 struct dispatch_index_of {
+  // SFINAE with conditional return type because we need to support device lambda in this function.
+  // This is required due to a limitation of nvcc.
   template <typename Element, typename SearchKeyType>
   std::enable_if_t<is_supported_type<Element>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
