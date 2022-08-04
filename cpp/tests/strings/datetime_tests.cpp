@@ -181,30 +181,50 @@ TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
 
 TEST_F(StringsDatetimeTest, ToTimestampVariableFractions)
 {
-  cudf::test::strings_column_wrapper strings{"01:02:03.000001000",
-                                             "01:02:03.000001",
-                                             "01:02:03.1",
-                                             "01:02:03.01",
-                                             "01:02:03.0098700",
-                                             "01:02:03.0023456"};
-  auto strings_view = cudf::strings_column_view(strings);
+  cudf::test::strings_column_wrapper test1{"01:02:03.000001000",
+                                           "01:02:03.000001",
+                                           "01:02:03.1",
+                                           "01:02:03.01",
+                                           "01:02:03.0098700",
+                                           "01:02:03.0023456"};
+  auto strings_view = cudf::strings_column_view(test1);
   auto results      = cudf::strings::to_timestamps(
     strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%H:%M:%S.%9f");
   auto durations =
     cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
 
-  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected{
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected1{
     cudf::duration_ns{3723000001000},
     cudf::duration_ns{3723000001000},
     cudf::duration_ns{3723100000000},
     cudf::duration_ns{3723010000000},
     cudf::duration_ns{3723009870000},
     cudf::duration_ns{3723002345600}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected1);
 
   results = cudf::strings::is_timestamp(strings_view, "%H:%M:%S.%f");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results,
                                  cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1});
+
+  cudf::test::strings_column_wrapper test2{"01:02:03.100001Z",
+                                           "01:02:03.001Z",
+                                           "01:02:03.1Z",
+                                           "01:02:03.01Z",
+                                           "01:02:03.0098Z",
+                                           "01:02:03.00234Z"};
+  strings_view = cudf::strings_column_view(test2);
+  results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS}, "%H:%M:%S.%6f%Z");
+  durations = cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_MICROSECONDS});
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_us> expected2{
+    cudf::duration_us{3723100001},
+    cudf::duration_us{3723001000},
+    cudf::duration_us{3723100000},
+    cudf::duration_us{3723010000},
+    cudf::duration_us{3723009800},
+    cudf::duration_us{3723002340}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected2);
 }
 
 TEST_F(StringsDatetimeTest, ToTimestampYear)
