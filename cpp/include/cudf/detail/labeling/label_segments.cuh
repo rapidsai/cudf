@@ -23,8 +23,10 @@
 #include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/iterator_traits.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {

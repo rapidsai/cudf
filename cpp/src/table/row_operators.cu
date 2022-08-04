@@ -17,7 +17,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -27,10 +26,7 @@
 
 #include <jit/type.hpp>
 
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace experimental {
