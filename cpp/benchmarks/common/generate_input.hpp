@@ -406,6 +406,14 @@ class data_profile_builder {
   data_profile profile;
 
  public:
+  template <typename T, typename Type_enum>
+  data_profile_builder& distribution(Type_enum type_or_group, distribution_id dist)
+  {
+    auto const range = default_range<T>();
+    profile.set_distribution_params(type_or_group, dist, range.first, range.second);
+    return *this;
+  }
+
   template <class... T>
   data_profile_builder& distribution(T&&... t)
   {
@@ -418,16 +426,24 @@ class data_profile_builder {
     profile.set_bool_probability(p);
     return *this;
   }
-  data_profile_builder& null_frequency(std::optional<double> f)
+  data_profile_builder& null_frequency(double f)
   {
     profile.set_null_frequency(f);
     return *this;
   }
+
+  data_profile_builder& exclude_validity()
+  {
+    profile.set_null_frequency(nullopt);
+    return *this;
+  }
+
   data_profile_builder& cardinality(cudf::size_type c)
   {
     profile.set_cardinality(c);
     return *this;
   }
+  
   data_profile_builder& avg_run_length(cudf::size_type avg_rl)
   {
     profile.set_avg_run_length(avg_rl);
