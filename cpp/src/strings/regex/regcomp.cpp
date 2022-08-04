@@ -145,6 +145,8 @@ int32_t const* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
+static constexpr auto MAX_REGEX_CHAR = std::numeric_limits<char32_t>::max();
+
 /**
  * @brief Converts pattern into regex classes
  */
@@ -254,7 +256,7 @@ class regex_parser {
       ranges.push_back({'0', '9'});
     } else {
       ranges.push_back({0, '0' - 1});
-      ranges.push_back({'9' + 1, std::numeric_limits<char32_t>::max()});
+      ranges.push_back({'9' + 1, MAX_REGEX_CHAR});
     }
   }
 
@@ -265,7 +267,7 @@ class regex_parser {
       ranges.push_back({'\t', ' '});
     } else {
       ranges.push_back({0, '\t' - 1});
-      ranges.push_back({' ' + 1, std::numeric_limits<char32_t>::max()});
+      ranges.push_back({' ' + 1, MAX_REGEX_CHAR});
     }
   }
 
@@ -281,7 +283,7 @@ class regex_parser {
       add_ascii_digit_class(ranges, negated);
       ranges.back().last = 'A' - 1;
       ranges.push_back({'Z' + 1, 'a' - 1});  // {'_'-1, '_' + 1}
-      ranges.push_back({'z' + 1, std::numeric_limits<char32_t>::max()});
+      ranges.push_back({'z' + 1, MAX_REGEX_CHAR});
     }
   }
 
@@ -328,7 +330,7 @@ class regex_parser {
             if (is_ascii(_flags)) {
               add_ascii_word_class(ranges, chr == 'W');
             } else {
-              builtins |= (chr == 'w' ? cclass_w.builtins : cclass_W.builtins);
+              builtins |= (chr == 'W' ? cclass_W.builtins : cclass_w.builtins);
             }
             std::tie(is_quoted, chr) = next_char();
             continue;
@@ -337,7 +339,7 @@ class regex_parser {
             if (is_ascii(_flags)) {
               add_ascii_space_class(ranges, chr == 'S');
             } else {
-              builtins |= (chr == 's' ? cclass_s.builtins : cclass_S.builtins);
+              builtins |= (chr == 'S' ? cclass_S.builtins : cclass_s.builtins);
             }
             std::tie(is_quoted, chr) = next_char();
             continue;
@@ -346,7 +348,7 @@ class regex_parser {
             if (is_ascii(_flags)) {
               add_ascii_digit_class(ranges, chr == 'D');
             } else {
-              builtins |= (chr == 'd' ? cclass_d.builtins : cclass_D.builtins);
+              builtins |= (chr == 'D' ? cclass_D.builtins : cclass_d.builtins);
             }
             std::tie(is_quoted, chr) = next_char();
             continue;
@@ -713,7 +715,7 @@ class regex_parser {
   }
 
  public:
-  regex_parser(const char32_t* pattern, regex_flags flags, reprog& prog)
+  regex_parser(const char32_t* pattern, regex_flags const flags, reprog& prog)
     : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern), _flags(flags)
   {
     auto const dot_type = is_dotall(_flags) ? ANYNL : ANY;
