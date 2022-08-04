@@ -330,7 +330,7 @@ class regex_parser {
             if (is_ascii(_flags)) {
               add_ascii_word_class(ranges, chr == 'W');
             } else {
-              builtins |= (chr == 'W' ? cclass_W.builtins : cclass_w.builtins);
+              builtins |= (chr == 'w' ? cclass_w.builtins : cclass_W.builtins);
             }
             std::tie(is_quoted, chr) = next_char();
             continue;
@@ -339,7 +339,7 @@ class regex_parser {
             if (is_ascii(_flags)) {
               add_ascii_space_class(ranges, chr == 'S');
             } else {
-              builtins |= (chr == 'S' ? cclass_S.builtins : cclass_s.builtins);
+              builtins |= (chr == 's' ? cclass_s.builtins : cclass_S.builtins);
             }
             std::tie(is_quoted, chr) = next_char();
             continue;
@@ -348,7 +348,7 @@ class regex_parser {
             if (is_ascii(_flags)) {
               add_ascii_digit_class(ranges, chr == 'D');
             } else {
-              builtins |= (chr == 'D' ? cclass_D.builtins : cclass_d.builtins);
+              builtins |= (chr == 'd' ? cclass_d.builtins : cclass_D.builtins);
             }
             std::tie(is_quoted, chr) = next_char();
             continue;
