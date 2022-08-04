@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from typing import Callable
+from typing import Any, Callable, Dict, List
 
 import cachetools
 import cupy as cp
@@ -10,10 +10,6 @@ from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
-from strings_udf import ptxpath
-from strings_udf._typing import str_view_arg_handler, string_view
-
-from cudf.api.types import is_string_dtype
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.masked_typing import MaskedType
@@ -38,6 +34,8 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
+arg_handlers: List[Any] = []
+files: List[Any] = []
 
 
 @_cudf_nvtx_annotate
@@ -119,6 +117,9 @@ def _supported_cols_from_frame(frame):
     }
 
 
+masked_array_types: Dict[Any, Any] = {}
+
+
 def _masked_array_type_from_col(col):
     """
     Return a type representing a tuple of arrays,
@@ -126,9 +127,10 @@ def _masked_array_type_from_col(col):
     corresponding to `dtype`, and the second an
     array of bools representing a mask.
     """
-    if is_string_dtype(col.dtype):
-        # strings_udf library provides a pointer directly to the data
-        col_type = CPointer(string_view)
+
+    col_type = masked_array_types.get(col.dtype)
+    if col_type:
+        col_type = CPointer(col_type)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
         col_type = nb_scalar_ty[::1]
@@ -228,21 +230,21 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])(
-        _kernel
-    )
+    kernel = cuda.jit(sig, link=files, extensions=arg_handlers)(_kernel)
 
     return kernel
 
 
-def _launch_arg_from_col(col):
-    from strings_udf._lib.cudf_jit_udf import to_string_view_array
+launch_arg_getters: Dict[Any, Any] = {}
 
-    data = (
-        col.data
-        if not is_string_dtype(col.dtype)
-        else to_string_view_array(col)
-    )
+
+def _launch_arg_from_col(col):
+    getter = launch_arg_getters.get(col.dtype)
+    if getter:
+        data = getter(col)
+    else:
+        data = col.data
+
     mask = col.mask
     if mask is None:
         return data

@@ -7,6 +7,9 @@ from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 from cudf.core.udf import api
+from cudf.core.udf import utils
+from cudf.core.dtypes import dtype
+import numpy as np
 
 units = ["ns", "ms", "us", "s"]
 datetime_cases = {types.NPDatetime(u) for u in units}
@@ -25,6 +28,9 @@ _STRING_UDFS_ENABLED = False
 try:
     from . import strings_typing
     from . import strings_lowering
+    from strings_udf import ptxpath
+    from strings_udf._typing import string_view, str_view_arg_handler
+    from strings_udf._lib.cudf_jit_udf import to_string_view_array
 
     # add an overload of MaskedType.__init__(string_view, bool)
     cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
@@ -37,6 +43,11 @@ try:
     )
 
     supported_masked_types |= {strings_typing.string_view}
+    utils.launch_arg_getters[dtype("O")] = to_string_view_array
+    utils.masked_array_types[dtype("O")] = string_view
+    utils.files.append(ptxpath)
+    utils.arg_handlers.append(str_view_arg_handler)
+
     _STRING_UDFS_ENABLED = True
 except (NotImplementedError, ImportError):
     # allow cuDF to work without strings_udf
