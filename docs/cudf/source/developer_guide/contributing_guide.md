@@ -108,4 +108,4 @@ Any attempt to write pure Cython code for this purpose should be justified with 
 
 ## Exception handling
 
-TBD, to be written by Michael.
+This section is under development, see https://github.com/rapidsai/cudf/pull/7917.
