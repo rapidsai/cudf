@@ -57,11 +57,7 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
 }
 
-NVBENCH_BENCH_TYPES(bench_groupby_max, NVBENCH_TYPE_AXES(nvbench::type_list<float, double>))
-  .set_name("groupby_max_floating_point")
-  .add_int64_power_of_two_axis("NumRows", {12, 16, 20, 24});
-
 NVBENCH_BENCH_TYPES(bench_groupby_max,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int16_t, int32_t, int64_t>))
-  .set_name("groupby_max_integer")
+                    NVBENCH_TYPE_AXES(nvbench::type_list<int16_t, int32_t, int64_t, float, double>))
+  .set_name("groupby_max")
   .add_int64_power_of_two_axis("NumRows", {12, 16, 20, 24});
