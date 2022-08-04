@@ -1425,8 +1425,10 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<uint8_t co
   // we know at this point that truncate_length < size_bytes, so
   // there is a character at [len]. work backwards until we find
   // the start of a unicode character.
-  auto len  = truncate_length;
-  while (not strings::detail::is_begin_utf8_char(str[len]) && len > 0) { len--; }
+  auto len = truncate_length;
+  while (not strings::detail::is_begin_utf8_char(str[len]) && len > 0) {
+    len--;
+  }
 
   if (len != 0) {
     if (is_min) { return {str.data(), len}; }
@@ -1568,28 +1570,6 @@ __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* s
   }
 }
 
-/**
- * @brief Find a min value of the proper form to be included in Parquet statistics structures.
- */
-__device__ std::pair<const void*, uint32_t> get_min(const statistics_val* stats_val,
-                                                    statistics_dtype dtype,
-                                                    void* scratch,
-                                                    size_type truncate_length)
-{
-  return get_extremum(stats_val, dtype, scratch, true, truncate_length);
-}
-
-/**
- * @brief Find a max value of the proper form to be included in Parquet statistics structures.
- */
-__device__ std::pair<const void*, uint32_t> get_max(const statistics_val* stats_val,
-                                                    statistics_dtype dtype,
-                                                    void* scratch,
-                                                    size_type truncate_length)
-{
-  return get_extremum(stats_val, dtype, scratch, false, truncate_length);
-}
-
 }  // namespace
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
@@ -1601,9 +1581,11 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
-    auto const [max_ptr, max_size] = get_max(&s->max_value, dtype, scratch, NO_TRUNC_STATS);
+    auto const [max_ptr, max_size] =
+      get_extremum(&s->max_value, dtype, scratch, false, NO_TRUNC_STATS);
     encoder.field_binary(5, max_ptr, max_size);
-    auto const [min_ptr, min_size] = get_min(&s->min_value, dtype, scratch, NO_TRUNC_STATS);
+    auto const [min_ptr, min_size] =
+      get_extremum(&s->min_value, dtype, scratch, true, NO_TRUNC_STATS);
     encoder.field_binary(6, min_ptr, min_size);
   }
   encoder.end(&end);
@@ -1906,20 +1888,22 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    auto const [min_ptr, min_size] = get_min(&column_stats[pageidx + page].min_value,
-                                             col_g.stats_dtype,
-                                             scratch,
-                                             column_index_truncate_length);
+    auto const [min_ptr, min_size] = get_extremum(&column_stats[pageidx + page].min_value,
+                                                  col_g.stats_dtype,
+                                                  scratch,
+                                                  true,
+                                                  column_index_truncate_length);
     encoder.put_binary(min_ptr, min_size);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    auto const [max_ptr, max_size] = get_max(&column_stats[pageidx + page].max_value,
-                                             col_g.stats_dtype,
-                                             scratch,
-                                             column_index_truncate_length);
+    auto const [max_ptr, max_size] = get_extremum(&column_stats[pageidx + page].max_value,
+                                                  col_g.stats_dtype,
+                                                  scratch,
+                                                  false,
+                                                  column_index_truncate_length);
     encoder.put_binary(max_ptr, max_size);
   }
   encoder.field_list_end(3);
