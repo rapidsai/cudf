@@ -29,6 +29,7 @@
 
 #include <thrust/functional.h>
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
