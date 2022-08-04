@@ -52,43 +52,6 @@ std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
 
 }  // namespace
 
-template <template <typename> class hash_function>
-std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
-                                               uint32_t seed,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
-{
-  auto output = make_numeric_column(
-    data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
-
-  if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
-
-  table_view const leaf_table(to_leaf_columns(input.begin(), input.end()));
-  auto const device_input = table_device_view::create(leaf_table, stream);
-  auto output_view        = output->mutable_view();
-
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    output_view.begin<int32_t>(),
-    output_view.end<int32_t>(),
-    [device_input = *device_input, nulls = has_nulls(leaf_table), seed] __device__(auto row_index) {
-      return detail::accumulate(
-        device_input.begin(),
-        device_input.end(),
-        seed,
-        [row_index, nulls] __device__(auto hash, auto column) {
-          return cudf::type_dispatcher(
-            column.type(),
-            experimental::row::hash::element_hasher<hash_function, nullate::DYNAMIC>{
-              nullate::DYNAMIC{nulls}, hash, hash},
-            column,
-            row_index);
-        });
-    });
-
-  return output;
-}
-
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              uint32_t seed,
@@ -97,8 +60,6 @@ std::unique_ptr<column> hash(table_view const& input,
 {
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
-    case (hash_id::HASH_SERIAL_MURMUR3):
-      return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3): return spark_murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     default: CUDF_FAIL("Unsupported hash function.");

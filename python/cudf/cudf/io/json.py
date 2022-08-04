@@ -30,7 +30,7 @@ def read_json(
         raise ValueError("cudf engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-    if engine == "cudf":
+    if engine == "cudf" or engine == "cudf_experimental":
         # Multiple sources are passed as a list. If a single source is passed,
         # wrap it in a list for unified processing downstream.
         if not is_list_like(path_or_buf):
@@ -57,10 +57,13 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        df = cudf.DataFrame._from_data(
-            *libjson.read_json(
-                filepaths_or_buffers, dtype, lines, compression, byte_range
-            )
+        df = libjson.read_json(
+            filepaths_or_buffers,
+            dtype,
+            lines,
+            compression,
+            byte_range,
+            engine == "cudf_experimental",
         )
     else:
         warnings.warn(

@@ -374,6 +374,19 @@ constexpr inline bool is_floating_point(data_type type)
 }
 
 /**
+ * @brief Indicates whether `T` is a std::byte type.
+ *
+ * @tparam T The type to verify
+ * @return true `type` is std::byte
+ * @return false `type` is not std::byte
+ */
+template <typename T>
+constexpr inline bool is_byte()
+{
+  return std::is_same_v<std::remove_cv_t<T>, std::byte>;
+}
+
+/**
  * @brief Indicates whether `T` is a Boolean type.
  *
  * @param type The `data_type` to verify
@@ -561,7 +574,8 @@ constexpr inline bool is_chrono(data_type type)
 template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
-  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() or
+         cudf::is_byte<T>();
 }
 
 /**

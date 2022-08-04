@@ -1758,3 +1758,25 @@ def test_orc_writer_zlib_compression(list_struct_buff):
             pytest.mark.xfail(reason="nvcomp build doesn't have deflate")
         else:
             raise e
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_orc_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_orc(buffer, index=index)
+
+    expected = pd.read_orc(buffer, columns=columns)
+    got = cudf.read_orc(buffer, columns=columns)
+
+    if columns:
+        # TODO: Remove workaround after this issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/47944
+        assert_eq(
+            expected.sort_index(axis=1),
+            got.sort_index(axis=1),
+            check_index_type=True,
+        )
+    else:
+        assert_eq(expected, got, check_index_type=True)
