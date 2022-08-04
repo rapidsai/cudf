@@ -170,7 +170,7 @@ class TransitionTable {
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
   };
 
-  template <typename StateIdT, typename = std::void_t<decltype(ItemT{std::declval<StateIdT>()})>>
+  template <typename StateIdT>
   static void InitDeviceTransitionTable(hostdevice_vector<KernelParameter>& transition_table_init,
                                         std::vector<std::vector<StateIdT>> const& translation_table,
                                         rmm::cuda_stream_view stream)
@@ -179,10 +179,11 @@ class TransitionTable {
     for (std::size_t state = 0; state < translation_table.size(); ++state) {
       for (std::size_t symbol = 0; symbol < translation_table[state].size(); ++symbol) {
         CUDF_EXPECTS(
-          translation_table[state][symbol] <= std::numeric_limits<ItemT>::max(),
+          static_cast<int64_t>(translation_table[state][symbol]) <=
+            std::numeric_limits<ItemT>::max(),
           "Target state index value exceeds value representable by the transition table's type");
         transition_table_init.host_ptr()->transitions[symbol * MAX_NUM_STATES + state] =
-          translation_table[state][symbol];
+          static_cast<ItemT>(translation_table[state][symbol]);
       }
     }
 

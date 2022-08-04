@@ -38,7 +38,7 @@ using StateT = char;
 /**
  * @brief Definition of the DFA's states
  */
-enum dfa_states : StateT {
+enum class dfa_states : StateT {
   // The state being active while being outside of a string. When encountering an opening bracket
   // or curly brace, we push it onto the stack. When encountering a closing bracket or brace, we
   // pop from the stack.
@@ -56,25 +56,30 @@ enum dfa_states : StateT {
   TT_NUM_STATES
 };
 
+// Aliases for readability of the transition table
+constexpr auto TT_OOS = dfa_states::TT_OOS;
+constexpr auto TT_STR = dfa_states::TT_STR;
+constexpr auto TT_ESC = dfa_states::TT_ESC;
+
 /**
  * @brief Definition of the symbol groups
  */
 enum class dfa_symbol_group_id : uint32_t {
-  OPENING_BRACE_SG,    ///< Opening brace SG: {
-  OPENING_BRACKET_SG,  ///< Opening bracket SG: [
-  CLOSING_BRACKET_SG,  ///< Closing brace SG: }
-  CLOSING_BRACKET,     ///< Closing bracket SG: ]
-  QUOTE_CHAR,          ///< Quote character SG: "
-  ESCAPE_CHAR,         ///< Escape character SG: '\'
-  OTHER_SYMBOLS,       ///< SG implicitly matching all other characters
-  NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
+  OPENING_BRACE,     ///< Opening brace SG: {
+  OPENING_BRACKET,   ///< Opening bracket SG: [
+  CLOSING_BRACE,     ///< Closing brace SG: }
+  CLOSING_BRACKET,   ///< Closing bracket SG: ]
+  QUOTE_CHAR,        ///< Quote character SG: "
+  ESCAPE_CHAR,       ///< Escape character SG: '\'
+  OTHER_SYMBOLS,     ///< SG implicitly matching all other characters
+  NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
 };
 
 // The i-th string representing all the characters of a symbol group
 const std::vector<std::string> symbol_groups = {"{", "[", "}", "]", "\"", "\\"};
 
 // Transition table
-const std::vector<std::vector<StateT>> transition_table = {
+const std::vector<std::vector<dfa_states>> transition_table = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
   /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_ESC, TT_STR},
@@ -88,7 +93,7 @@ const std::vector<std::vector<std::vector<char>>> translation_table = {
   /* TT_ESC    */ {{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}};
 
 // The DFA's starting state
-constexpr auto start_state = TT_OOS;
+constexpr auto start_state = static_cast<StateT>(TT_OOS);
 }  // namespace to_stack_op
 
 // JSON tokenizer pushdown automaton
@@ -100,27 +105,27 @@ using StateT = char;
 /**
  * @brief Symbol groups for the input alphabet for the pushdown automaton
  */
-enum symbol_group_id : PdaSymbolGroupIdT {
+enum class symbol_group_id : PdaSymbolGroupIdT {
   /// Opening brace
-  OPENING_BRACE_SG,
+  OPENING_BRACE,
   /// Opening bracket
-  OPENING_BRACKET_SG,
+  OPENING_BRACKET,
   /// Closing brace
-  CLOSING_BRACE_SG,
+  CLOSING_BRACE,
   /// Closing bracket
-  CLOSING_BRACKET_SG,
+  CLOSING_BRACKET,
   /// Quote
-  QUOTE_SG,
+  QUOTE,
   /// Escape
-  ESCAPE_SG,
+  ESCAPE,
   /// Comma
-  COMMA_SG,
+  COMMA,
   /// Colon
-  COLON_SG,
+  COLON,
   /// Whitespace
-  WHITE_SPACE_SG,
+  WHITE_SPACE,
   /// Other (any input symbol not assigned to one of the above symbol groups)
-  OTHER_SG,
+  OTHER,
   /// Total number of symbol groups amongst which to differentiate
   NUM_PDA_INPUT_SGS
 };
@@ -128,57 +133,154 @@ enum symbol_group_id : PdaSymbolGroupIdT {
 /**
  * @brief Symbols in the stack alphabet
  */
-enum stack_symbol_group_id : PdaStackSymbolGroupIdT {
+enum class stack_symbol_group_id : PdaStackSymbolGroupIdT {
   /// Symbol representing the JSON-root (i.e., we're at nesting level '0')
-  STACK_ROOT = 0,
+  STACK_ROOT,
 
   /// Symbol representing that we're currently within a list object
-  STACK_LIST = 1,
+  STACK_LIST,
 
   /// Symbol representing that we're currently within a struct object
-  STACK_STRUCT = 2,
+  STACK_STRUCT,
 
   /// Total number of symbols in the stack alphabet
   NUM_STACK_SGS
 };
 
 /// Total number of symbol groups to differentiate amongst (stack alphabet * input alphabet)
-constexpr PdaSymbolGroupIdT NUM_PDA_SGIDS = NUM_PDA_INPUT_SGS * NUM_STACK_SGS;
+constexpr PdaSymbolGroupIdT NUM_PDA_SGIDS =
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) *
+  static_cast<PdaStackSymbolGroupIdT>(stack_symbol_group_id::NUM_STACK_SGS);
 
 /// Mapping a input symbol to the symbol group id
 static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       WHITE_SPACE_SG,     WHITE_SPACE_SG, OTHER_SG,
-  OTHER_SG,       WHITE_SPACE_SG,     OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  WHITE_SPACE_SG, OTHER_SG,           QUOTE_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  COMMA_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           COLON_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OPENING_BRACKET_SG,
-  ESCAPE_SG,      CLOSING_BRACKET_SG, OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OTHER_SG,
-  OTHER_SG,       OTHER_SG,           OTHER_SG,       OPENING_BRACE_SG,
-  OTHER_SG,       CLOSING_BRACE_SG,   OTHER_SG};
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::QUOTE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::COMMA),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::COLON),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OPENING_BRACKET),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::ESCAPE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::CLOSING_BRACKET),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OPENING_BRACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::CLOSING_BRACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER)};
 
 /**
  * @brief Maps a (top-of-stack symbol, input symbol)-pair to a symbol group id of the deterministic
@@ -198,20 +300,23 @@ struct PdaSymbolToSymbolGroupId {
 
     // The stack symbol offset: '_' is the root group (0), '[' is the list group (1), '{' is the
     // struct group (2)
-    int32_t stack_idx =
-      (stack_symbol == '_') ? STACK_ROOT : ((stack_symbol == '[') ? STACK_LIST : STACK_STRUCT);
+    int32_t stack_idx = static_cast<PdaStackSymbolGroupIdT>(
+      (stack_symbol == '_') ? stack_symbol_group_id::STACK_ROOT
+                            : ((stack_symbol == '[') ? stack_symbol_group_id::STACK_LIST
+                                                     : stack_symbol_group_id::STACK_STRUCT));
 
     // The relative symbol group id of the current input symbol
     constexpr int32_t pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(static_cast<int32_t>(symbol), pda_sgid_lookup_size - 1)];
-    return stack_idx * NUM_PDA_INPUT_SGS + symbol_gid;
+    return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +
+           symbol_gid;
   }
 };
 
 // The states defined by the pushdown automaton
-enum pda_state_t : StateT {
+enum class pda_state_t : StateT {
   // Beginning of value
   PD_BOV,
   // Beginning of array
@@ -238,8 +343,21 @@ enum pda_state_t : StateT {
   PD_NUM_STATES
 };
 
+// Aliases for readability of the transition table
+constexpr auto PD_BOV = pda_state_t::PD_BOV;
+constexpr auto PD_BOA = pda_state_t::PD_BOA;
+constexpr auto PD_LON = pda_state_t::PD_LON;
+constexpr auto PD_STR = pda_state_t::PD_STR;
+constexpr auto PD_SCE = pda_state_t::PD_SCE;
+constexpr auto PD_PVL = pda_state_t::PD_PVL;
+constexpr auto PD_BFN = pda_state_t::PD_BFN;
+constexpr auto PD_FLN = pda_state_t::PD_FLN;
+constexpr auto PD_FNE = pda_state_t::PD_FNE;
+constexpr auto PD_PFN = pda_state_t::PD_PFN;
+constexpr auto PD_ERR = pda_state_t::PD_ERR;
+
 // The starting state of the pushdown automaton
-constexpr auto start_state = PD_BOV;
+constexpr auto start_state = static_cast<StateT>(pda_state_t::PD_BOV);
 
 // Identity symbol to symbol group lookup table
 std::vector<std::vector<char>> const pda_sgids{
@@ -250,43 +368,54 @@ std::vector<std::vector<char>> const pda_sgids{
 /**
  * @brief Getting the transition table
  */
-std::vector<std::vector<StateT>> get_transition_table()
+auto get_transition_table()
 {
-  std::vector<std::vector<StateT>> pda_tt(PD_NUM_STATES);
-  //                   {       [       }       ]       "       \       ,       :     space   other
-  pda_tt[PD_BOV] = {PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
-                    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
-                    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON};
-  pda_tt[PD_BOA] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_LON,
-                    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_ERR};
-  pda_tt[PD_LON] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_LON,
-                    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_LON,
-                    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_LON};
-  pda_tt[PD_STR] = {PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR,
-                    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR,
-                    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR};
-  pda_tt[PD_SCE] = {PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
-                    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
-                    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR};
-  pda_tt[PD_PVL] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_ERR,
-                    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_ERR};
-  pda_tt[PD_BFN] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR};
-  pda_tt[PD_FLN] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_PFN, PD_FNE, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
-  pda_tt[PD_FNE] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
-  pda_tt[PD_PFN] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_PFN, PD_ERR};
-  pda_tt[PD_ERR] = {PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-                    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR};
+  std::vector<std::vector<pda_state_t>> pda_tt(static_cast<StateT>(pda_state_t::PD_NUM_STATES));
+  //  {       [       }       ]       "       \       ,       :     space   other
+  pda_tt[static_cast<StateT>(pda_state_t::PD_BOV)] = {
+    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_LON,
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_ERR};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_LON)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_LON,
+    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_LON,
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_LON};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_STR)] = {
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_SCE)] = {
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_PVL)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_ERR,
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_ERR};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_BFN)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_FLN)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_PFN, PD_FNE, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_FNE)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_PFN)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_PFN, PD_ERR};
+  pda_tt[static_cast<StateT>(pda_state_t::PD_ERR)] = {
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR};
   return pda_tt;
 }
 
@@ -295,254 +424,258 @@ std::vector<std::vector<StateT>> get_transition_table()
  */
 std::vector<std::vector<std::vector<char>>> get_translation_table()
 {
-  std::vector<std::vector<std::vector<char>>> pda_tlt(PD_NUM_STATES);
-  pda_tlt[PD_BOV] = {{token_t::StructBegin},
-                     {token_t::ListBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::StringBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ValueBegin},
-                     {token_t::StructBegin},
-                     {token_t::ListBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::StringBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ValueBegin},
-                     {token_t::StructBegin},
-                     {token_t::ListBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::StringBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ValueBegin}};
-  pda_tlt[PD_BOA] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::StructBegin},
-                     {token_t::ListBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ListEnd},
-                     {token_t::StringBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ValueBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::StructEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::FieldNameBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin}};
-  pda_tlt[PD_LON] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd},
-                     {},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd, token_t::ListEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd},
-                     {},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd, token_t::StructEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::ValueEnd},
-                     {}};
-  pda_tlt[PD_STR] = {{}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
-                     {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
-                     {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {}};
-  pda_tlt[PD_SCE] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                     {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
-  pda_tlt[PD_PVL] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ListEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::StructEnd},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin}};
-  pda_tlt[PD_BFN] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::FieldNameBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {token_t::ErrorBegin}};
-  pda_tlt[PD_FLN] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {token_t::FieldNameEnd},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {}};
-  pda_tlt[PD_FNE] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {},
-                     {}};
-  pda_tlt[PD_PFN] = {{token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {token_t::ErrorBegin},
-                     {},
-                     {},
-                     {token_t::ErrorBegin}};
-  pda_tlt[PD_ERR] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                     {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
+  std::vector<std::vector<std::vector<char>>> pda_tlt(
+    static_cast<StateT>(pda_state_t::PD_NUM_STATES));
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOV)] = {{token_t::StructBegin},
+                                                       {token_t::ListBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::StringBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ValueBegin},
+                                                       {token_t::StructBegin},
+                                                       {token_t::ListBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::StringBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ValueBegin},
+                                                       {token_t::StructBegin},
+                                                       {token_t::ListBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::StringBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ValueBegin}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::StructBegin},
+                                                       {token_t::ListBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ListEnd},
+                                                       {token_t::StringBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ValueBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::StructEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::FieldNameBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd},
+                                                       {},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd, token_t::ListEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd},
+                                                       {},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd, token_t::StructEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ValueEnd},
+                                                       {}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {
+    {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
+    {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
+    {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                                                       {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                                                       {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_PVL)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ListEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::StructEnd},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BFN)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::FieldNameBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {token_t::ErrorBegin}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {token_t::FieldNameEnd},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {},
+                                                       {}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {token_t::ErrorBegin},
+                                                       {},
+                                                       {},
+                                                       {token_t::ErrorBegin}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                                                       {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                                                       {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
   return pda_tlt;
 }
 
@@ -587,7 +720,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
     cudf::io::fst::detail::Dfa<StackSymbolT,
                                static_cast<int32_t>(
                                  to_stack_op::dfa_symbol_group_id::NUM_SYMBOL_GROUPS),
-                               to_stack_op::dfa_states::TT_NUM_STATES>;
+                               static_cast<int32_t>(to_stack_op::dfa_states::TT_NUM_STATES)>;
   ToStackOpFstT json_to_stack_ops_fst{to_stack_op::symbol_groups,
                                       to_stack_op::transition_table,
                                       to_stack_op::translation_table,
@@ -638,8 +771,11 @@ void get_token_stream(device_span<SymbolT const> json_in,
                     tokenizer_pda::PdaSymbolToSymbolGroupId{});
 
   // PDA transducer alias
-  using ToTokenStreamFstT = cudf::io::fst::detail::
-    Dfa<StackSymbolT, tokenizer_pda::NUM_PDA_SGIDS, tokenizer_pda::PD_NUM_STATES>;
+  using ToTokenStreamFstT =
+    cudf::io::fst::detail::Dfa<StackSymbolT,
+                               tokenizer_pda::NUM_PDA_SGIDS,
+                               static_cast<tokenizer_pda::StateT>(
+                                 tokenizer_pda::pda_state_t::PD_NUM_STATES)>;
 
   // Instantiating PDA transducer
   ToTokenStreamFstT json_to_tokens_fst{tokenizer_pda::pda_sgids,
