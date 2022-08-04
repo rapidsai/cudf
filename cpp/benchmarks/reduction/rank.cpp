@@ -33,11 +33,11 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
   double const null_frequency = state.get_float64("null_frequency");
   size_t const size           = state.get_int64("data_size");
 
-  data_profile table_data_profile;
-  table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 5);
-  table_data_profile.set_null_frequency(null_frequency);
+  data_profile const profile = data_profile_builder()
+                                 .null_frequency(null_frequency)
+                                 .distribution(dtype, distribution_id::UNIFORM, 0, 5);
 
-  auto const table = create_random_table({dtype}, table_size_bytes{size / 2}, table_data_profile);
+  auto const table = create_random_table({dtype}, table_size_bytes{size / 2}, profile);
 
   auto const new_tbl = cudf::repeat(table->view(), 2);
   cudf::column_view input(new_tbl->view().column(0));
