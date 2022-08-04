@@ -32,22 +32,22 @@ namespace detail {
 /**
  * @brief This will return true if passed a continuation byte of a UTF-8 character.
  *
- * @param byte Any byte from a valid UTF-8 character
+ * @param chr Any single byte from a valid UTF-8 character
  * @return true if this is not the first byte of the character
  */
-constexpr bool is_utf8_continuation_char(uint8_t byte)
+constexpr bool is_utf8_continuation_char(unsigned char chr)
 {
   // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
-  return (byte & 0xC0) == 0x80;
+  return (chr & 0xC0) == 0x80;
 }
 
 /**
  * @brief This will return true if passed the first byte of a UTF-8 character.
  *
- * @param byte Any byte from a valid UTF-8 character
+ * @param chr Any single byte from a valid UTF-8 character
  * @return true if this the first byte of the character
  */
-constexpr bool is_begin_utf8_char(uint8_t byte) { return not is_utf8_continuation_char(byte); }
+constexpr bool is_begin_utf8_char(unsigned char chr) { return not is_utf8_continuation_char(chr); }
 
 /**
  * @brief This will return true if the passed in byte could be the start of
