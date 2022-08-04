@@ -36,7 +36,6 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-numba.config.CUDA_USE_NVIDIA_BINDING = 1
 # Disable occupancy warnings to avoid polluting output when there are few
 # groups.
 numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0

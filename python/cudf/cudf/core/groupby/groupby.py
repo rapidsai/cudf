@@ -75,7 +75,14 @@ class GroupBy(Serializable, Reducible, Scannable):
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
+        self,
+        obj,
+        by=None,
+        level=None,
+        sort=False,
+        as_index=True,
+        dropna=True,
+        engine="nonjit",
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -111,6 +118,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._level = level
         self._sort = sort
         self._dropna = dropna
+        self._engine = engine
 
         if isinstance(by, _Grouping):
             by._obj = self.obj
@@ -610,8 +618,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, _, grouped_values = self._grouped()
 
-        # jit groupby apply only returns Series
-        if engine == "jit":
+        self._engine = engine
+        if self._engine == "jit":
             chunk_results = jit_groupby_apply(
                 offsets, grouped_values, function, *args
             )
