@@ -31,7 +31,7 @@ However, differences between tools and the different packages in the repo result
 - `isort` must be configured per project to set which project is the "first party" project.
 
 Additionally, our use of `versioneer` means that each project must have a `setup.cfg`.
-As a result, we maintain both root and project-level `pyproject.toml` and `setup.cfg` files.
+As a result, we currently maintain both root and project-level `pyproject.toml` and `setup.cfg` files.
 
 For more information on how to use pre-commit hooks, see the code formatting section of the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
@@ -44,12 +44,7 @@ it will be marked as deprecated in the 22.08 release and removed in the 22.10 re
 All internal usage of deprecated APIs in cuDF should be removed when the API is deprecated.
 This prevents users from encountering unexpected deprecation warnings when using other (non-deprecated) APIs.
 The documentation for the API should also be updated to reflect its deprecation.
-
-When deprecating an API, developers should open a corresponding GitHub issue to track the API removal.
-The GitHub issue should be labeled "deprecation" and added to the next release’s project board.
-If necessary, the removal timeline can be discussed on this issue.
-Upon removal this issue may be closed.
-Additionally, when removing an API, make sure to remove all tests and documentation.
+When the time comes to remove a deprecated API, make sure to remove all tests and documentation.
 
 Deprecation messages should:
 - emit a FutureWarning;
