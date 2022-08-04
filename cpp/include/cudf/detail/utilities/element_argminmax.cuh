@@ -37,6 +37,8 @@ struct element_argminmax_fn {
   bool const has_nulls;
   bool const arg_min;
 
+  // The noinline attribute is due to the aggressive inlining of thrust::reduce_by_key
+  // resulting in very high compile times.
   __noinline__ __device__ auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
