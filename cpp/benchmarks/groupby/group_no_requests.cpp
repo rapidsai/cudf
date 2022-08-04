@@ -31,7 +31,7 @@ void BM_basic_no_requests(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto profile = data_profile_builder().cardinality(0).no_validity().distribution(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
@@ -62,7 +62,7 @@ void BM_pre_sorted_no_requests(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto profile = data_profile_builder().cardinality(0).no_validity().distribution(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);

@@ -37,8 +37,8 @@ void BM_repeat(benchmark::State& state)
   auto input = cudf::table_view(*input_table);
 
   // repeat counts
-  using sizeT  = cudf::size_type;
-  auto profile = data_profile_builder().cardinality(0).no_validity().distribution(
+  using sizeT                = cudf::size_type;
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<sizeT>(), distribution_id::UNIFORM, 0, 3);
   auto repeat_table = create_random_table({cudf::type_to_id<sizeT>()}, row_count{n_rows}, profile);
   cudf::column_view repeat_count{repeat_table->get_column(0)};
