@@ -142,7 +142,8 @@ class SingleSymbolSmemLUT {
   constexpr CUDF_HOST_DEVICE int32_t operator()(SymbolT const symbol) const
   {
     // Look up the symbol group for given symbol
-    return temp_storage.sym_to_sgid[min(symbol, num_valid_entries - 1)];
+    return temp_storage
+      .sym_to_sgid[min(static_cast<SymbolGroupIdT>(symbol), num_valid_entries - 1U)];
   }
 };
 

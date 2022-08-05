@@ -95,6 +95,48 @@ TEST_F(JsonTest, StackContext)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
+TEST_F(JsonTest, StackContextUtf8)
+{
+  // Type used to represent the atomic symbol type used within the finite-state machine
+  using SymbolT      = char;
+  using StackSymbolT = char;
+
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Test input
+  std::string input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
+
+  // Prepare input & output buffers
+  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
+  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream_view);
+
+  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
+                                        input.data(),
+                                        input.size() * sizeof(SymbolT),
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
+
+  // Run algorithm
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
+
+  // Copy back the results
+  stack_context.device_to_host(stream_view);
+
+  // Make sure we copied back the stack context
+  stream_view.synchronize();
+
+  std::vector<char> golden_stack_context{
+    '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
+    '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
+    '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
+    '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '['};
+
+  ASSERT_EQ(golden_stack_context.size(), stack_context.size());
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
+}
+
 TEST_F(JsonTest, TokenStream)
 {
   using cuio_json::PdaTokenT;
