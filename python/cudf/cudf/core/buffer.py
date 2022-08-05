@@ -27,7 +27,7 @@ def as_buffer(obj: object) -> Buffer:
     The returned Buffer keeps a reference to `obj` in order to
     retain the lifetime of `obj`.
 
-    Raises ValueError if the data of `obj` isn't c-contiguous.
+    Raises ValueError if the data of `obj` isn't C-contiguous.
 
     Parameters
     ----------
@@ -208,7 +208,7 @@ def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     """
     Return the pointer and size of an array interface.
 
-    Raises ValueError if array isn't c-contiguous
+    Raises ValueError if array isn't C-contiguous
     """
 
     def is_c_contiguous(shape, strides, itemsize):
