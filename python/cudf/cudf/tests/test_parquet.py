@@ -940,8 +940,7 @@ def list_gen(gen, num_rows, lists_per_row, list_size, include_validity=False):
     Args:
         gen: A callable which generates an individual leaf element based on an
             absolute index.
-        num_rows : Number of rows to generate.  Again, this is to emulate the
-            'num_rows' parameter of the parquet reader.
+        num_rows : Number of rows to generate.
         lists_per_row : Number of lists to generate per row.
         list_size : Size of each generated list.
         include_validity : Whether or not to include nulls as part of the
