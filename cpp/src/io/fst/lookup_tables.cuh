@@ -172,9 +172,10 @@ class TransitionTable {
   };
 
   template <typename StateIdT>
-  static void InitDeviceTransitionTable(hostdevice_vector<KernelParameter>& transition_table_init,
-                                        std::vector<std::vector<StateIdT>> const& translation_table,
-                                        rmm::cuda_stream_view stream)
+  static void InitDeviceTransitionTable(
+    hostdevice_vector<KernelParameter>& transition_table_init,
+    std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table,
+    rmm::cuda_stream_view stream)
   {
     // translation_table[state][symbol] -> new state
     for (std::size_t state = 0; state < translation_table.size(); ++state) {
@@ -321,7 +322,8 @@ class TransducerLookupTable {
    */
   static void InitDeviceTranslationTable(
     hostdevice_vector<KernelParameter>& translation_table_init,
-    std::vector<std::vector<std::vector<OutSymbolT>>> const& translation_table,
+    std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const&
+      translation_table,
     rmm::cuda_stream_view stream)
   {
     std::vector<OutSymbolT> out_symbols;
@@ -478,8 +480,8 @@ class Dfa {
    */
   template <typename StateIdT, typename SymbolGroupIdItT>
   Dfa(SymbolGroupIdItT const& symbol_vec,
-      std::vector<std::vector<StateIdT>> const& tt_vec,
-      std::vector<std::vector<std::vector<OutSymbolT>>> const& out_tt_vec,
+      std::array<std::array<StateIdT, NUM_SYMBOLS>, NUM_STATES> const& tt_vec,
+      std::array<std::array<std::vector<OutSymbolT>, NUM_SYMBOLS>, NUM_STATES> const& out_tt_vec,
       cudaStream_t stream)
   {
     constexpr std::size_t single_item = 1;
