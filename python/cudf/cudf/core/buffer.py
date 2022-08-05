@@ -43,10 +43,6 @@ class DeviceBufferLike(Protocol):
         ...
 
     @property
-    def nbytes(self) -> int:
-        ...
-
-    @property
     def owner(self) -> object:
         ...
 

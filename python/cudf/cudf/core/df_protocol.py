@@ -18,7 +18,7 @@ import numpy as np
 from numba.cuda import as_cuda_array
 
 import cudf
-from cudf.core.buffer import buffer_from_pointer
+from cudf.core.buffer import DeviceBufferLike, buffer_from_pointer
 from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
@@ -64,12 +64,12 @@ class _CuDFBuffer:
 
     def __init__(
         self,
-        buf: cudf.core.buffer.DeviceBufferLike,
+        buf: DeviceBufferLike,
         dtype: np.dtype,
         allow_copy: bool = True,
     ) -> None:
         """
-        Use cudf.core.buffer.DeviceBufferLike object.
+        Use DeviceBufferLike object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
@@ -82,7 +82,7 @@ class _CuDFBuffer:
         """
         DeviceBufferLike size in bytes.
         """
-        return self._buf.nbytes
+        return self._buf.size
 
     @property
     def ptr(self) -> int:
