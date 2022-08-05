@@ -1381,7 +1381,7 @@ def pivot_table(
                     to_filter.append(x)
             except TypeError:
                 pass
-        if len(to_filter) < len(data.columns):
+        if len(to_filter) < len(data._column_names):
             data = data[to_filter]
 
     else:
