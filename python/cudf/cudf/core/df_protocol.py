@@ -18,7 +18,7 @@ import numpy as np
 from numba.cuda import as_cuda_array
 
 import cudf
-from cudf.core.buffer import DeviceBufferLike, buffer_from_pointer
+from cudf.core.buffer import Buffer, DeviceBufferLike
 from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
@@ -716,9 +716,7 @@ def _protocol_to_cudf_column_numeric(
     _dbuffer, _ddtype = buffers["data"]
     _check_buffer_is_on_gpu(_dbuffer)
     cudfcol_num = build_column(
-        buffer_from_pointer(
-            ptr=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None
-        ),
+        Buffer(data=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None),
         protocol_dtype_to_cupy_dtype(_ddtype),
     )
     return _set_missing_values(col, cudfcol_num), buffers
@@ -748,8 +746,8 @@ def _set_missing_values(
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         bitmask = cp.asarray(
-            buffer_from_pointer(
-                ptr=valid_mask[0].ptr, size=valid_mask[0].bufsize, owner=None
+            Buffer(
+                data=valid_mask[0].ptr, size=valid_mask[0].bufsize, owner=None
             ),
             cp.bool8,
         )
@@ -789,9 +787,7 @@ def _protocol_to_cudf_column_categorical(
     _check_buffer_is_on_gpu(codes_buffer)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(
-        buffer_from_pointer(
-            ptr=codes_buffer.ptr, size=codes_buffer.bufsize, owner=None
-        ),
+        Buffer(data=codes_buffer.ptr, size=codes_buffer.bufsize, owner=None),
         cdtype,
     )
 
@@ -823,9 +819,7 @@ def _protocol_to_cudf_column_string(
     data_buffer, data_dtype = buffers["data"]
     _check_buffer_is_on_gpu(data_buffer)
     encoded_string = build_column(
-        buffer_from_pointer(
-            ptr=data_buffer.ptr, size=data_buffer.bufsize, owner=None
-        ),
+        Buffer(data=data_buffer.ptr, size=data_buffer.bufsize, owner=None),
         protocol_dtype_to_cupy_dtype(data_dtype),
     )
 
@@ -835,9 +829,7 @@ def _protocol_to_cudf_column_string(
     offset_buffer, offset_dtype = buffers["offsets"]
     _check_buffer_is_on_gpu(offset_buffer)
     offsets = build_column(
-        buffer_from_pointer(
-            ptr=offset_buffer.ptr, size=offset_buffer.bufsize, owner=None
-        ),
+        Buffer(data=offset_buffer.ptr, size=offset_buffer.bufsize, owner=None),
         protocol_dtype_to_cupy_dtype(offset_dtype),
     )
 

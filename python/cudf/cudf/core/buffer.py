@@ -90,33 +90,6 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
     return Buffer(obj)
 
 
-def buffer_from_pointer(ptr: int, size: int, owner: object) -> Buffer:
-    """
-    Factory function to wrap a device memory pointer in a Buffer object.
-
-    Never copies any data and `ptr` must represents device memory.
-
-    The returned Buffer keeps a reference to `obj` in order to
-    retain the lifetime of `obj`.
-
-    Parameters
-    ----------
-    ptr : int
-        An integer representing a pointer to device memory.
-    size : int
-        Size of device memory in bytes.
-    owner : object
-        Python object to which the lifetime of the memory allocation is tied.
-        A reference to this object is kept in the returned Buffer.
-
-    Return
-    ------
-    Buffer
-        A Buffer instance that represents the device memory of `ptr`
-    """
-    return Buffer(ptr, size, owner)
-
-
 class Buffer(Serializable):
     """
     A Buffer represents a device memory allocation.
