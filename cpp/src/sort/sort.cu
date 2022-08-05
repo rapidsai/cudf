@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/functional.h>
+#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {

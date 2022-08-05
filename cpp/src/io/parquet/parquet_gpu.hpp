@@ -463,44 +463,6 @@ void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     rmm::cuda_stream_view stream);
 
 /**
- * @brief Dremel data that describes one nested type column
- *
- * @see get_dremel_data()
- */
-struct dremel_data {
-  rmm::device_uvector<size_type> dremel_offsets;
-  rmm::device_uvector<uint8_t> rep_level;
-  rmm::device_uvector<uint8_t> def_level;
-
-  size_type leaf_data_size;
-};
-
-/**
- * @brief Get the dremel offsets and repetition and definition levels for a LIST column
- *
- * Dremel offsets are the per row offsets into the repetition and definition level arrays for a
- * column.
- * Example:
- * ```
- * col            = {{1, 2, 3}, { }, {5, 6}}
- * dremel_offsets = { 0,         3,   4,  6}
- * rep_level      = { 0, 1, 1,   0,   0, 1}
- * def_level      = { 1, 1, 1,   0,   1, 1}
- * ```
- * @param col Column of LIST type
- * @param level_nullability Pre-determined nullability at each list level. Empty means infer from
- * `col`
- * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- * @return A struct containing dremel data
- */
-dremel_data get_dremel_data(column_view h_col,
-                            rmm::device_uvector<uint8_t> const& d_nullability,
-                            std::vector<uint8_t> const& nullability,
-                            bool output_as_byte_array,
-                            rmm::cuda_stream_view stream);
-
-/**
  * @brief Launches kernel for initializing encoder page fragments
  *
  * Based on the number of rows in each fragment, populates the value count, the size of data in the
