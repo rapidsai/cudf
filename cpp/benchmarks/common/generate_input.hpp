@@ -522,6 +522,11 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
 
+std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
+                                                   row_count num_rows,
+                                                   data_profile const& data_params = data_profile{},
+                                                   unsigned seed                   = 1);
+
 /**
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
  * subsequent rows.

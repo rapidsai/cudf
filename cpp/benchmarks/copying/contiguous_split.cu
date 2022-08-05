@@ -120,10 +120,10 @@ void BM_contiguous_split_strings(benchmark::State& state)
   cudf::test::strings_column_wrapper one_col(h_strings.begin(), h_strings.end());
   std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);
   for (int64_t idx = 0; idx < num_cols; idx++) {
-    auto random_indices = create_random_table(
-      {cudf::type_id::INT32}, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
+    auto random_indices = create_random_column(
+      cudf::type_id::INT32, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
     auto str_table = cudf::gather(cudf::table_view{{one_col}},
-                                  random_indices->get_column(0),
+                                  *random_indices,
                                   (include_validity ? cudf::out_of_bounds_policy::NULLIFY
                                                     : cudf::out_of_bounds_policy::DONT_CHECK));
     src_cols[idx]  = std::move(str_table->release()[0]);
