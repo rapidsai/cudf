@@ -22,5 +22,6 @@ Additionally, it includes longer sections on more specific topics like testing a
 
 library_design
 documentation
+benchmarking
 options
 ```
