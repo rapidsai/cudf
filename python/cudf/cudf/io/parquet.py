@@ -359,8 +359,6 @@ def read_parquet(
     columns=None,
     filters=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
@@ -370,18 +368,6 @@ def read_parquet(
     **kwargs,
 ):
     """{docstring}"""
-
-    if skiprows is not None:
-        warnings.warn(
-            "skiprows is deprecated and will be removed.",
-            FutureWarning,
-        )
-
-    if num_rows is not None:
-        warnings.warn(
-            "num_rows is deprecated and will be removed.",
-            FutureWarning,
-        )
 
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
@@ -485,8 +471,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        skiprows=skiprows,
-        num_rows=num_rows,
         strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
@@ -575,8 +559,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
@@ -589,8 +571,6 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            skiprows=skiprows,
-            num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
