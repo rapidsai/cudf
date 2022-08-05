@@ -19,6 +19,8 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
+#include <thrust/optional.h>
+
 namespace cudf {
 namespace strings {
 namespace detail {

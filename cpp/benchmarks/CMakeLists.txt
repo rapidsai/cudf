@@ -199,7 +199,9 @@ ConfigureBench(
   groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
 
-ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
+ConfigureNVBench(
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
+)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
