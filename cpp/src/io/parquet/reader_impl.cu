@@ -576,7 +576,7 @@ class aggregate_reader_metadata {
       for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
         auto const chunk_start_row = count;
         count += get_row_group(rg_idx, src_idx).num_rows;
-        if (count > 0) { selection.emplace_back(rg_idx, chunk_start_row, src_idx); }
+        selection.emplace_back(rg_idx, chunk_start_row, src_idx);
         if (count >= row_count) { break; }
       }
     }
