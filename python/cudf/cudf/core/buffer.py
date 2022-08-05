@@ -25,12 +25,6 @@ from cudf.core.abc import Serializable
 
 @runtime_checkable
 class DeviceBufferLike(Protocol):
-    @classmethod
-    def from_buffer(
-        cls, buffer: DeviceBufferLike, size: int = None, offset: int = 0
-    ):
-        ...
-
     def __len__(self) -> int:
         ...
 
@@ -58,7 +52,9 @@ class DeviceBufferLike(Protocol):
         ...
 
 
-def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
+def as_device_buffer_like(
+    obj: Any, size: int = None, offset: int = 0
+) -> DeviceBufferLike:
     """
     Factory function to wrap `obj` in a DeviceBufferLike object.
 
@@ -70,6 +66,8 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
     The returned Buffer keeps a reference to `obj` in order to retain the
     lifetime of `obj`.
 
+    If `size` and/or `offset` is specified, `obj` must be device-buffer-like.
+
     Raises ValueError if the data of `obj` isn't C-contiguous.
 
     Parameters
@@ -79,20 +77,37 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
         `__array_interface__`, `__cuda_array_interface__`, or the
         buffer protocol. Only when `obj` represents host memory are
         data copied.
+    size : int, optional
+        Size of buffer in bytes.
+    offset : int, optional
+        Start offset relative to `obj.ptr` (in bytes).
 
     Return
     ------
-    Buffer
-        A Buffer instance that represents the device memory of `obj`
+    DeviceBufferLike
+        A device-buffer-like instance that represents the device memory
+        of `obj`.
     """
-    if isinstance(obj, Buffer):
-        return obj
+    if isinstance(obj, DeviceBufferLike):
+        size = obj.size - offset if size is None else size
+        if size == obj.size and offset == 0:
+            return obj
+        return Buffer(
+            data=obj.ptr + offset,
+            size=size,
+            owner=obj,
+        )
+    elif size or offset:
+        raise ValueError(
+            "`obj` must be DeviceBufferLike when `size` and/or `offset`"
+            "is specified"
+        )
     return Buffer(obj)
 
 
 class Buffer(Serializable):
     """
-    A Buffer represents a device memory allocation.
+    A Buffer represents device memory.
 
     Usually Buffers will be created using `as_device_buffer_like(obj)`,
     which will make sure that `obj` is device-buffer-like and not a `Buffer`
@@ -147,29 +162,6 @@ class Buffer(Serializable):
             ptr, size = _get_ptr_and_size(np.asarray(buf).__array_interface__)
             buf = rmm.DeviceBuffer(ptr=ptr, size=size)
             self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
-
-    @classmethod
-    def from_buffer(
-        cls, buffer: DeviceBufferLike, size: int = None, offset: int = 0
-    ):
-        """
-        Create a buffer from another buffer
-
-        Parameters
-        ----------
-        buffer : Buffer
-            The base buffer, which will also be set as the owner of
-            the memory allocation.
-        size : int, optional
-            Size of the memory allocation (default: `buffer.size`).
-        offset : int, optional
-            Start offset relative to `buffer.ptr`.
-        """
-        return cls(
-            data=buffer.ptr + offset,
-            size=buffer.size if size is None else size,
-            owner=buffer,
-        )
 
     def __len__(self) -> int:
         return self._size

@@ -117,8 +117,8 @@ cdef class Column:
                 # `data` spans all of `base_data`
                 self._data = self.base_data
             else:
-                self._data = Buffer.from_buffer(
-                    buffer=self.base_data,
+                self._data = as_device_buffer_like(
+                    obj=self.base_data,
                     size=size,
                     offset=offset
                 )

@@ -16,7 +16,7 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
-from cudf.core.buffer import Buffer, DeviceBufferLike
+from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype
@@ -706,8 +706,8 @@ class CategoricalColumn(column.ColumnBase):
         if self._children is None:
             codes_column = self.base_children[0]
 
-            buf = Buffer.from_buffer(
-                buffer=codes_column.base_data,
+            buf = as_device_buffer_like(
+                obj=codes_column.base_data,
                 size=self.size * codes_column.dtype.itemsize,
                 offset=self.offset * codes_column.dtype.itemsize,
             )

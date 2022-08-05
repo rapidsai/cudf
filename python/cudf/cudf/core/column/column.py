@@ -432,8 +432,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             ):
                 view_buf = self.base_data
             else:
-                view_buf = Buffer.from_buffer(
-                    buffer=self.base_data,
+                view_buf = as_device_buffer_like(
+                    obj=self.base_data,
                     size=self.size * self.dtype.itemsize,
                     offset=self.offset * self.dtype.itemsize,
                 )
