@@ -1448,7 +1448,7 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned c
 }
 
 /**
- * @brief Attempt to runcate a span of binary data to at most truncate_length bytes.
+ * @brief Attempt to truncate a span of binary data to at most truncate_length bytes.
  *
  * If is_min is false, then the final byte (or bytes if there is overflow) will be
  * incremented so that the resultant binary will still be a valid maximum. scratch is only used when
