@@ -86,17 +86,18 @@ index 5d486789..b42fb5f0 100644
      {
        if (compare_op(keys[j + 1], keys[j]))
 diff --git a/thrust/system/cuda/detail/dispatch.h b/thrust/system/cuda/detail/dispatch.h
-index d0e3f94..2c1c7ba 100644
+index d0e3f94..7d473de 100644
 --- a/thrust/system/cuda/detail/dispatch.h
 +++ b/thrust/system/cuda/detail/dispatch.h
-@@ -30,10 +30,6 @@
-     if (count <= thrust::detail::integer_traits<thrust::detail::int32_t>::const_max) { \
-         auto THRUST_PP_CAT2(count, _fixed) = static_cast<thrust::detail::int32_t>(count); \
+@@ -32,9 +32,8 @@
          status = call arguments; \
--    } \
--    else { \
+     } \
+     else { \
 -        auto THRUST_PP_CAT2(count, _fixed) = static_cast<thrust::detail::int64_t>(count); \
 -        status = call arguments; \
-     }
+-    }
++       throw std::runtime_error("THRUST_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
++    }
 
  /**
+  * Dispatch between 32-bit and 64-bit index based versions of the same algorithm
