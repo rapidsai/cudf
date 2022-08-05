@@ -87,9 +87,7 @@ def as_device_buffer_like(obj: object) -> DeviceBufferLike:
     """
     if isinstance(obj, Buffer):
         return obj
-    ret = Buffer.__new__(Buffer)
-    _init_buffer_from_any(ret, obj)
-    return ret
+    return Buffer(obj)
 
 
 def buffer_from_pointer(ptr: int, size: int, owner: object) -> Buffer:
@@ -123,11 +121,9 @@ class Buffer(Serializable):
     """
     A Buffer represents a device memory allocation.
 
-    Usually a Buffer instance should be created through factory functions
-    such as `as_device_buffer_like()` and `buffer_from_pointer()`. However,
-    for backward compatibility, it is possible to instantiate a Buffer
-    directly given a buffer-like object, which is equivalent to calling
-    `as_device_buffer_like()`.
+    Usually Buffers will be created using `as_device_buffer_like(obj)`,
+    which will make sure that `obj` is device-buffer-like and not a `Buffer`
+    necessarily.
 
     Parameters
     ----------
@@ -148,7 +144,7 @@ class Buffer(Serializable):
     _owner: object
 
     def __init__(
-        self, ptr: Union[int, object], size: int = None, owner: object = None
+        self, ptr: Union[int, Any], size: int = None, owner: object = None
     ):
         if isinstance(ptr, int):
             if size is None:
@@ -164,7 +160,20 @@ class Buffer(Serializable):
                     "`size` and `owner` must be None when "
                     "`ptr` is an buffer-like object"
                 )
-            _init_buffer_from_any(self, ptr)
+
+            # `ptr` is a buffer-like object
+            obj: Any = ptr
+            if isinstance(obj, rmm.DeviceBuffer):
+                self._ptr, self._size, self._owner = obj.ptr, obj.size, obj
+                return
+            iface = getattr(obj, "__cuda_array_interface__", None)
+            if iface:
+                ptr, size = _get_ptr_and_size(iface)
+                self._ptr, self._size, self._owner = ptr, size, obj
+                return
+            ptr, size = _get_ptr_and_size(np.asarray(obj).__array_interface__)
+            obj = rmm.DeviceBuffer(ptr=ptr, size=size)
+            self._ptr, self._size, self._owner = obj.ptr, obj.size, obj
 
     @classmethod
     def from_buffer(
@@ -274,31 +283,3 @@ def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
         raise ValueError("Buffer data must be 1D C-contiguous")
     size = functools.reduce(operator.mul, shape)
     return ptr, size * itemsize
-
-
-def _init_buffer_from_any(buf: Buffer, obj: object) -> None:
-    """
-    Initiate `buf` based on `obj`.
-
-    Parameters
-    ----------
-    buf : Buffer
-        The buffer to initialize.
-    obj : buffer-like
-        An object that exposes either device or host memory through
-        `__array_interface__`, `__cuda_array_interface__`, or the
-        buffer protocol. Only when `obj` represents host memory are
-        data copied.
-    """
-
-    if isinstance(obj, rmm.DeviceBuffer):
-        buf._ptr, buf._size, buf._owner = obj.ptr, obj.size, obj
-        return
-    iface = getattr(obj, "__cuda_array_interface__", None)
-    if iface:
-        ptr, size = _get_ptr_and_size(iface)
-        buf._ptr, buf._size, buf._owner = ptr, size, obj
-        return
-    host_ary = np.asarray(obj)
-    ptr, size = _get_ptr_and_size(host_ary.__array_interface__)
-    _init_buffer_from_any(buf, rmm.DeviceBuffer(ptr=ptr, size=size))
