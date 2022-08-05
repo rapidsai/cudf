@@ -58,7 +58,7 @@ class DeviceBufferLike(Protocol):
         ...
 
 
-def as_device_buffer_like(obj: object) -> DeviceBufferLike:
+def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
     """
     Factory function to wrap `obj` in a DeviceBufferLike object.
 
@@ -74,7 +74,7 @@ def as_device_buffer_like(obj: object) -> DeviceBufferLike:
 
     Parameters
     ----------
-    obj : buffer-like
+    obj : buffer-like or array-like
         An object that exposes either device or host memory through
         `__array_interface__`, `__cuda_array_interface__`, or the
         buffer protocol. Only when `obj` represents host memory are
@@ -127,9 +127,9 @@ class Buffer(Serializable):
 
     Parameters
     ----------
-    ptr : int or buffer-like
+    data : int or buffer-like or array-like
         An integer representing a pointer to device memory or a buffer-like
-        object. When a buffer-like object is given, `size` and `owner` must
+        ot array-like object. When not an integer, `size` and `owner` must
         be None.
     size : int, optional
         Size of device memory in bytes. Must be specified when `ptr` is a
@@ -144,36 +144,36 @@ class Buffer(Serializable):
     _owner: object
 
     def __init__(
-        self, ptr: Union[int, Any], size: int = None, owner: object = None
+        self, data: Union[int, Any], size: int = None, owner: object = None
     ):
-        if isinstance(ptr, int):
+        if isinstance(data, int):
             if size is None:
                 raise ValueError(
-                    "size must be specified when `ptr` is an integer"
+                    "size must be specified when `data` is an integer"
                 )
-            self._ptr = ptr
+            self._ptr = data
             self._size = size
             self._owner = owner
         else:
             if size is not None or owner is not None:
                 raise ValueError(
                     "`size` and `owner` must be None when "
-                    "`ptr` is an buffer-like object"
+                    "`data` is an buffer-like object"
                 )
 
-            # `ptr` is a buffer-like object
-            obj: Any = ptr
-            if isinstance(obj, rmm.DeviceBuffer):
-                self._ptr, self._size, self._owner = obj.ptr, obj.size, obj
+            # `data` is a buffer-like object
+            buf: Any = data
+            if isinstance(buf, rmm.DeviceBuffer):
+                self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
                 return
-            iface = getattr(obj, "__cuda_array_interface__", None)
+            iface = getattr(buf, "__cuda_array_interface__", None)
             if iface:
                 ptr, size = _get_ptr_and_size(iface)
-                self._ptr, self._size, self._owner = ptr, size, obj
+                self._ptr, self._size, self._owner = ptr, size, buf
                 return
-            ptr, size = _get_ptr_and_size(np.asarray(obj).__array_interface__)
-            obj = rmm.DeviceBuffer(ptr=ptr, size=size)
-            self._ptr, self._size, self._owner = obj.ptr, obj.size, obj
+            ptr, size = _get_ptr_and_size(np.asarray(buf).__array_interface__)
+            buf = rmm.DeviceBuffer(ptr=ptr, size=size)
+            self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
 
     @classmethod
     def from_buffer(
@@ -193,7 +193,7 @@ class Buffer(Serializable):
             Start offset relative to `buffer.ptr`.
         """
         return cls(
-            ptr=buffer.ptr + offset,
+            data=buffer.ptr + offset,
             size=buffer.size if size is None else size,
             owner=buffer,
         )
