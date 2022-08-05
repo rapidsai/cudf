@@ -30,9 +30,10 @@
 #include <cmath>
 #include <string>
 
-//! `fixed_point` and supporting types
+/// `fixed_point` and supporting types
 namespace numeric {
 
+/// The scale type for fixed_point
 enum scale_type : int32_t {};
 
 /**
@@ -46,6 +47,12 @@ enum scale_type : int32_t {};
  */
 enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 
+/**
+ * @brief Returns `true` if the representation type is supported by `fixed_point`
+ *
+ * @tparam T The representation type
+ * @return `true` if the type is supported by `fixed_point` implementation
+ */
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
@@ -54,6 +61,12 @@ constexpr inline auto is_supported_representation_type()
          cuda::std::is_same_v<T, __int128_t>;
 }
 
+/**
+ * @brief Returns `true` if the value type is supported for constructing a `fixed_point`
+ *
+ * @tparam T The construction value type
+ * @return `true` if the value type is supported to construct a `fixed_point` type
+ */
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
@@ -175,8 +188,14 @@ CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
 template <typename Rep,
           typename cuda::std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
 struct scaled_integer {
-  Rep value;
-  scale_type scale;
+  Rep value;         ///< The value of the fixed point number
+  scale_type scale;  ///< The scale of the value
+  /**
+   * @brief Constructor for `scaled_integer`
+   *
+   * @param v The value of the fixed point number
+   * @param s The scale of the value
+   */
   CUDF_HOST_DEVICE inline explicit scaled_integer(Rep v, scale_type s) : value{v}, scale{s} {}
 };
 
@@ -195,7 +214,7 @@ class fixed_point {
   scale_type _scale;
 
  public:
-  using rep = Rep;
+  using rep = Rep;  ///< The representation type
 
   /**
    * @brief Constructor that will perform shifting to store value appropriately (from floating point
@@ -244,6 +263,9 @@ class fixed_point {
   /**
    * @brief "Scale-less" constructor that constructs `fixed_point` number with a specified
    * value and scale of zero
+   *
+   * @tparam T The value type being constructing from
+   * @param value The value that will be constructed from
    */
   template <typename T,
             typename cuda::std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
@@ -287,6 +309,11 @@ class fixed_point {
     return static_cast<U>(detail::shift<Rep, Rad>(value, scale_type{-_scale}));
   }
 
+  /**
+   * @brief Converts the `fixed_point` number to a `scaled_integer`
+   *
+   * @return The `scaled_integer` representation of the `fixed_point` number
+   */
   CUDF_HOST_DEVICE inline operator scaled_integer<Rep>() const
   {
     return scaled_integer<Rep>{_value, _scale};
@@ -319,8 +346,9 @@ class fixed_point {
   /**
    * @brief operator +=
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @param rhs The number being added to `this`
    * @return The sum
    */
   template <typename Rep1, Radix Rad1>
@@ -333,8 +361,9 @@ class fixed_point {
   /**
    * @brief operator *=
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @param rhs The number being multiplied to `this`
    * @return The product
    */
   template <typename Rep1, Radix Rad1>
@@ -347,8 +376,9 @@ class fixed_point {
   /**
    * @brief operator -=
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @param rhs The number being subtracted from `this`
    * @return The difference
    */
   template <typename Rep1, Radix Rad1>
@@ -361,8 +391,9 @@ class fixed_point {
   /**
    * @brief operator /=
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `rhs`
+   * @param rhs The number being divided from `this`
    * @return The quotient
    */
   template <typename Rep1, Radix Rad1>
@@ -390,8 +421,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are added.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return The resulting `fixed_point` sum
    */
   template <typename Rep1, Radix Rad1>
@@ -405,8 +438,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are subtracted.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return The resulting `fixed_point` difference
    */
   template <typename Rep1, Radix Rad1>
@@ -418,8 +453,10 @@ class fixed_point {
    *
    * `_scale`s are added and `_value`s are multiplied.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return The resulting `fixed_point` product
    */
   template <typename Rep1, Radix Rad1>
@@ -431,8 +468,10 @@ class fixed_point {
    *
    * `_scale`s are subtracted and `_value`s are divided.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return The resulting `fixed_point` quotient
    */
   template <typename Rep1, Radix Rad1>
@@ -446,8 +485,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with larger `_scale` is shifted to the
    * smaller `_scale`, and then the modulus is computed.
    *
-   * @tparam Rep1 Representation type of number being modulo-ed to `this`
-   * @tparam Rad1 Radix (base) type of number being modulo-ed to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return The resulting `fixed_point` number
    */
   template <typename Rep1, Radix Rad1>
@@ -461,8 +502,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return true if `lhs` and `rhs` are equal, false if not
    */
   template <typename Rep1, Radix Rad1>
@@ -476,8 +519,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return true if `lhs` and `rhs` are not equal, false if not
    */
   template <typename Rep1, Radix Rad1>
@@ -491,8 +536,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return true if `lhs` less than or equal to `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
@@ -506,8 +553,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return true if `lhs` greater than or equal to `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
@@ -521,8 +570,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return true if `lhs` less than `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
@@ -536,8 +587,10 @@ class fixed_point {
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
    * smaller `_scale`, and then the `_value`s are compared.
    *
-   * @tparam Rep1 Representation type of number being added to `this`
-   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @tparam Rep1 Representation type of the operand `lhs` and `rhs`
+   * @tparam Rad1 Radix (base) type of the operand `lhs` and `rhs`
+   * @param lhs The left hand side operand
+   * @param rhs The right hand side operand
    * @return true if `lhs` greater than `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
@@ -774,9 +827,9 @@ CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1
   return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
 }
 
-using decimal32  = fixed_point<int32_t, Radix::BASE_10>;
-using decimal64  = fixed_point<int64_t, Radix::BASE_10>;
-using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;
+using decimal32  = fixed_point<int32_t, Radix::BASE_10>;     ///<  32-bit decimal fixed point
+using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decimal fixed point
+using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point
 
 /** @} */  // end of group
 }  // namespace numeric

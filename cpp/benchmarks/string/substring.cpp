@@ -16,20 +16,20 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <limits>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+
+#include <limits>
 
 class StringSubstring : public cudf::benchmark {
 };
@@ -53,7 +53,7 @@ static void BM_substring(benchmark::State& state, substring_type rt)
   cudf::test::strings_column_wrapper delimiters(delim_itr, delim_itr + n_rows);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (rt) {
       case position: cudf::strings::slice_strings(input, 1, max_str_length / 2); break;
       case multi_position: cudf::strings::slice_strings(input, starts, stops); break;

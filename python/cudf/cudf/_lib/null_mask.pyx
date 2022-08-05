@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import Enum
 
@@ -8,9 +8,6 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
-
-import cudf._lib as libcudfxx
-
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.null_mask cimport (
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,

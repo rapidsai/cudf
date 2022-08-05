@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,16 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/extrema.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/iterator_traits.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
 
 #include <type_traits>
@@ -211,7 +217,7 @@ struct minmax_functor {
     // copy the minmax_pair to the host; does not copy the strings
     using OutputType = minmax_pair<cudf::string_view>;
     OutputType host_result;
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
     // strings are copied to create the scalars here
     return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
@@ -230,7 +236,7 @@ struct minmax_functor {
     // copy the minmax_pair to the host to call get_element
     using OutputType = minmax_pair<T>;
     OutputType host_result;
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
@@ -270,7 +276,7 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   const column_view& col, rmm::mr::device_memory_resource* mr)
 {
-  return detail::minmax(col, rmm::cuda_stream_default, mr);
+  return detail::minmax(col, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

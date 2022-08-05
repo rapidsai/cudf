@@ -16,14 +16,15 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/column_wrapper.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class StringReplace : public cudf::benchmark {
 };
@@ -42,7 +43,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   cudf::test::strings_column_wrapper repls({"#", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (rt) {
       case replace_type::replace_re:  // contains_re and matches_re use the same main logic
         cudf::strings::replace_re(input, "\\d+");

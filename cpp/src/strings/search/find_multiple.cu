@@ -22,11 +22,13 @@
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -90,7 +92,7 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(input, targets, rmm::cuda_stream_default, mr);
+  return detail::find_multiple(input, targets, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

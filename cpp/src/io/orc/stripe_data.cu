@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 namespace cudf {
 namespace io {
@@ -962,15 +962,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s* bs,
   return rle->num_vals;
 }
 
-/**
- * @brief Powers of 10
- */
-static const __device__ __constant__ double kPow10[40] = {
-  1.0,   1.e1,  1.e2,  1.e3,  1.e4,  1.e5,  1.e6,  1.e7,  1.e8,  1.e9,  1.e10, 1.e11, 1.e12, 1.e13,
-  1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19, 1.e20, 1.e21, 1.e22, 1.e23, 1.e24, 1.e25, 1.e26, 1.e27,
-  1.e28, 1.e29, 1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36, 1.e37, 1.e38, 1.e39,
-};
-
 static const __device__ __constant__ int64_t kPow5i[28] = {1,
                                                            5,
                                                            25,
@@ -1045,34 +1036,24 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
       auto const pos = static_cast<int>(vals.i64[2 * t]);
       __int128_t v   = decode_varint128(bs, pos);
 
-      if (dtype_id == type_id::FLOAT64) {
-        double f      = v;
-        int32_t scale = (t < numvals) ? val_scale : 0;
-        if (scale >= 0)
-          vals.f64[t] = f / kPow10[min(scale, 39)];
-        else
-          vals.f64[t] = f * kPow10[min(-scale, 39)];
-      } else {
-        auto const scaled_value = [&]() {
-          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
-          // val_scale. So the difference of them will be used to add 0s or remove digits.
-          int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-          if (scale >= 0) {
-            scale = min(scale, 27);
-            return (v * kPow5i[scale]) << scale;
-          } else  // if (scale < 0)
-          {
-            scale = min(-scale, 27);
-            return (v / kPow5i[scale]) >> scale;
-          }
-        }();
-        if (dtype_id == type_id::DECIMAL32) {
-          vals.i32[t] = scaled_value;
-        } else if (dtype_id == type_id::DECIMAL64) {
-          vals.i64[t] = scaled_value;
+      auto const scaled_value = [&]() {
+        // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+        // val_scale. So the difference of them will be used to add 0s or remove digits.
+        int32_t const scale = (t < numvals) ? col_scale - val_scale : 0;
+        if (scale >= 0) {
+          auto const abs_scale = min(scale, 27);
+          return (v * kPow5i[abs_scale]) << abs_scale;
         } else {
-          vals.i128[t] = scaled_value;
+          auto const abs_scale = min(-scale, 27);
+          return (v / kPow5i[abs_scale]) >> abs_scale;
         }
+      }();
+      if (dtype_id == type_id::DECIMAL32) {
+        vals.i32[t] = scaled_value;
+      } else if (dtype_id == type_id::DECIMAL64) {
+        vals.i64[t] = scaled_value;
+      } else {
+        vals.i128[t] = scaled_value;
       }
     }
     // There is nothing to read, so break
@@ -1711,8 +1692,7 @@ __global__ void __launch_bounds__(block_size)
             case DECIMAL:
               if (s->chunk.dtype_id == type_id::DECIMAL32) {
                 static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
-              } else if (s->chunk.dtype_id == type_id::FLOAT64 or
-                         s->chunk.dtype_id == type_id::DECIMAL64) {
+              } else if (s->chunk.dtype_id == type_id::DECIMAL64) {
                 static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               } else {
                 // decimal128

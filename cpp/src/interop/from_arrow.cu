@@ -28,6 +28,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -108,11 +109,11 @@ struct dispatch_to_cudf_column {
       stream,
       mr);
     auto mask_buffer = array.null_bitmap();
-    CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                             reinterpret_cast<const uint8_t*>(mask_buffer->address()),
-                             array.null_bitmap()->size(),
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(mask->data(),
+                                  reinterpret_cast<const uint8_t*>(mask_buffer->address()),
+                                  array.null_bitmap()->size(),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
     return mask;
   }
 
@@ -135,7 +136,7 @@ struct dispatch_to_cudf_column {
     auto const has_nulls     = skip_mask ? false : array.null_bitmap_data() != nullptr;
     auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       mutable_column_view.data<T>(),
       reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
@@ -191,7 +192,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
   auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_column_view = col->mutable_view();
 
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     mutable_column_view.data<DeviceType>(),
     reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
     sizeof(DeviceType) * num_rows,
@@ -227,11 +228,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
 {
   auto data_buffer = array.data()->buffers[1];
   auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
-  CUDA_TRY(cudaMemcpyAsync(data.data(),
-                           reinterpret_cast<const uint8_t*>(data_buffer->address()),
-                           data_buffer->size(),
-                           cudaMemcpyDefault,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
+                                reinterpret_cast<const uint8_t*>(data_buffer->address()),
+                                data_buffer->size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
   auto out_col = mask_to_bools(static_cast<bitmask_type*>(data.data()),
                                array.offset(),
                                array.offset() + array.length(),
@@ -449,7 +450,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input_table, rmm::cuda_stream_default, mr);
+  return detail::from_arrow(input_table, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,12 @@ public class NativeDepsLoader {
    * subsequent stages are loaded.
    */
   private static final String[][] loadOrder = new String[][]{
+      new String[]{
+          "nvcomp_bitcomp", "nvcomp_gdeflate"
+      },
+      new String[]{
+          "nvcomp"
+      },
       new String[]{
           "cudf"
       },

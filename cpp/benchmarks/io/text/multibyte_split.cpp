@@ -19,25 +19,22 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf_test/file_utilities.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
+#include <thrust/host_vector.h>
 #include <thrust/transform.h>
 
 #include <cstdio>
 #include <fstream>
 #include <memory>
-
-using cudf::test::fixed_width_column_wrapper;
 
 temp_directory const temp_dir("cudf_gbench");
 
@@ -108,7 +105,7 @@ static void BM_multibyte_split(benchmark::State& state)
                   device_input.data(),
                   device_input.size() * sizeof(char),
                   cudaMemcpyDeviceToHost,
-                  rmm::cuda_stream_default);
+                  cudf::default_stream_value);
 
   auto temp_file_name = random_file_in_dir(temp_dir.path());
 
@@ -136,6 +133,7 @@ static void BM_multibyte_split(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);
     auto output = cudf::io::text::multibyte_split(*source, delim);
   }

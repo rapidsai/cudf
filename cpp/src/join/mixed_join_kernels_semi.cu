@@ -32,17 +32,18 @@ namespace detail {
 namespace cg = cooperative_groups;
 
 template <cudf::size_type block_size, bool has_nulls>
-__global__ void mixed_join_semi(table_device_view left_table,
-                                table_device_view right_table,
-                                table_device_view probe,
-                                table_device_view build,
-                                row_equality const equality_probe,
-                                join_kind const join_type,
-                                cudf::detail::semi_map_type::device_view hash_table_view,
-                                size_type* join_output_l,
-                                cudf::ast::detail::expression_device_view device_expression_data,
-                                cudf::size_type const* join_result_offsets,
-                                bool const swap_tables)
+__launch_bounds__(block_size) __global__
+  void mixed_join_semi(table_device_view left_table,
+                       table_device_view right_table,
+                       table_device_view probe,
+                       table_device_view build,
+                       row_equality const equality_probe,
+                       join_kind const join_type,
+                       cudf::detail::semi_map_type::device_view hash_table_view,
+                       size_type* join_output_l,
+                       cudf::ast::detail::expression_device_view device_expression_data,
+                       cudf::size_type const* join_result_offsets,
+                       bool const swap_tables)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is

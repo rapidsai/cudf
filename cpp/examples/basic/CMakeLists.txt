@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 cmake_minimum_required(VERSION 3.18)
 
 project(
@@ -14,7 +16,7 @@ file(
 )
 include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-set(CUDF_TAG branch-22.06)
+set(CUDF_TAG branch-22.08)
 CPMFindPackage(
   NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
   GIT_TAG ${CUDF_TAG}

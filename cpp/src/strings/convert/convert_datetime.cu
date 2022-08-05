@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -34,9 +35,14 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
 #include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/optional.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 
 #include <map>
 #include <numeric>
@@ -97,7 +103,7 @@ struct alignas(4) format_item {
 using specifier_map = std::map<char, int8_t>;
 
 struct format_compiler {
-  std::string const format;
+  std::string_view const format;
   rmm::device_uvector<format_item> d_items;
 
   // clang-format off
@@ -108,15 +114,15 @@ struct format_compiler {
     {'S', 2}, {'f', 6}, {'z', 5}, {'Z', 3}, {'p', 2}, {'j', 3}};
   // clang-format on
 
-  format_compiler(std::string fmt,
+  format_compiler(std::string_view fmt,
                   rmm::cuda_stream_view stream,
                   specifier_map extra_specifiers = {})
     : format(fmt), d_items(0, stream)
   {
     specifiers.insert(extra_specifiers.begin(), extra_specifiers.end());
     std::vector<format_item> items;
-    const char* str = format.c_str();
-    auto length     = format.length();
+    auto str    = format.data();
+    auto length = format.length();
     while (length > 0) {
       char ch = *str++;
       length--;
@@ -293,12 +299,14 @@ struct parse_datetime {
         }
         case 'z': {
           // 'z' format is +hh:mm -- single sign char and 2 chars each for hour and minute
-          auto const sign     = *ptr == '-' ? 1 : -1;
-          auto const [hh, lh] = parse_int(ptr + 1, 2);
-          auto const [mm, lm] = parse_int(ptr + 3, 2);
-          // revert timezone back to UTC
-          timeparts.tz_minutes = sign * ((hh * 60) + mm);
-          bytes_read -= lh + lm;
+          if (item.length == 5) {
+            auto const sign     = *ptr == '-' ? 1 : -1;
+            auto const [hh, lh] = parse_int(ptr + 1, 2);
+            auto const [mm, lm] = parse_int(ptr + 3, 2);
+            // revert timezone back to UTC
+            timeparts.tz_minutes = sign * ((hh * 60) + mm);
+            bytes_read -= lh + lm;
+          }
           break;
         }
         case 'Z': break;  // skip
@@ -355,7 +363,7 @@ struct parse_datetime {
 struct dispatch_to_timestamps_fn {
   template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   void operator()(column_device_view const& d_strings,
-                  std::string const& format,
+                  std::string_view format,
                   mutable_column_view& results_view,
                   rmm::cuda_stream_view stream) const
   {
@@ -369,7 +377,7 @@ struct dispatch_to_timestamps_fn {
   }
   template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
   void operator()(column_device_view const&,
-                  std::string const&,
+                  std::string_view,
                   mutable_column_view&,
                   rmm::cuda_stream_view) const
   {
@@ -382,7 +390,7 @@ struct dispatch_to_timestamps_fn {
 //
 std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             data_type timestamp_type,
-                                            std::string const& format,
+                                            std::string_view format,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
@@ -569,6 +577,8 @@ struct check_datetime_format {
             auto const cvm = check_value(ptr + 3, 2, 0, 59);
             result         = (*ptr == '-' || *ptr == '+') && cvh.first && cvm.first;
             bytes_read -= cvh.second + cvm.second;
+          } else if (item.length == 1) {
+            result = *ptr == 'Z';
           }
           break;
         }
@@ -603,7 +613,7 @@ struct check_datetime_format {
 };
 
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
-                                           std::string const& format,
+                                           std::string_view const& format,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
@@ -639,19 +649,19 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
 
 std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             data_type timestamp_type,
-                                            std::string const& format,
+                                            std::string_view format,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_timestamps(input, timestamp_type, format, rmm::cuda_stream_default, mr);
+  return detail::to_timestamps(input, timestamp_type, format, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
-                                           std::string const& format,
+                                           std::string_view format,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_timestamp(input, format, rmm::cuda_stream_default, mr);
+  return detail::is_timestamp(input, format, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -1077,7 +1087,7 @@ struct dispatch_from_timestamps_fn {
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        d_timestamps.size(),
                        pfn);
-    return std::make_pair(std::move(offsets_column), std::move(chars_column));
+    return std::pair(std::move(offsets_column), std::move(chars_column));
   }
 
   template <typename T, typename... Args>
@@ -1091,7 +1101,7 @@ struct dispatch_from_timestamps_fn {
 
 //
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
-                                        std::string const& format,
+                                        std::string_view format,
                                         strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
@@ -1134,12 +1144,12 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
 // external API
 
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
-                                        std::string const& format,
+                                        std::string_view format,
                                         strings_column_view const& names,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_timestamps(timestamps, format, names, rmm::cuda_stream_default, mr);
+  return detail::from_timestamps(timestamps, format, names, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

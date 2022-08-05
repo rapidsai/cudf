@@ -32,6 +32,7 @@
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
+#include <thrust/swap.h>
 
 namespace cudf {
 namespace detail {
@@ -126,7 +127,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   auto comp =
     experimental::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
-  auto comparator = comp.device_comparator(nullate::DYNAMIC{has_nested_nulls(input)});
+  auto comparator = comp.less(nullate::DYNAMIC{has_nested_nulls(input)});
 
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),

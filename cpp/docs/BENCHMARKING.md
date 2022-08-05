@@ -35,6 +35,12 @@ provided in `cpp/benchmarks/synchronization/synchronization.hpp` to help with th
 can also optionally clear the GPU L2 cache in order to ensure cache hits do not artificially inflate
 performance in repeated iterations.
 
+## Data generation
+
+For generating benchmark input data, helper functions are available at [cpp/benchmarks/common/generate_input.hpp](/cpp/benchmarks/common/generate_input.hpp). The input data generation happens on device, in contrast to any `column_wrapper` where data generation happens on the host.
+* `create_sequence_table` can generate sequence columns starting with value 0 in first row and increasing by 1 in subsequent rows.
+* `create_random_table` can generate a table filled with random data. The random data parameters are configurable.
+
 ## What should we benchmark?
 
 In general, we should benchmark all features over a range of data sizes and types, so that we can

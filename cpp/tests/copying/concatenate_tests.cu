@@ -22,6 +22,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -30,7 +31,9 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 
 #include <numeric>
 #include <string>
@@ -50,7 +53,7 @@ template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
-  TypedColumnTest(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  TypedColumnTest(rmm::cuda_stream_view stream = cudf::default_stream_value)
     : data{_num_elements * cudf::size_of(type()), stream},
       mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
@@ -60,9 +63,9 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
     std::iota(h_data.begin(), h_data.end(), char{0});
     std::vector<char> h_mask(mask.size());
     std::iota(h_mask.begin(), h_mask.end(), char{0});
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       typed_data, h_data.data(), data.size(), cudaMemcpyHostToDevice, stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       typed_mask, h_mask.data(), mask.size(), cudaMemcpyHostToDevice, stream.value()));
     stream.synchronize();
   }
@@ -353,7 +356,7 @@ TEST_F(OverflowTest, OverflowTest)
     table_view tbl_last({*many_chars_last});
     std::vector<cudf::table_view> table_views_to_concat({tbl, tbl, tbl, tbl, tbl, tbl_last});
     std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
-    EXPECT_NO_THROW(rmm::cuda_stream_default.synchronize());
+    EXPECT_NO_THROW(cudf::default_stream_value.synchronize());
     ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max());
   }
 

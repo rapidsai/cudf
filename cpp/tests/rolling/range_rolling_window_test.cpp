@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/range_window_bounds_detail.hpp>
-#include <src/rolling/rolling_detail.hpp>
+#include <src/rolling/detail/range_window_bounds.hpp>
+#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <vector>

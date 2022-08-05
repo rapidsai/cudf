@@ -1,11 +1,11 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
 
-import collections.abc as abc
 import io
 import os
+from collections import abc
 
 import cudf
 
@@ -82,15 +82,15 @@ cpdef read_json(object filepaths_or_buffers,
             for k, v in dtype.items():
                 c_dtypes_map[str(k).encode()] = \
                     _get_cudf_data_type_from_dtype(v)
-        elif not isinstance(dtype, abc.Iterable):
-            raise TypeError("`dtype` must be 'list like' or 'dict'")
-        else:
+        elif isinstance(dtype, abc.Collection):
             is_list_like_dtypes = True
             c_dtypes_list.reserve(len(dtype))
             for col_dtype in dtype:
                 c_dtypes_list.push_back(
                     _get_cudf_data_type_from_dtype(
                         col_dtype))
+        else:
+            raise TypeError("`dtype` must be 'list like' or 'dict'")
 
     cdef json_reader_options opts = move(
         json_reader_options.builder(make_source_info(filepaths_or_buffers))

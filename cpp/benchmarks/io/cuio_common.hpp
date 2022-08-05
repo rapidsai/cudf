@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <cudf_test/file_utilities.hpp>
+
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
-
-#include <cudf_test/file_utilities.hpp>
 
 using cudf::io::io_type;
 
@@ -132,3 +132,13 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
  * The segments could be Parquet row groups or ORC stripes.
  */
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
+
+/**
+ * @brief Drops L3 cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
+ *
+ * Has no effect if the environment variable is not set.
+ * May require sudo access ro run successfully.
+ *
+ * @throw cudf::logic_error if the environment variable is set and the command fails
+ */
+void try_drop_l3_cache();

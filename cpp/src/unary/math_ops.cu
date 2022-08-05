@@ -21,9 +21,12 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/transform.h>
 
 #include <cmath>
 #include <type_traits>
@@ -635,7 +638,7 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unary_operation(input, op, rmm::cuda_stream_default, mr);
+  return detail::unary_operation(input, op, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

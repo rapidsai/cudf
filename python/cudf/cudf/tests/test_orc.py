@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
-import pyorc as po
+import pyorc
 import pytest
 
 import cudf
@@ -301,27 +301,36 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     assert_eq(pdf, gdf)
 
 
-def test_orc_read_skiprows(tmpdir):
+def test_orc_read_skiprows():
     buff = BytesIO()
-    df = pd.DataFrame(
-        {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
-        dtype=pd.BooleanDtype(),
-    )
-    writer = po.Writer(buff, po.Struct(a=po.Boolean()))
-    tuples = list(
-        map(
-            lambda x: (None,) if x[0] is pd.NA else x,
-            list(df.itertuples(index=False, name=None)),
-        )
-    )
-    writer.writerows(tuples)
+    data = [
+        True,
+        False,
+        True,
+        False,
+        None,
+        True,
+        True,
+        True,
+        False,
+        None,
+        False,
+        False,
+        True,
+        True,
+        True,
+        True,
+    ]
+    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
+    writer.writerows([(d,) for d in data])
     writer.close()
 
+    # testing 10 skiprows due to a boolean specific bug fix that didn't
+    # repro for other sizes of data
     skiprows = 10
 
-    expected = cudf.read_orc(buff)[skiprows::].reset_index(drop=True)
+    expected = cudf.read_orc(buff)[skiprows:].reset_index(drop=True)
     got = cudf.read_orc(buff, skiprows=skiprows)
-
     assert_eq(expected, got)
 
 
@@ -640,6 +649,12 @@ def test_int_overflow(tmpdir):
 
 
 def normalized_equals(value1, value2):
+    # need naive time object for numpy to convert to datetime64
+    if isinstance(value1, datetime.datetime):
+        value1 = value1.replace(tzinfo=None)
+    if isinstance(value2, datetime.datetime):
+        value2 = value2.replace(tzinfo=None)
+
     if isinstance(value1, (datetime.datetime, np.datetime64)):
         value1 = np.datetime64(value1, "ms")
     if isinstance(value2, (datetime.datetime, np.datetime64)):
@@ -674,7 +689,10 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     for col in gdf:
@@ -715,6 +733,105 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
                 assert stats_num_vals == actual_num_vals
 
 
+@pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
+@pytest.mark.parametrize("nrows", [2, 100, 6000000])
+def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    supported_stat_types = supported_numpy_dtypes + ["str"]
+    # Can't write random bool columns until issue #6763 is fixed
+    if nrows == 6000000:
+        supported_stat_types.remove("bool")
+
+    gdf_fname = tmpdir.join("chunked_stats.orc")
+    writer = ORCWriter(gdf_fname)
+
+    max_char_length = 1000 if nrows < 10000 else 100
+
+    # Make a dataframe
+    gdf = cudf.DataFrame(
+        {
+            "col_"
+            + str(dtype): gen_rand_series(
+                dtype,
+                int(nrows / 2),
+                has_nulls=True,
+                low=0,
+                high=max_char_length,
+            )
+            for dtype in supported_stat_types
+        }
+    )
+
+    pdf1 = gdf.to_pandas()
+    writer.write_table(gdf)
+    # gdf is specifically being reused here to ensure the data is destroyed
+    # before the next write_table call to ensure the data is persisted inside
+    # write and no pointers are saved into the original table
+    gdf = cudf.DataFrame(
+        {
+            "col_"
+            + str(dtype): gen_rand_series(
+                dtype,
+                int(nrows / 2),
+                has_nulls=True,
+                low=0,
+                high=max_char_length,
+            )
+            for dtype in supported_stat_types
+        }
+    )
+    pdf2 = gdf.to_pandas()
+    writer.write_table(gdf)
+    writer.close()
+
+    # pandas is unable to handle min/max of string col with nulls
+    expect = cudf.DataFrame(pd.concat([pdf1, pdf2]).reset_index(drop=True))
+
+    # Read back written ORC's statistics
+    orc_file = pa.orc.ORCFile(gdf_fname)
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([gdf_fname])
+
+    # check file stats
+    for col in expect:
+        if "minimum" in file_stats[0][col]:
+            stats_min = file_stats[0][col]["minimum"]
+            actual_min = expect[col].min()
+            assert normalized_equals(actual_min, stats_min)
+        if "maximum" in file_stats[0][col]:
+            stats_max = file_stats[0][col]["maximum"]
+            actual_max = expect[col].max()
+            assert normalized_equals(actual_max, stats_max)
+        if "number_of_values" in file_stats[0][col]:
+            stats_num_vals = file_stats[0][col]["number_of_values"]
+            actual_num_vals = expect[col].count()
+            assert stats_num_vals == actual_num_vals
+
+    # compare stripe statistics with actual min/max
+    for stripe_idx in range(0, orc_file.nstripes):
+        stripe = orc_file.read_stripe(stripe_idx)
+        # pandas is unable to handle min/max of string col with nulls
+        stripe_df = cudf.DataFrame(stripe.to_pandas())
+        for col in stripe_df:
+            if "minimum" in stripes_stats[stripe_idx][col]:
+                actual_min = stripe_df[col].min()
+                stats_min = stripes_stats[stripe_idx][col]["minimum"]
+                assert normalized_equals(actual_min, stats_min)
+
+            if "maximum" in stripes_stats[stripe_idx][col]:
+                actual_max = stripe_df[col].max()
+                stats_max = stripes_stats[stripe_idx][col]["maximum"]
+                assert normalized_equals(actual_max, stats_max)
+
+            if "number_of_values" in stripes_stats[stripe_idx][col]:
+                stats_num_vals = stripes_stats[stripe_idx][col][
+                    "number_of_values"
+                ]
+                actual_num_vals = stripe_df[col].count()
+                assert stats_num_vals == actual_num_vals
+
+
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     # Make a dataframe
@@ -726,7 +843,10 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     col = "col_bool"
@@ -925,29 +1045,35 @@ def generate_list_struct_buff(size=100_000):
     buff = BytesIO()
 
     schema = {
-        "lvl3_list": po.Array(po.Array(po.Array(po.BigInt()))),
-        "lvl1_list": po.Array(po.BigInt()),
-        "lvl1_struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
-        "lvl2_struct": po.Struct(
+        "lvl3_list": pyorc.Array(pyorc.Array(pyorc.Array(pyorc.BigInt()))),
+        "lvl1_list": pyorc.Array(pyorc.BigInt()),
+        "lvl1_struct": pyorc.Struct(
+            **{"a": pyorc.BigInt(), "b": pyorc.BigInt()}
+        ),
+        "lvl2_struct": pyorc.Struct(
             **{
-                "a": po.BigInt(),
-                "lvl1_struct": po.Struct(
-                    **{"c": po.BigInt(), "d": po.BigInt()}
+                "a": pyorc.BigInt(),
+                "lvl1_struct": pyorc.Struct(
+                    **{"c": pyorc.BigInt(), "d": pyorc.BigInt()}
                 ),
             }
         ),
-        "list_nests_struct": po.Array(
-            po.Array(po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}))
+        "list_nests_struct": pyorc.Array(
+            pyorc.Array(
+                pyorc.Struct(**{"a": pyorc.BigInt(), "b": pyorc.BigInt()})
+            )
         ),
-        "struct_nests_list": po.Struct(
+        "struct_nests_list": pyorc.Struct(
             **{
-                "struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
-                "list": po.Array(po.BigInt()),
+                "struct": pyorc.Struct(
+                    **{"a": pyorc.BigInt(), "b": pyorc.BigInt()}
+                ),
+                "list": pyorc.Array(pyorc.BigInt()),
             }
         ),
     }
 
-    schema = po.Struct(**schema)
+    schema = pyorc.Struct(**schema)
 
     lvl3_list = [
         rd.choice(
@@ -1013,7 +1139,7 @@ def generate_list_struct_buff(size=100_000):
         }
     )
 
-    writer = po.Writer(buff, schema, stripe_size=1024)
+    writer = pyorc.Writer(buff, schema, stripe_size=1024)
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -1070,7 +1196,10 @@ def test_skip_rows_for_nested_types(columns, list_struct_buff):
         RuntimeError, match="skip_rows is not supported by nested column"
     ):
         cudf.read_orc(
-            list_struct_buff, columns=columns, use_index=True, skiprows=5,
+            list_struct_buff,
+            columns=columns,
+            use_index=True,
+            skiprows=5,
         )
 
 
@@ -1092,15 +1221,17 @@ def gen_map_buff(size=10000):
     buff = BytesIO()
 
     schema = {
-        "lvl1_map": po.Map(key=po.String(), value=po.BigInt()),
-        "lvl2_map": po.Map(key=po.String(), value=po.Array(po.BigInt())),
-        "lvl2_struct_map": po.Map(
-            key=po.String(),
-            value=po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+        "lvl1_map": pyorc.Map(key=pyorc.String(), value=pyorc.BigInt()),
+        "lvl2_map": pyorc.Map(
+            key=pyorc.String(), value=pyorc.Array(pyorc.BigInt())
+        ),
+        "lvl2_struct_map": pyorc.Map(
+            key=pyorc.String(),
+            value=pyorc.Struct(**{"a": pyorc.BigInt(), "b": pyorc.BigInt()}),
         ),
     }
 
-    schema = po.Struct(**schema)
+    schema = pyorc.Struct(**schema)
 
     lvl1_map = [
         rd.choice(
@@ -1177,8 +1308,8 @@ def gen_map_buff(size=10000):
             "lvl2_struct_map": lvl2_struct_map,
         }
     )
-    writer = po.Writer(
-        buff, schema, stripe_size=1024, compression=po.CompressionKind.NONE
+    writer = pyorc.Writer(
+        buff, schema, stripe_size=1024, compression=pyorc.CompressionKind.NONE
     )
     tuples = list(
         map(
@@ -1257,10 +1388,7 @@ def test_map_type_read(columns, num_rows, use_index):
         assert_eq(expected_tbl.to_pandas(), gdf)
 
 
-@pytest.mark.parametrize(
-    "data", [["_col0"], ["FakeName", "_col0", "TerriblyFakeColumnName"]]
-)
-def test_orc_reader_decimal(datadir, data):
+def test_orc_reader_decimal(datadir):
     path = datadir / "TestOrcFile.decimal.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
@@ -1268,28 +1396,8 @@ def test_orc_reader_decimal(datadir, data):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, decimal_cols_as_float=data).to_pandas()
+    gdf = cudf.read_orc(path).to_pandas()
 
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64
-    pdf = pdf.apply(pd.to_numeric)
-
-    assert_eq(pdf, gdf)
-
-
-@pytest.mark.parametrize("data", [["InvalidColumnName"]])
-def test_orc_reader_decimal_invalid_column(datadir, data):
-    path = datadir / "TestOrcFile.decimal.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
-    pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, decimal_cols_as_float=data).to_pandas()
-
-    # Since the `decimal_cols_as_float` column name
-    # is invalid, this should be a decimal
     assert_eq(pdf, gdf)
 
 
@@ -1493,8 +1601,9 @@ def test_statistics_sum_overflow():
     minint64 = np.iinfo(np.int64).min
 
     buff = BytesIO()
-    with po.Writer(
-        buff, po.Struct(a=po.BigInt(), b=po.BigInt(), c=po.BigInt())
+    with pyorc.Writer(
+        buff,
+        pyorc.Struct(a=pyorc.BigInt(), b=pyorc.BigInt(), c=pyorc.BigInt()),
     ) as writer:
         writer.write((maxint64, minint64, minint64))
         writer.write((1, -1, 1))
@@ -1511,20 +1620,20 @@ def test_statistics_sum_overflow():
 
 def test_empty_statistics():
     buff = BytesIO()
-    orc_schema = po.Struct(
-        a=po.BigInt(),
-        b=po.Double(),
-        c=po.String(),
-        d=po.Decimal(11, 2),
-        e=po.Date(),
-        f=po.Timestamp(),
-        g=po.Boolean(),
-        h=po.Binary(),
-        i=po.BigInt(),
+    orc_schema = pyorc.Struct(
+        a=pyorc.BigInt(),
+        b=pyorc.Double(),
+        c=pyorc.String(),
+        d=pyorc.Decimal(11, 2),
+        e=pyorc.Date(),
+        f=pyorc.Timestamp(),
+        g=pyorc.Boolean(),
+        h=pyorc.Binary(),
+        i=pyorc.BigInt(),
         # One column with non null value, else cudf/pyorc readers crash
     )
     data = tuple([None] * (len(orc_schema.fields) - 1) + [1])
-    with po.Writer(buff, orc_schema) as writer:
+    with pyorc.Writer(buff, orc_schema) as writer:
         writer.write(data)
 
     got = cudf.io.orc.read_orc_statistics([buff])
@@ -1605,3 +1714,47 @@ def test_empty_columns():
 
     got_df = cudf.read_orc(buffer)
     assert_eq(expected, got_df)
+
+
+def test_orc_reader_zstd_compression(list_struct_buff):
+    expected = cudf.read_orc(list_struct_buff)
+    # save with ZSTD compression
+    buffer = BytesIO()
+    pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+    writer = pyarrow.orc.ORCWriter(buffer, compression="zstd")
+    writer.write(pyarrow_tbl)
+    writer.close()
+    try:
+        got = cudf.read_orc(buffer)
+        assert_eq(expected, got)
+    except RuntimeError:
+        pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_writer_protobuf_large_rowindexentry():
+    s = [
+        "Length of the two strings needs to add up to at least ~120",
+        "So that the encoded statistics are larger than 128 bytes",
+    ] * 5001  # generate more than 10K rows to have two row groups
+    df = cudf.DataFrame({"s1": s})
+
+    buff = BytesIO()
+    df.to_orc(buff)
+
+    got = cudf.read_orc(buff)
+    assert_frame_equal(df, got)
+
+
+def test_orc_writer_zlib_compression(list_struct_buff):
+    expected = cudf.read_orc(list_struct_buff)
+    try:
+        # save with ZLIB compression
+        buff = BytesIO()
+        expected.to_orc(buff, compression="ZLIB")
+        got = cudf.read_orc(buff)
+        assert_eq(expected, got)
+    except RuntimeError as e:
+        if "Unsupported compression type" in str(e):
+            pytest.mark.xfail(reason="nvcomp build doesn't have deflate")
+        else:
+            raise e

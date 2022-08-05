@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -31,6 +31,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
@@ -181,9 +183,6 @@ class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 
-  // ORC compresses streams into independent chunks
-  static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
-
  public:
   /**
    * @brief Constructor with writer options.
@@ -284,24 +283,91 @@ class writer::impl {
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
-  struct encoded_statistics {
-    std::vector<ColStatsBlob> rowgroup_level;
+  /**
+   * @brief Statistics data stored between calls to write for chunked writes
+   *
+   */
+  struct intermediate_statistics {
+    explicit intermediate_statistics(rmm::cuda_stream_view stream)
+      : stripe_stat_chunks(0, stream){};
+    intermediate_statistics(std::vector<ColStatsBlob> rb,
+                            rmm::device_uvector<statistics_chunk> sc,
+                            hostdevice_vector<statistics_merge_group> smg,
+                            std::vector<statistics_dtype> sdt,
+                            std::vector<data_type> sct)
+      : rowgroup_blobs(std::move(rb)),
+        stripe_stat_chunks(std::move(sc)),
+        stripe_stat_merge(std::move(smg)),
+        stats_dtypes(std::move(sdt)),
+        col_types(std::move(sct)){};
+
+    // blobs for the rowgroups. Not persisted
+    std::vector<ColStatsBlob> rowgroup_blobs;
+
+    rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
+    hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+    std::vector<statistics_dtype> stats_dtypes;
+    std::vector<data_type> col_types;
+  };
+
+  /**
+   * @brief used for chunked writes to persist data between calls to write.
+   *
+   */
+  struct persisted_statistics {
+    void clear()
+    {
+      stripe_stat_chunks.clear();
+      stripe_stat_merge.clear();
+      string_pools.clear();
+      stats_dtypes.clear();
+      col_types.clear();
+      num_rows = 0;
+    }
+
+    void persist(int num_table_rows,
+                 bool single_write_mode,
+                 intermediate_statistics& intermediate_stats,
+                 rmm::cuda_stream_view stream);
+
+    std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
+    std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+    std::vector<rmm::device_uvector<char>> string_pools;
+    std::vector<statistics_dtype> stats_dtypes;
+    std::vector<data_type> col_types;
+    int num_rows = 0;
+  };
+
+  /**
+   * @brief Protobuf encoded statistics created at file close
+   *
+   */
+  struct encoded_footer_statistics {
     std::vector<ColStatsBlob> stripe_level;
     std::vector<ColStatsBlob> file_level;
   };
 
   /**
-   * @brief Returns column statistics encoded in ORC protobuf format.
+   * @brief Returns column statistics in an intermediate format.
    *
    * @param statistics_freq Frequency of statistics to be included in the output file
    * @param orc_table Table information to be written
-   * @param columns List of columns
    * @param segmentation stripe and rowgroup ranges
-   * @return The statistic blobs
+   * @return The statistic information
    */
-  encoded_statistics gather_statistic_blobs(statistics_freq statistics_freq,
-                                            orc_table_view const& orc_table,
-                                            file_segmentation const& segmentation);
+  intermediate_statistics gather_statistic_blobs(statistics_freq const statistics_freq,
+                                                 orc_table_view const& orc_table,
+                                                 file_segmentation const& segmentation);
+
+  /**
+   * @brief Returns column statistics encoded in ORC protobuf format stored in the footer.
+   *
+   * @param num_stripes number of stripes in the data
+   * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+   * @return The encoded statistic blobs
+   */
+  encoded_footer_statistics finish_statistic_blobs(
+    int num_stripes, writer::impl::persisted_statistics& incoming_stats);
 
   /**
    * @brief Writes the specified column's row index stream.
@@ -324,7 +390,7 @@ class writer::impl {
                           file_segmentation const& segmentation,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
-                          host_span<gpu_inflate_status_s const> comp_out,
+                          host_span<decompress_status const> comp_out,
                           std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,
@@ -362,8 +428,8 @@ class writer::impl {
 
   stripe_size_limits max_stripe_size;
   size_type row_index_stride;
-  size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
-  CompressionKind compression_kind_ = CompressionKind::NONE;
+  CompressionKind compression_kind_;
+  size_t compression_blocksize_;
 
   bool enable_dictionary_     = true;
   statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;
@@ -382,6 +448,8 @@ class writer::impl {
   std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
+  // statistics data saved between calls to write before a close writes out the statistics
+  persisted_statistics persisted_stripe_statistics;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

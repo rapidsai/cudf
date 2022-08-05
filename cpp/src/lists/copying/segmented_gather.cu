@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,10 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/detail/gather.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -117,7 +119,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
                                          rmm::mr::device_memory_resource* mr)
 {
   return detail::segmented_gather(
-    source_column, gather_map_list, bounds_policy, rmm::cuda_stream_default, mr);
+    source_column, gather_map_list, bounds_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

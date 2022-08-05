@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,228 @@ TEST_F(HashTest, MultiValueNulls)
 
   EXPECT_EQ(input1.num_rows(), spark_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(spark_output1->view(), spark_output2->view());
+}
+
+TEST_F(HashTest, BasicList)
+{
+  using LCW = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW = cudf::test::fixed_width_column_wrapper<uint32_t>;
+
+  auto const col = LCW{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+  auto const input  = cudf::table_view({col});
+  auto const expect = ICW{1607593296,
+                          1607593296,
+                          -636010097,
+                          -132459357,
+                          -636010097,
+                          -2008850957,
+                          -1023787369,
+                          761197503,
+                          761197503,
+                          1340177511,
+                          -1023787369,
+                          -1023787369};
+
+  auto const output = cudf::hash(input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
+
+  auto const expect_seeded = ICW{1607594268u,
+                                 1607594268u,
+                                 3658958173u,
+                                 4162508905u,
+                                 3658958173u,
+                                 2286117305u,
+                                 3271180885u,
+                                 761198477u,
+                                 761198477u,
+                                 1340178469u,
+                                 3271180885u,
+                                 3271180885u};
+
+  auto const seeded_output = cudf::hash(input, cudf::hash_id::HASH_MURMUR3, 15);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
+}
+
+TEST_F(HashTest, NullableList)
+{
+  using LCW = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW = cudf::test::fixed_width_column_wrapper<uint32_t>;
+
+  auto const valids = std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0};
+  auto const col =
+    LCW{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
+  auto expect = ICW{-2023148619,
+                    -2023148619,
+                    -31671896,
+                    -31671896,
+                    -1205248335,
+                    1865773848,
+                    1865773848,
+                    -2023148682,
+                    -1205248335,
+                    -1205248335,
+                    -2023148682};
+
+  auto const output = cudf::hash(cudf::table_view({col}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
+
+  auto const expect_seeded = ICW{2271820643u,
+                                 2271820643u,
+                                 4263297392u,
+                                 4263297392u,
+                                 3089720935u,
+                                 1865775808u,
+                                 1865775808u,
+                                 2271820578u,
+                                 3089720935u,
+                                 3089720935u,
+                                 2271820578u};
+
+  auto const seeded_output = cudf::hash(cudf::table_view({col}), cudf::hash_id::HASH_MURMUR3, 31);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
+}
+
+TEST_F(HashTest, ListOfStruct)
+{
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  auto col2 = cudf::test::strings_column_wrapper{
+    {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
+  auto struct_col = cudf::test::structs_column_wrapper{
+    {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto nullmask_buf =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::make_lists_column(
+    17, offsets.release(), struct_col.release(), cudf::UNKNOWN_NULL_COUNT, std::move(nullmask_buf));
+
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{83451479,
+                                                                 83451479,
+                                                                 83455332,
+                                                                 83455332,
+                                                                 -759684425,
+                                                                 -959632766,
+                                                                 -959632766,
+                                                                 -959632766,
+                                                                 -959636527,
+                                                                 -656998704,
+                                                                 613652814,
+                                                                 1902080426,
+                                                                 1902080426,
+                                                                 2061025592,
+                                                                 2061025592,
+                                                                 -319840811,
+                                                                 -319840811};
+
+  auto const output = cudf::hash(cudf::table_view({*list_column}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
+
+  auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{81710442u,
+                                                                        81710442u,
+                                                                        81729816u,
+                                                                        81729816u,
+                                                                        3532787573u,
+                                                                        3642097855u,
+                                                                        3642097855u,
+                                                                        3642097855u,
+                                                                        3642110391u,
+                                                                        3624905718u,
+                                                                        608933631u,
+                                                                        1899376347u,
+                                                                        1899376347u,
+                                                                        2058877614u,
+                                                                        2058877614u,
+                                                                        4013395891u,
+                                                                        4013395891u};
+
+  auto const seeded_output =
+    cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_MURMUR3, 619);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
+}
+
+TEST_F(HashTest, ListOfEmptyStruct)
+{
+  // []
+  // []
+  // Null
+  // Null
+  // [Null, Null]
+  // [Null, Null]
+  // [Null, Null]
+  // [Null]
+  // [Null]
+  // [{}]
+  // [{}]
+  // [{}, {}]
+  // [{}, {}]
+
+  auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto struct_validity_buffer =
+    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+  auto struct_col =
+    cudf::make_structs_column(14, {}, cudf::UNKNOWN_NULL_COUNT, std::move(struct_validity_buffer));
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_validity_buffer =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::make_lists_column(13,
+                                             offsets.release(),
+                                             std::move(struct_col),
+                                             cudf::UNKNOWN_NULL_COUNT,
+                                             std::move(list_validity_buffer));
+
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{-2023148619,
+                                                                 -2023148619,
+                                                                 -2023148682,
+                                                                 -2023148682,
+                                                                 -340558283,
+                                                                 -340558283,
+                                                                 -340558283,
+                                                                 -1999301021,
+                                                                 -1999301021,
+                                                                 -1999301020,
+                                                                 -1999301020,
+                                                                 -340558244,
+                                                                 -340558244};
+
+  auto output = cudf::hash(cudf::table_view({*list_column}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
+}
+
+TEST_F(HashTest, EmptyDeepList)
+{
+  // List<List<int>>, where all lists are empty
+  // []
+  // []
+  // Null
+  // Null
+
+  // Internal empty list
+  auto list1 = cudf::test::lists_column_wrapper<int>{};
+
+  auto offsets       = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0};
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0};
+  auto list_validity_buffer =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::make_lists_column(4,
+                                             offsets.release(),
+                                             list1.release(),
+                                             cudf::UNKNOWN_NULL_COUNT,
+                                             std::move(list_validity_buffer));
+
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{
+    -2023148619, -2023148619, -2023148682, -2023148682};
+
+  auto output = cudf::hash(cudf::table_view({*list_column}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
 template <typename T>
@@ -295,46 +517,75 @@ class SparkMurmurHash3Test : public cudf::test::BaseFixture {
 
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
-  // The hash values were determined by running the following Scala code in Apache Spark:
-  // import org.apache.spark.sql.catalyst.util.DateTimeUtils
-  // val schema = new StructType().add("structs", new StructType().add("a",IntegerType)
-  //   .add("b",StringType).add("c",new StructType().add("x",FloatType).add("y",LongType)))
-  //   .add("strings",StringType).add("doubles",DoubleType).add("timestamps",TimestampType)
-  //   .add("decimal64", DecimalType(18,7)).add("longs",LongType).add("floats",FloatType)
-  //   .add("dates",DateType).add("decimal32", DecimalType(9,3)).add("ints",IntegerType)
-  //   .add("shorts",ShortType).add("bytes",ByteType).add("bools",BooleanType)
-  //   .add("decimal128", DecimalType(38,11))
-  // val data = Seq(
-  // Row(Row(0, "a", Row(0f, 0L)), "", 0.toDouble, DateTimeUtils.toJavaTimestamp(0), BigDecimal(0),
-  //     0.toLong, 0.toFloat, DateTimeUtils.toJavaDate(0), BigDecimal(0), 0, 0.toShort, 0.toByte,
-  //     false, BigDecimal(0)),
-  // Row(Row(100, "bc", Row(100f, 100L)), "The quick brown fox", -(0.toDouble),
-  //     DateTimeUtils.toJavaTimestamp(100), BigDecimal("0.00001"), 100.toLong, -(0.toFloat),
-  //     DateTimeUtils.toJavaDate(100), BigDecimal("0.1"), 100, 100.toShort, 100.toByte, true,
-  //     BigDecimal("0.000000001")),
-  // Row(Row(-100, "def", Row(-100f, -100L)), "jumps over the lazy dog.", -Double.NaN,
-  //     DateTimeUtils.toJavaTimestamp(-100), BigDecimal("-0.00001"), -100.toLong, -Float.NaN,
-  //     DateTimeUtils.toJavaDate(-100), BigDecimal("-0.1"), -100, -100.toShort, -100.toByte,
-  //     true, BigDecimal("-0.00000000001")),
-  // Row(Row(0x12345678, "ghij", Row(Float.PositiveInfinity, 0x123456789abcdefL)),
-  //     "All work and no play makes Jack a dull boy", Double.MinValue,
-  //     DateTimeUtils.toJavaTimestamp(Long.MinValue/1000000), BigDecimal("-99999999999.9999999"),
-  //     Long.MinValue, Float.MinValue, DateTimeUtils.toJavaDate(Int.MinValue/100),
-  //     BigDecimal("-999999.999"), Int.MinValue, Short.MinValue, Byte.MinValue, true,
-  //     BigDecimal("-9999999999999999.99999999999")),
-  // Row(Row(-0x76543210, "klmno", Row(Float.NegativeInfinity, -0x123456789abcdefL)),
-  //     "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721", Double.MaxValue,
-  //     DateTimeUtils.toJavaTimestamp(Long.MaxValue/1000000), BigDecimal("99999999999.9999999"),
-  //     Long.MaxValue, Float.MaxValue, DateTimeUtils.toJavaDate(Int.MaxValue/100),
-  //     BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false,
-  //     BigDecimal("99999999999999999999999999.99999999999")))
-  // val df = spark.createDataFrame(sc.parallelize(data), schema)
-  // df.columns.foreach(c => println(s"$c => ${df.select(hash(col(c))).collect.mkString(",")}"))
-  // df.select(hash(col("*"))).collect
+  // The hash values were determined by running the following Scala code in Apache Spark.
+  // Note that Spark >= 3.2 normalizes the float/double value of -0. to +0. and both values hash
+  // to the same result. This is normalized in the calling code (Spark RAPIDS plugin) for Spark
+  // >= 3.2. However, the reference values for -0. below must be obtained with Spark < 3.2 and
+  // libcudf will continue to implement the Spark < 3.2 behavior until Spark >= 3.2 is required and
+  // the workaround in the calling code is removed. This also affects the combined hash values.
+
+  /*
+  import org.apache.spark.sql.functions._
+  import org.apache.spark.sql.types._
+  import org.apache.spark.sql.Row
+  import org.apache.spark.sql.catalyst.util.DateTimeUtils
+
+  val schema = new StructType()
+      .add("structs", new StructType()
+          .add("a", IntegerType)
+          .add("b", StringType)
+          .add("c", new StructType()
+              .add("x", FloatType)
+              .add("y", LongType)))
+      .add("strings", StringType)
+      .add("doubles", DoubleType)
+      .add("timestamps", TimestampType)
+      .add("decimal64", DecimalType(18, 7))
+      .add("longs", LongType)
+      .add("floats", FloatType)
+      .add("dates", DateType)
+      .add("decimal32", DecimalType(9, 3))
+      .add("ints", IntegerType)
+      .add("shorts", ShortType)
+      .add("bytes", ByteType)
+      .add("bools", BooleanType)
+      .add("decimal128", DecimalType(38, 11))
+
+  val data = Seq(
+      Row(Row(0, "a", Row(0f, 0L)), "", 0.toDouble,
+          DateTimeUtils.toJavaTimestamp(0), BigDecimal(0), 0.toLong, 0.toFloat,
+          DateTimeUtils.toJavaDate(0), BigDecimal(0), 0, 0.toShort, 0.toByte,
+          false, BigDecimal(0)),
+      Row(Row(100, "bc", Row(100f, 100L)), "The quick brown fox", -(0.toDouble),
+          DateTimeUtils.toJavaTimestamp(100), BigDecimal("0.00001"), 100.toLong, -(0.toFloat),
+          DateTimeUtils.toJavaDate(100), BigDecimal("0.1"), 100, 100.toShort, 100.toByte,
+          true, BigDecimal("0.000000001")),
+      Row(Row(-100, "def", Row(-100f, -100L)), "jumps over the lazy dog.", -Double.NaN,
+          DateTimeUtils.toJavaTimestamp(-100), BigDecimal("-0.00001"), -100.toLong, -Float.NaN,
+          DateTimeUtils.toJavaDate(-100), BigDecimal("-0.1"), -100, -100.toShort, -100.toByte,
+          true, BigDecimal("-0.00000000001")),
+      Row(Row(0x12345678, "ghij", Row(Float.PositiveInfinity, 0x123456789abcdefL)),
+          "All work and no play makes Jack a dull boy", Double.MinValue,
+          DateTimeUtils.toJavaTimestamp(Long.MinValue/1000000), BigDecimal("-99999999999.9999999"),
+          Long.MinValue, Float.MinValue, DateTimeUtils.toJavaDate(Int.MinValue/100),
+          BigDecimal("-999999.999"), Int.MinValue, Short.MinValue, Byte.MinValue, true,
+          BigDecimal("-9999999999999999.99999999999")),
+      Row(Row(-0x76543210, "klmno", Row(Float.NegativeInfinity, -0x123456789abcdefL)),
+          "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721", Double.MaxValue,
+          DateTimeUtils.toJavaTimestamp(Long.MaxValue/1000000), BigDecimal("99999999999.9999999"),
+          Long.MaxValue, Float.MaxValue, DateTimeUtils.toJavaDate(Int.MaxValue/100),
+          BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false,
+          BigDecimal("99999999999999999999999999.99999999999")))
+
+  val df = spark.createDataFrame(sc.parallelize(data), schema)
+  df.columns.foreach(c => println(s"$c => ${df.select(hash(col(c))).collect.mkString(",")}"))
+  println(s"combined => ${df.select(hash(col("*"))).collect.mkString(",")}")
+  */
+
   fixed_width_column_wrapper<int32_t> const hash_structs_expected(
     {-105406170, 90479889, -678041645, 1667387937, 301478567});
   fixed_width_column_wrapper<int32_t> const hash_strings_expected(
-    {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
+    {142593372, 1217302703, -715697185, -2061143941, -111635966});
   fixed_width_column_wrapper<int32_t> const hash_doubles_expected(
     {-1670924195, -853646085, -1281358385, 1897734433, -508695674});
   fixed_width_column_wrapper<int32_t> const hash_timestamps_expected(
@@ -410,7 +661,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;
   auto const hash_structs    = cudf::hash(cudf::table_view({structs_col}), hasher, 42);
-  auto const hash_strings    = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
+  auto const hash_strings    = cudf::hash(cudf::table_view({strings_col}), hasher, 42);
   auto const hash_doubles    = cudf::hash(cudf::table_view({doubles_col}), hasher, 42);
   auto const hash_timestamps = cudf::hash(cudf::table_view({timestamps_col}), hasher, 42);
   auto const hash_decimal64  = cudf::hash(cudf::table_view({decimal64_col}), hasher, 42);
@@ -457,6 +708,32 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
                                                 decimal128_col});
   auto const hash_combined  = cudf::hash(combined_table, hasher, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
+}
+
+TEST_F(SparkMurmurHash3Test, StringsWithSeed)
+{
+  // The hash values were determined by running the following Scala code in Apache Spark:
+  // val strs = Seq("", "The quick brown fox",
+  //              "jumps over the lazy dog.",
+  //              "All work and no play makes Jack a dull boy",
+  //              "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721")
+  // println(strs.map(org.apache.spark.unsafe.types.UTF8String.fromString)
+  //   .map(org.apache.spark.sql.catalyst.expressions.Murmur3HashFunction.hash(
+  //     _, org.apache.spark.sql.types.StringType, 314)))
+
+  fixed_width_column_wrapper<int32_t> const hash_strings_expected_seed_314(
+    {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
+
+  strings_column_wrapper const strings_col({"",
+                                            "The quick brown fox",
+                                            "jumps over the lazy dog.",
+                                            "All work and no play makes Jack a dull boy",
+                                            "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
+
+  constexpr auto hasher   = cudf::hash_id::HASH_SPARK_MURMUR3;
+  auto const hash_strings = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected_seed_314, verbosity);
 }
 
 TEST_F(SparkMurmurHash3Test, ListThrows)

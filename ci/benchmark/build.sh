@@ -82,8 +82,8 @@ if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     gpuci_logger "gpuci_mamba_retry update dask"
     gpuci_mamba_retry update dask
 else
-    gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.03.0 conda-forge::distributed==2022.03.0 conda-forge::dask-core==2022.03.0 --force-reinstall"
-    gpuci_mamba_retry install conda-forge::dask==2022.03.0 conda-forge::distributed==2022.03.0 conda-forge::dask-core==2022.03.0 --force-reinstall
+    gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall"
+    gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall
 fi
 
 # Install the master version of streamz
@@ -92,8 +92,7 @@ pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade
 
 logger "Check versions..."
 python --version
-$CC --version
-$CXX --version
+
 conda info
 conda config --show-sources
 conda list --show-channel-urls

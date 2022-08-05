@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import itertools
+from collections import abc
 from typing import Dict, Optional
 
 import numpy as np
@@ -41,7 +42,7 @@ def _align_objs(objs, how="outer", sort=None):
 
     if not_matching_index:
         if not all(o.index.is_unique for o in objs):
-            raise ValueError("cannot reindex from a duplicate axis")
+            raise ValueError("cannot reindex on an axis with duplicate labels")
 
         index = objs[0].index
         name = index.name
@@ -80,7 +81,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = False if isinstance(index, cudf.StringIndex) else True
+            sort = not isinstance(index, cudf.StringIndex)
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
@@ -256,7 +257,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     )
                 elif isinstance(obj, pd.Series):
                     result = cudf.Series(
-                        data=obj, index=cudf.RangeIndex(len(obj)),
+                        data=obj,
+                        index=cudf.RangeIndex(len(obj)),
                     )
                 else:
                     result = cudf.DataFrame._from_data(
@@ -264,7 +266,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         index=cudf.RangeIndex(len(obj)),
                     )
         else:
-            result = obj.copy()
+            if axis == 0:
+                result = obj.copy()
+            else:
+                data = obj._data.copy(deep=True)
+                if isinstance(obj, cudf.Series) and obj.name is None:
+                    # If the Series has no name, pandas renames it to 0.
+                    data[0] = data.pop(None)
+                result = cudf.DataFrame._from_data(data)
 
         return result.sort_index(axis=axis) if sort else result
 
@@ -484,14 +493,14 @@ def melt(
     1  b         B          3
     2  c         B          5
     """
-    assert col_level in (None,)
+    if col_level is not None:
+        raise NotImplementedError("col_level != None is not supported yet.")
 
     # Arg cleaning
-    import collections
 
     # id_vars
     if id_vars is not None:
-        if not isinstance(id_vars, collections.abc.Sequence):
+        if not isinstance(id_vars, abc.Sequence):
             id_vars = [id_vars]
         id_vars = list(id_vars)
         missing = set(id_vars) - set(frame._column_names)
@@ -505,7 +514,7 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if not isinstance(value_vars, collections.abc.Sequence):
+        if not isinstance(value_vars, abc.Sequence):
             value_vars = [value_vars]
         value_vars = list(value_vars)
         missing = set(value_vars) - set(frame._column_names)
@@ -755,7 +764,7 @@ def get_dummies(
         return cudf.DataFrame._from_data(data, index=ser._index)
 
 
-def merge_sorted(
+def _merge_sorted(
     objs,
     keys=None,
     by_index=False,
@@ -770,10 +779,10 @@ def merge_sorted(
 
     Parameters
     ----------
-    objs : list of DataFrame, Series, or Index
+    objs : list of DataFrame or Series
     keys : list, default None
         List of Column names to sort by. If None, all columns used
-        (Ignored if `index=True`)
+        (Ignored if `by_index=True`)
     by_index : bool, default False
         Use index for sorting. `keys` input will be ignored if True
     ignore_index : bool, default False
@@ -781,14 +790,13 @@ def merge_sorted(
         be used in the output dataframe.
     ascending : bool, default True
         Sorting is in ascending order, otherwise it is descending
-    na_position : {‘first’, ‘last’}, default ‘last’
+    na_position : {'first', 'last'}, default 'last'
         'first' nulls at the beginning, 'last' nulls at the end
 
     Returns
     -------
     A new, lexicographically sorted, DataFrame/Series.
     """
-
     if not pd.api.types.is_list_like(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 
@@ -804,18 +812,38 @@ def merge_sorted(
     if by_index and ignore_index:
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
-    result = objs[0].__class__._from_data(
-        *cudf._lib.merge.merge_sorted(
-            objs,
-            keys=keys,
-            by_index=by_index,
-            ignore_index=ignore_index,
+    if by_index:
+        key_columns_indices = list(range(0, objs[0]._index.nlevels))
+    else:
+        if keys is None:
+            key_columns_indices = list(range(0, objs[0]._num_columns))
+        else:
+            key_columns_indices = [
+                objs[0]._column_names.index(key) for key in keys
+            ]
+        if not ignore_index:
+            key_columns_indices = [
+                idx + objs[0]._index.nlevels for idx in key_columns_indices
+            ]
+
+    columns = [
+        [
+            *(obj._index._data.columns if not ignore_index else ()),
+            *obj._columns,
+        ]
+        for obj in objs
+    ]
+
+    return objs[0]._from_columns_like_self(
+        cudf._lib.merge.merge_sorted(
+            input_columns=columns,
+            key_columns_indices=key_columns_indices,
             ascending=ascending,
             na_position=na_position,
-        )
+        ),
+        column_names=objs[0]._column_names,
+        index_names=None if ignore_index else objs[0]._index_names,
     )
-    result._copy_type_metadata(objs[0])
-    return result
 
 
 def _pivot(df, index, columns):
@@ -851,7 +879,7 @@ def _pivot(df, index, columns):
         if num_elements > 0:
             col = df._data[v]
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target = cudf.core.frame.Frame(
+            target = cudf.DataFrame._from_data(
                 {
                     None: cudf.core.column.column_empty_like(
                         col, masked=True, newsize=nrows * ncols

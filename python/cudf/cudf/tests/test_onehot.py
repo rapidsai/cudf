@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from string import ascii_lowercase
 
@@ -31,14 +31,14 @@ def test_get_dummies(data, index):
     utils.assert_eq(
         encoded_expected,
         encoded_actual,
-        check_dtype=False if len(data) == 0 else True,
+        check_dtype=len(data) != 0,
     )
     encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
 
     utils.assert_eq(
         encoded_expected,
         encoded_actual,
-        check_dtype=False if len(data) == 0 else True,
+        check_dtype=len(data) != 0,
     )
 
 

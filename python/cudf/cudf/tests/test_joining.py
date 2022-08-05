@@ -1248,10 +1248,12 @@ def test_decimal_typecast_outer(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype_l", [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5)],
+    "dtype_l",
+    [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5)],
 )
 @pytest.mark.parametrize(
-    "dtype_r", [Decimal64Dtype(8, 3), Decimal64Dtype(11, 6)],
+    "dtype_r",
+    [Decimal64Dtype(8, 3), Decimal64Dtype(11, 6)],
 )
 def test_mixed_decimal_typecast(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d"]
@@ -1813,8 +1815,8 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
     if isinstance(rhs, cudf.Series):
         check_rhs = rhs.to_frame()
 
-    expect = check_lhs.merge(check_rhs, how=how, **kwargs)
-    got = lhs.merge(rhs, how=how, **kwargs)
+    expect = cudf.merge(check_lhs, check_rhs, how=how, **kwargs)
+    got = cudf.merge(lhs, rhs, how=how, **kwargs)
 
     assert_join_results_equal(expect, got, how=how)
 
@@ -1893,7 +1895,8 @@ def test_join_merge_with_on(lhs_col, lhs_idx, rhs_col, rhs_idx, on, how):
 
 
 @pytest.mark.parametrize(
-    "on", ["A", "L0"],
+    "on",
+    ["A", "L0"],
 )
 @pytest.mark.parametrize(
     "how", ["left", "inner", "right", "outer", "leftanti", "leftsemi"]
@@ -2178,3 +2181,10 @@ def test_join_multiindex_index():
     expect = lhs.to_pandas().join(rhs.to_pandas(), how="inner")
     got = lhs.join(rhs, how="inner")
     assert_join_results_equal(expect, got, how="inner")
+
+
+def test_dataframe_join_on():
+    """Verify that specifying the on parameter gives a NotImplementedError."""
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    with pytest.raises(NotImplementedError):
+        df.join(df, on="a")

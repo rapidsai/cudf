@@ -2188,14 +2188,37 @@ TEST_F(CsvReaderTest, DtypesMap)
   expect_column_data_equal(std::vector<int16_t>{9, 8, 7}, result_table.column(1));
 }
 
-TEST_F(CsvReaderTest, DtypesMapInvalid)
+TEST_F(CsvReaderTest, DtypesMapPartial)
 {
-  std::string csv_in{""};
-
   cudf_io::csv_reader_options in_opts =
-    cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_in.c_str(), csv_in.size()})
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{nullptr, 0})
       .names({"A", "B"})
       .dtypes({{"A", dtype<int16_t>()}});
+  {
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto view = result.tbl->view();
+    ASSERT_EQ(type_id::INT16, view.column(0).type().id());
+    // Default to String if there's no data
+    ASSERT_EQ(type_id::STRING, view.column(1).type().id());
+  }
+
+  in_opts.set_dtypes({{"B", dtype<uint32_t>()}});
+  {
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto view = result.tbl->view();
+    ASSERT_EQ(type_id::STRING, view.column(0).type().id());
+    ASSERT_EQ(type_id::UINT32, view.column(1).type().id());
+  }
+}
+
+TEST_F(CsvReaderTest, DtypesArrayInvalid)
+{
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{nullptr, 0})
+      .names({"A", "B", "C"})
+      .dtypes(std::vector<cudf::data_type>{dtype<int16_t>(), dtype<int8_t>()});
 
   EXPECT_THROW(cudf_io::read_csv(in_opts), cudf::logic_error);
 }

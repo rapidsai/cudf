@@ -15,8 +15,9 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/structs/struct_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -144,24 +145,37 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   // Make sure the current device ID matches the Tensor's device ID
   if (tensor.device.device_type != kDLCPU) {
     int device_id = 0;
-    CUDA_TRY(cudaGetDevice(&device_id));
+    CUDF_CUDA_TRY(cudaGetDevice(&device_id));
     CUDF_EXPECTS(tensor.device.device_id == device_id, "DLTensor device ID must be current device");
   }
 
-  // Currently only 1D and 2D tensors are supported
-  CUDF_EXPECTS(tensor.ndim > 0 && tensor.ndim <= 2, "DLTensor must be 1D or 2D");
-
+  // We only support 1D and 2D tensors with some restrictions on layout
+  if (tensor.ndim == 1) {
+    // 1D tensors must have dense layout (strides == nullptr <=> dense row-major)
+    CUDF_EXPECTS(nullptr == tensor.strides || tensor.strides[0] == 1,
+                 "from_dlpack of 1D DLTensor only for unit-stride data");
+  } else if (tensor.ndim == 2) {
+    // 2D tensors must have column-major layout and the fastest dimension must have dense layout
+    CUDF_EXPECTS((
+                   // 1D tensor reshaped into (N, 1) is fine
+                   tensor.shape[1] == 1 && (nullptr == tensor.strides || tensor.strides[0] == 1))
+                   // General case
+                   || (nullptr != tensor.strides && tensor.strides[0] == 1 &&
+                       tensor.strides[1] >= tensor.shape[0]),
+                 "from_dlpack of 2D DLTensor only for column-major unit-stride data");
+  } else {
+    CUDF_FAIL("DLTensor must be 1D or 2D");
+  }
   CUDF_EXPECTS(tensor.shape[0] >= 0,
-               "DLTensor first dim should be of shape greater than or equal-to 0.");
+               "DLTensor first dim should be of shape greater than or equal to 0.");
   CUDF_EXPECTS(tensor.shape[0] < std::numeric_limits<size_type>::max(),
                "DLTensor first dim exceeds size supported by cudf");
   if (tensor.ndim > 1) {
     CUDF_EXPECTS(tensor.shape[1] >= 0,
-                 "DLTensor second dim should be of shape greater than or equal-to 0.");
+                 "DLTensor second dim should be of shape greater than or equal to 0.");
     CUDF_EXPECTS(tensor.shape[1] < std::numeric_limits<size_type>::max(),
                  "DLTensor second dim exceeds size supported by cudf");
   }
-
   size_t const num_columns = (tensor.ndim == 2) ? static_cast<size_t>(tensor.shape[1]) : 1;
 
   // Validate and convert data type to cudf
@@ -184,11 +198,11 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   for (auto& col : columns) {
     col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-    CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
-                             reinterpret_cast<void*>(tensor_data),
-                             bytes,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
+                                  reinterpret_cast<void*>(tensor_data),
+                                  bytes,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
 
     tensor_data += col_stride;
   }
@@ -234,7 +248,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
     tensor.strides[1] = num_rows;
   }
 
-  CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
   tensor.device.device_type = kDLCUDA;
 
   // If there is only one column, then a 1D tensor can just copy the pointer
@@ -254,11 +268,11 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
-    CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
-                             get_column_data(col),
-                             stride_bytes,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
+                                  get_column_data(col),
+                                  stride_bytes,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
     tensor_data += stride_bytes;
   }
 
@@ -279,12 +293,12 @@ DLManagedTensor* to_dlpack(table_view const& input,
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::from_dlpack(managed_tensor, rmm::cuda_stream_default, mr);
+  return detail::from_dlpack(managed_tensor, cudf::default_stream_value, mr);
 }
 
 DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::to_dlpack(input, rmm::cuda_stream_default, mr);
+  return detail::to_dlpack(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

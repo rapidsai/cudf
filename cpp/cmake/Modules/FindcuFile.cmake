@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -20,9 +20,9 @@ Find cuFile headers and libraries.
 Imported Targets
 ^^^^^^^^^^^^^^^^
 
-``cuFile::cuFile``
+``cufile::cuFile``
   The cuFile library, if found.
-``cuFile::cuFileRDMA``
+``cufile::cuFileRDMA``
   The cuFile RDMA library, if found.
 
 Result Variables
@@ -54,22 +54,24 @@ pkg_check_modules(PKG_cuFile QUIET cuFile)
 set(cuFile_COMPILE_OPTIONS ${PKG_cuFile_CFLAGS_OTHER})
 set(cuFile_VERSION ${PKG_cuFile_VERSION})
 
+# Find the location of the CUDA Toolkit
+find_package(CUDAToolkit QUIET)
 find_path(
   cuFile_INCLUDE_DIR
   NAMES cufile.h
-  HINTS ${PKG_cuFile_INCLUDE_DIRS} /usr/local/cuda/include /usr/local/cuda/lib64
+  HINTS ${PKG_cuFile_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 find_library(
   cuFile_LIBRARY
   NAMES cufile
-  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64
+  HINTS ${PKG_cuFile_LIBRARY_DIRS} ${CUDAToolkit_LIBRARY_DIR}
 )
 
 find_library(
   cuFileRDMA_LIBRARY
   NAMES cufile_rdma
-  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64
+  HINTS ${PKG_cuFile_LIBRARY_DIRS} ${CUDAToolkit_LIBRARY_DIR}
 )
 
 include(FindPackageHandleStandardArgs)
@@ -80,29 +82,29 @@ find_package_handle_standard_args(
   VERSION_VAR cuFile_VERSION
 )
 
-if(cuFile_INCLUDE_DIR AND NOT TARGET cuFile::cuFile_interface)
-  add_library(cuFile::cuFile_interface IMPORTED INTERFACE)
+if(cuFile_INCLUDE_DIR AND NOT TARGET cufile::cuFile_interface)
+  add_library(cufile::cuFile_interface INTERFACE IMPORTED GLOBAL)
   target_include_directories(
-    cuFile::cuFile_interface INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>"
+    cufile::cuFile_interface INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>"
   )
-  target_compile_options(cuFile::cuFile_interface INTERFACE "${cuFile_COMPILE_OPTIONS}")
-  target_compile_definitions(cuFile::cuFile_interface INTERFACE CUFILE_FOUND)
+  target_compile_options(cufile::cuFile_interface INTERFACE "${cuFile_COMPILE_OPTIONS}")
+  target_compile_definitions(cufile::cuFile_interface INTERFACE CUFILE_FOUND)
 endif()
 
-if(cuFile_FOUND AND NOT TARGET cuFile::cuFile)
-  add_library(cuFile::cuFile UNKNOWN IMPORTED)
+if(cuFile_FOUND AND NOT TARGET cufile::cuFile)
+  add_library(cufile::cuFile UNKNOWN IMPORTED GLOBAL)
   set_target_properties(
-    cuFile::cuFile
+    cufile::cuFile
     PROPERTIES IMPORTED_LOCATION "${cuFile_LIBRARY}"
                INTERFACE_COMPILE_OPTIONS "${cuFile_COMPILE_OPTIONS}"
                INTERFACE_INCLUDE_DIRECTORIES "${cuFile_INCLUDE_DIR}"
   )
 endif()
 
-if(cuFile_FOUND AND NOT TARGET cuFile::cuFileRDMA)
-  add_library(cuFile::cuFileRDMA UNKNOWN IMPORTED)
+if(cuFile_FOUND AND NOT TARGET cufile::cuFileRDMA)
+  add_library(cufile::cuFileRDMA UNKNOWN IMPORTED GLOBAL)
   set_target_properties(
-    cuFile::cuFileRDMA
+    cufile::cuFileRDMA
     PROPERTIES IMPORTED_LOCATION "${cuFileRDMA_LIBRARY}"
                INTERFACE_COMPILE_OPTIONS "${cuFile_COMPILE_OPTIONS}"
                INTERFACE_INCLUDE_DIRECTORIES "${cuFile_INCLUDE_DIR}"

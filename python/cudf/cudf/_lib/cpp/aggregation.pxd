@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -7,11 +8,14 @@ from libcpp.vector cimport vector
 from cudf._lib.cpp.types cimport (
     data_type,
     interpolation,
+    null_order,
     null_policy,
+    order,
     size_type,
 )
 
 ctypedef int32_t underlying_type_t_correlation_type
+ctypedef int32_t underlying_type_t_rank_method
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
@@ -35,6 +39,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             ARGMIN 'cudf::aggregation::ARGMIN'
             NUNIQUE 'cudf::aggregation::NUNIQUE'
             NTH_ELEMENT 'cudf::aggregation::NTH_ELEMENT'
+            RANK 'cudf::aggregation::RANK'
             COLLECT 'cudf::aggregation::COLLECT_LIST'
             COLLECT_SET 'cudf::aggregation::COLLECT_SET'
             PTX 'cudf::aggregation::PTX'
@@ -67,6 +72,18 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         PEARSON 'cudf::correlation_type::PEARSON'
         KENDALL 'cudf::correlation_type::KENDALL'
         SPEARMAN 'cudf::correlation_type::SPEARMAN'
+
+    ctypedef enum rank_method:
+        FIRST "cudf::rank_method::FIRST"
+        AVERAGE "cudf::rank_method::AVERAGE"
+        MIN "cudf::rank_method::MIN"
+        MAX "cudf::rank_method::MAX"
+        DENSE "cudf::rank_method::DENSE"
+
+    ctypedef enum rank_percentage:
+        NONE "cudf::rank_percentage::NONE"
+        ZERO_NORMALIZED "cudf::rank_percentage::ZERO_NORMALIZED"
+        ONE_NORMALIZED "cudf::rank_percentage::ONE_NORMALIZED"
 
     cdef unique_ptr[T] make_sum_aggregation[T]() except +
 
@@ -127,3 +144,10 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_covariance_aggregation[T](
         size_type min_periods, size_type ddof) except +
+
+    cdef unique_ptr[T] make_rank_aggregation[T](
+        rank_method method,
+        order column_order,
+        null_policy null_handling,
+        null_order null_precedence,
+        rank_percentage percentage) except +

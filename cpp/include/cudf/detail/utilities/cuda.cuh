@@ -19,6 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -127,12 +128,12 @@ cudf::size_type elements_per_thread(Kernel kernel,
 
   // calculate theoretical occupancy
   int max_blocks = 0;
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
 
   int device = 0;
-  CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
   int num_sms = 0;
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
   return std::clamp(per_thread, 1, max_per_thread);
 }
@@ -169,7 +170,8 @@ __global__ void single_thread_kernel(F f)
  * @param stream CUDA stream used for the kernel launch
  */
 template <class Functor>
-void device_single_thread(Functor functor, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+void device_single_thread(Functor functor,
+                          rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
 }

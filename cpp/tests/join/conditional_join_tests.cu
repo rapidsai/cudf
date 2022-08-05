@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
@@ -92,7 +92,7 @@ std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(
   std::mt19937 gen(rd());
   std::shuffle(left.begin(), left.end(), gen);
   std::shuffle(right.begin(), right.end(), gen);
-  return std::make_pair(std::move(left), std::move(right));
+  return std::pair(std::move(left), std::move(right));
 }
 
 // Generate a single pair of left/right nullable columns of random data
@@ -119,8 +119,8 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
     return uniform_dist(gen) > 0.5;
   });
 
-  return std::make_pair(std::make_pair(std::move(left), std::move(left_nulls)),
-                        std::make_pair(std::move(right), std::move(right_nulls)));
+  return std::pair(std::pair(std::move(left), std::move(left_nulls)),
+                   std::pair(std::move(right), std::move(right_nulls)));
 }
 
 }  // namespace
@@ -204,8 +204,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                              result.second->element(i, rmm::cuda_stream_default)});
+      result_pairs.push_back({result.first->element(i, cudf::default_stream_value),
+                              result.second->element(i, cudf::default_stream_value)});
     }
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
@@ -683,7 +683,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      resulting_indices.push_back(result->element(i, rmm::cuda_stream_default));
+      resulting_indices.push_back(result->element(i, cudf::default_stream_value));
     }
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());

@@ -21,7 +21,12 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {

@@ -83,7 +83,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
-  groupby/lists_tests.cpp
+  groupby/lists_tests.cu
   groupby/m2_tests.cpp
   groupby/min_tests.cpp
   groupby/max_scan_tests.cpp
@@ -138,7 +138,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu hash_map/multimap_test.cu)
+ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
@@ -156,6 +156,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
+  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
 )
 
@@ -223,6 +224,8 @@ ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
+ConfigureTest(FST_TEST io/fst/fst_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
@@ -249,6 +252,7 @@ ConfigureTest(
   copying/gather_tests.cpp
   copying/get_value_tests.cpp
   copying/pack_tests.cpp
+  copying/purge_nonempty_nulls_tests.cpp
   copying/sample_tests.cpp
   copying/scatter_tests.cpp
   copying/scatter_list_tests.cpp
@@ -308,6 +312,7 @@ ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
 )
 
 # ##################################################################################################
@@ -337,6 +342,7 @@ ConfigureTest(
   rolling/empty_input_test.cpp
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
+  rolling/nth_element_test.cpp
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp
@@ -472,11 +478,16 @@ ConfigureTest(
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
   lists/count_elements_tests.cpp
-  lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
+  lists/set_operations/difference_distinct_tests.cpp
+  lists/set_operations/have_overlap_tests.cpp
+  lists/set_operations/intersect_distinct_tests.cpp
+  lists/set_operations/union_distinct_tests.cpp
   lists/sort_lists_tests.cpp
+  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/distinct_tests.cpp
 )
 
 # ##################################################################################################

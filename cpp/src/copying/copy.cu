@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,15 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -410,7 +415,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -419,7 +424,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -428,7 +433,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -437,7 +442,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

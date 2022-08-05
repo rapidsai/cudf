@@ -19,6 +19,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <algorithm>
 #include <cassert>
 #include <vector>
@@ -94,6 +96,22 @@ table_view scatter_columns(table_view const& source,
   for (size_type idx = 0; idx < source.num_columns(); ++idx)
     updated_columns[map[idx]] = source.column(idx);
   return table_view{updated_columns};
+}
+
+std::vector<column_view> get_nullable_columns(table_view const& table)
+{
+  std::vector<column_view> result;
+  for (auto const& col : table) {
+    if (col.nullable()) { result.push_back(col); }
+    for (auto it = col.child_begin(); it != col.child_end(); ++it) {
+      auto const& child = *it;
+      if (child.size() == col.size()) {
+        auto const child_result = get_nullable_columns(table_view{{child}});
+        result.insert(result.end(), child_result.begin(), child_result.end());
+      }
+    }
+  }
+  return result;
 }
 
 namespace detail {

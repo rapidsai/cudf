@@ -23,12 +23,15 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
@@ -279,21 +282,21 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hex_to_integers(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::hex_to_integers(strings, output_type, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_hex(strings, rmm::cuda_stream_default, mr);
+  return detail::is_hex(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> integers_to_hex(column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_hex(input, rmm::cuda_stream_default, mr);
+  return detail::integers_to_hex(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import datetime
 import itertools
@@ -223,7 +223,8 @@ def test_groupby_getitem_getattr(as_index):
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(), gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x")[["y"]].sum(),
+        gdf.groupby("x")[["y"]].sum(),
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
@@ -291,6 +292,40 @@ def test_groupby_apply():
     assert_groupby_results_equal(expect, got)
 
 
+def create_test_groupby_apply_args_params():
+    def f1(df, k):
+        df["out"] = df["val1"] + df["val2"] + k
+        return df
+
+    def f2(df, k, L):
+        df["out"] = df["val1"] - df["val2"] + (k / L)
+        return df
+
+    def f3(df, k, L, m):
+        df["out"] = ((k * df["val1"]) + (L * df["val2"])) / m
+        return df
+
+    return [(f1, (42,)), (f2, (42, 119)), (f3, (42, 119, 212.1))]
+
+
+@pytest.mark.parametrize("func,args", create_test_groupby_apply_args_params())
+def test_groupby_apply_args(func, args):
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df["key1"] = np.random.randint(0, 3, nelem)
+    df["key2"] = np.random.randint(0, 2, nelem)
+    df["val1"] = np.random.random(nelem)
+    df["val2"] = np.random.random(nelem)
+
+    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
+    got_grpby = df.groupby(["key1", "key2"])
+
+    expect = expect_grpby.apply(func, *args)
+    got = got_grpby.apply(func, *args)
+    assert_groupby_results_equal(expect, got)
+
+
 def test_groupby_apply_grouped():
     np.random.seed(0)
     df = DataFrame()
@@ -352,7 +387,7 @@ def test_groupby_2keys_agg(nelem, func):
     )
     got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
 
-    check_dtype = False if func in _index_type_aggs else True
+    check_dtype = func not in _index_type_aggs
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
@@ -375,7 +410,7 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits before the decimal to use.
     whole_digits = 2
 
-    scale = 10 ** whole_digits
+    scale = 10**whole_digits
     nelem = num_groups * nelem_per_group
 
     # The unique is necessary because otherwise if there are duplicates idxmin
@@ -432,7 +467,7 @@ def test_series_groupby(agg):
     gg = g.groupby(g // 2)
     sa = getattr(sg, agg)()
     ga = getattr(gg, agg)()
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(sa, ga, check_dtype=check_dtype)
 
 
@@ -444,7 +479,7 @@ def test_series_groupby_agg(agg):
     g = Series([1, 2, 3])
     sg = s.groupby(s // 2).agg(agg)
     gg = g.groupby(g // 2).agg(agg)
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(sg, gg, check_dtype=check_dtype)
 
 
@@ -474,7 +509,7 @@ def test_groupby_level_zero(agg):
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(pdresult, gdresult, check_dtype=check_dtype)
 
 
@@ -504,7 +539,7 @@ def test_groupby_series_level_zero(agg):
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(pdresult, gdresult, check_dtype=check_dtype)
 
 
@@ -562,7 +597,16 @@ def test_groupby_column_numeral():
 
 @pytest.mark.parametrize(
     "series",
-    [[0, 1, 0], [1, 1, 1], [0, 1, 1], [1, 2, 3], [4, 3, 2], [0, 2, 0]],
+    [
+        [0, 1, 0],
+        [1, 1, 1],
+        [0, 1, 1],
+        [1, 2, 3],
+        [4, 3, 2],
+        [0, 2, 0],
+        pd.Series([0, 2, 0]),
+        pd.Series([0, 2, 0], index=[0, 2, 1]),
+    ],
 )  # noqa: E501
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
@@ -589,7 +633,8 @@ def test_groupby_levels(level):
     pdf = pd.DataFrame({"c": [1, 2, 3], "d": [2, 3, 4]}, index=idx)
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby(level=level).sum(), gdf.groupby(level=level).sum(),
+        pdf.groupby(level=level).sum(),
+        gdf.groupby(level=level).sum(),
     )
 
 
@@ -840,10 +885,14 @@ def test_groupby_multi_agg_hash_groupby(agg):
             coll_dict[prefix + this_name] = float
     coll_dict["id"] = int
     gdf = cudf.datasets.timeseries(
-        start="2000", end="2000-01-2", dtypes=coll_dict, freq="1s", seed=1,
+        start="2000",
+        end="2000-01-2",
+        dtypes=coll_dict,
+        freq="1s",
+        seed=1,
     ).reset_index(drop=True)
     pdf = gdf.to_pandas()
-    check_dtype = False if "count" in agg else True
+    check_dtype = "count" not in agg
     pdg = pdf.groupby("id").agg(agg)
     gdg = gdf.groupby("id").agg(agg)
     assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
@@ -853,7 +902,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
     "agg", ["min", "max", "idxmax", "idxmax", "sum", "prod", "count", "mean"]
 )
 def test_groupby_nulls_basic(agg):
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
 
     pdf = pd.DataFrame({"a": [0, 0, 1, 1, 2, 2], "b": [1, 2, 1, 2, 1, None]})
     gdf = cudf.from_pandas(pdf)
@@ -975,7 +1024,9 @@ def test_groupby_cat():
     )
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("a").count(), gdf.groupby("a").count(), check_dtype=False,
+        pdf.groupby("a").count(),
+        gdf.groupby("a").count(),
+        check_dtype=False,
     )
 
 
@@ -1046,7 +1097,9 @@ def test_groupby_size():
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
-        pdf.groupby("a").size(), gdf.groupby("a").size(), check_dtype=False,
+        pdf.groupby("a").size(),
+        gdf.groupby("a").size(),
+        check_dtype=False,
     )
 
     assert_groupby_results_equal(
@@ -1057,17 +1110,21 @@ def test_groupby_size():
 
     sr = pd.Series(range(len(pdf)))
     assert_groupby_results_equal(
-        pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False,
+        pdf.groupby(sr).size(),
+        gdf.groupby(sr).size(),
+        check_dtype=False,
     )
 
 
-def test_groupby_cumcount():
+@pytest.mark.parametrize("index", [None, [1, 2, 3, 4]])
+def test_groupby_cumcount(index):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 3, 4],
             "b": ["bob", "bob", "alice", "cooper"],
             "c": [1, 2, 3, 4],
-        }
+        },
+        index=index,
     )
     gdf = cudf.from_pandas(pdf)
 
@@ -1083,7 +1140,7 @@ def test_groupby_cumcount():
         check_dtype=False,
     )
 
-    sr = pd.Series(range(len(pdf)))
+    sr = pd.Series(range(len(pdf)), index=index)
     assert_groupby_results_equal(
         pdf.groupby(sr).cumcount(),
         gdf.groupby(sr).cumcount(),
@@ -1282,7 +1339,8 @@ def test_groupby_nunique(agg, by):
 
 
 @pytest.mark.parametrize(
-    "n", [0, 1, 2, 10],
+    "n",
+    [0, 1, 2, 10],
 )
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nth(n, by):
@@ -1303,7 +1361,7 @@ def test_groupby_nth(n, by):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_raise_data_error():
@@ -1582,7 +1640,38 @@ def test_groupby_pipe():
     assert_groupby_results_equal(expected, actual)
 
 
-def test_groupby_apply_return_scalars():
+def create_test_groupby_apply_return_scalars_params():
+    def f0(x):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = ticker / 10
+        return full
+
+    def f1(x, k):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = ticker / k
+        return full
+
+    def f2(x, k, L):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = L * (ticker / k)
+        return full
+
+    def f3(x, k, L, m):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = L * (ticker / k) % m
+        return full
+
+    return [(f0, ()), (f1, (42,)), (f2, (42, 119)), (f3, (42, 119, 212.1))]
+
+
+@pytest.mark.parametrize(
+    "func,args", create_test_groupby_apply_return_scalars_params()
+)
+def test_groupby_apply_return_scalars(func, args):
     pdf = pd.DataFrame(
         {
             "A": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
@@ -1602,30 +1691,52 @@ def test_groupby_apply_return_scalars():
     )
     gdf = cudf.from_pandas(pdf)
 
-    def custom_map_func(x):
-        x = x[~x["B"].isna()]
-        ticker = x.shape[0]
-        full = ticker / 10
-        return full
-
-    expected = pdf.groupby("A").apply(lambda x: custom_map_func(x))
-    actual = gdf.groupby("A").apply(lambda x: custom_map_func(x))
+    expected = pdf.groupby("A").apply(func, *args)
+    actual = gdf.groupby("A").apply(func, *args)
 
     assert_groupby_results_equal(expected, actual)
 
 
+def create_test_groupby_apply_return_series_dataframe_params():
+    def f0(x):
+        return x - x.max()
+
+    def f1(x):
+        return x.min() - x.max()
+
+    def f2(x):
+        return x.min()
+
+    def f3(x, k):
+        return x - x.max() + k
+
+    def f4(x, k, L):
+        return x.min() - x.max() + (k / L)
+
+    def f5(x, k, L, m):
+        return m * x.min() + (k / L)
+
+    return [
+        (f0, ()),
+        (f1, ()),
+        (f2, ()),
+        (f3, (42,)),
+        (f4, (42, 119)),
+        (f5, (41, 119, 212.1)),
+    ]
+
+
 @pytest.mark.parametrize(
-    "cust_func",
-    [lambda x: x - x.max(), lambda x: x.min() - x.max(), lambda x: x.min()],
+    "func,args", create_test_groupby_apply_return_series_dataframe_params()
 )
-def test_groupby_apply_return_series_dataframe(cust_func):
+def test_groupby_apply_return_series_dataframe(func, args):
     pdf = pd.DataFrame(
         {"key": [0, 0, 1, 1, 2, 2, 2], "val": [0, 1, 2, 3, 4, 5, 6]}
     )
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.groupby(["key"]).apply(cust_func)
-    actual = gdf.groupby(["key"]).apply(cust_func)
+    expected = pdf.groupby(["key"]).apply(func, *args)
+    actual = gdf.groupby(["key"]).apply(func, *args)
 
     assert_groupby_results_equal(expected, actual)
 
@@ -1707,8 +1818,52 @@ def test_groupby_2keys_scan(nelem, func):
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
 
-    check_dtype = False if func in _index_type_aggs else True
+    check_dtype = func not in _index_type_aggs
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+
+@pytest.mark.parametrize("nelem", [100, 1000])
+@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
+@pytest.mark.parametrize("pct", [False, True])
+def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    pdf.columns = ["x", "y", "z"]
+    gdf = cudf.from_pandas(pdf)
+    expect_df = pdf.groupby(["x", "y"], sort=True).rank(
+        method=method, ascending=ascending, na_option=na_option, pct=pct
+    )
+    got_df = gdf.groupby(["x", "y"], sort=True).rank(
+        method=method, ascending=ascending, na_option=na_option, pct=pct
+    )
+
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=False)
+
+
+def test_groupby_rank_fails():
+    gdf = cudf.DataFrame(
+        {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "z": [1, 2, 3, 4]}
+    )
+    with pytest.raises(NotImplementedError):
+        gdf.groupby(["x", "y"]).rank(method="min", axis=1)
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [[1, 2], [3, None, 5], None, [], [7, 8], [9]],
+        }
+    )
+    with pytest.raises(NotImplementedError):
+        gdf.groupby(["a"]).rank(method="min", axis=1)
 
 
 def test_groupby_mix_agg_scan():
@@ -1746,6 +1901,7 @@ def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
 @pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
 @pytest.mark.parametrize("direction", [1, -1])
 @pytest.mark.parametrize("fill_value", [None, 0, 42])
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10608")
 def test_groupby_shift_row_mixed_numerics(
     nelem, shift_perc, direction, fill_value
 ):
@@ -2200,6 +2356,22 @@ def test_groupby_apply_series():
     assert_groupby_results_equal(expect, got)
 
 
+@pytest.mark.parametrize(
+    "func,args",
+    [
+        (lambda x, k: x + k, (42,)),
+        (lambda x, k, L: x + k - L, (42, 191)),
+        (lambda x, k, L, m: (x + k) / (L * m), (42, 191, 99.9)),
+    ],
+)
+def test_groupby_apply_series_args(func, args):
+
+    got = make_frame(DataFrame, 100).groupby("x").y.apply(func, *args)
+    expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(func, *args)
+
+    assert_groupby_results_equal(expect, got)
+
+
 @pytest.mark.parametrize("label", [None, "left", "right"])
 @pytest.mark.parametrize("closed", [None, "left", "right"])
 def test_groupby_freq_week(label, closed):
@@ -2420,3 +2592,88 @@ def test_groupby_select_then_diff():
 
 
 # TODO: Add a test including datetime64[ms] column in input data
+
+
+@pytest.mark.parametrize("by", ["a", ["a", "b"], pd.Series([1, 2, 1, 3])])
+def test_groupby_transform_maintain_index(by):
+    # test that we maintain the index after a groupby transform
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 1, 2], "b": [1, 2, 1, 2]}, index=[3, 2, 1, 0]
+    )
+    pdf = gdf.to_pandas()
+    assert_groupby_results_equal(
+        pdf.groupby(by).transform("max"), gdf.groupby(by).transform("max")
+    )
+
+
+@pytest.mark.parametrize(
+    "data, gkey",
+    [
+        (
+            {
+                "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+                "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+                "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+                "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            },
+            ["id"],
+        ),
+        (
+            {
+                "id": [0, 0, 0, 0, 1, 1, 1],
+                "a": [1, 3, 4, 2.0, -3.0, 9.0, 10.0],
+                "b": [10.0, 23, -4.0, 2, -3.0, None, 19.0],
+            },
+            ["id", "a"],
+        ),
+        (
+            {
+                "id": ["a", "a", "b", "b", "c", "c"],
+                "val1": [None, None, None, None, None, None],
+            },
+            ["id"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+def test_groupby_pct_change(data, gkey, periods, fill_method):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby(gkey).pct_change(
+        periods=periods, fill_method=fill_method
+    )
+    expected = pdf.groupby(gkey).pct_change(
+        periods=periods, fill_method=fill_method
+    )
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/11259")
+@pytest.mark.parametrize("periods", [-5, 5])
+def test_groupby_pct_change_multiindex_dataframe(periods):
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 1, 2, 3],
+            "c": [2, 3, 4, 5],
+            "d": [6, 8, 9, 1],
+        }
+    ).set_index(["a", "b"])
+
+    actual = gdf.groupby(level=["a", "b"]).pct_change(periods)
+    expected = gdf.to_pandas().groupby(level=["a", "b"]).pct_change(periods)
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_pct_change_empty_columns():
+    gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby("id").pct_change()
+    expected = pdf.groupby("id").pct_change()
+
+    assert_eq(expected, actual)

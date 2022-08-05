@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace unary {
@@ -68,7 +70,7 @@ struct launcher {
     thrust::transform(
       rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), output_view.begin<Tout>(), F{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
 
     return output;
   }

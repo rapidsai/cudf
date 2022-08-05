@@ -20,10 +20,16 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -131,7 +137,7 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input_column, endian_configuration, rmm::cuda_stream_default, mr);
+  return detail::byte_cast(input_column, endian_configuration, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "byte_array_view.cuh"
 #include "statistics.cuh"
 #include "statistics_type_identification.cuh"
 #include "temp_storage_wrapper.cuh"
@@ -30,6 +31,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <math_constants.h>
+
+#include <thrust/extrema.h>
 
 namespace cudf {
 namespace io {
@@ -43,9 +46,12 @@ class union_member {
 
  public:
   template <typename T, typename U>
-  using type = std::conditional_t<std::is_same_v<std::remove_cv_t<T>, string_view>,
-                                  reference_type<U, string_stats>,
-                                  reference_type<U, T>>;
+  using type = std::conditional_t<
+    std::is_same_v<std::remove_cv_t<T>, string_view>,
+    reference_type<U, string_stats>,
+    std::conditional_t<std::is_same_v<std::remove_cv_t<T>, statistics::byte_array_view>,
+                       reference_type<U, byte_array_stats>,
+                       reference_type<U, T>>>;
 
   template <typename T, typename U>
   __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T, U>>
@@ -62,6 +68,12 @@ class union_member {
   }
 
   template <typename T, typename U>
+  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(U& val)
+  {
+    return val.d128_val;
+  }
+
+  template <typename T, typename U>
   __device__ static std::enable_if_t<std::is_floating_point_v<T>, type<T, U>> get(U& val)
   {
     return val.fp_val;
@@ -71,6 +83,13 @@ class union_member {
   __device__ static std::enable_if_t<std::is_same_v<T, string_view>, type<T, U>> get(U& val)
   {
     return val.str_val;
+  }
+
+  template <typename T, typename U>
+  __device__ static std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>, type<T, U>>
+  get(U& val)
+  {
+    return val.byte_val;
   }
 };
 
@@ -124,9 +143,7 @@ struct typed_statistics_chunk<T, true> {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
       maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
     }
-    if (chunk.has_sum) {
-      aggregate += detail::aggregation_type<A>::convert(union_member::get<A>(chunk.sum));
-    }
+    if (chunk.has_sum) { aggregate += union_member::get<A>(chunk.sum); }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
   }
@@ -229,7 +246,7 @@ get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
   stat.has_minmax = chunk.has_minmax;
   stat.has_sum    = [&]() {
     if (!chunk.has_minmax) return false;
-    // invalidate the sum if overlow or underflow is possible
+    // invalidate the sum if overflow or underflow is possible
     if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
       return std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,10 +67,9 @@ auto compute_partial_results(cudf::column_view const& keys, cudf::column_view co
   auto [out_keys, out_results] = gb_obj.aggregate(requests);
 
   auto const num_output_rows = out_keys->num_rows();
-  return std::make_pair(
-    std::move(out_keys->release()[0]),
-    cudf::make_structs_column(
-      num_output_rows, std::move(out_results[0].results), 0, rmm::device_buffer{}));
+  return std::pair(std::move(out_keys->release()[0]),
+                   cudf::make_structs_column(
+                     num_output_rows, std::move(out_results[0].results), 0, rmm::device_buffer{}));
 }
 
 /**
@@ -93,8 +92,7 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
   auto result = gb_obj.aggregate(requests);
-  return std::make_pair(std::move(result.first->release()[0]),
-                        std::move(result.second[0].results[0]));
+  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
 }
 }  // namespace
 

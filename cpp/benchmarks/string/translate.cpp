@@ -16,18 +16,19 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/translate.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <algorithm>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/translate.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <algorithm>
 
 class StringTranslate : public cudf::benchmark {
 };
@@ -53,7 +54,7 @@ static void BM_translate(benchmark::State& state, int entry_count)
                  });
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::translate(input, entries);
   }
 

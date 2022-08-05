@@ -25,6 +25,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
+
 #include <type_traits>
 #include <vector>
 
@@ -91,7 +94,7 @@ TYPED_TEST(StableSort, WithNullMax)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -127,7 +130,7 @@ TYPED_TEST(StableSort, WithNullMin)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };

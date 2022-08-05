@@ -31,77 +31,10 @@ def test_series_invert(dtype):
     np.testing.assert_equal((~sr).to_numpy(), ~arr)
 
 
-@pytest.mark.parametrize("dtype", utils.INTEGER_TYPES + ["bool"])
-def test_series_not(dtype):
-    import pandas as pd
-
-    dtype = cudf.dtype(dtype).type
-    arr = pd.Series(np.random.choice([True, False], 1000)).astype(dtype)
-    if dtype is not np.bool_:
-        arr = arr * (np.random.random(1000) * 100).astype(dtype)
-    sr = Series(arr)
-
-    with pytest.warns(FutureWarning, match="logical_not is deprecated"):
-        result = cudf.logical_not(sr).to_numpy()
-    expect = np.logical_not(arr)
-    np.testing.assert_equal(result, expect)
-    np.testing.assert_equal((~sr).to_numpy(), ~arr)
-
-
 def test_series_neg():
     arr = np.random.random(100) * 100
     sr = Series(arr)
     np.testing.assert_equal((-sr).to_numpy(), -arr)
-
-
-def test_series_ceil():
-    arr = np.random.random(100) * 100
-    sr = Series(arr)
-    with pytest.warns(
-        FutureWarning, match="Series.ceil and DataFrame.ceil are deprecated"
-    ):
-        sr = sr.ceil()
-    np.testing.assert_equal(sr.to_numpy(), np.ceil(arr))
-
-
-def test_series_floor():
-    arr = np.random.random(100) * 100
-    sr = Series(arr)
-    with pytest.warns(
-        FutureWarning, match="Series.floor and DataFrame.floor are deprecated"
-    ):
-        sr = sr.floor()
-    np.testing.assert_equal(sr.to_numpy(), np.floor(arr))
-
-
-@pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
-def test_validity_ceil(nelem):
-    # Data
-    data = np.random.random(nelem) * 100
-    mask = utils.random_bitmask(nelem)
-    bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
-    sr = Series.from_masked_array(data, mask)
-
-    # Result
-    with pytest.warns(
-        FutureWarning, match="Series.ceil and DataFrame.ceil are deprecated"
-    ):
-        res = sr.ceil()
-
-    na_value = -100000
-    got = res.fillna(na_value).to_numpy()
-    res_mask = np.asarray(bitmask, dtype=np.bool_)[: data.size]
-
-    expect = np.ceil(data)
-    expect[~res_mask] = na_value
-
-    # Check
-    print("expect")
-    print(expect)
-    print("got")
-    print(got)
-
-    np.testing.assert_array_equal(expect, got)
 
 
 @pytest.mark.parametrize("mth", ["min", "max", "sum", "product"])

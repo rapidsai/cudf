@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,13 @@
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -74,7 +76,7 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_elements(input, rmm::cuda_stream_default, mr);
+  return detail::count_elements(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.

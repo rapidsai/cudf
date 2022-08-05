@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -77,11 +77,6 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-
-See Also
---------
-cudf.read_csv
-cudf.read_json
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -252,7 +247,7 @@ int96_timestamps : bool, default False
     timestamps will not be altered.
 row_group_size_bytes: integer or None, default None
     Maximum size of each stripe of the output.
-    If None, 13369344 (128MB) will be used.
+    If None, 134217728 (128MB) will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
@@ -264,7 +259,6 @@ row_group_size_rows: integer or None, default None
 See Also
 --------
 cudf.read_parquet
-cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
@@ -392,9 +386,6 @@ num_rows : int, default None
     If not None, the total number of rows to read.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
-decimal_cols_as_float: list, default None
-    If specified, names of the columns that should be converted from
-    Decimal to Float64 in the resulting dataframe.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
@@ -421,8 +412,7 @@ Examples
 
 See Also
 --------
-cudf.read_parquet
-cudf.DataFrame.to_parquet
+cudf.DataFrame.to_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -435,7 +425,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', None }}, default None
+compression : {{ 'snappy', 'ZLIB', None }}, default None
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
@@ -569,7 +559,7 @@ result : Series or DataFrame, depending on the value of `typ`.
 
 See Also
 --------
-.cudf.io.json.to_json
+cudf.DataFrame.to_json
 """
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
@@ -636,7 +626,7 @@ index : bool, default True
 
 See Also
 --------
-.cudf.io.json.read_json
+cudf.read_json
 """
 doc_to_json = docfmt_partial(docstring=_docstring_to_json)
 
@@ -1329,7 +1319,7 @@ def _open_remote_files(
     ]
 
 
-def get_filepath_or_buffer(
+def get_reader_filepath_or_buffer(
     path_or_data,
     compression,
     mode="rb",
@@ -1338,6 +1328,7 @@ def get_filepath_or_buffer(
     byte_ranges=None,
     use_python_file_object=False,
     open_file_options=None,
+    allow_raw_text_input=False,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1362,6 +1353,11 @@ def get_filepath_or_buffer(
     open_file_options : dict, optional
         Optional dictionary of key-word arguments to pass to
         `_open_remote_files` (used for remote storage only).
+    allow_raw_text_input : boolean, default False
+        If True, this indicates the input `path_or_data` could be a raw text
+        input and will not check for its existence in the filesystem. If False,
+        the input must be a path and an error will be raised if it does not
+        exist.
 
     Returns
     -------
@@ -1382,27 +1378,36 @@ def get_filepath_or_buffer(
             if fs is None:
                 return path_or_data, compression
 
-        if len(paths) == 0:
-            raise FileNotFoundError(
-                f"{path_or_data} could not be resolved to any files"
-            )
-
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
-            if os.path.exists(paths[0]):
-                path_or_data = paths if len(paths) > 1 else paths[0]
+            if len(paths):
+                if fs.exists(paths[0]):
+                    path_or_data = paths if len(paths) > 1 else paths[0]
+                elif not allow_raw_text_input:
+                    raise FileNotFoundError(
+                        f"{path_or_data} could not be resolved to any files"
+                    )
 
         else:
+            if len(paths) == 0:
+                raise FileNotFoundError(
+                    f"{path_or_data} could not be resolved to any files"
+                )
             if use_python_file_object:
                 path_or_data = _open_remote_files(
-                    paths, fs, **(open_file_options or {}),
+                    paths,
+                    fs,
+                    **(open_file_options or {}),
                 )
             else:
                 path_or_data = [
                     BytesIO(
                         _fsspec_data_transfer(
-                            fpath, fs=fs, mode=mode, **kwargs,
+                            fpath,
+                            fs=fs,
+                            mode=mode,
+                            **kwargs,
                         )
                     )
                     for fpath in paths
@@ -1685,7 +1690,11 @@ def _fsspec_data_transfer(
         for b in range(0, file_size, bytes_per_thread)
     ]
     _read_byte_ranges(
-        path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+        path_or_fob,
+        byte_ranges,
+        buf,
+        fs=fs,
+        **kwargs,
     )
 
     return buf.tobytes()
@@ -1717,19 +1726,25 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
         # We have an open fsspec file object
         path_or_fob.seek(offset)
         local_buffer[offset : offset + nbytes] = np.frombuffer(
-            path_or_fob.read(nbytes), dtype="b",
+            path_or_fob.read(nbytes),
+            dtype="b",
         )
     else:
         # We have an fsspec filesystem and a path
         with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
             fob.seek(offset)
             local_buffer[offset : offset + nbytes] = np.frombuffer(
-                fob.read(nbytes), dtype="b",
+                fob.read(nbytes),
+                dtype="b",
             )
 
 
 def _read_byte_ranges(
-    path_or_fob, ranges, local_buffer, fs=None, **kwargs,
+    path_or_fob,
+    ranges,
+    local_buffer,
+    fs=None,
+    **kwargs,
 ):
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf

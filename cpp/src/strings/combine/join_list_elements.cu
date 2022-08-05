@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,13 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -305,7 +308,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    rmm::cuda_stream_default,
+                                    cudf::default_stream_value,
                                     mr);
 }
 
@@ -324,7 +327,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     string_narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    rmm::cuda_stream_default,
+                                    cudf::default_stream_value,
                                     mr);
 }
 

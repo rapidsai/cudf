@@ -23,6 +23,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsFindMultipleTest : public cudf::test::BaseFixture {

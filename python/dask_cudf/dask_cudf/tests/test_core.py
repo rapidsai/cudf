@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import random
 
@@ -720,7 +720,9 @@ def test_series_describe():
     pdsr = dd.from_pandas(psr, npartitions=4)
 
     dd.assert_eq(
-        dsr.describe(), pdsr.describe(), check_less_precise=3,
+        dsr.describe(),
+        pdsr.describe(),
+        check_less_precise=3,
     )
 
 

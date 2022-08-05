@@ -77,9 +77,9 @@ std::filesystem::path get_cache_dir()
     int device;
     int cc_major;
     int cc_minor;
-    CUDA_TRY(cudaGetDevice(&device));
-    CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
-    CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
+    CUDF_CUDA_TRY(cudaGetDevice(&device));
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
     int cc = cc_major * 10 + cc_minor;
 
     kernel_cache_path /= std::to_string(cc);

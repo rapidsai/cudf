@@ -17,10 +17,13 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 template <typename T>
 void BM_contiguous_split_common(benchmark::State& state,

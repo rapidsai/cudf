@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,9 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::jni {
 
@@ -34,5 +37,36 @@ namespace cudf::jni {
 std::unique_ptr<cudf::column>
 new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
                                            cudf::column_view const &bool_column);
+
+/**
+ * @brief Generates list offsets with lengths of each list.
+ *
+ * For example,
+ * Given a list column: [[1,2,3], [4,5], [6], [], [7,8]]
+ * The list lengths of it: [3, 2, 1, 0, 2]
+ * The list offsets of it: [0, 3, 5, 6, 6, 8]
+ *
+ * @param list_length The column represents list lengths.
+ * @return The column represents list offsets.
+ */
+std::unique_ptr<cudf::column>
+generate_list_offsets(cudf::column_view const &list_length,
+                      rmm::cuda_stream_view stream = cudf::default_stream_value);
+
+/**
+ * @brief Generates lists column by copying elements that are distinct by key from each input list
+ * row to the corresponding output row.
+ *
+ * The input lists column must be given such that each list element is a struct of <key, value>
+ * pair. With such input, a list containing distinct by key elements are defined such that the keys
+ * of all elements in the list are distinct (i.e., any two keys are always compared unequal).
+ *
+ * There will not be any validity check for the input. The caller is responsible to make sure that
+ * the input lists column has the right structure.
+ *
+ * @return A new list columns in which the elements in each list are distinct by key.
+ */
+std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view const &input,
+                                                    rmm::cuda_stream_view stream);
 
 } // namespace cudf::jni

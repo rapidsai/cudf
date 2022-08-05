@@ -26,6 +26,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsExtractTests : public cudf::test::BaseFixture {

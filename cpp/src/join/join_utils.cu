@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
+#include "join_common_utils.cuh"
 
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf {
 namespace detail {
@@ -58,7 +61,7 @@ get_trivial_left_join_indices(table_view const& left,
     std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
 VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream)
@@ -148,7 +151,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                              left_invalid_indices->end(),
                              JoinNoneValue);
 
-  return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
+  return std::pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
 }  // namespace detail

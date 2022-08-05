@@ -17,10 +17,8 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core.scalar import (
-    NA,
-    Scalar,
-)
+from cudf.core.scalar import Scalar
+
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
@@ -45,6 +43,7 @@ from cudf.core.index import (
 )
 from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut
 from cudf.core.algorithms import factorize
@@ -58,31 +57,10 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.groupby import Grouper
-from cudf.core.ops import (
-    add,
-    arccos,
-    arcsin,
-    arctan,
-    cos,
-    exp,
-    floor_divide,
-    log,
-    logical_and,
-    logical_not,
-    logical_or,
-    multiply,
-    remainder,
-    sin,
-    sqrt,
-    subtract,
-    tan,
-    true_divide,
-)
 from cudf.core.reshape import (
     concat,
     get_dummies,
     melt,
-    merge_sorted,
     pivot,
     unstack,
 )
@@ -175,7 +153,6 @@ __all__ = [
     "isclose",
     "melt",
     "merge",
-    "merge_sorted",
     "pivot",
     "read_avro",
     "read_csv",

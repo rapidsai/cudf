@@ -1,3 +1,4 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
 import contextlib
 import doctest
 import inspect
@@ -88,7 +89,10 @@ class TestDoctests:
 
         # These global names are pre-defined and can be used in doctests
         # without first importing them.
-        globals = dict(cudf=cudf, np=np,)
+        globals = dict(
+            cudf=cudf,
+            np=np,
+        )
         docstring.globs = globals
 
         # Capture stdout and include failing outputs in the traceback.

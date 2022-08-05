@@ -125,7 +125,7 @@ def test_sum_of_squares(dtype, nelem):
 
     got = sr.sum_of_squares()
     got_df = df.sum_of_squares()
-    expect = (data ** 2).sum()
+    expect = (data**2).sum()
 
     if cudf.dtype(dtype).kind in {"u", "i"}:
         if 0 <= expect <= np.iinfo(dtype).max:
@@ -261,7 +261,7 @@ def test_sum_boolean():
 
 
 def test_date_minmax():
-    np_data = np.random.normal(size=10 ** 3)
+    np_data = np.random.normal(size=10**3)
     gdf_data = Series(np_data)
 
     np_casted = np_data.astype("datetime64[ms]")
@@ -277,7 +277,8 @@ def test_date_minmax():
 
 
 @pytest.mark.parametrize(
-    "op", ["sum", "product", "var", "kurt", "kurtosis", "skew"],
+    "op",
+    ["sum", "product", "var", "kurt", "kurtosis", "skew"],
 )
 def test_datetime_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")

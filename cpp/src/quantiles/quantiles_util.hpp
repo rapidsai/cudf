@@ -29,7 +29,7 @@ CUDF_HOST_DEVICE inline Result get_array_value(T const* devarr, size_type locati
 #if defined(__CUDA_ARCH__)
   result = devarr[location];
 #else
-  CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost));
 #endif
   return static_cast<Result>(result);
 }

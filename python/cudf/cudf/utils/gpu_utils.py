@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 
 def validate_setup():
@@ -55,6 +55,12 @@ def validate_setup():
             raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
+    except RuntimeError as e:
+        # getDeviceCount() can raise a RuntimeError
+        # when ``libcuda.so`` is missing.
+        # We don't want this to propagate up to the user.
+        warnings.warn(str(e))
+        return
 
     if gpus_count > 0:
         # Cupy throws RunTimeException to get GPU count,

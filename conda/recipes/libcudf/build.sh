@@ -1,8 +1,5 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+#!/bin/bash
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
-    # This assumes the script is executed from the root of the repo directory
-    ./build.sh -v libcudf --allgpuarch --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib\"
-else
-    ./build.sh -v libcudf tests --allgpuarch --build_metrics --incl_cache_stats --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib\"
-fi
+export cudf_ROOT="$(realpath ./cpp/build)"
+./build.sh -n -v libcudf libcudf_kafka benchmarks tests --build_metrics --incl_cache_stats --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib\"

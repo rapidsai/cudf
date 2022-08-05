@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -145,6 +147,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
@@ -157,7 +160,8 @@ struct SchemaElement {
     return type == other.type && converted_type == other.converted_type &&
            type_length == other.type_length && repetition_type == other.repetition_type &&
            name == other.name && num_children == other.num_children &&
-           decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision;
+           decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision &&
+           field_id == other.field_id;
   }
 
   // the parquet format is a little squishy when it comes to interpreting
@@ -200,6 +204,18 @@ struct SchemaElement {
            // this assumption might be a little weak.
            ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
   }
+};
+
+/**
+ * @brief Thrift-derived struct describing column chunk statistics
+ */
+struct Statistics {
+  std::vector<uint8_t> max;        // deprecated max value in signed comparison order
+  std::vector<uint8_t> min;        // deprecated min value in signed comparison order
+  int64_t null_count     = -1;     // count of null values in the column
+  int64_t distinct_count = -1;     // count of distinct values occurring
+  std::vector<uint8_t> max_value;  // max value for column determined by ColumnOrder
+  std::vector<uint8_t> min_value;  // min value for column determined by ColumnOrder
 };
 
 /**
@@ -315,6 +331,42 @@ struct PageHeader {
   DataPageHeader data_page_header;
   DictionaryPageHeader dictionary_page_header;
 };
+
+/**
+ * @brief Thrift-derived struct describing page location information stored
+ * in the offsets index.
+ */
+struct PageLocation {
+  int64_t offset;                // Offset of the page in the file
+  int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
+  int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
+                            // 0 at the beginning of each column chunk
+};
+
+/**
+ * @brief Thrift-derived struct describing the offset index.
+ */
+struct OffsetIndex {
+  std::vector<PageLocation> page_locations;
+};
+
+/**
+ * @brief Thrift-derived struct describing the column index.
+ */
+struct ColumnIndex {
+  std::vector<bool> null_pages;  // Boolean used to determine if a page contains only null values
+  std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
+  std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
+  BoundaryOrder boundary_order =
+    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;  // Optional count of null values per page
+};
+
+// bit space we are reserving in column_buffer::user_data
+constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
+constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
+// if this column has a list parent anywhere above it in the hierarchy
+constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT = (1 << 25);
 
 /**
  * @brief Count the number of leading zeros in an unsigned integer

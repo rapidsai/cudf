@@ -31,8 +31,9 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <src/rolling/rolling_detail.hpp>
+#include <src/rolling/detail/rolling.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -539,7 +540,7 @@ class RollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window_col,
@@ -551,10 +552,8 @@ class RollingTest : public cudf::test::BaseFixture {
     thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    thrust::host_vector<T> in_col;
-    std::vector<bitmask_type> in_valid;
-    std::tie(in_col, in_valid) = cudf::test::to_host<T>(input);
-    bitmask_type* valid_mask   = in_valid.data();
+    auto [in_col, in_valid]  = cudf::test::to_host<T>(input);
+    bitmask_type* valid_mask = in_valid.data();
 
     agg_op op;
     for (size_type i = 0; i < num_rows; i++) {
@@ -594,7 +593,7 @@ class RollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window_col,

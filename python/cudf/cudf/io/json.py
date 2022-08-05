@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import warnings
 from io import BytesIO, StringIO
 
@@ -42,10 +42,11 @@ def read_json(
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
 
-            tmp_source, compression = ioutils.get_filepath_or_buffer(
+            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
                 path_or_data=source,
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
+                allow_raw_text_input=True,
                 **kwargs,
             )
             if isinstance(tmp_source, list):
@@ -65,17 +66,19 @@ def read_json(
         )
 
         if not ioutils.ensure_single_filepath_or_buffer(
-            path_or_data=path_or_buf, **kwargs,
+            path_or_data=path_or_buf,
+            **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "
                 "multiple files via pandas"
             )
 
-        path_or_buf, compression = ioutils.get_filepath_or_buffer(
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
             compression=compression,
             iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
             **kwargs,
         )
 

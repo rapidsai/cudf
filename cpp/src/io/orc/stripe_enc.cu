@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
@@ -28,7 +29,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <nvcomp/snappy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace io {
@@ -1136,8 +1140,9 @@ __global__ void __launch_bounds__(1024)
  *
  * @param[in] strm_desc StripeStream device array [stripe][stream]
  * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[out] comp_in Per-block compression input parameters
- * @param[out] comp_out Per-block compression status
+ * @param[out] inputs Per-block compression input buffers
+ * @param[out] outputs Per-block compression output buffers
+ * @param[out] statuses Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
@@ -1146,8 +1151,9 @@ __global__ void __launch_bounds__(1024)
 __global__ void __launch_bounds__(256)
   gpuInitCompressionBlocks(device_2dspan<StripeStream const> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams,  // const?
-                           device_span<gpu_inflate_input_s> comp_in,
-                           device_span<gpu_inflate_status_s> comp_out,
+                           device_span<device_span<uint8_t const>> inputs,
+                           device_span<device_span<uint8_t>> outputs,
+                           device_span<decompress_status> statuses,
                            uint8_t* compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size)
@@ -1170,16 +1176,11 @@ __global__ void __launch_bounds__(256)
   dst        = compressed_bfr + ss.bfr_offset;
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
-    gpu_inflate_input_s* blk_in   = &comp_in[ss.first_block + b];
-    gpu_inflate_status_s* blk_out = &comp_out[ss.first_block + b];
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    blk_in->srcDevice = src + b * comp_blk_size;
-    blk_in->srcSize   = blk_size;
-    blk_in->dstDevice = dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE;
-    blk_in->dstSize   = max_comp_blk_size;
-    blk_out->bytes_written = blk_size;
-    blk_out->status        = 1;
-    blk_out->reserved      = 0;
+    inputs[ss.first_block + b] = {src + b * comp_blk_size, blk_size};
+    auto const dst_offset = b * compressed_block_size(max_comp_blk_size) + padded_block_header_size;
+    outputs[ss.first_block + b]  = {dst + dst_offset, max_comp_blk_size};
+    statuses[ss.first_block + b] = {blk_size, 1, 0};
   }
 }
 
@@ -1189,8 +1190,9 @@ __global__ void __launch_bounds__(256)
  *
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] comp_in Per-block compression input parameters
- * @param[in] comp_out Per-block compression status
+ * @param[out] inputs Per-block compression input buffers
+ * @param[out] outputs Per-block compression output buffers
+ * @param[out] statuses Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
@@ -1198,8 +1200,9 @@ __global__ void __launch_bounds__(256)
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
   gpuCompactCompressedBlocks(device_2dspan<StripeStream> strm_desc,
-                             device_span<gpu_inflate_input_s> comp_in,
-                             device_span<gpu_inflate_status_s> comp_out,
+                             device_span<device_span<uint8_t const> const> inputs,
+                             device_span<device_span<uint8_t> const> outputs,
+                             device_span<decompress_status> statuses,
                              uint8_t* compressed_bfr,
                              uint32_t comp_blk_size,
                              uint32_t max_comp_blk_size)
@@ -1223,21 +1226,21 @@ __global__ void __launch_bounds__(1024)
   b          = 0;
   do {
     if (t == 0) {
-      gpu_inflate_input_s* blk_in   = &comp_in[ss.first_block + b];
-      gpu_inflate_status_s* blk_out = &comp_out[ss.first_block + b];
-      uint32_t src_len =
+      auto const src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-      uint32_t dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
-      uint32_t blk_size24;
-      if (dst_len >= src_len) {
+      auto dst_len = (statuses[ss.first_block + b].status == 0)
+                       ? statuses[ss.first_block + b].bytes_written
+                       : src_len;
+      uint32_t blk_size24{};
+      if (statuses[ss.first_block + b].status == 0) {
         // Copy from uncompressed source
-        src                    = static_cast<const uint8_t*>(blk_in->srcDevice);
-        blk_out->bytes_written = src_len;
-        dst_len                = src_len;
-        blk_size24             = dst_len * 2 + 1;
+        src                                        = inputs[ss.first_block + b].data();
+        statuses[ss.first_block + b].bytes_written = src_len;
+        dst_len                                    = src_len;
+        blk_size24                                 = dst_len * 2 + 1;
       } else {
         // Compressed block
-        src        = static_cast<const uint8_t*>(blk_in->dstDevice);
+        src        = outputs[ss.first_block + b].data();
         blk_size24 = dst_len * 2 + 0;
       }
       dst[0]     = static_cast<uint8_t>(blk_size24 >> 0);
@@ -1306,78 +1309,49 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<gpu_inflate_input_s> comp_in,
-                            device_span<gpu_inflate_status_s> comp_out,
+                            device_span<device_span<uint8_t const>> comp_in,
+                            device_span<device_span<uint8_t>> comp_out,
+                            device_span<decompress_status> comp_stat,
                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
-  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
-    strm_desc, enc_streams, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
+  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(strm_desc,
+                                                                            enc_streams,
+                                                                            comp_in,
+                                                                            comp_out,
+                                                                            comp_stat,
+                                                                            compressed_data,
+                                                                            comp_blk_size,
+                                                                            max_comp_blk_size);
+
   if (compression == SNAPPY) {
-    if (detail::nvcomp_integration::is_stable_enabled()) {
-      try {
-        size_t temp_size;
-        nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
-          num_compressed_blocks, comp_blk_size, nvcompBatchedSnappyDefaultOpts, &temp_size);
-
-        CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-                     "Error in getting snappy compression scratch size");
-
-        rmm::device_buffer scratch(temp_size, stream);
-        rmm::device_uvector<void const*> uncompressed_data_ptrs(num_compressed_blocks, stream);
-        rmm::device_uvector<size_t> uncompressed_data_sizes(num_compressed_blocks, stream);
-        rmm::device_uvector<void*> compressed_data_ptrs(num_compressed_blocks, stream);
-        rmm::device_uvector<size_t> compressed_bytes_written(num_compressed_blocks, stream);
-
-        auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
-                                                 uncompressed_data_sizes.begin(),
-                                                 compressed_data_ptrs.begin());
-        thrust::transform(rmm::exec_policy(stream),
-                          comp_in.begin(),
-                          comp_in.end(),
-                          comp_it,
-                          [] __device__(gpu_inflate_input_s in) {
-                            return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
-                          });
-        nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
-                                                         uncompressed_data_sizes.data(),
-                                                         max_comp_blk_size,
-                                                         num_compressed_blocks,
-                                                         scratch.data(),
-                                                         scratch.size(),
-                                                         compressed_data_ptrs.data(),
-                                                         compressed_bytes_written.data(),
-                                                         nvcompBatchedSnappyDefaultOpts,
-                                                         stream.value());
-
-        CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in snappy compression");
-
-        thrust::transform(rmm::exec_policy(stream),
-                          compressed_bytes_written.begin(),
-                          compressed_bytes_written.end(),
-                          comp_out.begin(),
-                          [] __device__(size_t size) {
-                            gpu_inflate_status_s status{};
-                            status.bytes_written = size;
-                            return status;
-                          });
-      } catch (...) {
-        // If we reach this then there was an error in compressing so set an error status for each
-        // block
-        thrust::for_each(rmm::exec_policy(stream),
-                         comp_out.begin(),
-                         comp_out.end(),
-                         [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
-      };
-
-    } else {
-      gpu_snap(comp_in.data(), comp_out.data(), num_compressed_blocks, stream);
+    try {
+      if (detail::nvcomp_integration::is_stable_enabled()) {
+        nvcomp::batched_compress(
+          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_stat, comp_blk_size, stream);
+      } else {
+        gpu_snap(comp_in, comp_out, comp_stat, stream);
+      }
+    } catch (...) {
+      // There was an error in compressing so set an error status for each block
+      thrust::for_each(rmm::exec_policy(stream),
+                       comp_stat.begin(),
+                       comp_stat.end(),
+                       [] __device__(decompress_status & stat) { stat.status = 1; });
+      // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
+      // writing without compression
     }
+  } else if (compression == ZLIB and detail::nvcomp_integration::is_all_enabled()) {
+    nvcomp::batched_compress(
+      nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_stat, comp_blk_size, stream);
+  } else if (compression != NONE) {
+    CUDF_FAIL("Unsupported compression type");
   }
+
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
-    strm_desc, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
+    strm_desc, comp_in, comp_out, comp_stat, compressed_data, comp_blk_size, max_comp_blk_size);
 }
 
 }  // namespace gpu

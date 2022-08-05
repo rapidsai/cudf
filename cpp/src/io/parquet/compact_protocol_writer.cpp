@@ -144,6 +144,7 @@ size_t CompactProtocolWriter::write(const SchemaElement& s)
       c.field_int(8, s.decimal_precision);
     }
   }
+  if (s.field_id) { c.field_int(9, s.field_id.value()); }
   auto const isset = s.logical_type.isset;
   // TODO: add handling for all logical types
   // if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or
@@ -201,6 +202,22 @@ size_t CompactProtocolWriter::write(const ColumnChunkMetaData& s)
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   if (s.statistics_blob.size() != 0) { c.field_struct_blob(12, s.statistics_blob); }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(const PageLocation& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, s.offset);
+  c.field_int(2, s.compressed_page_size);
+  c.field_int(3, s.first_row_index);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(const OffsetIndex& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_struct_list(1, s.page_locations);
   return c.value();
 }
 

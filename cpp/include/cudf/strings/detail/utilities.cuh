@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,14 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
@@ -49,7 +53,7 @@ template <typename InputIterator>
 std::unique_ptr<column> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
@@ -64,30 +68,8 @@ std::unique_ptr<column> make_offsets_child_column(
   // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
   // offset values to zero manually.
   thrust::inclusive_scan(rmm::exec_policy(stream), begin, end, d_offsets + 1);
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
   return offsets_column;
-}
-
-/**
- * @brief Creates an offsets column from a string_view iterator, and size.
- *
- * @tparam Iter Iterator type that returns string_view instances
- * @param strings_begin Iterator to the beginning of the string_view sequence
- * @param num_strings The number of string_view instances in the sequence
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return Child offsets column
- */
-template <typename Iter>
-std::unique_ptr<cudf::column> child_offsets_from_string_iterator(
-  Iter strings_begin,
-  cudf::size_type num_strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
-  auto begin       = thrust::make_transform_iterator(strings_begin, transformer);
-  return make_offsets_child_column(begin, begin + num_strings, stream, mr);
 }
 
 /**
@@ -126,9 +108,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *         It must also have members d_offsets and d_chars which are set to
  *         memory containing the offsets and chars columns during write.
  *
- * @param size_and_exec_fn This is called twice. Once for the output size of each string.
- *        After that, the d_offsets and d_chars are set and this is called again to fill in the
- *        chars memory.
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string
+ *        and once again to fill in the memory pointed to by d_chars.
  * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
  * @param strings_count Number of strings.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -140,7 +121,7 @@ auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type exec_size,
   size_type strings_count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto offsets_column = make_numeric_column(
@@ -175,7 +156,7 @@ auto make_strings_children(
     for_each_fn(size_and_exec_fn);
   }
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 /**
@@ -186,9 +167,8 @@ auto make_strings_children(
  *         It must also have members d_offsets and d_chars which are set to
  *         memory containing the offsets and chars columns during write.
  *
- * @param size_and_exec_fn This is called twice. Once for the output size of each string.
- *        After that, the d_offsets and d_chars are set and this is called again to fill in the
- *        chars memory.
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string
+ *        and once again to fill in the memory pointed to by d_chars.
  * @param strings_count Number of strings.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
@@ -198,7 +178,7 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type strings_count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);

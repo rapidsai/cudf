@@ -22,9 +22,11 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -33,8 +35,15 @@
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/merge.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -137,8 +146,8 @@ struct byte_pair_encoding_fn {
    * @param rhs Second string.
    * @return The hash value to match with `d_map`.
    */
-  __device__ hash_value_type compute_hash(cudf::string_view const& lhs,
-                                          cudf::string_view const& rhs)
+  __device__ cudf::hash_value_type compute_hash(cudf::string_view const& lhs,
+                                                cudf::string_view const& rhs)
   {
     __shared__ char shmem[48 * 1024];  // max for Pascal
     auto const total_size         = lhs.size_bytes() + rhs.size_bytes() + 1;
@@ -180,9 +189,15 @@ struct byte_pair_encoding_fn {
    */
   __device__ void operator()(cudf::size_type idx)
   {
-    if (d_strings.is_null(idx)) { return; }
+    if (d_strings.is_null(idx)) {
+      d_sizes[idx] = 0;
+      return;
+    }
     auto const d_str = get_first_token(d_strings.element<cudf::string_view>(idx));
-    if (d_str.empty()) { return; }
+    if (d_str.empty()) {
+      d_sizes[idx] = 0;
+      return;
+    }
 
     auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
                           .element<cudf::offset_type>(idx);
@@ -550,7 +565,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_pair_encoding(input, merges_table, separator, rmm::cuda_stream_default, mr);
+  return detail::byte_pair_encoding(input, merges_table, separator, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

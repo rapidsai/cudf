@@ -31,13 +31,16 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <utility>
 #include <vector>
@@ -51,6 +54,9 @@ std::unique_ptr<table> unique(table_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  // If keep is KEEP_ANY, just alias it to KEEP_FIRST.
+  if (keep == duplicate_keep_option::KEEP_ANY) { keep = duplicate_keep_option::KEEP_FIRST; }
+
   auto const num_rows = input.num_rows();
   if (num_rows == 0 or input.num_columns() == 0 or keys.empty()) { return empty_like(input); }
 
@@ -93,7 +99,7 @@ std::unique_ptr<table> unique(table_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique(input, keys, keep, nulls_equal, rmm::cuda_stream_default, mr);
+  return detail::unique(input, keys, keep, nulls_equal, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

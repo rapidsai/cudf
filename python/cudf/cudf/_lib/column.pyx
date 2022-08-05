@@ -7,7 +7,7 @@ import pandas as pd
 import rmm
 
 import cudf
-import cudf._lib as libcudfxx
+import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
@@ -107,17 +107,21 @@ cdef class Column:
 
     @property
     def data(self):
+        if self.base_data is None:
+            return None
         if self._data is None:
-            if self.base_data is None:
+            itemsize = self.dtype.itemsize
+            size = self.size * itemsize
+            offset = self.offset * itemsize if self.size else 0
+            if offset == 0 and self.base_data.size == size:
+                # `data` spans all of `base_data`
                 self._data = self.base_data
             else:
-                buf = Buffer(self.base_data)
-                if self.size == 0:
-                    buf.ptr = 0
-                else:
-                    buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
-                buf.size = self.size * self.dtype.itemsize
-                self._data = buf
+                self._data = Buffer.from_buffer(
+                    buffer=self.base_data,
+                    size=size,
+                    offset=offset
+                )
         return self._data
 
     @property
@@ -133,7 +137,6 @@ cdef class Column:
                             type(value).__name__)
 
         self._data = None
-
         self._base_data = value
 
     @property
@@ -160,7 +163,7 @@ cdef class Column:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
-                self._mask = libcudfxx.null_mask.copy_bitmask(self)
+                self._mask = libcudf.null_mask.copy_bitmask(self)
         return self._mask
 
     @property

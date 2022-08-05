@@ -43,6 +43,32 @@ namespace detail {
 class simple_aggregations_collector;
 class aggregation_finalizer;
 }  // namespace detail
+
+/**
+ * @brief Tie-breaker method to use for ranking the column.
+ *
+ * @see cudf::make_rank_aggregation for more details.
+ * @ingroup column_sort
+ */
+enum class rank_method : int32_t {
+  FIRST,    ///< stable sort order ranking (no ties)
+  AVERAGE,  ///< mean of first in the group
+  MIN,      ///< min of first in the group
+  MAX,      ///< max of first in the group
+  DENSE     ///< rank always increases by 1 between groups
+};
+
+/**
+ * @brief Whether returned rank should be percentage or not and
+ *  mention the type of percentage normalization.
+ *
+ */
+enum class rank_percentage : int32_t {
+  NONE,             ///< rank
+  ZERO_NORMALIZED,  ///< rank / count
+  ONE_NORMALIZED    ///< (rank - 1) / (count - 1)
+};
+
 /**
  * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -77,9 +103,7 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    RANK,            ///< get rank       of current index
-    DENSE_RANK,      ///< get dense rank of current index
-    PERCENT_RANK,    ///< get percent (i.e. fractional) rank of current index
+    RANK,            ///< get rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -96,18 +120,56 @@ class aggregation {
   };
 
   aggregation() = delete;
+
+  /**
+   * @brief Construct a new aggregation object
+   *
+   * @param a aggregation::Kind enum value
+   */
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
   virtual ~aggregation() = default;
 
+  /**
+   * @brief Compares two aggregation objects for equality
+   *
+   * @param other The other aggregation to compare with
+   * @return True if the two aggregations are equal
+   */
   [[nodiscard]] virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
+
+  /**
+   * @brief Computes the hash value of the aggregation
+   *
+   * @return The hash value of the aggregation
+   */
   [[nodiscard]] virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+
+  /**
+   * @pure @brief Clones the aggregation object
+   *
+   * @return A copy of the aggregation object
+   */
   [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
 
   // override functions for compound aggregations
+  /**
+   * @pure @brief Get the simple aggregations that this aggregation requires to compute.
+   *
+   * @param col_type The type of the column to aggregate
+   * @param collector The collector visitor pattern to use to collect the simple aggregations
+   * @return Vector of pre-requisite simple aggregations
+   */
   virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const         = 0;
+
+  /**
+   * @pure @brief Compute the aggregation after pre-requisite simple aggregations have been
+   * computed.
+   *
+   * @param finalizer The finalizer visitor pattern to use to compute the aggregation
+   */
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const = 0;
 };
 
 /**
@@ -123,7 +185,8 @@ class rolling_aggregation : public virtual aggregation {
 
  protected:
   rolling_aggregation() {}
-  rolling_aggregation(aggregation::Kind a) : aggregation{a} {}
+  /// constructor inherited from cudf::aggregation
+  using aggregation::aggregation;
 };
 
 /**
@@ -181,46 +244,57 @@ class segmented_reduce_aggregation : public virtual aggregation {
   segmented_reduce_aggregation() {}
 };
 
+/// Type of code in the user defined function string.
 enum class udf_type : bool { CUDA, PTX };
+/// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 
 /// Factory to create a SUM aggregation
+/// @return A SUM aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_aggregation();
 
 /// Factory to create a PRODUCT aggregation
+/// @return A PRODUCT aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_product_aggregation();
 
 /// Factory to create a MIN aggregation
+/// @return A MIN aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_min_aggregation();
 
 /// Factory to create a MAX aggregation
+/// @return A MAX aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_max_aggregation();
 
 /**
  * @brief Factory to create a COUNT aggregation
  *
- * @param null_handling Indicates if null values will be counted.
+ * @param null_handling Indicates if null values will be counted
+ * @return A COUNT aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_count_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
 /// Factory to create an ANY aggregation
+/// @return A ANY aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_any_aggregation();
 
 /// Factory to create a ALL aggregation
+/// @return A ALL aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_all_aggregation();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
+/// @return A SUM_OF_SQUARES aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_of_squares_aggregation();
 
 /// Factory to create a MEAN aggregation
+/// @return A MEAN aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_mean_aggregation();
 
@@ -234,6 +308,7 @@ std::unique_ptr<Base> make_mean_aggregation();
  * deviation across multiple discrete sets. See
  * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm` for more
  * detail.
+ * @return A M2 aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_m2_aggregation();
@@ -245,6 +320,7 @@ std::unique_ptr<Base> make_m2_aggregation();
  *             `variance` is `N - ddof`, where `N` is the population size.
  *
  * @throw cudf::logic_error if input type is chrono or compound types.
+ * @return A VARIANCE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
@@ -256,11 +332,13 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
  *             `std` is `N - ddof`, where `N` is the population size.
  *
  * @throw cudf::logic_error if input type is chrono or compound types.
+ * @return A STD aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_std_aggregation(size_type ddof = 1);
 
 /// Factory to create a MEDIAN aggregation
+/// @return A MEDIAN aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_median_aggregation();
 
@@ -269,63 +347,71 @@ std::unique_ptr<Base> make_median_aggregation();
  *
  * @param quantiles The desired quantiles
  * @param interp The desired interpolation
+ * @return A QUANTILE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quantiles,
                                                 interpolation interp = interpolation::LINEAR);
 
 /**
- * @brief Factory to create an `argmax` aggregation
+ * @brief Factory to create an ARGMAX aggregation
  *
- * `argmax` returns the index of the maximum element.
+ * ARGMAX returns the index of the maximum element.
+ * @return A ARGMAX aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_argmax_aggregation();
 
 /**
- * @brief Factory to create an `argmin` aggregation
+ * @brief Factory to create an ARGMIN aggregation
  *
  * `argmin` returns the index of the minimum element.
+ * @return A ARGMIN aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_argmin_aggregation();
 
 /**
- * @brief Factory to create a `nunique` aggregation
+ * @brief Factory to create a NUNIQUE aggregation
  *
- * `nunique` returns the number of unique elements.
- * @param null_handling Indicates if null values will be counted.
+ * NUNIQUE returns the number of unique elements.
+ * @param null_handling Indicates if null values will be counted
+ * @return A NUNIQUE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
 /**
- * @brief Factory to create a `nth_element` aggregation
+ * @brief Factory to create a NTH_ELEMENT aggregation
  *
- * `nth_element` returns the n'th element of the group/series.
+ * NTH_ELEMENT returns the n'th element of the group/series.
  *
  * If @p n is not within the range `[-group_size, group_size)`, the result of
  * the respective group will be null. Negative indices `[-group_size, -1]`
  * corresponds to `[0, group_size-1]` indices respectively where `group_size` is
  * the size of each group.
  *
- * @param n index of nth element in each group.
- * @param null_handling Indicates to include/exclude nulls during indexing.
+ * @param n index of nth element in each group
+ * @param null_handling Indicates to include/exclude nulls during indexing
+ * @return A NTH_ELEMENT aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_nth_element_aggregation(
   size_type n, null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a ROW_NUMBER aggregation
+/// @return A ROW_NUMBER aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
 /**
  * @brief Factory to create a RANK aggregation
  *
- * `RANK` returns a non-nullable column of size_type "ranks": the number of rows preceding or
- * equal to the current row plus one. As a result, ranks are not unique and gaps will appear in
- * the ranking sequence.
+ * `RANK` returns a column of size_type or double "ranks" (see note 3 below for how the
+ * data type is determined) for a given rank method and column order.
+ * If nulls are excluded, the rank will be null for those rows, otherwise a non-nullable column is
+ * returned. Double precision column is returned only when percentage!=NONE and when rank method is
+ * average.
  *
  * This aggregation only works with "scan" algorithms. The input column into the group or
  * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
@@ -333,10 +419,12 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * column containing the ordering columns.
  *
  * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `RANK` aggregations will return a fully valid column regardless of null_handling policy
- *     specified in the scan.
- *  3. `RANK` aggregations are not compatible with exclusive scans.
+ *  1. This method could work faster with the rows that are presorted by the group keys and order_by
+ *     columns. Though groupby object does not require order_by column to be sorted, groupby rank
+ *     scan aggregation does require the order_by column to be sorted if the keys are sorted.
+ *  2. `RANK` aggregations are not compatible with exclusive scans.
+ *  3. All rank methods except AVERAGE method and percentage!=NONE returns size_type column.
+ *     For AVERAGE method and percentage!=NONE, the return type is double column.
  *
  * @code{.pseudo}
  * Example: Consider a motor-racing statistics dataset, containing the following columns:
@@ -362,123 +450,38 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * A grouped rank aggregation scan with:
  *   groupby column      : venue
  *   input orderby column: time
- * Produces the following rank column:
- * {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
+ * Produces the following rank column for each methods:
+ * first:   {   1,     2,     3,     4,     5,      1,     2,     3,     4,     5}
+ * average: {   1,     2,   3.5,   3.5,     5,      1,   2.5,   2.5,     4,     5}
+ * min:     {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
+ * max:     {   1,     2,     4,     4,     5,      1,     3,     3,     4,     5}
+ * dense:   {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
+ * This corresponds to the following grouping and `driver` rows:
+ *          { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *            <----------silverstone----------->|<-------------monza-------------->
+ *
+ * min rank for each percentage types:
+ * NONE:             {   1,      2,     3,     3,     5,      1,     2,     2,     4,     5 }
+ * ZERO_NORMALIZED : { 0.16,  0.33,  0.50,  0.50,  0.83,   0.16,  0.33,  0.33,  0.66,  0.83 }
+ * ONE_NORMALIZED:   { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
+ * where count corresponds to the number of rows in the group. @see cudf::rank_percentage
+ *
  * @endcode
+ *
+ * @param method The ranking method used for tie breaking (same values)
+ * @param column_order The desired sort order for ranking
+ * @param null_handling  flag to include nulls during ranking If nulls are not included,
+ * the corresponding rank will be null.
+ * @param null_precedence The desired order of null compared to other elements for column
+ * @param percentage enum to denote the type of conversion of ranks to percentage in range (0,1]
+ * @return A RANK aggregation object
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_rank_aggregation();
-
-/**
- * @brief Factory to create a DENSE_RANK aggregation
- *
- * `DENSE_RANK` returns a non-nullable column of size_type "dense ranks": the preceding unique
- * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
- * sequence (unlike RANK aggregations).
- *
- * This aggregation only works with "scan" algorithms. The input column into the group or
- * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
- * If rows are ordered by more than one column, the orderby input column should be a struct
- * column containing the ordering columns.
- *
- * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `DENSE_RANK` aggregations will return a fully valid column regardless of null_handling
- *     policy specified in the scan.
- *  3. `DENSE_RANK` aggregations are not compatible with exclusive scans.
- *
- * @code{.pseudo}
- * Example: Consider a motor-racing statistics dataset, containing the following columns:
- *   1. venue:  (STRING) Location of the race event
- *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
- *   3. time:   (INT32)  Time taken to complete the circuit
- *
- * For the following presorted data:
- *
- *  [ //      venue,           driver,           time
- *    {   "silverstone",  "HAM" ("hamilton"),   15823},
- *    {   "silverstone",  "LEC" ("leclerc"),    15827},
- *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
- *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
- *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
- *    {      "monza",     "RIC" ("ricciardo"),  12154},
- *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
- *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
- *    {      "monza",     "LEC" ("leclerc"),    12201},
- *    {      "monza",     "PER" ("perez"),      12203}
- *  ]
- *
- * A grouped dense rank aggregation scan with:
- *   groupby column      : venue
- *   input orderby column: time
- * Produces the following dense rank column:
- * {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- * @endcode
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_dense_rank_aggregation();
-
-/**
- * @brief Factory to create a PERCENT_RANK aggregation
- *
- * `PERCENT_RANK` returns a non-nullable column of double precision "fractional" ranks.
- * For row index `i`, the percent rank of row `i` is defined as:
- *   percent_rank = (rank - 1) / (group_row_count - 1)
- * where,
- *   1. rank is the `RANK` of the row within the group
- *   2. group_row_count is the number of rows in the group
- *
- * This aggregation only works with "scan" algorithms. The input to the grouped or
- * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
- * If rows are ordered by more than one column, the orderby input column should be a struct
- * column containing the ordering columns.
- *
- * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `PERCENT_RANK` aggregations will return a fully valid column regardless of null_handling
- *     policy specified in the scan.
- *  3. `PERCENT_RANK` aggregations are not compatible with exclusive scans.
- *
- * @code{.pseudo}
- * Example: Consider a motor-racing statistics dataset, containing the following columns:
- *   1. venue:  (STRING) Location of the race event
- *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
- *   3. time:   (INT32)  Time taken to complete the circuit
- *
- * For the following presorted data:
- *
- *  [ //      venue,           driver,           time
- *    {   "silverstone",  "HAM" ("hamilton"),   15823},
- *    {   "silverstone",  "LEC" ("leclerc"),    15827},
- *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
- *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
- *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
- *    {      "monza",     "RIC" ("ricciardo"),  12154},
- *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
- *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
- *    {      "monza",     "LEC" ("leclerc"),    12201},
- *    {      "monza",     "PER" ("perez"),      12203}
- *  ]
- *
- * A grouped percent rank aggregation scan with:
- *   groupby column      : venue
- *   input orderby column: time
- * Produces the following percent rank column:
- * { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
- *
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- * @endcode
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_percent_rank_aggregation();
+std::unique_ptr<Base> make_rank_aggregation(rank_method method,
+                                            order column_order         = order::ASCENDING,
+                                            null_policy null_handling  = null_policy::EXCLUDE,
+                                            null_order null_precedence = null_order::AFTER,
+                                            rank_percentage percentage = rank_percentage::NONE);
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation
@@ -488,7 +491,8 @@ std::unique_ptr<Base> make_percent_rank_aggregation();
  * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
  * of the list rows.
  *
- * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ * @param null_handling Indicates whether to include/exclude nulls in list elements
+ * @return A COLLECT_LIST aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_collect_list_aggregation(
@@ -508,17 +512,28 @@ std::unique_ptr<Base> make_collect_list_aggregation(
  *        equal.
  * @param nans_equal Flag to specify whether NaN values in floating point column should be
  *        considered equal.
+ * @return A COLLECT_SET aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                                    null_equality nulls_equal = null_equality::EQUAL,
                                                    nan_equality nans_equal = nan_equality::UNEQUAL);
 
-/// Factory to create a LAG aggregation
+/**
+ * @brief Factory to create a LAG aggregation
+ *
+ * @param offset The number of rows to lag the input
+ * @return A LAG aggregation object
+ */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_lag_aggregation(size_type offset);
 
-/// Factory to create a LEAD aggregation
+/**
+ * @brief Factory to create a LEAD aggregation
+ *
+ * @param offset The number of rows to lead the input
+ * @return A LEAD aggregation object
+ */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_lead_aggregation(size_type offset);
 
@@ -529,7 +544,7 @@ std::unique_ptr<Base> make_lead_aggregation(size_type offset);
  * @param[in] user_defined_aggregator A string containing the aggregator code
  * @param[in] output_type expected output type
  *
- * @return aggregation unique pointer housing user_defined_aggregator string.
+ * @return An aggregation containing a user-defined aggregator string
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_udf_aggregation(udf_type type,
@@ -544,6 +559,8 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
  * groupby `COLLECT_LIST` aggregations into a final `COLLECT_LIST` result. As such, it requires the
  * input lists column to be non-nullable (the child column containing list entries is not subjected
  * to this requirement).
+ *
+ * @return A MERGE_LISTS aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_lists_aggregation();
@@ -568,6 +585,7 @@ std::unique_ptr<Base> make_merge_lists_aggregation();
  *        during dropping duplicate list entries.
  * @param nans_equal Flag to specify whether NaN values in floating point column should be
  *        considered equal during dropping duplicate list entries.
+ * @return A MERGE_SETS aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = null_equality::EQUAL,
@@ -584,6 +602,8 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
  *
  * The input `M2` aggregation values are expected to be all non-negative numbers, since they
  * were output from `M2` aggregation.
+ *
+ * @return A MERGE_M2 aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
@@ -593,9 +613,10 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *
  * Compute covariance between two columns.
  * The input columns are child columns of a non-nullable struct columns.
- * @param min_periods Minimum number of non-null observations required to produce a result.
+ * @param min_periods Minimum number of non-null observations required to produce a result
  * @param ddof Delta Degrees of Freedom. The divisor used in calculations is N - ddof, where N is
  *        the number of non-null observations.
+ * @return A COVARIANCE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, size_type ddof = 1);
@@ -607,7 +628,8 @@ std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, siz
  * The input columns are child columns of a non-nullable struct columns.
  *
  * @param type correlation_type
- * @param min_periods Minimum number of non-null observations required to produce a result.
+ * @param min_periods Minimum number of non-null observations required to produce a result
+ * @return A CORRELATION aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
@@ -645,7 +667,7 @@ std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
  * the computed tdigests: A value of 1000 will result in a tdigest containing no
  * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
  *
- * @returns A TDIGEST aggregation object.
+ * @return A TDIGEST aggregation object
  */
 template <typename Base>
 std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
@@ -683,7 +705,7 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
  * the computed tdigests: A value of 1000 will result in a tdigest containing no
  * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
  *
- * @returns A MERGE_TDIGEST aggregation object.
+ * @return A MERGE_TDIGEST aggregation object
  */
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);

@@ -19,10 +19,10 @@
  * @brief cuDF-IO CSV reader class implementation
  */
 
-#include "csv_common.h"
-#include "csv_gpu.h"
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 
-#include <io/comp/io_uncomp.h>
+#include <io/comp/io_uncomp.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>
@@ -41,6 +41,9 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <iostream>
@@ -258,11 +261,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
 
     auto const previous_data_size = d_data.size();
     d_data.resize(target_pos - buffer_pos, stream);
-    CUDA_TRY(cudaMemcpyAsync(d_data.begin() + previous_data_size,
-                             data.begin() + buffer_pos + previous_data_size,
-                             target_pos - buffer_pos - previous_data_size,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.begin() + previous_data_size,
+                                  data.begin() + buffer_pos + previous_data_size,
+                                  target_pos - buffer_pos - previous_data_size,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
@@ -278,11 +281,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                                                  range_end,
                                                                  skip_rows,
                                                                  stream);
-    CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                             row_ctx.device_ptr(),
-                             num_blocks * sizeof(uint64_t),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                  row_ctx.device_ptr(),
+                                  num_blocks * sizeof(uint64_t),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
     // Sum up the rows in each character block, selecting the row count that
@@ -298,11 +301,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       // At least one row in range in this batch
       all_row_offsets.resize(total_rows - skip_rows, stream);
 
-      CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
-                               row_ctx.host_ptr(),
-                               num_blocks * sizeof(uint64_t),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
+                                    row_ctx.host_ptr(),
+                                    num_blocks * sizeof(uint64_t),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
 
       // Pass 2: Output row offsets
       cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
@@ -319,11 +322,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < data.size()) {
-        CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                                 row_ctx.device_ptr(),
-                                 num_blocks * sizeof(uint64_t),
-                                 cudaMemcpyDeviceToHost,
-                                 stream.value()));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                      row_ctx.device_ptr(),
+                                      num_blocks * sizeof(uint64_t),
+                                      cudaMemcpyDeviceToHost,
+                                      stream.value()));
         stream.synchronize();
 
         size_t rows_out_of_range = 0;
@@ -368,11 +371,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
-    CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                             row_offsets.data() + header_row_index,
-                             2 * sizeof(uint64_t),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                  row_offsets.data() + header_row_index,
+                                  2 * sizeof(uint64_t),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
     const auto header_start = buffer_pos + row_ctx[0];
@@ -417,11 +420,13 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
       reinterpret_cast<const char*>(buffer->data()),
       buffer->size());
 
-    std::vector<char> h_uncomp_data_owner;
+    std::vector<uint8_t> h_uncomp_data_owner;
 
     if (reader_opts.get_compression() != compression_type::NONE) {
-      h_uncomp_data_owner = get_uncompressed_data(h_data, reader_opts.get_compression());
-      h_data              = h_uncomp_data_owner;
+      h_uncomp_data_owner =
+        decompress(reader_opts.get_compression(), {buffer->data(), buffer->size()});
+      h_data = {reinterpret_cast<char const*>(h_uncomp_data_owner.data()),
+                h_uncomp_data_owner.size()};
     }
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
@@ -457,116 +462,111 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
   return {rmm::device_uvector<char>{0, stream}, selected_rows_offsets{stream}};
 }
 
-std::vector<data_type> select_data_types(std::vector<column_parse::flags> const& column_flags,
-                                         std::vector<data_type> const& dtypes,
-                                         int32_t num_actual_columns,
-                                         int32_t num_active_columns)
+void select_data_types(host_span<data_type const> user_dtypes,
+                       host_span<column_parse::flags> column_flags,
+                       host_span<data_type> column_types)
 {
-  std::vector<data_type> selected_dtypes;
+  if (user_dtypes.empty()) { return; }
 
-  if (dtypes.size() == 1) {
-    // If it's a single dtype, assign that dtype to all active columns
-    selected_dtypes.resize(num_active_columns, dtypes.front());
-  } else {
-    // If it's a list, assign dtypes to active columns in the given order
-    CUDF_EXPECTS(static_cast<int>(dtypes.size()) >= num_actual_columns,
-                 "Must specify data types for all columns");
+  CUDF_EXPECTS(user_dtypes.size() == 1 || user_dtypes.size() == column_flags.size(),
+               "Specify data types for all columns in file, or use a dictionary/map");
 
-    for (int i = 0; i < num_actual_columns; i++) {
-      if (column_flags[i] & column_parse::enabled) { selected_dtypes.emplace_back(dtypes[i]); }
+  for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
+    if (column_flags[col_idx] & column_parse::enabled) {
+      // If it's a single dtype, assign that dtype to all active columns
+      auto const& dtype     = user_dtypes.size() == 1 ? user_dtypes[0] : user_dtypes[col_idx];
+      column_types[col_idx] = dtype;
+      // Reset the inferred flag, no need to infer the types from the data
+      column_flags[col_idx] &= ~column_parse::inferred;
     }
   }
-  return selected_dtypes;
 }
 
-std::vector<data_type> get_data_types_from_column_names(
-  std::vector<column_parse::flags> const& column_flags,
-  std::map<std::string, data_type> const& column_type_map,
-  std::vector<std::string> const& column_names,
-  int32_t num_actual_columns)
+void get_data_types_from_column_names(std::map<std::string, data_type> const& user_dtypes,
+                                      host_span<std::string const> column_names,
+                                      host_span<column_parse::flags> column_flags,
+                                      host_span<data_type> column_types)
 {
-  std::vector<data_type> selected_dtypes;
-
-  for (int32_t i = 0; i < num_actual_columns; i++) {
-    if (column_flags[i] & column_parse::enabled) {
-      auto const col_type_it = column_type_map.find(column_names[i]);
-      CUDF_EXPECTS(col_type_it != column_type_map.end(),
-                   "Must specify data types for all active columns");
-      selected_dtypes.emplace_back(col_type_it->second);
-    }
-  }
-
-  return selected_dtypes;
-}
-
-std::vector<data_type> infer_column_types(parse_options const& parse_opts,
-                                          std::vector<column_parse::flags> const& column_flags,
-                                          device_span<char const> data,
-                                          device_span<uint64_t const> row_offsets,
-                                          int32_t num_records,
-                                          int32_t num_active_columns,
-                                          data_type timestamp_type,
-                                          rmm::cuda_stream_view stream)
-{
-  std::vector<data_type> dtypes;
-  if (num_records == 0) {
-    dtypes.resize(num_active_columns, data_type{type_id::EMPTY});
-  } else {
-    auto column_stats =
-      cudf::io::csv::gpu::detect_column_types(parse_opts.view(),
-                                              data,
-                                              make_device_uvector_async(column_flags, stream),
-                                              row_offsets,
-                                              num_active_columns,
-                                              stream);
-
-    stream.synchronize();
-
-    for (int col = 0; col < num_active_columns; col++) {
-      unsigned long long int_count_total = column_stats[col].big_int_count +
-                                           column_stats[col].negative_small_int_count +
-                                           column_stats[col].positive_small_int_count;
-
-      if (column_stats[col].null_count == num_records) {
-        // Entire column is NULL; allocate the smallest amount of memory
-        dtypes.emplace_back(cudf::type_id::INT8);
-      } else if (column_stats[col].string_count > 0L) {
-        dtypes.emplace_back(cudf::type_id::STRING);
-      } else if (column_stats[col].datetime_count > 0L) {
-        dtypes.emplace_back(cudf::type_id::TIMESTAMP_NANOSECONDS);
-      } else if (column_stats[col].bool_count > 0L) {
-        dtypes.emplace_back(cudf::type_id::BOOL8);
-      } else if (column_stats[col].float_count > 0L ||
-                 (column_stats[col].float_count == 0L && int_count_total > 0L &&
-                  column_stats[col].null_count > 0L)) {
-        // The second condition has been added to conform to
-        // PANDAS which states that a column of integers with
-        // a single NULL record need to be treated as floats.
-        dtypes.emplace_back(cudf::type_id::FLOAT64);
-      } else if (column_stats[col].big_int_count == 0) {
-        dtypes.emplace_back(cudf::type_id::INT64);
-      } else if (column_stats[col].big_int_count != 0 &&
-                 column_stats[col].negative_small_int_count != 0) {
-        dtypes.emplace_back(cudf::type_id::STRING);
-      } else {
-        // Integers are stored as 64-bit to conform to PANDAS
-        dtypes.emplace_back(cudf::type_id::UINT64);
+  if (user_dtypes.empty()) { return; }
+  for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
+    if (column_flags[col_idx] & column_parse::enabled) {
+      auto const col_type_it = user_dtypes.find(column_names[col_idx]);
+      if (col_type_it != user_dtypes.end()) {
+        // Assign the type from the map
+        column_types[col_idx] = col_type_it->second;
+        // Reset the inferred flag, no need to infer the types from the data
+        column_flags[col_idx] &= ~column_parse::inferred;
       }
     }
   }
+}
 
-  if (timestamp_type.id() != cudf::type_id::EMPTY) {
-    for (auto& type : dtypes) {
-      if (cudf::is_timestamp(type)) { type = timestamp_type; }
+void infer_column_types(parse_options const& parse_opts,
+                        host_span<column_parse::flags const> column_flags,
+                        device_span<char const> data,
+                        device_span<uint64_t const> row_offsets,
+                        int32_t num_records,
+                        data_type timestamp_type,
+                        host_span<data_type> column_types,
+                        rmm::cuda_stream_view stream)
+{
+  if (num_records == 0) {
+    for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
+      if (column_flags[col_idx] & column_parse::inferred) {
+        column_types[col_idx] = data_type(cudf::type_id::STRING);
+      }
+    }
+    return;
+  }
+
+  auto const num_inferred_columns =
+    std::count_if(column_flags.begin(), column_flags.end(), [](auto& flags) {
+      return flags & column_parse::inferred;
+    });
+  if (num_inferred_columns == 0) { return; }
+
+  auto const column_stats =
+    cudf::io::csv::gpu::detect_column_types(parse_opts.view(),
+                                            data,
+                                            make_device_uvector_async(column_flags, stream),
+                                            row_offsets,
+                                            num_inferred_columns,
+                                            stream);
+  stream.synchronize();
+
+  auto inf_col_idx = 0;
+  for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
+    if (not(column_flags[col_idx] & column_parse::inferred)) { continue; }
+    auto const& stats = column_stats[inf_col_idx++];
+    unsigned long long int_count_total =
+      stats.big_int_count + stats.negative_small_int_count + stats.positive_small_int_count;
+
+    if (stats.null_count == num_records) {
+      // Entire column is NULL; allocate the smallest amount of memory
+      column_types[col_idx] = data_type(cudf::type_id::INT8);
+    } else if (stats.string_count > 0L) {
+      column_types[col_idx] = data_type(cudf::type_id::STRING);
+    } else if (stats.datetime_count > 0L) {
+      column_types[col_idx] = timestamp_type.id() == cudf::type_id::EMPTY
+                                ? data_type(cudf::type_id::TIMESTAMP_NANOSECONDS)
+                                : timestamp_type;
+    } else if (stats.bool_count > 0L) {
+      column_types[col_idx] = data_type(cudf::type_id::BOOL8);
+    } else if (stats.float_count > 0L ||
+               (stats.float_count == 0L && int_count_total > 0L && stats.null_count > 0L)) {
+      // The second condition has been added to conform to
+      // pandas which states that a column of integers with
+      // a single NULL record need to be treated as floats.
+      column_types[col_idx] = data_type(cudf::type_id::FLOAT64);
+    } else if (stats.big_int_count == 0) {
+      column_types[col_idx] = data_type(cudf::type_id::INT64);
+    } else if (stats.big_int_count != 0 && stats.negative_small_int_count != 0) {
+      column_types[col_idx] = data_type(cudf::type_id::STRING);
+    } else {
+      // Integers are stored as 64-bit to conform to PANDAS
+      column_types[col_idx] = data_type(cudf::type_id::UINT64);
     }
   }
-
-  for (size_t i = 0; i < dtypes.size(); i++) {
-    // Replace EMPTY dtype with STRING
-    if (dtypes[i].id() == type_id::EMPTY) { dtypes[i] = data_type{type_id::STRING}; }
-  }
-
-  return dtypes;
 }
 
 std::vector<column_buffer> decode_data(parse_options const& parse_opts,
@@ -622,6 +622,49 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
   return out_buffers;
 }
 
+std::vector<data_type> determine_column_types(csv_reader_options const& reader_opts,
+                                              parse_options const& parse_opts,
+                                              host_span<std::string const> column_names,
+                                              device_span<char const> data,
+                                              device_span<uint64_t const> row_offsets,
+                                              int32_t num_records,
+                                              host_span<column_parse::flags> column_flags,
+                                              rmm::cuda_stream_view stream)
+{
+  std::vector<data_type> column_types(column_flags.size());
+
+  std::visit(cudf::detail::visitor_overload{
+               [&](const std::vector<data_type>& user_dtypes) {
+                 return select_data_types(user_dtypes, column_flags, column_types);
+               },
+               [&](const std::map<std::string, data_type>& user_dtypes) {
+                 return get_data_types_from_column_names(
+                   user_dtypes, column_names, column_flags, column_types);
+               }},
+             reader_opts.get_dtypes());
+
+  infer_column_types(parse_opts,
+                     column_flags,
+                     data,
+                     row_offsets,
+                     num_records,
+                     reader_opts.get_timestamp_type(),
+                     column_types,
+                     stream);
+
+  // compact column_types to only include active columns
+  std::vector<data_type> active_col_types;
+  std::copy_if(column_types.cbegin(),
+               column_types.cend(),
+               std::back_inserter(active_col_types),
+               [&column_flags, &types = std::as_const(column_types)](auto& dtype) {
+                 auto const idx = std::distance(types.data(), &dtype);
+                 return column_flags[idx] & column_parse::enabled;
+               });
+
+  return active_col_types;
+}
+
 table_with_metadata read_csv(cudf::io::datasource* source,
                              csv_reader_options const& reader_opts,
                              parse_options const& parse_opts,
@@ -645,7 +688,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   // Check if the user gave us a list of column names
   if (not reader_opts.get_names().empty()) {
-    column_flags.resize(reader_opts.get_names().size(), column_parse::enabled);
+    column_flags.resize(reader_opts.get_names().size(),
+                        column_parse::enabled | column_parse::inferred);
     column_names = reader_opts.get_names();
   } else {
     column_names = get_column_names(
@@ -653,39 +697,64 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
     num_actual_columns = num_active_columns = column_names.size();
 
-    column_flags.resize(num_actual_columns, column_parse::enabled);
+    column_flags.resize(num_actual_columns, column_parse::enabled | column_parse::inferred);
 
+    std::vector<size_t> col_loop_order(column_names.size());
+    auto unnamed_it = std::copy_if(
+      thrust::make_counting_iterator<size_t>(0),
+      thrust::make_counting_iterator<size_t>(column_names.size()),
+      col_loop_order.begin(),
+      [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
     // Rename empty column names to "Unnamed: col_index"
-    for (size_t col_idx = 0; col_idx < column_names.size(); ++col_idx) {
-      if (column_names[col_idx].empty()) {
-        column_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
-      }
-    }
+    std::copy_if(thrust::make_counting_iterator<size_t>(0),
+                 thrust::make_counting_iterator<size_t>(column_names.size()),
+                 unnamed_it,
+                 [&column_names](auto col_idx) -> bool {
+                   auto is_empty = column_names[col_idx].empty();
+                   if (is_empty)
+                     column_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
+                   return is_empty;
+                 });
 
     // Looking for duplicates
-    std::unordered_map<string, int> col_names_histogram;
-    for (auto& col_name : column_names) {
-      // Operator [] inserts a default-initialized value if the given key is not
-      // present
-      if (++col_names_histogram[col_name] > 1) {
-        if (reader_opts.is_enabled_mangle_dupe_cols()) {
-          // Rename duplicates of column X as X.1, X.2, ...; First appearance
-          // stays as X
-          do {
-            col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
-          } while (col_names_histogram[col_name]++);
-        } else {
+    std::unordered_map<string, int> col_names_counts;
+    if (!reader_opts.is_enabled_mangle_dupe_cols()) {
+      for (auto& col_name : column_names) {
+        if (++col_names_counts[col_name] > 1) {
           // All duplicate columns will be ignored; First appearance is parsed
           const auto idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
         }
       }
+    } else {
+      // For constant/linear search.
+      std::unordered_multiset<std::string> header(column_names.begin(), column_names.end());
+      for (auto const col_idx : col_loop_order) {
+        auto col       = column_names[col_idx];
+        auto cur_count = col_names_counts[col];
+        if (cur_count > 0) {
+          auto const old_col = col;
+          // Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
+          while (cur_count > 0) {
+            col_names_counts[old_col] = cur_count + 1;
+            col                       = old_col + "." + std::to_string(cur_count);
+            if (header.find(col) != header.end()) {
+              cur_count++;
+            } else {
+              cur_count = col_names_counts[col];
+            }
+          }
+          if (auto pos = header.find(old_col); pos != header.end()) { header.erase(pos); }
+          header.insert(col);
+          column_names[col_idx] = col;
+        }
+        col_names_counts[col] = cur_count + 1;
+      }
     }
 
-    // Update the number of columns to be processed, if some might have been
-    // removed
+    // Update the number of columns to be processed, if some might have been removed
     if (!reader_opts.is_enabled_mangle_dupe_cols()) {
-      num_active_columns = col_names_histogram.size();
+      num_active_columns = col_names_counts.size();
     }
   }
 
@@ -694,7 +763,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     std::fill(column_flags.begin(), column_flags.end(), column_parse::disabled);
 
     for (const auto index : reader_opts.get_use_cols_indexes()) {
-      column_flags[index] = column_parse::enabled;
+      column_flags[index] = column_parse::enabled | column_parse::inferred;
     }
     num_active_columns = std::unordered_set<int>(reader_opts.get_use_cols_indexes().begin(),
                                                  reader_opts.get_use_cols_indexes().end())
@@ -705,7 +774,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       if (it != column_names.end()) {
         auto curr_it = it - column_names.begin();
         if (column_flags[curr_it] == column_parse::disabled) {
-          column_flags[curr_it] = column_parse::enabled;
+          column_flags[curr_it] = column_parse::enabled | column_parse::inferred;
           num_active_columns++;
         }
       }
@@ -744,42 +813,12 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   // Return empty table rather than exception if nothing to load
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
+  auto const column_types = determine_column_types(
+    reader_opts, parse_opts, column_names, data, row_offsets, num_records, column_flags, stream);
+
   auto metadata    = table_metadata{};
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
-
-  bool has_to_infer_column_types =
-    std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
-
-  std::vector<data_type> column_types;
-  if (has_to_infer_column_types) {
-    column_types = infer_column_types(  //
-      parse_opts,
-      column_flags,
-      data,
-      row_offsets,
-      num_records,
-      num_active_columns,
-      reader_opts.get_timestamp_type(),
-      stream);
-  } else {
-    column_types =
-      std::visit(cudf::detail::visitor_overload{
-                   [&](const std::vector<data_type>& data_types) {
-                     return select_data_types(
-                       column_flags, data_types, num_actual_columns, num_active_columns);
-                   },
-                   [&](const std::map<std::string, data_type>& data_types) {
-                     return get_data_types_from_column_names(  //
-                       column_flags,
-                       data_types,
-                       column_names,
-                       num_actual_columns);
-                   }},
-                 reader_opts.get_dtypes());
-  }
-
   out_columns.reserve(column_types.size());
-
   if (num_records != 0) {
     auto out_buffers = decode_data(  //
       parse_opts,

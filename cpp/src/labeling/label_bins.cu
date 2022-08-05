@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -37,6 +38,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/pair.h>
+#include <thrust/transform.h>
 
 #include <limits>
 
@@ -236,7 +238,12 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    inclusive right_inclusive,
                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::label_bins(
-    input, left_edges, left_inclusive, right_edges, right_inclusive, rmm::cuda_stream_default, mr);
+  return detail::label_bins(input,
+                            left_edges,
+                            left_inclusive,
+                            right_edges,
+                            right_inclusive,
+                            cudf::default_stream_value,
+                            mr);
 }
 }  // namespace cudf

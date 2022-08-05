@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_134, PANDAS_LT_140
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -56,7 +57,12 @@ def test_series_replace_all(gsr, to_replace, value):
         pd_value = value
 
     actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    if pd_value is None:
+        # TODO: Remove this workaround once cudf
+        # introduces `no_default` values
+        expected = psr.replace(to_replace=pd_to_replace)
+    else:
+        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(
         expected.sort_values().reset_index(drop=True),
@@ -160,12 +166,18 @@ def test_series_replace_with_nulls():
                 "c": ["abc", "def", ".", None, None],
             }
         ),
-        cudf.DataFrame(
-            {
-                "a": ["one", "two", None, "three"],
-                "b": ["one", None, "two", "three"],
-            },
-            dtype="category",
+        pytest.param(
+            cudf.DataFrame(
+                {
+                    "a": ["one", "two", None, "three"],
+                    "b": ["one", None, "two", "three"],
+                },
+                dtype="category",
+            ),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_LT_140,
+                reason="https://github.com/pandas-dev/pandas/issues/46672",
+            ),
         ),
         cudf.DataFrame(
             {
@@ -229,7 +241,10 @@ def test_dataframe_replace(df, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    if pd_value is None:
+        expected = pdf.replace(to_replace=pd_to_replace)
+    else:
+        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
     actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
@@ -783,7 +798,7 @@ def test_series_where(data_dtype, fill_value):
         assert_eq(
             expect,
             got,
-            check_dtype=False if expect.dtype.kind in ("f") else True,
+            check_dtype=expect.dtype.kind not in ("f"),
         )
 
     if sr.dtype.type(fill_value) != fill_value:
@@ -796,7 +811,7 @@ def test_series_where(data_dtype, fill_value):
         assert_eq(
             expect,
             got,
-            check_dtype=False if expect.dtype.kind in ("f") else True,
+            check_dtype=expect.dtype.kind not in ("f"),
         )
 
     if sr.dtype.type(fill_value) != fill_value:
@@ -809,7 +824,7 @@ def test_series_where(data_dtype, fill_value):
         assert_eq(
             expect,
             got,
-            check_dtype=False if expect.dtype.kind in ("f") else True,
+            check_dtype=expect.dtype.kind not in ("f"),
         )
 
 
@@ -986,7 +1001,8 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43232"
+                condition=not PANDAS_GE_134,
+                reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
         (
@@ -1057,7 +1073,14 @@ def test_replace_df_error():
 
 @pytest.mark.parametrize(
     ("lower", "upper"),
-    [([2, 7.4], [4, 7.9]), ([2, 7.4], None), (None, [4, 7.9],)],
+    [
+        ([2, 7.4], [4, 7.9]),
+        ([2, 7.4], None),
+        (
+            None,
+            [4, 7.9],
+        ),
+    ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_clip(lower, upper, inplace):
@@ -1076,7 +1099,8 @@ def test_dataframe_clip(lower, upper, inplace):
 
 
 @pytest.mark.parametrize(
-    ("lower", "upper"), [("b", "d"), ("b", None), (None, "c"), (None, None)],
+    ("lower", "upper"),
+    [("b", "d"), ("b", None), (None, "c"), (None, None)],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_category_clip(lower, upper, inplace):
@@ -1147,51 +1171,6 @@ def test_series_exceptions_for_clip():
 
 
 @pytest.mark.parametrize(
-    ("data", "lower", "upper"),
-    [
-        ([1, 2, 3, 4, 5], 2, 4),
-        ([1, 2, 3, 4, 5], 2, None),
-        ([1, 2, 3, 4, 5], None, 4),
-        ([1, 2, 3, 4, 5], None, None),
-        (["a", "b", "c", "d", "e"], "b", "d"),
-        (["a", "b", "c", "d", "e"], "b", None),
-        (["a", "b", "c", "d", "e"], None, "d"),
-    ],
-)
-@pytest.mark.parametrize("inplace", [True, False])
-def test_index_clip(data, lower, upper, inplace):
-    pdf = pd.DataFrame({"a": data})
-    index = cudf.from_pandas(pdf).set_index("a").index
-
-    expect = pdf.clip(lower=lower, upper=upper)
-    got = index.clip(lower=lower, upper=upper, inplace=inplace)
-
-    if inplace is True:
-        assert_eq(expect, index.to_frame(index=False))
-    else:
-        assert_eq(expect, got.to_frame(index=False))
-
-
-@pytest.mark.parametrize(
-    ("lower", "upper"), [([2, 3], [4, 5]), ([2, 3], None), (None, [4, 5],)],
-)
-@pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_clip(lower, upper, inplace):
-    df = pd.DataFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
-    gdf = cudf.from_pandas(df)
-
-    index = gdf.set_index(["a", "b"]).index
-
-    expected = df.clip(lower=lower, upper=upper, inplace=inplace, axis=1)
-    got = index.clip(lower=lower, upper=upper, inplace=inplace)
-
-    if inplace is True:
-        assert_eq(df, index.to_frame(index=False))
-    else:
-        assert_eq(expected, got.to_frame(index=False))
-
-
-@pytest.mark.parametrize(
     "data", [[1, 2.0, 3, 4, None, 1, None, 10, None], ["a", "b", "c"]]
 )
 @pytest.mark.parametrize(
@@ -1257,7 +1236,10 @@ def test_series_replace_errors():
         gsr.replace([1, 2], ["a", "b"])
 
     assert_exceptions_equal(
-        psr.replace, gsr.replace, ([{"a": 1}, 1],), ([{"a": 1}, 1],),
+        psr.replace,
+        gsr.replace,
+        ([{"a": 1}, 1],),
+        ([{"a": 1}, 1],),
     )
 
     assert_exceptions_equal(
@@ -1352,3 +1334,17 @@ def test_replace_nulls(gsr, old, new, expected):
         expected.sort_values().reset_index(drop=True),
         actual.sort_values().reset_index(drop=True),
     )
+
+
+def test_fillna_columns_multiindex():
+    columns = pd.MultiIndex.from_tuples([("a", "b"), ("d", "e")])
+    pdf = pd.DataFrame(
+        {"0": [1, 2, None, 3, None], "1": [None, None, None, None, 4]}
+    )
+    pdf.columns = columns
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.fillna(10)
+    actual = gdf.fillna(10)
+
+    assert_eq(expected, actual)

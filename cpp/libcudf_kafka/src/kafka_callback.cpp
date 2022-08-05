@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "cudf_kafka/kafka_callback.hpp"
+#include <cudf_kafka/kafka_callback.hpp>
 
 #include <librdkafka/rdkafkacpp.h>
 

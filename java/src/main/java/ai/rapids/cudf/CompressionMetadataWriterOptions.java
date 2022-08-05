@@ -42,6 +42,16 @@ public class CompressionMetadataWriterOptions extends ColumnWriterOptions.Struct
   }
 
   @Override
+  boolean[] getFlatHasParquetFieldId() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatHasParquetFieldId());
+  }
+
+  @Override
+  int[] getFlatParquetFieldId() {
+    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatParquetFieldId());
+  }
+
+  @Override
   int[] getFlatNumChildren() {
     return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatNumChildren());
   }

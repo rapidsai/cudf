@@ -27,12 +27,16 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 #include <memory>
@@ -110,10 +114,7 @@ struct quantile_functor {
         ordered_indices,
         [input = *d_input] __device__(size_type idx) { return input.is_valid_nocheck(idx); });
 
-      rmm::device_buffer mask;
-      size_type null_count;
-
-      std::tie(mask, null_count) = valid_if(
+      auto [mask, null_count] = valid_if(
         q_device.begin(),
         q_device.end(),
         [sorted_validity, interp = interp, size = size] __device__(double q) {
@@ -188,7 +189,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantile(input, q, interp, ordered_indices, exact, rmm::cuda_stream_default, mr);
+  return detail::quantile(input, q, interp, ordered_indices, exact, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

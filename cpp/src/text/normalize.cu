@@ -33,10 +33,13 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 
 #include <limits>
@@ -242,7 +245,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_spaces(strings, rmm::cuda_stream_default, mr);
+  return detail::normalize_spaces(strings, cudf::default_stream_value, mr);
 }
 
 /**
@@ -253,7 +256,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(strings, do_lower_case, rmm::cuda_stream_default, mr);
+  return detail::normalize_characters(strings, do_lower_case, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

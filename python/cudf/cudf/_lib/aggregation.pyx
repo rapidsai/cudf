@@ -30,7 +30,10 @@ from cudf._lib.types import Interpolation
 
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
+from cudf._lib.cpp.aggregation cimport (
+    underlying_type_t_correlation_type,
+    underlying_type_t_rank_method,
+)
 
 import cudf
 
@@ -54,6 +57,7 @@ class AggregationKind(Enum):
     ARGMIN = libcudf_aggregation.aggregation.Kind.ARGMIN
     NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
     NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
+    RANK = libcudf_aggregation.aggregation.Kind.RANK
     COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT
     UNIQUE = libcudf_aggregation.aggregation.Kind.COLLECT_SET
     PTX = libcudf_aggregation.aggregation.Kind.PTX
@@ -75,6 +79,14 @@ class CorrelationType(IntEnum):
         <underlying_type_t_correlation_type>
         libcudf_aggregation.correlation_type.SPEARMAN
     )
+
+
+class RankMethod(IntEnum):
+    FIRST = libcudf_aggregation.rank_method.FIRST
+    AVERAGE = libcudf_aggregation.rank_method.AVERAGE
+    MIN = libcudf_aggregation.rank_method.MIN
+    MAX = libcudf_aggregation.rank_method.MAX
+    DENSE = libcudf_aggregation.rank_method.DENSE
 
 
 cdef class RollingAggregation:
@@ -563,6 +575,33 @@ cdef class GroupbyScanAggregation:
     cumsum = sum
     cummin = min
     cummax = max
+
+    @classmethod
+    def rank(cls, method, ascending, na_option, pct):
+        cdef GroupbyScanAggregation agg = cls()
+        cdef libcudf_aggregation.rank_method c_method = (
+            <libcudf_aggregation.rank_method> (
+                <underlying_type_t_rank_method> (
+                    RankMethod[method.upper()]
+                )
+            )
+        )
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_rank_aggregation[groupby_scan_aggregation](
+                c_method,
+                (libcudf_types.order.ASCENDING if ascending else
+                    libcudf_types.order.DESCENDING),
+                (libcudf_types.null_policy.EXCLUDE if na_option == "keep" else
+                    libcudf_types.null_policy.INCLUDE),
+                (libcudf_types.null_order.BEFORE
+                    if (na_option == "top") == ascending else
+                    libcudf_types.null_order.AFTER),
+                (libcudf_aggregation.rank_percentage.ZERO_NORMALIZED
+                    if pct else
+                    libcudf_aggregation.rank_percentage.NONE)
+            ))
+        return agg
 
 
 cdef class ReduceAggregation:

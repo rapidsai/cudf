@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -26,8 +27,15 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace strings {

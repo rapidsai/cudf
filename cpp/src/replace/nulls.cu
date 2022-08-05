@@ -36,6 +36,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -44,11 +45,13 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace {  // anonymous
 
@@ -450,7 +453,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, replacement, rmm::cuda_stream_default, mr);
+  return cudf::detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
@@ -458,7 +461,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, replacement, rmm::cuda_stream_default, mr);
+  return cudf::detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
@@ -466,7 +469,7 @@ std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, replace_policy, rmm::cuda_stream_default, mr);
+  return cudf::detail::replace_nulls(input, replace_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 from cudf.io.avro import read_avro
 from cudf.io.csv import read_csv, to_csv
 from cudf.io.dlpack import from_dlpack
@@ -9,6 +9,7 @@ from cudf.io.orc import read_orc, read_orc_metadata, to_orc
 from cudf.io.parquet import (
     merge_parquet_filemetadata,
     read_parquet,
+    ParquetDatasetWriter,
     read_parquet_metadata,
     write_to_dataset,
 )

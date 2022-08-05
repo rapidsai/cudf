@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.06.00
+  VERSION 22.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -42,12 +42,18 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(
+  CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  "Build cuDF with per-thread default stream, including passing the per-thread default
+         stream to external libraries."
+  OFF
+)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -64,7 +70,7 @@ message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
-message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -146,7 +152,8 @@ include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
+include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
@@ -154,7 +161,29 @@ include(cmake/thirdparty/get_gtest.cmake)
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
-include(cmake/Modules/FindcuFile.cmake)
+include(cmake/thirdparty/get_cufile.cmake)
+# find KvikIO
+include(cmake/thirdparty/get_kvikio.cmake)
+
+# Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
+if(NOT BUILD_SHARED_LIBS)
+  include("${rapids-cmake-dir}/export/find_package_file.cmake")
+  list(APPEND METADATA_KINDS BUILD INSTALL)
+  list(APPEND dependencies KvikIO ZLIB nvcomp)
+  if(TARGET cufile::cuFile_interface)
+    list(APPEND dependencies cuFile)
+  endif()
+
+  foreach(METADATA_KIND IN LISTS METADATA_KINDS)
+    foreach(dep IN LISTS dependencies)
+      rapids_export_package(${METADATA_KIND} ${dep} cudf-exports)
+    endforeach()
+  endforeach()
+
+  if(TARGET conda_env)
+    install(TARGETS conda_env EXPORT cudf-exports)
+  endif()
+endif()
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -167,27 +196,26 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/binary_ops.cu
-  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
+  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/BitwiseAnd.cu
   src/binaryop/compiled/BitwiseOr.cu
   src/binaryop/compiled/BitwiseXor.cu
-  src/binaryop/compiled/Less.cu
-  src/binaryop/compiled/Greater.cu
-  src/binaryop/compiled/LessEqual.cu
-  src/binaryop/compiled/GreaterEqual.cu
   src/binaryop/compiled/Div.cu
-  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/FloorDiv.cu
+  src/binaryop/compiled/Greater.cu
+  src/binaryop/compiled/GreaterEqual.cu
+  src/binaryop/compiled/IntPow.cu
+  src/binaryop/compiled/Less.cu
+  src/binaryop/compiled/LessEqual.cu
   src/binaryop/compiled/LogBase.cu
   src/binaryop/compiled/LogicalAnd.cu
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
-  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullLogicalAnd.cu
+  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -198,6 +226,8 @@ add_library(
   src/binaryop/compiled/ShiftRightUnsigned.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
+  src/binaryop/compiled/binary_ops.cu
+  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -207,7 +237,6 @@ add_library(
   src/column/column_factories.cpp
   src/column/column_factories.cu
   src/column/column_view.cpp
-  src/comms/ipc/ipc.cpp
   src/copying/concatenate.cu
   src/copying/contiguous_split.cu
   src/copying/copy.cpp
@@ -216,6 +245,7 @@ add_library(
   src/copying/gather.cu
   src/copying/get_element.cu
   src/copying/pack.cpp
+  src/copying/purge_nonempty_nulls.cu
   src/copying/reverse.cu
   src/copying/sample.cu
   src/copying/scatter.cu
@@ -280,6 +310,8 @@ add_library(
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
+  src/io/comp/nvcomp_adapter.cpp
+  src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
@@ -329,10 +361,12 @@ add_library(
   src/join/join.cu
   src/join/join_utils.cu
   src/join/mixed_join.cu
-  src/join/mixed_join_kernels.cu
+  src/join/mixed_join_kernel.cu
+  src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
-  src/join/mixed_join_size_kernels.cu
+  src/join/mixed_join_size_kernel.cu
+  src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/lists/contains.cu
@@ -344,7 +378,6 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
-  src/lists/drop_list_duplicates.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
@@ -352,6 +385,10 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/set_operations.cu
+  src/lists/stream_compaction/apply_boolean_mask.cu
+  src/lists/stream_compaction/distinct.cu
+  src/lists/utilities.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
@@ -392,14 +429,19 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/rolling_collect_list.cu
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
-  src/rolling/rolling_collect_list.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/search.cu
+  src/search/contains_column.cu
+  src/search/contains_table.cu
+  src/search/contains_nested.cu
+  src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
@@ -410,8 +452,10 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
+  src/stream_compaction/distinct_reduce.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
@@ -550,8 +594,10 @@ if(JITIFY_USE_CACHE)
 endif()
 
 # Per-thread default stream
-if(PER_THREAD_DEFAULT_STREAM)
-  target_compile_definitions(cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+  target_compile_definitions(
+    cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  )
 endif()
 
 # Disable NVTX if necessary
@@ -569,17 +615,13 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
-endif()
-
-# Add cuFile interface if available
-if(TARGET cuFile::cuFile_interface)
-  target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
 endif()
 
 if(CUDA_STATIC_RUNTIME)
@@ -668,6 +710,8 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+  # Always print verbose output when tests fail if run using `make test`.
+  list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
 endif()
 
@@ -706,7 +750,7 @@ install(
 )
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(
@@ -761,13 +805,6 @@ set(common_code_string
 if(NOT TARGET cudf::Thrust)
   thrust_create_target(cudf::Thrust FROM_OPTIONS)
 endif()
-]=]
-)
-
-set(install_code_string
-    [=[
-set(ArrowCUDA_DIR "${Arrow_DIR}")
-find_dependency(ArrowCUDA)
 ]=]
 )
 

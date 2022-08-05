@@ -1,7 +1,6 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import datetime
-import datetime as dt
 import re
 from decimal import Decimal
 
@@ -11,7 +10,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf import Scalar as pycudf_scalar
 from cudf._lib.copying import get_element
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -297,9 +295,9 @@ def test_date_duration_scalars(value):
 
     actual = s.value
 
-    if isinstance(value, dt.datetime):
+    if isinstance(value, datetime.datetime):
         expected = np.datetime64(value)
-    elif isinstance(value, dt.timedelta):
+    elif isinstance(value, datetime.timedelta):
         expected = np.timedelta64(value)
     elif isinstance(value, pd.Timestamp):
         expected = value.to_datetime64()
@@ -344,7 +342,7 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
         cls(pd.NA)
     except TypeError as e:
         with pytest.raises(TypeError, match=re.escape(str(e))):
-            slr = pycudf_scalar(None, dtype=dtype)
+            slr = cudf.Scalar(None, dtype=dtype)
             cls(slr)
 
 
@@ -354,7 +352,7 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_device_scalar_direct_construction(value, decimal_type):
-    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
 
     dtype = (
         value.dtype
@@ -378,7 +376,7 @@ def test_device_scalar_direct_construction(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_construct_from_scalar(value):
-    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
     x = cudf.Scalar(
         value, value.dtype if not isinstance(value, Decimal) else None
     )

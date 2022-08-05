@@ -170,14 +170,14 @@ resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)
 object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
 detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
-libcudf functions typically take views as input (`column_view`, `table_view`, or `scalar_view`)
+libcudf functions typically take views as input (`column_view` or `table_view`)
 and produce `unique_ptr`s to owning objects as output. For example,
 
 ```c++
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## `rmm::device_memory_resource`<a name="memory_resource"></a>
+## `rmm::device_memory_resource`
 
 libcudf allocates all device memory via RMM memory resources (MR). See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
@@ -350,7 +350,7 @@ internal API in the `detail` namespace. The internal `detail` API has the same p
 public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. If the
 detail API also accepts a memory resource parameter, the stream parameter should be ideally placed
 just *before* the memory resource. The public API will call the detail API and provide
-`rmm::cuda_stream_default`. The implementation should be wholly contained in the `detail` API
+`cudf::default_stream_value`. The implementation should be wholly contained in the `detail` API
 definition and use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
@@ -373,7 +373,7 @@ namespace detail{
     void external_function(..., rmm::cuda_stream_view stream){
         // Implementation uses the stream with async APIs.
         rmm::device_buffer buff(...,stream);
-        CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
         thrust::algorithm(rmm::exec_policy(stream), ...);
     }
@@ -381,7 +381,7 @@ namespace detail{
 
 void external_function(...){
     CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., rmm::cuda_stream_default);
+    detail::external_function(..., cudf::default_stream_value);
 }
 ```
 
@@ -413,7 +413,7 @@ should avoid creating streams (even if it is slightly less efficient). It is a g
 
 ## Memory Allocation
 
-Device [memory resources](#memory_resource) are used in libcudf to abstract and control how device
+Device [memory resources](#rmmdevice_memory_resource) are used in libcudf to abstract and control how device
 memory is allocated.
 
 ### Output Memory
@@ -572,7 +572,7 @@ The preferred style for how inputs are passed in and outputs are returned is the
 
 Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be
 done in C++ (including creating a `struct` for the output). One convenient way to do this is
-using `std::tie`  and `std::make_pair`. Note that objects passed to `std::make_pair` will invoke
+using `std::tie`  and `std::pair`. Note that objects passed to `std::pair` will invoke
 either the copy constructor or the move constructor of the object, and it may be preferable to move
 non-trivially copyable objects (and required for types with deleted copy constructors, like
 `std::unique_ptr`).
@@ -585,7 +585,7 @@ std::pair<table, table> return_two_tables(void){
   // Do stuff with out0, out1
 
   // Return a std::pair of the two outputs
-  return std::make_pair(std::move(out0), std::move(out1));
+  return std::pair(std::move(out0), std::move(out1));
 }
 
 cudf::table out0;
@@ -745,6 +745,30 @@ void isolated_helper_function(...);
 
 [**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file)
 
+# Deprecating and Removing Code
+
+libcudf is constantly evolving to improve performance and better meet our users' needs. As a
+result, we occasionally need to break or entirely remove APIs to respond to new and improved
+understanding of the functionality we provide. Remaining free to do this is essential to making
+libcudf an agile library that can rapidly accommodate our users needs. As a result, we do not
+always provide a warning or any lead time prior to releasing breaking changes. On a best effort
+basis, the libcudf team will notify users of changes that we expect to have significant or
+widespread effects.
+
+Where possible, indicate pending API removals using the
+[deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute and
+document them using Doxygen's
+[deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) command prior to removal.
+When a replacement API is available for a deprecated API, mention the replacement in both the
+deprecation message and the deprecation documentation. Pull requests that introduce deprecations
+should be labeled "deprecation" to facilitate discovery and removal in the subsequent release.
+
+Advertise breaking changes by labeling any pull request that breaks or removes an existing API with
+the "breaking" tag. This ensures that the "Breaking" section of the release notes includes a
+description of what has broken from the past release. Label pull requests that contain deprecations
+with the "non-breaking" tag.
+
+
 # Error Handling
 
 libcudf follows conventions (and provides utilities) enforcing compile-time and run-time
@@ -777,7 +801,7 @@ CUDF_FAIL("This code path should not be reached.");
 
 ### CUDA Error Checking
 
-Use the `CUDA_TRY` macro to check for the successful completion of CUDA runtime API functions. This
+Use the `CUDF_CUDA_TRY` macro to check for the successful completion of CUDA runtime API functions. This
 macro throws a `cudf::cuda_error` exception if the CUDA API return value is not `cudaSuccess`. The
 thrown exception includes a description of the CUDA error code in its `what()` message.
 
@@ -1145,7 +1169,7 @@ instance of a class object to represent a null string.
 
 The `string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
 functions like `sort` without string-specific code. The data for a `string_view` instance is
-required to be [UTF-8](#UTF-8) and all operators and methods expect this encoding. Unless documented
+required to be [UTF-8](#utf-8) and all operators and methods expect this encoding. Unless documented
 otherwise, position and length parameters are specified in characters and not bytes. The class also
 includes a `string_view::const_iterator` which can be used to navigate through individual characters
 within the string.

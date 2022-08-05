@@ -15,9 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
-#include <strings/regex/dispatcher.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -28,11 +26,13 @@
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/for_each.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
@@ -46,62 +46,55 @@ namespace {
  * @brief This functor handles extracting matched strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
  */
-template <int stack_size>
 struct findall_fn {
   column_device_view const d_strings;
-  reprog_device prog;
   offset_type const* d_offsets;
   string_index_pair* d_indices;
 
-  __device__ void operator()(size_type const idx)
+  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    int32_t begin = 0;
-    int32_t end   = d_str.length();
-    while ((begin < end) && (prog.find<stack_size>(idx, d_str, begin, end) > 0)) {
+    size_type begin = 0;
+    size_type end   = nchars;
+    while ((begin < end) && (prog.find(prog_idx, d_str, begin, end) > 0)) {
       auto const spos = d_str.byte_offset(begin);  // convert
       auto const epos = d_str.byte_offset(end);    // to bytes
 
       d_output[output_idx++] = string_index_pair{d_str.data() + spos, (epos - spos)};
 
       begin = end + (begin == end);
-      end   = d_str.length();
+      end   = nchars;
     }
   }
 };
 
-struct findall_dispatch_fn {
-  reprog_device d_prog;
-
-  template <int stack_size>
-  std::unique_ptr<column> operator()(column_device_view const& d_strings,
+std::unique_ptr<column> findall_util(column_device_view const& d_strings,
+                                     reprog_device& d_prog,
                                      size_type total_matches,
                                      offset_type const* d_offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
-  {
-    rmm::device_uvector<string_index_pair> indices(total_matches, stream);
+{
+  rmm::device_uvector<string_index_pair> indices(total_matches, stream);
 
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       d_strings.size(),
-                       findall_fn<stack_size>{d_strings, d_prog, d_offsets, indices.data()});
+  launch_for_each_kernel(
+    findall_fn{d_strings, d_offsets, indices.data()}, d_prog, d_strings.size(), stream);
 
-    return make_strings_column(indices.begin(), indices.end(), stream, mr);
-  }
-};
+  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+}
 
 }  // namespace
 
 //
 std::unique_ptr<column> findall_record(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -110,32 +103,11 @@ std::unique_ptr<column> findall_record(
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // compile regex into device object
-  auto const d_prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
+  auto const d_prog = reprog_device::create(pattern, flags, stream);
 
   // Create lists offsets column
-  auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
-
-  // Compute null output rows
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_offsets,
-    d_offsets + strings_count,
-    [] __device__(auto const v) { return v > 0; },
-    stream,
-    mr);
-
-  auto const valid_count = strings_count - null_count;
-  // Return an empty lists column if there are no valid rows
-  if (valid_count == 0) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
-                             make_empty_column(type_id::STRING),
-                             0,
-                             rmm::device_buffer{},
-                             stream,
-                             mr);
-  }
 
   // Convert counts into offsets
   thrust::exclusive_scan(
@@ -145,15 +117,14 @@ std::unique_ptr<column> findall_record(
   auto const total_matches =
     cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
 
-  auto strings_output = regex_dispatcher(
-    *d_prog, findall_dispatch_fn{*d_prog}, *d_strings, total_matches, d_offsets, stream, mr);
+  auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings
   return make_lists_column(strings_count,
                            std::move(offsets),
                            std::move(strings_output),
-                           null_count,
-                           std::move(null_mask),
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -163,12 +134,12 @@ std::unique_ptr<column> findall_record(
 // external API
 
 std::unique_ptr<column> findall_record(strings_column_view const& input,
-                                       std::string const& pattern,
+                                       std::string_view pattern,
                                        regex_flags const flags,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall_record(input, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::findall_record(input, pattern, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

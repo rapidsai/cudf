@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/hashing.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class HashBenchmark : public cudf::benchmark {
 };
@@ -35,7 +35,7 @@ static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls h
     data->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::hash(data->view(), hid);
   }
 }

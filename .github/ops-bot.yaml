@@ -6,3 +6,5 @@ branch_checker: true
 label_checker: true
 release_drafter: true
 external_contributors: false
+copy_prs: true
+rerun_tests: true

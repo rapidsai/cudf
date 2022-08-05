@@ -14,18 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/sorting.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf/sorting.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 template <bool stable>
 class Sort : public cudf::benchmark {
@@ -48,7 +42,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
   cudf::table_view input{*input_table};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
 
     auto result = (stable) ? cudf::stable_sorted_order(input) : cudf::sorted_order(input);
   }

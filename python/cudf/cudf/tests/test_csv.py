@@ -473,19 +473,26 @@ def test_csv_reader_usecols_int_char(tmpdir, pd_mixed_dataframe):
     assert_eq(df_out, out, check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols(tmpdir):
-    buffer = "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n"
-
+@pytest.mark.parametrize(
+    "buffer",
+    [
+        "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n",
+        "A,A,A.1,A,A.2,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+        "A,A,A.1,,Unnamed: 4,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+    ],
+)
+@pytest.mark.parametrize("mangle_dupe_cols", [True, False])
+def test_csv_reader_mangle_dupe_cols(tmpdir, buffer, mangle_dupe_cols):
     # Default: mangle_dupe_cols=True
-    pd_df = pd.read_csv(StringIO(buffer))
-    cu_df = read_csv(StringIO(buffer))
+    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=mangle_dupe_cols)
+    if mangle_dupe_cols:
+        pd_df = pd.read_csv(StringIO(buffer))
+    else:
+        # Pandas does not support mangle_dupe_cols=False
+        head = buffer.split("\n")[0].split(",")
+        first_cols = np.unique(head, return_index=True)[1]
+        pd_df = pd.read_csv(StringIO(buffer), usecols=first_cols)
     assert_eq(cu_df, pd_df)
-
-    # Pandas does not support mangle_dupe_cols=False
-    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
-    # check that the dupe columns were removed
-    assert len(cu_df.columns) == 3
-    np.testing.assert_array_equal(cu_df["abc"].to_numpy(), [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
@@ -580,7 +587,9 @@ def test_csv_reader_NaN_values():
 
     # data type detection should evaluate the column to int8 (all nulls)
     gdf = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values,
+        StringIO(all_cells),
+        header=None,
+        na_values=custom_na_values,
     )
     assert gdf.dtypes[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
@@ -1273,6 +1282,7 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a

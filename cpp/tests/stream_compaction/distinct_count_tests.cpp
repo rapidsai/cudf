@@ -71,7 +71,7 @@ TYPED_TEST(TypedDistinctCount, TableNoNull)
   std::vector<std::pair<T, T>> pair_input;
   std::transform(
     input1.begin(), input1.end(), input2.begin(), std::back_inserter(pair_input), [](T a, T b) {
-      return std::make_pair(a, b);
+      return std::pair(a, b);
     });
 
   cudf::test::fixed_width_column_wrapper<T> input_col1(input1.begin(), input1.end());

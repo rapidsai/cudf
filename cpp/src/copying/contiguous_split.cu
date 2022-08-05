@@ -26,12 +26,23 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/iterator_categories.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <cstddef>
 #include <numeric>
@@ -678,9 +689,9 @@ BufInfo build_output_columns(InputIter begin,
                                   ? 0
                                   : (current_info->num_rows - current_info->valid_count);
         ++current_info;
-        return std::make_pair(ptr, null_count);
+        return std::pair(ptr, null_count);
       }
-      return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
+      return std::pair(static_cast<bitmask_type const*>(nullptr), 0);
     }();
 
     // size/data pointer for the column
@@ -1036,11 +1047,11 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
 
   // HtoD indices and source buf info to device
-  CUDA_TRY(cudaMemcpyAsync(d_indices,
-                           h_indices,
-                           indices_size + src_buf_info_size,
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_indices,
+                                h_indices,
+                                indices_size + src_buf_info_size,
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
 
   // packed block of memory 2. partition buffer sizes and dst_buf_info structs
   std::size_t const buf_sizes_size =
@@ -1170,11 +1181,11 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   }
 
   // DtoH buf sizes and col info back to the host
-  CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
-                           d_buf_sizes,
-                           buf_sizes_size + dst_buf_info_size,
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
+                                d_buf_sizes,
+                                buf_sizes_size + dst_buf_info_size,
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
   stream.synchronize();
 
   // allocate output partition buffers
@@ -1214,14 +1225,14 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   });
 
   // HtoD src and dest buffers
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream.value()));
 
   // perform the copy.
   copy_data(num_bufs, num_src_bufs, d_src_bufs, d_dst_bufs, d_dst_buf_info, stream);
 
   // DtoH dst info (to retrieve null counts)
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     h_dst_buf_info, d_dst_buf_info, dst_buf_info_size, cudaMemcpyDeviceToHost, stream.value()));
 
   stream.synchronize();
@@ -1258,7 +1269,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::contiguous_split(input, splits, rmm::cuda_stream_default, mr);
+  return cudf::detail::contiguous_split(input, splits, cudf::default_stream_value, mr);
 }
 
 };  // namespace cudf

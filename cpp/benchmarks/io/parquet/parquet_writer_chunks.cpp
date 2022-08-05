@@ -14,21 +14,14 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf/column/column.hpp>
-#include <cudf/table/table.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf/column/column.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/table/table.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 

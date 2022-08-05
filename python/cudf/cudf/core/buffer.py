@@ -1,15 +1,15 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import functools
 import operator
 import pickle
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
 import rmm
-from rmm import DeviceBuffer
 
 import cudf
 from cudf.core.abc import Serializable
@@ -33,21 +33,20 @@ class Buffer(Serializable):
         object is kept in this Buffer.
     """
 
-    ptr: int
-    size: int
-    _owner: Any
+    _ptr: int
+    _size: int
+    _owner: object
 
     def __init__(
-        self, data: Any = None, size: Optional[int] = None, owner: Any = None
+        self, data: Any = None, size: int = None, owner: object = None
     ):
-
         if isinstance(data, Buffer):
-            self.ptr = data.ptr
-            self.size = data.size
+            self._ptr = data._ptr
+            self._size = data.size
             self._owner = owner or data._owner
         elif isinstance(data, rmm.DeviceBuffer):
-            self.ptr = data.ptr
-            self.size = data.size
+            self._ptr = data.ptr
+            self._size = data.size
             self._owner = data
         elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
@@ -58,12 +57,12 @@ class Buffer(Serializable):
         elif isinstance(data, int):
             if not isinstance(size, int):
                 raise TypeError("size must be integer")
-            self.ptr = data
-            self.size = size
+            self._ptr = data
+            self._size = size
             self._owner = owner
         elif data is None:
-            self.ptr = 0
-            self.size = 0
+            self._ptr = 0
+            self._size = 0
             self._owner = None
         else:
             try:
@@ -72,23 +71,52 @@ class Buffer(Serializable):
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
 
+    @classmethod
+    def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
+        """
+        Create a buffer from another buffer
+
+        Parameters
+        ----------
+        buffer : Buffer
+            The base buffer, which will also be set as the owner of
+            the memory allocation.
+        size : int, optional
+            Size of the memory allocation (default: `buffer.size`).
+        offset : int, optional
+            Start offset relative to `buffer.ptr`.
+        """
+
+        ret = cls()
+        ret._ptr = buffer._ptr + offset
+        ret._size = buffer.size if size is None else size
+        ret._owner = buffer
+        return ret
+
     def __len__(self) -> int:
-        return self.size
+        return self._size
+
+    @property
+    def ptr(self) -> int:
+        return self._ptr
+
+    @property
+    def size(self) -> int:
+        return self._size
 
     @property
     def nbytes(self) -> int:
-        return self.size
+        return self._size
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        intf = {
+        return {
             "data": (self.ptr, False),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
             "version": 0,
         }
-        return intf
 
     def to_host_array(self):
         data = np.empty((self.size,), "u1")
@@ -102,15 +130,15 @@ class Buffer(Serializable):
             ptr, size = _buffer_data_from_array_interface(
                 data.__cuda_array_interface__
             )
-            self.ptr = ptr
-            self.size = size
+            self._ptr = ptr
+            self._size = size
             self._owner = owner or data
         elif hasattr(data, "__array_interface__"):
             confirm_1d_contiguous(data.__array_interface__)
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
-            dbuf = DeviceBuffer(ptr=ptr, size=size)
+            dbuf = rmm.DeviceBuffer(ptr=ptr, size=size)
             self._init_from_array_like(dbuf, owner)
         else:
             raise TypeError(
@@ -123,16 +151,20 @@ class Buffer(Serializable):
         header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
         header["desc"]["strides"] = (1,)
+        header["frame_count"] = 1
         frames = [self]
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
+        assert (
+            header["frame_count"] == 1
+        ), "Only expecting to deserialize Buffer with a single frame."
         buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
-                f"Recieved a `Buffer` with the wrong size."
+                f"Received a `Buffer` with the wrong size."
                 f" Expected {header['desc']['shape']}, "
                 f"but got {buf.__cuda_array_interface__['shape']}"
             )
@@ -141,17 +173,16 @@ class Buffer(Serializable):
 
     @classmethod
     def empty(cls, size: int) -> Buffer:
-        dbuf = DeviceBuffer(size=size)
-        return Buffer(dbuf)
+        return Buffer(rmm.DeviceBuffer(size=size))
 
-    def copy(self):
+    def copy(self) -> Buffer:
         """
         Create a new Buffer containing a copy of the data contained
         in this Buffer.
         """
         from rmm._lib.device_buffer import copy_device_to_ptr
 
-        out = Buffer(DeviceBuffer(size=self.size))
+        out = Buffer.empty(size=self.size)
         copy_device_to_ptr(self.ptr, out.ptr, self.size)
         return out
 
@@ -173,7 +204,7 @@ def confirm_1d_contiguous(array_interface):
     shape = array_interface["shape"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
     typestr = array_interface["typestr"]
-    if typestr not in ("|i1", "|u1"):
+    if typestr not in ("|i1", "|u1", "|b1"):
         raise TypeError("Buffer data must be of uint8 type")
     if not get_c_contiguity(shape, strides, itemsize):
         raise ValueError("Buffer data must be 1D C-contiguous")

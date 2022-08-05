@@ -33,9 +33,15 @@ public class ColumnWriterOptions {
   private boolean isNullable;
   private boolean isMap = false;
   private String columnName;
+  // only for Parquet
+  private boolean hasParquetFieldId;
+  private int parquetFieldId;
+
   private ColumnWriterOptions(AbstractStructBuilder builder) {
     this.columnName = builder.name;
     this.isNullable = builder.isNullable;
+    this.hasParquetFieldId = builder.hasParquetFieldId;
+    this.parquetFieldId = builder.parquetFieldId;
     this.childColumnOptions =
         (ColumnWriterOptions[]) builder.children.toArray(new ColumnWriterOptions[0]);
   }
@@ -67,6 +73,10 @@ public class ColumnWriterOptions {
       super(name, isNullable);
     }
 
+    public AbstractStructBuilder(String name, boolean isNullable, int parquetFieldId) {
+      super(name, isNullable, parquetFieldId);
+    }
+
     protected AbstractStructBuilder() {
       super();
     }
@@ -84,6 +94,9 @@ public class ColumnWriterOptions {
     protected List<ColumnWriterOptions> children = new ArrayList<>();
     protected boolean isNullable = true;
     protected String name = "";
+    // Parquet structure needs
+    protected boolean hasParquetFieldId;
+    protected int parquetFieldId;
 
     /**
      * Builder specific to build a Struct meta
@@ -93,10 +106,21 @@ public class ColumnWriterOptions {
       this.isNullable = isNullable;
     }
 
+    protected NestedBuilder(String name, boolean isNullable, int parquetFieldId) {
+      this.name = name;
+      this.isNullable = isNullable;
+      this.hasParquetFieldId = true;
+      this.parquetFieldId = parquetFieldId;
+    }
+
     protected NestedBuilder() {}
 
-    protected ColumnWriterOptions withColumns(String name, boolean isNullable) {
+    protected ColumnWriterOptions withColumn(String name, boolean isNullable) {
       return new ColumnWriterOptions(name, isNullable);
+    }
+
+    protected ColumnWriterOptions withColumn(String name, boolean isNullable, int parquetFieldId) {
+      return new ColumnWriterOptions(name, isNullable, parquetFieldId);
     }
 
     protected ColumnWriterOptions withDecimal(String name, int precision,
@@ -104,9 +128,19 @@ public class ColumnWriterOptions {
       return new ColumnWriterOptions(name, false, precision, isNullable);
     }
 
+    protected ColumnWriterOptions withDecimal(String name, int precision,
+                                              boolean isNullable, int parquetFieldId) {
+      return new ColumnWriterOptions(name, false, precision, isNullable, parquetFieldId);
+    }
+
     protected ColumnWriterOptions withTimestamp(String name, boolean isInt96,
                                                 boolean isNullable) {
       return new ColumnWriterOptions(name, isInt96, UNKNOWN_PRECISION, isNullable);
+    }
+
+    protected ColumnWriterOptions withTimestamp(String name, boolean isInt96,
+                                                boolean isNullable, int parquetFieldId) {
+      return new ColumnWriterOptions(name, isInt96, UNKNOWN_PRECISION, isNullable, parquetFieldId);
     }
 
     /**
@@ -155,16 +189,16 @@ public class ColumnWriterOptions {
     /**
      * Set column name
      */
-    public T withNonNullableColumns(String... name) {
-      withColumns(false, name);
+    public T withNonNullableColumns(String... names) {
+      withColumns(false, names);
       return (T) this;
     }
 
     /**
      * Set nullable column meta data
      */
-    public T withNullableColumns(String... name) {
-      withColumns(true, name);
+    public T withNullableColumns(String... names) {
+      withColumns(true, names);
       return (T) this;
     }
 
@@ -172,10 +206,19 @@ public class ColumnWriterOptions {
      * Set a simple child meta data
      * @return this for chaining.
      */
-    public T withColumns(boolean nullable, String... name) {
-      for (String n : name) {
-        children.add(withColumns(n, nullable));
+    public T withColumns(boolean nullable, String... names) {
+      for (String n : names) {
+        children.add(withColumn(n, nullable));
       }
+      return (T) this;
+    }
+
+    /**
+     * Set a simple child meta data
+     * @return this for chaining.
+     */
+    public T withColumn(boolean nullable, String name, int parquetFieldId) {
+      children.add(withColumn(name, nullable, parquetFieldId));
       return (T) this;
     }
 
@@ -185,6 +228,15 @@ public class ColumnWriterOptions {
      */
     public T withDecimalColumn(String name, int precision, boolean nullable) {
       children.add(withDecimal(name, precision, nullable));
+      return (T) this;
+    }
+
+    /**
+     * Set a Decimal child meta data
+     * @return this for chaining.
+     */
+    public T withDecimalColumn(String name, int precision, boolean nullable, int parquetFieldId) {
+      children.add(withDecimal(name, precision, nullable, parquetFieldId));
       return (T) this;
     }
 
@@ -203,6 +255,15 @@ public class ColumnWriterOptions {
      */
     public T withDecimalColumn(String name, int precision) {
       withDecimalColumn(name, precision, false);
+      return (T) this;
+    }
+
+    /**
+     * Set a timestamp child meta data
+     * @return this for chaining.
+     */
+    public T withTimestampColumn(String name, boolean isInt96, boolean nullable, int parquetFieldId) {
+      children.add(withTimestamp(name, isInt96, nullable, parquetFieldId));
       return (T) this;
     }
 
@@ -244,11 +305,24 @@ public class ColumnWriterOptions {
     this.columnName = columnName;
   }
 
+  public ColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
+                             int precision, boolean isNullable, int parquetFieldId) {
+    this(columnName, isTimestampTypeInt96, precision, isNullable);
+    this.hasParquetFieldId = true;
+    this.parquetFieldId = parquetFieldId;
+  }
+
   public ColumnWriterOptions(String columnName, boolean isNullable) {
     this.isTimestampTypeInt96 = false;
     this.precision = UNKNOWN_PRECISION;
     this.isNullable = isNullable;
     this.columnName = columnName;
+  }
+
+  public ColumnWriterOptions(String columnName, boolean isNullable, int parquetFieldId) {
+    this(columnName, isNullable);
+    this.hasParquetFieldId = true;
+    this.parquetFieldId = parquetFieldId;
   }
 
   public ColumnWriterOptions(String columnName) {
@@ -297,6 +371,24 @@ public class ColumnWriterOptions {
     int[] ret = {precision};
     if (childColumnOptions.length > 0) {
       return getFlatInts(ret, (opt) -> opt.getFlatPrecision());
+    } else {
+      return ret;
+    }
+  }
+
+  boolean[] getFlatHasParquetFieldId() {
+    boolean[] ret = {hasParquetFieldId};
+    if (childColumnOptions.length > 0) {
+      return getFlatBooleans(ret, (opt) -> opt.getFlatHasParquetFieldId());
+    } else {
+      return ret;
+    }
+  }
+
+  int[] getFlatParquetFieldId() {
+    int[] ret = {parquetFieldId};
+    if (childColumnOptions.length > 0) {
+      return getFlatInts(ret, (opt) -> opt.getFlatParquetFieldId());
     } else {
       return ret;
     }
@@ -421,6 +513,13 @@ public class ColumnWriterOptions {
   /**
    * Creates a StructBuilder for column called 'name'
    */
+  public static StructBuilder structBuilder(String name, boolean isNullable, int parquetFieldId) {
+    return new StructBuilder(name, isNullable, parquetFieldId);
+  }
+
+  /**
+   * Creates a StructBuilder for column called 'name'
+   */
   public static StructBuilder structBuilder(String name) {
     return new StructBuilder(name, true);
   }
@@ -475,6 +574,10 @@ public class ColumnWriterOptions {
   public static class StructBuilder extends AbstractStructBuilder<StructBuilder, StructColumnWriterOptions> {
     public StructBuilder(String name, boolean isNullable) {
       super(name, isNullable);
+    }
+
+    public StructBuilder(String name, boolean isNullable, int parquetFieldId) {
+      super(name, isNullable, parquetFieldId);
     }
 
     public StructColumnWriterOptions build() {

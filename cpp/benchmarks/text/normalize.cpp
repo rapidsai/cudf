@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <nvtext/normalize.hpp>
 
@@ -40,7 +38,7 @@ static void BM_normalize(benchmark::State& state, bool to_lower)
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     nvtext::normalize_characters(input, to_lower);
   }
 

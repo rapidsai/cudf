@@ -1,3 +1,4 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import math
 
 import numpy as np

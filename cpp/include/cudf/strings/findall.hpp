@@ -19,6 +19,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace strings {
 /**
@@ -56,7 +58,7 @@ namespace strings {
  */
 std::unique_ptr<table> findall(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -64,19 +66,21 @@ std::unique_ptr<table> findall(
  * @brief Returns a lists column of strings for each matching occurrence of the
  * regex pattern within each string.
  *
+ * Each output row includes all the substrings within the corresponding input row
+ * that match the given pattern. If no matches are found, the output row is empty.
+ *
  * @code{.pseudo}
  * Example:
  * s = ["bunny", "rabbit", "hare", "dog"]
- * r = findall_record(s, "[ab]"")
+ * r = findall_record(s, "[ab]")
  * r is now a lists column like:
  *  [ ["b"]
  *    ["a","b","b"]
  *    ["a"]
- *    null ]
+ *    [] ]
  * @endcode
  *
- * A null output row results if the pattern is not found in the corresponding row
- * input string.
+ * A null output row occurs if the corresponding input row is null.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
@@ -88,7 +92,7 @@ std::unique_ptr<table> findall(
  */
 std::unique_ptr<column> findall_record(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

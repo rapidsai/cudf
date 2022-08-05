@@ -22,8 +22,11 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <vector>
@@ -43,10 +46,10 @@ static void BM_concatenate(benchmark::State& state)
   auto input_columns = input->view();
   std::vector<cudf::column_view> column_views(input_columns.begin(), input_columns.end());
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::concatenate(column_views);
   }
 
@@ -85,10 +88,10 @@ static void BM_concatenate_tables(benchmark::State& state)
     return table->view();
   });
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::concatenate(table_views);
   }
 
@@ -144,10 +147,10 @@ static void BM_concatenate_strings(benchmark::State& state)
       return static_cast<cudf::column_view>(col);
     });
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::concatenate(column_views);
   }
 

@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -102,9 +103,9 @@ std::unique_ptr<column> compute_column(table_view const& table,
   // Configure kernel parameters
   auto const& device_expression_data = parser.device_expression_data;
   int device_id;
-  CUDA_TRY(cudaGetDevice(&device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
@@ -125,7 +126,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   }
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return output_column;
 }
 
@@ -136,7 +137,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, rmm::cuda_stream_default, mr);
+  return detail::compute_column(table, expr, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

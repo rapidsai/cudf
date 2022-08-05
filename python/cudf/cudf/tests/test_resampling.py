@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -25,7 +27,8 @@ def test_series_downsample_simple(ts_resolution):
     gsr = cudf.from_pandas(psr)
     gsr.index = gsr.index.astype(f"datetime64[{ts_resolution}]")
     assert_resample_results_equal(
-        psr.resample("3T").sum(), gsr.resample("3T").sum(),
+        psr.resample("3T").sum(),
+        gsr.resample("3T").sum(),
     )
 
 
@@ -36,7 +39,8 @@ def test_series_upsample_simple():
     psr = pd.Series(range(10), index=index)
     gsr = cudf.from_pandas(psr)
     assert_resample_results_equal(
-        psr.resample("3T").sum(), gsr.resample("3T").sum(),
+        psr.resample("3T").sum(),
+        gsr.resample("3T").sum(),
     )
 
 

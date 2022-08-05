@@ -25,16 +25,30 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/utilities/span.hpp>
-
-#include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/merge.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+#include <thrust/remove.h>
+#include <thrust/replace.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -419,47 +433,51 @@ __global__ void generate_cluster_limits_kernel(int delta,
     // NOTE: can't use structured bindings here.
     thrust::tie(nearest_w, nearest_w_index) = nearest_weight(next_limit, group_index);
 
-    if (cluster_wl) {
-      // because of the way the scale functions work, it is possible to generate clusters
-      // in such a way that we end up with "gaps" where there are no input values that
-      // fall into a given cluster.  An example would be this:
-      //
-      // cluster weight limits = 0.00003, 1.008, 3.008
-      //
-      // input values(weight) = A(1), B(2), C(3)
-      //
-      // naively inserting these values into the clusters simply by taking a lower_bound,
-      // we would get the following distribution of input values into those 3 clusters.
-      //  (), (A), (B,C)
-      //
-      // whereas what we really want is:
-      //
-      //  (A), (B), (C)
-      //
-      // to fix this, we will artificially adjust the output cluster limits to guarantee
-      // at least 1 input value will be put in each cluster during the reduction step.
-      // this does not affect final centroid results as we still use the "real" weight limits
-      // to compute subsequent clusters - the purpose is only to allow cluster selection
-      // during the reduction step to be trivial.
-      //
-      double adjusted_next_limit = next_limit;
-      if ((last_inserted_index < 0) ||  // if we haven't inserted anything yet
-          (nearest_w_index ==
-           last_inserted_index)) {  // if we land in the same bucket as the previous cap
+    // because of the way the scale functions work, it is possible to generate clusters
+    // in such a way that we end up with "gaps" where there are no input values that
+    // fall into a given cluster.  An example would be this:
+    //
+    // cluster weight limits = 0.00003, 1.008, 3.008
+    //
+    // input values(weight) = A(1), B(2), C(3)
+    //
+    // naively inserting these values into the clusters simply by taking a lower_bound,
+    // we would get the following distribution of input values into those 3 clusters.
+    //  (), (A), (B,C)
+    //
+    // whereas what we really want is:
+    //
+    //  (A), (B), (C)
+    //
+    // to fix this, we will artificially adjust the output cluster limits to guarantee
+    // at least 1 input value will be put in each cluster during the reduction step.
+    // this does not affect final centroid results as we still use the "real" weight limits
+    // to compute subsequent clusters - the purpose is only to allow cluster selection
+    // during the reduction step to be trivial.
+    //
+    double adjusted_next_limit = next_limit;
+    int adjusted_w_index       = nearest_w_index;
+    if ((last_inserted_index < 0) ||  // if we haven't inserted anything yet
+        (nearest_w_index ==
+         last_inserted_index)) {  // if we land in the same bucket as the previous cap
 
-        // force the value into this bucket
-        nearest_w_index =
-          (last_inserted_index == group_size - 1) ? last_inserted_index : last_inserted_index + 1;
+      // force the value into this bucket
+      adjusted_w_index = (last_inserted_index == group_size - 1)
+                           ? last_inserted_index
+                           : max(adjusted_w_index, last_inserted_index + 1);
 
-        // the "adjusted" weight must be high enough so that this value will fall in the bucket.
-        // NOTE: cumulative_weight expects an absolute index into the input value stream, not a
-        // group-relative index
-        [[maybe_unused]] auto [r, i, adjusted] = cumulative_weight(nearest_w_index + group_start);
-        adjusted_next_limit                    = max(next_limit, adjusted);
-      }
-      cluster_wl[group_num_clusters[group_index]] = adjusted_next_limit;
-      last_inserted_index                         = nearest_w_index;
+      // the "adjusted" cluster limit must be high enough so that this value will fall in the
+      // bucket. NOTE: cumulative_weight expects an absolute index into the input value stream, not
+      // a group-relative index
+      [[maybe_unused]] auto [r, i, adjusted_w] = cumulative_weight(adjusted_w_index + group_start);
+      adjusted_next_limit                      = max(next_limit, adjusted_w);
+
+      // update the weight with our adjusted value.
+      nearest_w = adjusted_w;
     }
+    if (cluster_wl) { cluster_wl[group_num_clusters[group_index]] = adjusted_next_limit; }
+    last_inserted_index = adjusted_w_index;
+
     group_num_clusters[group_index]++;
     cur_limit = next_limit;
   }

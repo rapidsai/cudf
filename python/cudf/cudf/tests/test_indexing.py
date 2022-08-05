@@ -726,7 +726,7 @@ def test_dataframe_take(ntake):
 
 
 @pytest.mark.parametrize("ntake", [1, 2, 8, 9])
-def test_dataframe_take_with_multiIndex(ntake):
+def test_dataframe_take_with_multiindex(ntake):
     np.random.seed(0)
     df = cudf.DataFrame(
         index=cudf.MultiIndex(
@@ -981,7 +981,13 @@ def test_series_setitem_iloc(key, value, nulls):
 @pytest.mark.parametrize(
     "key, value",
     [
-        (0, 0.5),
+        pytest.param(
+            0,
+            0.5,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/9913"
+            ),
+        ),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
         (slice(0, 2), [0.5, 0.25]),
@@ -1379,7 +1385,8 @@ def test_dataframe_sliced(gdf_kwargs, slice):
     ],
 )
 @pytest.mark.parametrize(
-    "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
+    "slice",
+    [slice(6), slice(1), slice(7), slice(1, 3)],
 )
 def test_dataframe_iloc_index(gdf, slice):
     pdf = gdf.to_pandas()
@@ -1445,7 +1452,12 @@ def test_loc_zero_dim_array():
         slice((1, 2), None),
         slice(None, (1, 2)),
         (1, 1),
-        (1, slice(None)),
+        pytest.param(
+            (1, slice(None)),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/46704"
+            ),
+        ),
     ],
 )
 def test_loc_series_multiindex(arg):
@@ -1481,7 +1493,193 @@ def test_iloc_decimal():
         cudf.Decimal64Dtype(scale=2, precision=3)
     )
     got = sr.iloc[[3, 2, 1, 0]]
-    expect = cudf.Series(["4.00", "3.00", "2.00", "1.00"],).astype(
-        cudf.Decimal64Dtype(scale=2, precision=3)
-    )
+    expect = cudf.Series(
+        ["4.00", "3.00", "2.00", "1.00"],
+    ).astype(cudf.Decimal64Dtype(scale=2, precision=3))
     assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    ("key, value"),
+    [
+        (
+            ([0], ["x", "y"]),
+            [10, 20],
+        ),
+        (
+            ([0, 2], ["x", "y"]),
+            [[10, 30], [20, 40]],
+        ),
+        (
+            (0, ["x", "y"]),
+            [10, 20],
+        ),
+        (
+            ([0, 2], "x"),
+            [10, 20],
+        ),
+    ],
+)
+def test_dataframe_loc_inplace_update(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[key] = value
+    expected = pdf.loc[key] = value
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_string_index():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]}, index=list("abc"))
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[["a"], ["x", "y"]] = [10, 20]
+    expected = pdf.loc[["a"], ["x", "y"]] = [10, 20]
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    ("key, value"),
+    [
+        ([0], [10, 20]),
+        ([0, 2], [[10, 30], [20, 40]]),
+        (([0, 2], [0, 1]), [[10, 30], [20, 40]]),
+        (([0, 2], 0), [10, 30]),
+        ((0, [0, 1]), [20, 40]),
+    ],
+)
+def test_dataframe_iloc_inplace_update(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.iloc[key] = value
+    expected = pdf.iloc[key] = value
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "loc_key",
+    [([0, 2], ["x", "y"])],
+)
+@pytest.mark.parametrize(
+    "iloc_key",
+    [[0, 2]],
+)
+@pytest.mark.parametrize(
+    ("data, index"),
+    [
+        (
+            {"x": [10, 20], "y": [30, 40]},
+            [0, 2],
+        )
+    ],
+)
+def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
+    loc_key, iloc_key, data, index
+):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[loc_key] = cudf.DataFrame(data, index=cudf.Index(index))
+    expected = pdf.loc[loc_key] = pd.DataFrame(data, index=pd.Index(index))
+    assert_eq(expected, actual)
+
+    actual = gdf.iloc[iloc_key] = cudf.DataFrame(data, index=cudf.Index(index))
+    expected = pdf.iloc[iloc_key] = pd.DataFrame(data, index=pd.Index(index))
+    assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
+    )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    ("key, value"),
+    [
+        (([0, 2], ["x", "y"]), [[10, 30, 50], [20, 40, 60]]),
+        (([0], ["x", "y"]), [[10], [20]]),
+    ],
+)
+def test_dataframe_loc_inplace_update_shape_mismatch(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.loc[key] = value
+
+
+@pytest.mark.parametrize(
+    ("key, value"),
+    [
+        ([0, 2], [[10, 30, 50], [20, 40, 60]]),
+        ([0], [[10], [20]]),
+    ],
+)
+def test_dataframe_iloc_inplace_update_shape_mismatch(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.iloc[key] = value
+
+
+def test_dataframe_loc_inplace_update_shape_mismatch_RHS_df():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.loc[([0, 2], ["x", "y"])] = cudf.DataFrame(
+            {"x": [10, 20]}, index=cudf.Index([0, 2])
+        )
+
+
+def test_dataframe_iloc_inplace_update_shape_mismatch_RHS_df():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.iloc[[0, 2]] = cudf.DataFrame(
+            {"x": [10, 20]}, index=cudf.Index([0, 2])
+        )
+
+
+@pytest.mark.parametrize(
+    "array,is_error",
+    [
+        (cupy.arange(20, 40).reshape(-1, 2), False),
+        (cupy.arange(20, 50).reshape(-1, 3), True),
+        (np.arange(20, 40).reshape(-1, 2), False),
+        (np.arange(20, 30).reshape(-1, 1), False),
+        (cupy.arange(20, 30).reshape(-1, 1), False),
+    ],
+)
+def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
+    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
+    pdf = gdf.to_pandas()
+    if not is_error:
+        gdf.loc[:, ["a", "b"]] = array
+        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
+
+        assert_eq(gdf, pdf)
+    else:
+        assert_exceptions_equal(
+            lfunc=pdf.loc.__setitem__,
+            rfunc=gdf.loc.__setitem__,
+            lfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
+                {},
+            ),
+            rfunc_args_and_kwargs=(
+                [(slice(None, None, None), ["a", "b"]), array],
+                {},
+            ),
+            compare_error_message=False,
+            expected_error_message="shape mismatch: value array of shape "
+            "(10, 3) could not be broadcast to indexing "
+            "result of shape (10, 2)",
+        )

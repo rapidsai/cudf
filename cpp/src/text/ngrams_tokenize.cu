@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,15 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -135,7 +139,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   cudf::size_type ngrams               = 2,
   cudf::string_scalar const& delimiter = cudf::string_scalar(""),
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream         = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -259,7 +263,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
 {
   CUDF_FUNC_RANGE();
   return detail::ngrams_tokenize(
-    strings, ngrams, delimiter, separator, rmm::cuda_stream_default, mr);
+    strings, ngrams, delimiter, separator, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

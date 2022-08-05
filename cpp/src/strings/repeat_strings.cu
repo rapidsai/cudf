@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,15 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -78,10 +82,10 @@ auto generate_empty_output(strings_column_view const& input,
 
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<offset_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
-                           0,
-                           offsets_column->size() * sizeof(offset_type),
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
+                                0,
+                                offsets_column->size() * sizeof(offset_type),
+                                stream.value()));
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
@@ -261,7 +265,7 @@ auto make_strings_children(Func fn,
   } else {
     // Compute the offsets values from the provided output string sizes.
     auto const string_sizes = output_strings_sizes.value();
-    CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
+    CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            string_sizes.template begin<size_type>(),
                            string_sizes.template end<size_type>(),
@@ -280,7 +284,7 @@ auto make_strings_children(Func fn,
     for_each_fn(fn);
   }
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 }  // namespace
@@ -342,7 +346,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
 
   auto const strings_count = input.size();
   if (strings_count == 0) {
-    return std::make_pair(make_empty_column(type_to_id<size_type>()), int64_t{0});
+    return std::pair(make_empty_column(type_to_id<size_type>()), int64_t{0});
   }
 
   auto output_sizes = make_numeric_column(
@@ -371,7 +375,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
                              int64_t{0},
                              thrust::plus{});
 
-  return std::make_pair(std::move(output_sizes), total_bytes);
+  return std::pair(std::move(output_sizes), total_bytes);
 }
 
 }  // namespace detail
@@ -381,7 +385,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_string(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_string(input, repeat_times, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
@@ -389,7 +393,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings(input, repeat_times, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
@@ -399,7 +403,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::repeat_strings(
-    input, repeat_times, output_strings_sizes, rmm::cuda_stream_default, mr);
+    input, repeat_times, output_strings_sizes, cudf::default_stream_value, mr);
 }
 
 std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
@@ -408,7 +412,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings_output_sizes(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings_output_sizes(input, repeat_times, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,11 +56,12 @@ mkdir -p "$WORKSPACE/cpp/build"
 cd "$WORKSPACE/cpp/build"
 cmake .. -G"${CMAKE_GENERATOR}" \
          -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+         -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME \
          -DUSE_NVTX=$ENABLE_NVTX \
          -DCUDF_USE_ARROW_STATIC=ON \
          -DCUDF_ENABLE_ARROW_S3=OFF \
          -DBUILD_TESTS=$BUILD_CPP_TESTS \
-         -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS \
+         -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS \
          -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
          -DBUILD_SHARED_LIBS=OFF
 
@@ -74,11 +75,10 @@ cmake --install .
 ###### Build cudf jar ######
 BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\
  -DskipTests=$SKIP_JAVA_TESTS\
- -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS\
+ -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS\
  -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME\
  -DCUDF_JNI_LIBCUDF_STATIC=ON\
- -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL\
- -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest"
+ -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest,!CudaFatalTest"
 
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
@@ -92,9 +92,6 @@ fi
 
 cd "$WORKSPACE/java"
 mvn -B clean package $BUILD_ARG
-
-###### Sanity test: fail if static cudart found ######
-find . -name '*.so' | xargs -I{} readelf -Ws {} | grep cuInit && echo "Found statically linked CUDA runtime, this is currently not tested" && exit 1
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH

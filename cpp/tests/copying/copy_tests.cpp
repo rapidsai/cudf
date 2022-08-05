@@ -27,6 +27,9 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
 };

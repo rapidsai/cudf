@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include "string_bench_args.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/column_wrapper.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
-
-#include "string_bench_args.hpp"
 
 class StringReplace : public cudf::benchmark {
 };
@@ -48,7 +49,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   cudf::test::strings_column_wrapper repls({"", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (rt) {
       case scalar: cudf::strings::replace(input, target, repl); break;
       case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;

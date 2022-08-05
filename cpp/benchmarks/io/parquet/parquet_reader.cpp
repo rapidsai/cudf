@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -60,6 +58,7 @@ void BM_parq_read_varying_input(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer const raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_parquet(read_opts);
   }
@@ -94,6 +93,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
                        static_cast<int32_t>(type_group_id::FLOATING_POINT),
                        static_cast<int32_t>(type_group_id::FIXED_POINT),
                        static_cast<int32_t>(type_group_id::TIMESTAMP),
+                       static_cast<int32_t>(type_group_id::DURATION),
                        static_cast<int32_t>(cudf::type_id::STRING)}),
     col_sel);
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
@@ -117,6 +117,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
 
     cudf::size_type rows_read = 0;
@@ -164,8 +165,10 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_i
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, durations, type_group_id::DURATION);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, struct, cudf::type_id::STRUCT);
 
 BENCHMARK_DEFINE_F(ParquetRead, column_selection)
 (::benchmark::State& state) { BM_parq_read_varying_options(state); }

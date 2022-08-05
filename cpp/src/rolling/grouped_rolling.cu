@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "range_window_bounds_detail.hpp"
-#include "rolling_detail.cuh"
-#include "rolling_jit_detail.hpp"
+#include "detail/range_window_bounds.hpp"
+#include "detail/rolling.cuh"
+#include "detail/rolling_jit.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/rolling.hpp>
@@ -24,6 +24,15 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/partition.h>
 
 namespace cudf {
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -202,7 +211,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         following_window_bounds,
                                         min_periods,
                                         aggr,
-                                        rmm::cuda_stream_default,
+                                        cudf::default_stream_value,
                                         mr);
 }
 
@@ -1074,7 +1083,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                       following,
                                       min_periods,
                                       aggr,
-                                      rmm::cuda_stream_default,
+                                      cudf::default_stream_value,
                                       mr);
 }
 
@@ -1108,7 +1117,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               following,
                                               min_periods,
                                               aggr,
-                                              rmm::cuda_stream_default,
+                                              cudf::default_stream_value,
                                               mr);
 }
 

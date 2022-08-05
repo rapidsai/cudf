@@ -25,7 +25,9 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <numeric>
@@ -82,6 +84,7 @@ struct ScanTest : public BaseScanTest<T> {
         case aggregation::PRODUCT: return std::is_invocable_v<cudf::DeviceProduct, T, T>;
         case aggregation::MIN: return std::is_invocable_v<cudf::DeviceMin, T, T>;
         case aggregation::MAX: return std::is_invocable_v<cudf::DeviceMax, T, T>;
+        case aggregation::RANK: return std::is_invocable_v<cudf::DeviceMax, T, T>;  // comparable
         default: return false;
       }
       return false;

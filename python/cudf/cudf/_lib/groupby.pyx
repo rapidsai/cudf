@@ -341,7 +341,7 @@ cdef class GroupBy:
         return columns_from_unique_ptr(move(c_result.second))
 
 
-_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
+_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "rank"}
 
 
 def _is_all_scan_aggregate(all_aggs):

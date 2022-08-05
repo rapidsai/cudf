@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,12 @@
  * the License.
  */
 #include <tests/iterator/optional_iterator_test.cuh>
+
+#include <cudf/utilities/default_stream.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
 
 using TestingTypes = cudf::test::NumericTypes;
 
@@ -103,7 +109,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
 
   // this can be computed with a single reduce and without a temporary output vector
   // but the approach increases the compile time by ~2x
-  auto results = rmm::device_uvector<T_output>(d_col->size(), rmm::cuda_stream_default);
+  auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::default_stream_value);
   thrust::transform(thrust::device,
                     it_dev_squared,
                     it_dev_squared + d_col->size(),

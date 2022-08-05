@@ -31,6 +31,7 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
 

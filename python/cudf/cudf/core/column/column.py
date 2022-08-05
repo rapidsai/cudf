@@ -5,6 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
+from itertools import chain
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -41,10 +42,9 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
@@ -68,8 +68,8 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.mixins import Reducible
-from cudf.utils import utils
+from cudf.core.missing import NA
+from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     get_time_unit,
@@ -78,7 +78,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import NotIterable, mask_dtype
+from cudf.utils.utils import _array_ufunc, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 # TODO: This workaround allows type hints for `slice`, since `slice` is a
@@ -86,7 +86,7 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-class ColumnBase(Column, Serializable, Reducible, NotIterable):
+class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
         "any",
         "all",
@@ -185,7 +185,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             return False
         if check_dtypes and (self.dtype != other.dtype):
             return False
-        return self.binary_operator("NULL_EQUALS", other).all()
+        ret = self._binaryop(other, "NULL_EQUALS")
+        if ret is NotImplemented:
+            raise TypeError(f"Cannot compare equality with {type(other)}")
+        return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.
@@ -227,13 +230,9 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
           4
         ]
         """
-        return libcudf.interop.to_arrow(
-            cudf.core.frame.Frame(
-                cudf.core.column_accessor.ColumnAccessor({"None": self})
-            ),
-            [["None"]],
-            keep_index=False,
-        )["None"].chunk(0)
+        return libcudf.interop.to_arrow([self], [["None"]],)[
+            "None"
+        ].chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -278,12 +277,8 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 }
             )
 
-            codes = libcudf.interop.from_arrow(
-                indices_table, indices_table.column_names
-            )[0]["None"]
-            categories = libcudf.interop.from_arrow(
-                dictionaries_table, dictionaries_table.column_names
-            )[0]["None"]
+            codes = libcudf.interop.from_arrow(indices_table)[0]
+            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
 
             return build_categorical_column(
                 categories=categories,
@@ -292,14 +287,12 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(array.type, pa.StructType):
-            return cudf.core.column.StructColumn.from_arrow(array)
         elif isinstance(
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
-        result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
+        result = libcudf.interop.from_arrow(data)[0]
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
@@ -428,15 +421,19 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
 
             # This assertion prevents mypy errors below.
             assert self.base_data is not None
-            new_buf_ptr = (
-                self.base_data.ptr + self.offset * self.dtype.itemsize
-            )
-            new_buf_size = self.size * self.dtype.itemsize
-            view_buf = Buffer(
-                data=new_buf_ptr,
-                size=new_buf_size,
-                owner=self.base_data._owner,
-            )
+
+            # If the view spans all of `base_data`, we return `base_data`.
+            if (
+                self.offset == 0
+                and self.base_data.size == self.size * self.dtype.itemsize
+            ):
+                view_buf = self.base_data
+            else:
+                view_buf = Buffer.from_buffer(
+                    buffer=self.base_data,
+                    size=self.size * self.dtype.itemsize,
+                    offset=self.offset * self.dtype.itemsize,
+                )
             return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index: int):
@@ -477,22 +474,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             )
             return self.take(gather_map)
 
-    def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
-        if _is_scalar_or_zero_d_array(arg):
-            return self.element_indexing(int(arg))
-        elif isinstance(arg, slice):
-            start, stop, stride = arg.indices(len(self))
-            return self.slice(start, stop, stride)
-        else:
-            arg = as_column(arg)
-            if len(arg) == 0:
-                arg = as_column([], dtype="int32")
-            if is_integer_dtype(arg.dtype):
-                return self.take(arg)
-            if is_bool_dtype(arg.dtype):
-                return self.apply_boolean_mask(arg)
-            raise NotImplementedError(type(arg))
-
     def __setitem__(self, key: Any, value: Any):
         """
         Set the value of ``self[key]`` to ``value``.
@@ -521,8 +502,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is cudf.NA:
+        if other is NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(
@@ -548,7 +531,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
 
         # step != 1, create a scatter map with arange
         scatter_map = arange(
-            start=start, stop=stop, step=step, dtype=cudf.dtype(np.int32),
+            start=start,
+            stop=stop,
+            step=step,
+            dtype=cudf.dtype(np.int32),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -615,7 +601,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 raise ValueError(msg)
 
     def fillna(
-        self: T, value: Any = None, method: str = None, dtype: Dtype = None,
+        self: T,
+        value: Any = None,
+        method: str = None,
+        dtype: Dtype = None,
     ) -> T:
         """Fill null values with ``value``.
 
@@ -839,7 +828,9 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self: ColumnBase, ascending: bool = True, na_position: str = "last",
+        self: ColumnBase,
+        ascending: bool = True,
+        na_position: str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -910,7 +901,13 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         sr = cudf.Series(self)
 
         # Re-label self w.r.t. the provided categories
-        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+        if (
+            isinstance(dtype, cudf.CategoricalDtype)
+            and dtype._categories is not None
+        ) or (
+            isinstance(dtype, pd.CategoricalDtype)
+            and dtype.categories is not None
+        ):
             labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
@@ -919,7 +916,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 )
 
             return build_categorical_column(
-                categories=dtype.categories,
+                categories=as_column(dtype.categories),
                 codes=labels._column,
                 mask=self.mask,
                 ordered=dtype.ordered,
@@ -1015,13 +1012,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             "consider using .to_arrow()"
         )
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed. To explicitly construct a host array, consider using "
-            ".to_numpy()"
-        )
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
@@ -1029,50 +1019,8 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             "`__cuda_array_interface__`"
         )
 
-    def __add__(self, other):
-        return self.binary_operator("add", other)
-
-    def __sub__(self, other):
-        return self.binary_operator("sub", other)
-
-    def __mul__(self, other):
-        return self.binary_operator("mul", other)
-
-    def __eq__(self, other):
-        return self.binary_operator("eq", other)
-
-    def __ne__(self, other):
-        return self.binary_operator("ne", other)
-
-    def __or__(self, other):
-        return self.binary_operator("or", other)
-
-    def __and__(self, other):
-        return self.binary_operator("and", other)
-
-    def __floordiv__(self, other):
-        return self.binary_operator("floordiv", other)
-
-    def __truediv__(self, other):
-        return self.binary_operator("truediv", other)
-
-    def __mod__(self, other):
-        return self.binary_operator("mod", other)
-
-    def __pow__(self, other):
-        return self.binary_operator("pow", other)
-
-    def __lt__(self, other):
-        return self.binary_operator("lt", other)
-
-    def __gt__(self, other):
-        return self.binary_operator("gt", other)
-
-    def __le__(self, other):
-        return self.binary_operator("le", other)
-
-    def __ge__(self, other):
-        return self.binary_operator("ge", other)
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     def searchsorted(
         self,
@@ -1099,10 +1047,29 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
+        # data model:
+
+        # Serialization produces a nested metadata "header" and a flattened
+        # list of memoryviews/buffers that reference data (frames).  Each
+        # header advertises a frame_count slot which indicates how many
+        # frames deserialization will consume. The class used to construct
+        # an object is named under the key "type-serialized" to match with
+        # Dask's serialization protocol (see
+        # distributed.protocol.serialize). Since column dtypes may either be
+        # cudf native or foreign some special-casing is required here for
+        # serialization.
+
         header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = self.dtype.str
+        try:
+            dtype, dtype_frames = self.dtype.serialize()
+            header["dtype"] = dtype
+            frames.extend(dtype_frames)
+            header["dtype-is-cudf-serialized"] = True
+        except AttributeError:
+            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
             data_header, data_frames = self.data.serialize()
@@ -1113,32 +1080,57 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             mask_header, mask_frames = self.mask.serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
-
+        if self.children:
+            child_headers, child_frames = zip(
+                *(c.serialize() for c in self.children)
+            )
+            header["subheaders"] = list(child_headers)
+            frames.extend(chain(*child_frames))
+        header["size"] = self.size
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        dtype = header["dtype"]
-        data = Buffer.deserialize(header["data"], [frames[0]])
-        mask = None
+        def unpack(header, frames) -> Tuple[Any, list]:
+            count = header["frame_count"]
+            klass = pickle.loads(header["type-serialized"])
+            obj = klass.deserialize(header, frames[:count])
+            return obj, frames[count:]
+
+        assert header["frame_count"] == len(frames), (
+            f"Deserialization expected {header['frame_count']} frames, "
+            f"but received {len(frames)}"
+        )
+        if header["dtype-is-cudf-serialized"]:
+            dtype, frames = unpack(header["dtype"], frames)
+        else:
+            dtype = pickle.loads(header["dtype"])
+        if "data" in header:
+            data, frames = unpack(header["data"], frames)
+        else:
+            data = None
         if "mask" in header:
-            mask = Buffer.deserialize(header["mask"], [frames[1]])
+            mask, frames = unpack(header["mask"], frames)
+        else:
+            mask = None
+        children = []
+        if "subheaders" in header:
+            for h in header["subheaders"]:
+                child, frames = unpack(h, frames)
+                children.append(child)
+        assert len(frames) == 0, "Deserialization did not consume all frames"
         return build_column(
-            data=data, dtype=dtype, mask=mask, size=header.get("size", None)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=header.get("size", None),
+            children=tuple(children),
         )
 
     def unary_operator(self, unaryop: str):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
-        )
-
-    def binary_operator(
-        self, op: str, other: BinaryOperand, reflect: bool = False
-    ) -> ColumnBase:
-        raise TypeError(
-            f"Operation {op} not supported between dtypes {self.dtype} and "
-            f"{other.dtype}."
         )
 
     def normalize_binop_value(
@@ -1712,7 +1704,7 @@ def as_column(
         data = arbitrary._column
         if dtype is not None:
             data = data.astype(dtype)
-    elif isinstance(arbitrary, cudf.BaseIndex):
+    elif isinstance(arbitrary, cudf.GenericIndex):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
@@ -1843,9 +1835,7 @@ def as_column(
             if dtype is None:
                 dtype = cudf.dtype("float64")
 
-        data = as_column(
-            utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
-        )
+        data = as_column(full(length, arbitrary, dtype=dtype))
         if not nan_as_null and not is_decimal_dtype(data.dtype):
             if np.issubdtype(data.dtype, np.floating):
                 data = data.fillna(np.nan)
@@ -1879,8 +1869,17 @@ def as_column(
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
 
+        delayed_cast = False
         if dtype is not None:
-            arbitrary = arbitrary.astype(np.dtype(dtype))
+            try:
+                dtype = np.dtype(dtype)
+            except TypeError:
+                # Some `dtype`'s can't be parsed by `np.dtype`
+                # for which we will have to cast after the column
+                # has been constructed.
+                delayed_cast = True
+            else:
+                arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
 
@@ -1929,7 +1928,8 @@ def as_column(
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
             data = as_column(
-                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
+                pa.Array.from_pandas(interval_series),
+                dtype=arbitrary.dtype,
             )
             if dtype is not None:
                 data = data.astype(dtype)
@@ -1952,6 +1952,9 @@ def as_column(
             )
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
+
+        if delayed_cast:
+            data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
@@ -1996,15 +1999,7 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
-        cudf_dtype = arbitrary._data.dtype
-
-        data = Buffer(arbitrary._data.view("|u1"))
-        data = build_column(data, dtype=cudf_dtype)
-
-        mask = arbitrary._mask
-        mask = bools_to_mask(as_column(mask).unary_operator("not"))
-
-        data = data.set_mask(mask)
+        data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
     else:
         try:
             data = as_column(
@@ -2154,7 +2149,11 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary) in ("mixed", "mixed-integer",)
+            and infer_dtype(arbitrary)
+            in (
+                "mixed",
+                "mixed-integer",
+            )
         ):
             native_dtype = "object"
         arbitrary = np.asarray(

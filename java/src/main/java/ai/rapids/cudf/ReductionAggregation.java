@@ -211,6 +211,20 @@ public final class ReductionAggregation {
   }
 
   /**
+   * tDigest reduction.
+   */
+  public static ReductionAggregation createTDigest(int delta) {
+    return new ReductionAggregation(Aggregation.createTDigest(delta));
+  }
+
+  /**
+   * tDigest merge reduction.
+   */
+  public static ReductionAggregation mergeTDigest(int delta) {
+    return new ReductionAggregation(Aggregation.mergeTDigest(delta));
+  }
+
+  /*
    * Collect the values into a list. Nulls will be skipped.
    */
   public static ReductionAggregation collectList() {

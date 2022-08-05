@@ -21,10 +21,14 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/sequence.h>
+#include <thrust/tabulate.h>
 
 namespace cudf {
 namespace detail {
@@ -148,14 +152,14 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& step,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return detail::sequence(size, init, step, rmm::cuda_stream_default, mr);
+  return detail::sequence(size, init, step, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return detail::sequence(size, init, rmm::cuda_stream_default, mr);
+  return detail::sequence(size, init, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

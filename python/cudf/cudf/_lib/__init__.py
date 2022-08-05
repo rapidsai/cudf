@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import numpy as np
 
 from . import (
@@ -8,8 +8,8 @@ from . import (
     copying,
     csv,
     datetime,
+    expressions,
     filling,
-    gpuarrow,
     groupby,
     hash,
     interop,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace strings {
@@ -51,7 +53,7 @@ namespace strings {
  */
 std::unique_ptr<column> contains_re(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -78,7 +80,7 @@ std::unique_ptr<column> contains_re(
  */
 std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -105,7 +107,7 @@ std::unique_ptr<column> matches_re(
  */
 std::unique_ptr<column> count_re(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

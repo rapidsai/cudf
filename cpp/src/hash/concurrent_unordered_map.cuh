@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -113,7 +114,7 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
  */
 template <typename Key,
           typename Element,
-          typename Hasher    = default_hash<Key>,
+          typename Hasher    = cudf::detail::default_hash<Key>,
           typename Equality  = equal_to<Key>,
           typename Allocator = default_allocator<thrust::pair<Key, Element>>>
 class concurrent_unordered_map {
@@ -158,7 +159,7 @@ class concurrent_unordered_map {
    * storage
    */
   static auto create(size_type capacity,
-                     rmm::cuda_stream_view stream     = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream     = cudf::default_stream_value,
                      const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
                      const Hasher& hash_function      = hasher(),
@@ -421,7 +422,7 @@ class concurrent_unordered_map {
   }
 
   void assign_async(const concurrent_unordered_map& other,
-                    rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                    rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
@@ -432,14 +433,14 @@ class concurrent_unordered_map {
 
       m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     }
-    CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
-                             other.m_hashtbl_values,
-                             m_capacity * sizeof(value_type),
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
+                                  other.m_hashtbl_values,
+                                  m_capacity * sizeof(value_type),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
 
-  void clear_async(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void clear_async(rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     constexpr int block_size = 128;
     init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
@@ -454,16 +455,16 @@ class concurrent_unordered_map {
     }
   }
 
-  void prefetch(const int dev_id, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void prefetch(const int dev_id, rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-      CUDA_TRY(cudaMemPrefetchAsync(
+      CUDF_CUDA_TRY(cudaMemPrefetchAsync(
         m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
     }
-    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
+    CUDF_CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
   }
 
   /**
@@ -474,7 +475,7 @@ class concurrent_unordered_map {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void destroy(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void destroy(rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
     delete this;
@@ -515,7 +516,7 @@ class concurrent_unordered_map {
                            const Hasher& hash_function,
                            const Equality& equal,
                            const allocator_type& allocator,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                           rmm::cuda_stream_view stream = cudf::default_stream_value)
     : m_hf(hash_function),
       m_equal(equal),
       m_allocator(allocator),
@@ -532,8 +533,8 @@ class concurrent_unordered_map {
 
       if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_TRY(cudaGetDevice(&dev_id));
-        CUDA_TRY(cudaMemPrefetchAsync(
+        CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDF_CUDA_TRY(cudaMemPrefetchAsync(
           m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
       }
     }
@@ -543,6 +544,6 @@ class concurrent_unordered_map {
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
     }
 
-    CUDA_TRY(cudaGetLastError());
+    CUDF_CHECK_CUDA(stream.value());
   }
 };

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -31,7 +31,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # ucx-py version
-export UCX_PY_VERSION='0.26.*'
+export UCX_PY_VERSION='0.27.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -98,8 +98,7 @@ conda activate rapids
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
+
 
 gpuci_logger "Check conda environment"
 conda info
@@ -122,19 +121,8 @@ function install_dask {
 # INSTALL - Install libcudf artifacts
 ################################################################################
 
-export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
-export CUDF_ROOT=${LIB_BUILD_DIR}
-export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-
-CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
-CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
-CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
-KAFKA_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf_kafka-*.tar.bz2"`
-KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
-KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
-
-gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+gpuci_logger "Installing libcudf & libcudf_kafka"
+gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka
 
 install_dask
 

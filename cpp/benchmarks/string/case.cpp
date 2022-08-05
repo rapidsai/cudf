@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class StringCase : public cudf::benchmark {
 };
@@ -32,7 +32,7 @@ static void BM_case(benchmark::State& state)
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::to_lower(input);
   }
 

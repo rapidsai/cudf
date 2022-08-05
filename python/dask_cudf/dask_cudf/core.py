@@ -437,12 +437,12 @@ class Series(_Frame, dd.core.Series):
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
 
-    @property
+    @property  # type: ignore
     @_dask_cudf_nvtx_annotate
     def list(self):
         return ListMethods(self)
 
-    @property
+    @property  # type: ignore
     @_dask_cudf_nvtx_annotate
     def struct(self):
         return StructMethods(self)
@@ -456,7 +456,7 @@ class Index(Series, dd.core.Index):
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     num = ddf._get_numeric_data()
     x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
-    x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
+    x2 = 1.0 * (num**2).sum(skipna=skipna, split_every=split_every)
     n = num.count(split_every=split_every)
     name = ddf._token_prefix + "var"
     result = map_partitions(
@@ -489,7 +489,7 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
             n = n_a + n_b
             avg = (n_a * avg_a + n_b * avg_b) / n
             delta = avg_b - avg_a
-            m2 = m2_a + m2_b + delta ** 2 * n_a * n_b / n
+            m2 = m2_a + m2_b + delta**2 * n_a * n_b / n
         return n, avg, m2
 
     def _finalize_var(vals):

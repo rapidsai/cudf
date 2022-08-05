@@ -95,7 +95,7 @@ class Consumer(CudfKafkaClient):
         message_format="json",
     ):
 
-        """
+        r"""
         Read messages from the underlying KafkaDatasource connection and create
         a cudf Dataframe
 

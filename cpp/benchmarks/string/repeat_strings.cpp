@@ -16,13 +16,13 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 static constexpr cudf::size_type default_repeat_times = 16;
 static constexpr cudf::size_type min_repeat_times     = -16;
@@ -56,7 +56,7 @@ static void BM_repeat_strings_scalar_times(benchmark::State& state)
   auto const strings_col    = cudf::strings_column_view(table->view().column(0));
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings(strings_col, default_repeat_times);
   }
 
@@ -72,7 +72,7 @@ static void BM_repeat_strings_column_times(benchmark::State& state)
   auto const repeat_times_col = table->view().column(1);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings(strings_col, repeat_times_col);
   }
 
@@ -89,7 +89,7 @@ static void BM_compute_output_strings_sizes(benchmark::State& state)
   auto const repeat_times_col = table->view().column(1);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings_output_sizes(strings_col, repeat_times_col);
   }
 
@@ -108,7 +108,7 @@ static void BM_repeat_strings_column_times_precomputed_sizes(benchmark::State& s
     cudf::strings::repeat_strings_output_sizes(strings_col, repeat_times_col);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings(strings_col, repeat_times_col, *sizes);
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <io/utilities/parsing_utils.cuh>
@@ -35,14 +36,15 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/optional.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
 namespace {
-
-// debug accessibility
 
 // change to "\n" and 1 to make output more readable
 #define DEBUG_NEWLINE
@@ -58,9 +60,10 @@ constexpr int DEBUG_NEWLINE_LEN = 0;
  * or you get nothing back (parse_result::EMPTY)
  */
 enum class parse_result {
-  ERROR,    // failure
-  SUCCESS,  // success
-  EMPTY,    // success, but no data
+  ERROR,          // failure
+  SUCCESS,        // success
+  MISSING_FIELD,  // success, but the field is missing
+  EMPTY,          // success, but no data
 };
 
 /**
@@ -322,16 +325,18 @@ class json_state : private parser {
     }
     // loop until we find a match or there's nothing left
     do {
-      // wildcard matches anything
       if (name.size_bytes() == 1 && name.data()[0] == '*') {
         return parse_result::SUCCESS;
       } else if (cur_el_name == name) {
         return parse_result::SUCCESS;
       }
-
       // next
       parse_result result = next_element_internal(false);
-      if (result != parse_result::SUCCESS) { return result; }
+      if (result != parse_result::SUCCESS) {
+        return options.get_missing_fields_as_nulls() && result == parse_result::EMPTY
+                 ? parse_result::MISSING_FIELD
+                 : result;
+      }
     } while (true);
 
     return parse_result::ERROR;
@@ -506,7 +511,7 @@ struct path_operator {
   //    - you cannot retrieve a subscripted field (eg [5]) from an object.
   //    - you cannot retrieve a field by name (eg  .book) from an array.
   //    - you -can- use .* for both arrays and objects
-  // a value of NONE imples any type accepted
+  // a value of NONE implies any type accepted
   json_element_type expected_type{NONE};  // the expected type of the element we're working with
   string_view name;                       // name to match against (if applicable)
   int index{-1};                          // index for subscript operator
@@ -667,8 +672,8 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty
-           ? std::make_pair(thrust::nullopt, 0)
-           : std::make_pair(
+           ? std::pair(thrust::nullopt, 0)
+           : std::pair(
                thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
                max_stack_depth);
 }
@@ -724,7 +729,6 @@ __device__ parse_result parse_json_path(json_state& j_state,
   int element_count = 0;
   while (pop_context(ctx)) {
     path_operator op = *ctx.commands;
-
     switch (op.type) {
       // whatever the first object is
       case path_operator_type::ROOT:
@@ -742,6 +746,12 @@ __device__ parse_result parse_json_path(json_state& j_state,
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
           if (last_result == parse_result::SUCCESS) {
             push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
+          } else if (last_result == parse_result::MISSING_FIELD) {
+            if (ctx.list_element && element_count > 0) {
+              output.add_output({"," DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN});
+            }
+            output.add_output({"null", 4});
+            element_count++;
           }
         }
       } break;
@@ -977,9 +987,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   constexpr int block_size = 512;
   cudf::detail::grid_1d const grid{col.size(), block_size};
-
   auto cdv = column_device_view::create(col.parent(), stream);
-
   // preprocess sizes (returned in the offsets buffer)
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
@@ -1011,6 +1019,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   // compute results
   cudf::mutable_column_view chars_view(*chars);
   rmm::device_scalar<size_type> d_valid_count{0, stream};
+
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
@@ -1020,7 +1029,6 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
-
   return make_strings_column(col.size(),
                              std::move(offsets),
                              std::move(chars),
@@ -1040,7 +1048,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, options, rmm::cuda_stream_default, mr);
+  return detail::get_json_object(col, json_path, options, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

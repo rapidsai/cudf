@@ -6,9 +6,13 @@ This page specifies which regular expression (regex) features are currently supp
 - cudf::strings::matches_re()
 - cudf::strings::count_re()
 - cudf::strings::extract()
-- cudf::strings::findall_re()
+- cudf::strings::extract_all_record()
+- cudf::strings::findall()
+- cudf::strings::findall_record()
 - cudf::strings::replace_re()
 - cudf::strings::replace_with_backrefs()
+- cudf::strings::split_re()
+- cudf::strings::split_record_re()
 
 The details are based on features documented at https://www.regular-expressions.info/reference.html
 
@@ -41,7 +45,7 @@ The details are based on features documented at https://www.regular-expressions.
 
 | Feature  | Syntax | Description | Example |
 | ---------- | ------------- | ------------- | ------------- |
-| Dot | . (dot) | Matches any single character except line break characters. Optionally match line break characters. | . matches x or (almost) any other character |
+| Dot | . (dot) | Matches any single character except line break characters. Optionally match line break characters. The behavior of the dot when encountering a  `\n` character can be controlled by cudf::strings::regex_flags for some regex APIs. | . matches x or (almost) any other character |
 | Alternation | `⎮` (pipe) | Causes the regex engine to match either the part on the left side, or the part on the right side. Can be strung together into a series of alternations. | `abc⎮def⎮xyz` matches `abc`, `def` or `xyz` |
 
 
@@ -77,8 +81,8 @@ The details are based on features documented at https://www.regular-expressions.
 | ---------- | ------------- | ------------- | ------------- |
 | String anchor | `^` (caret) | Matches at the start of the string | `^.` matches `a` in `abcdef` |
 | String anchor | `$` (dollar) | Matches at the end of the string | `.$` matches `f` in `abcdef` |
-| Line anchor | `^` (caret) | Matches after each line break in addition to matching at the start of the string, thus matching at the start of each line in the string. | `^.` matches `a` and `d` in `abc\ndef` |
-| Line anchor | `$` (dollar) | Matches before each line break in addition to matching at the end of the string, thus matching at the end of each line in the string. | `.$` matches `c` and `f` in `abc\ndef`　|
+| Line anchor | `^` (caret) | Matches after each line break in addition to matching at the start of the string, thus matching at the start of each line in the string. The behavior of this anchor can be controlled by cudf::strings::regex_flags for some regex APIs. | `^.` matches `a` and `d` in `abc\ndef` |
+| Line anchor | `$` (dollar) | Matches before each line break in addition to matching at the end of the string, thus matching at the end of each line in the string. The behavior of this anchor can be controlled by cudf::strings::regex_flags for some regex APIs. | `.$` matches `c` and `f` in `abc\ndef`　|
 | String anchor | `\A` | Matches at the start of the string | `\A\w` matches only `a` in `abc` |
 | String anchor | `\Z` | Matches at the end of the string | `\w\Z` matches `f` in `abc\ndef` but fails to match `abc\ndef\n` or `abc\ndef\n\n` |
 
@@ -94,20 +98,28 @@ The details are based on features documented at https://www.regular-expressions.
 | Feature  | Syntax | Description | Example |
 | ---------- | ------------- | ------------- | ------------- |
 | Greedy quantifier | `?` (question mark) | Makes the preceding item optional. Greedy, so the optional item is included in the match if possible. | `abc?` matches `abc` or `ab` |
-| Greedy quantifier | `*` (star) | Repeats the previous item zero or more times. Greedy, so as many items as possible will be matched before trying permutations with less matches of the preceding item, up to the point where the preceding item is not matched at all. | `".*"` matches `"def"` and `"ghi"` in `abc "def" "ghi" jkl` |
-| Greedy quantifier | `+` (plus)　| Repeats the previous item once or more. Greedy, so as many items as possible will be matched before trying permutations with less matches of the preceding item, up to the point where the preceding item is matched only once. | `".+"` matches `"def"` and `"ghi"` in `abc "def" "ghi" jkl` |
+| Greedy quantifier | `*` (star) | Repeats the previous item zero or more times. Greedy, so as many items as possible will be matched before trying permutations with fewer matches of the preceding item, up to the point where the preceding item is not matched at all. | `".*"` matches `"def"` and `"ghi"` in `abc "def" "ghi" jkl` |
+| Greedy quantifier | `+` (plus)　| Repeats the previous item once or more. Greedy, so as many items as possible will be matched before trying permutations with fewer matches of the preceding item, up to the point where the preceding item is matched only once. | `".+"` matches `"def"` and `"ghi"` in `abc "def" "ghi" jkl` |
 | Lazy quantifier | `??` | Makes the preceding item optional. Lazy, so the optional item is excluded in the match if possible. | `abc??` matches `ab` or `abc` |
 | Lazy quantifier | `*?` | Repeats the previous item zero or more times. Lazy, so the engine first attempts to skip the previous item, before trying permutations with ever increasing matches of the preceding item. | `".*?"` matches `"def"` and `"ghi"` in `abc "def" "ghi" jkl` |
 | Lazy quantifier | `+?` | Repeats the previous item once or more. Lazy, so the engine first matches the previous item only once, before trying permutations with ever increasing matches of the preceding item. | `".+?"` matches `"def"` and `"ghi"` in `abc "def" "ghi" jkl` |
-| Fixed quantifier | `{n}` where `n is an integer >= 1` | Repeats the previous item exactly `n` times. | `a{5}` matches `aaaaa` |
-| Greedy quantifier | `{n,m}` where `n >= 0` and `m >= n` | Repeats the previous item between `n` and `m` times. Greedy, so repeating `m` times is tried before reducing the repetition to `n` times. | `a{2,4}` matches `aaaa`, `aaa` or `aa` |
-| Greedy quantifier | `{n,}` where `n >= 0` | Repeats the previous item at least `n` times. Greedy, so as many items as possible will be matched before trying permutations with less matches of the preceding item, up to the point where the preceding item is matched only `n` times. | `a{2,}` matches `aaaaa` in `aaaaa` |
-| Lazy quantifier | `{n,m}?` where `n >= 0` and `m >= n` | Repeats the previous item between `n` and `m` times. Lazy, so repeating `n` times is tried before increasing the repetition to `m` times. | `a{2,4}?` matches `aa`, `aaa` or `aaaa` |
-| Lazy quantifier | `{n,}?` where `n >= 0` | Repeats the previous item `n` or more times. Lazy, so the engine first matches the previous item `n` times, before trying permutations with ever increasing matches of the preceding item. | `a{2,}?` matches `aa` in `aaaaa` |
+| Fixed quantifier | `{n}` where `n` is an integer: `0 ≤ n ≤ 999` | Repeats the previous item exactly `n` times. | `a{5}` matches `aaaaa` |
+| Greedy quantifier | `{n,m}` where `n` and `m` are integers: `0 ≤ n ≤ m ≤ 999` | Repeats the previous item between `n` and `m` times. Greedy, so repeating `m` times is tried before reducing the repetition to `n` times. | `a{2,4}` matches `aaaa`, `aaa` or `aa` |
+| Greedy quantifier | `{n,}` where `n` is an integer: `0 ≤ n ≤ 999` | Repeats the previous item at least `n` times. Greedy, so as many items as possible will be matched before trying permutations with fewer matches of the preceding item, up to the point where the preceding item is matched only `n` times. | `a{2,}` matches `aaaaa` in `aaaaa` |
+| Lazy quantifier | `{n,m}?` where `n` and `m` are integers `0 ≤ n ≤ m ≤ 999` | Repeats the previous item between `n` and `m` times. Lazy, so repeating `n` times is tried before increasing the repetition to `m` times. | `a{2,4}?` matches `aa`, `aaa`, or `aaaa` |
+| Lazy quantifier | `{n,}?` where `n` is an integer: `0 ≤ n ≤ 999` | Repeats the previous item `n` or more times. Lazy, so the engine first matches the previous item `n` times, before trying permutations with ever increasing matches of the preceding item. | `a{2,}?` matches `aa` in `aaaaa` |
 
 ### Groups
 
 | Feature  | Syntax | Description | Example |
 | ---------- | ------------- | ------------- | ------------- |
-| Capturing group | `(`regex`)` | Parentheses group the regex between them. They capture the text matched by the regex inside them into a numbered group. They allow you to apply regex operators to the entire grouped regex. | `(abc⎮def)ghi` matches `abcghi` or `defghi` |
-| Non-capturing group | `(?:`regex`)` | Non-capturing parentheses group the regex so you can apply regex operators, but do not capture anything. | `(?:abc⎮def)ghi` matches `abcghi` or `defghi` |
+| Capturing group | `(regex)` | Parentheses group the regex between them. They capture the text matched by the regex inside them into a numbered group. They allow you to apply regex operators to the entire grouped regex. | `(abc⎮def)ghi` matches `abcghi` or `defghi` |
+| Non-capturing group | `(?:regex)` | Non-capturing parentheses group the regex so you can apply regex operators, but do not capture anything. | `(?:abc⎮def)ghi` matches `abcghi` or `defghi` |
+
+### Replacement Backreferences
+
+| Feature  | Syntax | Description | Example |
+| ---------- | ------------- | ------------- | ------------- |
+| Backreference | `\1` through `\99` | Insert the text matched by capturing groups 1 through 99 | Replacing `(a)(b)(c)` with `\3\3\1` in `abc` yields `cca` |
+| Backreference | `${1}` through `${99}` | Insert the text matched by capturing groups 1 through 99 | Replacing `(a)(b)(c)` with `${2}.${2}:{$3}` in `abc` yields `b.b:c` |
+| Whole match | `${0}` | Insert the whole regex match | Replacing `(\d)(a)` with `[${0}]:-${2}_${1};` in `123abc` yields `12[3a]:-a_3;bc`

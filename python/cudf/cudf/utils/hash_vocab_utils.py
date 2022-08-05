@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np
@@ -10,16 +10,16 @@ PRIME = np.uint64(281474976710677)
 A_SECOND_LEVEL_POW = np.uint8(48)
 B_SECOND_LEVEL_POW = np.uint8(7)
 
-A_LBOUND_SECOND_LEVEL_HASH = 2 ** 16
-A_HBOUND_SECOND_LEVEL_HASH = 2 ** A_SECOND_LEVEL_POW
+A_LBOUND_SECOND_LEVEL_HASH = 2**16
+A_HBOUND_SECOND_LEVEL_HASH = 2**A_SECOND_LEVEL_POW
 
 B_LBOUND_SECOND_LEVEL_HASH = 0
-B_HBOUND_SECOND_LEVEL_HASH = 2 ** B_SECOND_LEVEL_POW
+B_HBOUND_SECOND_LEVEL_HASH = 2**B_SECOND_LEVEL_POW
 
 # Extremely generous and should not ever happen. This limit is imposed
 # To ensure we can bit pack all the information needed for the bin hash
 # functions - a, b and table size
-MAX_SIZE_FOR_INITIAL_BIN = 2 ** 8 - 1
+MAX_SIZE_FOR_INITIAL_BIN = 2**8 - 1
 
 
 # Shifts for bit packing
@@ -71,8 +71,8 @@ def _get_space_util(bins, init_bins):
 
 def _pick_initial_a_b(data, max_constant, init_bins):
     while True:
-        a = np.random.randint(2 ** 12, 2 ** 15)
-        b = np.random.randint(2 ** 12, 2 ** 15)
+        a = np.random.randint(2**12, 2**15)
+        b = np.random.randint(2**12, 2**15)
         bins = _make_bins(data, init_bins, a, b)
         score = _get_space_util(bins, init_bins) / len(data)
 

@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 import operator
 
 from llvmlite import ir
@@ -117,7 +119,8 @@ def make_unary_op(op):
                 builder,
                 lambda x: op(x),
                 nb_signature(
-                    masked_return_type.value_type, masked_type_1.value_type,
+                    masked_return_type.value_type,
+                    masked_type_1.value_type,
                 ),
                 (m1.value,),
             )

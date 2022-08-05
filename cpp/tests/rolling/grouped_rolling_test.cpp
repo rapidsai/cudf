@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +28,11 @@
 #include <cudf/rolling.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/rolling_detail.hpp>
+#include <src/rolling/detail/rolling.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <vector>
@@ -326,7 +328,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window,
@@ -338,10 +340,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    thrust::host_vector<T> in_col;
-    std::vector<bitmask_type> in_valid;
-    std::tie(in_col, in_valid) = cudf::test::to_host<T>(input);
-    bitmask_type* valid_mask   = in_valid.data();
+    auto [in_col, in_valid]  = cudf::test::to_host<T>(input);
+    bitmask_type* valid_mask = in_valid.data();
 
     agg_op op;
     for (size_type i = 0; i < num_rows; i++) {
@@ -383,7 +383,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window_col,
@@ -953,7 +953,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& timestamp_column,
                                                         cudf::order const& timestamp_order,
                                                         cudf::column_view const& input,
@@ -971,10 +971,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    thrust::host_vector<T> in_col;
-    std::vector<bitmask_type> in_valid;
-    std::tie(in_col, in_valid) = cudf::test::to_host<T>(input);
-    bitmask_type* valid_mask   = in_valid.data();
+    auto [in_col, in_valid]  = cudf::test::to_host<T>(input);
+    bitmask_type* valid_mask = in_valid.data();
 
     agg_op op;
     for (size_type i = 0; i < num_rows; i++) {
@@ -1037,7 +1035,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& timestamp_column,
                                                         cudf::order const& timestamp_order,
                                                         cudf::column_view const& input,
