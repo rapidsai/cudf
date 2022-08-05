@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <map>
@@ -389,13 +390,13 @@ class data_profile {
     struct_dist_desc.max_depth = max_depth;
   }
 
-  void set_struct_types(std::vector<cudf::type_id> const& types)
+  void set_struct_types(cudf::host_span<cudf::type_id const> types)
   {
     CUDF_EXPECTS(
       std::none_of(
-        types.cbegin(), types.cend(), [](auto& type) { return type == cudf::type_id::STRUCT; }),
+        types.begin(), types.end(), [](auto& type) { return type == cudf::type_id::STRUCT; }),
       "Cannot include STRUCT as its own subtype");
-    struct_dist_desc.leaf_types = types;
+    struct_dist_desc.leaf_types.assign(types.begin(), types.end());
   }
 };
 
@@ -426,7 +427,7 @@ class data_profile_builder {
     profile.set_bool_probability(p);
     return *this;
   }
-  
+
   data_profile_builder& null_frequency(std::optional<double> f)
   {
     profile.set_null_frequency(f);
@@ -469,7 +470,7 @@ class data_profile_builder {
     return *this;
   }
 
-  data_profile_builder& struct_types(std::vector<cudf::type_id> const& types)
+  data_profile_builder& struct_types(cudf::host_span<cudf::type_id const> types)
   {
     profile.set_struct_types(types);
     return *this;
