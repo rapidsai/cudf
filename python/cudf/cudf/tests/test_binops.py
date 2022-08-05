@@ -3064,15 +3064,31 @@ def test_binop_integer_power_int_scalar():
 
 def test_series_floordiv_by_zero():
     # https://github.com/rapidsai/cudf/issues/7389
-    gsr = cudf.Series([1, 2, 3])
-    psr = gsr.to_pandas()
+    # lhs and rhs are both columns
+    # zeros on the right beget zeros in the result
+    # but nulls on the left trump zeros on the right
+    psr_lhs = pd.Series([1, 2, pd.NA], dtype=pd.Int64Dtype())
+    psr_rhs = pd.Series([1, 0, 0], dtype=pd.Int64Dtype())
 
-    expect = psr // 0
-    got = gsr // 0
+    gsr_lhs, gsr_rhs = cudf.from_pandas(psr_lhs), cudf.from_pandas(psr_rhs)
+    expect = psr_lhs // psr_rhs
+    got = gsr_lhs // gsr_rhs
 
-    utils.assert_eq(expect, got)
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
 
-    expect = psr // pd.Series([0, 0, 0], dtype=pd.Int64Dtype())
-    got = (gsr // cudf.Series([0, 0, 0])).to_pandas(nullable=True)
+    # dividing a scalar by a series with zeros begets zeros
+    expect = 1 // psr_rhs
+    got = 1 // gsr_rhs
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
 
-    utils.assert_eq(expect, got)
+    # except the case where that scalar is null
+    expect = pd.NA // psr_rhs
+    got = cudf.NA // gsr_rhs
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
+
+    # dividing a series by zero begets a series full of zeroes
+    # except where the series was null
+    expect = psr_lhs // 0
+    got = gsr_lhs // 0
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
