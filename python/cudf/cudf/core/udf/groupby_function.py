@@ -43,34 +43,43 @@ numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 
 class Group(object):
-    def __init__(self, group_data, size, dtype):
+    def __init__(self, group_data, size, index, dtype, index_dtype):
         self.group_data = group_data
         self.size = size
+        self.index = index
         self.dtype = dtype
+        self.index_dtype = index_dtype
 
 
 class GroupType(numba.types.Type):
-    def __init__(self, group_scalar_type):
+    def __init__(self, group_scalar_type, index_type=types.int64):
         self.group_scalar_type = group_scalar_type
+        self.index_type = index_type
         self.group_data_type = types.CPointer(group_scalar_type)
         self.size_type = types.int64
-        super().__init__(name=f"Group({self.group_scalar_type})")
+        self.group_index_type = types.CPointer(index_type)
+        super().__init__(
+            name=f"Group({self.group_scalar_type}, {self.index_type})"
+        )
 
 
 @typeof_impl.register(Group)
 def typeof_group(val, c):
     return GroupType(
-        numba.np.numpy_support.from_dtype(val.dtype)
+        numba.np.numpy_support.from_dtype(val.dtype),
+        numba.np.numpy_support.from_dtype(val.index_dtype),
     )  # converting from numpy type to numba type
 
 
 @type_callable(Group)
 def type_group(context):
-    def typer(group_data, size):
-        if isinstance(group_data, types.Array) and isinstance(
-            size, types.Integer
+    def typer(group_data, size, index):
+        if (
+            isinstance(group_data, types.Array)
+            and isinstance(size, types.Integer)
+            and isinstance(index, types.Array)
         ):
-            return GroupType(group_data.dtype)
+            return GroupType(group_data.dtype, index.dtype)
 
     return typer
 
@@ -83,6 +92,7 @@ class GroupModel(models.StructModel):
         members = [
             ("group_data", types.CPointer(fe_type.group_scalar_type)),
             ("size", types.int64),
+            ("index", types.CPointer(fe_type.index_type)),
         ]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
@@ -162,6 +172,30 @@ my_var_float64 = cuda.declare_device(
     "types.float64(types.CPointer(types.float64),types.int64)",
 )
 
+my_idxmax_int64 = cuda.declare_device(
+    "BlockIdxMax_int64",
+    "types.int64(types.CPointer(types.int64),"
+    + "types.CPointer(types.int64),types.int64)",
+)
+
+my_idxmax_float64 = cuda.declare_device(
+    "BlockIdxMax_float64",
+    "types.int64(types.CPointer(types.float64),"
+    + "types.CPointer(types.int64),types.int64)",
+)
+
+my_idxmin_int64 = cuda.declare_device(
+    "BlockIdxMin_int64",
+    "types.int64(types.CPointer(types.int64),"
+    + "types.CPointer(types.int64),types.int64)",
+)
+
+my_idxmin_float64 = cuda.declare_device(
+    "BlockIdxMin_float64",
+    "types.int64(types.CPointer(types.float64),"
+    + "types.CPointer(types.int64),types.int64)",
+)
+
 # Path to the source containing the foreign function
 basedir = os.path.dirname(os.path.realpath(__file__))
 dev_func_ptx = os.path.join(basedir, "function.ptx")
@@ -231,9 +265,25 @@ def call_my_var_float64(data, size):
     return my_var_float64(data, size)
 
 
-@lower_builtin(Group, types.Array, types.int64)
+def call_my_idxmax_int64(data, index, size):
+    return my_idxmax_int64(data, index, size)
+
+
+def call_my_idxmax_float64(data, index, size):
+    return my_idxmax_float64(data, index, size)
+
+
+def call_my_idxmin_int64(data, index, size):
+    return my_idxmin_int64(data, index, size)
+
+
+def call_my_idxmin_float64(data, index, size):
+    return my_idxmin_float64(data, index, size)
+
+
+@lower_builtin(Group, types.Array, types.int64, types.Array)
 def group_constructor(context, builder, sig, args):
-    group_data, size = args
+    group_data, size, index = args
 
     grp = cgutils.create_struct_proxy(sig.return_type)(context, builder)
 
@@ -242,13 +292,20 @@ def group_constructor(context, builder, sig, args):
     )
     group_data_ptr = arr_group_data.data
 
+    arr_index = cgutils.create_struct_proxy(sig.args[2])(
+        context, builder, value=index
+    )
+    index_ptr = arr_index.data
+
     grp.group_data = group_data_ptr
+    grp.index = index_ptr
     grp.size = size
 
     return grp._getvalue()
 
 
 make_attribute_wrapper(GroupType, "group_data", "group_data")
+make_attribute_wrapper(GroupType, "index", "index")
 make_attribute_wrapper(GroupType, "size", "size")
 
 
@@ -308,35 +365,73 @@ class GroupVar(AbstractTemplate):
         return nb_signature(types.float64, recvr=self.this)
 
 
+class GroupIdxMax(AbstractTemplate):
+    key = "GroupType.idxmax"
+
+    def generic(self, args, kws):
+        return nb_signature(self.this.index_type, recvr=self.this)
+
+
+class GroupIdxMin(AbstractTemplate):
+    key = "GroupType.idxmin"
+
+    def generic(self, args, kws):
+        return nb_signature(self.this.index_type, recvr=self.this)
+
+
 @cuda_registry.register_attr
 class GroupAttr(AttributeTemplate):
     key = GroupType
 
     def resolve_max(self, mod):
-        return types.BoundFunction(GroupMax, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupMax, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
     def resolve_min(self, mod):
-        return types.BoundFunction(GroupMin, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupMin, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
     def resolve_size(self, mod):
-        return types.BoundFunction(GroupSize, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupSize, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
     def resolve_count(self, mod):
         return types.BoundFunction(
-            GroupCount, GroupType(mod.group_scalar_type)
+            GroupCount, GroupType(mod.group_scalar_type, mod.index_type)
         )
 
     def resolve_sum(self, mod):
-        return types.BoundFunction(GroupSum, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupSum, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
     def resolve_mean(self, mod):
-        return types.BoundFunction(GroupMean, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupMean, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
     def resolve_std(self, mod):
-        return types.BoundFunction(GroupStd, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupStd, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
     def resolve_var(self, mod):
-        return types.BoundFunction(GroupVar, GroupType(mod.group_scalar_type))
+        return types.BoundFunction(
+            GroupVar, GroupType(mod.group_scalar_type, mod.index_type)
+        )
+
+    def resolve_idxmax(self, mod):
+        return types.BoundFunction(
+            GroupIdxMax, GroupType(mod.group_scalar_type, mod.index_type)
+        )
+
+    def resolve_idxmin(self, mod):
+        return types.BoundFunction(
+            GroupIdxMin, GroupType(mod.group_scalar_type, mod.index_type)
+        )
 
 
 @cuda_lower("GroupType.max", GroupType(types.int32))
@@ -534,7 +629,71 @@ def cuda_Group_var(context, builder, sig, args):
     return result
 
 
-def _get_frame_groupby_type(dtype):
+@cuda_lower("GroupType.idxmax", GroupType(types.int64, types.int64))
+@cuda_lower("GroupType.idxmax", GroupType(types.float64, types.int64))
+def cuda_Group_idxmax(context, builder, sig, args):
+    retty = sig.return_type
+
+    grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    grp_type = sig.args[0]
+
+    group_dataty = grp_type.group_data_type
+    group_data_ptr = builder.alloca(grp.group_data.type)
+    builder.store(grp.group_data, group_data_ptr)
+
+    index_dataty = grp_type.group_index_type
+    index_ptr = builder.alloca(grp.index.type)
+    builder.store(grp.index, index_ptr)
+
+    if grp_type.group_scalar_type == types.int64:
+        func = call_my_idxmax_int64
+    elif grp_type.group_scalar_type == types.float64:
+        func = call_my_idxmax_float64
+
+    result = context.compile_internal(
+        builder,
+        func,
+        nb_signature(retty, group_dataty, index_dataty, grp_type.size_type),
+        (builder.load(group_data_ptr), builder.load(index_ptr), grp.size),
+    )
+    return result
+
+
+@cuda_lower("GroupType.idxmin", GroupType(types.int64, types.int64))
+@cuda_lower("GroupType.idxmin", GroupType(types.float64, types.int64))
+def cuda_Group_idxmin(context, builder, sig, args):
+    retty = sig.return_type
+
+    grp = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    grp_type = sig.args[0]
+
+    group_dataty = grp_type.group_data_type
+    group_data_ptr = builder.alloca(grp.group_data.type)
+    builder.store(grp.group_data, group_data_ptr)
+
+    index_dataty = grp_type.group_index_type
+    index_ptr = builder.alloca(grp.index.type)
+    builder.store(grp.index, index_ptr)
+
+    if grp_type.group_scalar_type == types.int64:
+        func = call_my_idxmin_int64
+    elif grp_type.group_scalar_type == types.float64:
+        func = call_my_idxmin_float64
+
+    result = context.compile_internal(
+        builder,
+        func,
+        nb_signature(retty, group_dataty, index_dataty, grp_type.size_type),
+        (builder.load(group_data_ptr), builder.load(index_ptr), grp.size),
+    )
+    return result
+
+
+def _get_frame_groupby_type(dtype, index_dtype):
     """
     Get the numba `Record` type corresponding to a frame.
     Models the column as a dictionary like data structure
@@ -560,15 +719,16 @@ def _get_frame_groupby_type(dtype):
         elemdtype = info[0]
         title = info[2] if len(info) == 3 else None
         ty = numpy_support.from_dtype(elemdtype)
+        indexty = numpy_support.from_dtype(index_dtype)
         infos = {
-            "type": GroupType(ty),
+            "type": GroupType(ty, indexty),
             "offset": offset,
             "title": title,
         }
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        offset += 8 + 8  # group struct size (2 pointers and 1 integer)
+        offset += 8 + 8 + 8  # group struct size (2 pointers and 1 integer)
 
         # Align the next member of the struct to be a multiple of the
         # memory access size, per PTX ISA 7.4/5.4.5
@@ -614,7 +774,8 @@ def _groupby_apply_kernel_string_from_template(frame, args):
 
 def _get_groupby_apply_kernel(frame, func, args):
     dataframe_group_type = _get_frame_groupby_type(
-        np.dtype(list(_all_dtypes_from_frame(frame).items()))
+        np.dtype(list(_all_dtypes_from_frame(frame).items())),
+        frame.index.dtype,
     )
 
     return_type = _get_udf_return_type(dataframe_group_type, func, args)
@@ -622,7 +783,9 @@ def _get_groupby_apply_kernel(frame, func, args):
     np_field_types = np.dtype(
         list(_supported_dtypes_from_frame(frame).items())
     )
-    dataframe_group_type = _get_frame_groupby_type(np_field_types)
+    dataframe_group_type = _get_frame_groupby_type(
+        np_field_types, frame.index.dtype
+    )
 
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
@@ -649,7 +812,11 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     output = cp.empty(ngroups, dtype=return_type)
 
-    launch_args = [cp.asarray(offsets), output]
+    launch_args = [
+        cp.asarray(offsets),
+        output,
+        cp.asarray(grouped_values.index),
+    ]
 
     for col in _supported_cols_from_frame(grouped_values).values():
         launch_args.append(cp.asarray(col))

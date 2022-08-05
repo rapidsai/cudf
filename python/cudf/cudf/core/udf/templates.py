@@ -16,7 +16,7 @@ row_initializer_template = """\
 
 group_initializer_template = """\
         arr_{idx} = input_col_{idx}[offset[block_id]:offset[block_id+1]]
-        dataframe_group["{name}"] = Group(arr_{idx}, size)
+        dataframe_group["{name}"] = Group(arr_{idx}, size, arr_index)
 """
 
 row_kernel_template = """\
@@ -59,7 +59,7 @@ def _kernel(retval, size, input_col_0, offset_0, {extra_args}):
 """
 
 groupby_apply_kernel_template = """
-def _kernel(offset, out, {input_columns}, {extra_args}):
+def _kernel(offset, out, index, {input_columns}, {extra_args}):
     tid = cuda.threadIdx.x
     block_id = cuda.blockIdx.x
     tb_size = cuda.blockDim.x
@@ -70,6 +70,7 @@ def _kernel(offset, out, {input_columns}, {extra_args}):
     if block_id < (len(offset) - 1):
 
         size = offset[block_id+1] - offset[block_id]
+        arr_index = index[offset[block_id]:offset[block_id+1]]
 
 {group_initializers}
 

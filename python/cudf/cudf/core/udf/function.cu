@@ -1,6 +1,7 @@
 // Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 #include<stdint.h>
+#include<float.h>
 
 // double atomicAdd
 __device__ __forceinline__ double atomicAdd(double* address, double val)
@@ -415,7 +416,7 @@ extern "C" __device__ int BlockMax_int32(int *numba_return_value, int *data, int
   __shared__ int smax;
 
   if (tid == 0)
-    smax = 0;
+    smax = INT_MIN;
 
   __syncthreads();
 
@@ -451,7 +452,7 @@ extern "C" __device__ int BlockMax_int64(int64_t *numba_return_value, int64_t *d
   __shared__ int64_t smax;
 
   if (tid == 0)
-    smax = 0;
+    smax = INT64_MIN;
 
   __syncthreads();
 
@@ -487,7 +488,7 @@ extern "C" __device__ int BlockMax_float64(double *numba_return_value, double *d
   __shared__ double smax;
 
   if (tid == 0)
-    smax = 0;
+    smax = -DBL_MAX;
 
   __syncthreads();
 
@@ -558,7 +559,7 @@ extern "C" __device__ int BlockMin_int64(int64_t *numba_return_value, int64_t *d
   __shared__ int64_t smin;
 
   if (tid == 0)
-    smin = INT_MAX;
+    smin = INT64_MAX;
     
   __syncthreads();
 
@@ -594,7 +595,7 @@ extern "C" __device__ int BlockMin_float64(double *numba_return_value, double *d
   __shared__ double smin;
 
   if (tid == 0)
-    smin = INT_MAX;
+    smin = DBL_MAX;
     
   __syncthreads();
 
@@ -620,7 +621,7 @@ extern "C" __device__ int BlockMin_float64(double *numba_return_value, double *d
 }
 
 // Calculate minimum of the group, return the scalar
-extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t *data, int64_t index, int64_t size) {
+extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t *data, int64_t* index, int64_t size) {
 
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
@@ -631,8 +632,10 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t
   __shared__ int64_t smax;
   __shared__ int64_t sidx;
 
-  if (tid == 0)
-    smax = 0;
+  if (tid == 0) {
+    smax = INT64_MIN;
+    sidx = INT64_MAX;
+  }
     
   __syncthreads();
 
@@ -643,7 +646,7 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t
           int64_t load = data[tid + ITEM * tb_size];
           if (load > local_max) {
             local_max = load;
-            local_idx = index[tid + ITEM * tb_size]
+            local_idx = index[tid + ITEM * tb_size];
           }
       }
   }
@@ -656,7 +659,7 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t
   __syncthreads();
 
   if (local_max == smax) {
-    atomicMin((long long*) (&sidx), (long long)local_idx);
+    atomicMin((long long*) (&sidx), (long long) local_idx);
   }
 
   __syncthreads();
@@ -667,7 +670,7 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t
 }
 
 // Calculate minimum of the group, return the scalar
-extern "C" __device__ int BlockIdxMax_float64(int64_t *numba_return_value, double *data, int64_t index, int64_t size) {
+extern "C" __device__ int BlockIdxMax_float64(int64_t *numba_return_value, double *data, int64_t* index, int64_t size) {
 
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
@@ -678,8 +681,10 @@ extern "C" __device__ int BlockIdxMax_float64(int64_t *numba_return_value, doubl
   __shared__ double smax;
   __shared__ int64_t sidx;
 
-  if (tid == 0)
-    smax = 0;
+  if (tid == 0) {
+    smax = -DBL_MAX;
+    sidx = INT64_MAX;
+  }
     
   __syncthreads();
 
@@ -690,7 +695,7 @@ extern "C" __device__ int BlockIdxMax_float64(int64_t *numba_return_value, doubl
           double load = data[tid + ITEM * tb_size];
           if (load > local_max) {
             local_max = load;
-            local_idx = index[tid + ITEM * tb_size]
+            local_idx = index[tid + ITEM * tb_size];
           }
       }
   }
@@ -714,7 +719,7 @@ extern "C" __device__ int BlockIdxMax_float64(int64_t *numba_return_value, doubl
 }
 
 // Calculate minimum of the group, return the scalar
-extern "C" __device__ int BlockIdxMin_int64(int64_t *numba_return_value, int64_t *data, int64_t index, int64_t size) {
+extern "C" __device__ int BlockIdxMin_int64(int64_t *numba_return_value, int64_t *data, int64_t* index, int64_t size) {
 
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
@@ -725,8 +730,10 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t *numba_return_value, int64_t
   __shared__ int64_t smin;
   __shared__ int64_t sidx;
 
-  if (tid == 0)
-    smin = INT_MAX;
+  if (tid == 0) {
+    smin = INT64_MAX;
+    sidx = INT64_MAX;
+  }
     
   __syncthreads();
 
@@ -737,7 +744,7 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t *numba_return_value, int64_t
           int64_t load = data[tid + ITEM * tb_size];
           if (load < local_min) {
             local_min = load;
-            local_idx = index[tid + ITEM * tb_size]
+            local_idx = index[tid + ITEM * tb_size];
           }
       }
   }
@@ -761,7 +768,7 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t *numba_return_value, int64_t
 }
 
 // Calculate minimum of the group, return the scalar
-extern "C" __device__ int BlockIdxMin_float64(int64_t *numba_return_value, double *data, int64_t index, int64_t size) {
+extern "C" __device__ int BlockIdxMin_float64(int64_t *numba_return_value, double *data, int64_t* index, int64_t size) {
 
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
@@ -772,8 +779,10 @@ extern "C" __device__ int BlockIdxMin_float64(int64_t *numba_return_value, doubl
   __shared__ double smin;
   __shared__ int64_t sidx;
 
-  if (tid == 0)
-    smin = INT_MAX;
+  if (tid == 0) {
+    smin = DBL_MAX;
+    sidx = INT64_MAX;
+  }
     
   __syncthreads();
 
@@ -784,7 +793,7 @@ extern "C" __device__ int BlockIdxMin_float64(int64_t *numba_return_value, doubl
           double load = data[tid + ITEM * tb_size];
           if (load < local_min) {
             local_min = load;
-            local_idx = index[tid + ITEM * tb_size]
+            local_idx = index[tid + ITEM * tb_size];
           }
       }
   }
