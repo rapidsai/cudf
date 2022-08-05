@@ -124,15 +124,15 @@ There is no need to mention when the argument will be supported in the future.
 ### Handling libcudf Exceptions
 
 Currently libcudf raises `cudf::logic_error` and `cudf::cuda_error`.
-By default these error types are mapped to `RuntimeError` in python.
+These error types are mapped to `RuntimeError` in python.
 Several APIs use the exception payload `what()` message to determine the exception type raised by libcudf.
 
 Determining error type based on exception payload is brittle since libcudf does not maintain API stability on exception messages.
-This is a compromise due to lack of exception diversity in libcudf.
+This is a compromise due to libcudf only raising a limited number of error types.
 Only adopt this strategy when necessary.
 
 The projected roadmap is to diversify the exception types raised by libcudf.
 Standard C++ natively supports various [exception types](https://en.cppreference.com/w/cpp/error/exception),
-which Cython maps to [these Python exception types](http://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
+which Cython maps to [these Python exception types](https://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
 In the future, libcudf may employ custom C++ exception types.
 If that occurs, this section will be updated to reflect how these may be mapped to desired Python exception types.
