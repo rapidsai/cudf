@@ -125,7 +125,7 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   skiprows=None, num_rows=None, strings_to_categorical=False,
+                   strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -151,8 +151,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-    cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
-    cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
+
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
@@ -168,8 +167,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
-        .skip_rows(cpp_skiprows)
-        .num_rows(cpp_num_rows)
         .timestamp_type(cpp_timestamp_type)
         .build()
     )
@@ -291,10 +288,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
-                if skiprows is not None:
-                    idx = idx[skiprows:]
-                if num_rows is not None:
-                    idx = idx[:num_rows]
+
             df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]
