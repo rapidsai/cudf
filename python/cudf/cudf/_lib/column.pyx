@@ -12,7 +12,7 @@ from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import (
     Buffer,
     DeviceBufferLike,
-    as_buffer,
+    as_device_buffer_like,
     buffer_from_pointer,
 )
 
@@ -241,27 +241,27 @@ cdef class Column:
                 if isinstance(value, Column):
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')
-            mask = as_buffer(value)
+            mask = as_device_buffer_like(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             if mask.size < mask_size:
                 dbuf = rmm.DeviceBuffer(size=mask_size)
                 dbuf.copy_from_device(value)
-                mask = as_buffer(dbuf)
+                mask = as_device_buffer_like(dbuf)
         elif hasattr(value, "__array_interface__"):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = as_buffer(dbuf)
+            mask = as_device_buffer_like(dbuf)
         elif PyObject_CheckBuffer(value):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = as_buffer(dbuf)
+            mask = as_device_buffer_like(dbuf)
         else:
             raise TypeError(
                 "Expected a DeviceBufferLike-like object or None for mask, "
@@ -463,11 +463,11 @@ cdef class Column:
         cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        data = as_buffer(data)
+        data = as_device_buffer_like(data)
 
         if has_nulls:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            mask = as_buffer(mask)
+            mask = as_device_buffer_like(mask)
             null_count = c_col.get()[0].null_count()
         else:
             mask = None
@@ -520,7 +520,7 @@ cdef class Column:
 
         if data_ptr:
             if data_owner is None:
-                data = as_buffer(
+                data = as_device_buffer_like(
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype.itemsize)
                 )
@@ -531,7 +531,7 @@ cdef class Column:
                     owner=data_owner
                 )
         else:
-            data = as_buffer(
+            data = as_device_buffer_like(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)
             )
 
@@ -561,7 +561,7 @@ cdef class Column:
                     # result:
                     mask = None
                 else:
-                    mask = as_buffer(
+                    mask = as_device_buffer_like(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
                             size=bitmask_allocation_size_bytes(size+offset)

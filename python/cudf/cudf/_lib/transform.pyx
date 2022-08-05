@@ -6,7 +6,7 @@ from numba.np import numpy_support
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
-from cudf.core.buffer import as_buffer
+from cudf.core.buffer import as_device_buffer_like
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -52,7 +52,7 @@ def bools_to_mask(Column col):
         up_db = move(cpp_out.first)
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_buffer(rmm_db)
+    buf = as_device_buffer_like(rmm_db)
     return buf
 
 
@@ -88,7 +88,7 @@ def nans_to_nulls(Column input):
         return None
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = as_buffer(buffer)
+    buffer = as_device_buffer_like(buffer)
     return buffer
 
 

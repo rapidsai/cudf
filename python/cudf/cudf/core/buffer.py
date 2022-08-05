@@ -58,17 +58,17 @@ class DeviceBufferLike(Protocol):
         ...
 
 
-def as_buffer(obj: object) -> Buffer:
+def as_device_buffer_like(obj: object) -> DeviceBufferLike:
     """
-    Factory function to wrap `obj` in a Buffer object.
+    Factory function to wrap `obj` in a DeviceBufferLike object.
 
-    If `obj` isn't a Buffer already, a new Buffer that points to the
-    memory of `obj` is created. If `obj` represents host memory, it is
-    copied to a new `rmm.DeviceBuffer` device allocation. Otherwise,
-    the data of `obj` is **not** copied.
+    If `obj` isn't device-buffer-like already, a new buffer that implements
+    DeviceBufferLike and points to the memory of `obj` is created. If `obj`
+    represents host memory, it is copied to a new `rmm.DeviceBuffer` device
+    allocation. Otherwise, the data of `obj` is **not** copied.
 
-    The returned Buffer keeps a reference to `obj` in order to
-    retain the lifetime of `obj`.
+    The returned Buffer keeps a reference to `obj` in order to retain the
+    lifetime of `obj`.
 
     Raises ValueError if the data of `obj` isn't C-contiguous.
 
@@ -124,9 +124,10 @@ class Buffer(Serializable):
     A Buffer represents a device memory allocation.
 
     Usually a Buffer instance should be created through factory functions
-    such as `as_buffer()` and `buffer_from_pointer()`. However, for backward
-    compatibility, it is possible to instantiate a Buffer directly given a
-    buffer-like object, which is equivalent to calling `as_buffer()`.
+    such as `as_device_buffer_like()` and `buffer_from_pointer()`. However,
+    for backward compatibility, it is possible to instantiate a Buffer
+    directly given a buffer-like object, which is equivalent to calling
+    `as_device_buffer_like()`.
 
     Parameters
     ----------

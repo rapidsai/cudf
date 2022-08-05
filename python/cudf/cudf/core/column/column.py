@@ -66,7 +66,7 @@ from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
     DeviceBufferLike,
-    as_buffer,
+    as_device_buffer_like,
     buffer_from_pointer,
 )
 from cudf.core.dtypes import (
@@ -1284,7 +1284,7 @@ def column_empty(
         data = None
         children = (
             build_column(
-                data=as_buffer(
+                data=as_device_buffer_like(
                     rmm.DeviceBuffer(
                         size=row_count * cudf.dtype("int32").itemsize
                     )
@@ -1297,7 +1297,7 @@ def column_empty(
         children = (
             full(row_count + 1, 0, dtype="int32"),
             build_column(
-                data=as_buffer(
+                data=as_device_buffer_like(
                     rmm.DeviceBuffer(
                         size=row_count * cudf.dtype("int8").itemsize
                     )
@@ -1306,7 +1306,9 @@ def column_empty(
             ),
         )
     else:
-        data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
+        data = as_device_buffer_like(
+            rmm.DeviceBuffer(size=row_count * dtype.itemsize)
+        )
 
     if masked:
         mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
@@ -1662,7 +1664,9 @@ def _make_copy_replacing_NaT_with_null(column):
     out_col = cudf._lib.replace.replace(
         column,
         build_column(
-            as_buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
+            as_device_buffer_like(
+                np.array([na_value], dtype=column.dtype).view("|u1")
+            ),
             dtype=column.dtype,
         ),
         null,
@@ -1757,7 +1761,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_buffer(arbitrary)
+        data = as_device_buffer_like(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -1905,7 +1909,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
-            buffer = as_buffer(arbitrary.view("|u1"))
+            buffer = as_device_buffer_like(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
@@ -1923,7 +1927,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
-            buffer = as_buffer(arbitrary.view("|u1"))
+            buffer = as_device_buffer_like(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)

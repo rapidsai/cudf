@@ -4,7 +4,7 @@ from typing import Callable
 import cupy as cp
 import pytest
 
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, as_device_buffer_like
 
 arr_len = 10
 
@@ -23,10 +23,10 @@ arr_len = 10
 def test_buffer_from_cuda_iface_contiguous(data):
     data, expect_success = data
     if expect_success:
-        as_buffer(data.view("|u1"))
+        as_device_buffer_like(data.view("|u1"))
     else:
         with pytest.raises(ValueError):
-            as_buffer(data.view("|u1"))
+            as_device_buffer_like(data.view("|u1"))
 
 
 @pytest.mark.parametrize(
@@ -42,10 +42,10 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
-    as_buffer(data)
+    as_device_buffer_like(data)
 
 
-@pytest.mark.parametrize("creator", [Buffer, as_buffer])
+@pytest.mark.parametrize("creator", [Buffer, as_device_buffer_like])
 def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
     ary = cp.arange(arr_len)
     b = creator(ary)

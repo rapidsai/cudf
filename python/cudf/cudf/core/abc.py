@@ -133,7 +133,7 @@ class Serializable:
         """
         typ = pickle.loads(header["type-serialized"])
         frames = [
-            cudf.core.buffer.as_buffer(f) if c else memoryview(f)
+            cudf.core.buffer.as_device_buffer_like(f) if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
         assert all(
