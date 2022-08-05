@@ -426,6 +426,7 @@ class data_profile_builder {
     profile.set_bool_probability(p);
     return *this;
   }
+  
   data_profile_builder& null_frequency(std::optional<double> f)
   {
     profile.set_null_frequency(f);
