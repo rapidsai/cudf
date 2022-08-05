@@ -1448,7 +1448,7 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned c
 }
 
 /**
- * @brief Truncate a span of binary data to at most truncate_length bytes.
+ * @brief Attempt to runcate a span of binary data to at most truncate_length bytes.
  *
  * If is_min is false, then the final byte (or bytes if there is overflow) will be
  * incremented so that the resultant binary will still be a valid maximum. scratch is only used when
@@ -1482,7 +1482,7 @@ __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t 
 // is incorrect, then truncate_byte_array() and truncate_string() should just be combined into
 // a single function.
 /**
- * @brief Truncate a UTF-8 string to at most truncate_length bytes.
+ * @brief Attempt to truncate a UTF-8 string to at most truncate_length bytes.
  */
 __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
                                                             bool is_min,
@@ -1506,7 +1506,7 @@ __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& s
 }
 
 /**
- * @brief Truncate a binary array to at most truncate_length bytes.
+ * @brief Attempt to truncate a binary array to at most truncate_length bytes.
  */
 __device__ std::pair<const void*, uint32_t> truncate_byte_array(
   const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
