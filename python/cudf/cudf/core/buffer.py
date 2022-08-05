@@ -5,7 +5,15 @@ from __future__ import annotations
 import functools
 import operator
 import pickle
-from typing import Any, Dict, Mapping, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Mapping,
+    Protocol,
+    Tuple,
+    Union,
+    runtime_checkable,
+)
 
 import numpy as np
 
@@ -13,6 +21,45 @@ import rmm
 
 import cudf
 from cudf.core.abc import Serializable
+
+
+@runtime_checkable
+class DeviceBufferLike(Protocol):
+    @classmethod
+    def from_buffer(
+        cls, buffer: DeviceBufferLike, size: int = None, offset: int = 0
+    ):
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    @property
+    def ptr(self) -> int:
+        ...
+
+    @property
+    def size(self) -> int:
+        ...
+
+    @property
+    def nbytes(self) -> int:
+        ...
+
+    @property
+    def owner(self) -> object:
+        ...
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping:
+        ...
+
+    def serialize(self) -> Tuple[dict, list]:
+        ...
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> DeviceBufferLike:
+        ...
 
 
 def as_buffer(obj: object) -> Buffer:
@@ -123,7 +170,9 @@ class Buffer(Serializable):
             _init_buffer_from_any(self, ptr)
 
     @classmethod
-    def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
+    def from_buffer(
+        cls, buffer: DeviceBufferLike, size: int = None, offset: int = 0
+    ):
         """
         Create a buffer from another buffer
 
@@ -138,7 +187,7 @@ class Buffer(Serializable):
             Start offset relative to `buffer.ptr`.
         """
         return cls(
-            ptr=buffer._ptr + offset,
+            ptr=buffer.ptr + offset,
             size=buffer.size if size is None else size,
             owner=buffer,
         )

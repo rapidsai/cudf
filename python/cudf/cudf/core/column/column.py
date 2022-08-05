@@ -63,7 +63,12 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer, buffer_from_pointer
+from cudf.core.buffer import (
+    Buffer,
+    DeviceBufferLike,
+    as_buffer,
+    buffer_from_pointer,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -353,7 +358,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return len(self) - self.null_count
 
     @property
-    def nullmask(self) -> Buffer:
+    def nullmask(self) -> DeviceBufferLike:
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
@@ -769,12 +774,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         return res._data["bool"].fillna(False)
 
-    def as_mask(self) -> Buffer:
+    def as_mask(self) -> DeviceBufferLike:
         """Convert booleans to bitmask
 
         Returns
         -------
-        Buffer
+        DeviceBufferLike
         """
 
         if self.has_nulls():
@@ -1314,11 +1319,11 @@ def column_empty(
 
 
 def build_column(
-    data: Union[Buffer, None],
+    data: Union[DeviceBufferLike, None],
     dtype: Dtype,
     *,
     size: int = None,
-    mask: Buffer = None,
+    mask: DeviceBufferLike = None,
     offset: int = 0,
     null_count: int = None,
     children: Tuple[ColumnBase, ...] = (),
@@ -1328,12 +1333,12 @@ def build_column(
 
     Parameters
     ----------
-    data : Buffer
+    data : DeviceBufferLike
         The data buffer (can be None if constructing certain Column
         types like StringColumn, ListColumn, or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
-    mask : Buffer, optional
+    mask : DeviceBufferLike, optional
         The mask buffer
     size : int, optional
     offset : int, optional
@@ -1478,7 +1483,7 @@ def build_column(
 def build_categorical_column(
     categories: ColumnBase,
     codes: ColumnBase,
-    mask: Buffer = None,
+    mask: DeviceBufferLike = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1494,7 +1499,7 @@ def build_categorical_column(
     codes : Column
         Column of codes, the size of the resulting Column will be
         the size of `codes`
-    mask : Buffer
+    mask : DeviceBufferLike
         Null mask
     size : int, optional
     offset : int, optional
@@ -1538,7 +1543,7 @@ def build_interval_column(
         Column of values representing the left of the interval
     right_col : Column
         Column of representing the right of the interval
-    mask : Buffer
+    mask : DeviceBufferLike
         Null mask
     size : int, optional
     offset : int, optional
@@ -1569,7 +1574,7 @@ def build_interval_column(
 def build_list_column(
     indices: ColumnBase,
     elements: ColumnBase,
-    mask: Buffer = None,
+    mask: DeviceBufferLike = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1583,7 +1588,7 @@ def build_list_column(
         Column of list indices
     elements : ColumnBase
         Column of list elements
-    mask: Buffer
+    mask: DeviceBufferLike
         Null mask
     size: int, optional
     offset: int, optional
@@ -1607,7 +1612,7 @@ def build_struct_column(
     names: Sequence[str],
     children: Tuple[ColumnBase, ...],
     dtype: Optional[Dtype] = None,
-    mask: Buffer = None,
+    mask: DeviceBufferLike = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1621,7 +1626,7 @@ def build_struct_column(
         Field names to map to children dtypes, must be strings.
     children : tuple
 
-    mask: Buffer
+    mask: DeviceBufferLike
         Null mask
     size: int, optional
     offset: int, optional
@@ -2197,7 +2202,7 @@ def _construct_array(
     return arbitrary
 
 
-def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
+def _mask_from_cuda_array_interface_desc(obj) -> Union[DeviceBufferLike, None]:
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 

@@ -96,7 +96,10 @@ class Serializable:
         """
         header, frames = self.serialize()
         assert all(
-            (type(f) in [cudf.core.buffer.Buffer, memoryview]) for f in frames
+            (
+                isinstance(f, (cudf.core.buffer.DeviceBufferLike, memoryview))
+                for f in frames
+            )
         )
         header["type-serialized"] = pickle.dumps(type(self))
         header["is-cuda"] = [

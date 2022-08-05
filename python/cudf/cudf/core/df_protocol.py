@@ -64,12 +64,12 @@ class _CuDFBuffer:
 
     def __init__(
         self,
-        buf: cudf.core.buffer.Buffer,
+        buf: cudf.core.buffer.DeviceBufferLike,
         dtype: np.dtype,
         allow_copy: bool = True,
     ) -> None:
         """
-        Use cudf.core.buffer.Buffer object.
+        Use cudf.core.buffer.DeviceBufferLike object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
@@ -80,7 +80,7 @@ class _CuDFBuffer:
     @property
     def bufsize(self) -> int:
         """
-        Buffer size in bytes.
+        DeviceBufferLike size in bytes.
         """
         return self._buf.nbytes
 
@@ -622,11 +622,11 @@ from_dataframe : construct a cudf.DataFrame from an input data frame which
 Notes
 -----
 
-- Interpreting a raw pointer (as in ``Buffer.ptr``) is annoying and unsafe to
-  do in pure Python. It's more general but definitely less friendly than
-  having ``to_arrow`` and ``to_numpy`` methods. So for the buffers which lack
-  ``__dlpack__`` (e.g., because the column dtype isn't supported by DLPack),
-  this is worth looking at again.
+- Interpreting a raw pointer (as in ``DeviceBufferLike.ptr``) is annoying and
+  unsafe to do in pure Python. It's more general but definitely less friendly
+  than having ``to_arrow`` and ``to_numpy`` methods. So for the buffers which
+  lack ``__dlpack__`` (e.g., because the column dtype isn't supported by
+  DLPack), this is worth looking at again.
 
 """
 
