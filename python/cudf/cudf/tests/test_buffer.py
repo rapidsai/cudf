@@ -4,7 +4,7 @@ from typing import Callable
 import cupy as cp
 import pytest
 
-from cudf.core.buffer import Buffer, as_device_buffer_like
+from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 
 arr_len = 10
 
@@ -49,10 +49,11 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
 def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
     ary = cp.arange(arr_len)
     b = creator(ary)
+    assert isinstance(b, DeviceBufferLike)
     assert ary.__cuda_array_interface__["data"][0] == b.ptr
     assert ary.nbytes == b.size
 
     with pytest.raises(
-        ValueError, match="size must be specified when `ptr` is an integer"
+        ValueError, match="size must be specified when `data` is an integer"
     ):
         Buffer(42)
