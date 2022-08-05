@@ -30,6 +30,7 @@ from cudf.core.udf.templates import (
 )
 from cudf.core.udf.utils import (
     _all_dtypes_from_frame,
+    _compile_or_get,
     _get_kernel_groupby_apply,
     _get_udf_return_type,
     _supported_cols_from_frame,
@@ -615,6 +616,7 @@ def _get_groupby_apply_kernel(frame, func, args):
     dataframe_group_type = _get_frame_groupby_type(
         np.dtype(list(_all_dtypes_from_frame(frame).items()))
     )
+
     return_type = _get_udf_return_type(dataframe_group_type, func, args)
 
     np_field_types = np.dtype(
@@ -641,11 +643,9 @@ def _get_groupby_apply_kernel(frame, func, args):
 def jit_groupby_apply(offsets, grouped_values, function, *args):
     ngroups = len(offsets) - 1
 
-    kernel, return_type = _get_groupby_apply_kernel(
-        grouped_values, function, args
+    kernel, return_type = _compile_or_get(
+        grouped_values, function, args, _get_groupby_apply_kernel
     )
-
-    return_type = numpy_support.as_dtype(return_type)
 
     output = cp.empty(ngroups, dtype=return_type)
 
@@ -658,7 +658,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     stream = cuda.default_stream()
 
-    kernel[ngroups, 256](*launch_args)
+    kernel[ngroups, 256, stream](*launch_args)
 
     stream.synchronize()
 

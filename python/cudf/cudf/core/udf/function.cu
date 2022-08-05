@@ -410,7 +410,7 @@ extern "C" __device__ int BlockMax_int32(int *numba_return_value, int *data, int
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
-  int local_max = 0;
+  int local_max = INT_MIN;
 
   __shared__ int smax;
 
@@ -446,7 +446,7 @@ extern "C" __device__ int BlockMax_int64(int64_t *numba_return_value, int64_t *d
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
-  int64_t local_max = 0;
+  int64_t local_max = INT64_MIN;
 
   __shared__ int64_t smax;
 
@@ -482,7 +482,7 @@ extern "C" __device__ int BlockMax_float64(double *numba_return_value, double *d
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
-  double local_max = 0;
+  double local_max = -DBL_MAX;
 
   __shared__ double smax;
 
@@ -553,7 +553,7 @@ extern "C" __device__ int BlockMin_int64(int64_t *numba_return_value, int64_t *d
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
-  int64_t local_min = INT_MAX;
+  int64_t local_min = INT64_MAX;
 
   __shared__ int64_t smin;
 
@@ -589,7 +589,7 @@ extern "C" __device__ int BlockMin_float64(double *numba_return_value, double *d
   int tid = threadIdx.x; int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
-  double local_min = INT_MAX;
+  double local_min = DBL_MAX;
 
   __shared__ double smin;
 
@@ -615,6 +615,194 @@ extern "C" __device__ int BlockMin_float64(double *numba_return_value, double *d
   __syncthreads();
 
   *numba_return_value = smin;
+
+  return 0;
+}
+
+// Calculate minimum of the group, return the scalar
+extern "C" __device__ int BlockIdxMax_int64(int64_t *numba_return_value, int64_t *data, int64_t index, int64_t size) {
+
+  int tid = threadIdx.x; int tb_size = blockDim.x;
+  // Calculate how many elements each thread is working on
+  int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
+  int64_t local_max = INT64_MIN;
+  int64_t local_idx = -1;
+
+  __shared__ int64_t smax;
+  __shared__ int64_t sidx;
+
+  if (tid == 0)
+    smax = 0;
+    
+  __syncthreads();
+
+  // Calculate local max for each thread
+  #pragma unroll
+  for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ITEM++) {
+      if (tid + (ITEM * tb_size) < size) {
+          int64_t load = data[tid + ITEM * tb_size];
+          if (load > local_max) {
+            local_max = load;
+            local_idx = index[tid + ITEM * tb_size]
+          }
+      }
+  }
+
+  __syncthreads();
+
+  // Calculate local max for each group
+  atomicMax((long long*) (&smax), (long long) local_max);
+
+  __syncthreads();
+
+  if (local_max == smax) {
+    atomicMin((long long*) (&sidx), (long long)local_idx);
+  }
+
+  __syncthreads();
+
+  *numba_return_value = sidx;
+
+  return 0;
+}
+
+// Calculate minimum of the group, return the scalar
+extern "C" __device__ int BlockIdxMax_float64(int64_t *numba_return_value, double *data, int64_t index, int64_t size) {
+
+  int tid = threadIdx.x; int tb_size = blockDim.x;
+  // Calculate how many elements each thread is working on
+  int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
+  double local_max = -DBL_MAX;
+  int64_t local_idx = -1;
+
+  __shared__ double smax;
+  __shared__ int64_t sidx;
+
+  if (tid == 0)
+    smax = 0;
+    
+  __syncthreads();
+
+  // Calculate local max for each thread
+  #pragma unroll
+  for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ITEM++) {
+      if (tid + (ITEM * tb_size) < size) {
+          double load = data[tid + ITEM * tb_size];
+          if (load > local_max) {
+            local_max = load;
+            local_idx = index[tid + ITEM * tb_size]
+          }
+      }
+  }
+
+  __syncthreads();
+
+  // Calculate local max for each group
+  atomicMax((&smax), local_max);
+
+  __syncthreads();
+
+  if (local_max == smax) {
+    atomicMin((long long*) (&sidx), (long long)local_idx);
+  }
+
+  __syncthreads();
+
+  *numba_return_value = sidx;
+
+  return 0;
+}
+
+// Calculate minimum of the group, return the scalar
+extern "C" __device__ int BlockIdxMin_int64(int64_t *numba_return_value, int64_t *data, int64_t index, int64_t size) {
+
+  int tid = threadIdx.x; int tb_size = blockDim.x;
+  // Calculate how many elements each thread is working on
+  int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
+  int64_t local_min = INT64_MAX;
+  int64_t local_idx = -1;
+
+  __shared__ int64_t smin;
+  __shared__ int64_t sidx;
+
+  if (tid == 0)
+    smin = INT_MAX;
+    
+  __syncthreads();
+
+  // Calculate local max for each thread
+  #pragma unroll
+  for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ITEM++) {
+      if (tid + (ITEM * tb_size) < size) {
+          int64_t load = data[tid + ITEM * tb_size];
+          if (load < local_min) {
+            local_min = load;
+            local_idx = index[tid + ITEM * tb_size]
+          }
+      }
+  }
+
+  __syncthreads();
+
+  // Calculate local max for each group
+  atomicMin((long long*) (&smin), (long long) local_min);
+
+  __syncthreads();
+
+  if (local_min == smin) {
+    atomicMin((long long*) (&sidx), (long long)local_idx);
+  }
+
+  __syncthreads();
+
+  *numba_return_value = sidx;
+
+  return 0;
+}
+
+// Calculate minimum of the group, return the scalar
+extern "C" __device__ int BlockIdxMin_float64(int64_t *numba_return_value, double *data, int64_t index, int64_t size) {
+
+  int tid = threadIdx.x; int tb_size = blockDim.x;
+  // Calculate how many elements each thread is working on
+  int ITEMS_PER_THREAD = (size + tb_size - 1) / tb_size;
+  double local_min = DBL_MAX;
+  int64_t local_idx = -1;
+
+  __shared__ double smin;
+  __shared__ int64_t sidx;
+
+  if (tid == 0)
+    smin = INT_MAX;
+    
+  __syncthreads();
+
+  // Calculate local max for each thread
+  #pragma unroll
+  for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ITEM++) {
+      if (tid + (ITEM * tb_size) < size) {
+          double load = data[tid + ITEM * tb_size];
+          if (load < local_min) {
+            local_min = load;
+            local_idx = index[tid + ITEM * tb_size]
+          }
+      }
+  }
+
+  __syncthreads();
+
+  // Calculate local max for each group
+  atomicMin((&smin), local_min);
+
+  __syncthreads();
+
+  if (local_min == smin) {
+    atomicMin((long long*) (&sidx), (long long)local_idx);
+  }
+
+  __syncthreads();
+
+  *numba_return_value = sidx;
 
   return 0;
 }
