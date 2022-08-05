@@ -113,7 +113,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
         - test -f $PREFIX/include/cudf/detail/unary.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/alignment.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/column.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
         - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
@@ -166,6 +166,7 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
         - test -f $PREFIX/include/cudf/lists/detail/contains.hpp
         - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+        - test -f $PREFIX/include/cudf/lists/detail/dremel.hpp
         - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
         - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
         - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh

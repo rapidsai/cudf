@@ -386,6 +386,7 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
+  src/lists/dremel.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
