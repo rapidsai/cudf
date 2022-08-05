@@ -175,25 +175,25 @@ my_var_float64 = cuda.declare_device(
 my_idxmax_int64 = cuda.declare_device(
     "BlockIdxMax_int64",
     "types.int64(types.CPointer(types.int64),"
-    + "types.CPointer(types.int64),types.int64)",
+    "types.CPointer(types.int64),types.int64)",
 )
 
 my_idxmax_float64 = cuda.declare_device(
     "BlockIdxMax_float64",
     "types.int64(types.CPointer(types.float64),"
-    + "types.CPointer(types.int64),types.int64)",
+    "types.CPointer(types.int64),types.int64)",
 )
 
 my_idxmin_int64 = cuda.declare_device(
     "BlockIdxMin_int64",
     "types.int64(types.CPointer(types.int64),"
-    + "types.CPointer(types.int64),types.int64)",
+    "types.CPointer(types.int64),types.int64)",
 )
 
 my_idxmin_float64 = cuda.declare_device(
     "BlockIdxMin_float64",
     "types.int64(types.CPointer(types.float64),"
-    + "types.CPointer(types.int64),types.int64)",
+    "types.CPointer(types.int64),types.int64)",
 )
 
 # Path to the source containing the foreign function
