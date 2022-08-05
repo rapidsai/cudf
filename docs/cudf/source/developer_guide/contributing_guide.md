@@ -108,13 +108,13 @@ Any attempt to write pure Cython code for this purpose should be justified with 
 
 ## Exception handling
 
-In align with [maintaining compatibility with pandas](#pandas-compatibility),
-if an API shares an argument with pandas,
-cuDF should raise the same error type given a specific invalid input for that argument.
+In alignment with [maintaining compatibility with pandas](#pandas-compatibility),
+any API that cuDF shares with pandas should throw all the same exceptions as the
+corresponding pandas API given the same inputs.
 However, it is not required to match the corresponding pandas API's exception message.
 
 When writing error messages,
-sufficient information should be included to help user locate the source of the error,
+sufficient information should be included to help users locate the source of the error,
 such as including the expected argument type versus the actual argument provided.
 
 For parameters that are not yet supported,
@@ -125,15 +125,14 @@ There is no need to mention when the argument will be supported in the future.
 
 Currently libcudf raises `cudf::logic_error` and `cudf::cuda_error`.
 By default these error types are mapped to `RuntimeError` in python.
-Several APIs uses the exception payload `what()` message to determine the exception type raised by libcudf.
+Several APIs use the exception payload `what()` message to determine the exception type raised by libcudf.
 
 Determining error type based on exception payload is brittle since libcudf does not maintain API stability on exception messages.
 This is a compromise due to lack of exception diversity in libcudf.
 Only adopt this strategy when necessary.
 
 The projected roadmap is to diversify the exception types raised by libcudf.
-Standard c++ natively supports various [exception types](https://en.cppreference.com/w/cpp/error/exception),
-which follow [these mappings](http://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions) to python error types.
-Custom c++ exceptions types may also be created if necessary.
-Experiments are in progress to create custom cython error mappings to custom exception types in c++.
-This section may be updated as progresses are made on these fronts.
+Standard C++ natively supports various [exception types](https://en.cppreference.com/w/cpp/error/exception),
+which Cython maps to [these Python exception types](http://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
+In the future, libcudf may employ custom C++ exception types.
+If that occurs, this section will be updated to reflect how these may be mapped to desired Python exception types.
