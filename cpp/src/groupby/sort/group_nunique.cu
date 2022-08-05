@@ -56,9 +56,7 @@ struct is_unique_iterator_fn {
   {
   }
 
-  // The noinline is necessary because of the aggressive inlining in thrust::reduce_by_key
-  // results in very large compile times.
-  __noinline__ __device__ size_type operator()(size_type i)
+  __device__ size_type operator()(size_type i)
   {
     bool is_input_countable =
       !nulls || (null_handling == null_policy::INCLUDE || v.is_valid_nocheck(i));
