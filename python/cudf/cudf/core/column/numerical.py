@@ -232,6 +232,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         if op == "__floordiv__":
             zero = result.dtype.type(0)
+            zero_mask = None
             # https://github.com/rapidsai/cudf/issues/7389
             if isinstance(lhs, ColumnBase) and isinstance(rhs, ColumnBase):
                 zero_mask = libcudf.binaryop.binaryop(
@@ -243,27 +244,23 @@ class NumericalColumn(NumericalBaseColumn):
                     zero_mask = libcudf.binaryop.binaryop(
                         zero_mask, lhs.notnull(), "__and__", np.dtype("bool")
                     )
+
+            elif isinstance(rhs, ColumnBase) and cudf.Scalar(lhs).is_valid():
+                zero_mask = libcudf.binaryop.binaryop(
+                    rhs, zero, "__eq__", np.dtype("bool")
+                )
+
+            elif isinstance(lhs, ColumnBase) and rhs == 0:
+                # TODO: this could be an earlystop
+                zero_mask = full(len(lhs), True, np.dtype("bool"))
+                zero_mask = libcudf.copying.boolean_mask_scatter(
+                    [False], [zero_mask], lhs.isnull()
+                )[0]
+            if zero_mask:
                 result = libcudf.copying.boolean_mask_scatter(
                     [zero], [result], zero_mask
                 )[0]
-            elif isinstance(rhs, ColumnBase):
-                if cudf.Scalar(lhs).is_valid():
-                    zero_mask = libcudf.binaryop.binaryop(
-                        rhs, zero, "__eq__", np.dtype("bool")
-                    )
-                    result = libcudf.copying.boolean_mask_scatter(
-                        [zero], [result], zero_mask
-                    )[0]
-            elif isinstance(lhs, ColumnBase):
-                if rhs == 0:
-                    # TODO: this should be an earlystop
-                    zero_mask = full(len(lhs), True, np.dtype("bool"))
-                    zero_mask = libcudf.copying.boolean_mask_scatter(
-                        [False], [zero_mask], lhs.isnull()
-                    )[0]
-                result = libcudf.copying.boolean_mask_scatter(
-                    [zero], [result], zero_mask
-                )[0]
+
         return result
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
