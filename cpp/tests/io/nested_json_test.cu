@@ -98,7 +98,7 @@ void print_json_struct_col(std::string const& input,
   std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
   std::cout << pad(indent) << " -> validity[]: "
             << "\n";
-  for (std::size_t i = 0; i < column.current_offset; i++) {
+  for (decltype(column.current_offset) i = 0; i < column.current_offset; i++) {
     std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "]\n";
   }
   auto it = std::begin(column.child_columns);

@@ -718,13 +718,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     case json_col_t::StructColumn: {
       std::vector<std::unique_ptr<column>> child_columns;
       std::vector<column_name_info> column_names{};
-      size_type num_rows{-1};
+      size_type num_rows{json_col.current_offset};
       // Create children columns
       for (auto const& col : json_col.child_columns) {
         column_names.emplace_back(col.first);
         auto const& child_col      = col.second;
         auto [child_column, names] = json_column_to_cudf_column(child_col, d_input, stream, mr);
-        if (num_rows < 0) num_rows = child_column->size();
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));

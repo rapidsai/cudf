@@ -107,7 +107,7 @@ enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown }
  */
 struct json_column {
   // Type used to count number of rows
-  using row_offset_t = uint32_t;
+  using row_offset_t = size_type;
 
   // The inferred type of this column (list, struct, or value/string column)
   json_col_t type = json_col_t::Unknown;
