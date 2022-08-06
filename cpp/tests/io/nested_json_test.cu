@@ -165,7 +165,7 @@ TEST_F(JsonTest, StackContext)
                                         stream.value()));
 
   // Run algorithm
-  nested_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
 
   // Copy back the results
   stack_context.device_to_host(stream_view);
@@ -194,11 +194,53 @@ TEST_F(JsonTest, StackContext)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
+TEST_F(JsonTest, StackContextUtf8)
+{
+  // Type used to represent the atomic symbol type used within the finite-state machine
+  using SymbolT      = char;
+  using StackSymbolT = char;
+
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Test input
+  std::string input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
+
+  // Prepare input & output buffers
+  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
+  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream_view);
+
+  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
+                                        input.data(),
+                                        input.size() * sizeof(SymbolT),
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
+
+  // Run algorithm
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
+
+  // Copy back the results
+  stack_context.device_to_host(stream_view);
+
+  // Make sure we copied back the stack context
+  stream_view.synchronize();
+
+  std::vector<char> golden_stack_context{
+    '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
+    '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
+    '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
+    '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '['};
+
+  ASSERT_EQ(golden_stack_context.size(), stack_context.size());
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
+}
+
 TEST_F(JsonTest, TokenStream)
 {
-  using nested_json::PdaTokenT;
-  using nested_json::SymbolOffsetT;
-  using nested_json::SymbolT;
+  using cuio_json::PdaTokenT;
+  using cuio_json::SymbolOffsetT;
+  using cuio_json::SymbolT;
 
   constexpr std::size_t single_item = 1;
 
@@ -236,11 +278,11 @@ TEST_F(JsonTest, TokenStream)
   hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream_view};
 
   // Parse the JSON and get the token stream
-  nested_json::detail::get_token_stream(d_input,
-                                        tokens_gpu.device_ptr(),
-                                        token_indices_gpu.device_ptr(),
-                                        num_tokens_out.device_ptr(),
-                                        stream_view);
+  cuio_json::detail::get_token_stream(d_input,
+                                      tokens_gpu.device_ptr(),
+                                      token_indices_gpu.device_ptr(),
+                                      num_tokens_out.device_ptr(),
+                                      stream_view);
 
   // Copy back the number of tokens that were written
   num_tokens_out.device_to_host(stream_view);
@@ -251,8 +293,8 @@ TEST_F(JsonTest, TokenStream)
   stream_view.synchronize();
 
   // Golden token stream sample
-  using token_t = nested_json::token_t;
-  std::vector<std::pair<std::size_t, nested_json::PdaTokenT>> golden_token_stream = {
+  using token_t = cuio_json::token_t;
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream = {
     {2, token_t::ListBegin},        {3, token_t::StructBegin},      {4, token_t::FieldNameBegin},
     {13, token_t::FieldNameEnd},    {16, token_t::StringBegin},     {26, token_t::StringEnd},
     {28, token_t::FieldNameBegin},  {35, token_t::FieldNameEnd},    {38, token_t::ListBegin},

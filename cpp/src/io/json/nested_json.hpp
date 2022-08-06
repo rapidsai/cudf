@@ -230,7 +230,7 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
  * sections from the input.
  *
  * @param[in] d_json_in The JSON input
- * @param[out] d_tokens_out Device memory to which the parsed tokens are written
+ * @param[out] d_tokens Device memory to which the parsed tokens are written
  * @param[out] d_tokens_indices Device memory to which the indices are written, where each index
  * represents the offset within \p d_json_in that cause the input being written
  * @param[out] d_num_written_tokens The total number of tokens that were parsed
