@@ -150,10 +150,6 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-skiprows : int, default None
-    If not None, the number of rows to skip from the start of the file.
-num_rows : int, default None
-    If not None, the total number of rows to read.
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.

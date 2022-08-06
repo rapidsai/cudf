@@ -28,6 +28,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/tabulate.h>
+
 namespace cudf::binops::compiled::detail {
 template <class T, class... Ts>
 inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
