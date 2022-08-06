@@ -401,7 +401,29 @@ class data_profile {
 };
 
 /**
- * @brief Builder to build data profile for the random data generator.
+ * @brief Builder to construct data profiles for the random data generator.
+ *
+ * Setters can be chained to set multiple properties in a single expression.
+ * For example, `data_profile` initialization
+ * @code{.pseudo}
+ * data_profile profile;
+ * profile.set_null_frequency(0.0);
+ * profile.set_cardinality(0);
+ * profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
+ * @endcode
+ * becomes
+ * @code{.pseudo}
+ * data_profile const profile =
+ *   data_profile_builder().cardinality(0).null_frequency(0.0).distribution(
+ *     cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
+ * @endcode
+ * The builder makes it easier to have immutable `data_profile` objects even with the complex
+ * initialization. The `profile` object in the example above is initialized from
+ * `data_profile_builder` using an implicit conversion operator.
+ *
+ * The builder API also includes a few additional convinience setters:
+ * Overload of `distribution` that only takes the distribution type (not the range).
+ * `no_validity`, which is a simpler equivalent of `null_frequency(std::nullopr)`.
  */
 class data_profile_builder {
   data_profile profile;
