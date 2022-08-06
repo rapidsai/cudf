@@ -27,9 +27,7 @@
 
 namespace cudf::io::json {
 
-//------------------------------------------------------------------------------
-// JSON-TO-STACK-OP DFA
-//------------------------------------------------------------------------------
+// JSON to stack operator DFA (Deterministic Finite Automata)
 namespace to_stack_op {
 
 // Type used to represent the target state in the transition table
@@ -39,17 +37,16 @@ using StateT = char;
  * @brief Definition of the DFA's states
  */
 enum class dfa_states : StateT {
-  // The state being active while being outside of a string. When encountering an opening bracket
-  // or curly brace, we push it onto the stack. When encountering a closing bracket or brace, we
-  // pop from the stack.
+  // The active state while outside of a string. When encountering an opening bracket or curly
+  // brace, we push it onto the stack. When encountering a closing bracket or brace, we pop from the
+  // stack.
   TT_OOS = 0U,
 
-  // The state being active while being within a string (e.g., field name or a string value). We do
-  // not push or pop from the stack while being in this state.
+  // The active state while within a string (e.g., field name or a string value). We do not push or
+  // pop from the stack while in this state.
   TT_STR,
 
-  // The state being active after encountering an escape symbol (e.g., '\'), while being in the
-  // TT_STR state.
+  // The active state after encountering an escape symbol (e.g., '\'), while in the TT_STR state.
   TT_ESC,
 
   // Total number of states
@@ -64,7 +61,7 @@ constexpr auto TT_ESC = dfa_states::TT_ESC;
 /**
  * @brief Definition of the symbol groups
  */
-enum class dfa_symbol_group_id : uint32_t {
+enum class dfa_symbol_group_id : uint8_t {
   OPENING_BRACE,     ///< Opening brace SG: {
   OPENING_BRACKET,   ///< Opening bracket SG: [
   CLOSING_BRACE,     ///< Closing brace SG: }
@@ -138,7 +135,7 @@ enum class symbol_group_id : PdaSymbolGroupIdT {
  * @brief Symbols in the stack alphabet
  */
 enum class stack_symbol_group_id : PdaStackSymbolGroupIdT {
-  /// Symbol representing the JSON-root (i.e., we're at nesting level '0')
+  /// Symbol representing that we're at the JSON root (nesting level 0)
   STACK_ROOT,
 
   /// Symbol representing that we're currently within a list object
@@ -709,7 +706,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
 {
   constexpr std::size_t single_item = 1;
 
-  // Symbol that will represent empty-stack (i.e., that we're at the DOM root)
+  // Symbol representing the JSON-root (i.e., we're at nesting level '0')
   constexpr StackSymbolT root_symbol = '_';
   // This can be any stack symbol from the stack alphabet that does not push onto stack
   constexpr StackSymbolT read_symbol = 'x';
@@ -733,7 +730,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                       stream};
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
-  // structs/lists
+  // of structs/lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
