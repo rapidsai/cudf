@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <map>
@@ -389,18 +390,40 @@ class data_profile {
     struct_dist_desc.max_depth = max_depth;
   }
 
-  void set_struct_types(std::vector<cudf::type_id> const& types)
+  void set_struct_types(cudf::host_span<cudf::type_id const> types)
   {
     CUDF_EXPECTS(
       std::none_of(
-        types.cbegin(), types.cend(), [](auto& type) { return type == cudf::type_id::STRUCT; }),
+        types.begin(), types.end(), [](auto& type) { return type == cudf::type_id::STRUCT; }),
       "Cannot include STRUCT as its own subtype");
-    struct_dist_desc.leaf_types = types;
+    struct_dist_desc.leaf_types.assign(types.begin(), types.end());
   }
 };
 
 /**
- * @brief Builder to build data profile for the random data generator.
+ * @brief Builder to construct data profiles for the random data generator.
+ *
+ * Setters can be chained to set multiple properties in a single expression.
+ * For example, `data_profile` initialization
+ * @code{.pseudo}
+ * data_profile profile;
+ * profile.set_null_frequency(0.0);
+ * profile.set_cardinality(0);
+ * profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
+ * @endcode
+ * becomes
+ * @code{.pseudo}
+ * data_profile const profile =
+ *   data_profile_builder().cardinality(0).null_frequency(0.0).distribution(
+ *     cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
+ * @endcode
+ * The builder makes it easier to have immutable `data_profile` objects even with the complex
+ * initialization. The `profile` object in the example above is initialized from
+ * `data_profile_builder` using an implicit conversion operator.
+ *
+ * The builder API also includes a few additional convinience setters:
+ * Overload of `distribution` that only takes the distribution type (not the range).
+ * `no_validity`, which is a simpler equivalent of `null_frequency(std::nullopr)`.
  */
 class data_profile_builder {
   data_profile profile;
@@ -426,7 +449,7 @@ class data_profile_builder {
     profile.set_bool_probability(p);
     return *this;
   }
-  
+
   data_profile_builder& null_frequency(std::optional<double> f)
   {
     profile.set_null_frequency(f);
@@ -469,7 +492,7 @@ class data_profile_builder {
     return *this;
   }
 
-  data_profile_builder& struct_types(std::vector<cudf::type_id> const& types)
+  data_profile_builder& struct_types(cudf::host_span<cudf::type_id const> types)
   {
     profile.set_struct_types(types);
     return *this;
