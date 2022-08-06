@@ -30,12 +30,12 @@
 
 #include <string>
 
-namespace nested_json = cudf::io::json;
+namespace cuio_json = cudf::io::json;
 
 namespace {
 // Forward declaration
 void print_column(std::string const& input,
-                  nested_json::json_column const& column,
+                  cuio_json::json_column const& column,
                   uint32_t indent = 0);
 
 /**
@@ -52,7 +52,7 @@ std::string pad(uint32_t indent = 0)
  * @brief Prints a string column.
  */
 void print_json_string_col(std::string const& input,
-                           nested_json::json_column const& column,
+                           cuio_json::json_column const& column,
                            uint32_t indent = 0)
 {
   for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
@@ -65,7 +65,7 @@ void print_json_string_col(std::string const& input,
  * @brief Prints a list column.
  */
 void print_json_list_col(std::string const& input,
-                         nested_json::json_column const& column,
+                         cuio_json::json_column const& column,
                          uint32_t indent = 0)
 {
   std::cout << pad(indent) << " [LIST]\n";
@@ -89,7 +89,7 @@ void print_json_list_col(std::string const& input,
  * @brief Prints a struct column.
  */
 void print_json_struct_col(std::string const& input,
-                           nested_json::json_column const& column,
+                           cuio_json::json_column const& column,
                            uint32_t indent = 0)
 {
   std::cout << pad(indent) << " [STRUCT]\n";
@@ -112,13 +112,13 @@ void print_json_struct_col(std::string const& input,
 /**
  * @brief Prints the column's data and recurses through and prints all the child columns.
  */
-void print_column(std::string const& input, nested_json::json_column const& column, uint32_t indent)
+void print_column(std::string const& input, cuio_json::json_column const& column, uint32_t indent)
 {
   switch (column.type) {
-    case nested_json::json_col_t::StringColumn: print_json_string_col(input, column, indent); break;
-    case nested_json::json_col_t::ListColumn: print_json_list_col(input, column, indent); break;
-    case nested_json::json_col_t::StructColumn: print_json_struct_col(input, column, indent); break;
-    case nested_json::json_col_t::Unknown: std::cout << pad(indent) << "[UNKNOWN]\n"; break;
+    case cuio_json::json_col_t::StringColumn: print_json_string_col(input, column, indent); break;
+    case cuio_json::json_col_t::ListColumn: print_json_list_col(input, column, indent); break;
+    case cuio_json::json_col_t::StructColumn: print_json_struct_col(input, column, indent); break;
+    case cuio_json::json_col_t::Unknown: std::cout << pad(indent) << "[UNKNOWN]\n"; break;
     default: break;
   }
 }
@@ -333,7 +333,7 @@ TEST_F(JsonTest, TokenStream)
 
 TEST_F(JsonTest, ExtractColumn)
 {
-  using nested_json::SymbolT;
+  using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
@@ -341,7 +341,7 @@ TEST_F(JsonTest, ExtractColumn)
 
   std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
-  auto const cudf_table = nested_json::detail::parse_json_to_columns(
+  auto const cudf_table = cuio_json::detail::parse_json_to_columns(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
 
   auto const expected_col_count  = 2;
@@ -382,7 +382,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
 
-  CUDF_EXPECT_NO_THROW(nested_json::detail::parse_json_to_columns(ascii_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_json_to_columns(ascii_pass, stream_view));
 
   // utf-8 string that fails parsing.
   std::string utf_failed = R"([
@@ -392,8 +392,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_THROW_MESSAGE(nested_json::detail::parse_json_to_columns(utf_failed, stream_view),
-                            "Parser encountered an invalid format.");
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_json_to_columns(utf_failed, stream_view));
 
   // utf-8 string that passes parsing.
   std::string utf_pass = R"([
@@ -404,5 +403,5 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(nested_json::detail::parse_json_to_columns(utf_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_json_to_columns(utf_pass, stream_view));
 }
