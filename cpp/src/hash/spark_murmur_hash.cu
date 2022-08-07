@@ -33,7 +33,7 @@ namespace {
 
 using spark_hash_value_type = int32_t;
 
-template <typename Key>
+template <typename Key, CUDF_ENABLE_IF(not cudf::is_nested<Key>())>
 struct SparkMurmurHash3_32 {
   using result_type = spark_hash_value_type;
 
@@ -239,20 +239,6 @@ spark_hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>
   auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
   thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
   return compute_bytes(big_endian_data, length);
-}
-
-template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<cudf::list_view>::operator()(
-  cudf::list_view const& key) const
-{
-  CUDF_UNREACHABLE("List column hashing is not supported");
-}
-
-template <>
-spark_hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operator()(
-  cudf::struct_view const& key) const
-{
-  CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }
 
 /**
