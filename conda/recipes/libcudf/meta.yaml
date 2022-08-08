@@ -35,6 +35,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - cuda-nvrtc-dev {{ cuda_version }}.*
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
