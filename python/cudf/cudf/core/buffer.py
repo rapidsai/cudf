@@ -25,9 +25,6 @@ from cudf.core.abc import Serializable
 
 @runtime_checkable
 class DeviceBufferLike(Protocol):
-    def __len__(self) -> int:
-        """Size of the buffer in bytes."""
-
     @property
     def size(self) -> int:
         """Size of the buffer in bytes."""
@@ -193,9 +190,6 @@ class Buffer(Serializable):
             ptr, size = _get_ptr_and_size(np.asarray(buf).__array_interface__)
             buf = rmm.DeviceBuffer(ptr=ptr, size=size)
             self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
-
-    def __len__(self) -> int:
-        return self._size
 
     @property
     def size(self) -> int:
