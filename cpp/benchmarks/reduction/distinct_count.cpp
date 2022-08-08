@@ -27,7 +27,7 @@ static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_
   cudf::rmm_pool_raii pool_raii;
 
   auto const dtype          = cudf::type_to_id<Type>();
-  const auto size           = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const size           = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const null_frequency = state.get_float64("null_frequency");
 
   data_profile profile;
