@@ -211,7 +211,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     def to_arrow(self):
-        data_buf_32 = self.base_data.to_host_array().view("int32")
+        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")
         data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
 
         # use striding to set the first 32 bits of each 128-bit chunk:
@@ -231,7 +231,7 @@ class Decimal32Column(DecimalBaseColumn):
         mask_buf = (
             self.base_mask
             if self.base_mask is None
-            else pa.py_buffer(self.base_mask.to_host_array())
+            else pa.py_buffer(self.base_mask.memoryview())
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
@@ -298,7 +298,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     def to_arrow(self):
-        data_buf_64 = self.base_data.to_host_array().view("int64")
+        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
 
         # use striding to set the first 64 bits of each 128-bit chunk:
@@ -312,7 +312,7 @@ class Decimal64Column(DecimalBaseColumn):
         mask_buf = (
             self.base_mask
             if self.base_mask is None
-            else pa.py_buffer(self.base_mask.to_host_array())
+            else pa.py_buffer(self.base_mask.memoryview())
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),

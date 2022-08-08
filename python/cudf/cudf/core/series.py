@@ -1831,7 +1831,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         >>> series.data
         <cudf.core.buffer.Buffer object at 0x...>
-        >>> series.data.to_host_array()
+        >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
         """  # noqa: E501

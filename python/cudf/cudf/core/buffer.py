@@ -26,30 +26,61 @@ from cudf.core.abc import Serializable
 @runtime_checkable
 class DeviceBufferLike(Protocol):
     def __len__(self) -> int:
-        ...
-
-    @property
-    def ptr(self) -> int:
-        ...
+        """Size of the buffer in bytes."""
 
     @property
     def size(self) -> int:
-        ...
+        """Size of the buffer in bytes."""
 
     @property
-    def owner(self) -> object:
-        ...
+    def nbytes(self) -> int:
+        """Size of the buffer in bytes."""
+
+    @property
+    def ptr(self) -> int:
+        """Device pointer to the start of the buffer."""
+
+    @property
+    def owner(self) -> Any:
+        """Object owning the memory of the buffer."""
 
     @property
     def __cuda_array_interface__(self) -> Mapping:
-        ...
+        """Implementation of the CUDA Array Interface."""
+
+    def memoryview(self) -> memoryview:
+        """Read-only access to the buffer through host memory."""
 
     def serialize(self) -> Tuple[dict, list]:
-        ...
+        """Serialize the buffer into header and frames.
+
+        Notice, device data is **not** moved to host memory necessarily.
+
+        Returns
+        -------
+        Tuple[Dict, List]
+            The first element of the returned tuple is a dict containing any
+            serializable metadata required to reconstruct the object. The
+            second element is a list containing the device data buffers
+            or memoryviews of the object.
+        """
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> DeviceBufferLike:
-        ...
+        """Generate an buffer from a serialized representation.
+
+        Parameters
+        ----------
+        header : dict
+            The metadata required to reconstruct the object.
+        frames : list
+            The Buffers or memoryviews that the object should contain.
+
+        Returns
+        -------
+        DeviceBufferLike
+            A new object that implements DeviceBufferLike.
+        """
 
 
 def as_device_buffer_like(
@@ -80,7 +111,7 @@ def as_device_buffer_like(
     size : int, optional
         Size of buffer in bytes.
     offset : int, optional
-        Start offset relative to `obj.ptr` (in bytes).
+        Start offset relative to the memory of `obj` (in bytes).
 
     Return
     ------
@@ -167,20 +198,20 @@ class Buffer(Serializable):
         return self._size
 
     @property
-    def ptr(self) -> int:
-        return self._ptr
-
-    @property
     def size(self) -> int:
         return self._size
 
     @property
-    def owner(self) -> object:
-        return self._owner
-
-    @property
     def nbytes(self) -> int:
         return self._size
+
+    @property
+    def ptr(self) -> int:
+        return self._ptr
+
+    @property
+    def owner(self) -> Any:
+        return self._owner
 
     @property
     def __cuda_array_interface__(self) -> dict:
@@ -192,10 +223,10 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def to_host_array(self):
-        data = np.empty((self.size,), "u1")
-        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data)
-        return data
+    def memoryview(self) -> memoryview:
+        host_buf = bytearray(self.size)
+        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, host_buf)
+        return memoryview(host_buf).toreadonly()
 
     def serialize(self) -> Tuple[dict, list]:
         header = {}  # type: Dict[Any, Any]

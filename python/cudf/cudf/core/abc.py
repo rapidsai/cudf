@@ -90,7 +90,8 @@ class Serializable:
         header : dict
             The metadata required to reconstruct the object.
         frames : list
-            The Buffers or memoryviews that the object should contain.
+            The DeviceBufferLikes or memoryviews objects that the object
+            should contain.
 
         :meta private:
         """
@@ -161,7 +162,7 @@ class Serializable:
         header, frames = self.device_serialize()
         header["writeable"] = len(frames) * (None,)
         frames = [
-            f.to_host_array().data if c else memoryview(f)
+            f.memoryview() if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
         return header, frames
