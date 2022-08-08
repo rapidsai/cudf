@@ -266,11 +266,11 @@ def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     def is_c_contiguous(shape, strides, itemsize):
         if strides is None or any(dim == 0 for dim in shape):
             return True
-        sd = itemsize
+        cumulative_stride = itemsize
         for dim, stride in zip(reversed(shape), reversed(strides)):
-            if dim > 1 and stride != sd:
+            if dim > 1 and stride != cumulative_stride:
                 return False
-            sd *= dim
+            cumulative_stride *= dim
         return True
 
     shape = array_interface["shape"] or (1,)
