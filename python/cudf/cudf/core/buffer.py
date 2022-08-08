@@ -81,7 +81,7 @@ class DeviceBufferLike(Protocol):
 
 
 def as_device_buffer_like(
-    obj: Any, size: int = None, offset: int = 0
+    obj: Any, *, size: int = None, offset: int = 0
 ) -> DeviceBufferLike:
     """
     Factory function to wrap `obj` in a DeviceBufferLike object.
@@ -160,7 +160,7 @@ class Buffer(Serializable):
     _owner: object
 
     def __init__(
-        self, data: Union[int, Any], size: int = None, owner: object = None
+        self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
         if isinstance(data, int):
             if size is None:
