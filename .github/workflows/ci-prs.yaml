@@ -1,0 +1,145 @@
+name: CI for PRs
+
+on: pull_request
+
+jobs:
+  cpp-build:
+    name: C++ Matrix Build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "amd64", PY_VER: "3.8" }
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "arm64", PY_VER: "3.8" }
+    runs-on:
+      - self-hosted
+      - linux
+      - cpu8
+      - ${{ matrix.ARCH }}
+    container:
+      image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-base-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
+      env:
+        BUILD_TYPE: "pull-request"
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+        PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
+    steps:
+      - name: Setup gpuci-tools
+        run: |
+          git clone https://github.com/Ethyling/gpuci-tools.git -b gha
+          cp gpuci-tools/tools/* /usr/local/bin
+          rm -rf gpuci-tools
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: C++ build
+        run: ci/build_cpp.sh
+  cpp-tests:
+    name: C++ Matrix Tests
+    needs: cpp-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { CUDA_VER: "11.0.3", LINUX_VER: "centos7", ARCH: "amd64", PY_VER: "3.8", GPU: "v100", DRIVER: "495" }
+          - { CUDA_VER: "11.2.2", LINUX_VER: "ubuntu18.04", ARCH: "amd64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+          #- { CUDA_VER: "11.2.2", LINUX_VER: "ubuntu18.04", ARCH: "arm64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "amd64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+          #- { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "arm64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+    runs-on:
+      - self-hosted
+      - linux
+      - gpu-${{ matrix.GPU }}-${{ matrix.DRIVER }}-1
+      - ${{ matrix.ARCH }}
+    container:
+      image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-base-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
+      env:
+        BUILD_TYPE: "pull-request"
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+        PY_VER: ${{ matrix.PY_VER }}
+        PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
+        NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
+    steps:
+      - name: Setup gpuci-tools
+        run: |
+          git clone https://github.com/Ethyling/gpuci-tools.git -b gha
+          cp gpuci-tools/tools/* /usr/local/bin
+          rm -rf gpuci-tools
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: C++ tests
+        run: ci/test_cpp.sh
+  python-build:
+    name: Python Matrix Build
+    needs: cpp-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "amd64", PY_VER: "3.8" }
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "arm64", PY_VER: "3.8" }
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "amd64", PY_VER: "3.9" }
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "arm64", PY_VER: "3.9" }
+    runs-on:
+      - self-hosted
+      - linux
+      - cpu8
+      - ${{ matrix.ARCH }}
+    container:
+      image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-base-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
+      env:
+        BUILD_TYPE: "pull-request"
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+        PY_VER: ${{ matrix.PY_VER }}
+        PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
+    steps:
+      - name: Setup gpuci-tools
+        run: |
+          git clone https://github.com/Ethyling/gpuci-tools.git -b gha
+          cp gpuci-tools/tools/* /usr/local/bin
+          rm -rf gpuci-tools
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Python build
+        run: ci/build_python.sh
+  python-tests:
+    name: Python Matrix Tests
+    needs: python-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { CUDA_VER: "11.0.3", LINUX_VER: "centos7", ARCH: "amd64", PY_VER: "3.8", GPU: "v100", DRIVER: "495" }
+          - { CUDA_VER: "11.2.2", LINUX_VER: "ubuntu18.04", ARCH: "amd64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+          #- { CUDA_VER: "11.2.2", LINUX_VER: "ubuntu18.04", ARCH: "arm64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+          - { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "amd64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+          #- { CUDA_VER: "11.5.1", LINUX_VER: "ubuntu20.04", ARCH: "arm64", PY_VER: "3.9", GPU: "v100", DRIVER: "495" }
+    runs-on:
+      - self-hosted
+      - linux
+      - gpu-${{ matrix.GPU }}-${{ matrix.DRIVER }}-1
+      - ${{ matrix.ARCH }}
+    container:
+      image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-base-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
+      env:
+        BUILD_TYPE: "pull-request"
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+        PY_VER: ${{ matrix.PY_VER }}
+        PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
+        NVIDIA_VISIBLE_DEVICES: ${{ env.NVIDIA_VISIBLE_DEVICES }}
+    steps:
+      - name: Setup gpuci-tools
+        run: |
+          git clone https://github.com/Ethyling/gpuci-tools.git -b gha
+          cp gpuci-tools/tools/* /usr/local/bin
+          rm -rf gpuci-tools
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Python tests
+        run: ci/test_python.sh
