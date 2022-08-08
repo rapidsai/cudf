@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <memory>
 #include <vector>
 
 namespace cudf::io::json::experimental {
 
-template <typename str_ptrs_it, typename str_sizes_it>
-void parse_data(device_span<str_ptrs_it const> str_data_ptrs,
-                device_span<str_sizes_it const> str_data_sizes,
-                host_span<data_type const> col_types,
-                std::vector<mutable_column_view> cols,
-                rmm::cuda_stream_view stream);
+template <typename str_spans_it_it, typename col_size_it>
+std::vector<std::unique_ptr<column>> parse_data(str_spans_it_it cols_str_spans,
+                                                col_size_it cols_size,
+                                                host_span<data_type const> cols_type,
+                                                rmm::cuda_stream_view stream);
 
 }
