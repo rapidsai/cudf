@@ -33,6 +33,10 @@ function(find_and_configure_thrust VERSION)
   # that build times of of cudf are kept reasonable, without this CI builds of cudf will be killed
   # as some source file can take over 45 minutes to build
   #
+  include(GNUInstallDirs)
+  set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
+  set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
+
   set(CPM_DOWNLOAD_ALL TRUE)
   rapids_cpm_find(
     Thrust ${VERSION}
@@ -43,7 +47,7 @@ function(find_and_configure_thrust VERSION)
     GIT_TAG ${VERSION}
     GIT_SHALLOW TRUE ${cpm_thrust_disconnect_update} PATCH_COMMAND patch --reject-file=- -p1 -N <
                 ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true
-    OPTIONS "THRUST_INSTALL TRUE"
+    OPTIONS "THRUST_ENABLE_INSTALL_RULES TRUE"
   )
 
   if(NOT TARGET cudf::Thrust)
@@ -51,31 +55,11 @@ function(find_and_configure_thrust VERSION)
   endif()
 
   if(Thrust_SOURCE_DIR) # only install thrust when we have an in-source version
-    include(GNUInstallDirs)
-    install(
-      DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
-      FILES_MATCHING
-      REGEX "\\.(h|inl)$"
-    )
-    install(
-      DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/"
-      FILES_MATCHING
-      PATTERN "*.cuh"
-    )
-
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust/cmake"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/thrust/"
-    )
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/"
-    )
-
     # Store where CMake can find our custom Thrust install
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(
-      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust/]=] cudf-exports
+      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/cmake/thrust/]=]
+      cudf-exports
     )
   endif()
 endfunction()
