@@ -230,4 +230,95 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRanges)
   }
 }
 
+TEST_F(MultibyteSplitTest, SmallInputAllPossibleRangesSingleByte)
+{
+  using namespace cudf::io::text;
+
+  auto host_input = std::string();
+  for (auto i = 0; i < 5; i++) {
+    host_input += std::to_string(i) + ":";
+  }
+
+  auto delimiter = std::string(":");
+  auto source    = make_source(host_input);
+
+  // for all possible ways to split the input, check that each field is only output once
+  int size = static_cast<int>(host_input.size());
+  for (int split1 = 1; split1 < size; split1++) {
+    SCOPED_TRACE(split1);
+    for (int split2 = split1 + 1; split2 < size; split2++) {
+      SCOPED_TRACE(split2);
+      auto out1 = multibyte_split(*source, delimiter, byte_range_info{0, split1});
+      auto out2 = multibyte_split(*source, delimiter, byte_range_info{split1, split2 - split1});
+      auto out3 = multibyte_split(*source, delimiter, byte_range_info{split2, size - split2});
+
+      auto out_views = std::vector<cudf::column_view>({out1->view(), out2->view(), out3->view()});
+      auto out       = cudf::concatenate(out_views);
+
+      auto expected = multibyte_split(*source, delimiter);
+
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+
+      std::cout << host_input.substr(0, split1) << ' ' << host_input.substr(split1, split2 - split1)
+                << ' ' << host_input.substr(split2) << '\n';
+      cudf::test::print(out1->view());
+      cudf::test::print(out2->view());
+      cudf::test::print(out3->view());
+      cudf::test::print(expected->view());
+    }
+  }
+}
+
+TEST_F(MultibyteSplitTest, EmptyInput)
+{
+  using namespace cudf::io::text;
+  auto host_input = std::string();
+  auto delimiter  = std::string("::");
+  auto source     = make_source(host_input);
+  auto expected   = strings_column_wrapper{};
+
+  auto out = multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, EmptyInputSingleByte)
+{
+  using namespace cudf::io::text;
+  auto host_input = std::string();
+  auto delimiter  = std::string(":");
+  auto source     = make_source(host_input);
+  auto expected   = strings_column_wrapper{};
+
+  auto out = multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, EmptyRange)
+{
+  using namespace cudf::io::text;
+  auto host_input = std::string("ab::cd");
+  auto delimiter  = std::string("::");
+  auto source     = make_source(host_input);
+  auto expected   = strings_column_wrapper{};
+
+  auto out = multibyte_split(*source, delimiter, byte_range_info{4, 0});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, EmptyRangeSingleByte)
+{
+  using namespace cudf::io::text;
+  auto host_input = std::string("ab:cd");
+  auto delimiter  = std::string(":");
+  auto source     = make_source(host_input);
+  auto expected   = strings_column_wrapper{};
+
+  auto out = multibyte_split(*source, delimiter, byte_range_info{3, 0});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
