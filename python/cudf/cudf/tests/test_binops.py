@@ -856,7 +856,9 @@ def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
     if func == "rmod" or func == "rfloordiv":
         return
-    psr = pd.Series([True, False, False])
+    psr = pd.Series(
+        [True, False, False], dtype="boolean" if func == "floordiv" else None
+    )
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(
         getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False

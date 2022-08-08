@@ -250,7 +250,12 @@ class NumericalColumn(NumericalBaseColumn):
                     rhs, zero, "__eq__", np.dtype("bool")
                 )
 
-            elif isinstance(lhs, ColumnBase) and rhs == 0:
+            elif (
+                isinstance(lhs, ColumnBase)
+                and cudf.Scalar(rhs).is_valid()
+                and rhs == 0
+            ):
+
                 # TODO: this could be an earlystop
                 zero_mask = full(len(lhs), True, np.dtype("bool"))
                 zero_mask = libcudf.copying.boolean_mask_scatter(
