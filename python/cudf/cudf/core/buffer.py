@@ -21,6 +21,7 @@ import rmm
 
 import cudf
 from cudf.core.abc import Serializable
+from cudf.utils.string import format_bytes
 
 
 @runtime_checkable
@@ -247,6 +248,12 @@ class Buffer(Serializable):
             )
 
         return buf
+
+    def __repr__(self) -> str:
+        return (
+            f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
+            f"ptr={hex(self._ptr)} owner={repr(self._owner)} "
+        )
 
 
 def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
