@@ -59,7 +59,6 @@ def bench_pivot_table_simple(benchmark, dataframe):
     values = ["d", "e"]
     index = ["a", "b"]
     columns = ["c"]
-    print(dataframe.columns.names)
     benchmark(
         cudf.pivot_table,
         data=dataframe,

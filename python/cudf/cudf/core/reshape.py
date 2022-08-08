@@ -1175,7 +1175,7 @@ def _get_names(arrs, names, prefix: str = "row"):
                 names.append(f"{prefix}_{i}")
     else:
         if len(names) != len(arrs):
-            raise AssertionError("arrays and names must have the same length")
+            raise ValueError("arrays and names must have the same length")
         if not isinstance(names, list):
             names = list(names)
 
@@ -1264,9 +1264,9 @@ def crosstab(
     )
 
     if len(index) != len(rownames):
-        raise ValueError("'index' and 'rownames' must have same length")
+        raise ValueError("index and rownames must have same length")
     if len(columns) != len(colnames):
-        raise ValueError("'columns' and 'colnames' must have same length")
+        raise ValueError("columns and colnames must have same length")
 
     if len(set(rownames)) != len(rownames):
         raise ValueError("rownames must be unique")
@@ -1415,7 +1415,7 @@ def pivot_table(
         table = table.fillna(fill_value)
 
     # discard the top level
-    if values_passed and not values_multi and table.columns.nlevels > 1:
+    if values_passed and not values_multi and table._data.multiindex:
         column_names = table._data.level_names[1:]
         table_columns = tuple(
             map(lambda column: column[1:], table._data.names)

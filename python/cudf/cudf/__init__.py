@@ -150,6 +150,7 @@ __all__ = [
     "UInt8Index",
     "api",
     "concat",
+    "crosstab",
     "cut",
     "date_range",
     "describe_option",
@@ -164,6 +165,7 @@ __all__ = [
     "melt",
     "merge",
     "pivot",
+    "pivot_table",
     "read_avro",
     "read_csv",
     "read_feather",
@@ -178,6 +180,4 @@ __all__ = [
     "to_datetime",
     "to_numeric",
     "unstack",
-    "crosstab",
-    "pivot_table",
 ]
