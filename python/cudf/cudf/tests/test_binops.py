@@ -854,10 +854,11 @@ def test_logical_operator_func_dataframe(func, nulls, other):
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
-    if func == "rmod" or func == "rfloordiv":
+    if func == "rmod":
         return
     psr = pd.Series(
-        [True, False, False], dtype="boolean" if func == "floordiv" else None
+        [True, False, False],
+        dtype="boolean" if func in {"floordiv", "rfloordiv"} else None,
     )
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(
