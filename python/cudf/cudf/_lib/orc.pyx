@@ -103,7 +103,7 @@ cpdef read_orc(object filepaths_or_buffers,
     """
     cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
         filepaths_or_buffers,
-        columns or [],
+        columns,
         stripes or [],
         get_size_t_arg(skip_rows, "skip_rows"),
         get_size_t_arg(num_rows, "num_rows"),
@@ -159,6 +159,8 @@ cdef compression_type _get_comp_type(object compression):
         return compression_type.NONE
     elif compression == "snappy":
         return compression_type.SNAPPY
+    elif compression == "ZLIB":
+        return compression_type.ZLIB
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 
@@ -323,16 +325,11 @@ cdef orc_reader_options make_orc_reader_options(
     for i, datasource in enumerate(filepaths_or_buffers):
         if isinstance(datasource, NativeFile):
             filepaths_or_buffers[i] = NativeFileDatasource(datasource)
-    cdef vector[string] c_column_names
     cdef vector[vector[size_type]] strps = stripes
-    c_column_names.reserve(len(column_names))
-    for col in column_names:
-        c_column_names.push_back(str(col).encode())
     cdef orc_reader_options opts
     cdef source_info src = make_source_info(filepaths_or_buffers)
     opts = move(
         orc_reader_options.builder(src)
-        .columns(c_column_names)
         .stripes(strps)
         .skip_rows(skip_rows)
         .num_rows(num_rows)
@@ -340,6 +337,13 @@ cdef orc_reader_options make_orc_reader_options(
         .use_index(use_index)
         .build()
     )
+
+    cdef vector[string] c_column_names
+    if column_names is not None:
+        c_column_names.reserve(len(column_names))
+        for col in column_names:
+            c_column_names.push_back(str(col).encode())
+        opts.set_columns(c_column_names)
 
     return opts
 

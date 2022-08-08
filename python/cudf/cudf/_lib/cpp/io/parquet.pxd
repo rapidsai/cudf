@@ -16,13 +16,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_reader_options:
         parquet_reader_options() except +
         cudf_io_types.source_info get_source_info() except +
-        vector[string] get_columns() except +
         vector[vector[size_type]] get_row_groups() except +
         data_type get_timestamp_type() except +
         bool is_enabled_convert_strings_to_categories() except +
         bool is_enabled_use_pandas_metadata() except +
-        size_type get_skip_rows() except +
-        size_type get_num_rows() except +
 
         # setter
 
@@ -30,8 +27,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_row_groups(vector[vector[size_type]] row_grp) except +
         void enable_convert_strings_to_categories(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
-        void set_skip_rows(size_type val) except +
-        void set_num_rows(size_type val) except +
         void set_timestamp_type(data_type type) except +
 
         @staticmethod
@@ -56,8 +51,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& use_pandas_metadata(
             bool val
         ) except +
-        parquet_reader_options_builder& skip_rows(size_type val) except +
-        parquet_reader_options_builder& num_rows(size_type val) except +
         parquet_reader_options_builder& timestamp_type(
             data_type type
         ) except +

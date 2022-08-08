@@ -19,12 +19,14 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <sort/sort_impl.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/functional.h>
+#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
@@ -98,7 +100,7 @@ std::unique_ptr<table> sort(table_view const& input,
     return std::make_unique<table>(std::move(columns));
   }
   return detail::sort_by_key(
-    input, input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    input, input, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 }  // namespace detail
@@ -109,7 +111,7 @@ std::unique_ptr<column> sorted_order(table_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sorted_order(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+  return detail::sorted_order(input, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> sort(table_view const& input,
@@ -118,7 +120,7 @@ std::unique_ptr<table> sort(table_view const& input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+  return detail::sort(input, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
@@ -129,7 +131,7 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
 {
   CUDF_FUNC_RANGE();
   return detail::sort_by_key(
-    values, keys, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    values, keys, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

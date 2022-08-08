@@ -5,7 +5,6 @@
 import errno
 import io
 import os
-from collections import OrderedDict
 
 import pyarrow as pa
 
@@ -17,6 +16,7 @@ except ImportError:
     import json
 
 import numpy as np
+
 from cython.operator cimport dereference
 
 from cudf.api.types import (
@@ -38,6 +38,7 @@ from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
+from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -110,8 +111,21 @@ cdef class BufferArrayFromVector:
         pass
 
 
+def _parse_metadata(meta):
+    file_is_range_index = False
+    file_index_cols = None
+
+    if 'index_columns' in meta and len(meta['index_columns']) > 0:
+        file_index_cols = meta['index_columns']
+
+        if isinstance(file_index_cols[0], dict) and \
+                file_index_cols[0]['kind'] == 'range':
+            file_is_range_index = True
+    return file_is_range_index, file_index_cols
+
+
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   skiprows=None, num_rows=None, strings_to_categorical=False,
+                   strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -135,20 +149,14 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef vector[string] cpp_columns
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-    cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
-    cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
+
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
     )
 
-    if columns is not None:
-        cpp_columns.reserve(len(columns))
-        for col in columns or []:
-            cpp_columns.push_back(str(col).encode())
     if row_groups is not None:
         cpp_row_groups = row_groups
 
@@ -156,15 +164,20 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Setup parquet reader arguments
     args = move(
         parquet_reader_options.builder(source)
-        .columns(cpp_columns)
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
-        .skip_rows(cpp_skiprows)
-        .num_rows(cpp_num_rows)
         .timestamp_type(cpp_timestamp_type)
         .build()
     )
+    cdef vector[string] cpp_columns
+    allow_range_index = True
+    if columns is not None:
+        cpp_columns.reserve(len(columns))
+        allow_range_index = False
+        for col in columns:
+            cpp_columns.push_back(str(col).encode())
+        args.set_columns(cpp_columns)
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
@@ -174,25 +187,29 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
 
-    # Access the Parquet user_data json to find the index
+    # Access the Parquet per_file_user_data to find the index
     index_col = None
-    is_range_index = False
-    cdef map[string, string] user_data = c_out_table.metadata.user_data
-    json_str = user_data[b'pandas'].decode('utf-8')
-    meta = None
-    if json_str != "":
-        meta = json.loads(json_str)
-        if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
-                is_range_index = True
-            else:
-                index_col_names = OrderedDict()
+    cdef vector[unordered_map[string, string]] per_file_user_data = \
+        c_out_table.metadata.per_file_user_data
+
+    index_col_names = None
+    is_range_index = True
+    for single_file in per_file_user_data:
+        json_str = single_file[b'pandas'].decode('utf-8')
+        meta = None
+        if json_str != "":
+            meta = json.loads(json_str)
+            file_is_range_index, index_col = _parse_metadata(meta)
+            is_range_index &= file_is_range_index
+
+            if not file_is_range_index and index_col is not None \
+                    and index_col_names is None:
+                index_col_names = {}
                 for idx_col in index_col:
                     for c in meta['columns']:
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
+
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_out_table.tbl),
         column_names=column_names
@@ -218,7 +235,20 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
-            range_index_meta = index_col[0]
+            if not allow_range_index:
+                return df
+
+            if len(per_file_user_data) > 1:
+                range_index_meta = {
+                    "kind": "range",
+                    "name": None,
+                    "start": 0,
+                    "stop": len(df),
+                    "step": 1
+                }
+            else:
+                range_index_meta = index_col[0]
+
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
@@ -258,10 +288,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
-                if skiprows is not None:
-                    idx = idx[skiprows:]
-                if num_rows is not None:
-                    idx = idx[:num_rows]
+
             df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]

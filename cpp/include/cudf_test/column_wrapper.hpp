@@ -28,6 +28,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -169,7 +170,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), rmm::cuda_stream_default};
+  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), cudf::default_stream_value};
 }
 
 /**
@@ -195,7 +196,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::default_stream_value};
 }
 
 /**
@@ -222,7 +223,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::default_stream_value};
 }
 
 /**
@@ -270,7 +271,7 @@ rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
   auto null_mask = make_null_mask_vector(begin, end);
   return rmm::device_buffer{null_mask.data(),
                             null_mask.size() * sizeof(decltype(null_mask.front())),
-                            rmm::cuda_stream_default};
+                            cudf::default_stream_value};
 }
 
 /**
@@ -546,7 +547,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default}});
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::default_stream_value}});
   }
 
   /**
@@ -610,7 +611,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default},
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::default_stream_value},
       detail::make_null_mask(v, v + size),
       cudf::UNKNOWN_NULL_COUNT});
   }

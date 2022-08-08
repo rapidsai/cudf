@@ -13,7 +13,7 @@ from cudf._lib.lists import (
     concatenate_rows,
     contains_scalar,
     count_elements,
-    drop_list_duplicates,
+    distinct,
     extract_element_column,
     extract_element_scalar,
     index_of_column,
@@ -70,9 +70,9 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[0][
-                current_offset
-            ]
+            current_offset = current_base_child.base_children[
+                0
+            ].element_indexing(current_offset)
             n += child0_size
             current_base_child = current_base_child.base_children[1]
 
@@ -603,9 +603,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            drop_list_duplicates(
-                self._column, nulls_equal=True, nans_all_equal=True
-            )
+            distinct(self._column, nulls_equal=True, nans_all_equal=True)
         )
 
     def sort_values(

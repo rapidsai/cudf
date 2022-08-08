@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 namespace nvtext {
 
@@ -45,7 +46,7 @@ struct bpe_merge_pairs {
    * @param mr Device memory resource used to allocate the device memory
    */
   bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -56,7 +57,7 @@ struct bpe_merge_pairs {
    * @param mr Device memory resource used to allocate the device memory
    */
   bpe_merge_pairs(cudf::strings_column_view const& input,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();

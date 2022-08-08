@@ -26,6 +26,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -159,7 +160,7 @@ std::unique_ptr<column> filter_characters(
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters(
-    strings, characters_to_filter, keep_characters, replacement, rmm::cuda_stream_default, mr);
+    strings, characters_to_filter, keep_characters, replacement, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

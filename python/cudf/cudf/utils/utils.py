@@ -212,7 +212,7 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
-    use_managed_memory = True if allocator == "managed" else False
+    use_managed_memory = allocator == "managed"
 
     rmm.reinitialize(
         pool_allocator=pool,

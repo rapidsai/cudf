@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -213,7 +214,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, sizes, rmm::cuda_stream_default, mr);
+  return detail::sequences(starts, sizes, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
@@ -222,7 +223,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, steps, sizes, rmm::cuda_stream_default, mr);
+  return detail::sequences(starts, steps, sizes, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf::lists

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -967,4 +967,49 @@ TEST_F(JsonPathTests, EscapeSequences)
     // clang-format on
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
+}
+
+TEST_F(JsonPathTests, MissingFieldsAsNulls)
+{
+  std::string input_string{
+    // clang-format off
+    "{"
+      "\"tup\":"
+      "["
+          "{\"id\":\"1\",\"array\":[1,2]},"
+          "{\"id\":\"2\"},"
+          "{\"id\":\"3\",\"array\":[3,4]},"
+          "{\"id\":\"4\", \"a\": {\"x\": \"5\", \"y\": \"6\"}}"
+      "]"
+    "}"
+    // clang-format on
+  };
+  auto do_test = [&input_string](auto const& json_path_string,
+                                 auto const& default_output,
+                                 auto const& missing_fields_output,
+                                 bool default_valid = true) {
+    cudf::test::strings_column_wrapper input{input_string};
+    cudf::strings::get_json_object_options options;
+
+    // Test default behavior
+    options.set_missing_fields_as_nulls(false);
+    auto const default_result =
+      cudf::strings::get_json_object(cudf::strings_column_view(input), {json_path_string}, options);
+    cudf::test::strings_column_wrapper default_expected({default_output}, {default_valid});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(default_expected, *default_result);
+
+    // Test with missing fields as null
+    options.set_missing_fields_as_nulls(true);
+    auto const missing_fields_result =
+      cudf::strings::get_json_object(cudf::strings_column_view(input), {json_path_string}, options);
+    cudf::test::strings_column_wrapper missing_fields_expected({missing_fields_output}, {1});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(missing_fields_expected, *missing_fields_result);
+  };
+
+  do_test("$.tup[1].array", "", "null", false);
+  do_test("$.tup[*].array", "[[1,2],[3,4]]", "[[1,2],null,[3,4],null]");
+  do_test("$.x[*].array", "", "null", false);
+  do_test("$.tup[*].a.x", "[\"5\"]", "[null,null,null,\"5\"]");
 }

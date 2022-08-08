@@ -22,10 +22,12 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -399,7 +401,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::mr::device_memory_resource* mr)
 {
-  return percentile_approx(input, percentiles, rmm::cuda_stream_default, mr);
+  return percentile_approx(input, percentiles, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -21,7 +21,7 @@ cuDF provides a pandas-like API that will be familiar to data engineers & data s
 
 For example, the following snippet downloads a CSV, then uses the GPU to parse it into rows and columns and run calculations:
 ```python
-import cudf, io, requests
+import cudf, requests
 from io import StringIO
 
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"
@@ -69,11 +69,11 @@ For `cudf version == 22.06` :
 ```bash
 # for CUDA 11.0
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=21.08 python=3.9 cudatoolkit=11.0
+    cudf=22.06 python=3.9 cudatoolkit=11.0
 
 # or, for CUDA 11.2
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=21.08 python=3.9 cudatoolkit=11.2
+    cudf=22.06 python=3.9 cudatoolkit=11.2
 
 ```
 

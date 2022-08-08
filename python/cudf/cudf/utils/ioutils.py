@@ -150,10 +150,6 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-skiprows : int, default None
-    If not None, the number of rows to skip from the start of the file.
-num_rows : int, default None
-    If not None, the total number of rows to read.
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
@@ -425,7 +421,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', None }}, default None
+compression : {{ 'snappy', 'ZLIB', None }}, default None
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
@@ -463,7 +459,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'cudf_experimental', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters.
 orient : string,

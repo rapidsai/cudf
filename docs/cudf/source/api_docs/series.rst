@@ -18,6 +18,7 @@ Attributes
 .. autosummary::
    :toctree: api/
 
+   Series.axes
    Series.index
    Series.values
    Series.data
@@ -184,13 +185,17 @@ Missing data handling
 .. autosummary::
    :toctree: api/
 
+   Series.backfill
+   Series.bfill
    Series.dropna
+   Series.ffill
    Series.fillna
    Series.isna
    Series.isnull
    Series.nans_to_nulls
    Series.notna
    Series.notnull
+   Series.pad
    Series.replace
 
 Reshaping, sorting
@@ -199,11 +204,9 @@ Reshaping, sorting
    :toctree: api/
 
    Series.argsort
-   Series.interleave_columns
    Series.sort_values
    Series.sort_index
    Series.explode
-   Series.scatter_by_map
    Series.searchsorted
    Series.repeat
    Series.transpose

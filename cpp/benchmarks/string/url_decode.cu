@@ -24,6 +24,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -90,7 +91,7 @@ void BM_url_decode(benchmark::State& state, int esc_seq_pct)
   auto strings_view = cudf::strings_column_view(column->view());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::strings::url_decode(strings_view);
   }
 

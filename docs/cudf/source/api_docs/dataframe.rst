@@ -18,6 +18,7 @@ Attributes and underlying data
 .. autosummary::
    :toctree: api/
 
+   DataFrame.axes
    DataFrame.index
    DataFrame.columns
 
@@ -186,7 +187,10 @@ Missing data handling
 .. autosummary::
    :toctree: api/
 
+   DataFrame.backfill
+   DataFrame.bfill
    DataFrame.dropna
+   DataFrame.ffill
    DataFrame.fillna
    DataFrame.interpolate
    DataFrame.isna
@@ -194,6 +198,7 @@ Missing data handling
    DataFrame.nans_to_nulls
    DataFrame.notna
    DataFrame.notnull
+   DataFrame.pad
    DataFrame.replace
 
 Reshaping, sorting, transposing

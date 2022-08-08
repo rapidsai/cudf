@@ -22,6 +22,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -126,7 +127,7 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
 {
   CUDF_FUNC_RANGE();
   return detail::lower_bound(
-    haystack, needles, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& haystack,
@@ -137,7 +138,7 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
 {
   CUDF_FUNC_RANGE();
   return detail::upper_bound(
-    haystack, needles, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

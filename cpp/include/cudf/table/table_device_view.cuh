@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -38,14 +39,17 @@ namespace detail {
  * @brief Base class for a device table of `ColumnDeviceView`s
  *
  * This class should not be used directly. Instead:
- * -`table_device_view` should be used for a table of `column_device_view`s
- * -`mutable_table_device_view` should be used for a table of `mutable_column__device_view`s
+ * - `table_device_view` should be used for a table of columns of type `column_device_view`
+ * - `mutable_table_device_view` should be used for a table of columns of type
+ * `mutable_column_device_view`
  *
  * All public constructors and member functions of `table_device_view_base` are
  * available in both `table_device_view` and `mutable_table_device_view`.
  *
- * @tparam ColumnDeviceView The type of column device view the table contains
- * @tparam HostTableView The type of table view used to create the table device view
+ * @tparam ColumnDeviceView The type of column device view the table contains:
+ *                          expects column_device_view or mutable_column_device_view
+ * @tparam HostTableView The type of table view used to create the table device view:
+ *                       expects table_view or mutable_table_view
  */
 template <typename ColumnDeviceView, typename HostTableView>
 class table_device_view_base {
@@ -171,7 +175,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
    * available in device memory
    */
   static auto create(table_view source_view,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                     rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     auto deleter = [](table_device_view* t) { t->destroy(); };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
@@ -208,7 +212,7 @@ class mutable_table_device_view
    * available in device memory
    */
   static auto create(mutable_table_view source_view,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                     rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{

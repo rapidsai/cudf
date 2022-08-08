@@ -25,6 +25,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -37,7 +38,7 @@
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
   cudf::size_type size() { return cudf::size_type(100); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
@@ -92,7 +93,7 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
   auto primitive_col =
     fixed_width_column_wrapper<Rep>(chrono_col_data.begin(), chrono_col_data.end());
 
-  rmm::device_uvector<int32_t> indices(this->size(), rmm::cuda_stream_default);
+  rmm::device_uvector<int32_t> indices(this->size(), cudf::default_stream_value);
   thrust::sequence(rmm::exec_policy(), indices.begin(), indices.end());
   EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
                              indices.begin(),
@@ -146,7 +147,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
   auto chrono_rhs_col =
     generate_timestamps<T>(this->size(), time_point_ms(start_rhs), time_point_ms(stop_rhs));
 
-  rmm::device_uvector<int32_t> indices(this->size(), rmm::cuda_stream_default);
+  rmm::device_uvector<int32_t> indices(this->size(), cudf::default_stream_value);
   thrust::sequence(rmm::exec_policy(), indices.begin(), indices.end());
 
   EXPECT_TRUE(thrust::all_of(
