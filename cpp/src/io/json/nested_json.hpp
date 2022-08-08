@@ -20,6 +20,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -119,7 +120,7 @@ struct json_column {
   std::vector<row_offset_t> child_offsets;
 
   // Validity bitmap
-  std::vector<bool> validity;
+  std::vector<bitmask_type> validity;
   row_offset_t valid_count = 0;
 
   // Map of child columns, if applicable.
@@ -138,7 +139,7 @@ struct json_column {
   void null_fill(row_offset_t up_to_row_offset)
   {
     // Fill all the rows up to up_to_row_offset with "empty"/null rows
-    std::fill_n(std::back_inserter(validity), up_to_row_offset - string_offsets.size(), false);
+    validity.resize(word_index(up_to_row_offset) + 1);
     std::fill_n(std::back_inserter(string_offsets),
                 up_to_row_offset - string_offsets.size(),
                 (string_offsets.size() > 0) ? string_offsets.back() : 0);

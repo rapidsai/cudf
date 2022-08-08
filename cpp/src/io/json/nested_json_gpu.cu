@@ -26,6 +26,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <iterator>
@@ -845,10 +846,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     [stream, mr](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
     if (json_col.current_offset == json_col.valid_count) { return {rmm::device_buffer{}, 0}; }
 
-    thrust::device_vector<json_column::row_offset_t> d_validity(
-      json_col.validity);  // TODO device_uvector.
-    return cudf::detail::valid_if(
-      d_validity.begin(), d_validity.end(), thrust::identity<bool>{}, stream, mr);
+    return {rmm::device_buffer{json_col.validity.data(),
+                               bitmask_allocation_size_bytes(json_col.current_offset),
+                               stream,
+                               mr},
+            json_col.current_offset - json_col.valid_count};
   };
 
   switch (json_col.type) {
@@ -1116,7 +1118,9 @@ json_column get_json_columns(host_span<SymbolT const> input,
     // String   | Struct    => null
     // String   | String    => valid
     bool const is_valid = (column->type == row_type);
-    column->validity.push_back(is_valid);
+    if (static_cast<size_type>(column->validity.size()) < word_index(column->current_offset))
+      column->validity.push_back({});
+    set_bit_unsafe(&column->validity.back(), intra_word_index(column->current_offset));
     column->valid_count += (is_valid) ? 1U : 0U;
     column->string_offsets.push_back(string_offset);
     column->string_lengths.push_back(string_end - string_offset);
