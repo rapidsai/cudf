@@ -18,10 +18,9 @@
 
 #include "parquet.hpp"
 
-#include <thrust/optional.h>
-
 #include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -264,10 +263,10 @@ class ParquetFieldInt32 {
  */
 class ParquetFieldOptionalInt32 {
   int field_val;
-  thrust::optional<int32_t>& val;
+  std::optional<int32_t>& val;
 
  public:
-  ParquetFieldOptionalInt32(int f, thrust::optional<int32_t>& v) : field_val(f), val(v) {}
+  ParquetFieldOptionalInt32(int f, std::optional<int32_t>& v) : field_val(f), val(v) {}
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {

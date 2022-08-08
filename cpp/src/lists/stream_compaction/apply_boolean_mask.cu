@@ -30,6 +30,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/reduce.h>
+#include <thrust/scan.h>
 
 namespace cudf::lists {
 namespace detail {
