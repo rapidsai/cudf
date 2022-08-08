@@ -452,7 +452,7 @@ cdef class Column:
 
         size = c_col.get()[0].size()
         dtype = dtype_from_column_view(c_col.get()[0].view())
-        has_nulls = c_col.get()[0].has_nulls()
+        null_count = c_col.get()[0].null_count()
 
         # After call to release(), c_col is unusable
         cdef column_contents contents = move(c_col.get()[0].release())
@@ -460,13 +460,11 @@ cdef class Column:
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
         data = as_device_buffer_like(data)
 
-        if has_nulls:
+        if null_count > 0:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
             mask = as_device_buffer_like(mask)
-            null_count = c_col.get()[0].null_count()
         else:
             mask = None
-            null_count = 0
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
         children = ()

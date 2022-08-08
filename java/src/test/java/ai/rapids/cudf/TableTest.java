@@ -78,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
+  private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
@@ -563,6 +564,19 @@ public class TableTest extends CudfTestBase {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
       assertTableTypes(new DType[]{DType.INT64, DType.INT32, DType.INT32}, table);
+    }
+  }
+
+  @Test
+  void testReadParquetBinary() {
+    ParquetOptions opts = ParquetOptions.builder()
+        .includeColumn("value1", true)
+        .includeColumn("value2", false)
+        .build();
+    try (Table table = Table.readParquet(opts, TEST_PARQUET_FILE_BINARY)) {
+      assertTableTypes(new DType[]{DType.LIST, DType.STRING}, table);
+      ColumnView columnView = table.getColumn(0);
+      assertEquals(DType.INT8, columnView.getChildColumnView(0).getType());
     }
   }
 
