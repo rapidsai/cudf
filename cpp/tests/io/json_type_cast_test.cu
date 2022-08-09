@@ -35,11 +35,11 @@ struct JSONTypeCastTest : public cudf::test::BaseFixture {
 };
 
 namespace {
-using string_pair = thrust::pair<char const*, cudf::size_type>;
-struct string_view_only {
-  __device__ cudf::string_view operator()(thrust::pair<cudf::string_view, bool> const& p)
+struct to_thrust_pair_fn {
+  __device__ thrust::pair<const char*, cudf::size_type> operator()(
+    thrust::pair<cudf::string_view, bool> const& p)
   {
-    return p.first;
+    return {p.first.data(), p.first.size_bytes()};
   }
 };
 }  // namespace
@@ -47,24 +47,19 @@ struct string_view_only {
 TEST_F(JSONTypeCastTest, RealBasic)
 {
   auto const stream = rmm::cuda_stream_default;
-  std::vector<cudf::data_type> types{cudf::data_type{cudf::type_id::INT32}};
+  auto const type   = cudf::data_type{cudf::type_id::STRING};
 
   cudf::test::strings_column_wrapper data({"this", "is", "a", "column", "of", "strings"});
   auto d_column = cudf::column_device_view::create(data);
-  rmm::device_uvector<cudf::string_view> svs(d_column->size(), rmm::cuda_stream_default);
+  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
-                    svs.data(),
-                    string_view_only{});
+                    svs.begin(),
+                    to_thrust_pair_fn{});
 
-  std::vector<cudf::string_view*> str_spans{svs.data()};
-  auto d_str_spans = cudf::detail::make_device_uvector_async(str_spans, stream);
-  std::vector<cudf::size_type> col_size{(cudf::size_type)svs.size()};
-  auto d_col_size = cudf::detail::make_device_uvector_async(col_size, stream);
-
-  cudf::io::json::experimental::parse_data<cudf::string_view**, cudf::size_type*>(
-    d_str_spans.data(), d_col_size.data(), types, rmm::cuda_stream_default);
+  auto column = cudf::io::json::experimental::parse_data(svs.data(), svs.size(), type, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(column->view(), data);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

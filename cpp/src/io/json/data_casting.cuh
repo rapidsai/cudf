@@ -18,16 +18,34 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <memory>
-#include <vector>
 
 namespace cudf::io::json::experimental {
 
-template <typename str_spans_it_it, typename col_size_it>
-std::vector<std::unique_ptr<column>> parse_data(str_spans_it_it cols_str_spans,
-                                                col_size_it cols_size,
-                                                host_span<data_type const> cols_type,
-                                                rmm::cuda_stream_view stream);
-
+template <typename str_tuple_it>
+rmm::device_uvector<thrust::pair<const char*, size_type>> coalesce_input(
+  str_tuple_it str_tuples, size_type col_size, rmm::cuda_stream_view stream)
+{
+  auto result = rmm::device_uvector<thrust::pair<const char*, size_type>>(col_size, stream);
+  thrust::copy_n(rmm::exec_policy(stream), str_tuples, col_size, result.begin());
+  return result;
 }
+
+template <typename str_tuple_it>
+std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
+                                   size_type col_size,
+                                   data_type col_type,
+                                   rmm::cuda_stream_view stream)
+{
+  if (col_type == cudf::data_type{cudf::type_id::STRING}) {
+    auto const strings_span = coalesce_input(str_tuples, col_size, stream);
+    return make_strings_column(strings_span, stream);
+  } else {
+    CUDF_FAIL("Type conversion not implemented");
+    // full version: use existing code (`ConvertFunctor`) to convert values
+  }
+}
+
+}  // namespace cudf::io::json::experimental
