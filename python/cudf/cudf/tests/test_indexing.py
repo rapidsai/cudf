@@ -668,6 +668,20 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[np.array([0])], pdf.loc[np.array([0])])
 
 
+def test_dataframe_iloc_single_row_downcast():
+    # checks to make sure a single row is downcast to a series
+    # even if the resulting dtype has to be string
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    pdf = gdf.to_pandas()
+
+    got = gdf.iloc[0]
+    expect = pdf.iloc[0]
+    # at this point expect is object dtype and contains an int and a string[
+    expect = expect.map(str)
+
+    assert_eq(expect, got)
+
+
 def test_dataframe_iloc_tuple():
     gdf = cudf.DataFrame()
     nelem = 123

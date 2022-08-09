@@ -176,8 +176,10 @@ class _DataFrameIndexer(_FrameIndexer):
                 ):
                     return True
             dtypes = df.dtypes.values.tolist()
-            all_numeric = all(is_numeric_dtype(t) for t in dtypes)
-            if all_numeric:
+            transposeable = all(
+                is_numeric_dtype(t) or is_string_dtype(t) for t in dtypes
+            )
+            if transposeable:
                 return True
         if ncols == 1:
             if type(arg[1]) is slice:
