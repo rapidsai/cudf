@@ -1162,7 +1162,7 @@ def _length_check_params(obj, columns, name):
             )
 
 
-def _get_names(arrs, names, prefix: str = "row"):
+def _get_pivot_names(arrs, names, prefix):
     """
     Generates unique names for rows/columns
     """
@@ -1189,10 +1189,10 @@ def crosstab(
     rownames=None,
     colnames=None,
     aggfunc=None,
-    margins=None,
-    margins_name=None,
+    margins=False,
+    margins_name="All",
     dropna=None,
-    normalize=None,
+    normalize=False,
 ):
     """
     Compute a simple cross tabulation of two (or more) factors. By default
@@ -1208,9 +1208,9 @@ def crosstab(
     values : array-like, optional
         Array of values to aggregate according to the factors.
         Requires `aggfunc` be specified.
-    rownames : sequence, default None
+    rownames : list of str, default None
         If passed, must match number of row arrays passed.
-    colnames : sequence, default None
+    colnames : list of str, default None
         If passed, must match number of column arrays passed.
     aggfunc : function, optional
         If specified, requires `values` be specified as well.
@@ -1240,7 +1240,7 @@ def crosstab(
     bar    1     2    1     0
     foo    2     2    1     2
     """
-    if normalize is not None:
+    if normalize is not False:
         raise NotImplementedError("normalize is not supported yet")
 
     if values is None and aggfunc is not None:
@@ -1249,16 +1249,18 @@ def crosstab(
     if values is not None and aggfunc is None:
         raise ValueError("values cannot be used without an aggfunc.")
 
-    if not cudf.api.types.is_nested_list_like(index):
+    if not isinstance(index, (list, tuple)):
         index = [index]
-    if not cudf.api.types.is_nested_list_like(columns):
+    if not isinstance(columns, (list, tuple)):
         columns = [columns]
 
     rownames = (
-        _get_names(index, rownames, prefix="row") if not rownames else rownames
+        _get_pivot_names(index, rownames, prefix="row")
+        if not rownames
+        else rownames
     )
     colnames = (
-        _get_names(columns, colnames, prefix="col")
+        _get_pivot_names(columns, colnames, prefix="col")
         if not colnames
         else colnames
     )
@@ -1308,11 +1310,11 @@ def pivot_table(
     columns=None,
     aggfunc="mean",
     fill_value=None,
-    margins=None,
+    margins=False,
     dropna=None,
-    margins_name=None,
-    observed=None,
-    sort=None,
+    margins_name="All",
+    observed=False,
+    sort=True,
 ):
     """
     Create a spreadsheet-style pivot table as a DataFrame.
@@ -1342,19 +1344,19 @@ def pivot_table(
     DataFrame
         An Excel style pivot table.
     """
-    if margins is not None:
+    if margins is not False:
         raise NotImplementedError("margins is not supported yet")
 
-    if margins_name is not None:
+    if margins_name != "All":
         raise NotImplementedError("margins_name is not supported yet")
 
     if dropna is not None:
         raise NotImplementedError("dropna is not supported yet")
 
-    if observed is not None:
+    if observed is not False:
         raise NotImplementedError("observed is not supported yet")
 
-    if sort is not None:
+    if sort is not True:
         raise NotImplementedError("sort is not supported yet")
 
     keys = index + columns

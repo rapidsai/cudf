@@ -549,7 +549,7 @@ def test_pivot_duplicate_error():
 @pytest.mark.parametrize("fill_value", [0])
 def test_pivot_table_simple(data, aggfunc, fill_value):
     pdf = pd.DataFrame(data)
-    ref = pd.pivot_table(
+    expected = pd.pivot_table(
         pdf,
         values=["D", "E"],
         index=["A", "B"],
@@ -558,7 +558,7 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
         fill_value=fill_value,
     )
     cdf = cudf.DataFrame(data)
-    res = cudf.pivot_table(
+    actual = cudf.pivot_table(
         cdf,
         values=["D", "E"],
         index=["A", "B"],
@@ -566,7 +566,7 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
         aggfunc=aggfunc,
         fill_value=fill_value,
     )
-    assert_eq(ref, res, check_dtype=False)
+    assert_eq(expected, actual, check_dtype=False)
 
 
 def test_crosstab_simple():
@@ -618,6 +618,6 @@ def test_crosstab_simple():
         ],
         dtype=object,
     )
-    ref = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
-    res = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
-    assert_eq(ref, res, check_dtype=False)
+    expected = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
+    actual = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
+    assert_eq(expected, actual, check_dtype=False)
