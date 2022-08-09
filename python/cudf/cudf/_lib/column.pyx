@@ -110,18 +110,9 @@ cdef class Column:
         if self.base_data is None:
             return None
         if self._data is None:
-            itemsize = self.dtype.itemsize
-            size = self.size * itemsize
-            offset = self.offset * itemsize if self.size else 0
-            if offset == 0 and self.base_data.size == size:
-                # `data` spans all of `base_data`
-                self._data = self.base_data
-            else:
-                self._data = as_device_buffer_like(
-                    obj=self.base_data,
-                    size=size,
-                    offset=offset
-                )
+            start = self.offset * self.dtype.itemsize
+            end = start + self.size * self.dtype.itemsize
+            self._data = self.base_data[start:end]
         return self._data
 
     @property

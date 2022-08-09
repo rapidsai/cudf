@@ -66,3 +66,21 @@ def test_buffer_repr(size, expect):
     ary = cp.arange(size, dtype="uint8")
     buf = as_device_buffer_like(ary)
     assert f"size={expect}" in repr(buf)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        2,
+        -2,
+        slice(0, 0),
+        slice(0, 1),
+        slice(0, arr_len),
+        slice(2, 3),
+        slice(2, -1),
+    ],
+)
+def test_buffer_slice(idx):
+    ary = cp.arange(arr_len, dtype="uint8")
+    buf = as_device_buffer_like(ary)
+    assert (ary[idx] == buf[idx]).all()

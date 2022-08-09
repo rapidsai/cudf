@@ -425,19 +425,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # This assertion prevents mypy errors below.
             assert self.base_data is not None
 
-            # If the view spans all of `base_data`, we return `base_data`.
-            if (
-                self.offset == 0
-                and self.base_data.size == self.size * self.dtype.itemsize
-            ):
-                view_buf = self.base_data
-            else:
-                view_buf = as_device_buffer_like(
-                    obj=self.base_data,
-                    size=self.size * self.dtype.itemsize,
-                    offset=self.offset * self.dtype.itemsize,
-                )
-            return build_column(view_buf, dtype=dtype)
+            start = self.offset * self.dtype.itemsize
+            end = start + self.size * self.dtype.itemsize
+            return build_column(self.base_data[start:end], dtype=dtype)
 
     def element_indexing(self, index: int):
         """Default implementation for indexing to an element
