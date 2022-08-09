@@ -35,7 +35,7 @@ function(find_and_configure_thrust VERSION)
   #
   include(GNUInstallDirs)
   set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
-  set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
+  set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_LIBDIR}/libcudf")
 
   set(CPM_DOWNLOAD_ALL TRUE)
   rapids_cpm_find(
@@ -58,7 +58,7 @@ function(find_and_configure_thrust VERSION)
     # Store where CMake can find our custom Thrust install
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(
-      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/cmake/thrust/]=]
+      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../lib/libcudf/cmake/thrust/]=]
       cudf-exports
     )
   endif()
