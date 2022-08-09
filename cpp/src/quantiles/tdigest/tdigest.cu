@@ -358,7 +358,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<offset_type>());
 
-  if (percentiles.size() == 0) {
+  if (percentiles.size() == 0 || empty_input) {
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
@@ -388,8 +388,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   return cudf::make_lists_column(
     input.size(),
     std::move(offsets),
-    empty_input ? cudf::make_empty_column(type_id::FLOAT64)
-                : tdigest::compute_approx_percentiles(input, percentiles, stream, mr),
+    tdigest::compute_approx_percentiles(input, percentiles, stream, mr),
     null_count,
     std::move(bitmask),
     stream,
