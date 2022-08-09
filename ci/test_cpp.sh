@@ -37,6 +37,7 @@ for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
 done
 set -e
 
+CODECOV_TOKEN="${CODECOV_TOKEN:-}"
 if [ -n "${CODECOV_TOKEN}" ]; then
     codecov -t "${CODECOV_TOKEN}"
 fi
