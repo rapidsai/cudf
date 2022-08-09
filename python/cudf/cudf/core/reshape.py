@@ -1226,11 +1226,11 @@ def crosstab(
 
     Examples
     --------
-    >>> a = np.array(["foo", "foo", "foo", "foo", "bar", "bar",
+    >>> a = cudf.Series(["foo", "foo", "foo", "foo", "bar", "bar",
     ...               "bar", "bar", "foo", "foo", "foo"], dtype=object)
-    >>> b = np.array(["one", "one", "one", "two", "one", "one",
+    >>> b = cudf.Series(["one", "one", "one", "two", "one", "one",
     ...               "one", "two", "two", "two", "one"], dtype=object)
-    >>> c = np.array(["dull", "dull", "shiny", "dull", "dull", "shiny",
+    >>> c = cudf.Series(["dull", "dull", "shiny", "dull", "dull", "shiny",
     ...               "shiny", "dull", "shiny", "shiny", "shiny"],
     ...              dtype=object)
     >>> cudf.crosstab(a, [b, c], rownames=['a'], colnames=['b', 'c'])
@@ -1249,9 +1249,9 @@ def crosstab(
     if values is not None and aggfunc is None:
         raise ValueError("values cannot be used without an aggfunc.")
 
-    if not pd.core.dtypes.inference.is_nested_list_like(index):
+    if not cudf.api.types.is_nested_list_like(index):
         index = [index]
-    if not pd.core.dtypes.inference.is_nested_list_like(columns):
+    if not cudf.api.types.is_nested_list_like(columns):
         columns = [columns]
 
     rownames = (

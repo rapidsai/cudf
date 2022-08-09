@@ -177,6 +177,25 @@ def is_list_like(obj):
     )
 
 
+def is_nested_list_like(obj):
+    """
+    Check if the object is list-like, and that all of its elements
+    are also list-like.
+
+    Parameters
+    ----------
+    obj : The object to check
+
+    Returns
+    -------
+        bool
+        Whether `obj` has list-like properties.
+    """
+    if isinstance(obj, cudf.Series):
+        obj = obj.values_host
+    return pd.core.dtypes.inference.is_nested_list_like(obj)
+
+
 # These methods are aliased directly into this namespace, but can be modified
 # later if we determine that there is a need.
 
