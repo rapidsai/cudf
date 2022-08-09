@@ -60,6 +60,9 @@ ipython_mplbackend = "str"
 
 html_use_modindex = True
 
+# Enable automatic generation of systematic, namespaced labels for sections
+myst_heading_anchors = 2
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
@@ -269,7 +272,7 @@ nitpick_ignore = [("py:class", "SeriesOrIndex"),]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
-    app.add_js_file("https://docs.rapids.ai/assets/js/custom.js")
+    app.add_js_file("https://docs.rapids.ai/assets/js/custom.js", loading_method="defer")
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", ignore_internal_references)
     app.connect("autodoc-process-docstring", process_class_docstrings)

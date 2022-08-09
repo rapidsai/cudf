@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
