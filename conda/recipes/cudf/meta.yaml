@@ -44,6 +44,7 @@ requirements:
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
+    - cuda-nvtx {{ cuda_version }}.*
   run:
     - protobuf>=3.20.1,<3.21.0a0
     - python
