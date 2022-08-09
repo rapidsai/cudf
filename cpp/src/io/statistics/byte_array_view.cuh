@@ -28,7 +28,7 @@ namespace cudf::io::statistics {
  */
 class byte_array_view {
  public:
-  using element_type = uint8_t const;  ///< The type of the elements in the byte array
+  using element_type = std::byte const;  ///< The type of the elements in the byte array
 
   constexpr byte_array_view() noexcept {}
   /**
