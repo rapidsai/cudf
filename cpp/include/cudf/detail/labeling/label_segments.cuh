@@ -85,22 +85,23 @@ void label_segments(InputIterator offsets_begin,
   // very large segment.
   if (thrust::distance(offsets_begin, offsets_end) <= 2) { return; }
 
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    offsets_begin + 1,  // exclude the first offset value
-    offsets_end - 1,    // exclude the last offset value
-    [num_labels, offsets = offsets_begin, output = label_begin] __device__(auto const idx) {
-      // Zero-normalized offsets.
-      auto const dst_idx = idx - (*offsets);
+  thrust::for_each(rmm::exec_policy(stream),
+                   offsets_begin + 1,  // exclude the first offset value
+                   offsets_end - 1,    // exclude the last offset value
+                   [num_labels = static_cast<size_type>(num_labels),
+                    offsets    = offsets_begin,
+                    output     = label_begin] __device__(auto const idx) {
+                     // Zero-normalized offsets.
+                     auto const dst_idx = idx - (*offsets);
 
-      // Scatter value `1` to the index at (idx - offsets[0]).
-      // Note that we need to check for out of bound, since the offset values may be invalid due to
-      // empty segments at the end.
-      // In case we have repeated offsets (i.e., we have empty segments), this `atomicAdd` call will
-      // make sure the label values corresponding to these empty segments will be skipped in the
-      // output.
-      if (dst_idx < num_labels) { atomicAdd(&output[dst_idx], OutputType{1}); }
-    });
+                     // Scatter value `1` to the index at (idx - offsets[0]).
+                     // Note that we need to check for out of bound, since the offset values may be
+                     // invalid due to empty segments at the end.
+                     // In case we have repeated offsets (i.e., we have empty segments), this
+                     // `atomicAdd` call will make sure the label values corresponding to these
+                     // empty segments will be skipped in the output.
+                     if (dst_idx < num_labels) { atomicAdd(&output[dst_idx], OutputType{1}); }
+                   });
   thrust::inclusive_scan(rmm::exec_policy(stream), label_begin, label_end, label_begin);
 }
 
