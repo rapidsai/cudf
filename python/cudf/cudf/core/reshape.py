@@ -266,7 +266,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         index=cudf.RangeIndex(len(obj)),
                     )
         else:
-            result = obj.copy()
+            if axis == 0:
+                result = obj.copy()
+            else:
+                data = obj._data.copy(deep=True)
+                if isinstance(obj, cudf.Series) and obj.name is None:
+                    # If the Series has no name, pandas renames it to 0.
+                    data[0] = data.pop(None)
+                result = cudf.DataFrame._from_data(data)
 
         return result.sort_index(axis=axis) if sort else result
 
@@ -672,7 +679,7 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-    null  1  2  4
+       null  1  2  4
     0     0  1  0  0
     1     0  0  1  0
     2     1  0  0  0

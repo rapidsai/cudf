@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-set(cudf_version 22.08.00)
+set(cudf_version 22.10.00)
 
 include(../../fetch_rapids.cmake)
 

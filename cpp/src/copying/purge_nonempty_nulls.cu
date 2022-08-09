@@ -17,6 +17,7 @@
 #include <cudf/detail/copy.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {

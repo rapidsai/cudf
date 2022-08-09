@@ -21,7 +21,12 @@ from dask.highlevelgraph import HighLevelGraph
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
-SUPPORTED_AGGS = (
+CUMULATIVE_AGGS = (
+    "cumsum",
+    "cumcount",
+)
+
+AGGS = (
     "count",
     "mean",
     "std",
@@ -33,6 +38,8 @@ SUPPORTED_AGGS = (
     "first",
     "last",
 )
+
+SUPPORTED_AGGS = (*AGGS, *CUMULATIVE_AGGS)
 
 
 def _check_groupby_supported(func):

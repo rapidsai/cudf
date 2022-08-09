@@ -9,6 +9,7 @@ import numbers
 import pickle
 import re
 import sys
+import textwrap
 import warnings
 from collections import abc, defaultdict
 from typing import (
@@ -66,8 +67,14 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
+from cudf.core.index import (
+    BaseIndex,
+    Index,
+    RangeIndex,
+    _index_from_data,
+    as_index,
+)
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -610,6 +617,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _accessors: Set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
+    _groupby = DataFrameGroupBy
+    _resampler = DataFrameResampler
 
     @_cudf_nvtx_annotate
     def __init__(
@@ -1053,12 +1062,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: object
         """
         return pd.Series(self._dtypes)
-
-    @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
 
     @property
     def ndim(self):
@@ -3168,7 +3171,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 except OverflowError:
                     index_data = self.index._data.copy(deep=True)
 
-                out = DataFrame(index=self.index._from_data(index_data))
+                out = DataFrame(index=_index_from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 
@@ -3465,6 +3468,72 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(False, n, columns, keep)
 
     @_cudf_nvtx_annotate
+    def swaplevel(self, i=-2, j=-1, axis=0):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level of index to be swapped.
+        j : int or str, default -1
+            Second level of index to be swapped.
+        axis : The axis to swap levels on.
+            0 or 'index' for row-wise, 1 or 'columns' for column-wise.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(levels=[['llama', 'cow', 'falcon'],
+        ...   ['speed', 'weight', 'length'],['first','second']],
+        ...   codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        ...             [0, 0, 0, 0, 0, 0, 1, 1, 1]])
+        >>> cdf = cudf.DataFrame(index=midx, columns=['big', 'small'],
+        ...  data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
+        ...         [250, 150], [1.5, 0.8], [320, 250], [1, 0.8], [0.3, 0.2]])
+
+        >>> cdf
+                                     big  small
+             llama  speed  first    45.0   30.0
+                    weight first   200.0  100.0
+                    length first     1.5    1.0
+             cow    speed  first    30.0   20.0
+                    weight first   250.0  150.0
+                    length first     1.5    0.8
+             falcon speed  second  320.0  250.0
+                    weight second    1.0    0.8
+                    length second    0.3    0.2
+
+        >>> cdf.swaplevel()
+                                     big  small
+             llama  first  speed    45.0   30.0
+                           weight  200.0  100.0
+                           length    1.5    1.0
+             cow    first  speed    30.0   20.0
+                           weight  250.0  150.0
+                           length    1.5    0.8
+             falcon second speed   320.0  250.0
+                           weight    1.0    0.8
+                           length    0.3    0.2
+        """
+        result = self.copy()
+
+        # To get axis number
+        axis = self._get_axis_from_axis_arg(axis)
+
+        if axis == 0:
+            if not isinstance(result.index, MultiIndex):
+                raise TypeError("Can only swap levels on a hierarchical axis.")
+            result.index = result.index.swaplevel(i, j)
+        else:
+            if not result._data.multiindex:
+                raise TypeError("Can only swap levels on a hierarchical axis.")
+            result._data = result._data.swaplevel(i, j)
+
+        return result
+
+    @_cudf_nvtx_annotate
     def transpose(self):
         """Transpose index and columns.
 
@@ -3735,6 +3804,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+        if on is not None:
+            raise NotImplementedError("The on parameter is not yet supported")
 
         df = self.merge(
             other,
@@ -3750,7 +3821,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @_cudf_nvtx_annotate
-    @copy_docstring(DataFrameGroupBy)
+    @docutils.doc_apply(
+        groupby_doc_template.format(
+            ret=textwrap.dedent(
+                """
+                Returns
+                -------
+                DataFrameGroupBy
+                    Returns a DataFrameGroupBy object that contains
+                    information about the groups.
+                """
+            )
+        )
+    )
     def groupby(
         self,
         by=None,
@@ -3763,40 +3846,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         observed=False,
         dropna=True,
     ):
-        if axis not in (0, "index"):
-            raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
-
-        if observed is not False:
-            raise NotImplementedError(
-                "observed parameter is not yet implemented"
-            )
-
-        if by is None and level is None:
-            raise TypeError(
-                "groupby() requires either by or level to be specified."
-            )
-
-        return (
-            DataFrameResampler(self, by=by)
-            if isinstance(by, cudf.Grouper) and by.freq
-            else DataFrameGroupBy(
-                self,
-                by=by,
-                level=level,
-                as_index=as_index,
-                dropna=dropna,
-                sort=sort,
-            )
+        return super().groupby(
+            by,
+            axis,
+            level,
+            as_index,
+            sort,
+            group_keys,
+            squeeze,
+            observed,
+            dropna,
         )
 
     def query(self, expr, local_dict=None):
@@ -5143,12 +5202,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If q is a float, a Series will be returned where the index is
             the columns of self and the values are the quantiles.
 
-        Notes
-        -----
-        One notable difference from Pandas is when DataFrame is of
-        non-numeric types and result is expected to be a Series in case of
-        Pandas. cuDF will return a DataFrame as it doesn't support mixed
-        types under Series.
+        .. pandas-compat::
+            **DataFrame.quantile**
+
+            One notable difference from Pandas is when DataFrame is of
+            non-numeric types and result is expected to be a Series in case of
+            Pandas. cuDF will return a DataFrame as it doesn't support mixed
+            types under Series.
 
         Examples
         --------
@@ -5174,47 +5234,41 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
+        data_df = self
         if numeric_only:
-            data_df = self.select_dtypes(
+            data_df = data_df.select_dtypes(
                 include=[np.number], exclude=["datetime64", "timedelta64"]
             )
-        else:
-            data_df = self
 
         if columns is None:
             columns = data_df._data.names
 
-        result = DataFrame()
-
+        # Ensure that qs is non-scalar so that we always get a column back.
+        qs = [q] if is_scalar(q) else q
+        result = {}
         for k in data_df._data.names:
-
             if k in columns:
-                res = data_df[k].quantile(
-                    q,
+                ser = data_df[k]
+                res = ser.quantile(
+                    qs,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
-                )
-                if (
-                    not isinstance(
-                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
-                    )
-                    and len(res) == 0
-                ):
+                )._column
+                if len(res) == 0:
                     res = column.column_empty_like(
-                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
+                        qs, dtype=ser.dtype, masked=True, newsize=len(qs)
                     )
-                result[k] = column.as_column(res)
+                result[k] = res
 
+        result = DataFrame._from_data(result)
         if isinstance(q, numbers.Number) and numeric_only:
-            result = result.fillna(np.nan)
-            result = result.iloc[0]
+            result = result.fillna(np.nan).iloc[0]
             result.index = data_df._data.to_pandas_index()
             result.name = q
             return result
         else:
-            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
-            result.index = q
+            result.index = list(map(float, qs))
             return result
 
     @_cudf_nvtx_annotate

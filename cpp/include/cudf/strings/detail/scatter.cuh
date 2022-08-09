@@ -25,6 +25,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
 
 namespace cudf {
