@@ -24,6 +24,7 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
+    - cython >=0.29,<0.30
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
