@@ -24,6 +24,8 @@ build:
     - SCCACHE_BUCKET=rapids-sccache
     - SCCACHE_REGION=us-west-2
     - SCCACHE_IDLE_TIMEOUT=32768
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
 
 requirements:
   build:
