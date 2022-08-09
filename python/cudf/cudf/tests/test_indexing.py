@@ -676,7 +676,7 @@ def test_dataframe_iloc_single_row_downcast():
 
     got = gdf.iloc[0]
     expect = pdf.iloc[0]
-    # at this point expect is object dtype and contains an int and a string[
+    # at this point expect is object dtype and contains an int and a string
     expect = expect.map(str)
 
     assert_eq(expect, got)
