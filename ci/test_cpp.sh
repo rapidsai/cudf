@@ -30,15 +30,15 @@ for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
   echo "Running GoogleTest ${gt}"
   ${gt} --gtest_output=xml:"${TESTRESULTS_DIR}/"
   EXITCODE=$?
-    if (( ${EXITCODE} != 0 )); then
-        SUITEERROR=${EXITECODE}
+    if (( EXITCODE != 0 )); then
+        SUITEERROR="${EXITCODE}"
         echo "FAILED: GTest ${gt}"
     fi
 done
 set -e
 
 if [ -n "${CODECOV_TOKEN}" ]; then
-    codecov -t $CODECOV_TOKEN
+    codecov -t "${CODECOV_TOKEN}"
 fi
 
 exit "${SUITEERROR}"

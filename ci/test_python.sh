@@ -53,5 +53,5 @@ gpuci_logger "Test notebooks"
 python "${GITHUB_WORKSPACE}/ci/utils/nbtestlog2junitxml.py" nbtest.log
 
 if [ -n "${CODECOV_TOKEN}" ]; then
-    codecov -t $CODECOV_TOKEN
+    codecov -t "${CODECOV_TOKEN}"
 fi
