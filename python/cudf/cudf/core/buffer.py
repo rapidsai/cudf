@@ -185,10 +185,10 @@ class Buffer(Serializable):
                 return
             iface = getattr(buf, "__cuda_array_interface__", None)
             if iface:
-                ptr, size = _get_ptr_and_size(iface)
+                ptr, size = get_ptr_and_size(iface)
                 self._ptr, self._size, self._owner = ptr, size, buf
                 return
-            ptr, size = _get_ptr_and_size(np.asarray(buf).__array_interface__)
+            ptr, size = get_ptr_and_size(np.asarray(buf).__array_interface__)
             buf = rmm.DeviceBuffer(ptr=ptr, size=size)
             self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
 
@@ -256,7 +256,7 @@ class Buffer(Serializable):
         )
 
 
-def _get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
+def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     """
     Return the pointer and size of an array interface.
 
