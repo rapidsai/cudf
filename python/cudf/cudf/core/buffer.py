@@ -10,6 +10,7 @@ from typing import (
     List,
     Mapping,
     Protocol,
+    Sequence,
     Tuple,
     Union,
     runtime_checkable,
@@ -268,27 +269,49 @@ class Buffer(Serializable):
         )
 
 
+def is_c_contiguous(
+    shape: Sequence[int], strides: Sequence[int], itemsize: int
+) -> bool:
+    """
+    Determine if shape and strides are C-contiguous
+
+    Parameters
+    ----------
+    shape : Sequence[int]
+        Number of elements in each dimension.
+    strides : Sequence[int]
+        The stride of each dimension in bytes.
+    itemsize : int
+        Size of an element in bytes.
+
+    Return
+    ------
+    bool
+        The boolean answer.
+    """
+
+    if any(dim == 0 for dim in shape):
+        return True
+    cumulative_stride = itemsize
+    for dim, stride in zip(reversed(shape), reversed(strides)):
+        if dim > 1 and stride != cumulative_stride:
+            return False
+        cumulative_stride *= dim
+    return True
+
+
 def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     """
     Return the pointer and size of an array interface.
 
-    Raises ValueError if array isn't C-contiguous
+    Raises ValueError if array isn't C-contiguous.
     """
 
-    def is_c_contiguous(shape, strides, itemsize):
-        if strides is None or any(dim == 0 for dim in shape):
-            return True
-        cumulative_stride = itemsize
-        for dim, stride in zip(reversed(shape), reversed(strides)):
-            if dim > 1 and stride != cumulative_stride:
-                return False
-            cumulative_stride *= dim
-        return True
-
     shape = array_interface["shape"] or (1,)
+    strides = array_interface["strides"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    ptr = array_interface["data"][0] or 0
-    if not is_c_contiguous(shape, array_interface["strides"], itemsize):
-        raise ValueError("Buffer data must be 1D C-contiguous")
-    size = math.prod(shape)
-    return ptr, size * itemsize
+    if strides is None or is_c_contiguous(shape, strides, itemsize):
+        nelem = math.prod(shape)
+        ptr = array_interface["data"][0] or 0
+        return ptr, nelem * itemsize
+    raise ValueError("Buffer data must be C-contiguous")
