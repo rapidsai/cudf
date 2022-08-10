@@ -335,6 +335,21 @@ if buildAll || hasArg cudf; then
     fi
 fi
 
+if buildAll || hasArg strings_udf; then
+    cd ${REPODIR}/python/strings_udf/cpp
+    mkdir build
+    cd build
+    cmake .. -DCONDA_PREFIX=${INSTALL_PREFIX} -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}/
+    make
+    cd ${REPODIR}/python/strings_udf
+    python setup.py build_ext --inplace -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py install --single-version-externally-managed --record=record.txt  -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
+        cd ${REPODIR}/python/strings_udf/cpp/build
+        make install
+    fi
+fi
+
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then
 
@@ -388,9 +403,4 @@ if hasArg custreamz; then
     else
         PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
     fi
-fi
-
-if hasArg strings_udf; then
-    cd ${REPODIR}/python/strings_udf
-    bash build.sh
 fi

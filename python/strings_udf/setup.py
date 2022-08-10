@@ -4,7 +4,8 @@ import os
 from distutils.sysconfig import get_python_lib
 
 from Cython.Build import cythonize
-from setuptools import find_packages, setup
+from setuptools import find_packages
+from skbuild import setup
 from setuptools.extension import Extension
 
 CUDA_HOME = "/usr/local/cuda"
