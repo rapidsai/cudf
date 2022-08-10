@@ -19,7 +19,7 @@ gpuci_mamba_retry install \
   libcudf libcudf_kafka cudf dask-cudf cudf_kafka custreamz
 
 # Install test dependencies
-gpuci_mamba_retry install pytest pytest-cov
+gpuci_mamba_retry install pytest pytest-cov pytest-xdist
 
 gpuci_logger "Check GPU usage"
 nvidia-smi
