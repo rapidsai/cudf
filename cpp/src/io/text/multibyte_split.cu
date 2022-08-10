@@ -742,8 +742,9 @@ std::unique_ptr<cudf::column> multibyte_split_singlepass(
 
   join_stream(streams, stream);
 
-  // if we didn't find a delimiter at all, or the first delimiter was also the last: empty output
-  if (!first_offset.has_value() || first_offset == last_offset) {
+  // if the input was empty, we didn't find a delimiter at all,
+  // or the first delimiter was also the last: empty output
+  if (chunk_offset == 0 || !first_offset.has_value() || first_offset == last_offset) {
     return make_empty_column(type_id::STRING);
   }
 
