@@ -3052,7 +3052,6 @@ def test_binop_integer_power_int_series():
     utils.assert_eq(expected, got)
 
 
-@pytest.mark.xfail(reason="Reverse binops fail for scalar. See GH: #11225.")
 def test_binop_integer_power_int_scalar():
     # GH: #10178
     base = 3
