@@ -34,11 +34,11 @@ requirements:
     - python-confluent-kafka >=1.7.0,<1.8.0a0
     - cudf_kafka ={{ version }}
 
-test:                                   # [linux64]
-  requires:                             # [linux64]
-    - cudatoolkit {{ cuda_version }}.*  # [linux64]
-  imports:                              # [linux64]
-    - custreamz                         # [linux64]
+#test:                                   # [linux64]
+#  requires:                             # [linux64]
+#    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+#  imports:                              # [linux64]
+#    - custreamz                         # [linux64]
 
 about:
   home: https://rapids.ai/
