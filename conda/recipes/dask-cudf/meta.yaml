@@ -24,14 +24,14 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask==2022.7.1
-    - distributed==2022.7.1
+    - dask>=2022.7.1
+    - distributed>=2022.7.1
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask==2022.7.1
-    - distributed==2022.7.1
+    - dask>=2022.7.1
+    - distributed>=2022.7.1
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 test:                                   # [linux64]
