@@ -90,17 +90,15 @@ class Serializable:
         header : dict
             The metadata required to reconstruct the object.
         frames : list
-            The DeviceBufferLikes or memoryviews objects that the object
+            The DeviceBufferLike or memoryview objects that the object
             should contain.
 
         :meta private:
         """
         header, frames = self.serialize()
         assert all(
-            (
-                isinstance(f, (cudf.core.buffer.DeviceBufferLike, memoryview))
-                for f in frames
-            )
+            isinstance(f, (cudf.core.buffer.DeviceBufferLike, memoryview))
+            for f in frames
         )
         header["type-serialized"] = pickle.dumps(type(self))
         header["is-cuda"] = [

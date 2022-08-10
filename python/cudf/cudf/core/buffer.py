@@ -103,8 +103,8 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
     obj : buffer-like or array-like
         An object that exposes either device or host memory through
         `__array_interface__`, `__cuda_array_interface__`, or the
-        buffer protocol. Only when `obj` represents host memory are
-        data copied.
+        buffer protocol. If `obj` represents host memory, data will
+        be copied.
 
     Return
     ------
@@ -130,10 +130,10 @@ class Buffer(Serializable):
     ----------
     data : int or buffer-like or array-like
         An integer representing a pointer to device memory or a buffer-like
-        ot array-like object. When not an integer, `size` and `owner` must
+        or array-like object. When not an integer, `size` and `owner` must
         be None.
     size : int, optional
-        Size of device memory in bytes. Must be specified when `ptr` is a
+        Size of device memory in bytes. Must be specified if `data` is an
         integer.
     owner : object, optional
         Python object to which the lifetime of the memory allocation is tied.
@@ -159,33 +159,39 @@ class Buffer(Serializable):
             if size is not None or owner is not None:
                 raise ValueError(
                     "`size` and `owner` must be None when "
-                    "`data` is an buffer-like object"
+                    "`data` is a buffer-like object"
                 )
 
             # `data` is a buffer-like object
             buf: Any = data
             if isinstance(buf, rmm.DeviceBuffer):
-                self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
+                self._ptr = buf.ptr
+                self._size = buf.size
+                self._owner = buf
                 return
             iface = getattr(buf, "__cuda_array_interface__", None)
             if iface:
                 ptr, size = get_ptr_and_size(iface)
-                self._ptr, self._size, self._owner = ptr, size, buf
+                self._ptr = ptr
+                self._size = size
+                self._owner = buf
                 return
             ptr, size = get_ptr_and_size(np.asarray(buf).__array_interface__)
             buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-            self._ptr, self._size, self._owner = buf.ptr, buf.size, buf
+            self._ptr = buf.ptr
+            self._size = buf.size
+            self._owner = buf
 
     def __getitem__(self, key: Union[int, slice]) -> Buffer:
         if isinstance(key, int):
             if key >= self.size:
-                raise TypeError("index out of bounds")
+                raise IndexError("index out of bounds")
             key = slice(key, key + 1)
         if not isinstance(key, slice):
             raise TypeError("index must be an int or a slice")
         start, stop, step = key.indices(self.size)
         if step != 1:
-            raise TypeError("slice must be contiguous")
+            raise ValueError("slice must be contiguous")
         return self.__class__(
             data=self.ptr + start, size=stop - start, owner=self.owner
         )

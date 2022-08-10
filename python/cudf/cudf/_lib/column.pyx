@@ -250,7 +250,7 @@ cdef class Column:
             mask = as_device_buffer_like(dbuf)
         else:
             raise TypeError(
-                "Expected a DeviceBufferLike-like object or None for mask, "
+                "Expected a DeviceBufferLike object or None for mask, "
                 f"got {type(value).__name__}"
             )
 
