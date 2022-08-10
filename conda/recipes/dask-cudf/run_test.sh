@@ -3,6 +3,9 @@
 
 set -e
 
+# TODO: Remove
+exit 0
+
 # Logger function for build status output
 function logger() {
   echo -e "\n>>>> $@\n"
