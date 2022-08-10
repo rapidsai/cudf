@@ -156,6 +156,8 @@ class Buffer(Serializable):
                 raise ValueError(
                     "size must be specified when `data` is an integer"
                 )
+            if size < 0:
+                raise ValueError("size cannot be negative")
             self._ptr = data
             self._size = size
             self._owner = owner
@@ -188,7 +190,9 @@ class Buffer(Serializable):
 
     def __getitem__(self, key: Union[int, slice]) -> Buffer:
         if isinstance(key, int):
-            if key >= self.size:
+            if key < 0:
+                key = self.size + key
+            if key < 0 or key >= self.size:
                 raise IndexError("index out of bounds")
             key = slice(key, key + 1)
         if not isinstance(key, slice):

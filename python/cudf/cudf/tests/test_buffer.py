@@ -84,3 +84,22 @@ def test_buffer_slice(idx):
     ary = cp.arange(arr_len, dtype="uint8")
     buf = as_device_buffer_like(ary)
     assert (ary[idx] == buf[idx]).all()
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        arr_len * 2,
+        -arr_len * 2,
+        slice(3, 2),
+    ],
+)
+def test_buffer_slice_fail(idx):
+    ary = cp.arange(arr_len, dtype="uint8")
+    buf = as_device_buffer_like(ary)
+
+    with pytest.raises(
+        (IndexError, ValueError),
+        match="(index out of bounds|size cannot be negative)",
+    ):
+        buf[idx]
