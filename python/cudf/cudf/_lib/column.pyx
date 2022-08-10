@@ -125,8 +125,8 @@ cdef class Column:
     def set_base_data(self, value):
         if value is not None and not isinstance(value, DeviceBufferLike):
             raise TypeError(
-                "Expected a DeviceBufferLike or None for data, got " +
-                type(value).__name__
+                "Expected a DeviceBufferLike or None for data, "
+                f"got {type(value).__name__}"
             )
 
         self._data = None
