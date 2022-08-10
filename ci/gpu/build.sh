@@ -75,6 +75,9 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
+gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc"
+mamba install -y "arrow-cpp=9.0.0" "pyarrow=9.0.0" "orc"
+
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
