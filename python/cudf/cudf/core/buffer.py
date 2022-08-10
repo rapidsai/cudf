@@ -25,7 +25,7 @@ from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
 # Frame type for serialization and deserialization of `DeviceBufferLike`
-FrameList = List[Union[memoryview, "DeviceBufferLike"]]
+Frame = Union[memoryview, "DeviceBufferLike"]
 
 
 @runtime_checkable
@@ -56,7 +56,7 @@ class DeviceBufferLike(Protocol):
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
 
-    def serialize(self) -> Tuple[dict, FrameList]:
+    def serialize(self) -> Tuple[dict, List[Frame]]:
         """Serialize the buffer into header and frames.
 
         The frames can be a mixture of memoryview and device-buffer-like
@@ -72,7 +72,9 @@ class DeviceBufferLike(Protocol):
         """
 
     @classmethod
-    def deserialize(cls, header: dict, frames: FrameList) -> DeviceBufferLike:
+    def deserialize(
+        cls, header: dict, frames: List[Frame]
+    ) -> DeviceBufferLike:
         """Generate an buffer from a serialized representation.
 
         Parameters
