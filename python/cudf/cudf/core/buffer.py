@@ -8,6 +8,7 @@ import pickle
 from typing import (
     Any,
     Dict,
+    List,
     Mapping,
     Protocol,
     Tuple,
@@ -22,6 +23,9 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
+
+# Frame type for serialization and deserialization of `DeviceBufferLike`
+FrameList = List[Union[memoryview, "DeviceBufferLike"]]
 
 
 @runtime_checkable
@@ -52,22 +56,23 @@ class DeviceBufferLike(Protocol):
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> Tuple[dict, FrameList]:
         """Serialize the buffer into header and frames.
 
-        Notice, device data is **not** moved to host memory necessarily.
+        The frames can be a mixture of memoryview and device-buffer-like
+        objects.
 
         Returns
         -------
         Tuple[Dict, List]
             The first element of the returned tuple is a dict containing any
             serializable metadata required to reconstruct the object. The
-            second element is a list containing the device data buffers
-            or memoryviews of the object.
+            second element is a list containing the device buffers and
+            memoryviews of the object.
         """
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> DeviceBufferLike:
+    def deserialize(cls, header: dict, frames: FrameList) -> DeviceBufferLike:
         """Generate an buffer from a serialized representation.
 
         Parameters
@@ -75,7 +80,8 @@ class DeviceBufferLike(Protocol):
         header : dict
             The metadata required to reconstruct the object.
         frames : list
-            The Buffers or memoryviews that the object should contain.
+            The device-buffer-like and memoryview buffers that the object
+            should contain.
 
         Returns
         -------
