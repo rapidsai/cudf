@@ -1,10 +1,10 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
-{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
-{% set py_version = environ.get('PY_VER', '3.8') %}
-{% set py_version_numeric = py_version.replace('.', '') %}
+{% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
+{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_major=cuda_version.split('.')[0] %}
 
 package:
   name: strings_udf
@@ -15,10 +15,15 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: cuda_{{ cuda_version }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
+  # libcudf's run_exports pinning is looser than we would like
+  ignore_run_exports:
+    - libcudf
+  ignore_run_exports_from:
+    - {{ compiler('cuda') }}
 
 requirements:
   build:
@@ -37,6 +42,7 @@ requirements:
     - dlpack>=0.5,<0.6.0a0
     - pyarrow =8
     - libcudf ={{ version }}
+    - cudf ={{ version }}
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
   run:
@@ -49,6 +55,7 @@ requirements:
     - numpy
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
     - libcudf {{ version }}
+    - cudf ={{ version }}
     - fastavro >=0.22.0
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec>=0.6.0
@@ -58,13 +65,11 @@ requirements:
     - cachetools
     - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
     - cuda-python >=11.5,<11.7.1
-
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
   imports:                              # [linux64]
     - strings_udf                       # [linux64]
-
 
 about:
   home: https://rapids.ai/
