@@ -32,17 +32,18 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize(
     "data",
     [
-        (cp.zeros(arr_len)),
-        (cp.zeros((1, arr_len))),
-        (cp.zeros((1, arr_len, 1))),
-        (cp.zeros((arr_len, arr_len))),
-        (cp.zeros((arr_len, arr_len)).reshape(arr_len * arr_len)),
+        cp.arange(arr_len),
+        cp.arange(arr_len).reshape(1, arr_len),
+        cp.arange(arr_len).reshape(1, arr_len, 1),
+        cp.arange(arr_len**2).reshape(arr_len, arr_len),
     ],
 )
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
-    as_device_buffer_like(data)
+    buf = as_device_buffer_like(data)
+    ary = cp.array(buf).flatten().view("uint8")
+    assert (ary == buf).all()
 
 
 @pytest.mark.parametrize("creator", [Buffer, as_device_buffer_like])
