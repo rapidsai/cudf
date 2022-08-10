@@ -16,18 +16,15 @@
 
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
-#include "datetime.cuh"
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/lists/list_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -291,78 +288,6 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     field_start = next_field;
     col++;
   }
-}
-
-template <typename T, int base>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T, base>(begin, end, opts);
-}
-
-template <typename T,
-          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T>(begin, end, opts);
-}
-
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return to_timestamp<T>(begin, end, opts.dayfirst);
-}
-
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return to_duration<T>(begin, end);
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ cudf::string_view decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  return cudf::string_view{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-template <>
-__inline__ __device__ cudf::dictionary32 decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  return cudf::dictionary32{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ cudf::list_view decode_value(char const* begin,
-                                                   char const* end,
-                                                   parse_options_view const& opts)
-{
-  return cudf::list_view{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ cudf::struct_view decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  return cudf::struct_view{};
 }
 
 /**
