@@ -44,9 +44,10 @@ struct to_thrust_pair_fn {
 };
 }  // namespace
 
-TEST_F(JSONTypeCastTest, RealBasic)
+TEST_F(JSONTypeCastTest, String)
 {
   auto const stream = rmm::cuda_stream_default;
+  auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
   cudf::test::strings_column_wrapper data({"this", "is", "a", "column", "of", "strings"});
@@ -58,8 +59,31 @@ TEST_F(JSONTypeCastTest, RealBasic)
                     svs.begin(),
                     to_thrust_pair_fn{});
 
-  auto column = cudf::io::json::experimental::parse_data(svs.data(), svs.size(), type, stream);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(column->view(), data);
+  auto str_col = cudf::io::json::experimental::parse_data(
+    svs.data(), svs.size(), type, rmm::device_buffer{0, stream}, stream, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(str_col->view(), data);
+}
+
+TEST_F(JSONTypeCastTest, Int)
+{
+  auto const stream = rmm::cuda_stream_default;
+  auto mr           = rmm::mr::get_current_device_resource();
+  auto const type   = cudf::data_type{cudf::type_id::INT32};
+
+  cudf::test::strings_column_wrapper data({"1", "2", "3", "4", "5", "6"});
+  auto d_column = cudf::column_device_view::create(data);
+  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
+  thrust::transform(thrust::device,
+                    d_column->pair_begin<cudf::string_view, false>(),
+                    d_column->pair_end<cudf::string_view, false>(),
+                    svs.begin(),
+                    to_thrust_pair_fn{});
+
+  auto col = cudf::io::json::experimental::parse_data(
+    svs.data(), svs.size(), type, rmm::device_buffer{0, stream}, stream, mr);
+
+  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4, 5, 6}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col->view(), expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
