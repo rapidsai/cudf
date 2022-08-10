@@ -751,7 +751,7 @@ std::unique_ptr<cudf::column> multibyte_split_singlepass(
   auto global_offsets = offset_storage.collect(stream, mr);
 
   bool const insert_begin = *first_offset == 0;
-  bool const insert_end   = !last_offset.has_value();
+  bool const insert_end   = !last_offset.has_value() || last_offset == chunk_offset;
   rmm::device_uvector<int32_t> offsets{
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
