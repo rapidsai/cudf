@@ -351,17 +351,18 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // output is a list column with each row containing percentiles.size() percentile values
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  bool empty_input   = thrust::count_if(rmm::exec_policy(stream),
-                                      input.size_begin(),
-                                      input.size_begin() + input.size(),
-                                      [] __device__(int x) { return x == 0; }) == input.size();
-  auto row_size_iter = thrust::make_constant_iterator(empty_input ? 0 : percentiles.size());
+  auto const all_empty_rows =
+    thrust::count_if(rmm::exec_policy(stream),
+                     input.size_begin(),
+                     input.size_begin() + input.size(),
+                     [] __device__(auto const x) { return x == 0; }) == input.size();
+  auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<offset_type>());
 
-  if (percentiles.size() == 0 || empty_input) {
+  if (percentiles.size() == 0 || all_empty_rows) {
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
