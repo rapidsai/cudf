@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import functools
-import operator
+import math
 import pickle
 from typing import (
     Any,
@@ -287,5 +286,5 @@ def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     ptr = array_interface["data"][0] or 0
     if not is_c_contiguous(shape, array_interface["strides"], itemsize):
         raise ValueError("Buffer data must be 1D C-contiguous")
-    size = functools.reduce(operator.mul, shape)
+    size = math.prod(shape)
     return ptr, size * itemsize
