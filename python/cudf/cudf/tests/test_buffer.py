@@ -71,7 +71,9 @@ def test_buffer_repr(size, expect):
 @pytest.mark.parametrize(
     "idx",
     [
+        1,
         2,
+        -1,
         -2,
         slice(0, 0),
         slice(0, 1),
