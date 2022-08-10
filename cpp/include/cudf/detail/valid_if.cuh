@@ -53,7 +53,7 @@ __global__ void valid_if_kernel(
   thread_index_type const stride = blockDim.x * gridDim.x;
   size_type warp_valid_count{0};
 
-  auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
+  auto active_mask = __ballot_sync(0xFFFFFFFF, i < size);
   while (i < size) {
     bitmask_type ballot = __ballot_sync(active_mask, p(*(begin + i)));
     if (lane_id == leader_lane) {
