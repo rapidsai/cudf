@@ -302,9 +302,21 @@ def is_c_contiguous(
 
 def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     """
-    Return the pointer and size of an array interface.
+    Retrieve the pointer and size from an array interface.
 
     Raises ValueError if array isn't C-contiguous.
+
+    Parameters
+    ----------
+    array_interface : Mapping
+        The array interface metadata.
+
+    Return
+    ------
+    pointer : int
+        The pointer to device or host memory
+    size : int
+        The size in bytes
     """
 
     shape = array_interface["shape"] or (1,)
