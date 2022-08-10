@@ -51,9 +51,6 @@ if [ "$SOURCE_BRANCH" = "main" ]; then
   conda config --system --remove channels dask/label/dev
 fi
 
-gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc"
-mamba install -y "arrow-cpp=9.0.0" "pyarrow=9.0.0" "orc"
-
 gpuci_logger "Check compiler versions"
 python --version
 
