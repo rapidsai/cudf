@@ -21,6 +21,7 @@
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
+#include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -612,27 +613,74 @@ __inline__ __device__ numeric::decimal128 decode_value(const char*,
 
 struct ConvertFunctor {
   /**
-   * @brief Template specialization for operator() for types whose values can be
-   * convertible to a 0 or 1 to represent false/true. The converting is done by
-   * checking against the default and user-specified true/false values list.
+   * @brief Dispatch for numeric types whose values can be convertible to
+   * 0 or 1 to represent boolean false/true, based upon checking against a
+   * true/false values list.
    *
-   * It is handled here rather than within convertStrToValue() as that function
-   * is used by other types (ex. timestamp) that aren't 'booleable'.
+   * @return bool Whether the parsed value is valid.
    */
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T,
+            std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
+                             !cudf::is_fixed_point<T>()>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
-                                                      void* output_column,
-                                                      cudf::size_type row,
-                                                      const parse_options_view& opts)
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex = false)
   {
-    T& value{static_cast<T*>(output_column)[row]};
-
-    value = [&opts, end, begin]() -> T {
+    static_cast<T*>(out_buffer)[row] = [as_hex, &opts, begin, end]() -> T {
       // Check for user-specified true/false values
-      auto const len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, len})) { return 1; }
-      if (serialized_trie_contains(opts.trie_false, {begin, len})) { return 0; }
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
+      return as_hex ? decode_value<T, 16>(begin, end, opts) : decode_value<T>(begin, end, opts);
+    }();
+
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for fixed point types.
+   *
+   * @return bool Whether the parsed value is valid.
+   */
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
+  {
+    static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
+      [&opts, output_type, begin, end]() -> device_storage_type_t<T> {
+      return strings::detail::parse_decimal<device_storage_type_t<T>>(
+        begin, end, output_type.scale());
+    }();
+
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for boolean type types.
+   */
+  template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
+  {
+    static_cast<T*>(out_buffer)[row] = [&opts, begin, end]() {
+      // Check for user-specified true/false values
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
       return decode_value<T>(begin, end, opts);
     }();
 
@@ -648,7 +696,9 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      parse_options_view const& opts)
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
   {
     T const value                    = decode_value<T>(begin, end, opts);
     static_cast<T*>(out_buffer)[row] = value;
@@ -657,18 +707,20 @@ struct ConvertFunctor {
   }
 
   /**
-   * @brief Default template operator() dispatch specialization all data types
-   * (including wrapper types) that is not covered by above.
+   * @brief Dispatch for all other types.
    */
   template <typename T,
-            std::enable_if_t<!std::is_floating_point_v<T> and !std::is_integral_v<T>>* = nullptr>
+            std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
+                             !cudf::is_fixed_point<T>()>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
-                                                      void* output_column,
-                                                      cudf::size_type row,
-                                                      const parse_options_view& opts)
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
   {
-    static_cast<T*>(output_column)[row] = decode_value<T>(begin, end, opts);
+    static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
 
     return true;
   }

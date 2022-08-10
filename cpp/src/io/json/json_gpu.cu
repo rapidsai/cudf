@@ -278,7 +278,9 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
                                   desc.value_end,
                                   output_columns[desc.column],
                                   rec_id,
-                                  opts)) {
+                                  column_types[desc.column],
+                                  opts,
+                                  false)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[desc.column], rec_id);
           atomicAdd(&num_valid_fields[desc.column], 1);

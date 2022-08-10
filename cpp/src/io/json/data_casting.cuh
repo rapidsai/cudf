@@ -68,8 +68,15 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     [str_tuples, col = *output_dv_ptr, opts = parse_opts.view(), col_type] __device__(
       size_type row_idx) mutable {
       auto const in = str_tuples[row_idx];
-      cudf::type_dispatcher(
-        col_type, ConvertFunctor{}, in.first, in.first + in.second, col.data<int>(), row_idx, opts);
+      cudf::type_dispatcher(col_type,
+                            ConvertFunctor{},
+                            in.first,
+                            in.first + in.second,
+                            col.data<char>(),
+                            row_idx,
+                            col_type,
+                            opts,
+                            false);
     });
 
   return out_col;
