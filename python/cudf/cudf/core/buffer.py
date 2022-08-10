@@ -97,10 +97,9 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
     If `obj` isn't device-buffer-like already, a new buffer that implements
     DeviceBufferLike and points to the memory of `obj` is created. If `obj`
     represents host memory, it is copied to a new `rmm.DeviceBuffer` device
-    allocation. Otherwise, the data of `obj` is **not** copied.
-
-    The returned Buffer keeps a reference to `obj` in order to retain the
-    lifetime of `obj`.
+    allocation. Otherwise, the data of `obj` is **not** copied, instead the
+    new buffer keeps a reference to `obj` in order to retain the lifetime
+    of `obj`.
 
     Raises ValueError if the data of `obj` isn't C-contiguous.
 
