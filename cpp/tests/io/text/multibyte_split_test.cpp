@@ -258,13 +258,6 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRangesSingleByte)
       auto expected = multibyte_split(*source, delimiter);
 
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
-
-      std::cout << host_input.substr(0, split1) << ' ' << host_input.substr(split1, split2 - split1)
-                << ' ' << host_input.substr(split2) << '\n';
-      cudf::test::print(out1->view());
-      cudf::test::print(out2->view());
-      cudf::test::print(out3->view());
-      cudf::test::print(expected->view());
     }
   }
 }
