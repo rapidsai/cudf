@@ -72,12 +72,9 @@ def test_buffer_repr(size, expect):
 @pytest.mark.parametrize(
     "idx",
     [
-        1,
-        2,
-        -1,
-        -2,
         slice(0, 0),
         slice(0, 1),
+        slice(-2, -1),
         slice(0, arr_len),
         slice(2, 3),
         slice(2, -1),
@@ -90,19 +87,18 @@ def test_buffer_slice(idx):
 
 
 @pytest.mark.parametrize(
-    "idx",
+    "idx, err_msg",
     [
-        arr_len * 2,
-        -arr_len * 2,
-        slice(3, 2),
+        (1, "index must be an slice"),
+        (slice(3, 2), "size cannot be negative"),
+        (slice(1, 2, 2), "slice must be contiguous"),
+        (slice(1, 2, -1), "slice must be contiguous"),
+        (slice(3, 2, -1), "slice must be contiguous"),
     ],
 )
-def test_buffer_slice_fail(idx):
+def test_buffer_slice_fail(idx, err_msg):
     ary = cp.arange(arr_len, dtype="uint8")
     buf = as_device_buffer_like(ary)
 
-    with pytest.raises(
-        (IndexError, ValueError),
-        match="(index out of bounds|size cannot be negative)",
-    ):
+    with pytest.raises(ValueError, match=err_msg):
         buf[idx]

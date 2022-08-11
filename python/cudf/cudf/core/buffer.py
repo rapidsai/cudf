@@ -30,7 +30,7 @@ Frame = Union[memoryview, "DeviceBufferLike"]
 
 @runtime_checkable
 class DeviceBufferLike(Protocol):
-    def __getitem__(self, key: Union[int, slice]) -> DeviceBufferLike:
+    def __getitem__(self, key: slice) -> DeviceBufferLike:
         """Create a new view of the buffer."""
 
     @property
@@ -191,15 +191,9 @@ class Buffer(Serializable):
             self._size = buf.size
             self._owner = buf
 
-    def __getitem__(self, key: Union[int, slice]) -> Buffer:
-        if isinstance(key, int):
-            if key < 0:
-                key = self.size + key
-            if key < 0 or key >= self.size:
-                raise IndexError("index out of bounds")
-            key = slice(key, key + 1)
+    def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
-            raise TypeError("index must be an int or a slice")
+            raise ValueError("index must be an slice")
         start, stop, step = key.indices(self.size)
         if step != 1:
             raise ValueError("slice must be contiguous")
