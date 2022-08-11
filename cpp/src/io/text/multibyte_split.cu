@@ -510,36 +510,40 @@ class output_chunks {
   using value_type   = std::remove_cv<T>;  ///< Stored value type
   using size_type    = std::size_t;        ///< The type used for the size of the span
 
-  output_chunks(size_type initial_size,
+  output_chunks(size_type max_output_size,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
-    : _size{}
+    : _size{}, _max_output_size{max_output_size}
   {
-    assert(initial_size > 0);
+    assert(max_output_size > 0);
     _chunks.emplace_back(0, stream, mr);
-    _chunks.back().reserve(initial_size, stream);
+    _chunks.back().reserve(max_output_size * 2, stream);
   }
 
-  output_chunks& operator=(output_chunks&&) = delete;
-  output_chunks(output_chunks&&)            = delete;
+  output_chunks(output_chunks&&)                 = delete;
+  output_chunks(const output_chunks&)            = delete;
+  output_chunks& operator=(output_chunks&&)      = delete;
+  output_chunks& operator=(const output_chunks&) = delete;
 
-  [[nodiscard]] split_device_span<element_type> next_output(size_type max_size,
-                                                            rmm::cuda_stream_view stream)
+  [[nodiscard]] split_device_span<element_type> next_output(rmm::cuda_stream_view stream)
   {
-    device_span<element_type> head_span{_chunks.back().data() + _chunks.back().size(),
-                                        _chunks.back().capacity() - _chunks.back().size()};
-    if (head_span.size() >= max_size) { return split_device_span<element_type>{head_span}; }
-    // growth and padding factor 2, reduces the number of allocations if max_size is overestimate
-    auto const next_chunk_size = 2 * std::max(_chunks.back().capacity(), max_size);
-    _chunks.emplace_back(0, stream, _chunks.back().memory_resource());
-    _chunks.back().reserve(next_chunk_size, stream);
-    device_span<element_type> tail_span{_chunks.back().data(), _chunks.back().capacity()};
-    assert(head_span.size() + tail_span.size() >= max_size);
+    auto head_it   = _chunks.end() - (_chunks.size() > 1 && _chunks.back().is_empty() ? 2 : 1);
+    auto head_span = free_span(*head_it);
+    if (head_span.size() >= _max_output_size) { return split_device_span<element_type>{head_span}; }
+    if (head_it == _chunks.end() - 1) {
+      // insert a new vector of double size
+      auto const next_chunk_size = 2 * _chunks.back().capacity();
+      _chunks.emplace_back(0, stream, _chunks.back().memory_resource());
+      _chunks.back().reserve(next_chunk_size, stream);
+    }
+    auto tail_span = free_span(_chunks.back());
+    assert(head_span.size() + tail_span.size() >= _max_output_size);
     return split_device_span<element_type>{head_span, tail_span};
   }
 
   void advance_output(size_type actual_size)
   {
+    assert(actual_size <= _max_output_size);
     // this dummy stream is used for resizing, since we know we won't reallocate,
     // providing a the correct stream is not necessary.
     rmm::cuda_stream_view dummy_stream{};
@@ -566,7 +570,7 @@ class output_chunks {
 
   [[nodiscard]] const rmm::device_uvector<element_type>& last_nonempty_chunk() const
   {
-    return _chunks.back().is_empty() ? *(_chunks.end() - 2) : _chunks.back();
+    return _chunks.size() > 1 && _chunks.back().is_empty() ? *(_chunks.end() - 2) : _chunks.back();
   }
 
   [[nodiscard]] size_type size() const
@@ -592,7 +596,14 @@ class output_chunks {
   }
 
  private:
+  static device_span<element_type> free_span(rmm::device_uvector<element_type>& vector)
+  {
+    return device_span<element_type>{vector.data() + vector.size(),
+                                     vector.capacity() - vector.size()};
+  }
+
   size_type _size;
+  size_type _max_output_size;
   std::vector<rmm::device_uvector<element_type>> _chunks;
 };
 
@@ -652,8 +663,8 @@ std::unique_ptr<cudf::column> multibyte_split_singlepass(
   auto chunk_offset         = std::max<int64_t>(0, byte_range.offset() - delimiter.size());
   auto const byte_range_end = byte_range.offset() + byte_range.size();
   reader->skip_bytes(chunk_offset);
-  output_chunks<int64_t> offset_storage(2 * ITEMS_PER_CHUNK, stream, mr);
-  output_chunks<char> char_storage(2 * ITEMS_PER_CHUNK, stream, mr);
+  output_chunks<int64_t> offset_storage(ITEMS_PER_CHUNK / delimiter.size() + 1, stream, mr);
+  output_chunks<char> char_storage(ITEMS_PER_CHUNK, stream, mr);
 
   fork_stream(streams, stream);
 
@@ -678,7 +689,7 @@ std::unique_ptr<cudf::column> multibyte_split_singlepass(
 
     cudaStreamWaitEvent(scan_stream.value(), last_launch_event);
 
-    auto offset_output = offset_storage.next_output(ITEMS_PER_CHUNK, scan_stream);
+    auto offset_output = offset_storage.next_output(scan_stream);
 
     // reset the next chunk of tile state
     multibyte_split_singlepass_init_kernel<<<tiles_in_launch,
@@ -723,7 +734,7 @@ std::unique_ptr<cudf::column> multibyte_split_singlepass(
       auto const sentinel = last_offset.value_or(std::numeric_limits<int64_t>::max());
       auto const end = chunk->data() + std::min<int64_t>(sentinel - chunk_offset, chunk->size());
       auto const output_size = end - begin;
-      auto char_output       = char_storage.next_output(output_size, scan_stream);
+      auto char_output       = char_storage.next_output(scan_stream);
       auto const split       = begin + std::min<int64_t>(output_size, char_output.head().size());
       thrust::copy(rmm::exec_policy_nosync(scan_stream), begin, split, char_output.head().begin());
       thrust::copy(rmm::exec_policy_nosync(scan_stream), split, end, char_output.tail().begin());
