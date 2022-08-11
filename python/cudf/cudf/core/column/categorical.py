@@ -16,7 +16,7 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype
@@ -610,7 +610,7 @@ class CategoricalColumn(column.ColumnBase):
     Parameters
     ----------
     dtype : CategoricalDtype
-    mask : Buffer
+    mask : DeviceBufferLike
         The validity mask
     offset : int
         Data offset
@@ -634,7 +634,7 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         dtype: CategoricalDtype,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,
         offset: int = 0,
         null_count: int = None,
@@ -693,7 +693,7 @@ class CategoricalColumn(column.ColumnBase):
         rhs = cudf.core.column.as_column(values, dtype=self.dtype)
         return lhs, rhs
 
-    def set_base_mask(self, value: Optional[Buffer]):
+    def set_base_mask(self, value: Optional[DeviceBufferLike]):
         super().set_base_mask(value)
         self._codes = None
 
@@ -705,16 +705,12 @@ class CategoricalColumn(column.ColumnBase):
     def children(self) -> Tuple[NumericalColumn]:
         if self._children is None:
             codes_column = self.base_children[0]
-
-            buf = Buffer.from_buffer(
-                buffer=codes_column.base_data,
-                size=self.size * codes_column.dtype.itemsize,
-                offset=self.offset * codes_column.dtype.itemsize,
-            )
+            start = self.offset * codes_column.dtype.itemsize
+            end = start + self.size * codes_column.dtype.itemsize
             codes_column = cast(
                 cudf.core.column.NumericalColumn,
                 column.build_column(
-                    data=buf,
+                    data=codes_column.base_data[start:end],
                     dtype=codes_column.dtype,
                     size=self.size,
                 ),
