@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -30,6 +31,8 @@
 #include <src/io/json/data_casting.cuh>
 
 #include <type_traits>
+
+using namespace cudf::test::iterators;
 
 struct JSONTypeCastTest : public cudf::test::BaseFixture {
 };
@@ -59,8 +62,12 @@ TEST_F(JSONTypeCastTest, String)
                     svs.begin(),
                     to_thrust_pair_fn{});
 
+  auto null_mask_it = no_nulls();
+  auto null_mask =
+    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+
   auto str_col = cudf::io::json::experimental::parse_data(
-    svs.data(), svs.size(), type, rmm::device_buffer{0, stream}, stream, mr);
+    svs.data(), svs.size(), type, std::move(null_mask), stream, mr);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(str_col->view(), data);
 }
 
@@ -68,9 +75,9 @@ TEST_F(JSONTypeCastTest, Int)
 {
   auto const stream = rmm::cuda_stream_default;
   auto mr           = rmm::mr::get_current_device_resource();
-  auto const type   = cudf::data_type{cudf::type_id::INT32};
+  auto const type   = cudf::data_type{cudf::type_id::INT64};
 
-  cudf::test::strings_column_wrapper data({"1", "2", "3", "4", "5", "6"});
+  cudf::test::strings_column_wrapper data({"1", "null", "3", "true", "5", "false"});
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
   thrust::transform(thrust::device,
@@ -79,10 +86,15 @@ TEST_F(JSONTypeCastTest, Int)
                     svs.begin(),
                     to_thrust_pair_fn{});
 
-  auto col = cudf::io::json::experimental::parse_data(
-    svs.data(), svs.size(), type, rmm::device_buffer{0, stream}, stream, mr);
+  auto null_mask_it = no_nulls();
+  auto null_mask =
+    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
 
-  auto expected = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4, 5, 6}};
+  auto col = cudf::io::json::experimental::parse_data(
+    svs.data(), svs.size(), type, std::move(null_mask), stream, mr);
+
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<int64_t>{{1, 2, 3, 1, 5, 0}, {1, 0, 1, 1, 1, 1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col->view(), expected);
 }
 
