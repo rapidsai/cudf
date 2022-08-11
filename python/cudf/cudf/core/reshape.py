@@ -679,7 +679,7 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-    null  1  2  4
+       null  1  2  4
     0     0  1  0  0
     1     0  0  1  0
     2     1  0  0  0

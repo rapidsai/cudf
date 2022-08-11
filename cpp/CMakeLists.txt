@@ -53,7 +53,7 @@ option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
 option(
   CUDF_USE_PER_THREAD_DEFAULT_STREAM
   "Build cuDF with per-thread default stream, including passing the per-thread default
