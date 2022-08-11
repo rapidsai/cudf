@@ -91,6 +91,25 @@ TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
+TEST_F(MultibyteSplitTest, LargeInputSparse)
+{
+  auto host_input    = std::string(1024 * 1024 * 32, '.');
+  auto host_expected = std::vector<std::string>();
+
+  host_input[host_input.size() / 2] = '|';
+
+  host_expected.emplace_back(host_input.substr(0, host_input.size() / 2 + 1));
+  host_expected.emplace_back(host_input.substr(host_input.size() / 2 + 1));
+
+  auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
+
+  auto delimiter = std::string("|");
+  auto source    = cudf::io::text::make_source(host_input);
+  auto out       = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
 TEST_F(MultibyteSplitTest, LargeInput)
 {
   auto host_input    = std::string();
