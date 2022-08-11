@@ -42,15 +42,10 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                    size_type col_size,
                                    data_type col_type,
                                    B&& null_mask,
+                                   cudf::io::parse_options_view const& options,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  auto parse_opts = parse_options{',', '\n', '\"', '.'};
-
-  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
-  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
-
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     auto const strings_span = coalesce_input(str_tuples, col_size, stream);
     return make_strings_column(strings_span, stream);
@@ -65,13 +60,12 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     col_size,
-    [str_tuples, col = *output_dv_ptr, opts = parse_opts.view(), col_type] __device__(
-      size_type row) {
+    [str_tuples, col = *output_dv_ptr, options, col_type] __device__(size_type row) {
       if (col.is_null(row)) { return; }
       auto const in = str_tuples[row];
 
       auto const is_null_literal =
-        serialized_trie_contains(opts.trie_na, {in.first, static_cast<size_t>(in.second)});
+        serialized_trie_contains(options.trie_na, {in.first, static_cast<size_t>(in.second)});
 
       if (is_null_literal) {
         col.set_null(row);
@@ -85,7 +79,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                                    col.data<char>(),
                                                    row,
                                                    col_type,
-                                                   opts,
+                                                   options,
                                                    false);
       if (not is_parsed) { col.set_null(row); }
     });

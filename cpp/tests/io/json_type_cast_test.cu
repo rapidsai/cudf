@@ -47,6 +47,17 @@ struct to_thrust_pair_fn {
 };
 }  // namespace
 
+auto default_json_options()
+{
+  auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
+
+  auto const stream     = rmm::cuda_stream_default;
+  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  return parse_opts;
+}
+
 TEST_F(JSONTypeCastTest, String)
 {
   auto const stream = rmm::cuda_stream_default;
@@ -67,7 +78,7 @@ TEST_F(JSONTypeCastTest, String)
     cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
 
   auto str_col = cudf::io::json::experimental::parse_data(
-    svs.data(), svs.size(), type, std::move(null_mask), stream, mr);
+    svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(str_col->view(), data);
 }
 
@@ -91,7 +102,7 @@ TEST_F(JSONTypeCastTest, Int)
     cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
 
   auto col = cudf::io::json::experimental::parse_data(
-    svs.data(), svs.size(), type, std::move(null_mask), stream, mr);
+    svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<int64_t>{{1, 2, 3, 1, 5, 0}, {1, 0, 1, 1, 1, 1}};
