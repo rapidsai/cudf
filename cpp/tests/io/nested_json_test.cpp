@@ -354,22 +354,12 @@ TEST_F(JsonTest, ExtractColumn)
   auto const second_column_index = 1;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 
-  std::cout << std::endl << "=== PARSED COLUMN ===" << std::endl;
-  for (std::size_t col = 0; col < expected_col_count; col++) {
-    std::cout << std::left << std::setw(20) << cudf_table.metadata.schema_info[col].name << ": ";
-    cudf::test::print(cudf_table.tbl->get_column(col));
-  }
-
   auto expected_col1            = cudf::test::strings_column_wrapper({"0.0", "0.1", "0.2"});
   auto expected_col2            = cudf::test::strings_column_wrapper({"1.0", "1.1", "1.2"});
   cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
-  std::cout << "*parsed_col1:\n";
-  cudf::test::print(parsed_col1);
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
-  std::cout << "*parsed_col2:\n";
-  cudf::test::print(parsed_col2);
 }
 
 TEST_F(JsonTest, UTF_JSON)
