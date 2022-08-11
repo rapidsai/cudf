@@ -915,4 +915,13 @@ TEST_F(JsonReaderTest, BadDtypeParams)
   EXPECT_THROW(cudf_io::read_json(options_map), cudf::logic_error);
 }
 
+TEST_F(JsonReaderTest, ExperimentalParam)
+{
+  cudf_io::json_reader_options const options =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{nullptr, 0}).experimental(true);
+
+  // should throw for now
+  EXPECT_THROW(cudf_io::read_json(options), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

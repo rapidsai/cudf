@@ -25,6 +25,8 @@
 #include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 constexpr int64_t data_size = 512 << 20;

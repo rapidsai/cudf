@@ -1897,6 +1897,20 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
       if (out_buf.size == 0) {
         int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
 
+        // Handle a specific corner case.  It is possible to construct a parquet file such that
+        // a column within a row group contains more rows than the row group itself. This may be
+        // invalid, but we have seen instances of this in the wild, including how they were created
+        // using the apache parquet tools.  Normally, the trim pass would handle this case quietly,
+        // but if we are not running the trim pass (which is most of the time) we need to cap the
+        // number of rows we will allocate/read from the file with the amount specified in the
+        // associated row group. This only applies to columns that are not children of lists as
+        // those may have an arbitrary number of rows in them.
+        if (!uses_custom_row_bounds &&
+            !(out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) &&
+            size > static_cast<size_type>(num_rows)) {
+          size = static_cast<size_type>(num_rows);
+        }
+
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 

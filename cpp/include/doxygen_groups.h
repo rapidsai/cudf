@@ -152,6 +152,7 @@
  *   @defgroup lists_elements Counting
  *   @defgroup lists_filtering Filtering
  *   @defgroup lists_sort Sorting
+ *   @defgroup set_operations Set Operations
  * @}
  * @defgroup nvtext_apis NVText
  * @{
