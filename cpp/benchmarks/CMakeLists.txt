@@ -182,7 +182,9 @@ ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
   reduction/reduce.cpp reduction/scan.cpp
 )
-ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
+ConfigureNVBench(
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -200,7 +202,8 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
+  groupby/group_struct_keys.cpp
 )
 
 # ##################################################################################################
