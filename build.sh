@@ -337,16 +337,16 @@ fi
 
 if buildAll || hasArg strings_udf; then
     cd ${REPODIR}/python/strings_udf/cpp
-    mkdir build
-    cd build
-    cmake .. -DCONDA_PREFIX=${INSTALL_PREFIX} -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}/
-    make
+    ls
+    cmake -S ./ -B build -DCONDA_PREFIX=${INSTALL_PREFIX} -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}/
+    cmake --build build
+    ls
     cd ${REPODIR}/python/strings_udf
     python setup.py build_ext --inplace -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
     if [[ ${INSTALL_TARGET} != "" ]]; then
         python setup.py install --single-version-externally-managed --record=record.txt  -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-        cd ${REPODIR}/python/strings_udf/cpp/build
-        make install
+        cd ${REPODIR}/python/strings_udf/cpp/
+        cmake --install ./build
     fi
 fi
 
