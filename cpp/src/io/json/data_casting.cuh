@@ -66,14 +66,15 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     thrust::make_counting_iterator<size_type>(0),
     col_size,
     [str_tuples, col = *output_dv_ptr, opts = parse_opts.view(), col_type] __device__(
-      size_type row_idx) {
-      auto const in = str_tuples[row_idx];
+      size_type row) {
+      if (col.is_null(row)) { return; }
+      auto const in = str_tuples[row];
 
       auto const is_null_literal =
         serialized_trie_contains(opts.trie_na, {in.first, static_cast<size_t>(in.second)});
 
       if (is_null_literal) {
-        col.set_null(row_idx);
+        col.set_null(row);
         return;
       }
 
@@ -82,11 +83,11 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                                    in.first,
                                                    in.first + in.second,
                                                    col.data<char>(),
-                                                   row_idx,
+                                                   row,
                                                    col_type,
                                                    opts,
                                                    false);
-      if (not is_parsed) { col.set_null(row_idx); }
+      if (not is_parsed) { col.set_null(row); }
     });
 
   return out_col;
