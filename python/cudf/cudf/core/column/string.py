@@ -3485,9 +3485,7 @@ class StringMethods(ColumnMethods):
             libstrings.count_re(self._column, pat, flags)
         )
 
-    def findall(
-        self, pat: str, flags: int = 0, expand: bool = True
-    ) -> SeriesOrIndex:
+    def findall(self, pat: str, flags: int = 0) -> SeriesOrIndex:
         """
         Find all occurrences of pattern or regular expression in the
         Series/Index.
@@ -3559,17 +3557,8 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        if expand:
-            warnings.warn(
-                "The expand parameter is deprecated and will be removed in a "
-                "future version. Set expand=False to match future behavior.",
-                FutureWarning,
-            )
-            data, _ = libstrings.findall(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
-        else:
-            data = libstrings.findall_record(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
+        data = libstrings.findall_record(self._column, pat, flags)
+        return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:
         """
