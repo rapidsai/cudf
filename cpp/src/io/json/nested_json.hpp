@@ -76,6 +76,49 @@ enum token_t : PdaTokenT {
   NUM_TOKENS
 };
 
+/// Type used to represent the class of a node (or a node "category") within the tree representation
+using NodeT = char;
+
+/**
+ * @brief Class of a node (or a node "category") within the tree representation
+ */
+enum node_t : NodeT {
+  /// A node representing a struct
+  NC_STRUCT,
+  /// A node representing a list
+  NC_LIST,
+  /// A node representing a field name
+  NC_FN,
+  /// A node representing a string value
+  NC_STR,
+  /// A node representing a numeric or literal value (e.g., true, false, null)
+  NC_VAL,
+  /// A node representing a parser error
+  NC_ERR,
+  /// Total number of node classes
+  NUM_NODE_CLASSES
+};
+
+/// Type used to index into the nodes within the tree of structs, lists, field names, and value
+/// nodes
+using NodeIndexT = uint32_t;
+
+/// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
+using TreeDepthT = StackLevelT;
+
+/**
+ * @brief Struct that encapsulate all information of a columnar tree representation.
+ */
+struct tree_meta_t {
+  std::vector<NodeT> node_categories;
+  std::vector<NodeIndexT> parent_node_ids;
+  std::vector<TreeDepthT> node_levels;
+  std::vector<SymbolOffsetT> node_range_begin;
+  std::vector<SymbolOffsetT> node_range_end;
+};
+
+constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
+
 namespace detail {
 /**
  * @brief Identifies the stack context for each character from a JSON input. Specifically, we
@@ -110,6 +153,15 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
+
+/**
+ * @brief Parses the given JSON string and generates a tree representation of the given input.
+ *
+ * @param input The JSON input
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return
+ */
+tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
 }  // namespace detail
 
 }  // namespace cudf::io::json
