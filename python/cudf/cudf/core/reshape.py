@@ -1254,16 +1254,10 @@ def crosstab(
     if not isinstance(columns, (list, tuple)):
         columns = [columns]
 
-    rownames = (
-        _get_pivot_names(index, rownames, prefix="row")
-        if not rownames
-        else rownames
-    )
-    colnames = (
-        _get_pivot_names(columns, colnames, prefix="col")
-        if not colnames
-        else colnames
-    )
+    if not rownames:
+        rownames = _get_pivot_names(index, rownames, prefix="row")
+    if not colnames:
+        colnames = _get_pivot_names(columns, colnames, prefix="col")
 
     if len(index) != len(rownames):
         raise ValueError("index and rownames must have same length")

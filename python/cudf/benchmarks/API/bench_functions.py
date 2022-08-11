@@ -76,4 +76,7 @@ def bench_crosstab_simple(benchmark, nr):
     np.random.shuffle(series_a)
     np.random.shuffle(series_b)
     np.random.shuffle(series_c)
+    series_a = cudf.Series(series_a)
+    series_b = cudf.Series(series_b)
+    series_c = cudf.Series(series_c)
     benchmark(cudf.crosstab, index=series_a, columns=[series_b, series_c])

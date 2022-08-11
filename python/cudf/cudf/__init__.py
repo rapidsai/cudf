@@ -59,12 +59,12 @@ from cudf.core.dtypes import (
 from cudf.core.groupby import Grouper
 from cudf.core.reshape import (
     concat,
+    crosstab,
     get_dummies,
     melt,
     pivot,
-    unstack,
-    crosstab,
     pivot_table,
+    unstack,
 )
 from cudf.core.series import isclose
 from cudf.core.tools.datetimes import DateOffset, to_datetime
