@@ -71,7 +71,7 @@ void BM_parq_read_varying_input(benchmark::State& state)
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
   cudf_io::parquet_reader_options const read_options =
-    cudf_io::parquet_reader_options::builder(source).num_rows(1);
+    cudf_io::parquet_reader_options::builder(source);
   return cudf_io::read_parquet(read_options).metadata.column_names;
 }
 
@@ -113,9 +113,8 @@ void BM_parq_read_varying_options(benchmark::State& state)
       .use_pandas_metadata(use_pandas_metadata)
       .timestamp_type(ts_type);
 
-  auto const num_row_groups           = data_size / (128 << 20);
-  cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
-  auto mem_stats_logger               = cudf::memory_stats_logger();
+  auto const num_row_groups = data_size / (128 << 20);
+  auto mem_stats_logger     = cudf::memory_stats_logger();
   for (auto _ : state) {
     try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
@@ -133,11 +132,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
           }
           read_options.set_row_groups({row_groups_to_read});
         } break;
-        case row_selection::NROWS:
-          read_options.set_skip_rows(chunk * chunk_row_cnt);
-          read_options.set_num_rows(chunk_row_cnt);
-          if (is_last_chunk) read_options.set_num_rows(-1);
-          break;
+        case row_selection::NROWS: [[fallthrough]];
         default: CUDF_FAIL("Unsupported row selection method");
       }
 
@@ -186,24 +181,3 @@ BENCHMARK_REGISTER_F(ParquetRead, column_selection)
 
 // row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file and
 // determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
-BENCHMARK_DEFINE_F(ParquetRead, row_selection)
-(::benchmark::State& state) { BM_parq_read_varying_options(state); }
-BENCHMARK_REGISTER_F(ParquetRead, row_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1, 4},
-                 {0b01},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_DEFINE_F(ParquetRead, misc_options)
-(::benchmark::State& state) { BM_parq_read_varying_options(state); }
-BENCHMARK_REGISTER_F(ParquetRead, misc_options)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1},
-                 {0b01, 0b00, 0b11, 0b010},
-                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
