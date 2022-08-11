@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -220,7 +220,6 @@ __global__ void conditional_join(table_device_view left_table,
                                                          join_output_r);
         __syncwarp(activemask);
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-        __syncwarp(activemask);
       }
     }
 
@@ -242,6 +241,7 @@ __global__ void conditional_join(table_device_view left_table,
                         join_shared_r[warp_id]);
     }
 
+    __syncwarp(activemask);
     // final flush of output cache
     if (current_idx_shared[warp_id] > 0) {
       flush_output_cache<num_warps, output_cache_size>(activemask,
