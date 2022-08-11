@@ -925,7 +925,7 @@ tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_st
     // If this token is the beginning-of-{value, string, field name}, also consume the next end-of-*
     // token
     if (is_begin_of_section(token)) {
-      if ((i + 1) < num_tokens_out[0] && end_of_partner(tokens_gpu[i + 1])) {
+      if ((i + 1) < num_tokens_out[0] && end_of_partner(token) == tokens_gpu[i + 1]) {
         // Update the range_end for this pair of tokens
         range_end = token_indices_gpu[i + 1];
         // We can skip the subsequent end-of-* token

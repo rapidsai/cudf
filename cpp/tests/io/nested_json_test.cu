@@ -17,6 +17,8 @@
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/utilities/default_stream.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
@@ -286,15 +288,6 @@ TEST_F(JsonTest, TokenStream)
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  using cuio_json::PdaTokenT;
-  using cuio_json::SymbolOffsetT;
-  using cuio_json::SymbolT;
-
-  // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
-  rmm::cuda_stream_view stream_view(stream);
-
   // Test input
   std::string input = R"(  [{)"
                       R"("category": "reference",)"
@@ -312,8 +305,7 @@ TEST_F(JsonTest, TreeRepresentation)
                       R"(}] )";
 
   // Get the JSON's tree representation
-  auto tree_rep = cuio_json::detail::get_tree_representation(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+  auto tree_rep = cuio_json::detail::get_tree_representation(input, cudf::default_stream_value);
 
   // Print tree representation
   if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
