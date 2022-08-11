@@ -417,7 +417,7 @@ _reflected_ops = [
 @pytest.mark.parametrize(
     "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
 )
-def test_reflected_ops_scalar(func, dtype, obj_class):
+def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
     random_series = utils.gen_rand(dtype, 100, low=10)
@@ -440,6 +440,19 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
 
     # verify
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+)
+def test_cudf_scalar_reflected_ops_scalar(func, dtype):
+    value = 42
+    scalar = cudf.Scalar(42)
+
+    expected = func(value)
+    actual = func(scalar).value
+
+    assert np.isclose(expected, actual)
 
 
 _cudf_scalar_reflected_ops = [
@@ -483,7 +496,7 @@ _cudf_scalar_reflected_ops = [
         )
     ),
 )
-def test_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
+def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
