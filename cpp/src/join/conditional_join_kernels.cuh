@@ -221,6 +221,7 @@ __global__ void conditional_join(table_device_view left_table,
         __syncwarp(activemask);
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
       }
+      __syncwarp(activemask);
     }
 
     // Left, left anti, and full joins all require saving left columns that
