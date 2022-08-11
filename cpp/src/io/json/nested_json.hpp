@@ -25,7 +25,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <variant>
 #include <vector>
 
 namespace cudf::io::json {
@@ -103,8 +102,7 @@ enum node_t : NodeT {
 enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
 
 /**
- * @brief
- *
+ * @brief Intermediate representation of data from a nested JSON input
  */
 struct json_column {
   // Type used to count number of rows
@@ -249,20 +247,21 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
  * @param input The JSON input in host memory
  * @param d_input The JSON input in device memory
  * @param stream The CUDA stream to which kernels are dispatched
- * @return
+ * @return The columnar representation of the data from the given JSON input
  */
-json_column get_json_columns(host_span<SymbolT const> input,
+json_column make_json_column(host_span<SymbolT const> input,
                              device_span<SymbolT const> d_input,
                              rmm::cuda_stream_view stream);
 
 /**
- * @brief Parses the given JSON string and generates a cudf::column of the given input.
+ * @brief Parses the given JSON string and generates table from the given input.
  *
  * @param input The JSON input
  * @param stream The CUDA stream to which kernels are dispatched
- * @return cudf::column of the given input
+ * @param mr Optional, resource with which to allocate.
+ * @return The data parsed from the given JSON input
  */
-table_with_metadata parse_json_to_columns(
+table_with_metadata parse_nested_json(
   host_span<SymbolT const> input,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

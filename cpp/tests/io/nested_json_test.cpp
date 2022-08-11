@@ -346,7 +346,7 @@ TEST_F(JsonTest, ExtractColumn)
 
   std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
-  auto const cudf_table = cuio_json::detail::parse_json_to_columns(
+  auto const cudf_table = cuio_json::detail::parse_nested_json(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
 
   auto const expected_col_count  = 2;
@@ -387,7 +387,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
 
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_json_to_columns(ascii_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(ascii_pass, stream_view));
 
   // utf-8 string that fails parsing.
   std::string utf_failed = R"([
@@ -397,7 +397,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_json_to_columns(utf_failed, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_failed, stream_view));
 
   // utf-8 string that passes parsing.
   std::string utf_pass = R"([
@@ -408,7 +408,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_json_to_columns(utf_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, stream_view));
 }
 
 TEST_F(JsonTest, FromParquet)
@@ -507,7 +507,7 @@ TEST_F(JsonTest, FromParquet)
   auto result = cudf::io::read_parquet(read_opts);
 
   // Read in the data via the JSON parser
-  auto const cudf_table = cuio_json::detail::parse_json_to_columns(
+  auto const cudf_table = cuio_json::detail::parse_nested_json(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
 
   // Verify that the data read via parquet matches the data read via JSON

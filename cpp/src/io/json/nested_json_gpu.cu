@@ -932,15 +932,15 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   return {};
 }
 
-table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+table_with_metadata parse_nested_json(host_span<SymbolT const> input,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
   // Get internal JSON column
-  auto root_column = get_json_columns(input, d_input, stream);
+  auto root_column = make_json_column(input, d_input, stream);
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;
@@ -971,7 +971,7 @@ table_with_metadata parse_json_to_columns(host_span<SymbolT const> input,
                              {{}, out_column_names}};
 }
 
-json_column get_json_columns(host_span<SymbolT const> input,
+json_column make_json_column(host_span<SymbolT const> input,
                              device_span<SymbolT const> d_input,
                              rmm::cuda_stream_view stream)
 {
@@ -1397,7 +1397,9 @@ json_column get_json_columns(host_span<SymbolT const> input,
 
     // Error token
     else if (token == token_t::ErrorBegin) {
+#ifdef NJP_DEBUG_PRINT
       std::cout << "[ErrorBegin]\n";
+#endif
       CUDF_FAIL("Parser encountered an invalid format.");
     }
 
