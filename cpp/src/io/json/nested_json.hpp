@@ -166,6 +166,9 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
  * @return
  */
 tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
+
+tree_meta_t get_tree_representation_gpu(device_span<SymbolT const> d_input,
+                                        rmm::cuda_stream_view stream);
 }  // namespace detail
 
 }  // namespace cudf::io::json
