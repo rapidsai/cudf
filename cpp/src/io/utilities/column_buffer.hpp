@@ -135,6 +135,7 @@ struct column_buffer {
  */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
+                                    std::optional<reader_metadata> const& metadata,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr);
 

@@ -645,5 +645,74 @@ struct partition_info {
   }
 };
 
+class reader_metadata {
+  // Whether to read binary data as a string column
+  bool _convert_binary_to_strings{true};
+
+  std::vector<reader_metadata> children;
+
+ public:
+  reader_metadata() = default;
+
+  /**
+   * @brief Add the children metadata of this column
+   *
+   * @param child The children metadata of this column to add
+   * @return this for chaining
+   */
+  reader_metadata& add_child(reader_metadata const& child)
+  {
+    children.push_back(child);
+    return *this;
+  }
+
+  /**
+   * @brief Get reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  [[nodiscard]] reader_metadata& child(size_type i) { return children[i]; }
+
+  /**
+   * @brief Get const reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  [[nodiscard]] reader_metadata const& child(size_type i) const { return children[i]; }
+
+  /**
+   * @brief Specifies whether this column should be written as binary or string data
+   * Only valid for the following column types:
+   * string, list<int8>
+   *
+   * @param binary True = use binary data type. False = use string data type
+   * @return this for chaining
+   */
+  reader_metadata& set_convert_binary_to_strings(bool binary)
+  {
+    _convert_binary_to_strings = binary;
+    return *this;
+  }
+
+  /**
+   * @brief Get whether to encode this column as binary or string data
+   *
+   * @return Boolean indicating whether to encode this column as binary data
+   */
+  [[nodiscard]] bool is_enabled_convert_binary_to_strings() const
+  {
+    return _convert_binary_to_strings;
+  }
+
+  /**
+   * @brief Get the number of child objects
+   *
+   * @return number of children
+   */
+  [[nodiscard]] size_t get_num_children() const { return children.size(); }
+};
+
 }  // namespace io
 }  // namespace cudf

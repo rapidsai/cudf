@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include "column_buffer.hpp"
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -58,6 +59,7 @@ void column_buffer::create(size_type _size,
  */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
+                                    std::optional<reader_metadata> const& metadata,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -65,11 +67,32 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
   switch (buffer.type.id()) {
     case type_id::STRING:
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"chars"});
+      if (!metadata.value_or(reader_metadata{}).is_enabled_convert_binary_to_strings()) {
+        // convert to binary
+        auto const string_col = make_strings_column(*buffer._strings, stream, mr);
+        auto const num_rows   = string_col->size();
+        auto data             = string_col->release();
+
+        if (schema_info != nullptr) {
+          schema_info->children.push_back(column_name_info{"offsets"});
+          schema_info->children.push_back(column_name_info{"binary"});
+        }
+
+        return make_lists_column(
+          num_rows,
+          std::move(data.children[strings_column_view::offsets_column_index]),
+          std::move(data.children[strings_column_view::chars_column_index]),
+          UNKNOWN_NULL_COUNT,
+          std::move(*data.null_mask));
+      } else {
+        if (schema_info != nullptr) {
+          schema_info->children.push_back(column_name_info{"offsets"});
+          schema_info->children.push_back(column_name_info{"chars"});
+        }
+
+        return make_strings_column(*buffer._strings, stream, mr);
+        ;
       }
-      return make_strings_column(*buffer._strings, stream, mr);
 
     case type_id::LIST: {
       // make offsets column
@@ -83,9 +106,15 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
         child_info = &schema_info->children.back();
       }
 
+      CUDF_EXPECTS(not metadata.has_value() or metadata->get_num_children() > 0,
+                   "Invalid metadata provided for read, expected child data for list!");
+      auto const child_metadata = metadata.has_value()
+                                    ? std::make_optional<reader_metadata>(metadata->child(0))
+                                    : std::nullopt;
+
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], child_info, stream, mr);
+      auto child = make_column(buffer.children[0], child_info, child_metadata, stream, mr);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -101,17 +130,22 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
     case type_id::STRUCT: {
       std::vector<std::unique_ptr<cudf::column>> output_children;
       output_children.reserve(buffer.children.size());
-      std::transform(buffer.children.begin(),
-                     buffer.children.end(),
-                     std::back_inserter(output_children),
-                     [&](column_buffer& col) {
-                       column_name_info* child_info = nullptr;
-                       if (schema_info != nullptr) {
-                         schema_info->children.push_back(column_name_info{""});
-                         child_info = &schema_info->children.back();
-                       }
-                       return make_column(col, child_info, stream, mr);
-                     });
+      for (size_t i = 0; i < buffer.children.size(); ++i) {
+        column_name_info* child_info = nullptr;
+        if (schema_info != nullptr) {
+          schema_info->children.push_back(column_name_info{""});
+          child_info = &schema_info->children.back();
+        }
+
+        CUDF_EXPECTS(not metadata.has_value() or metadata->get_num_children() > i,
+                     "Invalid metadata provided for read, expected more child data for struct!");
+        auto const child_metadata = metadata.has_value()
+                                      ? std::make_optional<reader_metadata>(metadata->child(i))
+                                      : std::nullopt;
+
+        output_children.emplace_back(
+          make_column(buffer.children[i], child_info, child_metadata, stream, mr));
+      }
 
       return make_structs_column(buffer.size,
                                  std::move(output_children),
