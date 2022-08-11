@@ -36,13 +36,15 @@ column_view_base::column_view_base(data_type type,
                                    void const* data,
                                    bitmask_type const* null_mask,
                                    size_type null_count,
-                                   size_type offset)
+                                   size_type offset,
+                                   std::shared_ptr<void> owner)
   : _type{type},
     _size{size},
     _data{data},
     _null_mask{null_mask},
     _null_count{null_count},
-    _offset{offset}
+    _offset{offset},
+    _owner{owner}
 {
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
@@ -143,8 +145,10 @@ column_view::column_view(data_type type,
                          bitmask_type const* null_mask,
                          size_type null_count,
                          size_type offset,
-                         std::vector<column_view> const& children)
-  : detail::column_view_base{type, size, data, null_mask, null_count, offset}, _children{children}
+                         std::vector<column_view> const& children,
+                         std::shared_ptr<void> owner)
+  : detail::column_view_base{type, size, data, null_mask, null_count, offset, owner},
+    _children{children}
 {
   if (type.id() == type_id::EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
@@ -158,8 +162,9 @@ mutable_column_view::mutable_column_view(data_type type,
                                          bitmask_type* null_mask,
                                          size_type null_count,
                                          size_type offset,
-                                         std::vector<mutable_column_view> const& children)
-  : detail::column_view_base{type, size, data, null_mask, null_count, offset},
+                                         std::vector<mutable_column_view> const& children,
+                                         std::shared_ptr<void> owner)
+  : detail::column_view_base{type, size, data, null_mask, null_count, offset, owner},
     mutable_children{children}
 {
   if (type.id() == type_id::EMPTY) {
