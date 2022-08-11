@@ -58,6 +58,10 @@ enum token_t : PdaTokenT {
   ListBegin,
   /// End-of-list token (on encounter of semantic ']')
   ListEnd,
+  // Beginning-of-struct-member token
+  StructMemberBegin,
+  // End-of-struct-member token
+  StructMemberEnd,
   /// Beginning-of-field-name token (on encounter of first quote)
   FieldNameBegin,
   /// End-of-field-name token (on encounter of a field name's second quote)
