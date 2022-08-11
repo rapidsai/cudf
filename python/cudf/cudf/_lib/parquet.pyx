@@ -151,6 +151,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
+
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
@@ -287,6 +288,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
+
             df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]
