@@ -180,6 +180,55 @@ struct json_column {
       }
     }
   }
+
+  /**
+   * @brief Appends the row at the given index to the column, filling all rows between the column's
+   * current offset and the given \p row_index with null items.
+   *
+   * @param row_index The row index at which to insert the given row
+   * @param row_type The row's type
+   * @param string_offset The string offset within the original JSON input of this item
+   * @param string_end The one-past-the-last-char offset within the original JSON input of this item
+   * @param child_count In case of a list column, this row's number of children is used to compute
+   * the offsets
+   */
+  void append_row(uint32_t row_index,
+                  json_col_t const& row_type,
+                  uint32_t string_offset,
+                  uint32_t string_end,
+                  uint32_t child_count)
+  {
+    // If, thus far, the column's type couldn't be inferred, we infer it to the given type
+    if (type == json_col_t::Unknown) { type = row_type; }
+
+    // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
+    // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
+
+    // Fill all the omitted rows with "empty"/null rows (if needed)
+    null_fill(row_index);
+
+    // Table listing what we intend to use for a given column type and row type combination
+    // col type | row type  => {valid, FAIL, null}
+    // -----------------------------------------------
+    // List     | List      => valid
+    // List     | Struct    => FAIL
+    // List     | String    => null
+    // Struct   | List      => FAIL
+    // Struct   | Struct    => valid
+    // Struct   | String    => null
+    // String   | List      => null
+    // String   | Struct    => null
+    // String   | String    => valid
+    bool const is_valid = (type == row_type);
+    if (static_cast<size_type>(validity.size()) < word_index(current_offset))
+      validity.push_back({});
+    set_bit_unsafe(&validity.back(), intra_word_index(current_offset));
+    valid_count += (is_valid) ? 1U : 0U;
+    string_offsets.push_back(string_offset);
+    string_lengths.push_back(string_end - string_offset);
+    child_offsets.push_back((child_offsets.size() > 0) ? child_offsets.back() + child_count : 0);
+    current_offset++;
+  };
 };
 
 /**

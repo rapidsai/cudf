@@ -956,57 +956,6 @@ void make_json_column(json_column& root_column,
   };
 #endif
 
-  auto append_row_to_column = [&](json_column* column,
-                                  uint32_t row_index,
-                                  json_col_t const& row_type,
-                                  uint32_t string_offset,
-                                  uint32_t string_end,
-                                  uint32_t child_count) {
-    CUDF_EXPECTS(column != nullptr, "Encountered invalid JSON token sequence");
-
-#ifdef NJP_DEBUG_PRINT
-    std::cout << "  -> append_row_to_column()\n";
-    std::cout << "  ---> col@" << column << "\n";
-    std::cout << "  ---> row #" << row_index << "\n";
-    std::cout << "  ---> col.type: " << column_type_string(column->type) << "\n";
-    std::cout << "  ---> row_type: " << column_type_string(row_type) << "\n";
-    std::cout << "  ---> string: '"
-              << std::string{input.data() + string_offset, (string_end - string_offset)} << "'\n";
-#endif
-
-    // If, thus far, the column's type couldn't be inferred, we infer it to the given type
-    if (column->type == json_col_t::Unknown) { column->type = row_type; }
-
-    // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
-    CUDF_EXPECTS(column->type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
-
-    // Fill all the omitted rows with "empty"/null rows (if needed)
-    column->null_fill(row_index);
-
-    // Table listing what we intend to use for a given column type and row type combination
-    // col type | row type  => {valid, FAIL, null}
-    // -----------------------------------------------
-    // List     | List      => valid
-    // List     | Struct    => FAIL
-    // List     | String    => null
-    // Struct   | List      => FAIL
-    // Struct   | Struct    => valid
-    // Struct   | String    => null
-    // String   | List      => null
-    // String   | Struct    => null
-    // String   | String    => valid
-    bool const is_valid = (column->type == row_type);
-    if (static_cast<size_type>(column->validity.size()) < word_index(column->current_offset))
-      column->validity.push_back({});
-    set_bit_unsafe(&column->validity.back(), intra_word_index(column->current_offset));
-    column->valid_count += (is_valid) ? 1U : 0U;
-    column->string_offsets.push_back(string_offset);
-    column->string_lengths.push_back(string_end - string_offset);
-    column->child_offsets.push_back(
-      (column->child_offsets.size() > 0) ? column->child_offsets.back() + child_count : 0);
-    column->current_offset++;
-  };
-
   /**
    * @brief Updates the given row in the given column with a new string_end and child_count. In
    * particular, updating the child count is relevant for list columns.
@@ -1126,12 +1075,11 @@ void make_json_column(json_column& root_column,
   // The JSON root is either a struct or list
   if (is_nested_token(tokens_gpu[offset])) {
     // Initialize the root column and append this row to it
-    append_row_to_column(&root_column,
-                         row_offset_zero,
-                         token_to_column_type(tokens_gpu[offset]),
-                         get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                         get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                         0);
+    root_column.append_row(row_offset_zero,
+                           token_to_column_type(tokens_gpu[offset]),
+                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                           0);
 
     // Push the root node onto the stack for the data path
     current_data_path.push({&root_column, row_offset_zero, nullptr, zero_child_count});
@@ -1161,12 +1109,11 @@ void make_json_column(json_column& root_column,
         ? get_token_index(tokens_gpu[offset + 1], token_indices_gpu[offset + 1])
         : input.size();
 
-    append_row_to_column(&root_column,
-                         row_offset_zero,
-                         json_col_t::StringColumn,
-                         token_begin_offset,
-                         token_end_offset,
-                         zero_child_count);
+    root_column.append_row(row_offset_zero,
+                           json_col_t::StringColumn,
+                           token_begin_offset,
+                           token_end_offset,
+                           zero_child_count);
     return;
   }
 
@@ -1202,12 +1149,11 @@ void make_json_column(json_column& root_column,
       current_data_path.push({selected_col, target_row_index, nullptr, zero_child_count});
 
       // Add this struct node to the current column
-      append_row_to_column(selected_col,
-                           target_row_index,
-                           token_to_column_type(tokens_gpu[offset]),
-                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                           zero_child_count);
+      selected_col->append_row(target_row_index,
+                               token_to_column_type(tokens_gpu[offset]),
+                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                               zero_child_count);
     }
 
     // StructEnd token
@@ -1241,12 +1187,11 @@ void make_json_column(json_column& root_column,
       current_data_path.push({selected_col, target_row_index, nullptr, zero_child_count});
 
       // Add this struct node to the current column
-      append_row_to_column(selected_col,
-                           target_row_index,
-                           token_to_column_type(tokens_gpu[offset]),
-                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                           zero_child_count);
+      selected_col->append_row(target_row_index,
+                               token_to_column_type(tokens_gpu[offset]),
+                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                               zero_child_count);
     }
 
     // ListEnd token
@@ -1310,12 +1255,11 @@ void make_json_column(json_column& root_column,
 
         current_data_path.top().num_children++;
 
-        append_row_to_column(selected_col,
-                             target_row_index,
-                             token_to_column_type(token),
-                             token_begin_offset,
-                             token_end_offset,
-                             zero_child_count);
+        selected_col->append_row(target_row_index,
+                                 token_to_column_type(token),
+                                 token_begin_offset,
+                                 token_end_offset,
+                                 zero_child_count);
       } else {
         CUDF_FAIL("Unknown JSON token");
       }
