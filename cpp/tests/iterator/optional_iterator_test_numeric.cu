@@ -19,6 +19,8 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 using TestingTypes = cudf::test::NumericTypes;
 

@@ -59,9 +59,11 @@ from cudf.core.dtypes import (
 from cudf.core.groupby import Grouper
 from cudf.core.reshape import (
     concat,
+    crosstab,
     get_dummies,
     melt,
     pivot,
+    pivot_table,
     unstack,
 )
 from cudf.core.series import isclose
@@ -148,6 +150,7 @@ __all__ = [
     "UInt8Index",
     "api",
     "concat",
+    "crosstab",
     "cut",
     "date_range",
     "describe_option",
@@ -162,6 +165,7 @@ __all__ = [
     "melt",
     "merge",
     "pivot",
+    "pivot_table",
     "read_avro",
     "read_csv",
     "read_feather",

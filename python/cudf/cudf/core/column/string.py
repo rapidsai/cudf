@@ -32,7 +32,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
@@ -3549,9 +3549,7 @@ class StringMethods(ColumnMethods):
             libstrings.count_re(self._column, pat, flags)
         )
 
-    def findall(
-        self, pat: str, flags: int = 0, expand: bool = True
-    ) -> SeriesOrIndex:
+    def findall(self, pat: str, flags: int = 0) -> SeriesOrIndex:
         """
         Find all occurrences of pattern or regular expression in the
         Series/Index.
@@ -3623,17 +3621,8 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        if expand:
-            warnings.warn(
-                "The expand parameter is deprecated and will be removed in a "
-                "future version. Set expand=False to match future behavior.",
-                FutureWarning,
-            )
-            data, _ = libstrings.findall(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
-        else:
-            data = libstrings.findall_record(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
+        data = libstrings.findall_record(self._column, pat, flags)
+        return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -5115,7 +5104,7 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
-    mask : Buffer
+    mask : DeviceBufferLike
         The validity mask
     offset : int
         Data offset
@@ -5149,7 +5138,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,

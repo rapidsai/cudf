@@ -550,13 +550,21 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
     }
   }
 
+  std::vector<column_name_info> column_infos;
+  column_infos.reserve(column_names.size());
+  std::transform(column_names.cbegin(),
+                 column_names.cend(),
+                 std::back_inserter(column_infos),
+                 [](auto const& col_name) { return column_name_info{col_name}; });
+
   // This is to ensure the stream-ordered make_stream_column calls above complete before
   // the temporary std::vectors are destroyed on exit from this function.
   stream.synchronize();
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {column_names}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
+                             {column_names, column_infos}};
 }
 
 /**
