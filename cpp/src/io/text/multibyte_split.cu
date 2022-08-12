@@ -57,28 +57,17 @@ namespace cudf {
 template <typename T>
 class split_device_span {
  public:
-  using element_type    = T;                  ///< The type of the elements in the span
-  using value_type      = std::remove_cv<T>;  ///< Stored value type
-  using size_type       = std::size_t;        ///< The type used for the size of the span
-  using difference_type = std::ptrdiff_t;     ///< std::ptrdiff_t
-  using pointer         = T*;                 ///< The type of the pointer returned by data()
-  using iterator        = T*;                 ///< The type of the iterator returned by begin()
-  using const_pointer   = T const*;           ///< The type of the pointer returned by data() const
-  using reference       = T&;  ///< The type of the reference returned by operator[](size_type)
-  using const_reference =
-    T const&;  ///< The type of the reference returned by operator[](size_type) const
-
   explicit constexpr split_device_span(device_span<T> head, device_span<T> tail = {})
     : _head{head}, _tail{tail}
   {
   }
 
-  [[nodiscard]] constexpr reference operator[](size_type i)
+  [[nodiscard]] constexpr T& operator[](size_type i)
   {
     return i < _head.size() ? _head[i] : _tail[i - _head.size()];
   }
 
-  [[nodiscard]] constexpr const_reference operator[](size_type i) const
+  [[nodiscard]] constexpr const T& operator[](size_type i) const
   {
     return i < _head.size() ? _head[i] : _tail[i - _head.size()];
   }
@@ -506,14 +495,12 @@ int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const
 template <typename T>
 class output_chunks {
  public:
-  using element_type = T;                  ///< The type of the elements in the span
-  using value_type   = std::remove_cv<T>;  ///< Stored value type
-  using size_type    = std::size_t;        ///< The type used for the size of the span
+  using size_type = typename rmm::device_uvector<T>::size_type;
 
   output_chunks(size_type max_output_size,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
-    : _size{}, _max_output_size{max_output_size}
+    : _size{0}, _max_output_size{max_output_size}
   {
     assert(max_output_size > 0);
     _chunks.emplace_back(0, stream, mr);
@@ -525,11 +512,11 @@ class output_chunks {
   output_chunks& operator=(output_chunks&&)      = delete;
   output_chunks& operator=(const output_chunks&) = delete;
 
-  [[nodiscard]] split_device_span<element_type> next_output(rmm::cuda_stream_view stream)
+  [[nodiscard]] split_device_span<T> next_output(rmm::cuda_stream_view stream)
   {
     auto head_it   = _chunks.end() - (_chunks.size() > 1 && _chunks.back().is_empty() ? 2 : 1);
     auto head_span = free_span(*head_it);
-    if (head_span.size() >= _max_output_size) { return split_device_span<element_type>{head_span}; }
+    if (head_span.size() >= _max_output_size) { return split_device_span<T>{head_span}; }
     if (head_it == _chunks.end() - 1) {
       // insert a new vector of double size
       auto const next_chunk_size = 2 * _chunks.back().capacity();
@@ -538,7 +525,7 @@ class output_chunks {
     }
     auto tail_span = free_span(_chunks.back());
     assert(head_span.size() + tail_span.size() >= _max_output_size);
-    return split_device_span<element_type>{head_span, tail_span};
+    return split_device_span<T>{head_span, tail_span};
   }
 
   void advance_output(size_type actual_size)
@@ -563,12 +550,9 @@ class output_chunks {
     _size += actual_size;
   }
 
-  [[nodiscard]] const rmm::device_uvector<element_type>& first_chunk() const
-  {
-    return _chunks.front();
-  }
+  [[nodiscard]] const rmm::device_uvector<T>& first_chunk() const { return _chunks.front(); }
 
-  [[nodiscard]] const rmm::device_uvector<element_type>& last_nonempty_chunk() const
+  [[nodiscard]] const rmm::device_uvector<T>& last_nonempty_chunk() const
   {
     return _chunks.size() > 1 && _chunks.back().is_empty() ? *(_chunks.end() - 2) : _chunks.back();
   }
@@ -583,10 +567,10 @@ class output_chunks {
     return _size;
   }
 
-  rmm::device_uvector<element_type> collect(rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr) const
+  rmm::device_uvector<T> collect(rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr) const
   {
-    rmm::device_uvector<element_type> output{size(), stream, mr};
+    rmm::device_uvector<T> output{size(), stream, mr};
     auto output_it = output.begin();
     for (auto const& chunk : _chunks) {
       output_it = thrust::copy(
@@ -596,15 +580,14 @@ class output_chunks {
   }
 
  private:
-  static device_span<element_type> free_span(rmm::device_uvector<element_type>& vector)
+  static device_span<T> free_span(rmm::device_uvector<T>& vector)
   {
-    return device_span<element_type>{vector.data() + vector.size(),
-                                     vector.capacity() - vector.size()};
+    return device_span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
   }
 
   size_type _size;
   size_type _max_output_size;
-  std::vector<rmm::device_uvector<element_type>> _chunks;
+  std::vector<rmm::device_uvector<T>> _chunks;
 };
 
 std::unique_ptr<cudf::column> multibyte_split_singlepass(
