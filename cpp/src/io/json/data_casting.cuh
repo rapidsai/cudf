@@ -28,15 +28,6 @@
 
 namespace cudf::io::json::experimental {
 
-template <typename str_tuple_it>
-rmm::device_uvector<thrust::pair<const char*, size_type>> coalesce_input(
-  str_tuple_it str_tuples, size_type col_size, rmm::cuda_stream_view stream)
-{
-  auto result = rmm::device_uvector<thrust::pair<const char*, size_type>>(col_size, stream);
-  thrust::copy_n(rmm::exec_policy(stream), str_tuples, col_size, result.begin());
-  return result;
-}
-
 template <typename str_tuple_it, typename B>
 std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                    size_type col_size,
@@ -47,8 +38,33 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                    rmm::mr::device_memory_resource* mr)
 {
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    auto const strings_span = coalesce_input(str_tuples, col_size, stream);
-    return make_strings_column(strings_span, stream);
+    rmm::device_uvector<size_type> offsets(col_size + 1, stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      str_tuples,
+                      str_tuples + col_size,
+                      offsets.begin(),
+                      [] __device__(auto const& str) { return str.second; });
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
+
+    rmm::device_uvector<char> chars(offsets.back_element(stream), stream);
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       col_size,
+                       [str_tuples,
+                        chars     = device_span<char>{chars},
+                        offsets   = device_span<size_type>{offsets},
+                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
+                        options] __device__(size_type row) {
+                         if (not bit_is_set(null_mask, row)) { return; }
+                         auto const in = str_tuples[row];
+                         for (int i = 0; i < in.second; ++i) {
+                           chars[offsets[row] + i] = *(in.first + i);
+                         }
+                       });
+
+    return make_strings_column(
+      col_size, std::move(offsets), std::move(chars), std::move(null_mask));
   }
 
   auto out_col = make_fixed_width_column(
