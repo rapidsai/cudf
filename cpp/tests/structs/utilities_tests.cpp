@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,26 +30,13 @@
 
 namespace cudf::test {
 
-/**
- * @brief Round-trip input table through flatten/unflatten,
- *        verify that the table remains equivalent.
- */
-void flatten_unflatten_compare(table_view const& input_table)
-{
-  using namespace cudf::structs::detail;
-
-  auto flattened = flatten_nested_columns(input_table, {}, {}, column_nullability::FORCE);
-  auto unflattened =
-    unflatten_nested_columns(std::make_unique<cudf::table>(flattened), input_table);
-
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, unflattened->view());
-}
-
 using namespace cudf;
 using namespace iterators;
+using namespace cudf::structs::detail;
 using strings    = strings_column_wrapper;
 using dictionary = dictionary_column_wrapper<std::string>;
 using structs    = structs_column_wrapper;
+using bools      = fixed_width_column_wrapper<bool>;
 
 template <typename T>
 using nums = fixed_width_column_wrapper<T, int32_t>;
@@ -66,7 +53,7 @@ struct TypedStructUtilitiesTest : StructUtilitiesTest {
 
 TYPED_TEST_SUITE(TypedStructUtilitiesTest, FixedWidthTypes);
 
-TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevelUnsupported)
+TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevel)
 {
   using T     = TypeParam;
   using lists = lists_column_wrapper<T, int32_t>;
@@ -75,8 +62,10 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevelUnsupported)
   auto lists_col = lists{{0, 1}, {22, 33}, {44, 55, 66}};
   auto nums_col  = nums{{0, 1, 2}, null_at(6)};
 
-  EXPECT_THROW(flatten_unflatten_compare(cudf::table_view{{lists_col, nums_col}}),
-               cudf::logic_error);
+  auto table = cudf::table_view{{lists_col, nums_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
@@ -88,10 +77,10 @@ TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
   auto lists_member = lists{{0, 1}, {22, 33}, {44, 55, 66}};
   auto nums_member  = nums{{0, 1, 2}, null_at(6)};
   auto structs_col  = structs{{nums_member, lists_member}};
+  auto nums_col     = nums{{0, 1, 2}, null_at(6)};
 
-  auto nums_col = nums{{0, 1, 2}, null_at(6)};
-
-  EXPECT_THROW(flatten_unflatten_compare(cudf::table_view{{nums_col, structs_col}}),
+  EXPECT_THROW(flatten_nested_columns(
+                 cudf::table_view{{nums_col, structs_col}}, {}, {}, column_nullability::FORCE),
                cudf::logic_error);
 }
 
@@ -104,7 +93,10 @@ TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
   auto strings_col     = strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto nuther_nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, strings_col, nuther_nums_col}});
+  auto table = cudf::table_view{{nums_col, strings_col, nuther_nums_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
@@ -116,8 +108,19 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
   auto strings_member = strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_col    = structs{{nums_member, strings_member}};
   auto nums_col       = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
+  auto table          = cudf::table_view{{nums_col, structs_col}};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, structs_col}});
+  auto expected_nums_col_1  = cudf::column(nums_col);
+  auto expected_structs_col = bools{{1, 1, 1, 1, 1, 1, 1}};
+  auto expected_nums_col_2 =
+    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(1));
+  auto expected = cudf::table_view{
+    {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
@@ -129,8 +132,19 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
   auto strings_member = strings{{"", "1", "22", "333", "4444", "55555", "666666"}, null_at(1)};
   auto structs_col    = structs{{nums_member, strings_member}, null_at(2)};
   auto nums_col       = nums{{0, 1, 2, 3, 4, 5, 6}, null_at(6)};
+  auto table          = cudf::table_view{{nums_col, structs_col}};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, structs_col}});
+  auto expected_nums_col_1  = cudf::column(nums_col);
+  auto expected_structs_col = bools{{1, 1, 0, 1, 1, 1, 1}, null_at(2)};
+  auto expected_nums_col_2 =
+    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(1));
+  auto expected = cudf::table_view{
+    {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
@@ -147,8 +161,26 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
 
   auto struct_1_nums_member  = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col = structs{{struct_1_nums_member, structs_1_structs_member}};
+  auto table                 = cudf::table_view{{nums_col, struct_of_structs_col}};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
+  auto expected_nums_col_1    = cudf::column(nums_col);
+  auto expected_structs_col_1 = bools{{1, 1, 1, 1, 1, 1, 1}};
+  auto expected_nums_col_2 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+  auto expected_structs_col_2 = bools{{1, 1, 1, 1, 1, 1, 1}};
+  auto expected_nums_col_3    = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
+  auto expected_strings_col = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected = cudf::table_view{{expected_nums_col_1,
+                                    expected_structs_col_1,
+                                    expected_nums_col_2,
+                                    expected_structs_col_2,
+                                    expected_nums_col_3,
+                                    expected_strings_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
@@ -166,8 +198,26 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
 
   auto struct_1_nums_member  = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col = structs{{struct_1_nums_member, structs_1_structs_member}};
+  auto table                 = cudf::table_view{{nums_col, struct_of_structs_col}};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
+  auto expected_nums_col_1    = cudf::column(nums_col);
+  auto expected_structs_col_1 = bools{{1, 1, 1, 1, 1, 1, 1}};
+  auto expected_nums_col_2 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+  auto expected_structs_col_2 = bools{{1, 1, 0, 1, 1, 1, 1}, null_at(2)};
+  auto expected_nums_col_3    = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
+  auto expected_strings_col = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected = cudf::table_view{{expected_nums_col_1,
+                                    expected_structs_col_1,
+                                    expected_nums_col_2,
+                                    expected_structs_col_2,
+                                    expected_nums_col_3,
+                                    expected_strings_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
@@ -185,8 +235,26 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
   auto struct_1_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col =
     structs{{struct_1_nums_member, structs_1_structs_member}, null_at(4)};
+  auto table = cudf::table_view{{nums_col, struct_of_structs_col}};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
+  auto expected_nums_col_1    = cudf::column(nums_col);
+  auto expected_structs_col_1 = bools{{1, 1, 1, 1, 0, 1, 1}, null_at(4)};
+  auto expected_nums_col_2 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+  auto expected_structs_col_2 = bools{{1, 1, 1, 1, 0, 1, 1}, null_at(4)};
+  auto expected_nums_col_3    = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
+  auto expected_strings_col = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected = cudf::table_view{{expected_nums_col_1,
+                                    expected_structs_col_1,
+                                    expected_nums_col_2,
+                                    expected_structs_col_2,
+                                    expected_nums_col_3,
+                                    expected_strings_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
@@ -205,8 +273,26 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
   auto struct_1_nums_member = nums{{0, 1, 22, 33, 44, 55, 66}, null_at(3)};
   auto struct_of_structs_col =
     structs{{struct_1_nums_member, structs_1_structs_member}, null_at(4)};
+  auto table = cudf::table_view{{nums_col, struct_of_structs_col}};
 
-  flatten_unflatten_compare(cudf::table_view{{nums_col, struct_of_structs_col}});
+  auto expected_nums_col_1    = cudf::column(nums_col);
+  auto expected_structs_col_1 = bools{{1, 1, 1, 1, 0, 1, 1}, null_at(4)};
+  auto expected_nums_col_2 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+  auto expected_structs_col_2 = bools{{1, 1, 0, 1, 0, 1, 1}, {1, 1, 0, 1, 0, 1, 1}};
+  auto expected_nums_col_3    = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
+  auto expected_strings_col = cudf::column(
+    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected = cudf::table_view{{expected_nums_col_1,
+                                    expected_structs_col_1,
+                                    expected_nums_col_2,
+                                    expected_structs_col_2,
+                                    expected_nums_col_3,
+                                    expected_strings_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
+                                flatten_nested_columns(table, {}, {}, column_nullability::FORCE));
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
@@ -222,7 +308,8 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
 
   auto structs_with_lists_col = structs{lists_member, ints_member};
 
-  EXPECT_THROW(flatten_unflatten_compare(cudf::table_view{{structs_with_lists_col}}),
+  EXPECT_THROW(flatten_nested_columns(
+                 cudf::table_view{{structs_with_lists_col}}, {}, {}, column_nullability::FORCE),
                cudf::logic_error);
 }
 

@@ -283,7 +283,7 @@ struct parse_datetime {
             std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
-            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size - left));
+            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size + left));
           bytes_read = read_size - left;
           break;
         }
