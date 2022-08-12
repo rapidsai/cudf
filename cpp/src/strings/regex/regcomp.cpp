@@ -274,13 +274,12 @@ class regex_parser {
   // for \w and \W
   void add_ascii_word_class(std::vector<reclass_range>& ranges, bool negated = false)
   {
+    add_ascii_digit_class(ranges, negated);
     if (!negated) {
       ranges.push_back({'a', 'z'});
       ranges.push_back({'A', 'Z'});
       ranges.push_back({'_', '_'});
-      add_ascii_digit_class(ranges, negated);
     } else {
-      add_ascii_digit_class(ranges, negated);
       ranges.back().last = 'A' - 1;
       ranges.push_back({'Z' + 1, 'a' - 1});  // {'_'-1, '_' + 1}
       ranges.push_back({'z' + 1, MAX_REGEX_CHAR});
