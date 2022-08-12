@@ -129,6 +129,12 @@ struct json_column {
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;
 
+  json_column()                    = default;
+  json_column(json_column&& other) = default;
+  json_column& operator=(json_column&&) = default;
+  json_column(const json_column&)       = delete;
+  json_column& operator=(const json_column&) = delete;
+
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.
    *
@@ -240,18 +246,6 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
-
-/**
- * @brief Parses the given JSON string and generates a tree representation of the given input.
- *
- * @param input The JSON input in host memory
- * @param d_input The JSON input in device memory
- * @param stream The CUDA stream to which kernels are dispatched
- * @return The columnar representation of the data from the given JSON input
- */
-json_column make_json_column(host_span<SymbolT const> input,
-                             device_span<SymbolT const> d_input,
-                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
