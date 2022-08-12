@@ -460,12 +460,12 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 }
 
 /**
- * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
+ * @brief Pack literal values in output bitstream (1,2,4,8,12,16,20 or 24 bits per value)
  */
 inline __device__ void PackLiterals(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 24) {
+  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 20 || w == 24) {
     if (t <= (count | 0x1f)) {
       if (w == 1 || w == 2 || w == 4) {
         uint32_t mask = 0;
@@ -501,6 +501,16 @@ inline __device__ void PackLiterals(
           dst[t * 2 + 1] = v >> 8;
         }
         return;
+      } else if (w == 20) {
+        uint64_t vt = v;
+        vt |= shuffle_xor(vt, 1) << 20;
+        if (t < count && !(t & 1)) {
+          dst[t * 5 + 0] = v;
+          dst[t * 5 + 1] = v >> 8;
+          dst[t * 5 + 2] = v >> 16;
+          dst[t * 5 + 3] = v >> 24;
+          dst[t * 5 + 4] = v >> 32;
+        }
       } else if (w == 24) {
         if (t < count) {
           dst[t * 3 + 0] = v;
@@ -516,6 +526,8 @@ inline __device__ void PackLiterals(
     // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
     // words but the destination mem may not be a multiple of 4 bytes.
     // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
+    // TODO (ets): This code should never be called, since we prescribe a limited number of bit
+    // widths in build_chunk_dictionaries().
     __shared__ uint32_t scratch[64];
     if (t < 64) { scratch[t] = 0; }
     __syncthreads();
