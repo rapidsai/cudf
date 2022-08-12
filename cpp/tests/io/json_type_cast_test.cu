@@ -64,8 +64,11 @@ TEST_F(JSONTypeCastTest, String)
   auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
-  cudf::test::strings_column_wrapper data({"this", "is", "a", "column", "of", "strings"});
-  auto d_column = cudf::column_device_view::create(data);
+  auto in_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  std::vector<const char*> input_values{"this", "is", "null", "of", "", "strings"};
+  cudf::test::strings_column_wrapper input(input_values.begin(), input_values.end(), in_valids);
+
+  auto d_column = cudf::column_device_view::create(input);
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, false>(),
@@ -79,7 +82,13 @@ TEST_F(JSONTypeCastTest, String)
 
   auto str_col = cudf::io::json::experimental::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(str_col->view(), data);
+
+  auto out_valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2 and i != 4; });
+  std::vector<const char*> expected_values{"this", "is", "", "of", "", "strings"};
+  cudf::test::strings_column_wrapper expected(
+    expected_values.begin(), expected_values.end(), out_valids);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(str_col->view(), expected);
 }
 
 TEST_F(JSONTypeCastTest, Int)

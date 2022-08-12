@@ -39,11 +39,30 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 {
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     rmm::device_uvector<size_type> offsets(col_size + 1, stream);
-    thrust::transform(rmm::exec_policy(stream),
-                      str_tuples,
-                      str_tuples + col_size,
-                      offsets.begin(),
-                      [] __device__(auto const& str) { return str.second; });
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       col_size,
+                       [str_tuples,
+                        sizes     = device_span<size_type>{offsets},
+                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
+                        options] __device__(size_type row) {
+                         if (not bit_is_set(null_mask, row)) {
+                           sizes[row] = 0;
+                           return;
+                         }
+                         auto const in = str_tuples[row];
+
+                         auto const is_null_literal = serialized_trie_contains(
+                           options.trie_na, {in.first, static_cast<size_t>(in.second)});
+                         if (is_null_literal) {
+                           sizes[row] = 0;
+                           clear_bit(null_mask, row);
+                           return;
+                         }
+
+                         sizes[row] = in.second;
+                       });
+
     thrust::exclusive_scan(
       rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
 
