@@ -1,14 +1,5 @@
 # Library Design
 
-The cuDF library is a GPU-accelerated, [Pandas-like](https://pandas.pydata.org/) DataFrame library.
-Under the hood, all of cuDF's functionality relies on the CUDA-accelerated `libcudf` C++ library.
-Thus, cuDF's internals are designed to efficiently and robustly map pandas APIs to `libcudf` functions.
-
-```{note}
-For more information about the `libcudf` library, a good starting point is the
-[developer guide](https://github.com/rapidsai/cudf/blob/main/cpp/docs/DEVELOPER_GUIDE.md).
-```
-
 At a high level, cuDF is structured in three layers, each of which serves a distinct purpose:
 
 1. The Frame layer: The user-facing implementation of pandas-like data structures like `DataFrame` and `Series`.
@@ -219,8 +210,7 @@ A `Buffer` constructed from a preexisting device memory allocation (such as a Cu
 Conversely, when constructed from a host object,
 `Buffer` uses [`rmm.DeviceBuffer`](https://github.com/rapidsai/rmm#devicebuffers) to allocate new memory.
 The data is then copied from the host object into the newly allocated device memory.
-You can read more about device memory allocation with RMM [here](https://github.com/rapidsai/rmm).
-
+You can read more about [device memory allocation with RMM here](https://github.com/rapidsai/rmm).
 
 ## The Cython layer
 

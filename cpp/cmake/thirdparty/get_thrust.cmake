@@ -80,6 +80,6 @@ function(find_and_configure_thrust VERSION)
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_Thrust 1.15.0)
+set(CUDF_MIN_VERSION_Thrust 1.17.0)
 
 find_and_configure_thrust(${CUDF_MIN_VERSION_Thrust})

@@ -424,6 +424,25 @@ TEST_F(StringsContainsTests, FixedQuantifier)
   }
 }
 
+TEST_F(StringsContainsTests, QuantifierErrors)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"});
+  auto sv    = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::contains_re(sv, "^+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "$+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "(^)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(sv, "($)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "\\A+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "\\Z+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(\\A)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(\\Z)+"), cudf::logic_error);
+
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(^($))+"), cudf::logic_error);
+  EXPECT_NO_THROW(cudf::strings::contains_re(sv, "(^a($))+"));
+  EXPECT_NO_THROW(cudf::strings::count_re(sv, "(^(a$))+"));
+}
+
 TEST_F(StringsContainsTests, OverlappedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "defghí", "", "éééééé", "ghijkl"});

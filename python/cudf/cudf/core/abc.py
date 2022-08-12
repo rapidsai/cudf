@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
 import sys
@@ -90,13 +90,15 @@ class Serializable:
         header : dict
             The metadata required to reconstruct the object.
         frames : list
-            The Buffers or memoryviews that the object should contain.
+            The DeviceBufferLike or memoryview objects that the object
+            should contain.
 
         :meta private:
         """
         header, frames = self.serialize()
         assert all(
-            (type(f) in [cudf.core.buffer.Buffer, memoryview]) for f in frames
+            isinstance(f, (cudf.core.buffer.DeviceBufferLike, memoryview))
+            for f in frames
         )
         header["type-serialized"] = pickle.dumps(type(self))
         header["is-cuda"] = [
@@ -130,7 +132,7 @@ class Serializable:
         """
         typ = pickle.loads(header["type-serialized"])
         frames = [
-            cudf.core.buffer.Buffer(f) if c else memoryview(f)
+            cudf.core.buffer.as_device_buffer_like(f) if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
         assert all(
@@ -158,7 +160,7 @@ class Serializable:
         header, frames = self.device_serialize()
         header["writeable"] = len(frames) * (None,)
         frames = [
-            f.to_host_array().data if c else memoryview(f)
+            f.memoryview() if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
         return header, frames

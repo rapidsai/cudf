@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from cudf import DataFrame, GenericIndex, RangeIndex, Series
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 from cudf.testing._utils import assert_eq
 
 if sys.version_info < (3, 8):
@@ -97,7 +97,7 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10).view("|u1")
-    buf = Buffer(arr)
+    buf = as_device_buffer_like(arr)
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)
