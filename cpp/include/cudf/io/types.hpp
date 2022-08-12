@@ -646,6 +646,10 @@ struct partition_info {
   }
 };
 
+/**
+ * @brief schema element for parquet reader
+ *
+ */
 class reader_column_schema {
   // Whether to read binary data as a string column
   bool _convert_binary_to_strings{true};
@@ -655,8 +659,18 @@ class reader_column_schema {
  public:
   reader_column_schema() = default;
 
+  /**
+   * @brief Construct a new reader column schema object
+   *
+   * @param number_of_children number of child schema objects to default construct
+   */
   reader_column_schema(size_type number_of_children) { children.resize(number_of_children); }
 
+  /**
+   * @brief Construct a new reader column schema object with a span defining the children
+   *
+   * @param child_span span of child schema objects
+   */
   reader_column_schema(host_span<reader_column_schema> const& child_span)
   {
     children.assign(child_span.begin(), child_span.end());
