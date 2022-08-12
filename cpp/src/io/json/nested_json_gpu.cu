@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/error.hpp"
 #include "nested_json.hpp"
 
 #include <io/fst/logical_stack.cuh>
@@ -27,9 +26,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <iterator>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 

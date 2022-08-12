@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 
-#include "cudf_test/column_wrapper.hpp"
-
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
-
-#include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
