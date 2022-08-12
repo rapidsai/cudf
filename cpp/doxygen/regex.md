@@ -68,12 +68,12 @@ The details are based on features documented at https://www.regular-expressions.
 
 | Feature  | Syntax | Description | Example |
 | ---------- | ------------- | ------------- | ------------- |
-| Shorthand | `\d` | Adds all digits to the character class. Matches a single digit if used outside character classes. | `\d` matches a character that is a digit |
-| Shorthand | `\w` | Adds all word characters to the character class. Matches a single word character if used outside character classes. | `\w` matches any single word character |
-| Shorthand | `\s` | Adds all whitespace to the character class. Matches a single whitespace character if used outside character classes. | `\s` matches any single whitespace character |
-| Shorthand | `\D` | Adds all non-digits to the character class. Matches a single character that is not a digit character if used outside character classes. | `[\D]` matches a single character that is not a digit character |
-| Shorthand | `\W` | Adds all non-word characters to the character class. Matches a single character that is not a word character if used outside character classes. | [`\W`] matches a single character that is not a word character |
-| Shorthand | `\S` | Adds all non-whitespace to the character class. Matches a single character that is not a whitespace character if used outside character classes. | `[\S]` matches a single character that is not a whitespace character |
+| Shorthand | `\d` | Adds all digits to the character class. Matches a single digit if used outside character classes. The behavior can be controlled by [cudf::strings::regex_flags::ASCII](@ref cudf::strings::regex_flags) to include only `[0-9]` | `\d` matches a character that is a digit |
+| Shorthand | `\w` | Adds all word characters to the character class. Matches a single word character if used outside character classes. The behavior can be controlled by [cudf::strings::regex_flags::ASCII](@ref cudf::strings::regex_flags) to include only `[0-9A-Za-z_]` | `\w` matches any single word character |
+| Shorthand | `\s` | Adds all whitespace to the character class. Matches a single whitespace character if used outside character classes. The behavior can be controlled by [cudf::strings::regex_flags::ASCII](@ref cudf::strings::regex_flags) to include only `[\t- ]` | `\s` matches any single whitespace character |
+| Shorthand | `\D` | Adds all non-digits to the character class. Matches a single character that is not a digit character if used outside character classes. The behavior can be controlled by [cudf::strings::regex_flags::ASCII](@ref cudf::strings::regex_flags) | `[\D]` matches a single character that is not a digit character |
+| Shorthand | `\W` | Adds all non-word characters to the character class. Matches a single character that is not a word character if used outside character classes. The behavior can be controlled by [cudf::strings::regex_flags::ASCII](@ref cudf::strings::regex_flags) | [`\W`] matches a single character that is not a word character |
+| Shorthand | `\S` | Adds all non-whitespace to the character class. Matches a single character that is not a whitespace character if used outside character classes. The behavior can be controlled by [cudf::strings::regex_flags::ASCII](@ref cudf::strings::regex_flags) | `[\S]` matches a single character that is not a whitespace character |
 
 ### Anchors
 
