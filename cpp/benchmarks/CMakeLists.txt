@@ -276,6 +276,7 @@ ConfigureBench(
   string/factory.cu
   string/filter.cpp
   string/find.cpp
+  string/like.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
