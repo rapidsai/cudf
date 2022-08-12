@@ -121,6 +121,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             "ARROW_GRPC_USE_SHARED ${ARROW_BUILD_SHARED}"
             "ARROW_PROTOBUF_USE_SHARED ${ARROW_BUILD_SHARED}"
             "ARROW_ZSTD_USE_SHARED ${ARROW_BUILD_SHARED}"
+            "xsimd_SOURCE AUTO"
   )
 
   set(ARROW_FOUND TRUE)
@@ -275,7 +276,7 @@ endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
-      8.0.0
+      9.0.0
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()

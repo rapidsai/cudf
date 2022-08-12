@@ -16,7 +16,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 )
 from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import (
     Decimal32Dtype,
@@ -203,7 +203,7 @@ class Decimal32Column(DecimalBaseColumn):
         data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int32"))
         data_32 = data_128[::4].copy()
         return cls(
-            data=Buffer(data_32.view("uint8")),
+            data=as_device_buffer_like(data_32.view("uint8")),
             size=len(data),
             dtype=dtype,
             offset=data.offset,
@@ -211,7 +211,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     def to_arrow(self):
-        data_buf_32 = self.base_data.to_host_array().view("int32")
+        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")
         data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
 
         # use striding to set the first 32 bits of each 128-bit chunk:
@@ -231,7 +231,7 @@ class Decimal32Column(DecimalBaseColumn):
         mask_buf = (
             self.base_mask
             if self.base_mask is None
-            else pa.py_buffer(self.base_mask.to_host_array())
+            else pa.py_buffer(self.base_mask.memoryview())
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
@@ -290,7 +290,7 @@ class Decimal64Column(DecimalBaseColumn):
         data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int64"))
         data_64 = data_128[::2].copy()
         return cls(
-            data=Buffer(data_64.view("uint8")),
+            data=as_device_buffer_like(data_64.view("uint8")),
             size=len(data),
             dtype=dtype,
             offset=data.offset,
@@ -298,7 +298,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     def to_arrow(self):
-        data_buf_64 = self.base_data.to_host_array().view("int64")
+        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
 
         # use striding to set the first 64 bits of each 128-bit chunk:
@@ -312,7 +312,7 @@ class Decimal64Column(DecimalBaseColumn):
         mask_buf = (
             self.base_mask
             if self.base_mask is None
-            else pa.py_buffer(self.base_mask.to_host_array())
+            else pa.py_buffer(self.base_mask.memoryview())
         )
         return pa.Array.from_buffers(
             type=self.dtype.to_arrow(),
