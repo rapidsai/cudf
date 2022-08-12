@@ -68,7 +68,7 @@ class parquet_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
-  std::optional<std::vector<reader_metadata>> _reader_metadata;
+  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
   /**
    * @brief Constructor from source info.
@@ -123,11 +123,11 @@ class parquet_reader_options {
   /**
    * @brief Returns optional tree of metadata.
    *
-   * @return vector of parquet_reader_metadata objects.
+   * @return vector of reader_column_schema objects.
    */
-  [[nodiscard]] std::optional<std::vector<reader_metadata>> get_metadata() const
+  [[nodiscard]] std::optional<std::vector<reader_column_schema>> get_column_schema() const
   {
-    return _reader_metadata;
+    return _reader_column_schema;
   }
 
   /**
@@ -201,12 +201,15 @@ class parquet_reader_options {
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
-   * @brief Sets reader metadata.
+   * @brief Sets reader column schema.
    *
-   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
+   * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
    * Note default is to convert to string columns.
    */
-  void set_metadata(std::vector<reader_metadata> val) { _reader_metadata = std::move(val); }
+  void set_column_schema(std::vector<reader_column_schema> val)
+  {
+    _reader_column_schema = std::move(val);
+  }
 
   /**
    * @brief Sets number of rows to skip.
@@ -319,9 +322,9 @@ class parquet_reader_options_builder {
    * @param val Tree of metadata information.
    * @return this for chaining
    */
-  parquet_reader_options_builder& set_metadata(std::vector<reader_metadata> val)
+  parquet_reader_options_builder& set_column_schema(std::vector<reader_column_schema> val)
   {
-    options._reader_metadata = std::move(val);
+    options._reader_column_schema = std::move(val);
     return *this;
   }
 

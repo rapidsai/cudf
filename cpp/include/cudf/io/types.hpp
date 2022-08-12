@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <map>
 #include <memory>
@@ -645,14 +646,21 @@ struct partition_info {
   }
 };
 
-class reader_metadata {
+class reader_column_schema {
   // Whether to read binary data as a string column
   bool _convert_binary_to_strings{true};
 
-  std::vector<reader_metadata> children;
+  std::vector<reader_column_schema> children;
 
  public:
-  reader_metadata() = default;
+  reader_column_schema() = default;
+
+  reader_column_schema(size_type number_of_children) { children.resize(number_of_children); }
+
+  reader_column_schema(host_span<reader_column_schema> const& child_span)
+  {
+    children.assign(child_span.begin(), child_span.end());
+  }
 
   /**
    * @brief Add the children metadata of this column
@@ -660,7 +668,7 @@ class reader_metadata {
    * @param child The children metadata of this column to add
    * @return this for chaining
    */
-  reader_metadata& add_child(reader_metadata const& child)
+  reader_column_schema& add_child(reader_column_schema const& child)
   {
     children.push_back(child);
     return *this;
@@ -672,7 +680,7 @@ class reader_metadata {
    * @param i Index of the child to get
    * @return this for chaining
    */
-  [[nodiscard]] reader_metadata& child(size_type i) { return children[i]; }
+  [[nodiscard]] reader_column_schema& child(size_type i) { return children[i]; }
 
   /**
    * @brief Get const reference to a child of this column
@@ -680,7 +688,7 @@ class reader_metadata {
    * @param i Index of the child to get
    * @return this for chaining
    */
-  [[nodiscard]] reader_metadata const& child(size_type i) const { return children[i]; }
+  [[nodiscard]] reader_column_schema const& child(size_type i) const { return children[i]; }
 
   /**
    * @brief Specifies whether this column should be written as binary or string data
@@ -690,7 +698,7 @@ class reader_metadata {
    * @param binary True = use binary data type. False = use string data type
    * @return this for chaining
    */
-  reader_metadata& set_convert_binary_to_strings(bool binary)
+  reader_column_schema& set_convert_binary_to_strings(bool binary)
   {
     _convert_binary_to_strings = binary;
     return *this;

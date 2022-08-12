@@ -1595,7 +1595,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   // Binary columns can be read as binary or strings
-  _reader_metadata = options.get_metadata();
+  _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
@@ -1769,9 +1769,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        auto const metadata        = _reader_metadata.has_value()
-                                       ? std::make_optional<reader_metadata>((*_reader_metadata)[i])
-                                       : std::nullopt;
+        auto const metadata =
+          _reader_column_schema.has_value()
+            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+            : std::nullopt;
         out_columns.emplace_back(
           make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
       }

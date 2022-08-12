@@ -203,7 +203,7 @@ class reader::impl {
   std::vector<int> _output_column_schemas;
 
   bool _strings_to_categorical = false;
-  std::optional<std::vector<reader_metadata>> _reader_metadata;
+  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
 };
 

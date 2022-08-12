@@ -768,11 +768,12 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .set_metadata({cudf_io::reader_metadata().set_convert_binary_to_strings(false),
-                     cudf_io::reader_metadata().set_convert_binary_to_strings(false),
-                     cudf_io::reader_metadata().set_convert_binary_to_strings(false),
-                     cudf_io::reader_metadata().add_child(cudf_io::reader_metadata()),
-                     cudf_io::reader_metadata().add_child(cudf_io::reader_metadata())});
+      .set_column_schema(
+        {cudf_io::reader_column_schema().set_convert_binary_to_strings(false),
+         cudf_io::reader_column_schema().set_convert_binary_to_strings(false),
+         cudf_io::reader_column_schema().set_convert_binary_to_strings(false),
+         cudf_io::reader_column_schema().add_child(cudf_io::reader_column_schema()),
+         cudf_io::reader_column_schema().add_child(cudf_io::reader_column_schema())});
   auto result = cudf_io::read_parquet(in_opts);
 
   auto original_cols = write_tbl->release();
@@ -4348,7 +4349,7 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
-      .set_metadata({{}, {}, {}, {}, {}});
+      .set_column_schema({{}, {}, {}, {}, {}});
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_string->view(), result.tbl->view());
@@ -4359,15 +4360,15 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_string->view(), result.tbl->view());
 
-  std::vector<cudf_io::reader_metadata> md{
+  std::vector<cudf_io::reader_column_schema> md{
     {},
     {},
     {},
-    cudf_io::reader_metadata().set_convert_binary_to_strings(false),
-    cudf_io::reader_metadata().set_convert_binary_to_strings(false)};
+    cudf_io::reader_column_schema().set_convert_binary_to_strings(false),
+    cudf_io::reader_column_schema().set_convert_binary_to_strings(false)};
 
   cudf_io::parquet_reader_options mixed_in_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_metadata(md);
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_column_schema(md);
   result = cudf_io::read_parquet(mixed_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_mixed->view(), result.tbl->view());
@@ -4425,14 +4426,14 @@ TEST_F(ParquetReaderTest, NestedByteArray)
   read_footer(source, &fmd);
   EXPECT_EQ(fmd.schema[5].type, cudf::io::parquet::Type::BYTE_ARRAY);
 
-  std::vector<cudf_io::reader_metadata> md{
+  std::vector<cudf_io::reader_column_schema> md{
     {},
     {},
-    cudf_io::reader_metadata().add_child(
-      cudf_io::reader_metadata().set_convert_binary_to_strings(false))};
+    cudf_io::reader_column_schema().add_child(
+      cudf_io::reader_column_schema().set_convert_binary_to_strings(false))};
 
   cudf_io::parquet_reader_options in_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_metadata(md);
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_column_schema(md);
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
@@ -4469,7 +4470,8 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_metadata({{}, {}});
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+      .set_column_schema({{}, {}});
   auto result = cudf_io::read_parquet(in_opts);
 
   auto source = cudf_io::datasource::create(filepath);
@@ -4516,11 +4518,11 @@ TEST_F(ParquetReaderTest, StructByteArray)
       .metadata(&output_metadata);
   cudf_io::write_parquet(out_opts);
 
-  std::vector<cudf_io::reader_metadata> md{cudf_io::reader_metadata().add_child(
-    cudf_io::reader_metadata().set_convert_binary_to_strings(false))};
+  std::vector<cudf_io::reader_column_schema> md{cudf_io::reader_column_schema().add_child(
+    cudf_io::reader_column_schema().set_convert_binary_to_strings(false))};
 
   cudf_io::parquet_reader_options in_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_metadata(md);
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).set_column_schema(md);
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());

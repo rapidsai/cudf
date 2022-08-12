@@ -59,7 +59,7 @@ void column_buffer::create(size_type _size,
  */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
-                                    std::optional<reader_metadata> const& metadata,
+                                    std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -67,7 +67,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
   switch (buffer.type.id()) {
     case type_id::STRING:
-      if (!metadata.value_or(reader_metadata{}).is_enabled_convert_binary_to_strings()) {
+      if (!schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
         // convert to binary
         auto const string_col = make_strings_column(*buffer._strings, stream, mr);
         auto const num_rows   = string_col->size();
@@ -106,15 +106,15 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
         child_info = &schema_info->children.back();
       }
 
-      CUDF_EXPECTS(not metadata.has_value() or metadata->get_num_children() > 0,
-                   "Invalid metadata provided for read, expected child data for list!");
-      auto const child_metadata = metadata.has_value()
-                                    ? std::make_optional<reader_metadata>(metadata->child(0))
-                                    : std::nullopt;
+      CUDF_EXPECTS(not schema.has_value() or schema->get_num_children() > 0,
+                   "Invalid schema provided for read, expected child data for list!");
+      auto const child_schema = schema.has_value()
+                                  ? std::make_optional<reader_column_schema>(schema->child(0))
+                                  : std::nullopt;
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], child_info, child_metadata, stream, mr);
+      auto child = make_column(buffer.children[0], child_info, child_schema, stream, mr);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -137,14 +137,14 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
           child_info = &schema_info->children.back();
         }
 
-        CUDF_EXPECTS(not metadata.has_value() or metadata->get_num_children() > i,
-                     "Invalid metadata provided for read, expected more child data for struct!");
-        auto const child_metadata = metadata.has_value()
-                                      ? std::make_optional<reader_metadata>(metadata->child(i))
-                                      : std::nullopt;
+        CUDF_EXPECTS(not schema.has_value() or schema->get_num_children() > i,
+                     "Invalid schema provided for read, expected more child data for struct!");
+        auto const child_schema = schema.has_value()
+                                    ? std::make_optional<reader_column_schema>(schema->child(i))
+                                    : std::nullopt;
 
         output_children.emplace_back(
-          make_column(buffer.children[i], child_info, child_metadata, stream, mr));
+          make_column(buffer.children[i], child_info, child_schema, stream, mr));
       }
 
       return make_structs_column(buffer.size,
