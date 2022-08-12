@@ -73,7 +73,7 @@ void BM_pre_sorted_sum(benchmark::State& state)
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-  profile.set_null_frequency(0.1);
+  profile.set_null_probability(0.1);
   auto vals_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
 

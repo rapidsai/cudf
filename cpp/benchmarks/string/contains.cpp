@@ -51,7 +51,7 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t
 
   // Create a randomized gather-map to build a column out of the strings in data.
   data_profile gather_profile =
-    data_profile_builder().cardinality(0).null_frequency(0.0).distribution(
+    data_profile_builder().cardinality(0).null_probability(0.0).distribution(
       cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
   auto gather_table =
     create_random_table({cudf::type_id::INT32}, row_count{n_rows}, gather_profile);

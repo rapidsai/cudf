@@ -54,7 +54,7 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
 
   cudf::size_type const num_rows = state.get_int64("NumRows");
 
-  data_profile profile = data_profile_builder().cardinality(0).null_frequency(0.01).distribution(
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.01).distribution(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
   auto source_table =

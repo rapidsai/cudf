@@ -33,7 +33,7 @@ void BM_group_shift(benchmark::State& state)
   const int num_groups = 100;
 
   data_profile const profile =
-    data_profile_builder().cardinality(0).null_frequency(0.01).distribution(
+    data_profile_builder().cardinality(0).null_probability(0.01).distribution(
       cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, num_groups);
 
   auto keys_table =
