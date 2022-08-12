@@ -68,11 +68,9 @@ std::pair<std::unique_ptr<column>, thrust::device_vector<size_type>> make_test_d
 
   auto segment_length = column_size / num_segments;
 
-  auto const dtype = cudf::type_to_id<InputType>();
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 100);
+  auto const dtype     = cudf::type_to_id<InputType>();
+  data_profile profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    dtype, distribution_id::UNIFORM, 0, 100);
   auto input = create_random_table({dtype}, row_count{column_size}, profile);
 
   auto offset_it =
