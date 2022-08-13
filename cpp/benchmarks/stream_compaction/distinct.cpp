@@ -64,8 +64,8 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
 {
   cudf::rmm_pool_raii pool_raii;
 
-  auto const size             = state.get_int64("ColumnSize");
-  auto const dtype            = cudf::type_to_id<Type>();
+  auto const size               = state.get_int64("ColumnSize");
+  auto const dtype              = cudf::type_to_id<Type>();
   double const null_probability = state.get_float64("null_probability");
 
   auto builder = data_profile_builder().null_probability(null_probability);

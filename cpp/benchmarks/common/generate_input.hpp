@@ -229,10 +229,10 @@ class data_profile {
     {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
 
-  double bool_probability_true              = 0.5;
+  double bool_probability_true           = 0.5;
   std::optional<double> null_probability = 0.01;
-  cudf::size_type cardinality          = 2000;
-  cudf::size_type avg_run_length       = 4;
+  cudf::size_type cardinality            = 2000;
+  cudf::size_type avg_run_length         = 4;
 
  public:
   template <typename T,

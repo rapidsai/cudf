@@ -31,7 +31,7 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
   auto const dtype = cudf::type_to_id<type>();
 
   double const null_probability = state.get_float64("null_probability");
-  size_t const size           = state.get_int64("data_size");
+  size_t const size             = state.get_int64("data_size");
 
   data_profile const profile = data_profile_builder()
                                  .null_probability(null_probability)
