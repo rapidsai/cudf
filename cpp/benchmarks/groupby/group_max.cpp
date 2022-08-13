@@ -36,8 +36,8 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
   auto const vals = [&] {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 1000);
-    if (const auto null_freq = state.get_float64("null_frequency"); null_freq > 0) {
-      builder.null_frequency(null_freq);
+    if (const auto null_freq = state.get_float64("null_probability"); null_freq > 0) {
+      builder.null_probability(null_freq);
     } else {
       builder.no_validity();
     }
@@ -61,4 +61,4 @@ NVBENCH_BENCH_TYPES(bench_groupby_max,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
   .set_name("groupby_max")
   .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
-  .add_float64_axis("null_frequency", {0, 0.1, 0.9});
+  .add_float64_axis("null_probability", {0, 0.1, 0.9});

@@ -229,8 +229,8 @@ class data_profile {
     {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
 
-  double bool_probability              = 0.5;
-  std::optional<double> null_frequency = 0.01;
+  double bool_probability_true              = 0.5;
+  std::optional<double> null_probability = 0.01;
   cudf::size_type cardinality          = 2000;
   cudf::size_type avg_run_length       = 4;
 
@@ -265,7 +265,7 @@ class data_profile {
   template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
-    return distribution_params<T>{bool_probability};
+    return distribution_params<T>{bool_probability_true};
   }
 
   template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
@@ -314,8 +314,8 @@ class data_profile {
     }
   }
 
-  auto get_bool_probability() const { return bool_probability; }
-  auto get_null_frequency() const { return null_frequency; };
+  auto get_bool_probability() const { return bool_probability_true; }
+  auto get_null_frequency() const { return null_probability; };
   [[nodiscard]] auto get_cardinality() const { return cardinality; };
   [[nodiscard]] auto get_avg_run_length() const { return avg_run_length; };
 
@@ -371,8 +371,8 @@ class data_profile {
     }
   }
 
-  void set_bool_probability(double p) { bool_probability = p; }
-  void set_null_frequency(std::optional<double> f) { null_frequency = f; }
+  void set_bool_probability(double p) { bool_probability_true = p; }
+  void set_null_frequency(std::optional<double> f) { null_probability = f; }
   void set_cardinality(cudf::size_type c) { cardinality = c; }
   void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
 
@@ -414,7 +414,7 @@ class data_profile {
  * becomes
  * @code{.pseudo}
  * data_profile const profile =
- *   data_profile_builder().cardinality(0).null_frequency(0.0).distribution(
+ *   data_profile_builder().cardinality(0).null_probability(0.0).distribution(
  *     cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
  * @endcode
  * The builder makes it easier to have immutable `data_profile` objects even with the complex
@@ -423,7 +423,7 @@ class data_profile {
  *
  * The builder API also includes a few additional convinience setters:
  * Overload of `distribution` that only takes the distribution type (not the range).
- * `no_validity`, which is a simpler equivalent of `null_frequency(std::nullopr)`.
+ * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopr)`.
  */
 class data_profile_builder {
   data_profile profile;
@@ -444,13 +444,13 @@ class data_profile_builder {
     return *this;
   }
 
-  data_profile_builder& bool_probability(double p)
+  data_profile_builder& bool_probability_true(double p)
   {
     profile.set_bool_probability(p);
     return *this;
   }
 
-  data_profile_builder& null_frequency(std::optional<double> f)
+  data_profile_builder& null_probability(std::optional<double> f)
   {
     profile.set_null_frequency(f);
     return *this;

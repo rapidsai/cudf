@@ -36,7 +36,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
   // Create table with values in the range [0,100)
   data_profile const profile = data_profile_builder()
                                  .cardinality(0)
-                                 .null_frequency(nulls ? std::optional{0.01} : std::nullopt)
+                                 .null_probability(nulls ? std::optional{0.01} : std::nullopt)
                                  .distribution(dtype, distribution_id::UNIFORM, 0, 100);
   auto input_table = create_random_table(cycle_dtypes({dtype}, n_cols), row_count{n_rows}, profile);
   cudf::table_view input{*input_table};

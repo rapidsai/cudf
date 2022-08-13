@@ -76,7 +76,7 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
   const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))};
 
-  data_profile profile = data_profile_builder().cardinality(0).null_frequency(0.0).distribution(
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.0).distribution(
     cudf::type_to_id<T>(), distribution_id::UNIFORM, 0, 100);
 
   auto source_table = create_random_table(
