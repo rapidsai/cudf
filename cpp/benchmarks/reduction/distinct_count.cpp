@@ -33,9 +33,9 @@ static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_
   data_profile profile;
   profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, size / 100);
   if (null_probability > 0) {
-    profile.set_null_frequency({null_probability});
+    profile.set_null_probability({null_probability});
   } else {
-    profile.set_null_frequency(std::nullopt);
+    profile.set_null_probability(std::nullopt);
   }
 
   auto const data_table   = create_random_table({dtype}, row_count{size}, profile);

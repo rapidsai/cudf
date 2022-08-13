@@ -24,13 +24,12 @@
 #include <nvbench/nvbench.cuh>
 
 namespace {
-
 template <typename Type>
 std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool has_nulls = false)
 {
   data_profile profile = data_profile_builder().cardinality(0).distribution(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 1000);
-  profile.set_null_frequency(has_nulls ? std::optional{0.1} : std::nullopt);
+  profile.set_null_probability(has_nulls ? std::optional{0.1} : std::nullopt);
 
   return create_random_column(cudf::type_to_id<Type>(), row_count{n_rows}, profile);
 }

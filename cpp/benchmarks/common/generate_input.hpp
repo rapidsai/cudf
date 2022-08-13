@@ -314,8 +314,8 @@ class data_profile {
     }
   }
 
-  auto get_bool_probability() const { return bool_probability_true; }
-  auto get_null_frequency() const { return null_probability; };
+  auto get_bool_probability_true() const { return bool_probability_true; }
+  auto get_null_probability() const { return null_probability; };
   [[nodiscard]] auto get_cardinality() const { return cardinality; };
   [[nodiscard]] auto get_avg_run_length() const { return avg_run_length; };
 
@@ -371,8 +371,17 @@ class data_profile {
     }
   }
 
-  void set_bool_probability(double p) { bool_probability_true = p; }
-  void set_null_frequency(std::optional<double> f) { null_probability = f; }
+  void set_bool_probability_true(double p)
+  {
+    CUDF_EXPECTS(p >= 0. and p <= 1., "probablity must be in range [0...1]");
+    bool_probability_true = p;
+  }
+  void set_null_probability(std::optional<double> p)
+  {
+    CUDF_EXPECTS(p.value_or(0.) >= 0. and p.value_or(0.) <= 1.,
+                 "probablity must be in range [0...1]");
+    null_probability = p;
+  }
   void set_cardinality(cudf::size_type c) { cardinality = c; }
   void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
 
@@ -407,7 +416,7 @@ class data_profile {
  * For example, `data_profile` initialization
  * @code{.pseudo}
  * data_profile profile;
- * profile.set_null_frequency(0.0);
+ * profile.set_null_probability(0.0);
  * profile.set_cardinality(0);
  * profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 100);
  * @endcode
@@ -429,6 +438,17 @@ class data_profile_builder {
   data_profile profile;
 
  public:
+  /**
+   * @brief Sets random distribution type for a given set of data types.
+   *
+   * Only the distribution type is set; the distribution will use the default range.
+   *
+   * @param type_or_group  Type or group ID, depending on whether the new distribution
+   * applies to a single type or a subset of types
+   * @param dist  Random distribution type
+   * @tparam T Data type of the distribution range; does not need to match the data type
+   * @return this for chaining
+   */
   template <typename T, typename Type_enum>
   data_profile_builder& distribution(Type_enum type_or_group, distribution_id dist)
   {
@@ -437,6 +457,12 @@ class data_profile_builder {
     return *this;
   }
 
+  /**
+   * @brief Sets random distribution type and value range for a given set of data types.
+   *
+   * @tparam T Parameters that are forwarded to set_distribution_params
+   * @return this for chaining
+   */
   template <class... T>
   data_profile_builder& distribution(T&&... t)
   {
@@ -444,54 +470,109 @@ class data_profile_builder {
     return *this;
   }
 
+  /**
+   * @brief Sets the probability that a randomly generated boolean element with be `true`.
+   *
+   * For example, passing `0.9` means that 90% of values in boolean columns with be `true`.
+   *
+   * @param p Probability of `true` values, in range [0..1]
+   * @return this for chaining
+   */
   data_profile_builder& bool_probability_true(double p)
   {
-    profile.set_bool_probability(p);
+    profile.set_bool_probability_true(p);
     return *this;
   }
 
-  data_profile_builder& null_probability(std::optional<double> f)
+  /**
+   * @brief Sets the probability that a randomly generated element will be `null`.
+   *
+   * @param p Probability of `null` values, in range [0..1]
+   * @return this for chaining
+   */
+  data_profile_builder& null_probability(std::optional<double> p)
   {
-    profile.set_null_frequency(f);
+    profile.set_null_probability(p);
     return *this;
   }
 
+  /**
+   * @brief Disables the creation of null mask in the output columns.
+   *
+   * @return this for chaining
+   */
   data_profile_builder& no_validity()
   {
-    profile.set_null_frequency(std::nullopt);
+    profile.set_null_probability(std::nullopt);
     return *this;
   }
 
+  /**
+   * @brief Sets the maximum number of unique values in each output column.
+   *
+   * @param c Maximum number of unique values
+   * @return this for chaining
+   */
   data_profile_builder& cardinality(cudf::size_type c)
   {
     profile.set_cardinality(c);
     return *this;
   }
 
+  /**
+   * @brief Sets the average length of sequences of equal elements in output columns.
+   *
+   * @param avg_rl Average sequence length (run-length)
+   * @return this for chaining
+   */
   data_profile_builder& avg_run_length(cudf::size_type avg_rl)
   {
     profile.set_avg_run_length(avg_rl);
     return *this;
   }
 
+  /**
+   * @brief Sets the maximum nesting depth of generated list columns.
+   *
+   * @param max_depth maximum nesting depth
+   * @return this for chaining
+   */
   data_profile_builder& list_depth(cudf::size_type max_depth)
   {
     profile.set_list_depth(max_depth);
     return *this;
   }
 
+  /**
+   * @brief Sets the data type of list elements.
+   *
+   * @param type data type ID
+   * @return this for chaining
+   */
   data_profile_builder& list_type(cudf::type_id type)
   {
     profile.set_list_type(type);
     return *this;
   }
 
+  /**
+   * @brief Sets the maximum nesting depth of generated struct columns.
+   *
+   * @param max_depth maximum nesting depth
+   * @return this for chaining
+   */
   data_profile_builder& struct_depth(cudf::size_type max_depth)
   {
     profile.set_struct_depth(max_depth);
     return *this;
   }
 
+  /**
+   * @brief Sets the data types of struct fields.
+   *
+   * @param types data type IDs
+   * @return this for chaining
+   */
   data_profile_builder& struct_types(cudf::host_span<cudf::type_id const> types)
   {
     profile.set_struct_types(types);

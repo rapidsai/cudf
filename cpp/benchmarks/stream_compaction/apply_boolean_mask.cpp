@@ -82,8 +82,8 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
   auto source_table = create_random_table(
     cycle_dtypes({cudf::type_to_id<T>()}, num_columns), row_count{column_size}, profile);
 
-  profile.set_bool_probability(percent_true / 100.0);
-  profile.set_null_frequency(std::nullopt);  // no null mask
+  profile.set_bool_probability_true(percent_true / 100.0);
+  profile.set_null_probability(std::nullopt);  // no null mask
   auto mask = create_random_column(cudf::type_id::BOOL8, row_count{column_size}, profile);
 
   for (auto _ : state) {
