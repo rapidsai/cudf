@@ -647,7 +647,7 @@ struct partition_info {
 };
 
 /**
- * @brief schema element for parquet reader
+ * @brief schema element for reader
  *
  */
 class reader_column_schema {
@@ -709,12 +709,12 @@ class reader_column_schema {
    * Only valid for the following column types:
    * string, list<int8>
    *
-   * @param binary True = use binary data type. False = use string data type
+   * @param convert_to_string True = convert binary to strings False = return binary
    * @return this for chaining
    */
-  reader_column_schema& set_convert_binary_to_strings(bool binary)
+  reader_column_schema& set_convert_binary_to_strings(bool convert_to_string)
   {
-    _convert_binary_to_strings = binary;
+    _convert_binary_to_strings = convert_to_string;
     return *this;
   }
 

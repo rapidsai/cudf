@@ -67,11 +67,18 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
   switch (buffer.type.id()) {
     case type_id::STRING:
-      if (!schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
+      if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
+        if (schema_info != nullptr) {
+          schema_info->children.push_back(column_name_info{"offsets"});
+          schema_info->children.push_back(column_name_info{"chars"});
+        }
+
+        return make_strings_column(*buffer._strings, stream, mr);
+      } else {
         // convert to binary
         auto const string_col = make_strings_column(*buffer._strings, stream, mr);
         auto const num_rows   = string_col->size();
-        auto data             = string_col->release();
+        auto col_contest      = string_col->release();
 
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
@@ -80,18 +87,10 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
         return make_lists_column(
           num_rows,
-          std::move(data.children[strings_column_view::offsets_column_index]),
-          std::move(data.children[strings_column_view::chars_column_index]),
+          std::move(col_contest.children[strings_column_view::offsets_column_index]),
+          std::move(col_contest.children[strings_column_view::chars_column_index]),
           UNKNOWN_NULL_COUNT,
-          std::move(*data.null_mask));
-      } else {
-        if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-          schema_info->children.push_back(column_name_info{"chars"});
-        }
-
-        return make_strings_column(*buffer._strings, stream, mr);
-        ;
+          std::move(*col_contest.null_mask));
       }
 
     case type_id::LIST: {
