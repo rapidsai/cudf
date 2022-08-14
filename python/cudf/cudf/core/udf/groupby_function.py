@@ -19,6 +19,7 @@ from numba.core.extending import (
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
+from numba.cuda.cudadrv.devices import get_context
 from numba.cuda.cudaimpl import lower as cuda_lower
 from numba.np import numpy_support
 from numba.types import Record
@@ -36,6 +37,7 @@ from cudf.core.udf.utils import (
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
 )
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 # Disable occupancy warnings to avoid polluting output when there are few
 # groups.
@@ -121,16 +123,6 @@ my_min_int64 = cuda.declare_device(
 my_min_float64 = cuda.declare_device(
     "BlockMin_float64",
     "types.float64(types.CPointer(types.float64),types.int64)",
-)
-
-my_count_int64 = cuda.declare_device(
-    "BlockCount_int64",
-    "types.int64(types.CPointer(types.int64),types.int64)",
-)
-
-my_count_float64 = cuda.declare_device(
-    "BlockCount_float64",
-    "types.int64(types.CPointer(types.float64),types.int64)",
 )
 
 my_sum_int64 = cuda.declare_device(
@@ -223,14 +215,6 @@ def call_my_min_int64(data, size):
 
 def call_my_min_float64(data, size):
     return my_min_float64(data, size)
-
-
-def call_my_count_int64(data, size):
-    return my_count_int64(data, size)
-
-
-def call_my_count_float64(data, size):
-    return my_count_float64(data, size)
 
 
 def call_my_sum_int64(data, size):
@@ -803,12 +787,19 @@ def _get_groupby_apply_kernel(frame, func, args):
     return kernel, return_type
 
 
-def jit_groupby_apply(offsets, grouped_values, function, *args):
+@_cudf_nvtx_annotate
+def jit_groupby_apply(offsets, grouped_values, function, *args, cache=True):
     ngroups = len(offsets) - 1
 
-    kernel, return_type = _compile_or_get(
-        grouped_values, function, args, _get_groupby_apply_kernel
-    )
+    if cache is True:
+        kernel, return_type = _compile_or_get(
+            grouped_values, function, args, _get_groupby_apply_kernel
+        )
+    else:
+        kernel, return_type = _get_groupby_apply_kernel(
+            grouped_values, function, args
+        )
+        return_type = numpy_support.as_dtype(return_type)
 
     output = cp.empty(ngroups, dtype=return_type)
 
@@ -823,9 +814,37 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     launch_args += list(args)
 
+    max_group_size = cp.diff(offsets).max()
+
+    if max_group_size >= 1024:
+        if ngroups < 100:
+            blocklim = 1024
+        else:
+            blocklim = 256
+    else:
+        blocklim = ((max_group_size + 32 - 1) / 32) * 32
+
+    if kernel.specialized:
+        specialized = kernel
+    else:
+        specialized = kernel.specialize(*launch_args)
+
+    # Ask the driver to give a good config
+    ctx = get_context()
+    # Dispatcher is specialized, so there's only one definition - get
+    # it so we can get the cufunc from the code library
+    kern_def = next(iter(specialized.overloads.values()))
+    kwargs = dict(
+        func=kern_def._codelibrary.get_cufunc(),
+        b2d_func=0,
+        memsize=0,
+        blocksizelimit=blocklim,
+    )
+    _, tpb = ctx.get_max_potential_block_size(**kwargs)
+
     stream = cuda.default_stream()
 
-    kernel[ngroups, 256, stream](*launch_args)
+    specialized[ngroups, tpb, stream](*launch_args)
 
     stream.synchronize()
 

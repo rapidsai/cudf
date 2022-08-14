@@ -83,6 +83,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         as_index=True,
         dropna=True,
         engine="nonjit",
+        cache=True,
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -119,6 +120,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._sort = sort
         self._dropna = dropna
         self._engine = engine
+        self._cache = cache
 
         if isinstance(by, _Grouping):
             by._obj = self.obj
@@ -549,7 +551,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function, *args, engine="nonjit"):
+    def apply(self, function, *args, engine="nonjit", cache=True):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -619,9 +621,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, _, grouped_values = self._grouped()
 
         self._engine = engine
+        self._cache = cache
         if self._engine == "jit":
             chunk_results = jit_groupby_apply(
-                offsets, grouped_values, function, *args
+                offsets, grouped_values, function, *args, cache=cache
             )
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
