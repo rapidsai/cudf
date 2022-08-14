@@ -56,10 +56,6 @@ class parquet_reader_options {
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
-  // Number of rows to skip from the start
-  size_type _skip_rows = 0;
-  // Number of rows to read; -1 is all
-  size_type _num_rows = -1;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -134,20 +130,6 @@ class parquet_reader_options {
   }
 
   /**
-   * @brief Returns number of rows to skip from the start.
-   *
-   * @return Number of rows to skip from the start
-   */
-  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
-
-  /**
-   * @brief Returns number of rows to read.
-   *
-   * @return Number of rows to read
-   */
-  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
-
-  /**
    * @brief Returns names of column to be read, if set.
    *
    * @return Names of column to be read; `nullopt` if the option is not set
@@ -182,10 +164,6 @@ class parquet_reader_options {
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups)
   {
-    if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
-      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
-    }
-
     _row_groups = std::move(row_groups);
   }
 
@@ -212,34 +190,6 @@ class parquet_reader_options {
   void set_convert_binary_to_strings(std::vector<bool> val)
   {
     _convert_binary_to_strings = std::move(val);
-  }
-
-  /**
-   * @brief Sets number of rows to skip.
-   *
-   * @param val Number of rows to skip from start
-   */
-  void set_skip_rows(size_type val)
-  {
-    if ((val != 0) and (!_row_groups.empty())) {
-      CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-    }
-
-    _skip_rows = val;
-  }
-
-  /**
-   * @brief Sets number of rows to read.
-   *
-   * @param val Number of rows to read after skip
-   */
-  void set_num_rows(size_type val)
-  {
-    if ((val != -1) and (!_row_groups.empty())) {
-      CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-    }
-
-    _num_rows = val;
   }
 
   /**
@@ -329,30 +279,6 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& convert_binary_to_strings(std::vector<bool> val)
   {
     options._convert_binary_to_strings = std::move(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets number of rows to skip.
-   *
-   * @param val Number of rows to skip from start
-   * @return this for chaining
-   */
-  parquet_reader_options_builder& skip_rows(size_type val)
-  {
-    options.set_skip_rows(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets number of rows to read.
-   *
-   * @param val Number of rows to read after skip
-   * @return this for chaining
-   */
-  parquet_reader_options_builder& num_rows(size_type val)
-  {
-    options.set_num_rows(val);
     return *this;
   }
 

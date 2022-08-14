@@ -26,16 +26,16 @@ static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_
 {
   cudf::rmm_pool_raii pool_raii;
 
-  auto const dtype          = cudf::type_to_id<Type>();
-  auto const size           = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const null_frequency = state.get_float64("null_frequency");
+  auto const dtype            = cudf::type_to_id<Type>();
+  auto const size             = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const null_probability = state.get_float64("null_probability");
 
   data_profile profile;
   profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, size / 100);
-  if (null_frequency > 0) {
-    profile.set_null_frequency({null_frequency});
+  if (null_probability > 0) {
+    profile.set_null_probability({null_probability});
   } else {
-    profile.set_null_frequency(std::nullopt);
+    profile.set_null_probability(std::nullopt);
   }
 
   auto const data_table   = create_random_table({dtype}, row_count{size}, profile);
@@ -60,4 +60,4 @@ NVBENCH_BENCH_TYPES(bench_reduction_distinct_count, NVBENCH_TYPE_AXES(data_type)
                     10000000,   // 10M
                     100000000,  // 100M
                   })
-  .add_float64_axis("null_frequency", {0, 0.5});
+  .add_float64_axis("null_probability", {0, 0.5});

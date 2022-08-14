@@ -2,9 +2,11 @@
 
 """Benchmarks of free functions that accept cudf objects."""
 
+import numpy as np
 import pytest
 import pytest_cases
-from config import cudf, cupy
+from config import NUM_ROWS, cudf, cupy
+from utils import benchmark_with_object
 
 
 @pytest_cases.parametrize_with_cases("objs", prefix="concat")
@@ -50,3 +52,31 @@ def bench_get_dummies_simple(benchmark, prefix):
     benchmark(
         cudf.get_dummies, df, columns=["col1", "col2", "col3"], prefix=prefix
     )
+
+
+@benchmark_with_object(cls="dataframe", dtype="int", cols=6)
+def bench_pivot_table_simple(benchmark, dataframe):
+    values = ["d", "e"]
+    index = ["a", "b"]
+    columns = ["c"]
+    benchmark(
+        cudf.pivot_table,
+        data=dataframe,
+        values=values,
+        index=index,
+        columns=columns,
+    )
+
+
+@pytest_cases.parametrize("nr", NUM_ROWS)
+def bench_crosstab_simple(benchmark, nr):
+    series_a = np.array(["foo", "bar"] * nr)
+    series_b = np.array(["one", "two"] * nr)
+    series_c = np.array(["dull", "shiny"] * nr)
+    np.random.shuffle(series_a)
+    np.random.shuffle(series_b)
+    np.random.shuffle(series_c)
+    series_a = cudf.Series(series_a)
+    series_b = cudf.Series(series_b)
+    series_c = cudf.Series(series_c)
+    benchmark(cudf.crosstab, index=series_a, columns=[series_b, series_c])
