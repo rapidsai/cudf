@@ -331,12 +331,12 @@ TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
 {
   {  // test for AND, XOR
     std::vector<uint64_t> input_array(
-      {0xfcfcfcfcfcfcfc7f, 0x7f7f7f7f7f7ffc, 0xfffddffddffddfdf, 0x7f7f7f7f7f7ffc});
+      {0xfcfc'fcfc'fcfc'fc7f, 0x7f'7f7f'7f7f'7ffc, 0xfffd'dffd'dffd'dfdf, 0x7f'7f7f'7f7f'7ffc});
     this->atomic_test(input_array);
   }
   {  // test for OR, XOR
     std::vector<uint64_t> input_array(
-      {0x01, 0xfc02, 0x1dff03, 0x1100a0b0801d0003, 0x8000000000000000, 0x1dff03});
+      {0x01, 0xfc02, 0x1d'ff03, 0x1100'a0b0'801d'0003, 0x8000'0000'0000'0000, 0x1d'ff03});
     this->atomic_test(input_array);
   }
 }
