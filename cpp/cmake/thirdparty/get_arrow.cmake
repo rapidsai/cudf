@@ -202,7 +202,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         ]=]
     )
     if(ENABLE_PARQUET)
-      string(APPEND arrow_code_string "
+      string(
+        APPEND
+        arrow_code_string
+        "
           find_package(Boost)
           if (NOT TARGET Boost::headers)
             add_library(Boost::headers INTERFACE IMPORTED)
@@ -211,7 +214,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       )
     endif()
     if(NOT TARGET xsimd)
-      string(APPEND arrow_code_string "
+      string(
+        APPEND
+        arrow_code_string
+        "
           if(NOT TARGET xsimd)
             add_library(xsimd INTERFACE IMPORTED)
             target_include_directories(xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
