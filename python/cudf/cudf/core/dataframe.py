@@ -1253,7 +1253,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             sort=False,
                             allow_non_unique=True,
                         )
-                    else:
                         value = as_column(value)
                         self._data[arg] = value
                 else:
