@@ -33,13 +33,11 @@ void BM_reduction_dictionary(benchmark::State& state,
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
   // int column and encoded dictionary column
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<long>(cudf::type_to_id<long>(),
-                                        distribution_id::UNIFORM,
-                                        (agg->kind == cudf::aggregation::ALL ? 1 : 0),
-                                        (agg->kind == cudf::aggregation::ANY ? 0 : 100));
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    cudf::type_to_id<long>(),
+    distribution_id::UNIFORM,
+    (agg->kind == cudf::aggregation::ALL ? 1 : 0),
+    (agg->kind == cudf::aggregation::ANY ? 0 : 100));
   auto int_table = create_random_table({cudf::type_to_id<long>()}, row_count{column_size}, profile);
   auto number_col = cudf::cast(int_table->get_column(0), cudf::data_type{cudf::type_to_id<T>()});
   auto values     = cudf::dictionary::encode(*number_col);
