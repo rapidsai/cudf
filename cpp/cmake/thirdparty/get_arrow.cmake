@@ -192,8 +192,23 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
           if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
               add_library(arrow_static ALIAS cudf::arrow_static)
           endif()
+          if (NOT TARGET arrow::flatbuffers)
+            add_library(arrow::flatbuffers INTERFACE IMPORTED)
+          endif()
+          if (NOT TARGET arrow::hadoop)
+            add_library(arrow::hadoop INTERFACE IMPORTED)
+          endif()
         ]=]
     )
+    if(NOT TARGET xsimd)
+      string(APPEND arrow_code_string "
+          if(NOT TARGET xsimd)
+            add_library(xsimd INTERFACE IMPORTED)
+            target_include_directories(xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
+          endif()
+        "
+      )
+    endif()
 
     rapids_export(
       BUILD Arrow
