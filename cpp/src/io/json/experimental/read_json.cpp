@@ -15,18 +15,12 @@
  */
 
 #include "read_json.hpp"
+#include <io/json/nested_json.hpp>
 
 #include <cudf/utilities/error.hpp>
 #include <io/comp/io_uncomp.hpp>
 
 namespace cudf::io::detail::json::experimental {
-
-table_with_metadata read_nested_json(host_span<char const> input,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("Not implemented");
-}
 
 std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                       compression_type compression)
@@ -69,7 +63,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   auto const buffer = ingest_raw_input(sources, reader_opts.get_compression());
   auto data = host_span<char const>(reinterpret_cast<char const*>(buffer.data()), buffer.size());
 
-  return read_nested_json(data, stream, mr);
+  return cudf::io::json::detail::parse_nested_json(data, stream, mr);
 }
 
 }  // namespace cudf::io::detail::json::experimental

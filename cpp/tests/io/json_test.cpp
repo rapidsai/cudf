@@ -915,13 +915,30 @@ TEST_F(JsonReaderTest, BadDtypeParams)
   EXPECT_THROW(cudf_io::read_json(options_map), cudf::logic_error);
 }
 
-TEST_F(JsonReaderTest, ExperimentalParam)
+TEST_F(JsonReaderTest, JsonRecordsBasic)
 {
-  cudf_io::json_reader_options const options =
-    cudf_io::json_reader_options::builder(cudf_io::source_info{nullptr, 0}).experimental(true);
+  const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "[{\"a\":\"11\", \"b\":\"1.1\"},{\"a\":\"22\", \"b\":\"2.2\"}]";
+  outfile.close();
 
-  // should throw for now
-  EXPECT_THROW(cudf_io::read_json(options), cudf::logic_error);
+  cudf_io::json_reader_options options =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{fname}).experimental(true);
+  auto result = cudf_io::read_json(options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 2);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
+
+  EXPECT_EQ(std::string(result.metadata.column_names[0]), "a");
+  EXPECT_EQ(std::string(result.metadata.column_names[1]), "b");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 cudf::test::strings_column_wrapper({"11", "22"}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 cudf::test::strings_column_wrapper({"1.1", "2.2"}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
