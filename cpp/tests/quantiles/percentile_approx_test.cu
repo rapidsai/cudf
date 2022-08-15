@@ -405,8 +405,7 @@ TEST_F(PercentileApproxTest, EmptyInput)
                             3,
                             cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
 
-  // TODO: change percentile_approx to produce sanitary list outputs for this case.
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
 
 TEST_F(PercentileApproxTest, EmptyPercentiles)

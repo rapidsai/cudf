@@ -33,10 +33,8 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
 
   cudf::size_type const num_rows = state.get_int64("NumRows");
 
-  data_profile profile;
-  profile.set_null_frequency(0.01);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.01).distribution(
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
   auto source_table =
     create_random_table(cycle_dtypes({cudf::type_to_id<Type>()}, 1), row_count{num_rows}, profile);
@@ -67,27 +65,25 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
 {
   cudf::rmm_pool_raii pool_raii;
 
-  auto const size             = state.get_int64("ColumnSize");
-  auto const dtype            = cudf::type_to_id<Type>();
-  double const null_frequency = state.get_float64("null_frequency");
+  auto const size               = state.get_int64("ColumnSize");
+  auto const dtype              = cudf::type_to_id<Type>();
+  double const null_probability = state.get_float64("null_probability");
 
-  data_profile table_data_profile;
+  auto builder = data_profile_builder().null_probability(null_probability);
   if (dtype == cudf::type_id::LIST) {
-    table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 4);
-    table_data_profile.set_distribution_params(
-      cudf::type_id::INT32, distribution_id::UNIFORM, 0, 4);
-    table_data_profile.set_list_depth(1);
+    builder.distribution(dtype, distribution_id::UNIFORM, 0, 4)
+      .distribution(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 4)
+      .list_depth(1);
   } else {
     // We're comparing distinct() on a non-nested column to that on a list column with the same
     // number of distinct rows. The max list size is 4 and the number of distinct values in the
     // list's child is 5. So the number of distinct rows in the list = 1 + 5 + 5^2 + 5^3 + 5^4 = 781
     // We want this column to also have 781 distinct values.
-    table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 781);
+    builder.distribution(dtype, distribution_id::UNIFORM, 0, 781);
   }
-  table_data_profile.set_null_frequency(null_frequency);
 
   auto const table = create_random_table(
-    {dtype}, table_size_bytes{static_cast<size_t>(size)}, table_data_profile, 0);
+    {dtype}, table_size_bytes{static_cast<size_t>(size)}, data_profile{builder}, 0);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
@@ -104,5 +100,5 @@ NVBENCH_BENCH_TYPES(nvbench_distinct_list,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, cudf::list_view>))
   .set_name("distinct_list")
   .set_type_axes_names({"Type"})
-  .add_float64_axis("null_frequency", {0.0, 0.1})
+  .add_float64_axis("null_probability", {0.0, 0.1})
   .add_int64_axis("ColumnSize", {100'000'000});
