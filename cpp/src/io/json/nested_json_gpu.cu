@@ -23,6 +23,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/io/json.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -164,6 +165,8 @@ enum class symbol_group_id : PdaSymbolGroupIdT {
   COLON,
   /// Whitespace
   WHITE_SPACE,
+  /// Linebreak
+  LINE_BREAK,
   /// Other (any input symbol not assigned to one of the above symbol groups)
   OTHER,
   /// Total number of symbol groups amongst which to differentiate
@@ -206,7 +209,7 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
-  static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::LINE_BREAK),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
@@ -403,62 +406,62 @@ constexpr auto PD_NUM_STATES = static_cast<StateT>(pda_state_t::PD_NUM_STATES);
 // The starting state of the pushdown automaton
 constexpr auto start_state = static_cast<StateT>(pda_state_t::PD_BOV);
 
-// Identity symbol to symbol group lookup table
-std::vector<std::vector<char>> const pda_sgids{
-  {0},  {1},  {2},  {3},  {4},  {5},  {6},  {7},  {8},  {9},  {10}, {11}, {12}, {13}, {14},
-  {15}, {16}, {17}, {18}, {19}, {20}, {21}, {22}, {23}, {24}, {25}, {26}, {27}, {28}, {29}};
-
 /**
  * @brief Getting the transition table
  */
-auto get_transition_table()
+auto get_transition_table(bool newline_delimited_json)
 {
+  static_assert(static_cast<PdaStackSymbolGroupIdT>(stack_symbol_group_id::STACK_ROOT) == 0);
+  static_assert(static_cast<PdaStackSymbolGroupIdT>(stack_symbol_group_id::STACK_LIST) == 1);
+  static_assert(static_cast<PdaStackSymbolGroupIdT>(stack_symbol_group_id::STACK_STRUCT) == 2);
+
+  auto const PD_ANL = newline_delimited_json ? PD_BOV : PD_PVL;
   std::array<std::array<pda_state_t, NUM_PDA_SGIDS>, PD_NUM_STATES> pda_tt;
-  //  {       [       }       ]       "       \       ,       :     space   other
+  //  {       [       }       ]       "       \       ,       :     space   newline other
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOV)] = {
-    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
-    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
-    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON};
+    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON};
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_LON,
-    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_ERR};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_BOA, PD_LON,
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BOA, PD_BOA, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_LON)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_LON,
-    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_LON,
-    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_LON};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_PVL, PD_LON,
+    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_PVL, PD_LON,
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_PVL, PD_LON};
   pda_tt[static_cast<StateT>(pda_state_t::PD_STR)] = {
-    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR,
-    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR,
-    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR};
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_PVL, PD_SCE, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_SCE)] = {
-    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
-    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
-    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR};
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR,
+    PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR, PD_STR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_PVL)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_ERR,
-    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_ERR};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ANL, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_BOV, PD_ERR, PD_PVL, PD_PVL, PD_ERR,
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR, PD_PVL, PD_PVL, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_BFN)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_ERR};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_FLN)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_PFN, PD_FNE, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_PFN, PD_FNE, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
   pda_tt[static_cast<StateT>(pda_state_t::PD_FNE)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN, PD_FLN};
   pda_tt[static_cast<StateT>(pda_state_t::PD_PFN)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_PFN, PD_ERR};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_PFN, PD_PFN, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_ERR)] = {
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR};
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
+    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR};
   return pda_tt;
 }
 
@@ -468,16 +471,7 @@ auto get_transition_table()
 auto get_translation_table()
 {
   std::array<std::array<std::vector<char>, NUM_PDA_SGIDS>, PD_NUM_STATES> pda_tlt;
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOV)] = {{{token_t::StructBegin},
-                                                        {token_t::ListBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::StringBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {},
-                                                        {token_t::ValueBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOV)] = {{/*ROOT*/
                                                         {token_t::StructBegin},
                                                         {token_t::ListBegin},
                                                         {token_t::ErrorBegin},
@@ -487,7 +481,9 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ValueBegin},
+                                                        /*LIST*/
                                                         {token_t::StructBegin},
                                                         {token_t::ListBegin},
                                                         {token_t::ErrorBegin},
@@ -496,9 +492,22 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        {},
+                                                        {},
+                                                        {token_t::ValueBegin},
+                                                        /*STRUCT*/
+                                                        {token_t::StructBegin},
+                                                        {token_t::ListBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::StringBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {},
                                                         {},
                                                         {token_t::ValueBegin}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {{{token_t::ErrorBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {{/*ROOT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -508,6 +517,9 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        /*LIST*/
                                                         {token_t::StructBegin},
                                                         {token_t::ListBegin},
                                                         {token_t::ErrorBegin},
@@ -517,7 +529,9 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ValueBegin},
+                                                        /*STRUCT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::StructEnd},
@@ -527,8 +541,10 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ErrorBegin}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {{{token_t::ErrorBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {{/*ROOT*/
+                                                        {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -537,7 +553,9 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ValueEnd},
+                                                        {token_t::ValueEnd},
                                                         {},
+                                                        /*LIST*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -547,7 +565,9 @@ auto get_translation_table()
                                                         {token_t::ValueEnd},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ValueEnd},
+                                                        {token_t::ValueEnd},
                                                         {},
+                                                        /*STRUCT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ValueEnd, token_t::StructEnd},
@@ -557,15 +577,82 @@ auto get_translation_table()
                                                         {token_t::ValueEnd},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ValueEnd},
+                                                        {token_t::ValueEnd},
                                                         {}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {
-    {{}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
-     {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
-     {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{{}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                                                        {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                                                        {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_PVL)] = {{{token_t::ErrorBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{/*ROOT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {token_t::StringEnd},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        /*LIST*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {token_t::StringEnd},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        /*STRUCT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {token_t::StringEnd},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {}}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{/*ROOT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        /*LIST*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        /*STRUCT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {}}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_PVL)] = {{/*ROOT*/
+                                                        {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -574,7 +661,9 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ErrorBegin},
+                                                        /*LIST*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -584,7 +673,9 @@ auto get_translation_table()
                                                         {},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ErrorBegin},
+                                                        /*STRUCT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::StructEnd},
@@ -594,8 +685,9 @@ auto get_translation_table()
                                                         {},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ErrorBegin}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_BFN)] = {{{token_t::ErrorBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BFN)] = {{/*ROOT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -607,6 +699,7 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        /*LIST*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -615,6 +708,10 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        /*STRUCT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -624,8 +721,9 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {},
+                                                        {},
                                                         {token_t::ErrorBegin}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{{token_t::ErrorBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{/*ROOT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -637,6 +735,7 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        /*LIST*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -645,6 +744,10 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        /*STRUCT*/
                                                         {},
                                                         {},
                                                         {},
@@ -654,38 +757,9 @@ auto get_translation_table()
                                                         {},
                                                         {},
                                                         {},
-                                                        {}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{{token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {token_t::ErrorBegin},
-                                                        {},
-                                                        {},
-                                                        {},
-                                                        {},
-                                                        {},
-                                                        {},
-                                                        {},
-                                                        {},
                                                         {},
                                                         {}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{{token_t::ErrorBegin},
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{/*ROOT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -697,6 +771,7 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        /*LIST*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
@@ -708,16 +783,90 @@ auto get_translation_table()
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        /*STRUCT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {}}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{/*ROOT*/
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
                                                         {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        /*LIST*/
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        /*STRUCT*/
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {token_t::ErrorBegin},
+                                                        {},
                                                         {},
                                                         {},
                                                         {token_t::ErrorBegin}}};
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{{}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                                                        {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-                                                        {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}};
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{/*ROOT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        /*LIST*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        /*STRUCT*/
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {},
+                                                        {}}};
   return pda_tlt;
 }
 
@@ -792,11 +941,14 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
 // TODO: return pair of device_uvector instead of passing pre-allocated pointers.
 void get_token_stream(device_span<SymbolT const> json_in,
+                      cudf::io::json_reader_options const& options,
                       PdaTokenT* d_tokens,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream)
 {
+  auto const new_line_delimited_json = options.is_enabled_lines();
+
   // Memory holding the top-of-stack stack context for the input
   rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
@@ -820,8 +972,12 @@ void get_token_stream(device_span<SymbolT const> json_in,
                                  tokenizer_pda::pda_state_t::PD_NUM_STATES)>;
 
   // Instantiating PDA transducer
-  ToTokenStreamFstT json_to_tokens_fst{tokenizer_pda::pda_sgids,
-                                       tokenizer_pda::get_transition_table(),
+  std::vector<std::vector<char>> pda_sgid_identity{tokenizer_pda::NUM_PDA_SGIDS};
+  std::generate(std::begin(pda_sgid_identity), std::end(pda_sgid_identity), [i = 0]() mutable {
+    return std::vector<char>{static_cast<char>(i++)};
+  });
+  ToTokenStreamFstT json_to_tokens_fst{pda_sgid_identity,
+                                       tokenizer_pda::get_transition_table(new_line_delimited_json),
                                        tokenizer_pda::get_translation_table(),
                                        stream};
 
@@ -850,6 +1006,7 @@ void make_json_column(json_column& root_column,
                       std::stack<tree_node>& current_data_path,
                       host_span<SymbolT const> input,
                       device_span<SymbolT const> d_input,
+                      cudf::io::json_reader_options const& options,
                       rmm::cuda_stream_view stream)
 {
   // Default name for a list's child column
@@ -862,6 +1019,7 @@ void make_json_column(json_column& root_column,
 
   // Parse the JSON and get the token stream
   get_token_stream(d_input,
+                   options,
                    tokens_gpu.device_ptr(),
                    token_indices_gpu.device_ptr(),
                    num_tokens_out.device_ptr(),
@@ -894,15 +1052,6 @@ void make_json_column(json_column& root_column,
       case token_t::StringBegin: return json_col_t::StringColumn;
       case token_t::ValueBegin: return json_col_t::StringColumn;
       default: return json_col_t::Unknown;
-    };
-  };
-
-  // Whether this token is a beginning-of-list or beginning-of-struct token
-  auto is_nested_token = [](PdaTokenT const token) {
-    switch (token) {
-      case token_t::StructBegin:
-      case token_t::ListBegin: return true;
-      default: return false;
     };
   };
 
@@ -1061,7 +1210,6 @@ void make_json_column(json_column& root_column,
   std::size_t offset = 0;
 
   // Giving names to magic constants
-  constexpr uint32_t row_offset_zero  = 0;
   constexpr uint32_t zero_child_count = 0;
 
   //--------------------------------------------------------------------------------
@@ -1070,51 +1218,6 @@ void make_json_column(json_column& root_column,
   // The JSON root may only be a struct, list, string, or value node
   CUDF_EXPECTS(num_tokens_out[0] > 0, "Empty JSON input not supported");
   CUDF_EXPECTS(is_valid_root_token(tokens_gpu[offset]), "Invalid beginning of JSON document");
-
-  // The JSON root is either a struct or list
-  if (is_nested_token(tokens_gpu[offset])) {
-    // Initialize the root column and append this row to it
-    root_column.append_row(row_offset_zero,
-                           token_to_column_type(tokens_gpu[offset]),
-                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                           get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                           0);
-
-    // Push the root node onto the stack for the data path
-    current_data_path.push({&root_column, row_offset_zero, nullptr, zero_child_count});
-
-    // Continue with the next token from the token stream
-    offset++;
-  }
-  // The JSON is a simple scalar value -> create simple table and return
-  else {
-    constexpr SymbolOffsetT max_tokens_for_scalar_value = 2;
-    CUDF_EXPECTS(num_tokens_out[0] <= max_tokens_for_scalar_value,
-                 "Invalid JSON format. Expected just a scalar value.");
-
-    // If this isn't the only token, verify the subsequent token is the correct end-of-* partner
-    if ((offset + 1) < num_tokens_out[0]) {
-      CUDF_EXPECTS(tokens_gpu[offset + 1] == end_of_partner(tokens_gpu[offset]),
-                   "Invalid JSON token sequence");
-    }
-
-    // The offset to the first symbol from the JSON input associated with the current token
-    auto const& token_begin_offset = get_token_index(tokens_gpu[offset], token_indices_gpu[offset]);
-
-    // The offset to one past the last symbol associated with the current token
-    // Literals without trailing space are missing the corresponding end-of-* counterpart.
-    auto const& token_end_offset =
-      (offset + 1 < num_tokens_out[0])
-        ? get_token_index(tokens_gpu[offset + 1], token_indices_gpu[offset + 1])
-        : input.size();
-
-    root_column.append_row(row_offset_zero,
-                           json_col_t::StringColumn,
-                           token_begin_offset,
-                           token_end_offset,
-                           zero_child_count);
-    return;
-  }
 
   while (offset < num_tokens_out[0]) {
     // Verify there's at least the JSON root node left on the stack to which we can append data
@@ -1215,6 +1318,7 @@ void make_json_column(json_column& root_column,
     else if (token == token_t::ErrorBegin) {
 #ifdef NJP_DEBUG_PRINT
       std::cout << "[ErrorBegin]\n";
+      std::cout << "@" << get_token_index(tokens_gpu[offset], token_indices_gpu[offset]);
 #endif
       CUDF_FAIL("Parser encountered an invalid format.");
     }
@@ -1371,26 +1475,51 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 }
 
 table_with_metadata parse_nested_json(host_span<SymbolT const> input,
+                                      cudf::io::json_reader_options const& options,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  auto const new_line_delimited_json = options.is_enabled_lines();
+
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
   // Get internal JSON column
   json_column root_column{};
   std::stack<tree_node> data_path{};
-  make_json_column(root_column, data_path, input, d_input, stream);
+
+  constexpr uint32_t row_offset_zero            = 0;
+  constexpr uint32_t token_begin_offset_zero    = 0;
+  constexpr uint32_t token_end_offset_zero      = 0;
+  constexpr uint32_t node_init_child_count_zero = 0;
+
+  // We initialize the very root node and root column that represents a list column that contains
+  // all the values found at the root "level" of the given JSON string Initialize the root column
+  // For JSON lines: we expect to find a list of values that all will be inserted into this list
+  // column.
+  // For regular JSON: we expect to have only a single value (single row) that will be inserted into
+  // this column
+  root_column.append_row(
+    row_offset_zero, json_col_t::ListColumn, token_begin_offset_zero, token_end_offset_zero, 1);
+
+  // Push the root node onto the stack for the data path
+  data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
+
+  make_json_column(root_column, data_path, input, d_input, options, stream);
+
+  // data_root refers to the root column of the data represented by the given JSON string
+  auto const& data_root =
+    new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;
-  CUDF_EXPECTS(root_column.type == json_col_t::ListColumn and
-                 root_column.child_columns.size() == single_child_col_count and
-                 root_column.child_columns.begin()->second.type == json_col_t::StructColumn,
+  CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
+                 data_root.child_columns.size() == single_child_col_count and
+                 data_root.child_columns.begin()->second.type == json_col_t::StructColumn,
                "Currently the nested JSON parser only supports an array of (nested) objects");
 
   // Slice off the root list column, which has only a single row that contains all the structs
-  auto const& root_struct_col = root_column.child_columns.begin()->second;
+  auto const& root_struct_col = data_root.child_columns.begin()->second;
 
   // Initialize meta data to be populated while recursing through the tree of columns
   std::vector<std::unique_ptr<column>> out_columns;

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -267,14 +268,14 @@ namespace detail {
  * At this stage, we do not perform bracket matching, i.e., we do not verify whether a closing
  * bracket would actually pop a the corresponding opening brace.
  *
- * @param[in] d_json_in The string of input characters
+ * @param[in] json_in The string of input characters
  * @param[out] d_top_of_stack Will be populated with what-is-on-top-of-the-stack for any given input
  * character of \p d_json_in, where a '{' represents that the corresponding input character is
  * within the context of a struct, a '[' represents that it is within the context of an array, and a
  * '_' symbol that it is at the root of the JSON.
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
-void get_stack_context(device_span<SymbolT const> d_json_in,
+void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream);
 
@@ -282,14 +283,17 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
  * sections from the input.
  *
- * @param[in] d_json_in The JSON input
+ * @param[in] json_in The JSON input
+ * @param[in] options Parsing options specifying the parsing behaviour
  * @param[out] d_tokens Device memory to which the parsed tokens are written
  * @param[out] d_tokens_indices Device memory to which the indices are written, where each index
  * represents the offset within \p d_json_in that cause the input being written
  * @param[out] d_num_written_tokens The total number of tokens that were parsed
  * @param[in] stream The CUDA stream to which kernels are dispatched
  */
-void get_token_stream(device_span<SymbolT const> d_json_in,
+
+void get_token_stream(device_span<SymbolT const> json_in,
+                      cudf::io::json_reader_options const& options,
                       PdaTokenT* d_tokens,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
@@ -299,12 +303,14 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
  * @brief Parses the given JSON string and generates table from the given input.
  *
  * @param input The JSON input
+ * @param options Parsing options specifying the parsing behaviour
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate.
  * @return The data parsed from the given JSON input
  */
 table_with_metadata parse_nested_json(
   host_span<SymbolT const> input,
+  cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

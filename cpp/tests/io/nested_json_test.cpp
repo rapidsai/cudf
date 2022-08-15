@@ -18,6 +18,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -251,6 +252,9 @@ TEST_F(JsonTest, TokenStream)
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+
   // Test input
   std::string input = R"(  [{)"
                       R"("category": "reference",)"
@@ -282,6 +286,7 @@ TEST_F(JsonTest, TokenStream)
 
   // Parse the JSON and get the token stream
   cuio_json::detail::get_token_stream(d_input,
+                                      default_options,
                                       tokens_gpu.device_ptr(),
                                       token_indices_gpu.device_ptr(),
                                       num_tokens_out.device_ptr(),
@@ -342,10 +347,13 @@ TEST_F(JsonTest, ExtractColumn)
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+
   std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
   auto const cudf_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream_view);
 
   auto const expected_col_count  = 2;
   auto const first_column_index  = 0;
@@ -366,6 +374,9 @@ TEST_F(JsonTest, UTF_JSON)
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+
   // Only ASCII string
   std::string ascii_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
@@ -375,7 +386,8 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
 
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(ascii_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(
+    cuio_json::detail::parse_nested_json(ascii_pass, default_options, stream_view));
 
   // utf-8 string that fails parsing.
   std::string utf_failed = R"([
@@ -385,7 +397,8 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_failed, stream_view));
+  CUDF_EXPECT_NO_THROW(
+    cuio_json::detail::parse_nested_json(utf_failed, default_options, stream_view));
 
   // utf-8 string that passes parsing.
   std::string utf_pass = R"([
@@ -396,7 +409,8 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(
+    cuio_json::detail::parse_nested_json(utf_pass, default_options, stream_view));
 }
 
 TEST_F(JsonTest, FromParquet)
@@ -409,6 +423,9 @@ TEST_F(JsonTest, FromParquet)
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
 
   // Binary parquet data containing the same data as the data represented by the JSON string.
   // We could add a dataset to include this file, but we don't want tests in cudf to have data.
@@ -496,11 +513,45 @@ TEST_F(JsonTest, FromParquet)
 
   // Read in the data via the JSON parser
   auto const cudf_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream_view);
 
   // Verify that the data read via parquet matches the data read via JSON
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf_table.tbl->view(), result.tbl->view());
 
   // Verify that the schema read via parquet matches the schema read via JSON
   cudf::test::expect_metadata_equal(cudf_table.metadata, result.metadata);
+}
+
+TEST_F(JsonTest, JsonLines)
+{
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Default parsing options
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options_builder{}.lines(true);
+
+  using cuio_json::SymbolT;
+
+  std::string json_string =
+    R"({"a":"a0"}
+    {"a":"a1"}
+    {"a":"a2", "b":"b2"}
+    {"a":"a3", "c":"c3"}
+    {"a":"a4"})";
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_string.c_str(), json_string.size()})
+      .lines(true);
+  cudf::io::table_with_metadata old_reader_table = cudf::io::read_json(in_options);
+
+  auto const new_reader_table = cuio_json::detail::parse_nested_json(
+    cudf::host_span<SymbolT const>{json_string.data(), json_string.size()},
+    json_lines_options,
+    stream_view);
+
+  // Verify that the data read via parquet matches the data read via JSON
+  CUDF_TEST_EXPECT_TABLES_EQUAL(old_reader_table.tbl->view(), new_reader_table.tbl->view());
 }
