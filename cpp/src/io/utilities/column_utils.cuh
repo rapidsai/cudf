@@ -68,10 +68,10 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
       col_desc[index].parent_column = parent_col_view.begin() + index;
       column_device_view col        = parent_col_view.column(index);
       // traverse till leaf column
-      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-        auto child = (col.type().id() == type_id::LIST)
-                       ? col.child(lists_column_view::child_column_index)
-                       : col.child(0);
+      while (cudf::is_nested(col.type())) {
+        auto const child = (col.type().id() == type_id::LIST)
+                             ? col.child(lists_column_view::child_column_index)
+                             : col.child(0);
         // stop early if writing a byte array
         if (col_desc[index].stats_dtype == dtype_byte_array &&
             (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
