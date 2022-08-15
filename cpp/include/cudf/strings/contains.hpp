@@ -117,7 +117,7 @@ std::unique_ptr<column> count_re(
  * match the given like pattern.
  *
  * The like pattern expects only 2 wildcard special characters:
- * - `%` any characters of any number including zero
+ * - `%` any number of any character (including no characters)
  * - `_` any single character
  *
  * @code{.pseudo}

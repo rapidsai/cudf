@@ -792,7 +792,8 @@ class StringMethods(ColumnMethods):
         Parameters
         ----------
         pat : str
-            Pattern to search. Use '%' for any character of any number.
+            Pattern to search. Use '%' for any number of any character
+            including no characters.
             Use '_' for any single character.
 
         esc : str
