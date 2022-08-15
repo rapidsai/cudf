@@ -11,6 +11,8 @@ else:
 
 
 class HostIterator(Iterator):
+    """Iterates over arrays in host memory"""
+
     def __init__(self, start, size):
         self.item = start
         self.size = size
@@ -30,6 +32,8 @@ class HostIterator(Iterator):
 
 
 class DeviceIterator(Iterator):
+    """Iterates over arrays in device memory by copying chunks into host memory"""
+
     def __init__(self, start, size):
         self.exec = exec
         self.item = start
@@ -83,7 +87,7 @@ class DeviceIterator(Iterator):
 
 
 class CudfHostSpanPrinter(gdb.printing.PrettyPrinter):
-    "Print a cudf::host_span"
+    """Print a cudf::host_span"""
 
     def __init__(self, val):
         self.val = val
@@ -102,26 +106,7 @@ class CudfHostSpanPrinter(gdb.printing.PrettyPrinter):
 
 
 class CudfDeviceSpanPrinter(gdb.printing.PrettyPrinter):
-    "Print a cudf::device_span"
-
-    def __init__(self, val):
-        self.val = val
-        self.pointer = val['_data']
-        self.size = int(val['_size'])
-
-    def children(self):
-        return DeviceIterator(self.pointer, self.size)
-
-    def to_string(self):
-        typename = str(self.val.type)
-        return ('%s of length %d at %s' % (typename, self.size, hex(self.pointer)))
-
-    def display_hint(self):
-        return 'array'
-
-
-class CudfDeviceSpanPrinter(gdb.printing.PrettyPrinter):
-    "Print a cudf::device_span"
+    """Print a cudf::device_span"""
 
     def __init__(self, val):
         self.val = val
@@ -140,7 +125,7 @@ class CudfDeviceSpanPrinter(gdb.printing.PrettyPrinter):
 
 
 class ThrustVectorPrinter(gdb.printing.PrettyPrinter):
-    "Print a thrust::*_vector"
+    """Print a thrust::*_vector"""
 
     def __init__(self, val):
         self.val = val
@@ -167,7 +152,7 @@ class ThrustVectorPrinter(gdb.printing.PrettyPrinter):
 
 
 class ThrustReferencePrinter(gdb.printing.PrettyPrinter):
-    "Print a thrust::device_reference"
+    """Print a thrust::device_reference"""
 
     def __init__(self, val):
         self.val = val
@@ -199,7 +184,7 @@ class ThrustReferencePrinter(gdb.printing.PrettyPrinter):
 
 
 class RmmDeviceUVectorPrinter(gdb.printing.PrettyPrinter):
-    "Print a rmm::device_uvector"
+    """Print a rmm::device_uvector"""
 
     def __init__(self, val):
         self.val = val
