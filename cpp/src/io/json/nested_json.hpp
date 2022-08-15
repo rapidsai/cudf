@@ -285,27 +285,25 @@ void get_stack_context(device_span<SymbolT const> json_in,
  *
  * @param[in] json_in The JSON input
  * @param[in] options Parsing options specifying the parsing behaviour
- * @param[out] d_tokens Device memory to which the parsed tokens are written
- * @param[out] d_tokens_indices Device memory to which the indices are written, where each index
  * represents the offset within \p d_json_in that cause the input being written
- * @param[out] d_num_written_tokens The total number of tokens that were parsed
  * @param[in] stream The CUDA stream to which kernels are dispatched
+ * @param[in] mr Optional, resource with which to allocate
+ * @return Pair of device vectors, where the first vector represents the token types and the second
+ * vector represents the index within the input corresponding to each token
  */
-
-void get_token_stream(device_span<SymbolT const> json_in,
-                      cudf::io::json_reader_options const& options,
-                      PdaTokenT* d_tokens,
-                      SymbolOffsetT* d_tokens_indices,
-                      SymbolOffsetT* d_num_written_tokens,
-                      rmm::cuda_stream_view stream);
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
+  device_span<SymbolT const> json_in,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
  *
- * @param input The JSON input
- * @param options Parsing options specifying the parsing behaviour
- * @param stream The CUDA stream to which kernels are dispatched
- * @param mr Optional, resource with which to allocate.
+ * @param[in] input The JSON input
+ * @param[in] options Parsing options specifying the parsing behaviour
+ * @param[in] stream The CUDA stream to which kernels are dispatched
+ * @param[in] mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
 table_with_metadata parse_nested_json(

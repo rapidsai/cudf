@@ -939,14 +939,17 @@ void get_stack_context(device_span<SymbolT const> json_in,
     stream);
 }
 
-// TODO: return pair of device_uvector instead of passing pre-allocated pointers.
-void get_token_stream(device_span<SymbolT const> json_in,
-                      cudf::io::json_reader_options const& options,
-                      PdaTokenT* d_tokens,
-                      SymbolOffsetT* d_tokens_indices,
-                      SymbolOffsetT* d_num_written_tokens,
-                      rmm::cuda_stream_view stream)
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
+  device_span<SymbolT const> json_in,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
+  constexpr std::size_t single_item_count = 1ULL;
+  rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
+  rmm::device_uvector<SymbolOffsetT> num_written_tokens{single_item_count, stream};
+
   auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Memory holding the top-of-stack stack context for the input
@@ -984,11 +987,17 @@ void get_token_stream(device_span<SymbolT const> json_in,
   // Perform a PDA-transducer pass
   json_to_tokens_fst.Transduce(pda_sgids.begin(),
                                static_cast<SymbolOffsetT>(json_in.size()),
-                               d_tokens,
-                               d_tokens_indices,
-                               d_num_written_tokens,
+                               tokens.data(),
+                               tokens_indices.data(),
+                               num_written_tokens.data(),
                                tokenizer_pda::start_state,
                                stream);
+
+  auto num_total_tokens = num_written_tokens.front_element(stream);
+  tokens.resize(num_total_tokens, stream);
+  tokens_indices.resize(num_total_tokens, stream);
+
+  return std::make_pair(std::move(tokens), std::move(tokens_indices));
 }
 
 /**
@@ -1007,28 +1016,20 @@ void make_json_column(json_column& root_column,
                       host_span<SymbolT const> input,
                       device_span<SymbolT const> d_input,
                       cudf::io::json_reader_options const& options,
-                      rmm::cuda_stream_view stream)
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // Default name for a list's child column
   std::string const list_child_name = "element";
 
-  constexpr std::size_t single_item = 1;
-  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
-
   // Parse the JSON and get the token stream
-  get_token_stream(d_input,
-                   options,
-                   tokens_gpu.device_ptr(),
-                   token_indices_gpu.device_ptr(),
-                   num_tokens_out.device_ptr(),
-                   stream);
+  const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
-  token_indices_gpu.device_to_host(stream);
-  tokens_gpu.device_to_host(stream);
-  num_tokens_out.device_to_host(stream);
+  thrust::host_vector<PdaTokenT> tokens_gpu =
+    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
+  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Make sure tokens have been copied to the host
   stream.synchronize();
@@ -1216,10 +1217,12 @@ void make_json_column(json_column& root_column,
   // INITIALIZE JSON ROOT NODE
   //--------------------------------------------------------------------------------
   // The JSON root may only be a struct, list, string, or value node
-  CUDF_EXPECTS(num_tokens_out[0] > 0, "Empty JSON input not supported");
+  CUDF_EXPECTS(tokens_gpu.size() == token_indices_gpu.size(),
+               "Unexpected mismatch in number of token types and token indices");
+  CUDF_EXPECTS(tokens_gpu.size() > 0, "Empty JSON input not supported");
   CUDF_EXPECTS(is_valid_root_token(tokens_gpu[offset]), "Invalid beginning of JSON document");
 
-  while (offset < num_tokens_out[0]) {
+  while (offset < tokens_gpu.size()) {
     // Verify there's at least the JSON root node left on the stack to which we can append data
     CUDF_EXPECTS(current_data_path.size() > 0, "Invalid JSON structure");
 
@@ -1327,7 +1330,7 @@ void make_json_column(json_column& root_column,
     else if (token == token_t::FieldNameBegin or token == token_t::StringBegin or
              token == token_t::ValueBegin) {
       // Verify that this token has the right successor to build a correct (being, end) token pair
-      CUDF_EXPECTS((offset + 1) < num_tokens_out[0], "Invalid JSON token sequence");
+      CUDF_EXPECTS((offset + 1) < tokens_gpu.size(), "Invalid JSON token sequence");
       CUDF_EXPECTS(tokens_gpu[offset + 1] == end_of_partner(token), "Invalid JSON token sequence");
 
       // The offset to the first symbol from the JSON input associated with the current token
@@ -1505,7 +1508,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   // Push the root node onto the stack for the data path
   data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
 
-  make_json_column(root_column, data_path, input, d_input, options, stream);
+  make_json_column(root_column, data_path, input, d_input, options, stream, mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto const& data_root =

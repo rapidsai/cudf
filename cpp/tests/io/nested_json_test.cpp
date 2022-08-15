@@ -246,8 +246,6 @@ TEST_F(JsonTest, TokenStream)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
 
-  constexpr std::size_t single_item = 1;
-
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
@@ -280,22 +278,15 @@ TEST_F(JsonTest, TokenStream)
                                         cudaMemcpyHostToDevice,
                                         stream.value()));
 
-  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream_view};
-  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream_view};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream_view};
-
   // Parse the JSON and get the token stream
-  cuio_json::detail::get_token_stream(d_input,
-                                      default_options,
-                                      tokens_gpu.device_ptr(),
-                                      token_indices_gpu.device_ptr(),
-                                      num_tokens_out.device_ptr(),
-                                      stream_view);
+  const auto [d_tokens_gpu, d_token_indices_gpu] =
+    cuio_json::detail::get_token_stream(d_input, default_options, stream_view);
 
   // Copy back the number of tokens that were written
-  num_tokens_out.device_to_host(stream_view);
-  tokens_gpu.device_to_host(stream_view);
-  token_indices_gpu.device_to_host(stream_view);
+  thrust::host_vector<PdaTokenT> tokens_gpu =
+    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
+  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Make sure we copied back all relevant data
   stream_view.synchronize();
@@ -328,9 +319,10 @@ TEST_F(JsonTest, TokenStream)
     {267, token_t::StructEnd},      {268, token_t::ListEnd}};
 
   // Verify the number of tokens matches
-  ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
+  ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
+  ASSERT_EQ(golden_token_stream.size(), token_indices_gpu.size());
 
-  for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
+  for (std::size_t i = 0; i < tokens_gpu.size(); i++) {
     // Ensure the index the tokens are pointing to do match
     EXPECT_EQ(golden_token_stream[i].first, token_indices_gpu[i]) << "Mismatch at #" << i;
 
