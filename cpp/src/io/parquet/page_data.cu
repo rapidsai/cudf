@@ -485,7 +485,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
   if (s->dtype_len == 4) {
     // Output hash
     auto constexpr hash_seed      = 33;
-    *static_cast<uint32_t*>(dstv) = MurmurHash3_32(hash_seed).compute_bytes(ptr, len);
+    *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32(hash_seed).compute_bytes(ptr, len);
   } else {
     // Output string descriptor
     auto* dst   = static_cast<string_index_pair*>(dstv);
