@@ -20,6 +20,7 @@
 
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -484,8 +485,9 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
   }
   if (s->dtype_len == 4) {
     // Output hash
-    auto constexpr hash_seed      = 33;
-    *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32(hash_seed).compute_bytes(ptr, len);
+    uint32_t constexpr hash_seed = 33;
+    cudf::string_view const sv{ptr, static_cast<size_type>(len)};
+    *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
   } else {
     // Output string descriptor
     auto* dst   = static_cast<string_index_pair*>(dstv);
