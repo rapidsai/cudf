@@ -31,10 +31,7 @@ void BM_basic_sum(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
@@ -72,14 +69,11 @@ void BM_pre_sorted_sum(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
+  data_profile profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-  profile.set_null_frequency(0.1);
+  profile.set_null_probability(0.1);
   auto vals_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
 

@@ -35,10 +35,9 @@ enum class tokenize_type { single, multi, count, count_multi, ngrams, characters
 
 static void BM_tokenize(benchmark::State& state, tokenize_type tt)
 {
-  auto const n_rows         = static_cast<cudf::size_type>(state.range(0));
-  auto const max_str_length = static_cast<cudf::size_type>(state.range(1));
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  auto const n_rows                = static_cast<cudf::size_type>(state.range(0));
+  auto const max_str_length        = static_cast<cudf::size_type>(state.range(1));
+  data_profile const table_profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));

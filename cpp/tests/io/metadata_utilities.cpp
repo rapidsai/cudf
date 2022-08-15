@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,29 @@ void expect_metadata_equal(cudf::io::table_input_metadata in_meta,
 
   for (size_t i = 0; i < out_meta.schema_info.size(); ++i) {
     compare_names(out_meta.schema_info[i], in_meta.column_metadata[i]);
+  }
+}
+
+void expect_metadata_equal(cudf::io::table_metadata lhs_meta, cudf::io::table_metadata rhs_meta)
+{
+  std::function<void(cudf::io::column_name_info, cudf::io::column_name_info)> compare_names =
+    [&](cudf::io::column_name_info lhs, cudf::io::column_name_info rhs) {
+      // Ensure column names match
+      EXPECT_EQ(lhs.name, rhs.name);
+
+      // Ensure number of child columns match
+      ASSERT_EQ(lhs.children.size(), rhs.children.size());
+      for (size_t i = 0; i < lhs.children.size(); ++i) {
+        compare_names(lhs.children[i], rhs.children[i]);
+      }
+    };
+
+  // Ensure the number of columns at the root level matches
+  ASSERT_EQ(lhs_meta.schema_info.size(), rhs_meta.schema_info.size());
+
+  // Recurse for each column making sure their names and descendants match
+  for (size_t i = 0; i < rhs_meta.schema_info.size(); ++i) {
+    compare_names(lhs_meta.schema_info[i], rhs_meta.schema_info[i]);
   }
 }
 

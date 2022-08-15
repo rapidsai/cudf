@@ -21,6 +21,7 @@ Additionally, it includes longer sections on more specific topics like testing a
 :maxdepth: 2
 
 library_design
+contributing_guide
 documentation
 benchmarking
 options

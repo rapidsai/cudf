@@ -503,9 +503,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*rhs, *lhs);
-      auto out =
-          make_fixed_width_column(n_data_type, rhs->size(), std::move(new_mask), new_null_count);
+      auto out = make_fixed_width_column(n_data_type, rhs->size(), cudf::mask_state::UNALLOCATED);
+
+      if (op == cudf::binary_operator::NULL_EQUALS) {
+        out->set_null_mask(rmm::device_buffer{}, 0);
+      } else {
+        auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*rhs, *lhs);
+        out->set_null_mask(std::move(new_mask), new_null_count);
+      }
+
       auto lhs_col = cudf::make_column_from_scalar(*lhs, 1);
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, lhs_col->view(),

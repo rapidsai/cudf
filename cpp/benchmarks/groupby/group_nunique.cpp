@@ -21,8 +21,24 @@
 
 #include <nvbench/nvbench.cuh>
 
+namespace {
+
+template <typename... Args>
+auto make_aggregation_request_vector(cudf::column_view const& values, Args&&... args)
+{
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  (aggregations.emplace_back(std::forward<Args>(args)), ...);
+
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back(cudf::groupby::aggregation_request{values, std::move(aggregations)});
+
+  return requests;
+}
+
+}  // namespace
+
 template <typename Type>
-void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
+void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 {
   cudf::rmm_pool_raii pool_raii;
   const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
@@ -54,20 +70,16 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
   auto const& keys = keys_table->get_column(0);
   auto const& vals = vals_table->get_column(0);
 
-  auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
-
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+  auto gb_obj         = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
+  auto const requests = make_aggregation_request_vector(
+    vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
 }
 
-NVBENCH_BENCH_TYPES(bench_groupby_max,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
-  .set_name("groupby_max")
-  .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
-  .add_float64_axis("null_probability", {0, 0.1, 0.9});
+NVBENCH_BENCH_TYPES(bench_groupby_nunique, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t>))
+  .set_name("groupby_nunique")
+  .add_int64_power_of_two_axis("num_rows", {12, 16, 20, 24})
+  .add_float64_axis("null_probability", {0, 0.5});
