@@ -53,10 +53,8 @@ static void BM_extract(benchmark::State& state, int groups)
   }
 
   cudf::test::strings_column_wrapper samples_column(samples.begin(), samples.end());
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);  // <0 means, all valid
-  profile.set_distribution_params<cudf::size_type>(
-    cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0, samples.size() - 1);
+  data_profile const profile = data_profile_builder().no_validity().distribution(
+    cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0ul, samples.size() - 1);
   auto map_table =
     create_random_table({cudf::type_to_id<cudf::size_type>()}, row_count{n_rows}, profile);
   auto input = cudf::gather(cudf::table_view{{samples_column}},

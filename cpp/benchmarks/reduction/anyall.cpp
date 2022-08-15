@@ -32,12 +32,9 @@ void BM_reduction_anyall(benchmark::State& state,
                          std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
-  auto const dtype = cudf::type_to_id<type>();
-  data_profile profile;
-  if (agg->kind == cudf::aggregation::ANY)
-    profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 0);
-  else
-    profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 100);
+  auto const dtype           = cudf::type_to_id<type>();
+  data_profile const profile = data_profile_builder().distribution(
+    dtype, distribution_id::UNIFORM, 0, agg->kind == cudf::aggregation::ANY ? 0 : 100);
   auto const table = create_random_table({dtype}, row_count{column_size}, profile);
   table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
   cudf::column_view values(table->view().column(0));
