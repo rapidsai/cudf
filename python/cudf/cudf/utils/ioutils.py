@@ -378,8 +378,10 @@ stripes: list, default None
     concatenated with index ignored.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
+    This parameter is deprecated.
 num_rows : int, default None
     If not None, the total number of rows to read.
+    This parameter is deprecated.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
 use_python_file_object : boolean, default True

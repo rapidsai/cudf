@@ -57,13 +57,8 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
   auto const value_size_min  = static_cast<int32_t>(value_size_avg * (1 - deviation));
   auto const value_size_max  = static_cast<int32_t>(value_size_avg * (1 + deviation));
 
-  data_profile table_profile;
-
-  table_profile.set_distribution_params(  //
-    cudf::type_id::STRING,
-    distribution_id::NORMAL,
-    value_size_min,
-    value_size_max);
+  data_profile const table_profile = data_profile_builder().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, value_size_min, value_size_max);
 
   auto const values_table = create_random_table(  //
     {cudf::type_id::STRING},
