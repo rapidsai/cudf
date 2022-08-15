@@ -505,11 +505,11 @@ inline __device__ void PackLiterals(
         uint64_t vt = v;
         vt |= shuffle_xor(vt, 1) << 20;
         if (t < count && !(t & 1)) {
-          dst[t * 5 + 0] = v;
-          dst[t * 5 + 1] = v >> 8;
-          dst[t * 5 + 2] = v >> 16;
-          dst[t * 5 + 3] = v >> 24;
-          dst[t * 5 + 4] = v >> 32;
+          dst[t * 5 + 0] = vt;
+          dst[t * 5 + 1] = vt >> 8;
+          dst[t * 5 + 2] = vt >> 16;
+          dst[t * 5 + 3] = vt >> 24;
+          dst[t * 5 + 4] = vt >> 32;
         }
       } else if (w == 24) {
         if (t < count) {
