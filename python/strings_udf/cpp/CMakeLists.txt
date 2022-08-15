@@ -113,6 +113,9 @@ set_target_properties(udf_cli PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED O
 
 install(TARGETS cudf_strings_udf)
 install(TARGETS udf_cli)
+install(FILES ${CMAKE_SOURCE_DIR}/build/CMakeFiles/shim.dir/src/strings/udf/shim.ptx
+        DESTINATION ${CMAKE_SOURCE_DIR}/../strings_udf/shim/
+)
 
 add_custom_command(
   OUTPUT dstring_test
