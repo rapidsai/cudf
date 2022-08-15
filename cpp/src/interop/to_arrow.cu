@@ -418,4 +418,39 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
   return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
 }
 
+std::vector<char> export_ipc(table_view input,
+                             std::vector<column_metadata> const& metadata,
+                             arrow::MemoryPool* ar_mr) {
+  // 1 remove CPU copy
+  // 2 Return arrow CUDA buffer
+  // Extract IPC handle form each CUDA buffer
+  // Extract schema
+  // serialization
+  size_t i = 0;
+  std::vector<std::shared_ptr<arrow::Array>> arrays;
+  for (auto const& column : input) {
+    std::vector<column_view> c{column};
+    auto t           = table_view{c};
+    auto const& meta = metadata[i];
+    std::vector<column_metadata> column_meta{meta};
+    auto ptr_to_buf = detail::to_arrow(t, column_meta, cudf::default_stream_value, ar_mr);
+    arrow::TableBatchReader reader(ptr_to_buf);
+    // set chunk size
+    while (reader.ReadNext()) {
+      // append
+    }
+    auto array      = ptr_to_buf->column(0)->chunk(0);
+    arrays.emplace_back(array);
+    ++i;
+  }
+
+  for (auto const& batch : batches) {
+    arrow::cuda::CudaBuffer cbuf = SerializeRecordBatch();
+    cbuf->ExportForIPC();
+  }
+}
+
+table_view import_ipc(std::vector<char> handles) {
+
+}
 }  // namespace cudf
