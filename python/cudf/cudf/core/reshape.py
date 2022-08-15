@@ -956,6 +956,8 @@ def pivot(data, index=None, columns=None, values=None):
             col for col in df._column_names if col not in (index, columns)
         )
     else:
+        if not isinstance(values, (list, tuple)):
+            values = [values]
         values = df._columns_view(values)
     if index is None:
         index = df.index

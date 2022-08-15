@@ -621,3 +621,32 @@ def test_crosstab_simple():
     expected = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
     actual = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "values", ["z", "z123", ["z123"], ["z", "z123", "123z"]]
+)
+def test_pivot_values(values):
+    data = [
+        ["A", "a", 0, 0, 0],
+        ["A", "b", 1, 1, 1],
+        ["A", "c", 2, 2, 2],
+        ["B", "a", 0, 0, 0],
+        ["B", "b", 1, 1, 1],
+        ["B", "c", 2, 2, 2],
+        ["C", "a", 0, 0, 0],
+        ["C", "b", 1, 1, 1],
+        ["C", "c", 2, 2, 2],
+    ]
+    columns = ["x", "y", "z", "z123", "123z"]
+    pdf = pd.DataFrame(data, columns=columns)
+    cdf = cudf.DataFrame(data, columns=columns)
+    expected = pd.pivot(pdf, index="x", columns="y", values=values)
+    actual = cudf.pivot(cdf, index="x", columns="y", values=values)
+    if not isinstance(values, (list, tuple)):
+        actual.columns = actual.columns.droplevel(0)
+    assert_eq(
+        expected,
+        actual,
+        check_dtype=False,
+    )
