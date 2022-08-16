@@ -917,7 +917,7 @@ TEST_F(JsonReaderTest, BadDtypeParams)
 
 TEST_F(JsonReaderTest, JsonExperimentalBasic)
 {
-  const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonExperimentalBasic.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[{\"a\":\"11\", \"b\":\"1.1\"},{\"a\":\"22\", \"b\":\"2.2\"}]";
   outfile.close();
