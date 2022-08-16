@@ -21,6 +21,7 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -68,11 +69,7 @@ void bench_groupby_struct_keys(nvbench::state& state)
     child_cols = std::vector<std::unique_ptr<cudf::column>>{};
     child_cols.push_back(struct_col.release());
   }
-
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
 
   auto const keys_table = cudf::table(std::move(child_cols));
@@ -87,7 +84,7 @@ void bench_groupby_struct_keys(nvbench::state& state)
   requests[0].aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
 
   // Set up nvbench default stream
-  auto stream = rmm::cuda_stream_default;
+  auto stream = cudf::default_stream_value;
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync,

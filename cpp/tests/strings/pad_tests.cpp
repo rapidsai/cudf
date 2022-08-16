@@ -45,7 +45,7 @@ TEST_F(StringsPadTest, Padding)
   auto strings_view     = cudf::strings_column_view(strings);
 
   {
-    auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::RIGHT, phil);
+    auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::RIGHT, phil);
 
     std::vector<const char*> h_expected{
       "eee ddd", "bb cc+", nullptr, "++++++", "aa++++", "bbb+++", "ééé+++", "o+++++"};
@@ -56,7 +56,7 @@ TEST_F(StringsPadTest, Padding)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::LEFT, phil);
+    auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::LEFT, phil);
 
     std::vector<const char*> h_expected{
       "eee ddd", "+bb cc", nullptr, "++++++", "++++aa", "+++bbb", "+++ééé", "+++++o"};
@@ -67,7 +67,7 @@ TEST_F(StringsPadTest, Padding)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::BOTH, phil);
+    auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::BOTH, phil);
 
     std::vector<const char*> h_expected{
       "eee ddd", "bb cc+", nullptr, "++++++", "++aa++", "+bbb++", "+ééé++", "++o+++"};
@@ -86,12 +86,12 @@ TEST_F(StringsPadTest, PaddingBoth)
   auto strings_view = cudf::strings_column_view(strings);
 
   {  // even width left justify
-    auto results = cudf::strings::pad(strings_view, 6, cudf::strings::pad_side::BOTH, phil);
+    auto results = cudf::strings::pad(strings_view, 6, cudf::strings::side_type::BOTH, phil);
     cudf::test::strings_column_wrapper expected({"koala+", "+foxx+", "+fox++", "chameleon"});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {  // odd width right justify
-    auto results = cudf::strings::pad(strings_view, 7, cudf::strings::pad_side::BOTH, phil);
+    auto results = cudf::strings::pad(strings_view, 7, cudf::strings::side_type::BOTH, phil);
     cudf::test::strings_column_wrapper expected({"+koala+", "++foxx+", "++fox++", "chameleon"});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
@@ -115,7 +115,7 @@ TEST_P(PadParameters, Padding)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::size_type width = GetParam();
   auto strings_view     = cudf::strings_column_view(strings);
-  auto results          = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::RIGHT);
+  auto results          = cudf::strings::pad(strings_view, width, cudf::strings::side_type::RIGHT);
 
   std::vector<std::string> h_expected;
   for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {

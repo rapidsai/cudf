@@ -77,16 +77,13 @@ void BM_contiguous_split(benchmark::State& state)
   int64_t const num_rows  = total_desired_bytes / (num_cols * el_size);
 
   // generate input table
-  data_profile profile;
-  if (not include_validity) profile.set_null_frequency(std::nullopt);  // <0 means, no null_mask
-  profile.set_cardinality(0);
-  auto range = default_range<int>();
-  profile.set_distribution_params<int>(
-    cudf::type_id::INT32, distribution_id::UNIFORM, range.first, range.second);
+  auto builder = data_profile_builder().cardinality(0).distribution<int>(cudf::type_id::INT32,
+                                                                         distribution_id::UNIFORM);
+  if (not include_validity) builder.no_validity();
 
   auto src_cols = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
                                       row_count{static_cast<cudf::size_type>(num_rows)},
-                                      profile)
+                                      data_profile{builder})
                     ->release();
 
   int64_t const total_bytes =
@@ -115,13 +112,10 @@ void BM_contiguous_split_strings(benchmark::State& state)
   int64_t const num_rows      = col_len_bytes / string_len;
 
   // generate input table
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);  // <0 means, no null mask
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int>(
+  data_profile profile = data_profile_builder().no_validity().cardinality(0).distribution(
     cudf::type_id::INT32,
     distribution_id::UNIFORM,
-    0,
+    0ul,
     include_validity ? h_strings.size() * 2 : h_strings.size() - 1);  // out of bounds nullified
   cudf::test::strings_column_wrapper one_col(h_strings.begin(), h_strings.end());
   std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);

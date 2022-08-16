@@ -118,15 +118,17 @@ __global__ void __launch_bounds__(block_size)
   size_type end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be inserted into the map for current chunk
-  auto const cudf_col               = *(col->parent_column);
-  size_type const s_start_value_idx = row_to_value_idx(start_row, cudf_col);
-  size_type const end_value_idx     = row_to_value_idx(end_row, cudf_col);
+  size_type const s_start_value_idx = row_to_value_idx(start_row, *col);
+  size_type const end_value_idx     = row_to_value_idx(end_row, *col);
 
   column_device_view const& data_col = *col->leaf_column;
 
   // Make a view of the hash map
-  auto hash_map_mutable = map_type::device_mutable_view(
-    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+  auto hash_map_mutable =
+    map_type::device_mutable_view(chunk->dict_map_slots,
+                                  chunk->dict_map_size,
+                                  cuco::sentinel::empty_key{KEY_SENTINEL},
+                                  cuco::sentinel::empty_value{VALUE_SENTINEL});
 
   __shared__ size_type total_num_dict_entries;
   size_type val_idx = s_start_value_idx + t;
@@ -148,13 +150,24 @@ __global__ void __launch_bounds__(block_size)
           case Type::INT96: return 12;
           case Type::FLOAT: return 4;
           case Type::DOUBLE: return 8;
-          case Type::BYTE_ARRAY:
-            if (data_col.type().id() == type_id::STRING) {
+          case Type::BYTE_ARRAY: {
+            auto const col_type = data_col.type().id();
+            if (col_type == type_id::STRING) {
               // Strings are stored as 4 byte length + string bytes
               return 4 + data_col.element<string_view>(val_idx).size_bytes();
+            } else if (col_type == type_id::LIST) {
+              // Binary is stored as 4 byte length + bytes
+              return 4 + get_element<statistics::byte_array_view>(data_col, val_idx).size_bytes();
             }
+            CUDF_UNREACHABLE(
+              "Byte array only supports string and list<byte> column types for dictionary "
+              "encoding!");
+          }
           case Type::FIXED_LEN_BYTE_ARRAY:
             if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
+            CUDF_UNREACHABLE(
+              "Fixed length byte array only supports decimal 128 column types for dictionary "
+              "encoding!");
           default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
         }
       }();
@@ -184,9 +197,11 @@ __global__ void __launch_bounds__(block_size)
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
-  auto t = threadIdx.x;
-  auto map =
-    map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+  auto t   = threadIdx.x;
+  auto map = map_type::device_view(chunk.dict_map_slots,
+                                   chunk.dict_map_size,
+                                   cuco::sentinel::empty_key{KEY_SENTINEL},
+                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
 
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
   using cuda::std::memory_order_relaxed;
@@ -226,15 +241,16 @@ __global__ void __launch_bounds__(block_size)
   size_type end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be searched in the map for current chunk
-  auto const cudf_col           = *(col->parent_column);
-  auto const s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
-  auto const s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
-  auto const end_value_idx      = row_to_value_idx(end_row, cudf_col);
+  auto const s_start_value_idx  = row_to_value_idx(start_row, *col);
+  auto const s_ck_start_val_idx = row_to_value_idx(chunk->start_row, *col);
+  auto const end_value_idx      = row_to_value_idx(end_row, *col);
 
   column_device_view const& data_col = *col->leaf_column;
 
-  auto map = map_type::device_view(
-    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+  auto map = map_type::device_view(chunk->dict_map_slots,
+                                   chunk->dict_map_size,
+                                   cuco::sentinel::empty_key{KEY_SENTINEL},
+                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
 
   auto val_idx = s_start_value_idx + t;
   while (val_idx < end_value_idx) {

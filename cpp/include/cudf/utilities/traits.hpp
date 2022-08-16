@@ -31,6 +31,7 @@ namespace cudf {
  * @file
  */
 
+/// Utility metafunction that maps a sequence of any types to the type void.
 template <typename...>
 using void_t = void;
 
@@ -47,12 +48,15 @@ using void_t = void;
  */
 #define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
 
+/// Checks if two types are comparable using less operator (i.e. <).
 template <typename L, typename R>
 using less_comparable = decltype(std::declval<L>() < std::declval<R>());
 
+/// Checks if two types are comparable using greater operator (i.e. >).
 template <typename L, typename R>
 using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
 
+/// Checks if two types are comparable using equality operator (i.e. ==).
 template <typename L, typename R>
 using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
 
@@ -86,12 +90,15 @@ struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::tru
 };
 }  // namespace detail
 
+/// Checks if types have a common type
 template <typename... Ts>
 using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type;
 
+/// Helper variable template for has_common_type<>::value
 template <typename... Ts>
 constexpr inline bool has_common_type_v = detail::has_common_type_impl<void, Ts...>::value;
 
+/// Checks if a type is a timestamp type.
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,
@@ -99,6 +106,7 @@ using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
 
+/// Checks if a type is a duration type.
 template <typename T>
 using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
@@ -127,8 +135,15 @@ constexpr inline bool is_relationally_comparable()
 namespace detail {
 /**
  * @brief Helper functor to check if a specified type `T` supports relational comparisons.
+ *
  */
 struct unary_relationally_comparable_functor {
+  /**
+   * @brief Returns true if `T` supports relational comparisons.
+   *
+   * @tparam T Type to check
+   * @return true if `T` supports relational comparisons
+   */
   template <typename T>
   inline bool operator()() const
   {
@@ -170,8 +185,15 @@ constexpr inline bool is_equality_comparable()
 namespace detail {
 /**
  * @brief Helper functor to check if a specified type `T` supports equality comparisons.
+ *
  */
 struct unary_equality_comparable_functor {
+  /**
+   * @brief Checks whether `T` supports equality comparisons.
+   *
+   * @tparam T Type to check
+   * @return true if `T` supports equality comparisons
+   */
   template <typename T>
   bool operator()() const
   {
@@ -349,6 +371,19 @@ struct is_floating_point_impl {
 constexpr inline bool is_floating_point(data_type type)
 {
   return cudf::type_dispatcher(type, is_floating_point_impl{});
+}
+
+/**
+ * @brief Indicates whether `T` is a std::byte type.
+ *
+ * @tparam T The type to verify
+ * @return true `type` is std::byte
+ * @return false `type` is not std::byte
+ */
+template <typename T>
+constexpr inline bool is_byte()
+{
+  return std::is_same_v<std::remove_cv_t<T>, std::byte>;
 }
 
 /**
@@ -534,11 +569,13 @@ constexpr inline bool is_chrono(data_type type)
  * As further example, `duration_ns` is distinct from its concrete `int64_t` representation type,
  * but they are layout compatible.
  *
+ * @return true if `T` is layout compatible with its "representation" type
  */
 template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
-  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() or
+         cudf::is_byte<T>();
 }
 
 /**
@@ -697,37 +734,6 @@ struct is_nested_impl {
 constexpr inline bool is_nested(data_type type)
 {
   return cudf::type_dispatcher(type, is_nested_impl{});
-}
-
-/**
- * @brief Indicates whether `T` is a struct type.
- *
- * @param T The type to verify
- * @return A boolean indicating if T is a struct type
- */
-template <typename T>
-constexpr inline bool is_struct()
-{
-  return std::is_same_v<T, cudf::struct_view>;
-}
-
-struct is_struct_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_struct<T>();
-  }
-};
-
-/**
- * @brief Indicates whether `type` is a struct type.
- *
- * @param type The `data_type` to verify
- * @return A boolean indicating if `type` is a struct type
- */
-constexpr inline bool is_struct(data_type type)
-{
-  return cudf::type_dispatcher(type, is_struct_impl{});
 }
 
 template <typename FromType>

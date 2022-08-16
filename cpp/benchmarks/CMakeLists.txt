@@ -160,6 +160,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
+ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
@@ -181,7 +182,9 @@ ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
   reduction/reduce.cpp reduction/scan.cpp
 )
-ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
+ConfigureNVBench(
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -198,7 +201,10 @@ ConfigureBench(
   groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
 
-ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
+ConfigureNVBench(
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
+  groupby/group_struct_keys.cpp
+)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -287,6 +293,7 @@ ConfigureBench(
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
+ConfigureNVBench(FST_NVBENCH io/fst.cu)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

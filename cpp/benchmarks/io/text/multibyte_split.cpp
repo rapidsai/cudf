@@ -27,8 +27,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/transform.h>
@@ -58,13 +57,8 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
   auto const value_size_min  = static_cast<int32_t>(value_size_avg * (1 - deviation));
   auto const value_size_max  = static_cast<int32_t>(value_size_avg * (1 + deviation));
 
-  data_profile table_profile;
-
-  table_profile.set_distribution_params(  //
-    cudf::type_id::STRING,
-    distribution_id::NORMAL,
-    value_size_min,
-    value_size_max);
+  data_profile const table_profile = data_profile_builder().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, value_size_min, value_size_max);
 
   auto const values_table = create_random_table(  //
     {cudf::type_id::STRING},
@@ -106,7 +100,7 @@ static void BM_multibyte_split(benchmark::State& state)
                   device_input.data(),
                   device_input.size() * sizeof(char),
                   cudaMemcpyDeviceToHost,
-                  rmm::cuda_stream_default);
+                  cudf::default_stream_value);
 
   auto temp_file_name = random_file_in_dir(temp_dir.path());
 

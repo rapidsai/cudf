@@ -28,6 +28,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -127,9 +128,14 @@ std::unique_ptr<column> set_keys(
 
   // copy the keys -- use cudf::distinct to make sure there are no duplicates,
   // then sort the results.
-  auto distinct_keys = cudf::detail::distinct(
-    table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
-  auto sorted_keys = cudf::detail::sort(distinct_keys->view(),
+  auto distinct_keys = cudf::detail::distinct(table_view{{new_keys}},
+                                              std::vector<size_type>{0},
+                                              duplicate_keep_option::KEEP_ANY,
+                                              null_equality::EQUAL,
+                                              nan_equality::ALL_EQUAL,
+                                              stream,
+                                              mr);
+  auto sorted_keys   = cudf::detail::sort(distinct_keys->view(),
                                         std::vector<order>{order::ASCENDING},
                                         std::vector<null_order>{null_order::BEFORE},
                                         stream,
@@ -239,14 +245,14 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
+  return detail::set_keys(dictionary_column, keys, cudf::default_stream_value, mr);
 }
 
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::match_dictionaries(input, rmm::cuda_stream_default, mr);
+  return detail::match_dictionaries(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

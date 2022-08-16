@@ -19,6 +19,7 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -26,7 +27,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <random>
-#include <rmm/cuda_stream_view.hpp>
 #include <thrust/sequence.h>
 
 template <typename T>
@@ -57,7 +57,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
 
   auto scalar_device_view  = cudf::get_scalar_device_view(s);
   auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
-  rmm::device_scalar<bool> result{rmm::cuda_stream_default};
+  rmm::device_scalar<bool> result{cudf::default_stream_value};
 
   test_set_value<<<1, 1>>>(scalar_device_view, scalar_device_view1);
   CUDF_CHECK_CUDA(0);
@@ -68,7 +68,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
   test_value<<<1, 1>>>(scalar_device_view, scalar_device_view1, result.data());
   CUDF_CHECK_CUDA(0);
 
-  EXPECT_TRUE(result.value(rmm::cuda_stream_default));
+  EXPECT_TRUE(result.value(cudf::default_stream_value));
 }
 
 template <typename ScalarDeviceViewType>
@@ -82,12 +82,12 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{rmm::cuda_stream_default};
+  rmm::device_scalar<bool> result{cudf::default_stream_value};
 
   test_null<<<1, 1>>>(scalar_device_view, result.data());
   CUDF_CHECK_CUDA(0);
 
-  EXPECT_FALSE(result.value(rmm::cuda_stream_default));
+  EXPECT_FALSE(result.value(cudf::default_stream_value));
 }
 
 template <typename ScalarDeviceViewType>
@@ -127,11 +127,11 @@ TEST_F(StringScalarDeviceViewTest, Value)
   cudf::string_scalar s(value);
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{rmm::cuda_stream_default};
+  rmm::device_scalar<bool> result{cudf::default_stream_value};
   auto value_v = cudf::detail::make_device_uvector_sync(value);
 
   test_string_value<<<1, 1>>>(scalar_device_view, value_v.data(), value.size(), result.data());
   CUDF_CHECK_CUDA(0);
 
-  EXPECT_TRUE(result.value(rmm::cuda_stream_default));
+  EXPECT_TRUE(result.value(cudf::default_stream_value));
 }

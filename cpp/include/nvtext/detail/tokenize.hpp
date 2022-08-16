@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -37,7 +38,7 @@ namespace detail {
 std::unique_ptr<cudf::column> tokenize(
   cudf::strings_column_view const& strings,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream         = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
@@ -53,7 +54,7 @@ std::unique_ptr<cudf::column> tokenize(
 std::unique_ptr<cudf::column> tokenize(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -70,7 +71,7 @@ std::unique_ptr<cudf::column> tokenize(
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream         = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
@@ -86,7 +87,7 @@ std::unique_ptr<cudf::column> count_tokens(
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

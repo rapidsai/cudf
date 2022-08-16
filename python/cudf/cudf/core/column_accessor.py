@@ -383,6 +383,46 @@ class ColumnAccessor(abc.MutableMapping):
             level_names=self.level_names,
         )
 
+    def swaplevel(self, i=-2, j=-1):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level of index to be swapped.
+        j : int or str, default -1
+            Second level of index to be swapped.
+
+        Returns
+        -------
+        ColumnAccessor
+        """
+
+        i = _get_level(i, self.nlevels, self.level_names)
+        j = _get_level(j, self.nlevels, self.level_names)
+
+        new_keys = [list(row) for row in self]
+        new_dict = {}
+
+        # swap old keys for i and j
+        for n, row in enumerate(self.names):
+            new_keys[n][i], new_keys[n][j] = row[j], row[i]
+            new_dict.update({row: tuple(new_keys[n])})
+
+        new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
+
+        # swap level_names for i and j
+        new_names = list(self.level_names)
+        new_names[i], new_names[j] = new_names[j], new_names[i]
+
+        return self.__class__(
+            new_data,
+            multiindex=True,
+            level_names=new_names,
+        )
+
     def set_by_label(self, key: Any, value: Any, validate: bool = True):
         """
         Add (or modify) column by name.
@@ -605,3 +645,32 @@ def _remove_key_level(key: Any, level: int) -> Any:
     if len(result) == 1:
         return result[0]
     return result
+
+
+def _get_level(x, nlevels, level_names):
+    """Get the level index from a level number or name.
+
+    If given an integer, this function will handle wraparound for
+    negative values. If given a string (the level name), this function
+    will extract the index of that level from `level_names`.
+
+    Parameters
+    ----------
+    x
+        The level number to validate
+    nlevels
+        The total available levels in the MultiIndex
+    level_names
+        The names of the levels.
+    """
+    if isinstance(x, int):
+        if x < 0:
+            x += nlevels
+        if x >= nlevels:
+            raise IndexError(
+                f"Level {x} out of bounds. Index has {nlevels} levels."
+            )
+        return x
+    else:
+        x = level_names.index(x)
+        return x

@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -78,18 +79,15 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
     if (in_range) target.element<T>(index) = *(source_value_begin + source_idx);
 
     if (has_validity) {  // update bitmask
-      int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
-
-      bool valid    = in_range && *(source_validity_begin + source_idx);
-      int warp_mask = __ballot_sync(active_mask, valid);
+      const bool valid      = in_range && *(source_validity_begin + source_idx);
+      const int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
+      const int valid_mask  = __ballot_sync(0xFFFFFFFF, valid);
+      const int warp_mask   = active_mask & valid_mask;
 
       cudf::bitmask_type old_mask = target.get_mask_word(mask_idx);
-
       if (lane_id == leader_lane) {
-        cudf::bitmask_type new_mask = (old_mask & ~active_mask) | (warp_mask & active_mask);
+        cudf::bitmask_type new_mask = (old_mask & ~active_mask) | warp_mask;
         target.set_mask_word(mask_idx, new_mask);
-        // null_diff =
-        //   (warp_size - __popc(new_mask)) - (warp_size - __popc(old_mask))
         warp_null_change += __popc(active_mask & old_mask) - __popc(active_mask & new_mask);
       }
     }
@@ -137,7 +135,7 @@ void copy_range(SourceValueIterator source_value_begin,
                 mutable_column_view& target,
                 size_type target_begin,
                 size_type target_end,
-                rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   CUDF_EXPECTS((target_begin <= target_end) && (target_begin >= 0) &&
                  (target_begin < target.size()) && (target_end <= target.size()),
@@ -198,7 +196,7 @@ void copy_range_in_place(column_view const& source,
                          size_type source_begin,
                          size_type source_end,
                          size_type target_begin,
-                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                         rmm::cuda_stream_view stream = cudf::default_stream_value);
 
 /**
  * @copydoc cudf::copy_range
@@ -211,7 +209,7 @@ std::unique_ptr<column> copy_range(
   size_type source_begin,
   size_type source_end,
   size_type target_begin,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

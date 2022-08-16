@@ -568,7 +568,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
   auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
-  auto const d_key_equal = comparator.device_comparator(has_null, null_keys_are_equal);
+  auto const d_key_equal = comparator.equal_to(has_null, null_keys_are_equal);
   auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};

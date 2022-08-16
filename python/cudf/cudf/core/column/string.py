@@ -32,7 +32,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
@@ -630,11 +630,11 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, index = libstrings.extract(self._column, pat, flags)
+        data, _ = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
             data = next(iter(data.values()))
         else:
-            data = cudf.core.frame.Frame(data, index)
+            data = data
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -2236,16 +2236,38 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(libstrings.get(self._column, i))
 
-    def get_json_object(self, json_path):
+    def get_json_object(
+        self,
+        json_path,
+        *,
+        allow_single_quotes=False,
+        strip_quotes_from_single_strings=True,
+        missing_fields_as_nulls=False,
+    ):
         r"""
         Applies a JSONPath string to an input strings column
         where each row in the column is a valid json string
 
         Parameters
         ----------
-        json_path: str
+        json_path : str
             The JSONPath string to be applied to each row
             of the input column
+        allow_single_quotes : bool, default False
+            If True, representing strings with single
+            quotes is allowed.
+            If False, strings must only be represented
+            with double quotes.
+        strip_quotes_from_single_strings : bool, default True
+            If True, strip the quotes from the return value of
+            a given row if it is a string.
+            If False, values returned for a given row include
+            quotes if they are strings.
+        missing_fields_as_nulls : bool, default False
+            If True, when an object is queried for a field
+            it does not contain, "null" is returned.
+            If False, when an object is queried for a field
+            it does not contain, None is returned.
 
         Returns
         -------
@@ -2286,9 +2308,16 @@ class StringMethods(ColumnMethods):
         """
 
         try:
+            options = libstrings.GetJsonObjectOptions(
+                allow_single_quotes=allow_single_quotes,
+                strip_quotes_from_single_strings=(
+                    strip_quotes_from_single_strings
+                ),
+                missing_fields_as_nulls=missing_fields_as_nulls,
+            )
             res = self._return_or_inplace(
                 libstrings.get_json_object(
-                    self._column, cudf.Scalar(json_path, "str")
+                    self._column, cudf.Scalar(json_path, "str"), options
                 )
             )
         except RuntimeError as e:
@@ -2448,18 +2477,18 @@ class StringMethods(ColumnMethods):
 
         if expand:
             if self._column.null_count == len(self._column):
-                result_table = cudf.core.frame.Frame({0: self._column.copy()})
+                result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, index = libstrings.split_re(self._column, pat, n)
+                    data, _ = libstrings.split_re(self._column, pat, n)
                 else:
-                    data, index = libstrings.split(
+                    data, _ = libstrings.split(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
-                    result_table = cudf.core.frame.Frame({})
+                    result_table = {}
                 else:
-                    result_table = cudf.core.frame.Frame(data, index)
+                    result_table = data
         else:
             if regex is True:
                 result_table = libstrings.split_record_re(self._column, pat, n)
@@ -2621,18 +2650,18 @@ class StringMethods(ColumnMethods):
 
         if expand:
             if self._column.null_count == len(self._column):
-                result_table = cudf.core.frame.Frame({0: self._column.copy()})
+                result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, index = libstrings.rsplit_re(self._column, pat, n)
+                    data, _ = libstrings.rsplit_re(self._column, pat, n)
                 else:
-                    data, index = libstrings.rsplit(
+                    data, _ = libstrings.rsplit(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
-                    result_table = cudf.core.frame.Frame({})
+                    result_table = {}
                 else:
-                    result_table = cudf.core.frame.Frame(data, index)
+                    result_table = data
         else:
             if regex is True:
                 result_table = libstrings.rsplit_record_re(
@@ -2722,9 +2751,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            cudf.core.frame.Frame(
-                *libstrings.partition(self._column, cudf.Scalar(sep, "str"))
-            ),
+            libstrings.partition(self._column, cudf.Scalar(sep, "str"))[0],
             expand=expand,
         )
 
@@ -2789,9 +2816,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            cudf.core.frame.Frame(
-                *libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))
-            ),
+            libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))[0],
             expand=expand,
         )
 
@@ -2872,7 +2897,7 @@ class StringMethods(ColumnMethods):
             raise TypeError(msg)
 
         try:
-            side = libstrings.PadSide[side.upper()]
+            side = libstrings.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {‘left’, ‘right’, ‘both’}"
@@ -3460,9 +3485,7 @@ class StringMethods(ColumnMethods):
             libstrings.count_re(self._column, pat, flags)
         )
 
-    def findall(
-        self, pat: str, flags: int = 0, expand: bool = True
-    ) -> SeriesOrIndex:
+    def findall(self, pat: str, flags: int = 0) -> SeriesOrIndex:
         """
         Find all occurrences of pattern or regular expression in the
         Series/Index.
@@ -3534,19 +3557,8 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        if expand:
-            warnings.warn(
-                "The expand parameter is deprecated and will be removed in a "
-                "future version. Set expand=False to match future behavior.",
-                FutureWarning,
-            )
-            data, index = libstrings.findall(self._column, pat, flags)
-            return self._return_or_inplace(
-                cudf.core.frame.Frame(data, index), expand=expand
-            )
-        else:
-            data = libstrings.findall_record(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
+        data = libstrings.findall_record(self._column, pat, flags)
+        return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -5028,7 +5040,7 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
-    mask : Buffer
+    mask : DeviceBufferLike
         The validity mask
     offset : int
         Data offset
@@ -5062,7 +5074,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,

@@ -30,6 +30,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -247,7 +248,7 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, rmm::cuda_stream_default);
+  return detail::fill_in_place(destination, begin, end, value, cudf::default_stream_value);
 }
 
 std::unique_ptr<column> fill(column_view const& input,
@@ -257,7 +258,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, rmm::cuda_stream_default, mr);
+  return detail::fill(input, begin, end, value, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

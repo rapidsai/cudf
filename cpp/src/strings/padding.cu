@@ -25,6 +25,7 @@
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -59,9 +60,9 @@ struct compute_pad_output_length_fn {
 std::unique_ptr<column> pad(
   strings_column_view const& strings,
   size_type width,
-  pad_side side                       = pad_side::RIGHT,
+  side_type side                      = side_type::RIGHT,
   std::string_view fill_char          = " ",
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
@@ -89,7 +90,7 @@ std::unique_ptr<column> pad(
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
-  if (side == pad_side::LEFT) {
+  if (side == side_type::LEFT) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -103,7 +104,7 @@ std::unique_ptr<column> pad(
           ptr += from_char_utf8(d_fill_char, ptr);
         copy_string(ptr, d_str);
       });
-  } else if (side == pad_side::RIGHT) {
+  } else if (side == side_type::RIGHT) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -117,7 +118,7 @@ std::unique_ptr<column> pad(
         while (length++ < width)
           ptr += from_char_utf8(d_fill_char, ptr);
       });
-  } else if (side == pad_side::BOTH) {
+  } else if (side == side_type::BOTH) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -203,22 +204,22 @@ std::unique_ptr<column> zfill(
 
 // Public APIs
 
-std::unique_ptr<column> pad(strings_column_view const& strings,
+std::unique_ptr<column> pad(strings_column_view const& input,
                             size_type width,
-                            pad_side side,
+                            side_type side,
                             std::string_view fill_char,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(strings, width, side, fill_char, rmm::cuda_stream_default, mr);
+  return detail::pad(input, width, side, fill_char, cudf::default_stream_value, mr);
 }
 
-std::unique_ptr<column> zfill(strings_column_view const& strings,
+std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(strings, width, rmm::cuda_stream_default, mr);
+  return detail::zfill(input, width, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

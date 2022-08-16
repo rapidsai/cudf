@@ -24,6 +24,7 @@
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -286,7 +287,7 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(input, null_policy, rmm::cuda_stream_default, mr);
+  return detail::concatenate_list_elements(input, null_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

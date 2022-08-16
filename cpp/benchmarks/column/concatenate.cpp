@@ -22,6 +22,7 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -48,7 +49,7 @@ static void BM_concatenate(benchmark::State& state)
   CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::concatenate(column_views);
   }
 
@@ -90,7 +91,7 @@ static void BM_concatenate_tables(benchmark::State& state)
   CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::concatenate(table_views);
   }
 
@@ -149,7 +150,7 @@ static void BM_concatenate_strings(benchmark::State& state)
   CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     auto result = cudf::concatenate(column_views);
   }
 

@@ -31,7 +31,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # ucx-py version
-export UCX_PY_VERSION='0.27.*'
+export UCX_PY_VERSION='0.28.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -98,8 +98,7 @@ conda activate rapids
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
+
 
 gpuci_logger "Check conda environment"
 conda info

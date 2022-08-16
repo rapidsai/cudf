@@ -21,6 +21,8 @@
 #include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 /**
  * @addtogroup column_quantiles
@@ -30,7 +32,7 @@ namespace cudf {
 
 /**
  * @brief Computes quantiles with interpolation.
-
+ *
  * Computes the specified quantiles by interpolating values between which they
  * lie, using the interpolation strategy specified in `interp`.
  *

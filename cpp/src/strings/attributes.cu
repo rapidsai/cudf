@@ -22,12 +22,14 @@
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -183,21 +185,21 @@ std::unique_ptr<column> count_characters(strings_column_view const& strings,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_characters(strings, rmm::cuda_stream_default, mr);
+  return detail::count_characters(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_bytes(strings, rmm::cuda_stream_default, mr);
+  return detail::count_bytes(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::code_points(strings, rmm::cuda_stream_default, mr);
+  return detail::code_points(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

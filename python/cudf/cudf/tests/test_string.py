@@ -1879,34 +1879,9 @@ def test_string_findall(pat, flags):
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)
 
-    # TODO: Update this test to remove "expand=False" when removing the expand
-    # parameter from Series.str.findall.
-    assert_eq(
-        ps.str.findall(pat, flags), gs.str.findall(pat, flags, expand=False)
-    )
-
-
-@pytest.mark.filterwarnings("ignore:The expand parameter is deprecated")
-def test_string_findall_expand_True():
-    # TODO: Remove this test when removing the expand parameter from
-    # Series.str.findall.
-    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
-    ps = pd.Series(test_data)
-    gs = cudf.Series(test_data)
-
-    assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
-    assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
-    assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
-    assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
-    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
-    assert_eq(
-        ps.str.findall("on$", re.MULTILINE)[3][0],
-        gs.str.findall("on$", re.MULTILINE)[0][3],
-    )
-    assert_eq(
-        ps.str.findall("o.*k", re.DOTALL)[3][0],
-        gs.str.findall("o.*k", re.DOTALL)[0][3],
-    )
+    expected = ps.str.findall(pat, flags)
+    actual = gs.str.findall(pat, flags)
+    assert_eq(expected, actual)
 
 
 def test_string_replace_multi():
@@ -3127,6 +3102,157 @@ def test_string_get_json_object_invalid_JSONPath(json_path):
 
     with pytest.raises(ValueError):
         gs.str.get_json_object(json_path)
+
+
+def test_string_get_json_object_allow_single_quotes():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            'author':"Nigel Rees",
+                            "title":'Sayings of the Century',
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            'title':"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=True
+        ),
+        cudf.Series(["Nigel Rees"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=True
+        ),
+        cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"]),
+    )
+
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+
+
+def test_string_get_json_object_strip_quotes_from_single_strings():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(["Nigel Rees"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['"Nigel Rees"']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+
+
+def test_string_get_json_object_missing_fields_as_nulls():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(["null"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(['[null,"fiction"]']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series(['["fiction"]']),
+    )
 
 
 def test_str_join_lists_error():

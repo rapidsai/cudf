@@ -55,9 +55,24 @@ using python_callable_type              = void*;
  */
 class python_oauth_refresh_callback : public RdKafka::OAuthBearerTokenRefreshCb {
  public:
+  /**
+   * @brief Construct a new python oauth refresh callback object
+   *
+   * @param callback_wrapper Cython wrapper that will
+   *                 be used to invoke the `python_callable`. This wrapper serves the purpose
+   *                 of preventing us from having to link against the Python development library
+   *                 in libcudf_kafka.
+   * @param python_callable pointer to a Python `functools.partial` object
+   */
   python_oauth_refresh_callback(kafka_oauth_callback_wrapper_type callback_wrapper,
                                 python_callable_type python_callable);
 
+  /**
+   * @brief Invoke the Python callback function to get the OAuth token and its expiration time
+   *
+   * @param handle
+   * @param oauthbearer_config pointer to the OAuthBearerConfig object
+   */
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
  private:

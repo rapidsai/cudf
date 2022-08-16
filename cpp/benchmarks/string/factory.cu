@@ -24,8 +24,8 @@
 
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
@@ -51,12 +51,11 @@ static void BM_factory(benchmark::State& state)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  data_profile const table_profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   auto d_column    = cudf::column_device_view::create(table->view().column(0));
-  rmm::device_uvector<string_pair> pairs(d_column->size(), rmm::cuda_stream_default);
+  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::default_stream_value);
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
@@ -64,7 +63,7 @@ static void BM_factory(benchmark::State& state)
                     string_view_to_pair{});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::make_strings_column(pairs);
   }
 

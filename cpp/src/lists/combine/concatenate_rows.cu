@@ -21,12 +21,17 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/combine.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
 
 namespace cudf {
 namespace lists {
@@ -302,7 +307,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_rows(input, null_policy, rmm::cuda_stream_default, mr);
+  return detail::concatenate_rows(input, null_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

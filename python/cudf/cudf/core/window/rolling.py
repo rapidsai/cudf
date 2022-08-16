@@ -288,14 +288,49 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         return self._apply_agg(op)
 
     def var(self, ddof=1):
+        """Calculate the rolling variance.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+            Delta Degrees of Freedom.  The divisor used in calculations
+            is ``N - ddof``, where ``N`` represents the number of
+            elements.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
         self.agg_params["ddof"] = ddof
         return self._apply_agg("var")
 
     def std(self, ddof=1):
+        """Calculate the rolling standard deviation.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+            Delta Degrees of Freedom.  The divisor used in calculations
+            is ``N - ddof``, where ``N`` represents the number of
+            elements.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
         self.agg_params["ddof"] = ddof
         return self._apply_agg("std")
 
     def count(self):
+        """Calculate the rolling count of non NaN observations.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
         return self._apply_agg("count")
 
     def apply(self, func, *args, **kwargs):

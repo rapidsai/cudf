@@ -141,6 +141,7 @@ struct is_supported_operation_functor {
         case binary_operator::MOD:                  return call<ops::Mod>(out_type);
         case binary_operator::PYMOD:                return call<ops::PyMod>(out_type);
         case binary_operator::POW:                  return call<ops::Pow>(out_type);
+        case binary_operator::INT_POW:              return call<ops::IntPow>(out_type);
         case binary_operator::BITWISE_AND:          return call<ops::BitwiseAnd>(out_type);
         case binary_operator::BITWISE_OR:           return call<ops::BitwiseOr>(out_type);
         case binary_operator::BITWISE_XOR:          return call<ops::BitwiseXor>(out_type);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,10 +42,10 @@
  * The test `mytest` will be invoked 3 times, once for each of the types `int,
  * char, float`.
  *
- * Instead of using `::testing::Types` directly, we provide
- * `cudf::testing::Types`. This is a drop in replacement for GTest's
- * `::testing::Types`. In lieu of including `gtest/gtest.h`, include
- * `cudf_gtest.hpp` to ensure `cudf::testing::Types` is used.
+ * Instead of using \::testing::Types directly, we provide
+ * `cudf::test::Types`. This is a drop in replacement for GTest's
+ * \::testing::Types. In lieu of including `gtest/gtest.h`, include
+ * `cudf_gtest.hpp` to ensure `cudf::test::Types` is used.
  *
  * Using the utilities in this file, you can compose complex type lists.
  *
@@ -79,6 +79,7 @@ namespace test {
 // Types -----------------------------------------
 using ::testing::Types;
 
+// @cond
 template <class T, int D>
 struct GetTypeImpl {
   static_assert(D == 0, "Out of bounds");
@@ -98,6 +99,7 @@ struct GetTypeImpl<Types<ARGS...>, 0> {
 
   using type = typename Types<ARGS...>::Head;
 };
+// @endcond
 
 /**
  * @brief Gives the specified type from a type list
@@ -115,6 +117,7 @@ template <class TUPLE, int D>
 using GetType = typename GetTypeImpl<TUPLE, D>::type;
 
 // GetSize -------------------------------
+// @cond
 template <class TUPLE>
 struct GetSizeImpl;
 
@@ -122,6 +125,7 @@ template <class... TYPES>
 struct GetSizeImpl<Types<TYPES...>> {
   static constexpr auto value = sizeof...(TYPES);
 };
+// @endcond
 
 /**
  * @brief Returns the size (number of elements) in a type list
@@ -135,6 +139,7 @@ template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
 // Concat -----------------------------------------
+// @cond
 namespace detail {
 template <class A, class B>
 struct Concat2;
@@ -167,6 +172,7 @@ template <>
 struct ConcatImpl<> {
   using type = Types<>;
 };
+// @endcond
 
 /**
  * @brief Concatenates compile-time lists of types into a single type list.
@@ -181,6 +187,7 @@ template <class... T>
 using Concat = typename ConcatImpl<T...>::type;
 
 // Flatten -----------------------------------------
+// @cond
 template <class T>
 struct FlattenImpl;
 
@@ -198,6 +205,7 @@ template <class... HEAD, class... TAIL>
 struct FlattenImpl<Types<Types<HEAD...>, TAIL...>> {
   using type = typename FlattenImpl<Types<HEAD..., TAIL...>>::type;
 };
+// @endcond
 
 /**
  * @brief Flattens nested compile-time lists of types into a single list of
@@ -214,6 +222,7 @@ template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
 // CrossProduct -----------------------------------------
+// @cond
 namespace detail {
 // prepend T in TUPLE
 template <class T, class TUPLE>
@@ -262,6 +271,7 @@ struct CrossProductImpl<Types<AARGS...>, TAIL...> {
 template <class T, class... TAIL>
 struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {
 };
+// @endcond
 
 /**
  * @brief Creates a new type list from the cross product (cartesian product) of
@@ -282,6 +292,7 @@ template <class... ARGS>
 using CrossProduct = typename CrossProductImpl<ARGS...>::type;
 
 // AllSame -----------------------------------------
+// @cond
 namespace detail {
 template <class... ITEMS>
 struct AllSame : std::false_type {
@@ -305,11 +316,12 @@ struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {
 };
 
 }  // namespace detail
+// @endcond
 
 /**
  * @brief Indicates if all types in a list are identical.
  *
- * This is useful as a predicate for for `RemoveIf`.
+ * This is useful as a predicate for `RemoveIf`.
  *
  * Example:
  * ```
@@ -323,11 +335,17 @@ struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {
  * ```
  */
 struct AllSame {
+  /**
+   * @brief Invoked as predicate for RemoveIf
+   *
+   * @tparam ITEMS The type to check if they are all same
+   */
   template <class... ITEMS>
   using Call = detail::AllSame<ITEMS...>;
 };
 
 // Exists ---------------------------------
+// @cond
 // Do a linear search to find NEEDLE in HAYSACK
 template <class NEEDLE, class HAYSACK>
 struct ExistsImpl;
@@ -346,6 +364,7 @@ struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {
 template <class NEEDLE, class HEAD, class... TAIL>
 struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>> {
 };
+// @endcond
 
 /**
  * @brief Indicates if a type exists within a type list.
@@ -394,6 +413,7 @@ struct ContainedIn {
 };
 
 // RemoveIf -----------------------------------------
+// @cond
 template <class PRED, class TUPLE>
 struct RemoveIfImpl;
 
@@ -408,6 +428,7 @@ struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
     Concat<typename std::conditional<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>::type,
            typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
 };
+// @endcond
 
 /**
  * @brief Removes types from a type list that satisfy a predicate
@@ -432,7 +453,7 @@ template <class PRED, class TUPLE>
 using RemoveIf = typename RemoveIfImpl<PRED, TUPLE>::type;
 
 // Transform --------------------------------
-
+// @cond
 template <class XFORM, class TYPES>
 struct TransformImpl;
 
@@ -440,6 +461,7 @@ template <class XFORM, class... ITEMS>
 struct TransformImpl<XFORM, Types<ITEMS...>> {
   using type = Types<typename XFORM::template Call<ITEMS>...>;
 };
+// @endcond
 
 /**
  * @brief Applies a transformation to every type in a type list
@@ -460,7 +482,7 @@ template <class XFORM, class TYPES>
 using Transform = typename TransformImpl<XFORM, TYPES>::type;
 
 // Repeat --------------------------------
-
+// @cond
 namespace detail {
 template <class T, int N, class RES>
 struct Repeat;
@@ -475,6 +497,7 @@ struct Repeat<T, 0, Types<ITEMS...>> {
   using type = Types<ITEMS...>;
 };
 }  // namespace detail
+// @endcond
 
 /**
  * @brief Transformation that repeats a type for a specified count.
@@ -492,12 +515,17 @@ struct Repeat<T, 0, Types<ITEMS...>> {
  */
 template <int N>
 struct Repeat {
+  /**
+   * @brief Invoked as predicate for Transform
+   *
+   * @tparam T The type to repeat
+   */
   template <class T>
   using Call = typename detail::Repeat<T, N, Types<>>::type;
 };
 
 // Append --------------------------------
-
+// @cond
 template <class TYPES, class... ITEMS>
 struct AppendImpl;
 
@@ -505,6 +533,7 @@ template <class... HEAD, class... TAIL>
 struct AppendImpl<Types<HEAD...>, TAIL...> {
   using type = Types<HEAD..., TAIL...>;
 };
+// @endcond
 
 /**
  * @brief Appends types to a type list
@@ -523,7 +552,7 @@ using Append = typename AppendImpl<TYPES, ITEMS...>::type;
 
 // Remove -------------------------------------------
 // remove items from tuple given by their indices
-
+// @cond
 namespace detail {
 template <class TUPLE, int CUR, int... IDXs>
 struct Remove;
@@ -556,6 +585,7 @@ template <class TUPLE, int... IDXs>
 struct RemoveImpl {
   using type = typename detail::Remove<TUPLE, 0, IDXs...>::type;
 };
+// @endcond
 
 /**
  * @brief Removes types at specified indices from a type list.
@@ -567,7 +597,7 @@ template <class TUPLE, int... IDXs>
 using Remove = typename RemoveImpl<TUPLE, IDXs...>::type;
 
 // Unique --------------------------------
-
+// @cond
 namespace detail {
 template <class... ITEMS>
 struct Unique;
@@ -591,6 +621,7 @@ template <class... ITEMS>
 struct UniqueImpl<Types<ITEMS...>> {
   using type = typename detail::Unique<ITEMS...>::type;
 };
+// @endcond
 
 /**
  * @brief Removes duplicate types from a type list

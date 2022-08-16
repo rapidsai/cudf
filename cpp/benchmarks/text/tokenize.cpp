@@ -23,6 +23,7 @@
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <nvtext/ngrams_tokenize.hpp>
 #include <nvtext/tokenize.hpp>
@@ -34,17 +35,16 @@ enum class tokenize_type { single, multi, count, count_multi, ngrams, characters
 
 static void BM_tokenize(benchmark::State& state, tokenize_type tt)
 {
-  auto const n_rows         = static_cast<cudf::size_type>(state.range(0));
-  auto const max_str_length = static_cast<cudf::size_type>(state.range(1));
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  auto const n_rows                = static_cast<cudf::size_type>(state.range(0));
+  auto const max_str_length        = static_cast<cudf::size_type>(state.range(1));
+  data_profile const table_profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
   cudf::test::strings_column_wrapper delimiters({" ", "+", "-"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (tt) {
       case tokenize_type::single:
         // single whitespace delimiter
