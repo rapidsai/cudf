@@ -127,6 +127,14 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
    does use raw synchronization primitives. So we should revisit Parent's third rule and improve
    here.
 
+Additional style guidelines for libcudf code include:
+
+ * [NL.11: Make Literals
+   Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
+   Decimal values should use integer separators every thousands place, like
+   `1'234'567`. Hexadecimal values should use separators every 4 characters,
+   like `0x0123'ABCD`.
+
 Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
 ### Includes

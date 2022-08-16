@@ -33,17 +33,15 @@ void BM_reduction_anyall(benchmark::State& state,
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
   auto const dtype           = cudf::type_to_id<type>();
-  data_profile const profile = data_profile_builder().distribution(
+  data_profile const profile = data_profile_builder().no_validity().distribution(
     dtype, distribution_id::UNIFORM, 0, agg->kind == cudf::aggregation::ANY ? 0 : 100);
-  auto const table = create_random_table({dtype}, row_count{column_size}, profile);
-  table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
-  cudf::column_view values(table->view().column(0));
+  auto const values = create_random_column(dtype, row_count{column_size}, profile);
 
   cudf::data_type output_dtype{cudf::type_id::BOOL8};
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(values, agg, output_dtype);
+    auto result = cudf::reduce(*values, agg, output_dtype);
   }
 }
 

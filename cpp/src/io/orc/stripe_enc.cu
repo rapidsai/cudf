@@ -838,8 +838,8 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               uint32_t dict_idx = s->chunk.dict_index[row];
-              if (dict_idx > 0x7fffffffu) {
-                dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
+              if (dict_idx > 0x7fff'ffffu) {
+                dict_idx = s->chunk.dict_index[dict_idx & 0x7fff'ffffu];
               }
               s->vals.u32[nz_idx] = dict_idx;
             } else {
