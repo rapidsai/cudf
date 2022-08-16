@@ -459,75 +459,75 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
   return p;
 }
 
-/**
- * @brief Pack literal values in output bitstream (1,2,4,8,12,16,20 or 24 bits per value)
- */
-inline __device__ void PackLiterals(
+inline __device__ void PackLiteralsFast(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 20 || w == 24) {
-    if (t <= (count | 0x1f)) {
-      if (w == 1 || w == 2 || w == 4) {
-        uint32_t mask = 0;
-        if (w == 1) {
-          v |= shuffle_xor(v, 1) << 1;
-          v |= shuffle_xor(v, 2) << 2;
-          v |= shuffle_xor(v, 4) << 4;
-          mask = 0x7;
-        } else if (w == 2) {
-          v |= shuffle_xor(v, 1) << 2;
-          v |= shuffle_xor(v, 2) << 4;
-          mask = 0x3;
-        } else if (w == 4) {
-          v |= shuffle_xor(v, 1) << 4;
-          mask = 0x1;
-        }
-        if (t < count && mask && !(t & mask)) { dst[(t * w) >> 3] = v; }
-        return;
-      } else if (w == 8) {
-        if (t < count) { dst[t] = v; }
-        return;
-      } else if (w == 12) {
-        v |= shuffle_xor(v, 1) << 12;
-        if (t < count && !(t & 1)) {
-          dst[(t >> 1) * 3 + 0] = v;
-          dst[(t >> 1) * 3 + 1] = v >> 8;
-          dst[(t >> 1) * 3 + 2] = v >> 16;
-        }
-        return;
-      } else if (w == 16) {
-        if (t < count) {
-          dst[t * 2 + 0] = v;
-          dst[t * 2 + 1] = v >> 8;
-        }
-        return;
-      } else if (w == 20) {
-        uint64_t vt = v;
-        vt |= shuffle_xor(vt, 1) << 20;
-        if (t < count && !(t & 1)) {
-          dst[t * 5 + 0] = vt;
-          dst[t * 5 + 1] = vt >> 8;
-          dst[t * 5 + 2] = vt >> 16;
-          dst[t * 5 + 3] = vt >> 24;
-          dst[t * 5 + 4] = vt >> 32;
-        }
-      } else if (w == 24) {
-        if (t < count) {
-          dst[t * 3 + 0] = v;
-          dst[t * 3 + 1] = v >> 8;
-          dst[t * 3 + 2] = v >> 16;
-        }
-        return;
+  if (t > (count | 0x1f)) { return; }
+
+  switch (w) {
+    case 1:
+      v |= shuffle_xor(v, 1) << 1;
+      v |= shuffle_xor(v, 2) << 2;
+      v |= shuffle_xor(v, 4) << 4;
+      if (t < count && !(t & 0x7)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 2:
+      v |= shuffle_xor(v, 1) << 2;
+      v |= shuffle_xor(v, 2) << 4;
+      if (t < count && !(t & 0x3)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 4:
+      v |= shuffle_xor(v, 1) << 4;
+      if (t < count && !(t & 0x1)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 8:
+      if (t < count) { dst[t] = v; }
+      return;
+    case 12:
+      v |= shuffle_xor(v, 1) << 12;
+      if (t < count && !(t & 1)) {
+        dst[(t >> 1) * 3 + 0] = v;
+        dst[(t >> 1) * 3 + 1] = v >> 8;
+        dst[(t >> 1) * 3 + 2] = v >> 16;
       }
-    } else {
+      return;
+    case 16:
+      if (t < count) {
+        dst[t * 2 + 0] = v;
+        dst[t * 2 + 1] = v >> 8;
+      }
+      return;
+    case 20: {
+      uint64_t vt = shuffle_xor(v, 1);
+      vt = vt << 20 | v;
+      if (t < count && !(t & 1)) {
+        dst[(t >> 1) * 5 + 0] = vt;
+        dst[(t >> 1) * 5 + 1] = vt >> 8;
+        dst[(t >> 1) * 5 + 2] = vt >> 16;
+        dst[(t >> 1) * 5 + 3] = vt >> 24;
+        dst[(t >> 1) * 5 + 4] = vt >> 32;
+      }
       return;
     }
-  } else if (w <= 16) {
+    case 24:
+      if (t < count) {
+        dst[t * 3 + 0] = v;
+        dst[t * 3 + 1] = v >> 8;
+        dst[t * 3 + 2] = v >> 16;
+      }
+      return;
+
+    default:
+      CUDF_UNREACHABLE("Unsupported bit width");
+  }
+}
+
+inline __device__ void PackLiteralsSlow(
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
     // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
     // words but the destination mem may not be a multiple of 4 bytes.
     // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
-    // TODO (ets): This code should never be called, since we prescribe a limited number of bit
-    // widths in build_chunk_dictionaries().
     __shared__ uint32_t scratch[64];
     if (t < 64) { scratch[t] = 0; }
     __syncthreads();
@@ -553,8 +553,41 @@ inline __device__ void PackLiterals(
     if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
     if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
     __syncthreads();
-  } else {
-    CUDF_UNREACHABLE("Unsupported bit width");
+}
+
+/**
+ * @brief Pack literal values in output bitstream (1,2,4,8,12,16,20 or 24 bits per value)
+ */
+inline __device__ void PackLiterals(
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
+  switch (w) {
+    case 1:
+    case 2:
+    case 4:
+    case 8:
+    case 12:
+    case 16:
+    case 20:
+    case 24:
+      PackLiteralsFast(dst, v, count, w, t);
+      break;
+    case 3:
+    case 5:
+    case 6:
+    case 7:
+    case 9:
+    case 10:
+    case 11:
+    case 13:
+    case 14:
+    case 15:
+      // TODO (ets): This code should never be called, since we prescribe a limited
+      // number of bit widths in build_chunk_dictionaries().
+      PackLiteralsSlow(dst, v, count, w, t);
+      break;
+    default:
+      CUDF_UNREACHABLE("Unsupported bit width");
   }
 }
 
