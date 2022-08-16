@@ -44,10 +44,21 @@ message(STATUS "CONDA_PREFIX=${CONDA_PREFIX}")
 
 find_package(CUDAToolkit REQUIRED)
 
+# depends on an installed cudf dev env
+set(UDF_INCLUDES ${CONDA_PREFIX}/include)
+list(APPEND UDF_INCLUDES ${CONDA_PREFIX}/include/rapids/libcudacxx)
+list(APPEND UDF_INCLUDES ${CMAKE_SOURCE_DIR}/build/_deps/jitify-src)
+
+set(UDF_LIBS ${CONDA_PREFIX}/lib/libcudf.so nvrtc)
+
+set(UDF_CXX_FLAGS "")
+set(UDF_CUDA_FLAGS "")
 set(SHIM_CUDA_FLAGS "")
 
+list(APPEND UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -keep)
 
+add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
 add_library(shim OBJECT src/strings/udf/shim.cu)
 
 set_property(TARGET shim PROPERTY CUDA_PTX_COMPILATION ON)
@@ -64,8 +75,33 @@ target_include_directories(
   PUBLIC ${CONDA_PREFIX}/include
 )
 
+set_target_properties(
+  cudf_strings_udf
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN"
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
+
+target_compile_options(
+  cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
+)
+
 target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
 
+target_include_directories(
+  cudf_strings_udf
+  PRIVATE include
+  PUBLIC ${UDF_INCLUDES}
+)
+target_link_libraries(cudf_strings_udf PUBLIC ${UDF_LIBS})
+
+install(TARGETS cudf_strings_udf)
 install(FILES ${CMAKE_SOURCE_DIR}/build/CMakeFiles/shim.dir/src/strings/udf/shim.ptx
         DESTINATION ${CMAKE_SOURCE_DIR}/../strings_udf/shim/
 )
