@@ -2276,8 +2276,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Examples
         --------
+        Apply a basic function to a series:
 
-        Apply a basic function to a series
         >>> sr = cudf.Series([1,2,3])
         >>> def f(x):
         ...     return x + 1
