@@ -1156,8 +1156,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result.name = self.name
             result.index = self.index
         else:
-            # TODO: Check mask and index are consistent with applymap result,
-            # add return docs to Series.apply
             result = self.apply(arg)
         return result
 
@@ -2262,6 +2260,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Positional arguments passed to func after the series value.
         **kwargs
             Not supported
+
+        Returns
+        -------
+        result : Series
+            The mask and index are preserved.
 
         Notes
         -----
