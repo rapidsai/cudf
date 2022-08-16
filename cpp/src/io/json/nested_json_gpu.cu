@@ -1395,13 +1395,11 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   // Initialize meta data to be populated while recursing through the tree of columns
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
-  std::vector<std::string> out_root_column_names;
 
   // Iterate over the struct's child columns and convert to cudf column
   for (auto const& [col_name, json_col] : root_struct_col.child_columns) {
     // Insert this columns name into the schema
     out_column_names.emplace_back(col_name);
-    out_root_column_names.emplace_back(col_name);
 
     // Get this JSON column's cudf column and schema info
     auto [cudf_col, col_name_info]   = json_column_to_cudf_column(json_col, d_input, stream, mr);
@@ -1410,7 +1408,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   }
 
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
-                             {out_root_column_names, out_column_names}};
+                             {{}, out_column_names}};
 }
 
 }  // namespace detail
