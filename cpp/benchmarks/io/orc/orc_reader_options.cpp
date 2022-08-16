@@ -109,6 +109,8 @@ void BM_orc_read_varying_options(nvbench::state& state,
                                                     nvbench::enum_type<UsesNumpyDType>,
                                                     nvbench::enum_type<Timestamp>>)
 {
+  cudf::rmm_pool_raii rmm_pool;
+
   auto const num_chunks = state.get_int64("num_chunks");
 
   auto const use_index     = UsesIndex == uses_index::YES;
