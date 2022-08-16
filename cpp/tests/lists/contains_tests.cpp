@@ -101,7 +101,7 @@ auto constexpr FIND_FIRST = lists::duplicate_find_option::FIND_FIRST;
 auto constexpr FIND_LAST  = lists::duplicate_find_option::FIND_LAST;
 
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool, int32_t>;
-using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+using indices_col = cudf::test::fixed_width_column_wrapper<size_type>;
 using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
@@ -152,13 +152,13 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNoNulls)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space, *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{1, ABSENT, ABSENT, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+    auto expected = indices_col{1, ABSENT, ABSENT, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space, *search_key_one, FIND_LAST);
-    auto expected = int32s_col{3, ABSENT, ABSENT, 4, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+    auto expected = indices_col{3, ABSENT, ABSENT, 4, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -197,15 +197,15 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNullLists)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space, *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{{1, ABSENT, ABSENT, X, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, X},
-                               nulls_at({3, 10})};
+    auto expected = indices_col{{1, ABSENT, ABSENT, X, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, X},
+                                nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space, *search_key_one, FIND_LAST);
-    auto expected = int32s_col{{3, ABSENT, ABSENT, X, 4, ABSENT, ABSENT, ABSENT, ABSENT, 0, X},
-                               nulls_at({3, 10})};
+    auto expected = indices_col{{3, ABSENT, ABSENT, X, 4, ABSENT, ABSENT, ABSENT, ABSENT, 0, X},
+                                nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -247,14 +247,16 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
     }
     {
       // FIND_FIRST
-      auto result          = lists::index_of(sliced_column_1, *search_key_one, FIND_FIRST);
-      auto expected_result = int32s_col{{ABSENT, ABSENT, 0, 2, ABSENT, ABSENT, ABSENT}, null_at(2)};
+      auto result = lists::index_of(sliced_column_1, *search_key_one, FIND_FIRST);
+      auto expected_result =
+        indices_col{{ABSENT, ABSENT, 0, 2, ABSENT, ABSENT, ABSENT}, null_at(2)};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
     }
     {
       // FIND_LAST
-      auto result          = lists::index_of(sliced_column_1, *search_key_one, FIND_LAST);
-      auto expected_result = int32s_col{{ABSENT, ABSENT, 0, 4, ABSENT, ABSENT, ABSENT}, null_at(2)};
+      auto result = lists::index_of(sliced_column_1, *search_key_one, FIND_LAST);
+      auto expected_result =
+        indices_col{{ABSENT, ABSENT, 0, 4, ABSENT, ABSENT, ABSENT}, null_at(2)};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
     }
   }
@@ -278,13 +280,13 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
     {
       // FIND_FIRST
       auto result          = lists::index_of(sliced_column_2, *search_key_one, FIND_FIRST);
-      auto expected_result = int32s_col{{0, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0}, null_at(0)};
+      auto expected_result = indices_col{{0, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0}, null_at(0)};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
     }
     {
       // FIND_LAST
       auto result          = lists::index_of(sliced_column_2, *search_key_one, FIND_LAST);
-      auto expected_result = int32s_col{{0, 4, ABSENT, ABSENT, ABSENT, ABSENT, 2}, null_at(0)};
+      auto expected_result = indices_col{{0, 4, ABSENT, ABSENT, ABSENT, ABSENT, 2}, null_at(0)};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
     }
   }
@@ -298,7 +300,7 @@ TYPED_TEST(TypedContainsTest, ScalarKeyNonNullListsWithNullValues)
   auto numerals     = fixed_width_column_wrapper<T>{{X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1},
                                                 nulls_at({0, 3, 6, 9, 10, 13})};
   auto search_space = make_lists_column(
-    8, int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(), numerals.release(), 0, {});
+    8, indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(), numerals.release(), 0, {});
   // Search space: [ [x], [1,2], [x,4,5,x], [], [], [7,8,x], [x], [1,2,x,1] ]
   auto search_key_one = create_scalar_search_key<T>(1);
   {
@@ -316,13 +318,13 @@ TYPED_TEST(TypedContainsTest, ScalarKeyNonNullListsWithNullValues)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{ABSENT, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0};
+    auto expected = indices_col{ABSENT, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_LAST);
-    auto expected = int32s_col{ABSENT, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 3};
+    auto expected = indices_col{ABSENT, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 3};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -337,7 +339,7 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
 
   auto search_space = make_lists_column(
     8,
-    int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     numerals.release(),
     1,
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
@@ -359,13 +361,13 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
   {
     // FIND_FIRST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 0}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 0}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 3}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 3}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -401,13 +403,13 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
   {
     // FIND_FIRST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 0, 1, ABSENT, X, 0, ABSENT, 0}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 0, 1, ABSENT, X, 0, ABSENT, 0}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 1, 2, ABSENT, X, 1, ABSENT, 3}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 1, 2, ABSENT, X, 1, ABSENT, 3}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -422,7 +424,7 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
   auto input_null_mask_iter = null_at(4);
   auto search_space         = make_lists_column(
     8,
-    int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     strings.release(),
     1,
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
@@ -444,13 +446,13 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
   {
     // FIND_FIRST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 0}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 0}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 3}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 0, ABSENT, ABSENT, X, ABSENT, ABSENT, 3}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -482,13 +484,13 @@ TYPED_TEST(TypedContainsTest, ScalarNullSearchKey)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), *search_key_null, FIND_FIRST);
-    auto expected = int32s_col{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, all_nulls()};
+    auto expected = indices_col{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, all_nulls()};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), *search_key_null, FIND_LAST);
-    auto expected = int32s_col{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, all_nulls()};
+    auto expected = indices_col{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, all_nulls()};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -557,13 +559,13 @@ TYPED_TEST(TypedVectorContainsTest, VectorKeysWithNoNulls)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_key, FIND_FIRST);
-    auto expected = int32s_col{1, ABSENT, ABSENT, 2, 0, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+    auto expected = indices_col{1, ABSENT, ABSENT, 2, 0, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_key, FIND_LAST);
-    auto expected = int32s_col{3, ABSENT, ABSENT, 4, 0, ABSENT, ABSENT, ABSENT, 3, ABSENT};
+    auto expected = indices_col{3, ABSENT, ABSENT, 4, 0, ABSENT, ABSENT, ABSENT, 3, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -599,15 +601,15 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullLists)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_FIRST);
-    auto expected = int32s_col{{1, ABSENT, ABSENT, X, ABSENT, 1, ABSENT, ABSENT, ABSENT, 0, X},
-                               nulls_at({3, 10})};
+    auto expected = indices_col{{1, ABSENT, ABSENT, X, ABSENT, 1, ABSENT, ABSENT, ABSENT, 0, X},
+                                nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_LAST);
-    auto expected = int32s_col{{3, ABSENT, ABSENT, X, ABSENT, 1, ABSENT, ABSENT, ABSENT, 0, X},
-                               nulls_at({3, 10})};
+    auto expected = indices_col{{3, ABSENT, ABSENT, X, ABSENT, 1, ABSENT, ABSENT, ABSENT, 0, X},
+                                nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -621,7 +623,7 @@ TYPED_TEST(TypedVectorContainsTest, VectorNonNullListsWithNullValues)
                                                 nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto search_space = make_lists_column(
-    8, int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(), numerals.release(), 0, {});
+    8, indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(), numerals.release(), 0, {});
   // Search space: [ [x], [1,2], [x,4,5,x], [], [], [7,8,x], [x], [1,2,x,1] ]
   auto search_keys = fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 1};
   {
@@ -633,13 +635,13 @@ TYPED_TEST(TypedVectorContainsTest, VectorNonNullListsWithNullValues)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_FIRST);
-    auto expected = int32s_col{ABSENT, 1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0};
+    auto expected = indices_col{ABSENT, 1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_LAST);
-    auto expected = int32s_col{ABSENT, 1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 3};
+    auto expected = indices_col{ABSENT, 1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 3};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -655,7 +657,7 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullsInLists)
 
   auto search_space = make_lists_column(
     8,
-    int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     numerals.release(),
     1,
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
@@ -671,13 +673,13 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullsInLists)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, ABSENT, X, ABSENT, ABSENT, 0}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, ABSENT, X, ABSENT, ABSENT, 0}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, ABSENT, X, ABSENT, ABSENT, 3}, null_at(4)};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, ABSENT, X, ABSENT, ABSENT, 3}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -693,7 +695,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
 
   auto search_space = make_lists_column(
     8,
-    int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     numerals.release(),
     1,
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
@@ -709,13 +711,13 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 0}, nulls_at({3, 4})};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 0}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 3}, nulls_at({3, 4})};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 3}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -731,7 +733,7 @@ TEST_F(ContainsTest, BoolKeyVectorWithNullsInListsAndInSearchKeys)
 
   auto search_space = make_lists_column(
     8,
-    int32s_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     numerals.release(),
     1,
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
@@ -748,13 +750,13 @@ TEST_F(ContainsTest, BoolKeyVectorWithNullsInListsAndInSearchKeys)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 1}, nulls_at({3, 4})};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 1}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 3}, nulls_at({3, 4})};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 3}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -786,13 +788,13 @@ TEST_F(ContainsTest, StringKeyVectorWithNullsInListsAndInSearchKeys)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_FIRST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 0}, nulls_at({3, 4})};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 0}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_keys, FIND_LAST);
-    auto expected = int32s_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 3}, nulls_at({3, 4})};
+    auto expected = indices_col{{ABSENT, 1, ABSENT, X, X, ABSENT, ABSENT, 3}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -885,14 +887,14 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsScalar)
     // FIND_FIRST
     auto result = lists::index_of(search_space->view(), *search_key_nan, FIND_FIRST);
     auto expected =
-      int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT, 1, ABSENT, ABSENT, ABSENT};
+      indices_col{ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT, 1, ABSENT, ABSENT, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result = lists::index_of(search_space->view(), *search_key_nan, FIND_LAST);
     auto expected =
-      int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT, 1, ABSENT, ABSENT, ABSENT};
+      indices_col{ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT, 1, ABSENT, ABSENT, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -944,14 +946,14 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
       // FIND_FIRST
       auto result = lists::index_of(search_space->view(), search_keys->view(), FIND_FIRST);
       auto expected =
-        int32s_col{{1, ABSENT, X, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT}, nulls_at({2})};
+        indices_col{{1, ABSENT, X, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT}, nulls_at({2})};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {
       // FIND_LAST
       auto result = lists::index_of(search_space->view(), search_keys->view(), FIND_LAST);
       auto expected =
-        int32s_col{{1, ABSENT, X, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT}, nulls_at({2})};
+        indices_col{{1, ABSENT, X, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT}, nulls_at({2})};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
   }
@@ -968,13 +970,13 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
     {
       // FIND_FIRST
       auto result   = lists::index_of(search_space->view(), search_keys->view(), FIND_FIRST);
-      auto expected = int32s_col{1, ABSENT, ABSENT, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT};
+      auto expected = indices_col{1, ABSENT, ABSENT, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {
       // FIND_LAST
       auto result   = lists::index_of(search_space->view(), search_keys->view(), FIND_LAST);
-      auto expected = int32s_col{1, ABSENT, ABSENT, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT};
+      auto expected = indices_col{1, ABSENT, ABSENT, ABSENT, 0, ABSENT, 2, ABSENT, 1, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
   }
@@ -995,7 +997,7 @@ TYPED_TEST(TypedContainsDecimalsTest, ScalarKey)
                                                      2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3};
     auto decimals     = fixed_point_column_wrapper<typename T::rep>{
       values.begin(), values.end(), numeric::scale_type{0}};
-    auto list_offsets = int32s_col{0, 3, 6, 9, 12, 15, 18, 21, 21, 24, 24};
+    auto list_offsets = indices_col{0, 3, 6, 9, 12, 15, 18, 21, 21, 24, 24};
     return make_lists_column(10, list_offsets.release(), decimals.release(), 0, {});
   }();
   auto search_key_one = make_fixed_point_scalar<T>(typename T::rep{1}, numeric::scale_type{0});
@@ -1010,13 +1012,13 @@ TYPED_TEST(TypedContainsDecimalsTest, ScalarKey)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_FIRST);
-    auto expected = int32s_col{1, ABSENT, ABSENT, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+    auto expected = indices_col{1, ABSENT, ABSENT, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_LAST);
-    auto expected = int32s_col{1, ABSENT, ABSENT, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+    auto expected = indices_col{1, ABSENT, ABSENT, 2, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1030,7 +1032,7 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
                                                      2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3};
     auto decimals     = fixed_point_column_wrapper<typename T::rep>{
       values.begin(), values.end(), numeric::scale_type{0}};
-    auto list_offsets = int32s_col{0, 3, 6, 9, 12, 15, 18, 21, 21, 24, 24};
+    auto list_offsets = indices_col{0, 3, 6, 9, 12, 15, 18, 21, 21, 24, 24};
     return make_lists_column(10, list_offsets.release(), decimals.release(), 0, {});
   }();
 
@@ -1050,13 +1052,13 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
   {
     // FIND_FIRST
     auto result   = lists::index_of(search_space->view(), search_key->view(), FIND_FIRST);
-    auto expected = int32s_col{1, ABSENT, ABSENT, 2, 0, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+    auto expected = indices_col{1, ABSENT, ABSENT, 2, 0, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto result   = lists::index_of(search_space->view(), search_key->view(), FIND_LAST);
-    auto expected = int32s_col{1, ABSENT, ABSENT, 2, 0, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+    auto expected = indices_col{1, ABSENT, ABSENT, 2, 0, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1071,7 +1073,7 @@ TYPED_TEST(TypedStructContainsTest, EmptyInputTest)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists = [] {
-    auto offsets = int32s_col{};
+    auto offsets = indices_col{};
     auto data    = tdata_col{};
     auto child   = structs_col{{data}};
     return make_lists_column(0, offsets.release(), child.release(), 0, {});
@@ -1098,7 +1100,7 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullLists)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, 1, 2, 1,    //
                               3, 4, 5,       //
@@ -1145,14 +1147,14 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullLists)
     // FIND_FIRST
     auto const result = lists::index_of(lists->view(), key, FIND_FIRST);
     auto const expected =
-      int32s_col{1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+      indices_col{1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result = lists::index_of(lists->view(), key, FIND_LAST);
     auto const expected =
-      int32s_col{1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+      indices_col{1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1162,7 +1164,7 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, 1, 2, 1,    //
                               3, 4, 5,       //
@@ -1213,14 +1215,14 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
   {
     // FIND_FIRST
     auto const result   = lists::index_of(lists->view(), key, FIND_FIRST);
-    auto const expected = int32s_col{
+    auto const expected = indices_col{
       {1, ABSENT, ABSENT, X, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, X}, nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result   = lists::index_of(lists->view(), key, FIND_LAST);
-    auto const expected = int32s_col{
+    auto const expected = indices_col{
       {1, ABSENT, ABSENT, X, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, X}, nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
@@ -1231,7 +1233,7 @@ TYPED_TEST(TypedStructContainsTest, SlicedListsColumnNoNulls)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists_original = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, 1, 2, 1,    //
                               3, 4, 5,       //
@@ -1278,13 +1280,13 @@ TYPED_TEST(TypedStructContainsTest, SlicedListsColumnNoNulls)
   {
     // FIND_FIRST
     auto const result   = lists::index_of(lists, key, FIND_FIRST);
-    auto const expected = int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+    auto const expected = indices_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result   = lists::index_of(lists, key, FIND_LAST);
-    auto const expected = int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+    auto const expected = indices_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1294,7 +1296,7 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullListsWithNullStructs)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, X, 2, 1,    //
                               3, 4, 5,       //
@@ -1341,14 +1343,14 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullListsWithNullStructs)
     // FIND_FIRST
     auto const result = lists::index_of(lists->view(), key, FIND_FIRST);
     auto const expected =
-      int32s_col{3, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+      indices_col{3, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result = lists::index_of(lists->view(), key, FIND_LAST);
     auto const expected =
-      int32s_col{3, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+      indices_col{3, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1358,7 +1360,7 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyNoNullLists)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, 1, 2, 1,    //
                               3, 4, 3,       //
@@ -1399,14 +1401,14 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyNoNullLists)
     // FIND_FIRST
     auto const result = lists::index_of(lists->view(), keys, FIND_FIRST);
     auto const expected =
-      int32s_col{1, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+      indices_col{1, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result = lists::index_of(lists->view(), keys, FIND_LAST);
     auto const expected =
-      int32s_col{1, 2, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+      indices_col{1, 2, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1416,7 +1418,7 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists_original = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, 1, 2, 1,    //
                               3, 4, 3,       //
@@ -1459,13 +1461,13 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
   {
     // FIND_FIRST
     auto const result   = lists::index_of(lists, keys, FIND_FIRST);
-    auto const expected = int32s_col{0, ABSENT, 1, ABSENT};
+    auto const expected = indices_col{0, ABSENT, 1, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result   = lists::index_of(lists, keys, FIND_LAST);
-    auto const expected = int32s_col{0, ABSENT, 1, ABSENT};
+    auto const expected = indices_col{0, ABSENT, 1, ABSENT};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1475,7 +1477,7 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists_original = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
+    auto offsets = indices_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
     auto data1    = tdata_col{0, X, 2, 1,    //
                               3, 4, 5,       //
@@ -1523,13 +1525,13 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
   {
     // FIND_FIRST
     auto const result   = lists::index_of(lists, keys, FIND_FIRST);
-    auto const expected = int32s_col{{X, ABSENT, 1, ABSENT}, null_at(0)};
+    auto const expected = indices_col{{X, ABSENT, 1, ABSENT}, null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result   = lists::index_of(lists, keys, FIND_LAST);
-    auto const expected = int32s_col{{X, ABSENT, 2, ABSENT}, null_at(0)};
+    auto const expected = indices_col{{X, ABSENT, 2, ABSENT}, null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
@@ -1589,13 +1591,13 @@ TYPED_TEST(TypedListContainsTest, ScalarKeyLists)
     {
       // FIND_FIRST
       auto const result   = lists::index_of(lists_column_view{lists}, key, FIND_FIRST);
-      auto const expected = int32s_col{0, ABSENT, ABSENT};
+      auto const expected = indices_col{0, ABSENT, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {
       // FIND_LAST
       auto const result   = lists::index_of(lists_column_view{lists}, key, FIND_LAST);
-      auto const expected = int32s_col{2, ABSENT, ABSENT};
+      auto const expected = indices_col{2, ABSENT, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
   };
@@ -1681,13 +1683,13 @@ TYPED_TEST(TypedListContainsTest, SlicedListsColumn)
     {
       // FIND_FIRST
       auto const result   = lists::index_of(lists_column_view{lists}, key, FIND_FIRST);
-      auto const expected = int32s_col{0, ABSENT, ABSENT};
+      auto const expected = indices_col{0, ABSENT, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {
       // FIND_LAST
       auto const result   = lists::index_of(lists_column_view{lists}, key, FIND_LAST);
-      auto const expected = int32s_col{2, ABSENT, ABSENT};
+      auto const expected = indices_col{2, ABSENT, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
   };
@@ -1748,13 +1750,13 @@ TYPED_TEST(TypedListContainsTest, ColumnKeyLists)
     {
       // FIND_FIRST
       auto const result   = lists::index_of(lists_column_view{lists}, key, FIND_FIRST);
-      auto const expected = has_nulls ? int32s_col{0, 2, 1} : int32s_col{ABSENT, 0, ABSENT};
+      auto const expected = has_nulls ? indices_col{0, 2, 1} : indices_col{ABSENT, 0, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {
       // FIND_LAST
       auto const result   = lists::index_of(lists_column_view{lists}, key, FIND_LAST);
-      auto const expected = has_nulls ? int32s_col{2, 2, 1} : int32s_col{ABSENT, 2, ABSENT};
+      auto const expected = has_nulls ? indices_col{2, 2, 1} : indices_col{ABSENT, 2, ABSENT};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
   };
@@ -1768,7 +1770,7 @@ TYPED_TEST(TypedListContainsTest, ColumnKeyWithListsOfStructsNoNulls)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const lists = [] {
-    auto child_offsets = int32s_col{0, 3, 6, 9, 14, 17, 20, 23, 23};
+    auto child_offsets = indices_col{0, 3, 6, 9, 14, 17, 20, 23, 23};
     // clang-format off
     auto data1 = tdata_col{0, 0, 2,       //
                            3, 4, 5,       //
@@ -1792,7 +1794,7 @@ TYPED_TEST(TypedListContainsTest, ColumnKeyWithListsOfStructsNoNulls)
     auto structs = structs_col{{data1, data2}};
     auto child   = make_lists_column(8, child_offsets.release(), structs.release(), 0, {});
 
-    auto offsets = int32s_col{0, 4, 8};
+    auto offsets = indices_col{0, 4, 8};
     return make_lists_column(2, offsets.release(), std::move(child), 0, {});
   }();
 
@@ -1812,13 +1814,13 @@ TYPED_TEST(TypedListContainsTest, ColumnKeyWithListsOfStructsNoNulls)
   {
     // FIND_FIRST
     auto const result   = lists::index_of(lists_column_view{lists->view()}, key, FIND_FIRST);
-    auto const expected = int32s_col{0, 1};
+    auto const expected = indices_col{0, 1};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
     // FIND_LAST
     auto const result   = lists::index_of(lists_column_view{lists->view()}, key, FIND_LAST);
-    auto const expected = int32s_col{2, 1};
+    auto const expected = indices_col{2, 1};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
