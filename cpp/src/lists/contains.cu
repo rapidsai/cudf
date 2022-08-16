@@ -106,11 +106,12 @@ __device__ auto element_index_pair_iter(size_type const size)
  * @brief Functor to perform searching for index of a key element in a given list, specialized
  * for non-nested types.
  */
-struct search_list_non_nested_fn {
+struct search_list_non_nested_types_fn {
   duplicate_find_option const find_option;
 
   template <typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
-  __device__ size_type operator()(list_device_view list, thrust::optional<Element> key_opt) const
+  __device__ size_type operator()(list_device_view const list,
+                                  thrust::optional<Element> const key_opt) const
   {
     // A null list or null key will result in a null output row.
     if (list.is_null() || !key_opt) { return NULL_SENTINEL; }
@@ -121,7 +122,7 @@ struct search_list_non_nested_fn {
   }
 
   template <typename Element, CUDF_ENABLE_IF(!is_supported_non_nested_type<Element>())>
-  __device__ size_type operator()(list_device_view, thrust::optional<Element>) const
+  __device__ size_type operator()(list_device_view const, thrust::optional<Element> const) const
   {
     CUDF_UNREACHABLE("Unsupported type.");
   }
@@ -133,7 +134,7 @@ struct search_list_non_nested_fn {
   {
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
+      thrust::find_if(thrust::seq, begin, end, [=] __device__(auto const idx) {
         return !list.is_null(idx) &&
                cudf::equality_compare(list.template element<Element>(idx), search_key);
       });
@@ -154,7 +155,7 @@ struct search_list_nested_types_fn {
   bool const search_key_is_scalar;
 
   search_list_nested_types_fn(duplicate_find_option const find_option,
-                              KeyValidityIter const& key_validity_iter,
+                              KeyValidityIter const key_validity_iter,
                               EqComparator const& d_comp,
                               bool search_key_is_scalar)
     : find_option(find_option),
@@ -164,7 +165,7 @@ struct search_list_nested_types_fn {
   {
   }
 
-  __device__ size_type operator()(list_device_view list) const
+  __device__ size_type operator()(list_device_view const list) const
   {
     // A null list or null key will result in a null output row.
     if (list.is_null() || !key_validity_iter[list.row_index()]) { return NULL_SENTINEL; }
@@ -175,14 +176,14 @@ struct search_list_nested_types_fn {
 
  private:
   template <bool forward>
-  __device__ inline size_type search_list(list_device_view list) const
+  __device__ inline size_type search_list(list_device_view const list) const
   {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
 
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
+      thrust::find_if(thrust::seq, begin, end, [=] __device__(auto const idx) {
         return !list.is_null(idx) &&
                d_comp(static_cast<lhs_index_type>(list.element_offset(idx)),
                       static_cast<rhs_index_type>(search_key_is_scalar ? 0 : list.row_index()));
@@ -199,22 +200,23 @@ struct search_list_nested_types_fn {
 template <bool search_key_is_scalar,
           typename Element,
           typename InputIterator,
+          typename OutputIterator,
           typename SearchKeyType>
-void index_of_non_nested(InputIterator input_it,
-                         size_type num_rows,
-                         size_type* output_it,
-                         SearchKeyType const& search_keys,
-                         bool search_keys_have_nulls,
-                         duplicate_find_option find_option,
-                         rmm::cuda_stream_view stream)
+void index_of_non_nested_types(InputIterator input_it,
+                               size_type num_rows,
+                               OutputIterator output_it,
+                               SearchKeyType const& search_keys,
+                               bool search_keys_have_nulls,
+                               duplicate_find_option find_option,
+                               rmm::cuda_stream_view stream)
 {
-  auto const do_search = [&](auto const keys_iter) {
+  auto const do_search = [=](auto const keys_iter) {
     thrust::transform(rmm::exec_policy(stream),
                       input_it,
                       input_it + num_rows,
                       keys_iter,
                       output_it,
-                      search_list_non_nested_fn{find_option});
+                      search_list_non_nested_types_fn{find_option});
   };
 
   if constexpr (search_key_is_scalar) {
@@ -233,10 +235,13 @@ void index_of_non_nested(InputIterator input_it,
  * @brief Function to search for index of key element(s) in the corresponding rows of a lists
  * column, specialized for nested types.
  */
-template <bool search_key_is_scalar, typename InputIterator, typename SearchKeyType>
+template <bool search_key_is_scalar,
+          typename InputIterator,
+          typename OutputIterator,
+          typename SearchKeyType>
 void index_of_nested_types(InputIterator input_it,
                            size_type num_rows,
-                           size_type* output_it,
+                           OutputIterator output_it,
                            column_view const& child,
                            SearchKeyType const& search_keys,
                            duplicate_find_option find_option,
@@ -262,7 +267,7 @@ void index_of_nested_types(InputIterator input_it,
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
   auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
 
-  auto const do_search = [&](auto const key_validity_iter) {
+  auto const do_search = [=](auto const key_validity_iter) {
     thrust::transform(
       rmm::exec_policy(stream),
       input_it,
@@ -338,7 +343,7 @@ struct dispatch_index_of {
     auto const output_it = out_positions->mutable_view().template begin<size_type>();
 
     if constexpr (not cudf::is_nested<Element>()) {
-      index_of_non_nested<search_key_is_scalar, Element>(
+      index_of_non_nested_types<search_key_is_scalar, Element>(
         input_it, num_rows, output_it, search_keys, search_keys_have_nulls, find_option, stream);
     } else {  // list + struct
       index_of_nested_types<search_key_is_scalar>(
