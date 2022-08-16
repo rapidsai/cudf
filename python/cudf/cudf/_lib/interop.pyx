@@ -150,3 +150,11 @@ def from_arrow(object input_table):
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
     return columns_from_unique_ptr(move(c_result))
+
+
+def export_ipc(object input_table):
+    pass
+
+
+def import_ipc(bytes message):
+    pass
