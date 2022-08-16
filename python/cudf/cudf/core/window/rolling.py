@@ -355,7 +355,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         -----
         The supported Python features are listed in
 
-          https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
+        https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html
 
         with these exceptions:
 
