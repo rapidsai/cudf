@@ -15,10 +15,11 @@
  */
 
 #include "read_json.hpp"
+
+#include <io/comp/io_uncomp.hpp>
 #include <io/json/nested_json.hpp>
 
 #include <cudf/utilities/error.hpp>
-#include <io/comp/io_uncomp.hpp>
 
 #include <numeric>
 

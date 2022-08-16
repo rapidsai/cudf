@@ -593,4 +593,4 @@ def test_json_nested_basic(tmpdir):
     df = cudf.read_json(fname, engine="cudf_experimental", orient="records")
     pdf = pd.read_json(fname, orient="records")
 
-    assert_eq(cudf.DataFrame(pdf), df)
+    assert_eq(pdf, df)
