@@ -4237,18 +4237,19 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   constexpr int nrows = 3'000'000;
   char buf[64];
 
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+  auto elements       = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
     sprintf(buf, "a unique string value suffixed with %d", i % GetParam());
     return std::string(buf);
   });
-  auto const col0 = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  // set row group size so that there will be only one row group
   cudf::io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
       .row_group_size_rows(nrows)
-      .row_group_size_bytes(256*1024*1024);
+      .row_group_size_bytes(256 * 1024 * 1024);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options default_in_opts =
