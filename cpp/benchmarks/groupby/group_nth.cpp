@@ -36,10 +36,8 @@ void BM_pre_sorted_nth(benchmark::State& state)
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-  auto vals_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
+  auto vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{column_size}, profile);
 
-  cudf::column_view vals(vals_table->get_column(0));
   auto sort_order  = cudf::sorted_order(*keys_table);
   auto sorted_keys = cudf::gather(*keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
@@ -48,7 +46,7 @@ void BM_pre_sorted_nth(benchmark::State& state)
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals;
+  requests[0].values = vals->view();
   requests[0].aggregations.push_back(
     cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1));
 
