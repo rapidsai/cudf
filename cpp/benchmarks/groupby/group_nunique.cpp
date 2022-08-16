@@ -45,7 +45,7 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 
   auto const keys_table = [&] {
     data_profile profile;
-    profile.set_null_frequency(std::nullopt);
+    profile.set_null_probability(std::nullopt);
     profile.set_cardinality(0);
     profile.set_distribution_params<int32_t>(
       cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, 100);
@@ -54,10 +54,10 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 
   auto const vals_table = [&] {
     data_profile profile;
-    if (const auto null_freq = state.get_float64("null_frequency"); null_freq > 0) {
-      profile.set_null_frequency({null_freq});
+    if (const auto null_freq = state.get_float64("null_probability"); null_freq > 0) {
+      profile.set_null_probability({null_freq});
     } else {
-      profile.set_null_frequency(std::nullopt);
+      profile.set_null_probability(std::nullopt);
     }
     profile.set_cardinality(0);
     profile.set_distribution_params<Type>(cudf::type_to_id<Type>(),
@@ -82,4 +82,4 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 NVBENCH_BENCH_TYPES(bench_groupby_nunique, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t>))
   .set_name("groupby_nunique")
   .add_int64_power_of_two_axis("num_rows", {12, 16, 20, 24})
-  .add_float64_axis("null_frequency", {0, 0.5});
+  .add_float64_axis("null_probability", {0, 0.5});

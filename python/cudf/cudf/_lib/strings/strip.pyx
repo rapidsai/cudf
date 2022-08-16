@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -8,10 +8,8 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.strip cimport (
-    strip as cpp_strip,
-    strip_type as strip_type,
-)
+from cudf._lib.cpp.strings.side_type cimport side_type
+from cudf._lib.cpp.strings.strip cimport strip as cpp_strip
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -36,7 +34,7 @@ def strip(Column source_strings,
     with nogil:
         c_result = move(cpp_strip(
             source_view,
-            strip_type.BOTH,
+            side_type.BOTH,
             scalar_str[0]
         ))
 
@@ -63,7 +61,7 @@ def lstrip(Column source_strings,
     with nogil:
         c_result = move(cpp_strip(
             source_view,
-            strip_type.LEFT,
+            side_type.LEFT,
             scalar_str[0]
         ))
 
@@ -90,7 +88,7 @@ def rstrip(Column source_strings,
     with nogil:
         c_result = move(cpp_strip(
             source_view,
-            strip_type.RIGHT,
+            side_type.RIGHT,
             scalar_str[0]
         ))
 
