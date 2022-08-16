@@ -1225,9 +1225,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             else:
                 if arg in self._data:
-                    if is_scalar(value):
-                        self._data[arg] = column.full(len(self), value)
-                    elif len(self) == 0:
+                    if not is_scalar(value) and len(self) == 0:
                         if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
                         elif len(value) > 0:
@@ -1253,6 +1251,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             sort=False,
                             allow_non_unique=True,
                         )
+                    if is_scalar(value):
+                        self._data[arg] = column.full(len(self), value)
+                    else:
                         value = as_column(value)
                         self._data[arg] = value
                 else:
