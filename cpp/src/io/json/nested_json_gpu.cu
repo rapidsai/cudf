@@ -1008,8 +1008,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
  * first node encountered in \p input
  * @param[in] input The JSON input in host memory
  * @param[in] d_input The JSON input in device memory
- * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] options Parsing options specifying the parsing behaviour
+ * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] mr Optional, resource with which to allocate
  * @return The columnar representation of the data from the given JSON input
  */
