@@ -574,9 +574,9 @@ public class TableTest extends CudfTestBase {
         .includeColumn("value2", false)
         .build();
     try (Table table = Table.readParquet(opts, TEST_PARQUET_FILE_BINARY)) {
-      assertTableTypes(new DType[]{DType.LIST, DType.STRING}, table);
+      assertTableTypes(new DType[]{DType.STRING, DType.STRING}, table);
       ColumnView columnView = table.getColumn(0);
-      assertEquals(DType.INT8, columnView.getChildColumnView(0).getType());
+      assertEquals(DType.STRING, columnView.getType());
     }
   }
 

@@ -55,19 +55,17 @@ static void BM_extract(benchmark::State& state, int groups)
   cudf::test::strings_column_wrapper samples_column(samples.begin(), samples.end());
   data_profile const profile = data_profile_builder().no_validity().distribution(
     cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0ul, samples.size() - 1);
-  auto map_table =
-    create_random_table({cudf::type_to_id<cudf::size_type>()}, row_count{n_rows}, profile);
-  auto input = cudf::gather(cudf::table_view{{samples_column}},
-                            map_table->get_column(0).view(),
-                            cudf::out_of_bounds_policy::DONT_CHECK);
-  cudf::strings_column_view view(input->get_column(0).view());
+  auto map = create_random_column(cudf::type_to_id<cudf::size_type>(), row_count{n_rows}, profile);
+  auto input = cudf::gather(
+    cudf::table_view{{samples_column}}, map->view(), cudf::out_of_bounds_policy::DONT_CHECK);
+  cudf::strings_column_view strings_view(input->get_column(0).view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto results = cudf::strings::extract(view, pattern);
+    auto results = cudf::strings::extract(strings_view, pattern);
   }
 
-  state.SetBytesProcessed(state.iterations() * view.chars_size());
+  state.SetBytesProcessed(state.iterations() * strings_view.chars_size());
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
