@@ -15,6 +15,8 @@
  */
 #include <arrow/gpu/cuda_arrow_ipc.h>
 #include <arrow/gpu/cuda_context.h>
+#include <arrow/io/memory.h>
+#include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
 
 #include <sstream>
@@ -493,9 +495,9 @@ std::shared_ptr<arrow::cuda::CudaIpcMemHandle> to_arrow_ipc_handle(
 }
 }  // namespace
 
-std::vector<char> export_ipc(table_view input,
-                             std::vector<column_metadata> const& metadata,
-                             std::shared_ptr<arrow::cuda::CudaContext> ctx)
+std::vector<char> export_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
+                             table_view input,
+                             std::vector<column_metadata> const& metadata)
 {
   std::vector<std::shared_ptr<arrow::Field>> fields;
   std::transform(metadata.cbegin(),
@@ -511,8 +513,14 @@ std::vector<char> export_ipc(table_view input,
     CUDF_FAIL("Failed to serialize schema.");
     return std::shared_ptr<arrow::Buffer>{nullptr};
   });
-  std::vector<char> bytes(p_schema_buf->size());
-  std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), bytes.begin());
+  int64_t size                          = p_schema_buf->size();
+  std::vector<char> bytes(size + sizeof(int64_t));
+  {
+    auto ptr = bytes.data();
+    std::memcpy(ptr, &size, sizeof(size));
+    ptr += sizeof(size);
+    std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), bytes.begin());
+  }
 
   CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
   for (size_t i = 0; i < metadata.size(); ++i) {
