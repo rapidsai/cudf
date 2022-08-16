@@ -397,7 +397,6 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
 
   auto expected = table_view{{col}};
-  EXPECT_EQ(1, expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("SingleColumn.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -421,7 +420,6 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
 
   auto expected = table_view{{col}};
-  EXPECT_EQ(1, expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("SingleColumnWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -446,7 +444,6 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
     sequence, sequence + num_rows, validity);
 
   auto expected = table_view{{col}};
-  EXPECT_EQ(1, expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("Chronos.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -473,7 +470,6 @@ TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
     sequence, sequence + num_rows, validity);
 
   auto expected = table_view{{col}};
-  EXPECT_EQ(1, expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("ChronosWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -619,7 +615,6 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, col7_mask};
 
   auto expected = table_view{{/*col0, */ col1, col2, col3, col4, col5, col6, col7}};
-  EXPECT_EQ(7, expected.num_columns());
 
   cudf_io::table_input_metadata expected_metadata(expected);
   // expected_metadata.column_names.emplace_back("bools");
@@ -664,7 +659,6 @@ TEST_F(ParquetWriterTest, Strings)
   column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
 
   auto expected = table_view{{col0, col1, col2}};
-  EXPECT_EQ(3, expected.num_columns());
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
@@ -714,7 +708,6 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
     {'F', 'u', 'n', 'd', 'a', 'y'}};
 
   auto write_tbl = table_view{{col0, col1, col2, col3, col4}};
-  EXPECT_EQ(5, write_tbl.num_columns());
 
   cudf_io::table_input_metadata expected_metadata(write_tbl);
   expected_metadata.column_metadata[0].set_name("col_single").set_output_as_binary(true);
@@ -974,7 +967,6 @@ TEST_F(ParquetWriterTest, MultiIndex)
   column_wrapper<double> col4{col4_data.begin(), col4_data.end(), validity};
 
   auto expected = table_view{{col0, col1, col2, col3, col4}};
-  EXPECT_EQ(5, expected.num_columns());
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("int8s");
@@ -1010,7 +1002,6 @@ TEST_F(ParquetWriterTest, HostBuffer)
   column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
 
   const auto expected = table_view{{col}};
-  EXPECT_EQ(1, expected.num_columns());
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
@@ -3259,7 +3250,6 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   column_wrapper<int> col(sequence, sequence + num_rows, validity);
 
   auto expected = table_view{{col}};
-  EXPECT_EQ(1, expected.num_columns());
 
   auto const filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
   const cudf::io::parquet_writer_options out_opts =
@@ -4022,7 +4012,6 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
     {'F', 'u', 'n', 'd', 'a', 'y'}};
 
   auto output = table_view{{int_col, string_col, float_col, string_col, list_int_col}};
-  EXPECT_EQ(5, output.num_columns());
   cudf_io::table_input_metadata output_metadata(output);
   output_metadata.column_metadata[0].set_name("col_other");
   output_metadata.column_metadata[1].set_name("col_string");
@@ -4037,10 +4026,7 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   cudf_io::write_parquet(out_opts);
 
   auto expected_string = table_view{{int_col, string_col, float_col, string_col, string_col}};
-  EXPECT_EQ(5, expected_string.num_columns());
-
-  auto expected_mixed = table_view{{int_col, string_col, float_col, list_int_col, list_int_col}};
-  EXPECT_EQ(5, expected_mixed.num_columns());
+  auto expected_mixed  = table_view{{int_col, string_col, float_col, list_int_col, list_int_col}};
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
@@ -4103,7 +4089,6 @@ TEST_F(ParquetReaderTest, NestedByteArray)
     {{'M', 'o', 'n', 'd', 'a', 'y'}, {'F', 'r', 'i', 'd', 'a', 'y'}}};
 
   auto const expected = table_view{{int_col, float_col, list_list_int_col}};
-  EXPECT_EQ(3, expected.num_columns());
   cudf_io::table_input_metadata output_metadata(expected);
   output_metadata.column_metadata[0].set_name("col_other");
   output_metadata.column_metadata[1].set_name("col_float");
@@ -4150,7 +4135,6 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
     {0xfe, 0xfe, 0xfe}, {0xfe, 0xfe, 0xfe}, {0xfe, 0xfe, 0xfe}};
 
   auto expected = table_view{{list_int_col0, list_int_col1}};
-  EXPECT_EQ(2, expected.num_columns());
   cudf_io::table_input_metadata output_metadata(expected);
   output_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
   output_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
