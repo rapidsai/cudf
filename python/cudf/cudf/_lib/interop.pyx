@@ -17,6 +17,7 @@ from cudf._lib.cpp.interop cimport (
     from_dlpack as cpp_from_dlpack,
     to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
+    gather_metadata,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -84,26 +85,6 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object metadata) except *:
-    """
-    Metadata is stored as lists, and expected format is as follows,
-    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
-    First value signifies name of the main parent column,
-    and adjacent list will signify child column.
-    """
-    cdef vector[column_metadata] cpp_metadata
-    if isinstance(metadata, list):
-        cpp_metadata.reserve(len(metadata))
-        for i, val in enumerate(metadata):
-            cpp_metadata.push_back(column_metadata(str.encode(str(val[0]))))
-            if len(val) == 2:
-                cpp_metadata[i].children_meta = gather_metadata(val[1])
-
-        return cpp_metadata
-    else:
-        raise ValueError("Malformed metadata has been encountered")
-
-
 def to_arrow(list source_columns, object metadata):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
@@ -150,11 +131,3 @@ def from_arrow(object input_table):
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
     return columns_from_unique_ptr(move(c_result))
-
-
-def export_ipc(object input_table):
-    pass
-
-
-def import_ipc(bytes message):
-    pass

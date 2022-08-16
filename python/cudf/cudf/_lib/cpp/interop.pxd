@@ -5,7 +5,6 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport pair
 from pyarrow.lib cimport CTable
-from pyarrow.cuda cimport CudaContext, CudaBuffer
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
@@ -38,10 +37,22 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         vector[column_metadata] metadata,
     ) except +
 
-    cdef vector[char] export_ipc(
-        shared_ptr[CudaContext] ctx, table_view input, vector[column_metadata] metadata
-    ) except +
 
-    cdef pair[table_view, unique_ptr[vector[shared_ptr[CudaBuffer]]]] import_ipc(
-        shared_ptr[CudaContext] ctx, vector[char] ipc_handles
-    ) except +
+cdef inline vector[column_metadata] gather_metadata(object metadata) except *:
+    """
+    Metadata is stored as lists, and expected format is as follows,
+    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
+    First value signifies name of the main parent column,
+    and adjacent list will signify child column.
+    """
+    cdef vector[column_metadata] cpp_metadata
+    if isinstance(metadata, list):
+        cpp_metadata.reserve(len(metadata))
+        for i, val in enumerate(metadata):
+            cpp_metadata.push_back(column_metadata(str.encode(str(val[0]))))
+            if len(val) == 2:
+                cpp_metadata[i].children_meta = gather_metadata(val[1])
+
+        return cpp_metadata
+    else:
+        raise ValueError("Malformed metadata has been encountered")

@@ -26,6 +26,7 @@ set(cython_sources
     groupby.pyx
     hash.pyx
     interop.pyx
+    ipc.pyx
     join.pyx
     json.pyx
     labeling.pyx
@@ -64,7 +65,7 @@ rapids_cython_create_modules(
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
 # CMake 3.24, so we can remove the Development component once we upgrade to CMake 3.24.
 find_package(Python REQUIRED COMPONENTS Development NumPy)
-set(targets_using_numpy interop avro csv orc json parquet)
+set(targets_using_numpy interop avro csv orc json parquet ipc)
 foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
 endforeach()
