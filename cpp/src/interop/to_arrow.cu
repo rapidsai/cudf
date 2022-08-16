@@ -13,6 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <arrow/gpu/cuda_arrow_ipc.h>
+#include <arrow/gpu/cuda_context.h>
+#include <arrow/ipc/writer.h>
+
+#include <sstream>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -418,39 +423,118 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
   return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
 }
 
-std::vector<char> export_ipc(table_view input,
-                             std::vector<column_metadata> const& metadata,
-                             arrow::MemoryPool* ar_mr) {
-  // 1 remove CPU copy
-  // 2 Return arrow CUDA buffer
-  // Extract IPC handle form each CUDA buffer
-  // Extract schema
-  // serialization
-  size_t i = 0;
-  std::vector<std::shared_ptr<arrow::Array>> arrays;
-  for (auto const& column : input) {
-    std::vector<column_view> c{column};
-    auto t           = table_view{c};
-    auto const& meta = metadata[i];
-    std::vector<column_metadata> column_meta{meta};
-    auto ptr_to_buf = detail::to_arrow(t, column_meta, cudf::default_stream_value, ar_mr);
-    arrow::TableBatchReader reader(ptr_to_buf);
-    // set chunk size
-    while (reader.ReadNext()) {
-      // append
-    }
-    auto array      = ptr_to_buf->column(0)->chunk(0);
-    arrays.emplace_back(array);
-    ++i;
+namespace {
+
+class IpcMemHandle {};
+
+struct dispatch_to_arrow_buffer {
+  std::shared_ptr<arrow::cuda::CudaContext> ctx_;
+
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  arrow::Result<std::shared_ptr<arrow::cuda::CudaIpcMemHandle>> operator()(column_view)
+  {
+    return arrow::Status::Invalid("Unsupported type for to_arrow.");
   }
 
-  for (auto const& batch : batches) {
-    arrow::cuda::CudaBuffer cbuf = SerializeRecordBatch();
-    cbuf->ExportForIPC();
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  arrow::Result<std::shared_ptr<arrow::cuda::CudaIpcMemHandle>> operator()(column_view input_view)
+  {
+    const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
+    // there's no ConstCudaBuffer. We only need it for exporting IPC handle, const cast
+    auto ptr = const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(input_view.data<T>()));
+    auto cubuf =
+      std::make_shared<arrow::cuda::CudaBuffer>(ptr, data_size_in_bytes, ctx_, false, false);
+    auto handle = cubuf->ExportForIpc();
+    return handle;
   }
+};
+
+std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
+{
+  switch (dtype.id()) {
+    case type_id::BOOL8: return std::shared_ptr<arrow::DataType>{new arrow::BooleanType{}};
+    case type_id::INT8: return std::shared_ptr<arrow::DataType>{new arrow::Int8Type{}};
+    case type_id::INT16: return std::shared_ptr<arrow::DataType>{new arrow::Int16Type{}};
+    case type_id::INT32: return std::shared_ptr<arrow::DataType>{new arrow::Int32Type{}};
+    case type_id::INT64: return std::shared_ptr<arrow::DataType>{new arrow::Int64Type{}};
+    case type_id::UINT8: return std::shared_ptr<arrow::DataType>{new arrow::UInt8Type{}};
+    case type_id::UINT16: return std::shared_ptr<arrow::DataType>{new arrow::UInt16Type{}};
+    case type_id::UINT32: return std::shared_ptr<arrow::DataType>{new arrow::UInt32Type{}};
+    case type_id::UINT64: return std::shared_ptr<arrow::DataType>{new arrow::UInt64Type{}};
+    case type_id::FLOAT32: return std::shared_ptr<arrow::DataType>{new arrow::FloatType{}};
+    case type_id::FLOAT64: return std::shared_ptr<arrow::DataType>{new arrow::DoubleType{}};
+    case type_id::TIMESTAMP_DAYS:
+      return std::shared_ptr<arrow::DataType>{new arrow::Date32Type{}};  // correct?
+    case type_id::TIMESTAMP_SECONDS: return arrow::timestamp(arrow::TimeUnit::SECOND);
+    case type_id::TIMESTAMP_MILLISECONDS: return arrow::timestamp(arrow::TimeUnit::MILLI);
+    case type_id::TIMESTAMP_MICROSECONDS: return arrow::timestamp(arrow::TimeUnit::MICRO);
+    case type_id::TIMESTAMP_NANOSECONDS: return arrow::timestamp(arrow::TimeUnit::NANO);
+    case type_id::DURATION_SECONDS: return arrow::duration(arrow::TimeUnit::SECOND);
+    case type_id::DURATION_MILLISECONDS: return arrow::duration(arrow::TimeUnit::MILLI);
+    case type_id::DURATION_MICROSECONDS: return arrow::duration(arrow::TimeUnit::MICRO);
+    case type_id::DURATION_NANOSECONDS: return arrow::duration(arrow::TimeUnit::NANO);
+    default: CUDF_FAIL("Unsupported type_id conversion to arrow");
+  };
 }
 
-table_view import_ipc(std::vector<char> handles) {
+std::shared_ptr<arrow::cuda::CudaIpcMemHandle> to_arrow_ipc_handle(
+  column_view column,
+  column_metadata const& meta_data,
+  std::shared_ptr<arrow::cuda::CudaContext> ctx)
+{
+  if (column.type().id() != type_id::EMPTY) {
+    auto handle = type_dispatcher(column.type(), dispatch_to_arrow_buffer{ctx}, column);
+    CUDF_EXPECTS(handle.ok(), "Failed to obtain IPC handle.");
+  } else {
+    CUDF_FAIL("Empty column.");
+    return nullptr;
+  }
 
+  CUDF_FAIL("unreachable");
+  return nullptr;
+}
+}  // namespace
+
+std::vector<char> export_ipc(table_view input,
+                             std::vector<column_metadata> const& metadata,
+                             std::shared_ptr<arrow::cuda::CudaContext> ctx)
+{
+  std::vector<std::shared_ptr<arrow::Field>> fields;
+  std::transform(metadata.cbegin(),
+                 metadata.cend(),
+                 input.begin(),
+                 std::back_inserter(fields),
+                 [](auto const& meta, auto const& column) {
+                   auto field = arrow::field(meta.name, cudf_to_arrow_type(column.type()));
+                   return field;
+                 });
+  std::shared_ptr<arrow::Schema> schema = arrow::schema(fields);
+  auto p_schema_buf                     = arrow::ipc::SerializeSchema(*schema).ValueOrElse([]() {
+    CUDF_FAIL("Failed to serialize schema.");
+    return std::shared_ptr<arrow::Buffer>{nullptr};
+  });
+  std::vector<char> bytes(p_schema_buf->size());
+  std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), bytes.begin());
+
+  CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
+  for (size_t i = 0; i < metadata.size(); ++i) {
+    auto p_handle     = to_arrow_ipc_handle(input.column(i), metadata.at(i), ctx);
+    auto p_handle_buf = p_handle->Serialize().ValueOrElse([]() {
+      CUDF_FAIL("Failed to serialize IPC handle.");
+      return std::shared_ptr<arrow::Buffer>{};
+    });
+
+    // serialize to message
+    auto size        = bytes.size();
+    int64_t buf_size = p_handle_buf->size();
+    bytes.resize(size + sizeof(buf_size) + buf_size);
+
+    auto ptr = bytes.data() + size;
+    std::memcpy(ptr, &buf_size, sizeof(buf_size));
+
+    ptr += sizeof(buf_size);
+    std::copy(p_handle_buf->data(), p_handle_buf->data() + buf_size, ptr);
+  }
+  return bytes;
 }
 }  // namespace cudf

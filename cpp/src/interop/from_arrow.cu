@@ -453,4 +453,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   return detail::from_arrow(input_table, cudf::default_stream_value, mr);
 }
 
+table_view import_ipc(std::vector<char> ipc_handles) {
+  return {};
+}
 }  // namespace cudf
