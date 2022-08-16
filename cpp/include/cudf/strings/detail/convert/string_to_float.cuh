@@ -46,7 +46,7 @@ __device__ inline double stod(string_view const& d_str)
 
 #ifndef CUDF_JIT_UDF
   constexpr double infinity      = std::numeric_limits<double>::infinity();
-  constexpr uint64_t max_holding = (std::numeric_limits<uint32_t>::max() - 9L) / 10L;
+  constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
 #else
   constexpr double infinity      = (1.0 / 0.0);
   constexpr uint64_t max_holding = (18446744073709551615UL - 9UL) / 10UL;
@@ -55,8 +55,8 @@ __device__ inline double stod(string_view const& d_str)
   // special strings: NaN, Inf
   if ((in_ptr < end) && *in_ptr > '9') {
     auto const inf_nan = string_view(in_ptr, static_cast<size_type>(end - in_ptr));
-    if (is_inf_str(inf_nan)) return sign * infinity;
     if (is_nan_str(inf_nan)) return nan("");
+    if (is_inf_str(inf_nan)) return sign * infinity;
   }
 
   // Parse and store the mantissa as much as we can,
