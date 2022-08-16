@@ -25,22 +25,13 @@
 
 namespace {
 template <typename Type>
-std::unique_ptr<cudf::table> create_table_data(cudf::size_type n_rows,
-                                               cudf::size_type n_cols,
-                                               bool has_nulls = false)
+std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool has_nulls = false)
 {
   data_profile profile = data_profile_builder().cardinality(0).distribution(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 1000);
   profile.set_null_probability(has_nulls ? std::optional{0.1} : std::nullopt);
 
-  return create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
-}
-
-template <typename Type>
-std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool has_nulls = false)
-{
-  return std::move(create_table_data<Type>(n_rows, 1, has_nulls)->release().front());
+  return create_random_column(cudf::type_to_id<Type>(), row_count{n_rows}, profile);
 }
 
 }  // namespace

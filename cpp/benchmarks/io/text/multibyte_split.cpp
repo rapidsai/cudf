@@ -60,15 +60,13 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
   data_profile const table_profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, value_size_min, value_size_max);
 
-  auto const values_table = create_random_table(  //
-    {cudf::type_id::STRING},
-    row_count{num_rows},
-    table_profile);
+  auto const values =
+    create_random_column(cudf::type_id::STRING, row_count{num_rows}, table_profile);
 
   auto delim_scalar  = cudf::make_string_scalar(delim);
   auto delims_column = cudf::make_column_from_scalar(*delim_scalar, num_rows);
-  auto input_table  = cudf::table_view({values_table->get_column(0).view(), delims_column->view()});
-  auto input_column = cudf::strings::concatenate(input_table);
+  auto input_table   = cudf::table_view({values->view(), delims_column->view()});
+  auto input_column  = cudf::strings::concatenate(input_table);
 
   // extract the chars from the returned strings column.
   auto input_column_contents = input_column->release();
