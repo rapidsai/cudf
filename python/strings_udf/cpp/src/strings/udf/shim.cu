@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/udf/dstring.cuh>
 #include <cudf/strings/udf/starts_with.cuh>
 #include <cudf/strings/udf/char_types.cuh>
 #include <cudf/strings/udf/search.cuh>

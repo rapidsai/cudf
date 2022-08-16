@@ -44,21 +44,9 @@ message(STATUS "CONDA_PREFIX=${CONDA_PREFIX}")
 
 find_package(CUDAToolkit REQUIRED)
 
-# depends on an installed cudf dev env
-set(UDF_INCLUDES ${CONDA_PREFIX}/include)
-list(APPEND UDF_INCLUDES ${CONDA_PREFIX}/include/rapids/libcudacxx)
-list(APPEND UDF_INCLUDES ${CMAKE_SOURCE_DIR}/build/_deps/jitify-src)
-
-set(UDF_LIBS ${CONDA_PREFIX}/lib/libcudf.so nvrtc)
-
-set(UDF_CXX_FLAGS "")
-set(UDF_CUDA_FLAGS "")
 set(SHIM_CUDA_FLAGS "")
 
-list(APPEND UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -keep)
-
-add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
 
 add_library(shim OBJECT src/strings/udf/shim.cu)
 
@@ -76,56 +64,8 @@ target_include_directories(
   PUBLIC ${CONDA_PREFIX}/include
 )
 
-set_target_properties(
-  cudf_strings_udf
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN"
-             CXX_STANDARD 17
-             CXX_STANDARD_REQUIRED ON
-             CUDA_STANDARD 17
-             CUDA_STANDARD_REQUIRED ON
-             POSITION_INDEPENDENT_CODE ON
-             INTERFACE_POSITION_INDEPENDENT_CODE ON
-)
-
-target_compile_options(
-  cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
-                           "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
-)
-
 target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
 
-target_include_directories(
-  cudf_strings_udf
-  PRIVATE include
-  PUBLIC ${UDF_INCLUDES}
-)
-target_link_libraries(cudf_strings_udf PUBLIC ${UDF_LIBS})
-
-add_executable(udf_cli src/strings/udf/udf_cli.cpp)
-target_include_directories(
-  udf_cli
-  PRIVATE include
-  PUBLIC ${UDF_INCLUDES} CUDA::cudart
-)
-target_link_libraries(udf_cli PUBLIC cudf_strings_udf ${UDF_LIBS} CUDA::cudart)
-set_target_properties(udf_cli PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
-
-install(TARGETS cudf_strings_udf)
-install(TARGETS udf_cli)
 install(FILES ${CMAKE_SOURCE_DIR}/build/CMakeFiles/shim.dir/src/strings/udf/shim.ptx
         DESTINATION ${CMAKE_SOURCE_DIR}/../strings_udf/shim/
-)
-
-add_custom_command(
-  OUTPUT dstring_test
-  COMMAND ../tests/run_tests.sh
-  VERBATIM
-  COMMENT "Running dstring tests."
-)
-
-add_custom_target(
-  test
-  DEPENDS dstring_test
-  COMMENT "Run dstring tests."
 )

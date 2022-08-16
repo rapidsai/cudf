@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include "dstring.cuh"
-
 #include <cudf/strings/string_view.cuh>
 
 namespace cudf {
@@ -40,19 +38,6 @@ __device__ inline bool starts_with(cudf::string_view const dstr,
   if (bytes > dstr.size_bytes()) { return false; }
   auto const start_str = cudf::string_view{dstr.data(), bytes};
   return start_str.compare(tgt, bytes) == 0;
-}
-
-/**
- * @brief Returns true if the beginning of the specified string
- * matches the given character array.
- *
- * @param dstr String to check
- * @param tgt Null-terminated character array encoded in UTF-8
- * @return true if `tgt` matches the beginning of `dstr`
- */
-__device__ inline bool starts_with(cudf::string_view const dstr, char const* tgt)
-{
-  return starts_with(dstr, tgt, detail::bytes_in_null_terminated_string(tgt));
 }
 
 /**
@@ -86,18 +71,6 @@ __device__ inline bool ends_with(cudf::string_view const dstr,
   return end_str.compare(tgt, bytes) == 0;
 }
 
-/**
- * @brief Returns true if the end of the specified string
- * matches the given character array.
- *
- * @param dstr String to check
- * @param tgt Null-terminated character array encoded in UTF-8
- * @return true if `tgt` matches the end of `dstr`
- */
-__device__ inline bool ends_with(cudf::string_view const dstr, char const* tgt)
-{
-  return ends_with(dstr, tgt, detail::bytes_in_null_terminated_string(tgt));
-}
 
 /**
  * @brief Returns true if the end of the specified string

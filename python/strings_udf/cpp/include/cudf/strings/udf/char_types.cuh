@@ -20,7 +20,6 @@
 #include <cudf/strings/char_types/char_types_enum.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utf8.hpp>
-#include "dstring.cuh"
 
 namespace cudf {
 namespace strings {

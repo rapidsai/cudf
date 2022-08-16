@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#include "dstring.cuh"
 
 #include <cudf/strings/string_view.cuh>
 
@@ -58,24 +57,6 @@ __device__ inline cudf::size_type count(string_view const source,
   return count;
 }
 
-/**
- * @brief Returns the number of times that the target string appears
- * in the source string.
- *
- * @param source String to search
- * @param target Null-terminated string to match within source
- * @param start First character position within source to start the search
- * @param end Last character position (exclusive) within source to search
- * @return Number of matches
- */
-__device__ inline cudf::size_type count(string_view const source,
-                                        char const* target,
-                                        cudf::size_type start = 0,
-                                        cudf::size_type end   = -1)
-{
-  return count(
-    source, cudf::string_view{target, detail::bytes_in_null_terminated_string(target)}, start, end);
-}
 
 }  // namespace udf
 }  // namespace strings
