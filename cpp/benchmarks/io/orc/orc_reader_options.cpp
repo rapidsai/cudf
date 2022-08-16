@@ -16,19 +16,79 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/orc.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
+#include <nvbench/nvbench.cuh>
 
 constexpr int64_t data_size = 512 << 20;
 
 namespace cudf_io = cudf::io;
 
-class OrcRead : public cudf::benchmark {
-};
+enum class uses_index : bool { YES, NO };
+
+enum class uses_numpy_dtype : bool { YES, NO };
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  uses_index,
+  [](auto value) {
+    switch (value) {
+      case uses_index::YES: return "YES";
+      case uses_index::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  uses_numpy_dtype,
+  [](auto value) {
+    switch (value) {
+      case uses_numpy_dtype::YES: return "YES";
+      case uses_numpy_dtype::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  column_selection,
+  [](auto value) {
+    switch (value) {
+      case column_selection::ALL: return "ALL";
+      case column_selection::ALTERNATE: return "ALTERNATE";
+      case column_selection::FIRST_HALF: return "FIRST_HALF";
+      case column_selection::SECOND_HALF: return "SECOND_HALF";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  row_selection,
+  [](auto value) {
+    switch (value) {
+      case row_selection::ALL: return "ALL";
+      case row_selection::NROWS: return "NROWS";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  cudf::type_id,
+  [](auto value) {
+    switch (value) {
+      case cudf::type_id::EMPTY: return "EMPTY";
+      case cudf::type_id::TIMESTAMP_NANOSECONDS: return "TIMESTAMP_NANOSECONDS";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
 
 std::vector<std::string> get_col_names(cudf_io::source_info const& source)
 {
@@ -37,17 +97,23 @@ std::vector<std::string> get_col_names(cudf_io::source_info const& source)
   return cudf_io::read_orc(read_options).metadata.column_names;
 }
 
-void BM_orc_read_varying_options(benchmark::State& state)
+template <column_selection ColSelection,
+          row_selection RowSelection,
+          uses_index UsesIndex,
+          uses_numpy_dtype UsesNumpyDType,
+          cudf::type_id Timestamp>
+void BM_orc_read_varying_options(nvbench::state& state,
+                                 nvbench::type_list<nvbench::enum_type<ColSelection>,
+                                                    nvbench::enum_type<RowSelection>,
+                                                    nvbench::enum_type<UsesIndex>,
+                                                    nvbench::enum_type<UsesNumpyDType>,
+                                                    nvbench::enum_type<Timestamp>>)
 {
-  auto state_idx        = 0;
-  auto const col_sel    = static_cast<column_selection>(state.range(state_idx++));
-  auto const row_sel    = static_cast<row_selection>(state.range(state_idx++));
-  auto const num_chunks = state.range(state_idx++);
+  auto const num_chunks = state.get_int64("num_chunks");
 
-  auto const flags         = state.range(state_idx++);
-  auto const use_index     = (flags & 1) != 0;
-  auto const use_np_dtypes = (flags & 2) != 0;
-  auto const ts_type       = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
+  auto const use_index     = UsesIndex == uses_index::YES;
+  auto const use_np_dtypes = UsesNumpyDType == uses_numpy_dtype::YES;
+  auto const ts_type       = cudf::data_type{Timestamp};
 
   // skip_rows is not supported on nested types
   auto const data_types =
@@ -56,7 +122,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
                                                    int32_t(type_group_id::FIXED_POINT),
                                                    int32_t(type_group_id::TIMESTAMP),
                                                    int32_t(cudf::type_id::STRING)}),
-                                col_sel);
+                                ColSelection);
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
@@ -66,7 +132,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   cudf_io::write_orc(options);
 
   auto const cols_to_read =
-    select_column_names(get_col_names(source_sink.make_source_info()), col_sel);
+    select_column_names(get_col_names(source_sink.make_source_info()), ColSelection);
   cudf_io::orc_reader_options read_options =
     cudf_io::orc_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)
@@ -76,77 +142,85 @@ void BM_orc_read_varying_options(benchmark::State& state)
 
   auto const num_stripes              = data_size / (64 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
-  auto mem_stats_logger               = cudf::memory_stats_logger();
-  for (auto _ : state) {
-    try_drop_l3_cache();
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
 
-    cudf::size_type rows_read = 0;
-    for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
-      auto const is_last_chunk = chunk == (num_chunks - 1);
-      switch (row_sel) {
-        case row_selection::ALL: break;
-        case row_selection::STRIPES: {
-          auto stripes_to_read = segments_in_chunk(num_stripes, num_chunks, chunk);
-          if (is_last_chunk) {
-            // Need to assume that an additional "overflow" stripe is present
-            stripes_to_read.push_back(num_stripes);
-          }
-          read_options.set_stripes({stripes_to_read});
-        } break;
-        case row_selection::NROWS:
-          read_options.set_skip_rows(chunk * chunk_row_cnt);
-          read_options.set_num_rows(chunk_row_cnt);
-          if (is_last_chunk) read_options.set_num_rows(-1);
-          break;
-        default: CUDF_FAIL("Unsupported row selection method");
+  auto mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
+
+      timer.start();
+      cudf::size_type rows_read = 0;
+      for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
+        auto const is_last_chunk = chunk == (num_chunks - 1);
+        switch (RowSelection) {
+          case row_selection::ALL: break;
+          case row_selection::STRIPES: {
+            auto stripes_to_read = segments_in_chunk(num_stripes, num_chunks, chunk);
+            if (is_last_chunk) {
+              // Need to assume that an additional "overflow" stripe is present
+              stripes_to_read.push_back(num_stripes);
+            }
+            read_options.set_stripes({stripes_to_read});
+          } break;
+          case row_selection::NROWS:
+            read_options.set_skip_rows(chunk * chunk_row_cnt);
+            read_options.set_num_rows(chunk_row_cnt);
+            if (is_last_chunk) read_options.set_num_rows(-1);
+            break;
+          default: CUDF_FAIL("Unsupported row selection method");
+        }
+
+        rows_read += cudf_io::read_orc(read_options).tbl->num_rows();
       }
 
-      rows_read += cudf_io::read_orc(read_options).tbl->num_rows();
-    }
+      CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
+      timer.stop();
+    });
 
-    CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
-  }
-
+  auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
-  state.SetBytesProcessed(data_processed * state.iterations());
-  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["encoded_file_size"] = source_sink.size();
+  state.add_element_count(static_cast<double>(data_processed) / elapsed_time, "bytes_per_second");
+  state.add_element_count(mem_stats_logger.peak_memory_usage(), "peak_memory_usage");
+  state.add_element_count(source_sink.size(), "encoded_file_size");
 }
 
-BENCHMARK_DEFINE_F(OrcRead, column_selection)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, column_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL),
-                  int32_t(column_selection::ALTERNATE),
-                  int32_t(column_selection::FIRST_HALF),
-                  int32_t(column_selection::SECOND_HALF)},
-                 {int32_t(row_selection::ALL)},
-                 {1},
-                 {0b11},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+using col_selections = nvbench::enum_type_list<column_selection::ALL,
+                                               column_selection::ALTERNATE,
+                                               column_selection::FIRST_HALF,
+                                               column_selection::SECOND_HALF>;
 
-// Need an API to get the number of stripes to enable row_selection::STRIPES here
-BENCHMARK_DEFINE_F(OrcRead, row_selection)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, row_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1, 8},
-                 {0b11},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
+                    NVBENCH_TYPE_AXES(col_selections,
+                                      nvbench::enum_type_list<row_selection::ALL>,
+                                      nvbench::enum_type_list<uses_index::YES>,
+                                      nvbench::enum_type_list<uses_numpy_dtype::YES>,
+                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
+  .set_name("orc_read_column_selection")
+  .set_type_axes_names(
+    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
+  .add_int64_axis("num_chunks", {1});
 
-BENCHMARK_DEFINE_F(OrcRead, misc_options)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, misc_options)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1},
-                 {0b11, 0b10, 0b01},  // `true` is default for each boolean parameter here
-                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
+                                      nvbench::enum_type_list<row_selection::NROWS>,
+                                      nvbench::enum_type_list<uses_index::YES>,
+                                      nvbench::enum_type_list<uses_numpy_dtype::YES>,
+                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
+  .set_name("orc_read_num_chunks")
+  .set_type_axes_names(
+    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
+  .add_int64_axis("num_chunks", {1, 8});
+
+NVBENCH_BENCH_TYPES(
+  BM_orc_read_varying_options,
+  NVBENCH_TYPE_AXES(
+    nvbench::enum_type_list<column_selection::ALL>,
+    nvbench::enum_type_list<row_selection::NROWS>,
+    nvbench::enum_type_list<uses_index::YES, uses_index::NO>,
+    nvbench::enum_type_list<uses_numpy_dtype::YES, uses_numpy_dtype::NO>,
+    nvbench::enum_type_list<cudf::type_id::EMPTY, cudf::type_id::TIMESTAMP_NANOSECONDS>))
+  .set_name("orc_read_misc_options")
+  .set_type_axes_names(
+    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
+  .add_int64_axis("num_chunks", {1});
