@@ -39,9 +39,9 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile const table_profile = data_profile_builder().distribution(
+  data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, table_profile);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   cudf::strings_column_view input(column->view());
 
   auto const types = cudf::strings::string_character_types::SPACE;

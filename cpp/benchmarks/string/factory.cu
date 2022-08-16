@@ -51,9 +51,9 @@ static void BM_factory(benchmark::State& state)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile const table_profile = data_profile_builder().distribution(
+  data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, table_profile);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   auto d_column     = cudf::column_device_view::create(column->view());
   rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::default_stream_value);
   thrust::transform(thrust::device,
