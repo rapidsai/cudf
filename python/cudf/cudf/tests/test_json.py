@@ -590,10 +590,6 @@ def test_json_nested_basic(tmpdir):
     pdf = pd.DataFrame(data)
     pdf.to_json(fname, orient="records")
 
-    with open(fname, "r") as f:
-        print(f.read())
-    print(pdf)
-
     df = cudf.read_json(fname, engine="cudf_experimental", orient="records")
     pdf = pd.read_json(fname, orient="records")
 
