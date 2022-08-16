@@ -228,7 +228,8 @@ ConfigureBench(PARQUET_READER_BENCH io/parquet/parquet_reader.cpp)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_READER_BENCH io/orc/orc_reader.cpp)
+ConfigureBench(ORC_READER_BENCH io/orc/orc_reader_options.cpp)
+ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------

@@ -23,49 +23,12 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size        = 512 << 20;
-constexpr cudf::size_type num_cols = 64;
+constexpr int64_t data_size = 512 << 20;
 
 namespace cudf_io = cudf::io;
 
 class OrcRead : public cudf::benchmark {
 };
-
-void BM_orc_read_varying_input(benchmark::State& state)
-{
-  auto const data_types             = get_type_or_group(state.range(0));
-  cudf::size_type const cardinality = state.range(1);
-  cudf::size_type const run_length  = state.range(2);
-  cudf_io::compression_type const compression =
-    state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
-  auto const source_type = static_cast<io_type>(state.range(4));
-
-  auto const tbl =
-    create_random_table(cycle_dtypes(data_types, num_cols),
-                        table_size_bytes{data_size},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
-
-  cuio_source_sink_pair source_sink(source_type);
-  cudf_io::orc_writer_options opts =
-    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(compression);
-  cudf_io::write_orc(opts);
-
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(source_sink.make_source_info());
-
-  auto mem_stats_logger = cudf::memory_stats_logger();
-  for (auto _ : state) {
-    try_drop_l3_cache();
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::read_orc(read_opts);
-  }
-
-  state.SetBytesProcessed(data_size * state.iterations());
-  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["encoded_file_size"] = source_sink.size();
-}
 
 std::vector<std::string> get_col_names(cudf_io::source_info const& source)
 {
@@ -150,22 +113,6 @@ void BM_orc_read_varying_options(benchmark::State& state)
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
   state.counters["encoded_file_size"] = source_sink.size();
 }
-
-#define ORC_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                               \
-  BENCHMARK_DEFINE_F(OrcRead, name)                                                          \
-  (::benchmark::State & state) { BM_orc_read_varying_input(state); }                         \
-  BENCHMARK_REGISTER_F(OrcRead, name)                                                        \
-    ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {src_type}}) \
-    ->Unit(benchmark::kMillisecond)                                                          \
-    ->UseManualTime();
-
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL_SIGNED);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, struct, cudf::type_id::STRUCT);
 
 BENCHMARK_DEFINE_F(OrcRead, column_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }
