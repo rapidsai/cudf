@@ -4983,6 +4983,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return out.replace_schema_metadata(metadata)
 
+    def export_ipc(self, ctx):
+        columns = []
+        names = []
+        from cudf._lib import ipc
+        for name, col in self._data.items():
+            columns.append(col)
+            names.append(name)
+
+        return ipc.export_ipc(ctx, columns, names)
+
     @_cudf_nvtx_annotate
     def to_records(self, index=True):
         """Convert to a numpy recarray

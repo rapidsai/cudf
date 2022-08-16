@@ -29,6 +29,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/ipc.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -483,8 +484,11 @@ std::shared_ptr<arrow::cuda::CudaIpcMemHandle> to_arrow_ipc_handle(
   std::shared_ptr<arrow::cuda::CudaContext> ctx)
 {
   if (column.type().id() != type_id::EMPTY) {
-    auto handle = type_dispatcher(column.type(), dispatch_to_arrow_buffer{ctx}, column);
-    CUDF_EXPECTS(handle.ok(), "Failed to obtain IPC handle.");
+    auto handle = type_dispatcher(column.type(), dispatch_to_arrow_buffer{ctx}, column).ValueOrElse([]() {
+      CUDF_FAIL("Failed to obtain IPC handle.");
+      return std::shared_ptr<arrow::cuda::CudaIpcMemHandle>{nullptr};
+    });
+    return handle;
   } else {
     CUDF_FAIL("Empty column.");
     return nullptr;
@@ -495,9 +499,9 @@ std::shared_ptr<arrow::cuda::CudaIpcMemHandle> to_arrow_ipc_handle(
 }
 }  // namespace
 
-std::vector<char> export_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
-                             table_view input,
-                             std::vector<column_metadata> const& metadata)
+std::shared_ptr<arrow::Buffer> export_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
+                                          table_view input,
+                                          std::vector<column_metadata> const& metadata)
 {
   std::vector<std::shared_ptr<arrow::Field>> fields;
   std::transform(metadata.cbegin(),
@@ -514,7 +518,8 @@ std::vector<char> export_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
     return std::shared_ptr<arrow::Buffer>{nullptr};
   });
   int64_t size                          = p_schema_buf->size();
-  std::vector<char> bytes(size + sizeof(int64_t));
+  std::string bytes;
+  bytes.resize(size + sizeof(int64_t));
   {
     auto ptr = bytes.data();
     std::memcpy(ptr, &size, sizeof(size));
@@ -541,6 +546,8 @@ std::vector<char> export_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
     ptr += sizeof(buf_size);
     std::copy(p_handle_buf->data(), p_handle_buf->data() + buf_size, ptr);
   }
-  return bytes;
+  // an owning buffer
+  auto p_buf = arrow::Buffer::FromString(bytes);
+  return p_buf;
 }
 }  // namespace cudf
