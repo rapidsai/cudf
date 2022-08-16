@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <map>
 #include <memory>
@@ -643,6 +644,96 @@ struct partition_info {
   partition_info(size_type start_row, size_type num_rows) : start_row(start_row), num_rows(num_rows)
   {
   }
+};
+
+/**
+ * @brief schema element for reader
+ *
+ */
+class reader_column_schema {
+  // Whether to read binary data as a string column
+  bool _convert_binary_to_strings{true};
+
+  std::vector<reader_column_schema> children;
+
+ public:
+  reader_column_schema() = default;
+
+  /**
+   * @brief Construct a new reader column schema object
+   *
+   * @param number_of_children number of child schema objects to default construct
+   */
+  reader_column_schema(size_type number_of_children) { children.resize(number_of_children); }
+
+  /**
+   * @brief Construct a new reader column schema object with a span defining the children
+   *
+   * @param child_span span of child schema objects
+   */
+  reader_column_schema(host_span<reader_column_schema> const& child_span)
+  {
+    children.assign(child_span.begin(), child_span.end());
+  }
+
+  /**
+   * @brief Add the children metadata of this column
+   *
+   * @param child The children metadata of this column to add
+   * @return this for chaining
+   */
+  reader_column_schema& add_child(reader_column_schema const& child)
+  {
+    children.push_back(child);
+    return *this;
+  }
+
+  /**
+   * @brief Get reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  [[nodiscard]] reader_column_schema& child(size_type i) { return children[i]; }
+
+  /**
+   * @brief Get const reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  [[nodiscard]] reader_column_schema const& child(size_type i) const { return children[i]; }
+
+  /**
+   * @brief Specifies whether this column should be written as binary or string data
+   * Only valid for the following column types:
+   * string, list<int8>
+   *
+   * @param convert_to_string True = convert binary to strings False = return binary
+   * @return this for chaining
+   */
+  reader_column_schema& set_convert_binary_to_strings(bool convert_to_string)
+  {
+    _convert_binary_to_strings = convert_to_string;
+    return *this;
+  }
+
+  /**
+   * @brief Get whether to encode this column as binary or string data
+   *
+   * @return Boolean indicating whether to encode this column as binary data
+   */
+  [[nodiscard]] bool is_enabled_convert_binary_to_strings() const
+  {
+    return _convert_binary_to_strings;
+  }
+
+  /**
+   * @brief Get the number of child objects
+   *
+   * @return number of children
+   */
+  [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
 }  // namespace io

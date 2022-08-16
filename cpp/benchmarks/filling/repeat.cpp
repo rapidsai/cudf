@@ -40,15 +40,14 @@ void BM_repeat(benchmark::State& state)
   using sizeT                = cudf::size_type;
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<sizeT>(), distribution_id::UNIFORM, 0, 3);
-  auto repeat_table = create_random_table({cudf::type_to_id<sizeT>()}, row_count{n_rows}, profile);
-  cudf::column_view repeat_count{repeat_table->get_column(0)};
+  auto repeat_count = create_random_column(cudf::type_to_id<sizeT>(), row_count{n_rows}, profile);
 
   // warm up
-  auto output = cudf::repeat(input, repeat_count);
+  auto output = cudf::repeat(input, *repeat_count);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::repeat(input, repeat_count);
+    cudf::repeat(input, *repeat_count);
   }
 
   auto data_bytes =
