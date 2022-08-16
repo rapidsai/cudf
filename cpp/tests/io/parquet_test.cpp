@@ -4215,15 +4215,19 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
   // check that byte array min and max statistics are written as expected. If a byte array is
   // written as a string, max utf8 is 0xf7bfbfbf and so the minimum value will be set to that value
   // instead of a potential minimum higher than that.
-  std::vector<uint8_t> expected_col0_min{0x70};
-  std::vector<uint8_t> expected_col0_max{0x70, 0x75, 0x75};
-  std::vector<uint8_t> expected_col1_min{0x7e, 0x7e, 0x7e};
-  std::vector<uint8_t> expected_col1_max{0x7e, 0x7e, 0x7e};
+  std::vector<uint8_t> expected_col0_min{0xf0};
+  std::vector<uint8_t> expected_col0_max{0xf0, 0xf5, 0xf5};
+  std::vector<uint8_t> expected_col1_min{0xfe, 0xfe, 0xfe};
+  std::vector<uint8_t> expected_col1_max{0xfe, 0xfe, 0xfe};
 
   cudf::test::lists_column_wrapper<int8_t> list_int_col0{
-    {0x70}, {0x70, 0x75, 0x73}, {0x70, 0x75, 0x75}};
+    {static_cast<int8_t>(0xf0)},
+    {static_cast<int8_t>(0xf0), static_cast<int8_t>(0xf5), static_cast<int8_t>(0xf3)},
+    {static_cast<int8_t>(0xf0), static_cast<int8_t>(0xf5), static_cast<int8_t>(0xf5)}};
   cudf::test::lists_column_wrapper<int8_t> list_int_col1{
-    {0x7e, 0x7e, 0x7e}, {0x7e, 0x7e, 0x7e}, {0x7e, 0x7e, 0x7e}};
+    {static_cast<int8_t>(0xfe), static_cast<int8_t>(0xfe), static_cast<int8_t>(0xfe)},
+    {static_cast<int8_t>(0xfe), static_cast<int8_t>(0xfe), static_cast<int8_t>(0xfe)},
+    {static_cast<int8_t>(0xfe), static_cast<int8_t>(0xfe), static_cast<int8_t>(0xfe)}};
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(list_int_col0.release());
