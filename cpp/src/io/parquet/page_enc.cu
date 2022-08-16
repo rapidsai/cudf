@@ -460,7 +460,7 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 }
 
 /**
- * @brief Pack literal values in output bitstream (1,2,4,8,12,16,20 or 24 bits per value)
+ * @brief Pack literal values in output bitstream (1,2,4,6,8,10,12,16,20 or 24 bits per value)
  */
 inline __device__ void PackLiteralsShuffle(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
@@ -483,7 +483,7 @@ inline __device__ void PackLiteralsShuffle(
       v |= shuffle_xor(v, 1) << 4;
       if (t < count && !(t & 1)) { dst[(t * w) >> 3] = v; }
       return;
-    case 6:  // TODO(ets): not called yet, needs testing
+    case 6:
       v |= shuffle_xor(v, 1) << 6;
       v |= shuffle_xor(v, 2) << 12;
       if (t < count && !(t & 3)) {
@@ -495,7 +495,7 @@ inline __device__ void PackLiteralsShuffle(
     case 8:
       if (t < count) { dst[t] = v; }
       return;
-    case 10: {  // TODO(ets): not called yet, needs testing
+    case 10: {
       v |= shuffle_xor(v, 1) << 10;
       uint64_t vt = shuffle_xor(v, 2);
       vt          = vt << 20 | v;
@@ -598,14 +598,15 @@ inline __device__ void PackLiterals(
     case 1:
     case 2:
     case 4:
+    case 6:
     case 8:
+    case 10:
     case 12:
     case 16:
     case 20:
     case 24:
       // bit widths that lie on easy boundaries can be handled either directly
-      // (8, 16, 24) or through fast shuffle operations. 6 and 10 bits could be added
-      // pretty easily.
+      // (8, 16, 24) or through fast shuffle operations.
       PackLiteralsShuffle(dst, v, count, w, t);
       break;
     default:

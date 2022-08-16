@@ -367,10 +367,12 @@ class ParquetSizedTest : public ::testing::TestWithParam<int> {
 };
 
 // test the allowed bit widths for dictionary encoding
+// values chosen to trigger 1, 2, 4, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
 INSTANTIATE_TEST_SUITE_P(
   ParquetDictionaryTest,
   ParquetSizedTest,
-  testing::Values(2, 4, 16, 64, 256, 1024, 4096, 65536, 1024 * 1024, 16 * 1024 * 1024));
+  testing::Values(2, 4, 16, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
+  testing::PrintToStringParamName());
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -4230,8 +4232,30 @@ TEST_F(ParquetReaderTest, StructByteArray)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-#if 1
-TEST_P(ParquetSizedTest, DictionaryTest) { std::cout << GetParam() << std::endl; }
-#endif
+TEST_P(ParquetSizedTest, DictionaryTest)
+{
+  constexpr int nrows = 3'000'000;
+  char buf[64];
+
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "a unique string value suffixed with %d", i % GetParam());
+    return std::string(buf);
+  });
+  auto const col0 = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .row_group_size_rows(nrows)
+      .row_group_size_bytes(256*1024*1024);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto const result = cudf_io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
 
 CUDF_TEST_PROGRAM_MAIN()
