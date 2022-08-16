@@ -73,8 +73,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
                              ? col.child(lists_column_view::child_column_index)
                              : col.child(0);
         // stop early if writing a byte array
-        if (col_desc[index].stats_dtype == dtype_byte_array &&
-            (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+        if (col_desc[index].stats_dtype == dtype_byte_array && child.type().id() == type_id::INT8) {
           break;
         }
         col = child;
