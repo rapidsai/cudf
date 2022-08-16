@@ -30,6 +30,7 @@ cdef shared_ptr[void] create_expose_counter():
     )
 
 
+# TODO: this is not support by PyTorch
 class DelayedPointerTuple(collections.abc.Sequence):
     """
     A delayed version of the "data" field in __cuda_array_interface__.
