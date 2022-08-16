@@ -483,7 +483,7 @@ inline __device__ void PackLiteralsShuffle(
       v |= shuffle_xor(v, 1) << 4;
       if (t < count && !(t & 1)) { dst[(t * w) >> 3] = v; }
       return;
-    case 6: // TODO(ets): not called yet, needs testing
+    case 6:  // TODO(ets): not called yet, needs testing
       v |= shuffle_xor(v, 1) << 6;
       v |= shuffle_xor(v, 2) << 12;
       if (t < count && !(t & 3)) {
@@ -495,10 +495,10 @@ inline __device__ void PackLiteralsShuffle(
     case 8:
       if (t < count) { dst[t] = v; }
       return;
-    case 10: { // TODO(ets): not called yet, needs testing
+    case 10: {  // TODO(ets): not called yet, needs testing
       v |= shuffle_xor(v, 1) << 10;
       uint64_t vt = shuffle_xor(v, 2);
-      vt = vt << 20 | v;
+      vt          = vt << 20 | v;
       if (t < count && !(t & 3)) {
         dst[(t >> 2) * 5 + 0] = vt;
         dst[(t >> 2) * 5 + 1] = vt >> 8;
@@ -524,7 +524,7 @@ inline __device__ void PackLiteralsShuffle(
       return;
     case 20: {
       uint64_t vt = shuffle_xor(v, 1);
-      vt = vt << 20 | v;
+      vt          = vt << 20 | v;
       if (t < count && !(t & 1)) {
         dst[(t >> 1) * 5 + 0] = vt;
         dst[(t >> 1) * 5 + 1] = vt >> 8;
@@ -542,8 +542,7 @@ inline __device__ void PackLiteralsShuffle(
       }
       return;
 
-    default:
-      CUDF_UNREACHABLE("Unsupported bit width");
+    default: CUDF_UNREACHABLE("Unsupported bit width");
   }
 }
 
@@ -553,40 +552,40 @@ inline __device__ void PackLiteralsShuffle(
 inline __device__ void PackLiteralsRoundRobin(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-    // TODO (ets): this code is not called any longer.  Is it worth keeping in case there is a 
-    // need in the future for odd bit lengths?
-    // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
-    // words but the destination mem may not be a multiple of 4 bytes.
-    // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
-    // To allow up to 24 bit this needs to be sized at 96 words.
-    __shared__ uint32_t scratch[64];
-    if (t < 64) { scratch[t] = 0; }
-    __syncthreads();
+  // TODO (ets): this code is not called any longer.  Is it worth keeping in case there is a
+  // need in the future for odd bit lengths?
+  // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
+  // words but the destination mem may not be a multiple of 4 bytes.
+  // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
+  // To allow up to 24 bit this needs to be sized at 96 words.
+  __shared__ uint32_t scratch[64];
+  if (t < 64) { scratch[t] = 0; }
+  __syncthreads();
 
-    if (t <= count) {
-      // shift symbol left by up to 31 bits
-      uint64_t v64 = v;
-      v64 <<= (t * w) & 0x1f;
+  if (t <= count) {
+    // shift symbol left by up to 31 bits
+    uint64_t v64 = v;
+    v64 <<= (t * w) & 0x1f;
 
-      // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
-      uint32_t v32[2];
-      memcpy(&v32, &v64, sizeof(uint64_t));
+    // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
+    uint32_t v32[2];
+    memcpy(&v32, &v64, sizeof(uint64_t));
 
-      // Atomically write result to scratch
-      if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
-      if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
-    }
-    __syncthreads();
+    // Atomically write result to scratch
+    if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
+    if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
+  }
+  __syncthreads();
 
-    // Copy scratch data to final destination
-    auto available_bytes = (count * w + 7) / 8;
+  // Copy scratch data to final destination
+  auto available_bytes = (count * w + 7) / 8;
 
-    auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
-    if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
-    if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
-    // would need the following for up to 24 bits
-    // if (t + 256 < available_bytes) { dst[t + 256] = scratch_bytes[t + 256]; }
-    __syncthreads();
+  auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
+  if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
+  if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
+  // would need the following for up to 24 bits
+  // if (t + 256 < available_bytes) { dst[t + 256] = scratch_bytes[t + 256]; }
+  __syncthreads();
 }
 
 /**
