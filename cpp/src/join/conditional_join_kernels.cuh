@@ -171,7 +171,7 @@ __global__ void conditional_join(table_device_view left_table,
 
   cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
 
-  unsigned int const activemask = __ballot_sync(0xffffffff, outer_row_index < outer_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);

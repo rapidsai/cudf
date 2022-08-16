@@ -107,7 +107,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
 {
   auto x                  = destination + word_index(begin_bit);
   const auto last_word    = word_index(end_bit) - word_index(begin_bit);
-  bitmask_type fill_value = (valid == true) ? 0xffffffff : 0x00;
+  bitmask_type fill_value = (valid == true) ? 0xffff'ffff : 0;
 
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
