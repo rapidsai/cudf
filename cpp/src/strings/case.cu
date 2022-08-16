@@ -85,7 +85,7 @@ struct upper_lower_fn {
     for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
       uint32_t code_point = detail::utf8_to_codepoint(*itr);
 
-      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+      detail::character_flags_table_type flag = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
 
       // we apply special mapping in two cases:
       // - uncased characters with the special mapping flag, always

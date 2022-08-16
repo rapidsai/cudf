@@ -72,7 +72,7 @@ struct genericAtomicOperationImpl<T, Op, 1> {
       assumed                = old;
       T target_value         = T((old >> shift) & 0xff);
       uint8_t updating_value = type_reinterpret<uint8_t, T>(op(target_value, update_value));
-      T_int new_value        = (old & ~(0x000000ff << shift)) | (T_int(updating_value) << shift);
+      T_int new_value        = (old & ~(0x0000'00ff << shift)) | (T_int(updating_value) << shift);
       old                    = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
 
@@ -98,7 +98,7 @@ struct genericAtomicOperationImpl<T, Op, 2> {
       T const target_value    = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
       uint16_t updating_value = type_reinterpret<uint16_t, T>(op(target_value, update_value));
 
-      T_int const new_value = (is_32_align) ? (old & 0xffff0000) | updating_value
+      T_int const new_value = (is_32_align) ? (old & 0xffff'0000) | updating_value
                                             : (old & 0xffff) | (T_int(updating_value) << 16);
       old                   = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
@@ -338,7 +338,7 @@ struct typesAtomicCASImpl<T, 1> {
       // the `target_value` in `old` can be different with `compare`
       if (target_value != compare) break;
 
-      T_int new_value = (old & ~(0x000000ff << shift)) | (T_int(u_val) << shift);
+      T_int new_value = (old & ~(0x0000'00ff << shift)) | (T_int(u_val) << shift);
       old             = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
 
@@ -367,7 +367,7 @@ struct typesAtomicCASImpl<T, 2> {
       if (target_value != compare) break;
 
       T_int new_value =
-        (is_32_align) ? (old & 0xffff0000) | u_val : (old & 0xffff) | (T_int(u_val) << 16);
+        (is_32_align) ? (old & 0xffff'0000) | u_val : (old & 0xffff) | (T_int(u_val) << 16);
       old = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
 

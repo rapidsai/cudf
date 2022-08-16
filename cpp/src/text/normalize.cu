@@ -97,7 +97,7 @@ struct normalize_spaces_fn {
 // code-point to multi-byte range limits
 constexpr uint32_t UTF8_1BYTE = 0x0080;
 constexpr uint32_t UTF8_2BYTE = 0x0800;
-constexpr uint32_t UTF8_3BYTE = 0x010000;
+constexpr uint32_t UTF8_3BYTE = 0x01'0000;
 
 /**
  * @brief Convert code-point arrays into UTF-8 bytes for each string.
@@ -148,20 +148,19 @@ struct codepoint_to_utf8_fn {
         *out_ptr++ = static_cast<char>(code_point);
       else if (code_point < UTF8_2BYTE) {  // create two-byte UTF-8
         // b00001xxx:byyyyyyyy => b110xxxyy:b10yyyyyy
-        *out_ptr++ = static_cast<char>((((code_point << 2) & 0x001F00) | 0x00C000) >> 8);
+        *out_ptr++ = static_cast<char>((((code_point << 2) & 0x00'1F00) | 0x00'C000) >> 8);
         *out_ptr++ = static_cast<char>((code_point & 0x3F) | 0x0080);
       } else if (code_point < UTF8_3BYTE) {  // create three-byte UTF-8
         // bxxxxxxxx:byyyyyyyy => b1110xxxx:b10xxxxyy:b10yyyyyy
-        *out_ptr++ = static_cast<char>((((code_point << 4) & 0x0F0000) | 0x00E00000) >> 16);
-        *out_ptr++ = static_cast<char>((((code_point << 2) & 0x003F00) | 0x008000) >> 8);
+        *out_ptr++ = static_cast<char>((((code_point << 4) & 0x0F'0000) | 0x00E0'0000) >> 16);
+        *out_ptr++ = static_cast<char>((((code_point << 2) & 0x00'3F00) | 0x00'8000) >> 8);
         *out_ptr++ = static_cast<char>((code_point & 0x3F) | 0x0080);
       } else {  // create four-byte UTF-8
-        // maximum code-point value is 0x00110000
+        // maximum code-point value is 0x0011'0000
         // b000xxxxx:byyyyyyyy:bzzzzzzzz => b11110xxx:b10xxyyyy:b10yyyyzz:b10zzzzzz
-        *out_ptr++ =
-          static_cast<char>((((code_point << 6) & 0x07000000) | unsigned{0xF0000000}) >> 24);
-        *out_ptr++ = static_cast<char>((((code_point << 4) & 0x003F0000) | 0x00800000) >> 16);
-        *out_ptr++ = static_cast<char>((((code_point << 2) & 0x003F00) | 0x008000) >> 8);
+        *out_ptr++ = static_cast<char>((((code_point << 6) & 0x0700'0000u) | 0xF000'0000u) >> 24);
+        *out_ptr++ = static_cast<char>((((code_point << 4) & 0x003F'0000u) | 0x0080'0000u) >> 16);
+        *out_ptr++ = static_cast<char>((((code_point << 2) & 0x00'3F00u) | 0x00'8000u) >> 8);
         *out_ptr++ = static_cast<char>((code_point & 0x3F) | 0x0080);
       }
     }
