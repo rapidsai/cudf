@@ -130,7 +130,7 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
 {
   cudf::size_type nrows = input.size();
   cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t active_mask  = 0xffffffff;
+  uint32_t active_mask  = 0xffff'ffffu;
   active_mask           = __ballot_sync(active_mask, i < nrows);
   auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
@@ -251,7 +251,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
 
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
-  uint32_t active_mask = 0xffffffff;
+  uint32_t active_mask = 0xffff'ffffu;
   active_mask          = __ballot_sync(active_mask, i < nrows);
   auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};

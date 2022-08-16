@@ -113,7 +113,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
 {
   size_type mask_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-  auto active_mask = __ballot_sync(0xFFFF'FFFF, mask_index < number_of_mask_bits);
+  auto active_mask = __ballot_sync(0xFFFF'FFFFu, mask_index < number_of_mask_bits);
 
   while (mask_index < number_of_mask_bits) {
     size_type const source_view_index =
@@ -177,7 +177,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
-  if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFF, output_index < output_size); }
+  if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
     // thrust::prev isn't in CUDA 10.0, so subtracting 1 here instead

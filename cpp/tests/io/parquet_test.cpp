@@ -3294,7 +3294,7 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   std::vector<uint8_t> expected_max{
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6};
 
-  __int128_t val0 = 0xa1b2c3d4e5f6ULL;
+  __int128_t val0 = 0xa1b2'c3d4'e5f6ULL;
   __int128_t val1 = val0 << 80;
   column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0}),
                                             numeric::decimal128(val1, numeric::scale_type{0})}};
