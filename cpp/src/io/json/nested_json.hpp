@@ -285,7 +285,6 @@ void get_stack_context(device_span<SymbolT const> json_in,
  *
  * @param[in] json_in The JSON input
  * @param[in] options Parsing options specifying the parsing behaviour
- * represents the offset within \p d_json_in that cause the input being written
  * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] mr Optional, resource with which to allocate
  * @return Pair of device vectors, where the first vector represents the token types and the second
