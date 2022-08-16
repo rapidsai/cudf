@@ -425,8 +425,6 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
 namespace {
 
-class IpcMemHandle {};
-
 struct dispatch_to_arrow_buffer {
   std::shared_ptr<arrow::cuda::CudaContext> ctx_;
 
