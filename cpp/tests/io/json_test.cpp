@@ -919,7 +919,7 @@ TEST_F(JsonReaderTest, JsonExperimentalBasic)
 {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
-  outfile << "[{\"a\":\"11\", \"b\":\"1.1\"},{\"a\":\"22\", \"b\":\"2.2\"}]";
+  outfile << R"([{"a":"11", "b":"1.1"},{"a":"22", "b":"2.2"}])"
   outfile.close();
 
   cudf_io::json_reader_options options =
