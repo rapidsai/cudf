@@ -362,6 +362,14 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 // Declare typed test cases
 TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
+// Base test fixture for size-parameterized tests
+class ParquetSizedTest : public ::testing::TestWithParam<int> {};
+
+// test the allowed bit widths for dictionary encoding
+INSTANTIATE_TEST_SUITE_P(DictionaryTest, ParquetSizedTest, testing::Values(2, 4, 16, 64, 256, 1024, 4096, 65536, 1024*1024, 16*1024*1024));
+
+
+
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
@@ -4218,6 +4226,11 @@ TEST_F(ParquetReaderTest, StructByteArray)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_P(ParquetSizedTest, DictionaryTest)
+{
+  std::cout << GetParam() << std::endl;
 }
 
 CUDF_TEST_PROGRAM_MAIN()
