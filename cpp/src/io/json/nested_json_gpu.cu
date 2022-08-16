@@ -1010,6 +1010,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
  * @param[in] d_input The JSON input in device memory
  * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] options Parsing options specifying the parsing behaviour
+ * @param[in] include_quote_char Whether to include the original quote chars for string values,
+ * allowing to distinguish string values from numeric and literal values
  * @param[in] mr Optional, resource with which to allocate
  * @return The columnar representation of the data from the given JSON input
  */
@@ -1018,6 +1020,7 @@ void make_json_column(json_column& root_column,
                       host_span<SymbolT const> input,
                       device_span<SymbolT const> d_input,
                       cudf::io::json_reader_options const& options,
+                      bool include_quote_char,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -1058,14 +1061,30 @@ void make_json_column(json_column& root_column,
     };
   };
 
-  // Skips the quote char if the token is a beginning-of-string or beginning-of-field-name token
-  auto get_token_index = [](PdaTokenT const token, SymbolOffsetT const token_index) {
-    constexpr SymbolOffsetT skip_quote_char = 1;
-    switch (token) {
-      case token_t::StringBegin: return token_index + skip_quote_char;
-      case token_t::FieldNameBegin: return token_index + skip_quote_char;
-      default: return token_index;
-    };
+  // Depending on whether we want to include the quotes of strings or not, respectively, we:
+  // (a) strip off the beginning quote included in StringBegin and FieldNameBegin or
+  // (b) include of the end quote excluded from in StringEnd and strip off the beginning quote
+  // included FieldNameBegin
+  auto get_token_index = [include_quote_char](PdaTokenT const token,
+                                              SymbolOffsetT const token_index) {
+    constexpr SymbolOffsetT quote_char_size = 1;
+    if (include_quote_char) {
+      switch (token) {
+        // Include trailing quote char for string values excluded for StringEnd
+        case token_t::StringEnd: return token_index + quote_char_size;
+        // Strip off quote char included for FieldNameBegin
+        case token_t::FieldNameBegin: return token_index + quote_char_size;
+        default: return token_index;
+      };
+    } else {
+      switch (token) {
+        // Strip off quote char included for StringBegin
+        case token_t::StringBegin: return token_index + quote_char_size;
+        // Strip off quote char included for FieldNameBegin
+        case token_t::FieldNameBegin: return token_index + quote_char_size;
+        default: return token_index;
+      };
+    }
   };
 
   // The end-of-* partner token for a given beginning-of-* token
@@ -1497,6 +1516,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   constexpr uint32_t token_begin_offset_zero    = 0;
   constexpr uint32_t token_end_offset_zero      = 0;
   constexpr uint32_t node_init_child_count_zero = 0;
+  constexpr bool include_quote_chars            = false;
 
   // We initialize the very root node and root column that represents a list column that contains
   // all the values found at the root "level" of the given JSON string Initialize the root column
@@ -1510,7 +1530,8 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   // Push the root node onto the stack for the data path
   data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
 
-  make_json_column(root_column, data_path, input, d_input, options, stream, mr);
+  make_json_column(
+    root_column, data_path, input, d_input, options, include_quote_chars, stream, mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto const& data_root =
