@@ -268,7 +268,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
-                    data=as_device_buffer_like(ary),
+                    data=as_device_buffer_like(ary, exposed=False),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )

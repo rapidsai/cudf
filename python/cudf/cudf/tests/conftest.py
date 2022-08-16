@@ -158,3 +158,17 @@ def default_float_bitwidth(request):
     cudf.set_option("default_float_bitwidth", request.param)
     yield request.param
     cudf.set_option("default_float_bitwidth", old_default)
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Hook to make result information available in fixtures
+
+    See <https://docs.pytest.org/en/latest/example/simple.html>
+    """
+    outcome = yield
+    rep = outcome.get_result()
+
+    # Set a report attribute for each phase of a call, which can
+    # be "setup", "call", "teardown"
+    setattr(item, "report", {rep.when: rep})

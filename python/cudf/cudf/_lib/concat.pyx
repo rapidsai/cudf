@@ -32,7 +32,8 @@ cpdef concat_masks(object columns):
         c_result = move(libcudf_concatenate_masks(c_views))
         c_unique_result = make_unique[device_buffer](move(c_result))
     return as_device_buffer_like(
-        DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
+        DeviceBuffer.c_from_unique_ptr(move(c_unique_result)),
+        exposed=False
     )
 
 

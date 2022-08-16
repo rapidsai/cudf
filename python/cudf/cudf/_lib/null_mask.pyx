@@ -47,7 +47,7 @@ def copy_bitmask(Column col):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_device_buffer_like(rmm_db, exposed=False)
     return buf
 
 
@@ -93,5 +93,5 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_device_buffer_like(rmm_db, exposed=False)
     return buf

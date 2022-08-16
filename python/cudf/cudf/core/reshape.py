@@ -12,6 +12,7 @@ from cudf._lib.transform import one_hot_encode
 from cudf._typing import Dtype
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.core.spill_manager import mark_columns_as_read_only_inplace
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -233,6 +234,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     if not objs:
         raise ValueError("All objects passed were None")
+
+    mark_columns_as_read_only_inplace(objs)
 
     # Return for single object
     if len(objs) == 1:

@@ -203,7 +203,7 @@ class Decimal32Column(DecimalBaseColumn):
         data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int32"))
         data_32 = data_128[::4].copy()
         return cls(
-            data=as_device_buffer_like(data_32.view("uint8")),
+            data=as_device_buffer_like(data_32.view("uint8"), exposed=True),
             size=len(data),
             dtype=dtype,
             offset=data.offset,
@@ -290,7 +290,7 @@ class Decimal64Column(DecimalBaseColumn):
         data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int64"))
         data_64 = data_128[::2].copy()
         return cls(
-            data=as_device_buffer_like(data_64.view("uint8")),
+            data=as_device_buffer_like(data_64.view("uint8"), exposed=True),
             size=len(data),
             dtype=dtype,
             offset=data.offset,

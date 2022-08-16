@@ -28,8 +28,25 @@ from cudf.utils.string import format_bytes
 Frame = Union[memoryview, "DeviceBufferLike"]
 
 
+class _ProtocolMeta(Protocol.__class__):  # type: ignore
+    """Custom implementation of @runtime_checkable
+
+    The native implementation of @runtime_checkable use `hasattr()`
+    to check if an instance implements the Protocol. This is a problem
+    when checking SpillableBuffer.ptr because it will unspill the
+    buffer and make it unspillable permanently.
+    """
+
+    def __instancecheck__(cls, instance):
+        from cudf._lib.spillable_buffer import SpillableBuffer
+
+        if isinstance(instance, (Buffer, SpillableBuffer)):
+            return True
+        return super().__instancecheck__(instance)
+
+
 @runtime_checkable
-class DeviceBufferLike(Protocol):
+class DeviceBufferLike(Protocol, metaclass=_ProtocolMeta):
     def __getitem__(self, key: slice) -> DeviceBufferLike:
         """Create a new view of the buffer."""
 
@@ -92,7 +109,7 @@ class DeviceBufferLike(Protocol):
         """
 
 
-def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
+def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
     """
     Factory function to wrap `obj` in a DeviceBufferLike object.
 
@@ -112,6 +129,10 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
         `__array_interface__`, `__cuda_array_interface__`, or the
         buffer protocol. If `obj` represents host memory, data will
         be copied.
+    exposed : bool, optional
+        Whether or not a raw pointer (integer or C pointer) has
+        been exposed to the outside world. If this is the case,
+        the buffer cannot be spilled.
 
     Return
     ------
@@ -119,10 +140,18 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
         A device-buffer-like instance that represents the device memory
         of `obj`.
     """
+    from cudf._lib.spillable_buffer import SpillableBuffer
+    from cudf.core.spill_manager import global_manager
 
     if isinstance(obj, DeviceBufferLike):
         return obj
-    return Buffer(obj)
+
+    if global_manager.enabled:
+        return SpillableBuffer(
+            data=obj, exposed=exposed, manager=global_manager.get()
+        )
+    else:
+        return Buffer(obj)
 
 
 class Buffer(Serializable):
@@ -193,10 +222,13 @@ class Buffer(Serializable):
 
     def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
-            raise ValueError("index must be an slice")
+            raise TypeError(
+                "Argument 'key' has incorrect type "
+                f"(expected slice, got {key.__class__.__name__})"
+            )
         start, stop, step = key.indices(self.size)
         if step != 1:
-            raise ValueError("slice must be contiguous")
+            raise ValueError("slice must be C-contiguous")
         return self.__class__(
             data=self.ptr + start, size=stop - start, owner=self.owner
         )

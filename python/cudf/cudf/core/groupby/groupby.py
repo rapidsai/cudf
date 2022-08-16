@@ -217,6 +217,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
+        self._groupby = libgroupby.GroupBy(
+            [*self.grouping.keys._columns], dropna=self._dropna
+        )
+
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
@@ -331,12 +335,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         return self.agg(rank)
-
-    @cached_property
-    def _groupby(self):
-        return libgroupby.GroupBy(
-            [*self.grouping.keys._columns], dropna=self._dropna
-        )
 
     @_cudf_nvtx_annotate
     def agg(self, func):

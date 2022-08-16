@@ -1450,7 +1450,11 @@ def test_groupby_attribute_error():
     class TestGroupBy(cudf.core.groupby.GroupBy):
         @property
         def _groupby(self):
-            raise AttributeError("Test error message")
+            raise AttributeError(err_msg)
+
+        @_groupby.setter
+        def _groupby(self, _):
+            pass
 
     a = cudf.DataFrame({"a": [1, 2], "b": [2, 3]})
     gb = TestGroupBy(a, a["a"])

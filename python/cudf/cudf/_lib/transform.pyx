@@ -52,7 +52,7 @@ def bools_to_mask(Column col):
         up_db = move(cpp_out.first)
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_device_buffer_like(rmm_db, exposed=False)
     return buf
 
 
@@ -88,7 +88,7 @@ def nans_to_nulls(Column input):
         return None
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = as_device_buffer_like(buffer)
+    buffer = as_device_buffer_like(buffer, exposed=False)
     return buffer
 
 

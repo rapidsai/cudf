@@ -87,18 +87,18 @@ def test_buffer_slice(idx):
 
 
 @pytest.mark.parametrize(
-    "idx, err_msg",
+    "idx, err_type, err_msg",
     [
-        (1, "index must be an slice"),
-        (slice(3, 2), "size cannot be negative"),
-        (slice(1, 2, 2), "slice must be contiguous"),
-        (slice(1, 2, -1), "slice must be contiguous"),
-        (slice(3, 2, -1), "slice must be contiguous"),
+        (1, TypeError, "Argument 'key' has incorrect type"),
+        (slice(3, 2), ValueError, "size cannot be negative"),
+        (slice(1, 2, 2), ValueError, "slice must be C-contiguous"),
+        (slice(1, 2, -1), ValueError, "slice must be C-contiguous"),
+        (slice(3, 2, -1), ValueError, "slice must be C-contiguous"),
     ],
 )
-def test_buffer_slice_fail(idx, err_msg):
+def test_buffer_slice_fail(idx, err_type, err_msg):
     ary = cp.arange(arr_len, dtype="uint8")
     buf = as_device_buffer_like(ary)
 
-    with pytest.raises(ValueError, match=err_msg):
+    with pytest.raises(err_type, match=err_msg):
         buf[idx]
