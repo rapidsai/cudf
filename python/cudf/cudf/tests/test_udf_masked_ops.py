@@ -243,6 +243,15 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
+def test_apply_contains():
+    def func(row):
+        x = row["a"]
+        return x in [1, 2]
+
+    gdf = cudf.DataFrame({"a": [1, 3]})
+    run_masked_udf_test(func, gdf, check_dtype=False)
+
+
 @parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
 def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
