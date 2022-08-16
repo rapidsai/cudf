@@ -915,7 +915,7 @@ TEST_F(JsonReaderTest, BadDtypeParams)
   EXPECT_THROW(cudf_io::read_json(options_map), cudf::logic_error);
 }
 
-TEST_F(JsonReaderTest, JsonRecordsBasic)
+TEST_F(JsonReaderTest, JsonExperimentalBasic)
 {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);

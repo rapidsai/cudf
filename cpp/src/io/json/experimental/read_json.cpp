@@ -20,32 +20,25 @@
 #include <cudf/utilities/error.hpp>
 #include <io/comp/io_uncomp.hpp>
 
+#include <numeric>
+
 namespace cudf::io::detail::json::experimental {
 
 std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                       compression_type compression)
 {
-  // Iterate through the user defined sources and read the contents into the local buffer
-  size_t total_source_size = 0;
-  for (const auto& source : sources) {
-    total_source_size += source->size();
-  }
-
+  auto const total_source_size =
+    std::accumulate(sources.begin(), sources.end(), 0ul, [](size_t sum, auto& source) {
+      return sum + source->size();
+    });
   auto buffer = std::vector<uint8_t>(total_source_size);
 
   size_t bytes_read = 0;
   for (const auto& source : sources) {
-    if (not source->is_empty()) {
-      auto const destination = buffer.data() + bytes_read;
-      bytes_read += source->host_read(0, source->size(), destination);
-    }
+    bytes_read += source->host_read(0, source->size(), buffer.data() + bytes_read);
   }
 
-  if (compression == compression_type::NONE) {
-    return buffer;
-  } else {
-    return decompress(compression, buffer);
-  }
+  return (compression == compression_type::NONE) ? buffer : decompress(compression, buffer);
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
