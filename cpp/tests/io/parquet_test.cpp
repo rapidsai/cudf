@@ -399,7 +399,6 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("SingleColumn.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -425,7 +424,6 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("SingleColumnWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -452,7 +450,6 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("Chronos.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -481,7 +478,6 @@ TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
 
   auto filepath = temp_env->get_temp_filepath("ChronosWithNulls.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -646,7 +642,6 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
   cols.push_back(col6.release());
   cols.push_back(col7.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(7, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
   // expected_metadata.column_names.emplace_back("bools");
@@ -695,7 +690,6 @@ TEST_F(ParquetWriterTest, Strings)
   cols.push_back(col1.release());
   cols.push_back(col2.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(3, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
   expected_metadata.column_metadata[0].set_name("col_other");
@@ -751,7 +745,6 @@ TEST_F(ParquetWriterTest, StringsAsBinary)
   cols.push_back(col3.release());
   cols.push_back(col4.release());
   auto write_tbl = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, write_tbl->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*write_tbl);
   expected_metadata.column_metadata[0].set_name("col_single").set_output_as_binary(true);
@@ -1017,7 +1010,6 @@ TEST_F(ParquetWriterTest, MultiIndex)
   cols.push_back(col4.release());
   cols.push_back(col5.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
   expected_metadata.column_metadata[0].set_name("int8s");
@@ -1055,7 +1047,6 @@ TEST_F(ParquetWriterTest, HostBuffer)
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   const auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
   expected_metadata.column_metadata[0].set_name("col_other");
@@ -3306,7 +3297,6 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
 
   auto const filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
   const cudf::io::parquet_writer_options out_opts =
@@ -4104,7 +4094,6 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(list_int_col)));
   auto ouput = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, ouput->num_columns());
   cudf_io::table_input_metadata ouput_metadata(*ouput);
   ouput_metadata.column_metadata[0].set_name("col_other");
   ouput_metadata.column_metadata[1].set_name("col_string");
@@ -4125,7 +4114,6 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
   auto expected_string = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, expected_string->num_columns());
   cols.clear();
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(int_col)));
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(string_col)));
@@ -4133,7 +4121,6 @@ TEST_F(ParquetReaderTest, BinaryAsStrings)
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(list_int_col)));
   cols.push_back(std::make_unique<cudf::column>(static_cast<cudf::column_view>(list_int_col)));
   auto expected_mixed = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(5, expected_mixed->num_columns());
 
   cudf_io::parquet_reader_options in_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
@@ -4190,7 +4177,6 @@ TEST_F(ParquetReaderTest, NestedByteArray)
     {{'M', 'o', 'n', 'd', 'a', 'y'}, {'F', 'r', 'i', 'd', 'a', 'y'}}};
 
   auto const expected = table_view{{int_col, float_col, list_list_int_col}};
-  EXPECT_EQ(3, expected.num_columns());
   cudf_io::table_input_metadata ouput_metadata(expected);
   ouput_metadata.column_metadata[0].set_name("col_other");
   ouput_metadata.column_metadata[1].set_name("col_float");
@@ -4229,7 +4215,6 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
   cols.push_back(list_int_col0.release());
   cols.push_back(list_int_col1.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(2, expected->num_columns());
   cudf_io::table_input_metadata ouput_metadata(*expected);
   ouput_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
   ouput_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
