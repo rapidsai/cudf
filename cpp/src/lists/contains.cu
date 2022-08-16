@@ -94,11 +94,13 @@ auto constexpr is_supported_type()
 template <bool forward>
 __device__ auto element_index_pair_iter(size_type const size)
 {
+  auto const begin = thrust::make_counting_iterator(0);
+  auto const end   = thrust::make_counting_iterator(size);
+
   if constexpr (forward) {
-    return thrust::pair(thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+    return thrust::pair{begin, end};
   } else {
-    return thrust::pair(thrust::make_reverse_iterator(thrust::make_counting_iterator(size)),
-                        thrust::make_reverse_iterator(thrust::make_counting_iterator(0)));
+    return thrust::pair{thrust::make_reverse_iterator(end), thrust::make_reverse_iterator(begin)};
   }
 }
 
