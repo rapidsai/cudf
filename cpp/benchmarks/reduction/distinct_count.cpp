@@ -30,8 +30,8 @@ static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_
   auto const size             = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const null_probability = state.get_float64("null_probability");
 
-  data_profile profile;
-  profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, size / 100);
+  data_profile profile =
+    data_profile_builder().distribution(dtype, distribution_id::UNIFORM, 0, size / 100);
   if (null_probability > 0) {
     profile.set_null_probability({null_probability});
   } else {
