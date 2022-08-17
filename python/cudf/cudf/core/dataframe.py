@@ -2916,11 +2916,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        >>> cdf1 = cudf.DataFrame({'A': ['a', 'b', 'c', 'd', 'e'],
-        ...                       'B': ['f', 'g', 'h', 'i', 'j'],
-        ...                       'C': ['k', 'l', 'm', 'n', 'o']},
-        ...                             index=[1, 2, 3, 4, 5])
-        >>> cdf1
+        >>> df = cudf.DataFrame({
+        ...     'A': ['a', 'b', 'c', 'd', 'e'],
+        ...     'B': ['f', 'g', 'h', 'i', 'j'],
+        ...     'C': ['k', 'l', 'm', 'n', 'o']
+        ... }, index=[1, 2, 3, 4, 5])
+        >>> df
             A	B	C
         1	a	f	k
         2	b	g	l
