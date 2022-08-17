@@ -40,7 +40,7 @@ using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
-constexpr std::size_t MAX_WORKING_MEM = 0x01FFFFFFFF;  ///< Memory size for state data
+constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for state data
 constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing working memory
 
 /**

@@ -321,6 +321,8 @@ cpdef write_parquet(
         object int96_timestamps=False,
         object row_group_size_bytes=None,
         object row_group_size_rows=None,
+        object max_page_size_bytes=None,
+        object max_page_size_rows=None,
         object partitions_info=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -419,6 +421,10 @@ cpdef write_parquet(
         args.set_row_group_size_bytes(row_group_size_bytes)
     if row_group_size_rows is not None:
         args.set_row_group_size_rows(row_group_size_rows)
+    if max_page_size_bytes is not None:
+        args.set_max_page_size_bytes(max_page_size_bytes)
+    if max_page_size_rows is not None:
+        args.set_max_page_size_rows(max_page_size_rows)
 
     with nogil:
         out_metadata_c = move(parquet_writer(args))
@@ -456,6 +462,12 @@ cdef class ParquetWriter:
     row_group_size_rows: int, default 1000000
         Maximum number of rows of each stripe of the output.
         By default, 1000000 (10^6 rows) will be used.
+    max_page_size_bytes: int, default 524288
+        Maximum uncompressed size of each page of the output.
+        By default, 524288 (512KB) will be used.
+    max_page_size_rows: int, default 20000
+        Maximum number of rows of each page of the output.
+        By default, 20000 will be used.
 
     See Also
     --------
@@ -471,11 +483,15 @@ cdef class ParquetWriter:
     cdef object index
     cdef size_t row_group_size_bytes
     cdef size_type row_group_size_rows
+    cdef size_t max_page_size_bytes
+    cdef size_type max_page_size_rows
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression=None, str statistics="ROWGROUP",
                   int row_group_size_bytes=134217728,
-                  int row_group_size_rows=1000000):
+                  int row_group_size_rows=1000000,
+                  int max_page_size_bytes=524288,
+                  int max_page_size_rows=20000):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -488,6 +504,8 @@ cdef class ParquetWriter:
         self.initialized = False
         self.row_group_size_bytes = row_group_size_bytes
         self.row_group_size_rows = row_group_size_rows
+        self.max_page_size_bytes = max_page_size_bytes
+        self.max_page_size_rows = max_page_size_rows
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -602,6 +620,8 @@ cdef class ParquetWriter:
                 .stats_level(self.stat_freq)
                 .row_group_size_bytes(self.row_group_size_bytes)
                 .row_group_size_rows(self.row_group_size_rows)
+                .max_page_size_bytes(self.max_page_size_bytes)
+                .max_page_size_rows(self.max_page_size_rows)
                 .build()
             )
             self.writer.reset(new cpp_parquet_chunked_writer(args))

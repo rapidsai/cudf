@@ -80,8 +80,8 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
 
     if (has_validity) {  // update bitmask
       const bool valid      = in_range && *(source_validity_begin + source_idx);
-      const int active_mask = __ballot_sync(0xFFFFFFFF, in_range);
-      const int valid_mask  = __ballot_sync(0xFFFFFFFF, valid);
+      const int active_mask = __ballot_sync(0xFFFF'FFFFu, in_range);
+      const int valid_mask  = __ballot_sync(0xFFFF'FFFFu, valid);
       const int warp_mask   = active_mask & valid_mask;
 
       cudf::bitmask_type old_mask = target.get_mask_word(mask_idx);
