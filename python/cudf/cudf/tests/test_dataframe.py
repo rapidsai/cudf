@@ -318,11 +318,14 @@ def test_dataframe_truncate_axis_1():
         index=[1, 2, 3, 4, 5],
     )
     pdf1 = cdf1.to_pandas()
+
     expected = pdf1.truncate(before="A", after="B", axis="columns")
     actual = cdf1.truncate(before="A", after="B", axis="columns")
-
     assert_eq(actual, expected)
-    assert_eq(pdf1.truncate("A", "B", 1), cdf1.truncate("A", "B", 1))
+
+    expected = pdf1.truncate(before="A", after="B", axis=1)
+    actual = cdf1.truncate(before="A", after="B", axis=1)
+    assert_eq(actual, expected)
 
 
 def test_dataframe_truncate_datetimeindex():
