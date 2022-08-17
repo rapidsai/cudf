@@ -2969,7 +2969,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2021-01-01 23:45:27	1	2
         """
         axis = self._get_axis_from_axis_arg(axis)
-        ax = self._index if axis == 0 else self.columns
+        ax = self._index if axis == 0 else self._data.to_pandas_index()
 
         if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
             raise ValueError("truncate requires a sorted index")
