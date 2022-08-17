@@ -1956,6 +1956,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
   CATCH_STD(env, 0)
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_exportIPC(JNIEnv *env, jclass, jlong j_table) {
+  cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
+  CATCH_STD(env, 0)
+}
+
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCArrowChunk(JNIEnv *env, jclass,
                                                                          jlong j_state,
                                                                          jlong arrow_table_handle,

@@ -1633,6 +1633,13 @@ public final class Table implements AutoCloseable {
     return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, provider);
   }
 
+  native private static byte[] exportICPImpl(long tableHandle);
+
+  public byte[] exportIPC() {
+    byte[] result = new byte[10];
+    return result;
+  }
+
   /**
    * Concatenate multiple tables together to form a single table.
    * The schema of each table (i.e.: number of columns and types of each column) must be equal
