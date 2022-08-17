@@ -249,10 +249,11 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1):
+    def aggregate(self, arg, split_every=None, split_out=1, **kwargs):
         if arg == "size":
             return self.size()
 
+        maybe_shuffle_kwarg = _check_shuffle_kwarg(**kwargs)
         arg = _redirect_aggs(arg)
 
         if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
@@ -274,7 +275,10 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             )
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            **maybe_shuffle_kwarg,
         )
 
 
@@ -436,10 +440,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1):
+    def aggregate(self, arg, split_every=None, split_out=1, **kwargs):
         if arg == "size":
             return self.size()
 
+        maybe_shuffle_kwarg = _check_shuffle_kwarg(**kwargs)
         arg = _redirect_aggs(arg)
 
         if not isinstance(arg, dict):
@@ -459,7 +464,10 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             )[self._slice]
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            **maybe_shuffle_kwarg,
         )
 
 
@@ -890,3 +898,14 @@ def _finalize_gb_agg(
         gb.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
 
     return gb[final_columns]
+
+
+def _check_shuffle_kwarg(shuffle=None, **kwargs):
+    shuffle_kwarg = {}
+    if shuffle is not None:
+        shuffle_kwarg = {"shuffle": shuffle}
+    if kwargs:
+        raise TypeError(
+            f"Unexpected keyword arguments to aggregate: {set(kwargs)}"
+        )
+    return shuffle_kwarg

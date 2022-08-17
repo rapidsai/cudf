@@ -580,9 +580,9 @@ def test_groupby_categorical_key():
         .compute()
     )
     expect = (
-        ddf.groupby("name")
+        ddf.compute()
+        .groupby("name")
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
     )
     dd.assert_eq(expect, got)
 
