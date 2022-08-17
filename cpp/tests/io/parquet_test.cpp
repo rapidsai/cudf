@@ -367,11 +367,11 @@ class ParquetSizedTest : public ::testing::TestWithParam<int> {
 };
 
 // test the allowed bit widths for dictionary encoding
-// values chosen to trigger 1, 2, 4, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
+// values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
 INSTANTIATE_TEST_SUITE_P(
   ParquetDictionaryTest,
   ParquetSizedTest,
-  testing::Values(2, 4, 16, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
+  testing::Values(2, 4, 8, 16, 32, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
   testing::PrintToStringParamName());
 
 namespace {

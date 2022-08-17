@@ -460,11 +460,16 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 }
 
 /**
- * @brief Pack literal values in output bitstream (1,2,4,6,8,10,12,16,20 or 24 bits per value)
+ * @brief Pack literal values in output bitstream (1,2,3,4,5,6,8,10,12,16,20 or 24 bits per value)
  */
 inline __device__ void PackLiteralsShuffle(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
+  constexpr uint32_t MASK2T = 1;  // mask for 2 thread leader
+  constexpr uint32_t MASK4T = 3;  // mask for 4 thread leader
+  constexpr uint32_t MASK8T = 7;  // mask for 8 thread leader
+  uint64_t vt;
+
   if (t > (count | 0x1f)) { return; }
 
   switch (w) {
@@ -472,21 +477,44 @@ inline __device__ void PackLiteralsShuffle(
       v |= shuffle_xor(v, 1) << 1;
       v |= shuffle_xor(v, 2) << 2;
       v |= shuffle_xor(v, 4) << 4;
-      if (t < count && !(t & 7)) { dst[(t * w) >> 3] = v; }
+      if (t < count && !(t & MASK8T)) { dst[(t * w) >> 3] = v; }
       return;
     case 2:
       v |= shuffle_xor(v, 1) << 2;
       v |= shuffle_xor(v, 2) << 4;
-      if (t < count && !(t & 3)) { dst[(t * w) >> 3] = v; }
+      if (t < count && !(t & MASK4T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 3:
+      v |= shuffle_xor(v, 1) << 3;
+      v |= shuffle_xor(v, 2) << 6;
+      v |= shuffle_xor(v, 4) << 12;
+      if (t < count && !(t & MASK8T)) {
+        dst[(t >> 3) * 3 + 0] = v;
+        dst[(t >> 3) * 3 + 1] = v >> 8;
+        dst[(t >> 3) * 3 + 2] = v >> 16;
+      }
       return;
     case 4:
       v |= shuffle_xor(v, 1) << 4;
-      if (t < count && !(t & 1)) { dst[(t * w) >> 3] = v; }
+      if (t < count && !(t & MASK2T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 5:
+      v |= shuffle_xor(v, 1) << 5;
+      v |= shuffle_xor(v, 2) << 10;
+      vt = shuffle_xor(v, 4);
+      vt = vt << 20 | v;
+      if (t < count && !(t & MASK8T)) {
+        dst[(t >> 3) * 5 + 0] = vt;
+        dst[(t >> 3) * 5 + 1] = vt >> 8;
+        dst[(t >> 3) * 5 + 2] = vt >> 16;
+        dst[(t >> 3) * 5 + 3] = vt >> 24;
+        dst[(t >> 3) * 5 + 4] = vt >> 32;
+      }
       return;
     case 6:
       v |= shuffle_xor(v, 1) << 6;
       v |= shuffle_xor(v, 2) << 12;
-      if (t < count && !(t & 3)) {
+      if (t < count && !(t & MASK4T)) {
         dst[(t >> 2) * 3 + 0] = v;
         dst[(t >> 2) * 3 + 1] = v >> 8;
         dst[(t >> 2) * 3 + 2] = v >> 16;
@@ -495,11 +523,11 @@ inline __device__ void PackLiteralsShuffle(
     case 8:
       if (t < count) { dst[t] = v; }
       return;
-    case 10: {
+    case 10:
       v |= shuffle_xor(v, 1) << 10;
-      uint64_t vt = shuffle_xor(v, 2);
-      vt          = vt << 20 | v;
-      if (t < count && !(t & 3)) {
+      vt = shuffle_xor(v, 2);
+      vt = vt << 20 | v;
+      if (t < count && !(t & MASK4T)) {
         dst[(t >> 2) * 5 + 0] = vt;
         dst[(t >> 2) * 5 + 1] = vt >> 8;
         dst[(t >> 2) * 5 + 2] = vt >> 16;
@@ -507,10 +535,9 @@ inline __device__ void PackLiteralsShuffle(
         dst[(t >> 2) * 5 + 4] = vt >> 32;
       }
       return;
-    }
     case 12:
       v |= shuffle_xor(v, 1) << 12;
-      if (t < count && !(t & 1)) {
+      if (t < count && !(t & MASK2T)) {
         dst[(t >> 1) * 3 + 0] = v;
         dst[(t >> 1) * 3 + 1] = v >> 8;
         dst[(t >> 1) * 3 + 2] = v >> 16;
@@ -522,10 +549,10 @@ inline __device__ void PackLiteralsShuffle(
         dst[t * 2 + 1] = v >> 8;
       }
       return;
-    case 20: {
-      uint64_t vt = shuffle_xor(v, 1);
-      vt          = vt << 20 | v;
-      if (t < count && !(t & 1)) {
+    case 20:
+      vt = shuffle_xor(v, 1);
+      vt = vt << 20 | v;
+      if (t < count && !(t & MASK2T)) {
         dst[(t >> 1) * 5 + 0] = vt;
         dst[(t >> 1) * 5 + 1] = vt >> 8;
         dst[(t >> 1) * 5 + 2] = vt >> 16;
@@ -533,7 +560,6 @@ inline __device__ void PackLiteralsShuffle(
         dst[(t >> 1) * 5 + 4] = vt >> 32;
       }
       return;
-    }
     case 24:
       if (t < count) {
         dst[t * 3 + 0] = v;
@@ -595,7 +621,9 @@ inline __device__ void PackLiterals(
   switch (w) {
     case 1:
     case 2:
+    case 3:
     case 4:
+    case 5:
     case 6:
     case 8:
     case 10:

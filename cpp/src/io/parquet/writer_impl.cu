@@ -1068,9 +1068,9 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
       constexpr auto allowed_bitsizes =
-        std::array<size_type, 10>{1, 2, 4, 6, 8, 10, 12, 16, 20, 24};
+        std::array<size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
 
-      // ceil to (1/2/4/6/8/10/12/16/20/24)
+      // ceil to (1/2/3/4/5/6/8/10/12/16/20/24)
       auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 
