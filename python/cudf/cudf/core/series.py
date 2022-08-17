@@ -680,6 +680,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Returns
         -------
             The truncated Series.
+
         Notes
         -----
         If the index being truncated contains only datetime values,
