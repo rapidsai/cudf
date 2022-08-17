@@ -484,7 +484,8 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
     }
   }
   if (s->dtype_len == 4) {
-    // Output hash
+    // Output hash. This hash value is used if the option to convert strings to
+    // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;
     cudf::string_view const sv{ptr, static_cast<size_type>(len)};
     *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
