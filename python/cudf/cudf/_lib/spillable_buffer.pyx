@@ -64,12 +64,24 @@ class DelayedPointerTuple(collections.abc.Sequence):
         raise IndexError("tuple index out of range")
 
 
-cdef class SpillableBuffer():
+cdef class SpillableBuffer:
     """A spillable buffer that represents device memory.
 
-    Developer Notes
-    ---------------
+    This buffer supports spilling the represented data to host memory.
+    Spilling can be done manually by calling `.move_inplace(target="cpu")`
+    but usually the associated spilling manager triggers spilling based on
+    current device memory usage see `cudf.core.spill_manager.SpillManager`.
+    Unspill is triggered automatically when accessing the data of the buffer.
 
+    The buffer might not be spillable, which is based on the "expose" status
+    of the buffer. We say that the buffer has been exposed if the device
+    pointer (integer or void*) has been accessed outside of SpillableBuffer.
+    In this case, we cannot invalidate the device pointer by moving the data
+    to host.
+
+    A buffer can be exposed permanently at creation or by accessing the `.ptr`
+    property. To avoid this, one can use `.ptr_raw()` or `.ptr_restricted()`
+    instead, which only exposes the buffer temporarily.
 
     Parameters
     ----------
@@ -203,6 +215,8 @@ cdef class SpillableBuffer():
 
         Notice, this will mark the buffer as "exposed" and make
         it unspillable permanently.
+
+        Consider using `ptr_raw() or `.restricted_ptr()` instead.
         """
         if self._view_desc:
             return self._view_desc["base"].ptr + self._view_desc["offset"]
