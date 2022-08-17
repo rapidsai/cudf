@@ -298,11 +298,14 @@ def test_dataframe_truncate_axis_0():
         index=[1, 2, 3, 4, 5],
     )
     pdf1 = cdf1.to_pandas()
+
     expected = pdf1.truncate(before=2, after=4, axis="index")
     actual = cdf1.truncate(before=2, after=4, axis="index")
-
     assert_eq(actual, expected)
-    assert_eq(pdf1.truncate(1, 4, 0), cdf1.truncate(1, 4, 0))
+
+    expected = pdf1.truncate(before=1, after=4, axis=0)
+    actual = cdf1.truncate(before=1, after=4, axis=0)
+    assert_eq(expected, actual)
 
 
 def test_dataframe_truncate_axis_1():
