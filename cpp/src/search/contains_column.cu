@@ -138,7 +138,7 @@ struct multi_contains_dispatch {
     bool __device__ operator()(size_type const idx) const
     {
       if (needles_have_nulls && needles.is_null_nocheck(idx)) {
-        // `true` or `false`: doesn't matter, this will be masked out as a null element.
+        // Exit early. The value doesn't matter, and will be masked as a null element.
         return true;
       }
 
