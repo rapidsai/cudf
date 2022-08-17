@@ -103,5 +103,5 @@ target_link_libraries(cudf_strings_udf PUBLIC ${UDF_LIBS})
 
 install(TARGETS cudf_strings_udf)
 install(FILES ${CMAKE_SOURCE_DIR}/build/CMakeFiles/shim.dir/src/strings/udf/shim.ptx
-        DESTINATION ${CMAKE_SOURCE_DIR}/../strings_udf/shim/
+        DESTINATION ${CONDA_PREFIX}/lib
 )
