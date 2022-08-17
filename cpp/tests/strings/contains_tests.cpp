@@ -521,6 +521,27 @@ TEST_F(StringsContainsTests, DotAll)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
 }
 
+TEST_F(StringsContainsTests, ASCII)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
+  auto view = cudf::strings_column_view(input);
+
+  std::string patterns[] = {"\\w+[\\s]+\\d+",
+                            "[^\\W]+\\s+[^\\D]+",
+                            "[\\w]+[^\\S]+[\\d]+",
+                            "[\\w]+\\s+[\\d]+",
+                            "\\w+\\s+\\d+"};
+
+  for (auto ptn : patterns) {
+    auto results = cudf::strings::contains_re(view, ptn, cudf::strings::regex_flags::ASCII);
+    auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
+    results           = cudf::strings::contains_re(view, ptn);
+    expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
+  }
+}
+
 TEST_F(StringsContainsTests, MediumRegex)
 {
   // This results in 95 regex instructions and falls in the 'medium' range.

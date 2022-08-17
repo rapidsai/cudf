@@ -2796,7 +2796,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     Currently supported inputs are:
 
     * ``Column``
-    * ``Buffer``
+    * ``DeviceBufferLike``
     * ``Series``
     * ``Index``
     * numba device array

@@ -29,10 +29,10 @@ static constexpr cudf::size_type max_str_length     = 32;
 
 static auto create_data_table(cudf::size_type n_rows)
 {
-  data_profile table_profile;
-  table_profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, max_int);
-  table_profile.set_distribution_params(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
+  data_profile const table_profile =
+    data_profile_builder()
+      .distribution(cudf::type_id::INT32, distribution_id::UNIFORM, 0, max_int)
+      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
 
   // The first two struct members are int32 and string.
   // The first column is also used as keys in groupby.

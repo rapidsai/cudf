@@ -34,7 +34,7 @@ void __device__ busy_wait(size_t cycles)
   clock_t start = clock();
   for (;;) {
     clock_t const now     = clock();
-    clock_t const elapsed = now > start ? now - start : now + (0xffffffff - start);
+    clock_t const elapsed = now > start ? now - start : now + (0xffff'ffff - start);
     if (elapsed >= cycles) return;
   }
 }
@@ -361,8 +361,8 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
           v1        = ballot((clen >> 1) & 1);
           len3_mask = shuffle((t == 0) ? get_len5_mask(v0, v1) : 0);
           mask_t    = (1 << (2 * t)) - 1;
-          cur_t     = cur + 2 * t + 2 * __popc((len3_mask & 0xaaaaaaaa) & mask_t) +
-                  __popc((len3_mask & 0x55555555) & mask_t);
+          cur_t     = cur + 2 * t + 2 * __popc((len3_mask & 0xaaaa'aaaa) & mask_t) +
+                  __popc((len3_mask & 0x5555'5555) & mask_t);
           b0          = byte_access(s, cur_t);
           is_long_sym = ((b0 & 3) ? ((b0 & 3) == 3) : (b0 > 3 * 4)) || (cur_t >= cur + 32) ||
                         (batch_len + t >= batch_size);

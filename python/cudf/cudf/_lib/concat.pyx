@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
@@ -19,7 +19,7 @@ from cudf._lib.utils cimport (
     table_view_from_table,
 )
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
@@ -31,7 +31,9 @@ cpdef concat_masks(object columns):
     with nogil:
         c_result = move(libcudf_concatenate_masks(c_views))
         c_unique_result = make_unique[device_buffer](move(c_result))
-    return Buffer(DeviceBuffer.c_from_unique_ptr(move(c_unique_result)))
+    return as_device_buffer_like(
+        DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
+    )
 
 
 cpdef concat_columns(object columns):

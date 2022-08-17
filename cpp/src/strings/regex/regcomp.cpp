@@ -145,6 +145,8 @@ int32_t const* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
+static constexpr auto MAX_REGEX_CHAR = std::numeric_limits<char32_t>::max();
+
 /**
  * @brief Converts pattern into regex classes
  */
@@ -173,6 +175,7 @@ class regex_parser {
   char32_t const* const _pattern_begin;
   char32_t const* _expr_ptr;
   bool _lex_done{false};
+  regex_flags const _flags;
 
   int32_t _id_cclass_w{-1};  // alphanumeric [a-zA-Z0-9_]
   int32_t _id_cclass_W{-1};  // not alphanumeric plus '\n'
@@ -246,11 +249,49 @@ class regex_parser {
     return {false, c};
   }
 
+  // for \d and \D
+  void add_ascii_digit_class(std::vector<reclass_range>& ranges, bool negated = false)
+  {
+    if (!negated) {
+      ranges.push_back({'0', '9'});
+    } else {
+      ranges.push_back({0, '0' - 1});
+      ranges.push_back({'9' + 1, MAX_REGEX_CHAR});
+    }
+  }
+
+  // for \s and \S
+  void add_ascii_space_class(std::vector<reclass_range>& ranges, bool negated = false)
+  {
+    if (!negated) {
+      ranges.push_back({'\t', ' '});
+    } else {
+      ranges.push_back({0, '\t' - 1});
+      ranges.push_back({' ' + 1, MAX_REGEX_CHAR});
+    }
+  }
+
+  // for \w and \W
+  void add_ascii_word_class(std::vector<reclass_range>& ranges, bool negated = false)
+  {
+    add_ascii_digit_class(ranges, negated);
+    if (!negated) {
+      ranges.push_back({'a', 'z'});
+      ranges.push_back({'A', 'Z'});
+      ranges.push_back({'_', '_'});
+    } else {
+      ranges.back().last = 'A' - 1;
+      ranges.push_back({'Z' + 1, 'a' - 1});  // {'_'-1, '_' + 1}
+      ranges.push_back({'z' + 1, MAX_REGEX_CHAR});
+    }
+  }
+
   int32_t build_cclass()
   {
     int32_t type = CCLASS;
     std::vector<char32_t> literals;
     int32_t builtins = 0;
+    std::vector<reclass_range> ranges;
 
     auto [is_quoted, chr] = next_char();
     // check for negation
@@ -284,27 +325,30 @@ class regex_parser {
             break;
           }
           case 'w':
-            builtins |= cclass_w.builtins;
+          case 'W':
+            if (is_ascii(_flags)) {
+              add_ascii_word_class(ranges, chr == 'W');
+            } else {
+              builtins |= (chr == 'w' ? cclass_w.builtins : cclass_W.builtins);
+            }
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 's':
-            builtins |= cclass_s.builtins;
+          case 'S':
+            if (is_ascii(_flags)) {
+              add_ascii_space_class(ranges, chr == 'S');
+            } else {
+              builtins |= (chr == 's' ? cclass_s.builtins : cclass_S.builtins);
+            }
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 'd':
-            builtins |= cclass_d.builtins;
-            std::tie(is_quoted, chr) = next_char();
-            continue;
-          case 'W':
-            builtins |= cclass_W.builtins;
-            std::tie(is_quoted, chr) = next_char();
-            continue;
-          case 'S':
-            builtins |= cclass_S.builtins;
-            std::tie(is_quoted, chr) = next_char();
-            continue;
           case 'D':
-            builtins |= cclass_D.builtins;
+            if (is_ascii(_flags)) {
+              add_ascii_digit_class(ranges, chr == 'D');
+            } else {
+              builtins |= (chr == 'd' ? cclass_d.builtins : cclass_D.builtins);
+            }
             std::tie(is_quoted, chr) = next_char();
             continue;
         }
@@ -323,11 +367,11 @@ class regex_parser {
     }
 
     // transform pairs of literals to ranges
-    std::vector<reclass_range> ranges(literals.size() / 2);
     auto const counter = thrust::make_counting_iterator(0);
-    std::transform(counter, counter + ranges.size(), ranges.begin(), [&literals](auto idx) {
-      return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
-    });
+    std::transform(
+      counter, counter + (literals.size() / 2), std::back_inserter(ranges), [&literals](auto idx) {
+        return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
+      });
     // sort the ranges to help with detecting overlapping entries
     std::sort(ranges.begin(), ranges.end(), [](auto l, auto r) {
       return l.first == r.first ? l.last < r.last : l.first < r.first;
@@ -372,41 +416,77 @@ class regex_parser {
           break;
         }
         case 'w': {
-          if (_id_cclass_w < 0) { _id_cclass_w = _prog.add_class(cclass_w); }
-          _cclass_id = _id_cclass_w;
+          if (is_ascii(_flags)) {
+            reclass cls;
+            add_ascii_word_class(cls.literals);
+            _cclass_id = _prog.add_class(cls);
+          } else {
+            if (_id_cclass_w < 0) { _id_cclass_w = _prog.add_class(cclass_w); }
+            _cclass_id = _id_cclass_w;
+          }
           return CCLASS;
         }
         case 'W': {
-          if (_id_cclass_W < 0) {
-            reclass cls = cclass_w;
-            cls.literals.push_back({'\n', '\n'});
-            _id_cclass_W = _prog.add_class(cls);
+          if (is_ascii(_flags)) {
+            reclass cls;
+            add_ascii_word_class(cls.literals);
+            _cclass_id = _prog.add_class(cls);
+          } else {
+            if (_id_cclass_W < 0) {
+              reclass cls = cclass_w;
+              cls.literals.push_back({'\n', '\n'});
+              _id_cclass_W = _prog.add_class(cls);
+            }
+            _cclass_id = _id_cclass_W;
           }
-          _cclass_id = _id_cclass_W;
           return NCCLASS;
         }
         case 's': {
-          if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
-          _cclass_id = _id_cclass_s;
+          if (is_ascii(_flags)) {
+            reclass cls;
+            add_ascii_space_class(cls.literals);
+            _cclass_id = _prog.add_class(cls);
+          } else {
+            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
+            _cclass_id = _id_cclass_s;
+          }
           return CCLASS;
         }
         case 'S': {
-          if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
-          _cclass_id = _id_cclass_s;
-          return NCCLASS;
+          if (is_ascii(_flags)) {
+            reclass cls;
+            add_ascii_space_class(cls.literals);
+            _cclass_id = _prog.add_class(cls);
+          } else {
+            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
+            _cclass_id = _id_cclass_s;
+            return NCCLASS;
+          }
         }
         case 'd': {
-          if (_id_cclass_d < 0) { _id_cclass_d = _prog.add_class(cclass_d); }
-          _cclass_id = _id_cclass_d;
+          if (is_ascii(_flags)) {
+            reclass cls;
+            add_ascii_digit_class(cls.literals);
+            _cclass_id = _prog.add_class(cls);
+          } else {
+            if (_id_cclass_d < 0) { _id_cclass_d = _prog.add_class(cclass_d); }
+            _cclass_id = _id_cclass_d;
+          }
           return CCLASS;
         }
         case 'D': {
-          if (_id_cclass_D < 0) {
-            reclass cls = cclass_d;
-            cls.literals.push_back({'\n', '\n'});
-            _id_cclass_D = _prog.add_class(cls);
+          if (is_ascii(_flags)) {
+            reclass cls;
+            add_ascii_digit_class(cls.literals);
+            _cclass_id = _prog.add_class(cls);
+          } else {
+            if (_id_cclass_D < 0) {
+              reclass cls = cclass_d;
+              cls.literals.push_back({'\n', '\n'});
+              _id_cclass_D = _prog.add_class(cls);
+            }
+            _cclass_id = _id_cclass_D;
           }
-          _cclass_id = _id_cclass_D;
           return NCCLASS;
         }
         case 'b': return BOW;
@@ -660,9 +740,11 @@ class regex_parser {
   }
 
  public:
-  regex_parser(const char32_t* pattern, int32_t dot_type, reprog& prog)
-    : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern)
+  regex_parser(const char32_t* pattern, regex_flags const flags, reprog& prog)
+    : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern), _flags(flags)
   {
+    auto const dot_type = is_dotall(_flags) ? ANYNL : ANY;
+
     int32_t type = 0;
     while ((type = lex(dot_type)) != END) {
       auto const item = [type, chr = _chr, cid = _cclass_id, n = _min_count, m = _max_count] {
@@ -866,7 +948,7 @@ class regex_compiler {
     : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
   {
     // Parse pattern into items
-    auto const items = regex_parser(pattern, is_dotall(flags) ? ANYNL : ANY, _prog).get_items();
+    auto const items = regex_parser(pattern, _flags, _prog).get_items();
 
     int cur_subid{};
     int push_subid{};

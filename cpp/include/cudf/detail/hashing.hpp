@@ -73,7 +73,7 @@ std::unique_ptr<column> md5_hash(
  */
 constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 {
-  return lhs ^ (rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2));
+  return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2));
 }
 
 /* Copyright 2005-2014 Daniel James.
@@ -94,7 +94,7 @@ constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  */
 constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
-  return lhs ^ (rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2));
+  return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
 
 }  // namespace detail
