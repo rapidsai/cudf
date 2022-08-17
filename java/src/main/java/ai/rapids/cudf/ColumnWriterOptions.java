@@ -146,6 +146,8 @@ public class ColumnWriterOptions {
 
     protected ColumnWriterOptions withBinary(String name, boolean isNullable) {
       ColumnWriterOptions opt = listBuilder(name, isNullable)
+          // The name here does not matter. It will not be included in the final file
+          // This is just to get the metadata to line up properly for the C++ APIs
           .withColumns(false, "BINARY_DATA")
           .build();
       opt.isBinary = true;
@@ -154,6 +156,8 @@ public class ColumnWriterOptions {
 
     protected ColumnWriterOptions withBinary(String name, boolean isNullable, int parquetFieldId) {
       ColumnWriterOptions opt = listBuilder(name, isNullable)
+          // The name here does not matter. It will not be included in the final file
+          // This is just to get the metadata to line up properly for the C++ APIs
           .withColumn(false, "BINARY_DATA", parquetFieldId)
           .build();
       opt.isBinary = true;
