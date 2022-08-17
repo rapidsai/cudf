@@ -450,7 +450,6 @@ add_library(
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
   src/search/contains_table.cu
-  src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
