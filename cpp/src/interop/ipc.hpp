@@ -17,7 +17,7 @@ inline void check_cu_status(CUresult res)
   }
 }
 
-struct IpcDevicePtr {
+struct ipc_exported_ptr {
   cudaIpcMemHandle_t handle{0};
   int64_t offset{0};
   int64_t size{0};
@@ -40,9 +40,9 @@ struct IpcDevicePtr {
     std::memcpy(ptr, &size, sizeof(size));
   }
 
-  static uint8_t const* from_buffer(uint8_t const* ptr, IpcDevicePtr* out)
+  static uint8_t const* from_buffer(uint8_t const* ptr, ipc_exported_ptr* out)
   {
-    IpcDevicePtr& dptr = *out;
+    ipc_exported_ptr& dptr = *out;
     std::memcpy(&dptr.handle, ptr, sizeof(handle));
     ptr += sizeof(handle);
     std::memcpy(&dptr.offset, ptr, sizeof(offset));
@@ -54,9 +54,9 @@ struct IpcDevicePtr {
   }
 };
 
-struct IpcColumn {
-  IpcDevicePtr data;
-  IpcDevicePtr mask;
+struct ipc_exported_column {
+  ipc_exported_ptr data;
+  ipc_exported_ptr mask;
 
   bool has_nulls() const { return mask.size != 0; }
 
@@ -74,21 +74,21 @@ struct IpcColumn {
     if (has_nulls()) { mask.serialize(p_bytes); }
   }
 
-  static uint8_t const* from_buffer(uint8_t const* ptr, IpcColumn* out)
+  static uint8_t const* from_buffer(uint8_t const* ptr, ipc_exported_column* out)
   {
     bool hn;
     std::memcpy(&hn, ptr, sizeof(hn));
     ptr += sizeof(hn);
     std::cout << "hn:" << hn << std::endl;
 
-    IpcColumn& column = *out;
-    ptr = IpcDevicePtr::from_buffer(ptr, &column.data);
-    if (hn) { ptr = IpcDevicePtr::from_buffer(ptr, &column.mask); }
+    ipc_exported_column& column = *out;
+    ptr = ipc_exported_ptr::from_buffer(ptr, &column.data);
+    if (hn) { ptr = ipc_exported_ptr::from_buffer(ptr, &column.mask); }
     return ptr;
   }
 };
 
-inline IpcDevicePtr get_ipc_ptr(uint8_t const* ptr, int64_t size)
+inline ipc_exported_ptr export_ptr_for_ipc(uint8_t const* ptr, int64_t size)
 {
   CUdeviceptr pbase;
   size_t psize;
@@ -99,7 +99,7 @@ inline IpcDevicePtr get_ipc_ptr(uint8_t const* ptr, int64_t size)
   auto non_const = const_cast<void*>(reinterpret_cast<void const*>(ptr));
   CUDF_CUDA_TRY(cudaIpcGetMemHandle(&handle, non_const));
 
-  return IpcDevicePtr{.handle = handle, .offset = ptr - base, .size = size};
+  return ipc_exported_ptr{.handle = handle, .offset = ptr - base, .size = size};
 }
 }  // namespace ipc
 }  // namespace cudf

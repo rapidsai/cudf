@@ -462,7 +462,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 
 namespace {
 std::pair<column_view, std::unique_ptr<ipc_imported_column>> from_ipc_column(
-  arrow::Field const& field, ipc::IpcColumn ipc_column)
+  arrow::Field const& field, ipc::ipc_exported_column ipc_column)
 {
   ipc_imported_ptr data_base_ptr{ipc_column.data.handle};
   auto ptr        = data_base_ptr.get<uint8_t>() + ipc_column.data.offset;
@@ -503,8 +503,8 @@ std::pair<table_view, std::vector<std::shared_ptr<ipc_imported_column>>> import_
   std::vector<column_view> columns;
   std::vector<std::shared_ptr<ipc_imported_column>> imported_columns;
   while (ptr != ipc_handles->data() + ipc_handles->size()) {
-    ipc::IpcColumn ipc_column;
-    ptr    = ipc::IpcColumn::from_buffer(ptr, &ipc_column);
+    ipc::ipc_exported_column ipc_column;
+    ptr    = ipc::ipc_exported_column::from_buffer(ptr, &ipc_column);
     auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
     columns.push_back(std::move(c.first));
     imported_columns.push_back(std::move(c.second));

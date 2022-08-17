@@ -431,26 +431,26 @@ namespace {
 
 struct dispatch_to_ipc_column {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  arrow::Result<ipc::IpcColumn> operator()(column_view)
+  arrow::Result<ipc::ipc_exported_column> operator()(column_view)
   {
     return arrow::Status::Invalid("Unsupported type for to_arrow.");
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  arrow::Result<ipc::IpcColumn> operator()(column_view input_view)
+  arrow::Result<ipc::ipc_exported_column> operator()(column_view input_view)
   {
     const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
     auto data_ptr                    = reinterpret_cast<uint8_t const*>(input_view.data<T>());
-    auto data_dptr                   = ipc::get_ipc_ptr(data_ptr, data_size_in_bytes);
+    auto data_dptr                   = ipc::export_ptr_for_ipc(data_ptr, data_size_in_bytes);
 
-    ipc::IpcColumn column;
+    ipc::ipc_exported_column column;
     column.data = data_dptr;
 
     std::cout << "has_nulls:" << input_view.has_nulls() << std::endl;
     if (input_view.has_nulls()) {
       auto mask_ptr                    = reinterpret_cast<uint8_t const*>(input_view.null_mask());
       const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
-      auto mask_dptr                   = ipc::get_ipc_ptr(mask_ptr, mask_size_in_bytes);
+      auto mask_dptr                   = ipc::export_ptr_for_ipc(mask_ptr, mask_size_in_bytes);
       column.mask                      = mask_dptr;
     }
 
@@ -486,13 +486,13 @@ std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
   };
 }
 
-ipc::IpcColumn to_ipc_column(column_view column, column_metadata const& meta_data)
+ipc::ipc_exported_column to_ipc_column(column_view column, column_metadata const& meta_data)
 {
   if (column.type().id() != type_id::EMPTY) {
     auto handle =
       type_dispatcher(column.type(), dispatch_to_ipc_column{}, column).ValueOrElse([]() {
         CUDF_FAIL("Failed to obtain IPC handle.");
-        return ipc::IpcColumn{};
+        return ipc::ipc_exported_column{};
       });
     return handle;
   } else {
@@ -534,7 +534,7 @@ std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
 
   CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
   for (size_t i = 0; i < metadata.size(); ++i) {
-    ipc::IpcColumn p_handle = to_ipc_column(input.column(i), metadata.at(i));
+    ipc::ipc_exported_column p_handle = to_ipc_column(input.column(i), metadata.at(i));
     // serialize to message
     p_handle.serialize(&bytes);
     auto size = bytes.size();
