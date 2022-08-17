@@ -39,14 +39,14 @@ namespace {
 /**
  * @brief Get the underlying value of a scalar through a scalar device view.
  *
- * @tparam Type The scalar's value type
+ * @tparam Element The scalar's value type
  * @tparam ScalarDView Type of the input scalar device view
  * @param d_scalar The input scalar device view
  */
-template <typename Type, typename ScalarDView>
+template <typename Element, typename ScalarDView>
 __device__ auto inline get_scalar_value(ScalarDView d_scalar)
 {
-  if constexpr (cudf::is_fixed_point<Type>()) {
+  if constexpr (cudf::is_fixed_point<Element>()) {
     return d_scalar.rep();
   } else {
     return d_scalar.value();
@@ -56,19 +56,19 @@ __device__ auto inline get_scalar_value(ScalarDView d_scalar)
 struct contains_scalar_dispatch {
   // SFINAE with conditional return type because we need to support device lambda in this function.
   // This is required due to a limitation of nvcc.
-  template <typename Type>
-  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                        scalar const& needle,
-                                                        rmm::cuda_stream_view stream) const
+  template <typename Element>
+  std::enable_if_t<!is_nested<Element>(), bool> operator()(column_view const& haystack,
+                                                           scalar const& needle,
+                                                           rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
 
-    using DType           = device_storage_type_t<Type>;
+    using DType           = device_storage_type_t<Element>;
     auto const d_haystack = column_device_view::create(haystack, stream);
-    auto const d_needle =
-      get_scalar_device_view(static_cast<cudf::scalar_type_t<Type>&>(const_cast<scalar&>(needle)));
+    auto const d_needle   = get_scalar_device_view(
+      static_cast<cudf::scalar_type_t<Element>&>(const_cast<scalar&>(needle)));
 
     if (haystack.has_nulls()) {
       auto const begin = d_haystack->pair_begin<DType, true>();
@@ -76,7 +76,8 @@ struct contains_scalar_dispatch {
 
       return thrust::count_if(
                rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
-                 auto const needle_pair = thrust::make_pair(get_scalar_value<Type>(d_needle), true);
+                 auto const needle_pair =
+                   thrust::make_pair(get_scalar_value<Element>(d_needle), true);
                  return val_pair == needle_pair;
                }) > 0;
     } else {
@@ -85,15 +86,15 @@ struct contains_scalar_dispatch {
 
       return thrust::count_if(
                rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val) {
-                 return val == get_scalar_value<Type>(d_needle);
+                 return val == get_scalar_value<Element>(d_needle);
                }) > 0;
     }
   }
 
-  template <typename Type>
-  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                       scalar const& needle,
-                                                       rmm::cuda_stream_view stream) const
+  template <typename Element>
+  std::enable_if_t<is_nested<Element>(), bool> operator()(column_view const& haystack,
+                                                          scalar const& needle,
+                                                          rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller

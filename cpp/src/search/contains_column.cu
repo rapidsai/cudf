@@ -38,7 +38,7 @@ namespace detail {
 namespace {
 
 struct contains_column_dispatch {
-  template <typename ElementType, typename Haystack>
+  template <typename Element, typename Haystack>
   struct contains_fn {
     bool __device__ operator()(size_type const idx) const
     {
@@ -47,7 +47,7 @@ struct contains_column_dispatch {
         return true;
       }
 
-      return haystack.contains(needles.template element<ElementType>(idx));
+      return haystack.contains(needles.template element<Element>(idx));
     }
 
     Haystack const haystack;
@@ -55,7 +55,7 @@ struct contains_column_dispatch {
     bool const needles_have_nulls;
   };
 
-  template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
+  template <typename Element, CUDF_ENABLE_IF(!is_nested<Element>())>
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
                                      rmm::cuda_stream_view stream,
@@ -76,7 +76,7 @@ struct contains_column_dispatch {
       return result;
     }
 
-    auto const haystack_set    = cudf::detail::unordered_multiset<Type>::create(haystack, stream);
+    auto const haystack_set = cudf::detail::unordered_multiset<Element>::create(haystack, stream);
     auto const haystack_set_dv = haystack_set.to_device();
     auto const needles_cdv_ptr = column_device_view::create(needles, stream);
 
@@ -84,12 +84,12 @@ struct contains_column_dispatch {
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(needles.size()),
                       out_begin,
-                      contains_fn<Type, decltype(haystack_set_dv)>{
+                      contains_fn<Element, decltype(haystack_set_dv)>{
                         haystack_set_dv, *needles_cdv_ptr, needles.has_nulls()});
     return result;
   }
 
-  template <typename Type, CUDF_ENABLE_IF(is_nested<Type>())>
+  template <typename Element, CUDF_ENABLE_IF(is_nested<Element>())>
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
                                      rmm::cuda_stream_view stream,
