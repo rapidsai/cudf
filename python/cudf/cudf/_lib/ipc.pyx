@@ -41,9 +41,10 @@ def import_ipc(object message):
         pair[table_view, vector[shared_ptr[imported_column]]] result = move(
             cpp_import_ipc(cbuf)
         )
-        owners = [ImportedColumn.from_shared_ptr(n) for n in result.second]
 
+    owners = [ImportedColumn.from_shared_ptr(n) for n in result.second]
     names = [dereference(n).name.decode() for n in result.second]
+
     columns = columns_from_table_view(move(result.first), owners)
     data = {n: columns[i] for i, n in enumerate(names)}
     return data

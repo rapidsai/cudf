@@ -439,17 +439,16 @@ struct dispatch_to_ipc_column {
   {
     const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
     auto data_ptr                    = reinterpret_cast<uint8_t const*>(input_view.data<T>());
-    auto data_dptr = ipc::exported_ptr::from_data(data_ptr, data_size_in_bytes);
+    auto data_dptr                   = ipc::exported_ptr::from_data(data_ptr, data_size_in_bytes);
 
     ipc::exported_column column;
     column.data = data_dptr;
 
-    std::cout << "has_nulls:" << input_view.has_nulls() << std::endl;
     if (input_view.has_nulls()) {
       auto mask_ptr                    = reinterpret_cast<uint8_t const*>(input_view.null_mask());
       const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
-      auto mask_dptr = ipc::exported_ptr::from_data(mask_ptr, mask_size_in_bytes);
-      column.mask    = mask_dptr;
+      auto mask_dptr                   = ipc::exported_ptr::from_data(mask_ptr, mask_size_in_bytes);
+      column.mask                      = mask_dptr;
     }
 
     return column;
@@ -536,7 +535,6 @@ std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
     // serialize to message
     p_handle.serialize(&bytes);
     auto size = bytes.size();
-    std::cout << "sizeoffset:" << size << std::endl;
   }
   // an owning buffer
   auto p_buf = arrow::Buffer::FromString(bytes);

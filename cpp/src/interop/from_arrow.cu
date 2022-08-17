@@ -458,26 +458,27 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
-std::pair<column_view, std::unique_ptr<imported_column>> from_ipc_column(
+std::pair<column_view, std::shared_ptr<imported_column>> from_ipc_column(
   arrow::Field const& field, ipc::exported_column ipc_column)
 {
   ipc::imported_ptr data_base_ptr{ipc_column.data};
-  auto ptr        = data_base_ptr.get<uint8_t>();
+  auto data_ptr   = data_base_ptr.get<uint8_t>();
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
   size_type size = ipc_column.data.size / size_of(dtype);
 
   if (ipc_column.has_nulls()) {
-    auto mask_base_ptr     = std::make_shared<ipc::imported_ptr>(ipc_column.mask);
-    auto mask_ptr          = mask_base_ptr->get<bitmask_type>();
-    auto cview             = column_view{dtype, size, ptr, mask_ptr};
-    return std::make_pair(
-      cview, std::make_unique<imported_column>(field.name(), std::move(data_base_ptr)));
+    ipc::imported_ptr mask_base_ptr{ipc_column.mask};
+    auto mask_ptr = mask_base_ptr.get<bitmask_type>();
+    auto cview    = column_view{dtype, size, data_ptr, mask_ptr};
+    return std::make_pair(cview,
+                          std::make_shared<imported_column>(
+                            field.name(), std::move(data_base_ptr), std::move(mask_base_ptr)));
   }
 
-  auto cview = column_view{dtype, size, ptr};
-  return std::make_pair(
-    cview, std::make_unique<imported_column>(field.name(), std::move(data_base_ptr)));
+  auto cview = column_view{dtype, size, data_ptr};
+  return std::make_pair(cview,
+                        std::make_shared<imported_column>(field.name(), std::move(data_base_ptr)));
 }
 }  // namespace
 

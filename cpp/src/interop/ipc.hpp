@@ -105,11 +105,17 @@ class imported_ptr {
   }
   ~imported_ptr() noexcept(false)
   {
-    if (base_ptr) { CUDF_CUDA_TRY(cudaIpcCloseMemHandle(base_ptr)) };
+    if (base_ptr) { CUDF_CUDA_TRY(cudaIpcCloseMemHandle(base_ptr)); }
   }
 
   imported_ptr(imported_ptr const& that) = delete;
   imported_ptr(imported_ptr&& that) { std::swap(that.base_ptr, this->base_ptr); }
+  imported_ptr& operator=(imported_ptr const& that) = delete;
+  imported_ptr& operator=(imported_ptr&& that)
+  {
+    std::swap(that.base_ptr, this->base_ptr);
+    return *this;
+  }
 
   template <typename T>
   auto get() const
@@ -151,7 +157,6 @@ struct exported_column {
     bool hn;
     std::memcpy(&hn, ptr, sizeof(hn));
     ptr += sizeof(hn);
-    std::cout << "hn:" << hn << std::endl;
 
     exported_column& column = *out;
     ptr                     = exported_ptr::from_buffer(ptr, &column.data);
