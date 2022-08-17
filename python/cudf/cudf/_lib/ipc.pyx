@@ -25,5 +25,6 @@ def export_ipc(list source_columns, object metadata):
 def import_ipc(object message):
     cdef shared_ptr[CBuffer] cbuf = pyarrow_unwrap_buffer(message)
     cdef pair[unique_ptr[table], vector[string]] result = move(cpp_import_ipc(cbuf))
-    columns = data_from_unique_ptr(move(result.first), result.second)
+    names = [n.decode() for n in result.second]
+    columns = data_from_unique_ptr(move(result.first), names)
     return columns
