@@ -461,14 +461,14 @@ namespace {
 std::pair<column_view, std::unique_ptr<ipc_imported_column>> from_ipc_column(
   arrow::Field const& field, ipc::ipc_exported_column ipc_column)
 {
-  ipc_imported_ptr data_base_ptr{ipc_column.data.handle};
+  ipc::ipc_imported_ptr data_base_ptr{ipc_column.data.handle};
   auto ptr        = data_base_ptr.get<uint8_t>() + ipc_column.data.offset;
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
   size_type size = ipc_column.data.size / size_of(dtype);
 
   if (ipc_column.has_nulls()) {
-    auto mask_base_ptr     = std::make_shared<ipc_imported_ptr>(ipc_column.mask.handle);
+    auto mask_base_ptr     = std::make_shared<ipc::ipc_imported_ptr>(ipc_column.mask.handle);
     bitmask_type* mask_ptr = mask_base_ptr->get<bitmask_type>() + ipc_column.mask.offset;
     auto cview             = column_view{dtype, size, ptr, mask_ptr};
     return std::make_pair(

@@ -309,6 +309,7 @@ add_library(
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
+  src/interop/ipc.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu

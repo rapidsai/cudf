@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cinttypes>
 #include <cstring>
 #include <cuda.h>
@@ -51,6 +53,35 @@ struct ipc_exported_ptr {
     ptr += sizeof(size);
 
     return ptr;
+  }
+};
+
+class ipc_imported_ptr {
+  void* base_ptr{nullptr};
+
+ public:
+  ipc_imported_ptr() = default;
+  explicit ipc_imported_ptr(cudaIpcMemHandle_t handle)
+  {
+    CUDF_CUDA_TRY(cudaIpcOpenMemHandle(&base_ptr, handle, cudaIpcMemLazyEnablePeerAccess));
+  }
+  ~ipc_imported_ptr() noexcept(false)
+  {
+    if (base_ptr) { CUDF_CUDA_TRY(cudaIpcCloseMemHandle(base_ptr)) };
+  }
+
+  ipc_imported_ptr(ipc_imported_ptr const& that) = delete;
+  ipc_imported_ptr(ipc_imported_ptr&& that) { std::swap(that.base_ptr, this->base_ptr); }
+
+  template <typename T>
+  auto get() const
+  {
+    return reinterpret_cast<T const*>(base_ptr);
+  }
+  template <typename T>
+  auto get()
+  {
+    return reinterpret_cast<T*>(base_ptr);
   }
 };
 
