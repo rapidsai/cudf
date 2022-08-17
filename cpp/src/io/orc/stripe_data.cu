@@ -360,19 +360,19 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
 {
   if (bytestream_readbyte(bs, pos) > 0x7f) {
     uint32_t next32 = bytestream_readu32(bs, pos + 1);
-    uint32_t zbit   = __ffs((~next32) & 0x80808080);
+    uint32_t zbit   = __ffs((~next32) & 0x8080'8080);
     if (sizeof(T) <= 4 || zbit) {
       return 1 + (zbit >> 3);  // up to 5x7 bits
     } else {
       next32 = bytestream_readu32(bs, pos + 5);
-      zbit   = __ffs((~next32) & 0x80808080);
+      zbit   = __ffs((~next32) & 0x8080'8080);
       if (zbit) {
         return 5 + (zbit >> 3);  // up to 9x7 bits
       } else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f)) {
         return 10;  // up to 70 bits
       } else {
         uint64_t next64 = bytestream_readu64(bs, pos + 10);
-        zbit            = __ffsll((~next64) & 0x8080808080808080ull);
+        zbit            = __ffsll((~next64) & 0x8080'8080'8080'8080ull);
         if (zbit) {
           return 10 + (zbit >> 3);  // Up to 18x7 bits (126)
         } else {
@@ -405,10 +405,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
       v = (v & 0x3fff) | (b << 14);
       if (b > 0x7f) {
         b = bytestream_readbyte(bs, pos++);
-        v = (v & 0x1fffff) | (b << 21);
+        v = (v & 0x1f'ffff) | (b << 21);
         if (b > 0x7f) {
           b = bytestream_readbyte(bs, pos++);
-          v = (v & 0x0fffffff) | (b << 28);
+          v = (v & 0x0fff'ffff) | (b << 28);
           if constexpr (sizeof(T) > 4) {
             uint32_t lo = v;
             uint64_t hi;
@@ -421,10 +421,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
                 v = (v & 0x3ff) | (b << 10);
                 if (b > 0x7f) {
                   b = bytestream_readbyte(bs, pos++);
-                  v = (v & 0x1ffff) | (b << 17);
+                  v = (v & 0x1'ffff) | (b << 17);
                   if (b > 0x7f) {
                     b = bytestream_readbyte(bs, pos++);
-                    v = (v & 0xffffff) | (b << 24);
+                    v = (v & 0xff'ffff) | (b << 24);
                     if (b > 0x7f) {
                       pos++;  // last bit is redundant (extra byte implies bit63 is 1)
                     }
@@ -1208,7 +1208,7 @@ __global__ void __launch_bounds__(block_size)
           // Need to arrange the bytes to apply mask properly.
           uint32_t bits = (i + 32 <= skippedrows) ? s->vals.u32[i >> 5]
                                                   : (__byte_perm(s->vals.u32[i >> 5], 0, 0x0123) &
-                                                     (0xffffffffu << (0x20 - skippedrows + i)));
+                                                     (0xffff'ffffu << (0x20 - skippedrows + i)));
           skip_count += __popc(bits);
         }
         skip_count = warp_reduce(temp_storage.wr_storage[t / 32]).Sum(skip_count);

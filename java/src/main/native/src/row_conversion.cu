@@ -360,7 +360,7 @@ copy_from_rows_fixed_width_optimized(const size_type num_rows, const size_type n
     // But we might not use all of the threads if the number of rows does not go
     // evenly into the thread count. We don't want those threads to exit yet
     // because we may need them to copy data in for the next row group.
-    uint32_t active_mask = __ballot_sync(0xffffffff, row_index < num_rows);
+    uint32_t active_mask = __ballot_sync(0xffff'ffffu, row_index < num_rows);
     if (row_index < num_rows) {
       auto const col_index_start = threadIdx.y;
       auto const col_index_stride = blockDim.y;
@@ -753,7 +753,7 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     auto const absolute_col = relative_col + tile.start_col;
     auto const absolute_row = relative_row + tile.start_row;
     auto const participating = absolute_col < num_columns && absolute_row < num_rows;
-    auto const participation_mask = __ballot_sync(0xFFFFFFFF, participating);
+    auto const participation_mask = __ballot_sync(0xFFFF'FFFFu, participating);
 
     if (participating) {
       auto my_data = input_nm[absolute_col] != nullptr ?
@@ -1072,7 +1072,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     auto const row_batch_start =
         tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
-    auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_row < num_rows);
+    auto const participation_mask = __ballot_sync(0xFFFF'FFFFu, absolute_row < num_rows);
 
     if (absolute_row < num_rows) {
       auto const my_byte = input_data[row_offsets(absolute_row, row_batch_start) + validity_offset +

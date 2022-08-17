@@ -1558,6 +1558,37 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
     assert_eq(cudf.read_parquet(fname), gdf)
 
 
+@pytest.mark.parametrize(
+    "max_page_size_kwargs",
+    [
+        {"max_page_size_bytes": 4 * 1024},
+        {"max_page_size_rows": 5000},
+    ],
+)
+def test_parquet_writer_max_page_size(tmpdir, max_page_size_kwargs):
+    # Check that max_page_size options are exposed in Python
+    # Since we don't have access to page metadata, instead check that
+    # file written with more pages will be slightly larger
+
+    size = 20000
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
+
+    fname = tmpdir.join("gdf.parquet")
+    with ParquetWriter(fname, **max_page_size_kwargs) as writer:
+        writer.write_table(gdf)
+    s1 = os.path.getsize(fname)
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+
+    fname = tmpdir.join("gdf0.parquet")
+    with ParquetWriter(fname) as writer:
+        writer.write_table(gdf)
+    s2 = os.path.getsize(fname)
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+    assert s1 > s2
+
+
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):
