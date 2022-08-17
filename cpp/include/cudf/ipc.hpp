@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/interop.hpp>           // column_metadata
 #include <cudf/table/table_view.hpp>  // table_view
 #include <memory>                     // std::shared_ptr

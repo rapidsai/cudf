@@ -3,8 +3,8 @@
 #include <cinttypes>
 #include <cstring>
 #include <cuda.h>
-#include <iostream>
 #include <cudf/utilities/error.hpp>
+#include <iostream>
 
 namespace cudf {
 namespace ipc {
@@ -66,6 +66,12 @@ struct exported_ptr {
    */
   static exported_ptr from_data(uint8_t const* ptr, int64_t size)
   {
+    /*
+     * `cudaIpcGetMemHandle` returns the same handle for pointers having the same base
+     * address (the address returned from `cudaMalloc`).  So `ptr` and `ptr + 4` have the
+     * same `cudaIpcMemHandle_t`. As a result, we need to calculate the offset from base
+     * address ourseleves and export it along with the handle.
+     */
     CUdeviceptr pbase;
     size_t psize;
     check_cu_status(cuMemGetAddressRange(&pbase, &psize, reinterpret_cast<CUdeviceptr>(ptr)));
@@ -92,8 +98,7 @@ class imported_ptr {
 
  public:
   imported_ptr() = default;
-  explicit imported_ptr(exported_ptr const& handle)
-    : offset{handle.offset}, size{handle.size}
+  explicit imported_ptr(exported_ptr const& handle) : offset{handle.offset}, size{handle.size}
   {
     CUDF_CUDA_TRY(
       cudaIpcOpenMemHandle((void**)&base_ptr, handle.handle, cudaIpcMemLazyEnablePeerAccess));
@@ -131,7 +136,7 @@ struct exported_column {
   {
     std::string& bytes = *p_bytes;
     size_t orig_size   = p_bytes->size();
-    auto hn = has_nulls();
+    auto hn            = has_nulls();
 
     bytes.resize(orig_size + sizeof(hn));
     auto ptr = bytes.data() + orig_size;
@@ -149,7 +154,7 @@ struct exported_column {
     std::cout << "hn:" << hn << std::endl;
 
     exported_column& column = *out;
-    ptr = exported_ptr::from_buffer(ptr, &column.data);
+    ptr                     = exported_ptr::from_buffer(ptr, &column.data);
     if (hn) { ptr = exported_ptr::from_buffer(ptr, &column.mask); }
     return ptr;
   }
