@@ -429,20 +429,32 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
 namespace {
 
-struct dispatch_to_arrow_buffer {
+struct dispatch_to_ipc_column {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  arrow::Result<ipc::IpcDevicePtr> operator()(column_view)
+  arrow::Result<ipc::IpcColumn> operator()(column_view)
   {
     return arrow::Status::Invalid("Unsupported type for to_arrow.");
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  arrow::Result<ipc::IpcDevicePtr> operator()(column_view input_view)
+  arrow::Result<ipc::IpcColumn> operator()(column_view input_view)
   {
     const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
-    auto ptr                         = reinterpret_cast<uint8_t const*>(input_view.data<T>());
-    auto dptr                        = ipc::get_ipc_ptr(ptr, data_size_in_bytes);
-    return dptr;
+    auto data_ptr                    = reinterpret_cast<uint8_t const*>(input_view.data<T>());
+    auto data_dptr                   = ipc::get_ipc_ptr(data_ptr, data_size_in_bytes);
+
+    ipc::IpcColumn column;
+    column.data = data_dptr;
+
+    std::cout << "has_nulls:" << input_view.has_nulls() << std::endl;
+    if (input_view.has_nulls()) {
+      auto mask_ptr                    = reinterpret_cast<uint8_t const*>(input_view.null_mask());
+      const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
+      auto mask_dptr                   = ipc::get_ipc_ptr(mask_ptr, mask_size_in_bytes);
+      column.mask                      = mask_dptr;
+    }
+
+    return column;
   }
 };
 
@@ -474,13 +486,13 @@ std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
   };
 }
 
-ipc::IpcDevicePtr to_arrow_ipc_handle(column_view column, column_metadata const& meta_data)
+ipc::IpcColumn to_ipc_column(column_view column, column_metadata const& meta_data)
 {
   if (column.type().id() != type_id::EMPTY) {
     auto handle =
-      type_dispatcher(column.type(), dispatch_to_arrow_buffer{}, column).ValueOrElse([]() {
+      type_dispatcher(column.type(), dispatch_to_ipc_column{}, column).ValueOrElse([]() {
         CUDF_FAIL("Failed to obtain IPC handle.");
-        return ipc::IpcDevicePtr{};
+        return ipc::IpcColumn{};
       });
     return handle;
   } else {
@@ -511,7 +523,6 @@ std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
     return std::shared_ptr<arrow::Buffer>{nullptr};
   });
   int64_t size                          = p_schema_buf->size();
-  std::cout << __func__ << ":size:" << size << std::endl;
   std::string bytes;
   bytes.resize(size + sizeof(int64_t));
   {
@@ -523,7 +534,7 @@ std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
 
   CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
   for (size_t i = 0; i < metadata.size(); ++i) {
-    auto p_handle = to_arrow_ipc_handle(input.column(i), metadata.at(i));
+    ipc::IpcColumn p_handle = to_ipc_column(input.column(i), metadata.at(i));
     // serialize to message
     p_handle.serialize(&bytes);
     auto size = bytes.size();

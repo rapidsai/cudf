@@ -1,6 +1,7 @@
 #include <cinttypes>
 #include <cstring>
 #include <cuda.h>
+#include <iostream>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -17,9 +18,9 @@ inline void check_cu_status(CUresult res)
 }
 
 struct IpcDevicePtr {
-  cudaIpcMemHandle_t handle;
-  int64_t offset;
-  int64_t size;
+  cudaIpcMemHandle_t handle{0};
+  int64_t offset{0};
+  int64_t size{0};
 
   void serialize(std::string* p_bytes) const
   {
@@ -49,6 +50,40 @@ struct IpcDevicePtr {
     std::memcpy(&dptr.size, ptr, sizeof(size));
     ptr += sizeof(size);
 
+    return ptr;
+  }
+};
+
+struct IpcColumn {
+  IpcDevicePtr data;
+  IpcDevicePtr mask;
+
+  bool has_nulls() const { return mask.size != 0; }
+
+  void serialize(std::string* p_bytes) const
+  {
+    std::string& bytes = *p_bytes;
+    size_t orig_size   = p_bytes->size();
+    auto hn = has_nulls();
+
+    bytes.resize(orig_size + sizeof(hn));
+    auto ptr = bytes.data() + orig_size;
+    std::memcpy(ptr, &hn, sizeof(hn));
+
+    data.serialize(p_bytes);
+    if (has_nulls()) { mask.serialize(p_bytes); }
+  }
+
+  static uint8_t const* from_buffer(uint8_t const* ptr, IpcColumn* out)
+  {
+    bool hn;
+    std::memcpy(&hn, ptr, sizeof(hn));
+    ptr += sizeof(hn);
+    std::cout << "hn:" << hn << std::endl;
+
+    IpcColumn& column = *out;
+    ptr = IpcDevicePtr::from_buffer(ptr, &column.data);
+    if (hn) { ptr = IpcDevicePtr::from_buffer(ptr, &column.mask); }
     return ptr;
   }
 };

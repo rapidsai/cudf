@@ -460,15 +460,31 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
-std::unique_ptr<column> from_arrow_ipc(arrow::Field const& field,
-                                       ipc::IpcDevicePtr dptr,
-                                       uint8_t const* pbase)
+std::unique_ptr<column> from_ipc_column(arrow::Field const& field, ipc::IpcColumn ipc_column)
 {
-  auto ptr        = pbase + dptr.offset;
+  uint8_t* pbase;
+  CUDF_CUDA_TRY(
+    cudaIpcOpenMemHandle((void**)&pbase, ipc_column.data.handle, cudaIpcMemLazyEnablePeerAccess));
+  auto ptr        = pbase + ipc_column.data.offset;
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
-  size_type size = dptr.size / size_of(dtype);
-  auto c         = std::make_unique<column>(column_view{dtype, size, ptr});  // fixme: nullmask
+  size_type size = ipc_column.data.size / size_of(dtype);
+
+  bitmask_type* mask_pbase{nullptr};
+  bitmask_type* mask_ptr{nullptr};
+  std::cout << "from has_nulls:" << ipc_column.has_nulls() << std::endl;
+  if (ipc_column.has_nulls()) {
+    CUDF_CUDA_TRY(cudaIpcOpenMemHandle(
+      (void**)&mask_pbase, ipc_column.mask.handle, cudaIpcMemLazyEnablePeerAccess));
+    mask_ptr = mask_pbase + ipc_column.mask.offset;
+  }
+
+  auto cview = column_view{dtype, size, ptr, mask_ptr};
+  auto c     = std::make_unique<column>(cview);
+
+  CUDF_CUDA_TRY(cudaIpcCloseMemHandle(pbase));
+  if (ipc_column.has_nulls()) { CUDF_CUDA_TRY(cudaIpcCloseMemHandle(mask_pbase)); }
+
   return c;
 }
 }  // namespace
@@ -491,13 +507,9 @@ std::pair<std::unique_ptr<table>, std::vector<std::string>> import_ipc(
   size_t n_columns = 0;
   std::vector<std::unique_ptr<column>> columns;
   while (ptr != ipc_handles->data() + ipc_handles->size()) {
-    ipc::IpcDevicePtr dptr;
-    ptr = ipc::IpcDevicePtr::from_buffer(ptr, &dptr);
-    uint8_t* pbase;
-    CUDF_CUDA_TRY(
-      cudaIpcOpenMemHandle((void**)&pbase, dptr.handle, cudaIpcMemLazyEnablePeerAccess));
-    auto c = from_arrow_ipc(*p_schema->field(n_columns), dptr, pbase);
-    CUDF_CUDA_TRY(cudaIpcCloseMemHandle(pbase));
+    ipc::IpcColumn ipc_column;
+    ptr    = ipc::IpcColumn::from_buffer(ptr, &ipc_column);
+    auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
     columns.push_back(std::move(c));
     std::cout << "n_columns:" << n_columns << std::endl;
     ++n_columns;
