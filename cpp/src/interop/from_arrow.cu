@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <arrow/gpu/cuda_arrow_ipc.h>
-#include <arrow/gpu/cuda_context.h>
 #include <arrow/io/memory.h>   // arrow::io::BufferReader
 #include <arrow/ipc/reader.h>  // arrow::ipc::ReadSchema
 
@@ -449,7 +447,6 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 
   return std::make_unique<table>(std::move(columns));
 }
-
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,

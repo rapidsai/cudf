@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <arrow/gpu/cuda_arrow_ipc.h>
-#include <arrow/gpu/cuda_context.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
