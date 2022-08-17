@@ -92,6 +92,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return orc::CompressionKind::SNAPPY;
     case compression_type::ZLIB: return orc::CompressionKind::ZLIB;
+    case compression_type::ZSTD: return orc::CompressionKind::ZSTD;
     case compression_type::NONE: return orc::CompressionKind::NONE;
     default: CUDF_FAIL("Unsupported compression type"); return orc::CompressionKind::NONE;
   }
@@ -2010,6 +2011,7 @@ auto to_nvcomp_compression_type(CompressionKind compression_kind)
 {
   if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
+  if (compression_kind == ZSTD) return nvcomp::compression_type::ZSTD;
   CUDF_FAIL("Unsupported compression type");
 }
 

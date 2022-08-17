@@ -1345,6 +1345,9 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   } else if (compression == ZLIB and detail::nvcomp_integration::is_all_enabled()) {
     nvcomp::batched_compress(
       nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_stat, comp_blk_size, stream);
+  } else if (compression == ZSTD and detail::nvcomp_integration::is_all_enabled()) {
+    nvcomp::batched_compress(
+      nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_stat, comp_blk_size, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
   }
