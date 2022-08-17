@@ -4219,11 +4219,9 @@ TEST_F(ParquetReaderTest, StructByteArray)
 TEST_P(ParquetSizedTest, DictionaryTest)
 {
   constexpr int nrows = 3'000'000;
-  char buf[64];
 
-  auto elements       = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf, "a unique string value suffixed with %d", i % GetParam());
-    return std::string(buf);
+  auto elements       = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    return "a unique string value suffixed with " + std::to_string(i % GetParam());
   });
   auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
