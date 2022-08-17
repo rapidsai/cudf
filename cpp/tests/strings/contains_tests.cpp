@@ -460,6 +460,30 @@ TEST_F(StringsContainsTests, OverlappedClasses)
   }
 }
 
+TEST_F(StringsContainsTests, IncompleteClassesRange)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc-def", "---", "", "ghijkl", "-wxyz-"});
+  auto sv    = cudf::strings_column_view(input);
+
+  {
+    auto results = cudf::strings::contains_re(sv, "[a-z]");
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 0, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 0, 1, 1});
+    auto results = cudf::strings::contains_re(sv, "[g-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[-k]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 0, 0, 1});
+    auto results = cudf::strings::contains_re(sv, "[-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(StringsContainsTests, MultiLine)
 {
   auto input =
