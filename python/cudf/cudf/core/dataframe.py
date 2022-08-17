@@ -2929,13 +2929,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4	d	i	n
         5	e	j	o
 
-        >>> cdf1.truncate(before=2, after=4)
+        >>> df.truncate(before=2, after=4)
             A	B	C
         2	b	g	l
         3	c	h	m
         4	d	i	n
 
-        >>> cdf1.truncate(before="A", after="B", axis="columns")
+        >>> df.truncate(before="A", after="B", axis="columns")
             A	B
         1	a	f
         2	b	g
@@ -2945,8 +2945,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         >>> import cudf
         >>> dates = cudf.date_range('2021-01-01', '2021-01-02', freq='s')
-        >>> cdf2 = cudf.DataFrame(data={'A': 1, 'B': 2}, index=dates)
-        >>> cdf2.head()
+        >>> df2 = cudf.DataFrame(data={'A': 1, 'B': 2}, index=dates)
+        >>> df2.head()
                             A	B
         2021-01-01 00:00:00	1	2
         2021-01-01 00:00:01	1	2
@@ -2954,7 +2954,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2021-01-01 00:00:03	1	2
         2021-01-01 00:00:04	1	2
 
-        >>> cdf2.truncate(
+        >>> df2.truncate(
         ... before="2021-01-01 23:45:18", after="2021-01-01 23:45:27")
                             A	B
         2021-01-01 23:45:18	1	2
