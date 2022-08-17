@@ -42,7 +42,7 @@ class imported_ptr;
 /**
  * @brief Represents meta data of a column imported from IPC memory handle.
  *
- * This IIRR class holds the imported pointer from IPC handle and will close it upon
+ * This RAII class holds the imported pointer from IPC handle and will close it upon
  * destruction, hence the life time of imported column is tied to this class.
  */
 class imported_column {
