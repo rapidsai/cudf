@@ -686,6 +686,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If the index being truncated contains only datetime values,
         `before` and `after` may be specified as strings instead of
         Timestamps.
+
         Examples
         --------
         >>> import cudf
