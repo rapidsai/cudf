@@ -355,7 +355,7 @@ class regex_parser {
       }
       if (!is_quoted && chr == ']' && count_char > 1) { break; }  // done
 
-      // A dash '-' here signifies a range of characters in a '[]' class definition.
+      // A hyphen '-' here signifies a range of characters in a '[]' class definition.
       // The logic here also gracefully handles a dangling '-' appearing unquoted
       // at the beginning '[-x]' or at the end '[x-]' or by itself '[-]'
       // and treats the '-' as a literal value in this cclass in this case.
