@@ -34,12 +34,10 @@ def _get_frame_row_type(dtype):
     Models each column and its mask as a MaskedType and
     models the row as a dictionary like data structure
     containing these MaskedTypes.
-
     Large parts of this function are copied with comments
     from the Numba internals and slightly modified to
     account for validity bools to be present in the final
     struct.
-
     See numba.np.numpy_support.from_struct_dtype for details.
     """
 
@@ -48,7 +46,7 @@ def _get_frame_row_type(dtype):
     fields = []
     offset = 0
 
-    sizes = []
+    sizes = [itemsizes.get(val[0]) or val[0].itemsize for val in dtype.fields.values()]
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.
@@ -66,7 +64,6 @@ def _get_frame_row_type(dtype):
 
         # increment offset by itemsize plus one byte for validity
         itemsize = itemsizes.get(elemdtype) or elemdtype.itemsize
-        sizes.append(itemsize)
         offset += itemsize + 1
 
         # Align the next member of the struct to be a multiple of the
@@ -74,7 +71,7 @@ def _get_frame_row_type(dtype):
         if i < len(sizes) - 1:
             next_itemsize = sizes[i + 1]
             offset = int(math.ceil(offset / next_itemsize) * next_itemsize)
-
+            
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
     return Record(fields, offset, _is_aligned_struct)
