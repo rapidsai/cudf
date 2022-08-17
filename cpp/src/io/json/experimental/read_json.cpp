@@ -50,7 +50,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   auto const dtypes_empty =
     std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
   CUDF_EXPECTS(dtypes_empty, "user specified dtypes are not yet supported");
-  CUDF_EXPECTS(not reader_opts.is_enabled_lines(), "JSON Lines format is not yet supported");
   CUDF_EXPECTS(reader_opts.get_byte_range_offset() == 0 and reader_opts.get_byte_range_size() == 0,
                "specifying a byte range is not yet supported");
 
