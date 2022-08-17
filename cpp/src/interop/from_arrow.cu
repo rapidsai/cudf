@@ -39,6 +39,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include "./ipc.hpp"
 #include <thrust/gather.h>
 
 namespace cudf {
@@ -459,31 +460,28 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
-std::pair<std::shared_ptr<arrow::cuda::CudaBuffer>, column_view> from_arrow_ipc(
-  std::shared_ptr<arrow::cuda::CudaContext> ctx,
-  arrow::Field const& field,
-  arrow::cuda::CudaIpcMemHandle const& handle)
+std::unique_ptr<column> from_arrow_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
+                                       arrow::Field const& field,
+                                       ipc::IpcDevicePtr dptr,
+                                       uint8_t const* pbase)
 {
-  auto cubuf      = ctx->OpenIpcBuffer(handle).ValueOrElse([]() {
-    CUDF_FAIL("Failed to load buffer.");
-    return std::shared_ptr<arrow::cuda::CudaBuffer>{nullptr};
-  });
+  auto ptr        = pbase + dptr.offset;
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
-
-  size_type size = cubuf->size() / size_of(dtype);
-  auto column    = column_view{dtype, size, cubuf->data()};  // fixme: nullmask
-  return std::make_pair(cubuf, column);
+  size_type size = dptr.size / size_of(dtype);
+  auto c         = std::make_unique<column>(column_view{dtype, size, ptr});  // fixme: nullmask
+  return c;
 }
 }  // namespace
 
-std::pair<table_view, std::unique_ptr<std::vector<std::shared_ptr<arrow::cuda::CudaBuffer>>>>
-import_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx, std::vector<char> const& ipc_handles)
+std::pair<std::unique_ptr<table>, std::vector<std::string>> import_ipc(
+  std::shared_ptr<arrow::cuda::CudaContext> ctx, std::shared_ptr<arrow::Buffer> ipc_handles)
 {
   int64_t size{0};
-  auto ptr = ipc_handles.data();
+  auto ptr = ipc_handles->data();
   std::memcpy(&size, ptr, sizeof(size));
   ptr += sizeof(size);
+  std::cout << __func__ << ":size:" << size << std::endl;
   arrow::io::BufferReader stream(reinterpret_cast<uint8_t const*>(ptr), size);
   auto p_schema = arrow::ipc::ReadSchema(&stream, nullptr).ValueOrElse([]() {
     CUDF_FAIL("Failed to read schema from IPC message");
@@ -492,22 +490,20 @@ import_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx, std::vector<char> cons
   ptr += size;
 
   size_t n_columns = 0;
-  std::vector<column_view> columns;
-  std::unique_ptr<std::vector<std::shared_ptr<arrow::cuda::CudaBuffer>>> buffers;
-  while (ptr != ipc_handles.data() + ipc_handles.size()) {
-    int64_t size{0};
-    std::memcpy(&size, ptr, sizeof(int64_t));
-    auto handle   = arrow::cuda::CudaIpcMemHandle::FromBuffer(ptr).ValueOrElse([]() {
-      CUDF_FAIL("Failed to read IPC handle.");
-      return std::shared_ptr<arrow::cuda::CudaIpcMemHandle>{nullptr};
-    });
-    auto const& c = from_arrow_ipc(ctx, *p_schema->field(n_columns), *handle);
-    columns.push_back(c.second);
-    buffers->push_back(c.first);
+  std::vector<std::unique_ptr<column>> columns;
+  while (ptr != ipc_handles->data() + ipc_handles->size()) {
+    ipc::IpcDevicePtr dptr;
+    ptr = ipc::IpcDevicePtr::from_buffer(ptr, &dptr);
+    uint8_t* pbase;
+    CUDF_CUDA_TRY(
+      cudaIpcOpenMemHandle((void**)&pbase, dptr.handle, cudaIpcMemLazyEnablePeerAccess));
+    auto c = from_arrow_ipc(ctx, *p_schema->field(n_columns), dptr, pbase);
+    CUDF_CUDA_TRY(cudaIpcCloseMemHandle(pbase));
+    columns.push_back(std::move(c));
+    std::cout << "n_columns:" << n_columns << std::endl;
     ++n_columns;
   }
-  auto table = table_view{columns};
-  // must return buffers otherwise CudaBuffer closes the IPC handle.
-  return std::make_pair(table, std::move(buffers));
+  auto t = std::make_unique<table>(std::move(columns));
+  return std::make_pair(std::move(t), p_schema->field_names());
 }
 }  // namespace cudf

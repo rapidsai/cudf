@@ -4993,6 +4993,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return ipc.export_ipc(ctx, columns, names)
 
+    @classmethod
+    def import_ipc(self, ctx, message):
+        from cudf._lib import ipc
+        columns = ipc.import_ipc(ctx, message)
+        return columns
+
     @_cudf_nvtx_annotate
     def to_records(self, index=True):
         """Convert to a numpy recarray

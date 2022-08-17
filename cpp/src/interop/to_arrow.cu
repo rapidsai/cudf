@@ -45,6 +45,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include "detail/arrow_allocator.hpp"
+#include "ipc.hpp"
 
 namespace cudf {
 namespace detail {
@@ -432,21 +433,18 @@ struct dispatch_to_arrow_buffer {
   std::shared_ptr<arrow::cuda::CudaContext> ctx_;
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  arrow::Result<std::shared_ptr<arrow::cuda::CudaIpcMemHandle>> operator()(column_view)
+  arrow::Result<ipc::IpcDevicePtr> operator()(column_view)
   {
     return arrow::Status::Invalid("Unsupported type for to_arrow.");
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  arrow::Result<std::shared_ptr<arrow::cuda::CudaIpcMemHandle>> operator()(column_view input_view)
+  arrow::Result<ipc::IpcDevicePtr> operator()(column_view input_view)
   {
     const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
-    // there's no ConstCudaBuffer. We only need it for exporting IPC handle, const cast
-    auto ptr = const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(input_view.data<T>()));
-    auto cubuf =
-      std::make_shared<arrow::cuda::CudaBuffer>(ptr, data_size_in_bytes, ctx_, false, false);
-    auto handle = cubuf->ExportForIpc();
-    return handle;
+    auto ptr                         = reinterpret_cast<uint8_t const*>(input_view.data<T>());
+    auto dptr                        = ipc::get_ipc_ptr(ptr, data_size_in_bytes);
+    return dptr;
   }
 };
 
@@ -478,24 +476,24 @@ std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
   };
 }
 
-std::shared_ptr<arrow::cuda::CudaIpcMemHandle> to_arrow_ipc_handle(
-  column_view column,
-  column_metadata const& meta_data,
-  std::shared_ptr<arrow::cuda::CudaContext> ctx)
+ipc::IpcDevicePtr to_arrow_ipc_handle(column_view column,
+                                      column_metadata const& meta_data,
+                                      std::shared_ptr<arrow::cuda::CudaContext> ctx)
 {
   if (column.type().id() != type_id::EMPTY) {
-    auto handle = type_dispatcher(column.type(), dispatch_to_arrow_buffer{ctx}, column).ValueOrElse([]() {
-      CUDF_FAIL("Failed to obtain IPC handle.");
-      return std::shared_ptr<arrow::cuda::CudaIpcMemHandle>{nullptr};
-    });
+    auto handle =
+      type_dispatcher(column.type(), dispatch_to_arrow_buffer{ctx}, column).ValueOrElse([]() {
+        CUDF_FAIL("Failed to obtain IPC handle.");
+        return ipc::IpcDevicePtr{};
+      });
     return handle;
   } else {
     CUDF_FAIL("Empty column.");
-    return nullptr;
+    return {};
   }
 
   CUDF_FAIL("unreachable");
-  return nullptr;
+  return {};
 }
 }  // namespace
 
@@ -518,33 +516,23 @@ std::shared_ptr<arrow::Buffer> export_ipc(std::shared_ptr<arrow::cuda::CudaConte
     return std::shared_ptr<arrow::Buffer>{nullptr};
   });
   int64_t size                          = p_schema_buf->size();
+  std::cout << __func__ << ":size:" << size << std::endl;
   std::string bytes;
   bytes.resize(size + sizeof(int64_t));
   {
     auto ptr = bytes.data();
     std::memcpy(ptr, &size, sizeof(size));
     ptr += sizeof(size);
-    std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), bytes.begin());
+    std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), ptr);
   }
 
   CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
   for (size_t i = 0; i < metadata.size(); ++i) {
     auto p_handle     = to_arrow_ipc_handle(input.column(i), metadata.at(i), ctx);
-    auto p_handle_buf = p_handle->Serialize().ValueOrElse([]() {
-      CUDF_FAIL("Failed to serialize IPC handle.");
-      return std::shared_ptr<arrow::Buffer>{};
-    });
-
     // serialize to message
+    p_handle.serialize(&bytes);
     auto size        = bytes.size();
-    int64_t buf_size = p_handle_buf->size();
-    bytes.resize(size + sizeof(buf_size) + buf_size);
-
-    auto ptr = bytes.data() + size;
-    std::memcpy(ptr, &buf_size, sizeof(buf_size));
-
-    ptr += sizeof(buf_size);
-    std::copy(p_handle_buf->data(), p_handle_buf->data() + buf_size, ptr);
+    std::cout << "sizeoffset:" << size << std::endl;
   }
   // an owning buffer
   auto p_buf = arrow::Buffer::FromString(bytes);
