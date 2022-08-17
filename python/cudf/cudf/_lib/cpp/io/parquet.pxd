@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -16,7 +16,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_reader_options:
         parquet_reader_options() except +
         cudf_io_types.source_info get_source_info() except +
-        vector[string] get_columns() except +
         vector[vector[size_type]] get_row_groups() except +
         data_type get_timestamp_type() except +
         bool is_enabled_convert_strings_to_categories() except +
@@ -192,10 +191,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         chunked_parquet_writer_options_builder& compression(
             cudf_io_types.compression_type compression
         ) except +
-        parquet_writer_options_builder& row_group_size_bytes(
+        chunked_parquet_writer_options_builder& row_group_size_bytes(
             size_t val
         ) except+
-        parquet_writer_options_builder& row_group_size_rows(
+        chunked_parquet_writer_options_builder& row_group_size_rows(
             size_type val
         ) except+
 

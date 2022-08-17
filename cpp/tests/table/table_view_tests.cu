@@ -24,6 +24,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -42,7 +43,7 @@ void row_comparison(cudf::table_view input1,
                     cudf::mutable_column_view output,
                     std::vector<cudf::order> const& column_order)
 {
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
 
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);

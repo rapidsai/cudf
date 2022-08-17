@@ -1,2 +1,0 @@
-include python/versioneer.py
-include python/cudf/_version.py

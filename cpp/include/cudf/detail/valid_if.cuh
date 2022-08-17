@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -89,7 +90,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator begin,
   InputIterator end,
   Predicate p,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");

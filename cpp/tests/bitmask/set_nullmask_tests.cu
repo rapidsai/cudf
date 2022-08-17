@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -49,7 +50,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr
                             cudf::size_type start_bit,
                             thrust::host_vector<bool> const& expect,
-                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                            rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     rmm::device_uvector<bool> result(expect.size(), stream);
     auto counting_iter = thrust::counting_iterator<cudf::size_type>{0};

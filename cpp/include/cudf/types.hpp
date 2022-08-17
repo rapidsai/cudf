@@ -36,10 +36,6 @@
 /// @cond
 namespace rmm {
 class device_buffer;
-namespace mr {
-class device_memory_resource;
-device_memory_resource* get_current_device_resource();
-}  // namespace mr
 /// @endcond
 
 }  // namespace rmm

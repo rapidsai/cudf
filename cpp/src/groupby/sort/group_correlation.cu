@@ -133,7 +133,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
       .type();
   };
   bool const is_convertible =
-    type_dispatcher(get_base_type(values_0), is_double_convertible_impl{}) or
+    type_dispatcher(get_base_type(values_0), is_double_convertible_impl{}) and
     type_dispatcher(get_base_type(values_1), is_double_convertible_impl{});
 
   CUDF_EXPECTS(is_convertible,
@@ -185,8 +185,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           rmm::mr::device_memory_resource* mr)
 {
   using result_type = id_to_type<type_id::FLOAT64>;
-  CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64,
-               "Covariance result as FLOAT64 is supported");
+  CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64, "Covariance result must be FLOAT64");
   auto stddev0_ptr = stddev_0.begin<result_type>();
   auto stddev1_ptr = stddev_1.begin<result_type>();
   auto stddev_iter = thrust::make_zip_iterator(thrust::make_tuple(stddev0_ptr, stddev1_ptr));

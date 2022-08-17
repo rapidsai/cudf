@@ -23,6 +23,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
 
@@ -43,7 +44,7 @@ static void BM_split(benchmark::State& state, split_type rt)
   cudf::string_scalar target("+");
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (rt) {
       case split: cudf::strings::split(input, target); break;
       case split_ws: cudf::strings::split(input); break;

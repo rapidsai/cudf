@@ -25,6 +25,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -269,7 +270,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, rmm::cuda_stream_default, mr);
+    strings_columns, separator, narep, separate_nulls, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -285,7 +286,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              separator_narep,
                              col_narep,
                              separate_nulls,
-                             rmm::cuda_stream_default,
+                             cudf::default_stream_value,
                              mr);
 }
 

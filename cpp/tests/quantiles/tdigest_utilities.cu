@@ -18,6 +18,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -53,7 +54,7 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   rmm::device_vector<expected_value> expected(h_expected.begin(), h_expected.end());
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
-    rmm::exec_policy(rmm::cuda_stream_default),
+    rmm::exec_policy(cudf::default_stream_value),
     iter,
     iter + expected.size(),
     [expected            = expected.data().get(),
@@ -100,13 +101,13 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
 
     auto min_col =
       cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
                  min_col->mutable_view().begin<double>(),
                  min_col->mutable_view().end<double>(),
                  tdigest.min);
     auto max_col =
       cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
                  max_col->mutable_view().begin<double>(),
                  max_col->mutable_view().end<double>(),
                  tdigest.max);

@@ -71,6 +71,7 @@ from cudf.core.dtypes import (
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils.dtypes import (
+    _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     get_time_unit,
     min_unsigned_type,
@@ -287,8 +288,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(array.type, pa.StructType):
-            return cudf.core.column.StructColumn.from_arrow(array)
         elif isinstance(
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
@@ -423,15 +422,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             # This assertion prevents mypy errors below.
             assert self.base_data is not None
-            new_buf_ptr = (
-                self.base_data.ptr + self.offset * self.dtype.itemsize
-            )
-            new_buf_size = self.size * self.dtype.itemsize
-            view_buf = Buffer(
-                data=new_buf_ptr,
-                size=new_buf_size,
-                owner=self.base_data._owner,
-            )
+
+            # If the view spans all of `base_data`, we return `base_data`.
+            if (
+                self.offset == 0
+                and self.base_data.size == self.size * self.dtype.itemsize
+            ):
+                view_buf = self.base_data
+            else:
+                view_buf = Buffer.from_buffer(
+                    buffer=self.base_data,
+                    size=self.size * self.dtype.itemsize,
+                    offset=self.offset * self.dtype.itemsize,
+                )
             return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index: int):
@@ -899,7 +902,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         sr = cudf.Series(self)
 
         # Re-label self w.r.t. the provided categories
-        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+        if (
+            isinstance(dtype, cudf.CategoricalDtype)
+            and dtype._categories is not None
+        ) or (
+            isinstance(dtype, pd.CategoricalDtype)
+            and dtype.categories is not None
+        ):
             labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
@@ -908,7 +917,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
 
             return build_categorical_column(
-                categories=dtype.categories,
+                categories=as_column(dtype.categories),
                 codes=labels._column,
                 mask=self.mask,
                 ordered=dtype.ordered,
@@ -1861,8 +1870,17 @@ def as_column(
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
 
+        delayed_cast = False
         if dtype is not None:
-            arbitrary = arbitrary.astype(np.dtype(dtype))
+            try:
+                dtype = np.dtype(dtype)
+            except TypeError:
+                # Some `dtype`'s can't be parsed by `np.dtype`
+                # for which we will have to cast after the column
+                # has been constructed.
+                delayed_cast = True
+            else:
+                arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
 
@@ -1936,6 +1954,9 @@ def as_column(
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
+        if delayed_cast:
+            data = data.astype(cudf.dtype(dtype))
+
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
             arb_dtype = arbitrary.dtype
@@ -1979,15 +2000,7 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
-        cudf_dtype = arbitrary._data.dtype
-
-        data = Buffer(arbitrary._data.view("|u1"))
-        data = build_column(data, dtype=cudf_dtype)
-
-        mask = arbitrary._mask
-        mask = bools_to_mask(as_column(mask).unary_operator("not"))
-
-        data = data.set_mask(mask)
+        data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
     else:
         try:
             data = as_column(
@@ -2082,6 +2095,27 @@ def as_column(
                         dtype = "bool"
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
+                else:
+                    # By default cudf constructs a 64-bit column. Setting
+                    # the `default_*_bitwidth` to 32 will result in a 32-bit
+                    # column being created.
+                    if (
+                        cudf.get_option("default_integer_bitwidth")
+                        and infer_dtype(arbitrary) == "integer"
+                    ):
+                        pa_type = np_to_pa_dtype(
+                            _maybe_convert_to_default_type("int")
+                        )
+                    if cudf.get_option(
+                        "default_float_bitwidth"
+                    ) and infer_dtype(arbitrary) in (
+                        "floating",
+                        "mixed-integer-float",
+                    ):
+                        pa_type = np_to_pa_dtype(
+                            _maybe_convert_to_default_type("float")
+                        )
+
                 data = as_column(
                     pa.array(
                         arbitrary,

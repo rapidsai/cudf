@@ -35,8 +35,7 @@ def rolling(Column source_column,
     min_periods : Minimum number of observations in window required to have
                   a value (otherwise result is null)
     center : Set the labels at the center of the window
-    op : operation to be executed, as of now it supports MIN, MAX, COUNT, SUM,
-         MEAN and UDF
+    op : operation to be executed
     agg_params : dict, parameter for the aggregation (e.g. ddof for VAR/STD)
 
     Returns

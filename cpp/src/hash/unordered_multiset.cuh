@@ -131,7 +131,7 @@ class unordered_multiset {
     return unordered_multiset(d_col.size(), std::move(hash_bins_start), std::move(hash_data));
   }
 
-  unordered_multiset_device_view<Element, Hasher, Equality> to_device()
+  unordered_multiset_device_view<Element, Hasher, Equality> to_device() const
   {
     return unordered_multiset_device_view<Element, Hasher, Equality>(
       size, hash_bins.data(), hash_data.data());

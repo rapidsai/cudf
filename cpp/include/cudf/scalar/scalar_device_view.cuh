@@ -36,6 +36,7 @@ class scalar_device_view_base {
 
   /**
    * @brief Returns the value type
+   *
    * @returns The value type
    */
   [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }

@@ -19,12 +19,15 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <numeric>
 #include <stack>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace cudf {
@@ -49,12 +52,12 @@ enum OperatorType {
 };
 #define ITEM_MASK 0300
 
-static reclass ccls_w(CCLASS_W);   // \w
-static reclass ccls_s(CCLASS_S);   // \s
-static reclass ccls_d(CCLASS_D);   // \d
-static reclass ccls_W(NCCLASS_W);  // \W
-static reclass ccls_S(NCCLASS_S);  // \S
-static reclass ccls_D(NCCLASS_D);  // \D
+static reclass cclass_w(CCLASS_W);   // \w
+static reclass cclass_s(CCLASS_S);   // \s
+static reclass cclass_d(CCLASS_D);   // \d
+static reclass cclass_W(NCCLASS_W);  // \W
+static reclass cclass_S(NCCLASS_S);  // \S
+static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
 const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
@@ -106,16 +109,16 @@ int32_t reprog::add_inst(int32_t t)
   return add_inst(inst);
 }
 
-int32_t reprog::add_inst(reinst inst)
+int32_t reprog::add_inst(reinst const& inst)
 {
   _insts.push_back(inst);
-  return static_cast<int>(_insts.size() - 1);
+  return static_cast<int32_t>(_insts.size() - 1);
 }
 
-int32_t reprog::add_class(reclass cls)
+int32_t reprog::add_class(reclass const& cls)
 {
   _classes.push_back(cls);
-  return static_cast<int>(_classes.size() - 1);
+  return static_cast<int32_t>(_classes.size() - 1);
 }
 
 reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
@@ -134,9 +137,11 @@ void reprog::set_groups_count(int32_t groups) { _num_capturing_groups = groups; 
 
 int32_t reprog::groups_count() const { return _num_capturing_groups; }
 
-const reinst* reprog::insts_data() const { return _insts.data(); }
+reinst const* reprog::insts_data() const { return _insts.data(); }
 
-const int32_t* reprog::starts_data() const { return _startinst_ids.data(); }
+reclass const* reprog::classes_data() const { return _classes.data(); }
+
+int32_t const* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
@@ -144,322 +149,353 @@ int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.si
  * @brief Converts pattern into regex classes
  */
 class regex_parser {
-  reprog& m_prog;
-  const char32_t* pattern;
-  const char32_t* exprp;
-  bool lexdone;
+ public:
+  /**
+   * @brief Single parsed pattern element.
+   */
+  struct Item {
+    int32_t type;
+    union {
+      char32_t chr;
+      int32_t cclass_id;
+      struct {
+        int16_t n;
+        int16_t m;
+      } count;
+    } d;
+    Item(int32_t type, char32_t chr) : type{type}, d{chr} {}
+    Item(int32_t type, int32_t id) : type{type}, d{.cclass_id{id}} {}
+    Item(int32_t type, int16_t n, int16_t m) : type{type}, d{.count{n, m}} {}
+  };
 
-  int id_ccls_w = -1;  // alphanumeric
-  int id_ccls_W = -1;  // not alphanumeric
-  int id_ccls_s = -1;  // space
-  int id_ccls_d = -1;  // digit
-  int id_ccls_D = -1;  // not digit
+ private:
+  reprog& _prog;
+  char32_t const* const _pattern_begin;
+  char32_t const* _expr_ptr;
+  bool _lex_done{false};
 
-  char32_t yy{};    /* last lex'd Char */
-  int yyclass_id{}; /* last lex'd class */
-  int16_t yy_min_count{};
-  int16_t yy_max_count{};
+  int32_t _id_cclass_w{-1};  // alphanumeric [a-zA-Z0-9_]
+  int32_t _id_cclass_W{-1};  // not alphanumeric plus '\n'
+  int32_t _id_cclass_s{-1};  // whitespace including '\t', '\n', '\r'
+  int32_t _id_cclass_d{-1};  // digits [0-9]
+  int32_t _id_cclass_D{-1};  // not digits
 
-  bool nextc(char32_t& c)  // return "quoted" == backslash-escape prefix
+  char32_t _chr{};       // last lex'd char
+  int32_t _cclass_id{};  // last lex'd class
+  int16_t _min_count{};  // data for counted operators
+  int16_t _max_count{};
+
+  std::vector<Item> _items;
+  bool _has_counted{false};
+
+  /**
+   * @brief Parses octal characters at the current expression position
+   * to return the represented character
+   *
+   * Reads up to 3 octal digits. The first digit should be passed
+   * in `in_chr`.
+   *
+   * @param in_chr The first character of the octal pattern
+   * @return The resulting character
+   */
+  char32_t handle_octal(char32_t in_chr)
   {
-    if (lexdone) {
-      c = 0;
-      return true;
+    auto out_chr = in_chr - '0';
+    auto c       = *_expr_ptr;
+    auto digits  = 1;
+    while ((c >= '0') && (c <= '7') && (digits < 3)) {
+      out_chr = (out_chr * 8) | (c - '0');
+      c       = *(++_expr_ptr);
+      ++digits;
     }
-    c = *exprp++;
-    if (c == '\\') {
-      c = *exprp++;
-      return true;
-    }
-    if (c == 0) lexdone = true;
-    return false;
+    return out_chr;
   }
 
-  int bldcclass()
+  /**
+   * @brief Parses 2 hex characters at the current expression position
+   * to return the represented character
+   *
+   * @return The resulting character
+   */
+  char32_t handle_hex()
   {
-    int type = CCLASS;
-    std::vector<char32_t> cls;
-    int builtins = 0;
+    std::string hex(1, static_cast<char>(*_expr_ptr++));
+    hex.append(1, static_cast<char>(*_expr_ptr++));
+    return static_cast<char32_t>(std::stol(hex, nullptr, 16));  // 16 = hex
+  }
 
-    /* look ahead for negation */
-    /* SPECIAL CASE!!! negated classes don't match \n */
-    char32_t c = 0;
-    int quoted = nextc(c);
-    if (!quoted && c == '^') {
-      type   = NCCLASS;
-      quoted = nextc(c);
-      cls.push_back('\n');
-      cls.push_back('\n');
+  /**
+   * @brief Returns the next character in the expression
+   *
+   * Handles quoted (escaped) special characters and detecting the end of the expression.
+   *
+   * @return is-backslash-escape and character
+   */
+  std::pair<bool, char32_t> next_char()
+  {
+    if (_lex_done) { return {true, 0}; }
+
+    auto c = *_expr_ptr++;
+    if (c == '\\') {
+      c = *_expr_ptr++;
+      return {true, c};
     }
 
-    /* parse class into a set of spans */
-    int count_char = 0;
+    if (c == 0) { _lex_done = true; }
+
+    return {false, c};
+  }
+
+  int32_t build_cclass()
+  {
+    int32_t type = CCLASS;
+    std::vector<char32_t> literals;
+    int32_t builtins = 0;
+
+    auto [is_quoted, chr] = next_char();
+    // check for negation
+    if (!is_quoted && chr == '^') {
+      type                     = NCCLASS;
+      std::tie(is_quoted, chr) = next_char();
+      // negated classes also don't match '\n'
+      literals.push_back('\n');
+      literals.push_back('\n');
+    }
+
+    // parse class into a set of spans
+    auto count_char = 0;
     while (true) {
       count_char++;
-      if (c == 0) {
-        // malformed '[]'
-        return 0;
-      }
-      if (quoted) {
-        switch (c) {
-          case 'n': c = '\n'; break;
-          case 'r': c = '\r'; break;
-          case 't': c = '\t'; break;
-          case 'a': c = 0x07; break;
-          case 'b': c = 0x08; break;
-          case 'f': c = 0x0C; break;
+      if (chr == 0) { return 0; }  // malformed '[]'
+      if (is_quoted) {
+        switch (chr) {
+          case 'n': chr = '\n'; break;
+          case 'r': chr = '\r'; break;
+          case 't': chr = '\t'; break;
+          case 'a': chr = 0x07; break;
+          case 'b': chr = 0x08; break;
+          case 'f': chr = 0x0C; break;
+          case '0' ... '7': {
+            chr = handle_octal(chr);
+            break;
+          }
+          case 'x': {
+            chr = handle_hex();
+            break;
+          }
           case 'w':
-            builtins |= ccls_w.builtins;
-            quoted = nextc(c);
+            builtins |= cclass_w.builtins;
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 's':
-            builtins |= ccls_s.builtins;
-            quoted = nextc(c);
+            builtins |= cclass_s.builtins;
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'd':
-            builtins |= ccls_d.builtins;
-            quoted = nextc(c);
+            builtins |= cclass_d.builtins;
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'W':
-            builtins |= ccls_W.builtins;
-            quoted = nextc(c);
+            builtins |= cclass_W.builtins;
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'S':
-            builtins |= ccls_S.builtins;
-            quoted = nextc(c);
+            builtins |= cclass_S.builtins;
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'D':
-            builtins |= ccls_D.builtins;
-            quoted = nextc(c);
+            builtins |= cclass_D.builtins;
+            std::tie(is_quoted, chr) = next_char();
             continue;
         }
       }
-      if (!quoted && c == ']' && count_char > 1) break;
-      if (!quoted && c == '-') {
-        if (cls.size() < 1) {
-          // malformed '[]'
-          return 0;
-        }
-        quoted = nextc(c);
-        if ((!quoted && c == ']') || c == 0) {
-          // malformed '[]'
-          return 0;
-        }
-        cls[cls.size() - 1] = c;
+      if (!is_quoted && chr == ']' && count_char > 1) { break; }  // done
+      if (!is_quoted && chr == '-') {
+        if (literals.empty()) { return 0; }  // malformed '[]'
+        std::tie(is_quoted, chr) = next_char();
+        if ((!is_quoted && chr == ']') || chr == 0) { return 0; }  // malformed '[]'
+        literals.back() = chr;
       } else {
-        cls.push_back(c);
-        cls.push_back(c);
+        literals.push_back(chr);
+        literals.push_back(chr);
       }
-      quoted = nextc(c);
+      std::tie(is_quoted, chr) = next_char();
     }
 
-    /* sort on span start */
-    for (std::size_t p = 0; p < cls.size(); p += 2)
-      for (std::size_t np = p + 2; np < cls.size(); np += 2)
-        if (cls[np] < cls[p]) {
-          c           = cls[np];
-          cls[np]     = cls[p];
-          cls[p]      = c;
-          c           = cls[np + 1];
-          cls[np + 1] = cls[p + 1];
-          cls[p + 1]  = c;
-        }
-
-    /* merge spans */
-    reclass yycls{builtins};
-    if (cls.size() >= 2) {
-      int np        = 0;
-      std::size_t p = 0;
-      yycls.literals += cls[p++];
-      yycls.literals += cls[p++];
-      for (; p < cls.size(); p += 2) {
-        /* overlapping or adjacent ranges? */
-        if (cls[p] <= yycls.literals[np + 1] + 1) {
-          if (cls[p + 1] >= yycls.literals[np + 1])
-            yycls.literals.replace(np + 1, 1, 1, cls[p + 1]); /* coalesce */
-        } else {
-          np += 2;
-          yycls.literals += cls[p];
-          yycls.literals += cls[p + 1];
+    // transform pairs of literals to ranges
+    std::vector<reclass_range> ranges(literals.size() / 2);
+    auto const counter = thrust::make_counting_iterator(0);
+    std::transform(counter, counter + ranges.size(), ranges.begin(), [&literals](auto idx) {
+      return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
+    });
+    // sort the ranges to help with detecting overlapping entries
+    std::sort(ranges.begin(), ranges.end(), [](auto l, auto r) {
+      return l.first == r.first ? l.last < r.last : l.first < r.first;
+    });
+    // combine overlapping entries: [a-f][c-g] => [a-g]
+    if (ranges.size() > 1) {
+      for (auto itr = ranges.begin() + 1; itr < ranges.end(); ++itr) {
+        auto const prev = *(itr - 1);
+        if (itr->first <= prev.last + 1) {
+          // if these 2 ranges intersect, expand the current one
+          *itr = reclass_range{prev.first, std::max(prev.last, itr->last)};
         }
       }
     }
-    yyclass_id = m_prog.add_class(yycls);
+    // remove any duplicates
+    auto const end = std::unique(
+      ranges.rbegin(), ranges.rend(), [](auto l, auto r) { return l.first == r.first; });
+    ranges.erase(ranges.begin(), ranges.begin() + std::distance(end, ranges.rend()));
+
+    _cclass_id = _prog.add_class(reclass{builtins, std::move(ranges)});
     return type;
   }
 
-  int lex(int dot_type)
+  int32_t lex(int32_t dot_type)
   {
-    int quoted = nextc(yy);
-    if (quoted) {
-      // treating all quoted numbers as Octal, since we are not supporting backreferences
-      if (yy >= '0' && yy <= '7') {
-        yy          = yy - '0';
-        auto c      = *exprp;
-        auto digits = 1;
-        while (c >= '0' && c <= '7' && digits < 3) {
-          yy = (yy << 3) | (c - '0');
-          c  = *(++exprp);
-          ++digits;
+    _chr = 0;
+
+    auto [is_quoted, chr] = next_char();
+    if (is_quoted) {
+      switch (chr) {
+        case 't': chr = '\t'; break;
+        case 'n': chr = '\n'; break;
+        case 'r': chr = '\r'; break;
+        case 'a': chr = 0x07; break;
+        case 'f': chr = 0x0C; break;
+        case '0' ... '7': {
+          chr = handle_octal(chr);
+          break;
         }
-        return CHAR;
-      } else {
-        switch (yy) {
-          case 't': yy = '\t'; break;
-          case 'n': yy = '\n'; break;
-          case 'r': yy = '\r'; break;
-          case 'a': yy = 0x07; break;
-          case 'f': yy = 0x0C; break;
-          case '0': yy = 0; break;
-          case 'x': {
-            char32_t a = *exprp++;
-            char32_t b = *exprp++;
-            yy         = 0;
-            if (a >= '0' && a <= '9')
-              yy += (a - '0') << 4;
-            else if (a >= 'a' && a <= 'f')
-              yy += (a - 'a' + 10) << 4;
-            else if (a >= 'A' && a <= 'F')
-              yy += (a - 'A' + 10) << 4;
-            if (b >= '0' && b <= '9')
-              yy += b - '0';
-            else if (b >= 'a' && b <= 'f')
-              yy += b - 'a' + 10;
-            else if (b >= 'A' && b <= 'F')
-              yy += b - 'A' + 10;
+        case 'x': {
+          chr = handle_hex();
+          break;
+        }
+        case 'w': {
+          if (_id_cclass_w < 0) { _id_cclass_w = _prog.add_class(cclass_w); }
+          _cclass_id = _id_cclass_w;
+          return CCLASS;
+        }
+        case 'W': {
+          if (_id_cclass_W < 0) {
+            reclass cls = cclass_w;
+            cls.literals.push_back({'\n', '\n'});
+            _id_cclass_W = _prog.add_class(cls);
+          }
+          _cclass_id = _id_cclass_W;
+          return NCCLASS;
+        }
+        case 's': {
+          if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
+          _cclass_id = _id_cclass_s;
+          return CCLASS;
+        }
+        case 'S': {
+          if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
+          _cclass_id = _id_cclass_s;
+          return NCCLASS;
+        }
+        case 'd': {
+          if (_id_cclass_d < 0) { _id_cclass_d = _prog.add_class(cclass_d); }
+          _cclass_id = _id_cclass_d;
+          return CCLASS;
+        }
+        case 'D': {
+          if (_id_cclass_D < 0) {
+            reclass cls = cclass_d;
+            cls.literals.push_back({'\n', '\n'});
+            _id_cclass_D = _prog.add_class(cls);
+          }
+          _cclass_id = _id_cclass_D;
+          return NCCLASS;
+        }
+        case 'b': return BOW;
+        case 'B': return NBOW;
+        case 'A': return BOL;
+        case 'Z': return EOL;
+        default: {
+          // let valid escapable chars fall through as literal CHAR
+          if (chr &&
+              (std::find(escapable_chars.begin(), escapable_chars.end(), static_cast<char>(chr)) !=
+               escapable_chars.end())) {
             break;
           }
-          case 'w': {
-            if (id_ccls_w < 0) {
-              yyclass_id = m_prog.add_class(ccls_w);
-              id_ccls_w  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_w;
-            return CCLASS;
-          }
-          case 'W': {
-            if (id_ccls_W < 0) {
-              reclass cls = ccls_w;
-              cls.literals += '\n';
-              cls.literals += '\n';
-              yyclass_id = m_prog.add_class(cls);
-              id_ccls_W  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_W;
-            return NCCLASS;
-          }
-          case 's': {
-            if (id_ccls_s < 0) {
-              yyclass_id = m_prog.add_class(ccls_s);
-              id_ccls_s  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_s;
-            return CCLASS;
-          }
-          case 'S': {
-            if (id_ccls_s < 0) {
-              yyclass_id = m_prog.add_class(ccls_s);
-              id_ccls_s  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_s;
-            return NCCLASS;
-          }
-          case 'd': {
-            if (id_ccls_d < 0) {
-              yyclass_id = m_prog.add_class(ccls_d);
-              id_ccls_d  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_d;
-            return CCLASS;
-          }
-          case 'D': {
-            if (id_ccls_D < 0) {
-              reclass cls = ccls_d;
-              cls.literals += '\n';
-              cls.literals += '\n';
-              yyclass_id = m_prog.add_class(cls);
-              id_ccls_D  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_D;
-            return NCCLASS;
-          }
-          case 'b': return BOW;
-          case 'B': return NBOW;
-          case 'A': return BOL;
-          case 'Z': return EOL;
-          default: {
-            // let valid escapable chars fall through as literal CHAR
-            if (yy &&
-                (std::find(escapable_chars.begin(), escapable_chars.end(), static_cast<char>(yy)) !=
-                 escapable_chars.end()))
-              break;
-            // anything else is a bad escape so throw an error
-            CUDF_FAIL("invalid regex pattern: bad escape character at position " +
-                      std::to_string(exprp - pattern - 1));
-          }
-        }  // end-switch
-        return CHAR;
-      }
+          // anything else is a bad escape so throw an error
+          CUDF_FAIL("invalid regex pattern: bad escape character at position " +
+                    std::to_string(_expr_ptr - _pattern_begin - 1));
+        }
+      }  // end-switch
+      _chr = chr;
+      return CHAR;
     }
 
     // handle regex characters
-    switch (yy) {
+    switch (chr) {
       case 0: return END;
       case '(':
-        if (*exprp == '?' && *(exprp + 1) == ':')  // non-capturing group
+        if (*_expr_ptr == '?' && *(_expr_ptr + 1) == ':')  // non-capturing group
         {
-          exprp += 2;
+          _expr_ptr += 2;
           return LBRA_NC;
         }
         return LBRA;
       case ')': return RBRA;
-      case '^': return BOL;
-      case '$': return EOL;
-      case '[': return bldcclass();
+      case '^': {
+        _chr = chr;
+        return BOL;
+      }
+      case '$': {
+        _chr = chr;
+        return EOL;
+      }
+      case '[': return build_cclass();
       case '.': return dot_type;
     }
 
-    if (std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(yy)) ==
-        quantifiers.end())
+    if (std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(chr)) ==
+        quantifiers.end()) {
+      _chr = chr;
       return CHAR;
+    }
 
     // The quantifiers require at least one "real" previous item.
     // We are throwing an error in these two if-checks for invalid quantifiers.
     // Another option is to just return CHAR silently here which effectively
-    // treats the yy character as a literal instead as a quantifier.
+    // treats the chr character as a literal instead as a quantifier.
     // This could lead to confusion where sometimes unescaped quantifier characters
     // are treated as regex expressions and sometimes they are not.
-    if (m_items.empty()) CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
+    if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
 
     if (std::find(valid_preceding_inst_types.begin(),
                   valid_preceding_inst_types.end(),
-                  m_items.back().t) == valid_preceding_inst_types.end())
+                  _items.back().type) == valid_preceding_inst_types.end()) {
       CUDF_FAIL("invalid regex pattern: nothing to repeat at position " +
-                std::to_string(exprp - pattern - 1));
+                std::to_string(_expr_ptr - _pattern_begin - 1));
+    }
 
     // handle quantifiers
-    switch (yy) {
+    switch (chr) {
       case '*':
-        if (*exprp == '?') {
-          exprp++;
+        if (*_expr_ptr == '?') {
+          _expr_ptr++;
           return STAR_LAZY;
         }
         return STAR;
       case '?':
-        if (*exprp == '?') {
-          exprp++;
+        if (*_expr_ptr == '?') {
+          _expr_ptr++;
           return QUEST_LAZY;
         }
         return QUEST;
       case '+':
-        if (*exprp == '?') {
-          exprp++;
+        if (*_expr_ptr == '?') {
+          _expr_ptr++;
           return PLUS_LAZY;
         }
         return PLUS;
       case '{':  // counted repetition: {n,m}
       {
-        if (!std::isdigit(*exprp)) { break; }
+        if (!std::isdigit(*_expr_ptr)) { break; }
 
         // transform char32 to char until null, delimiter, non-digit or end is reached;
         // returns the number of chars read/transformed
@@ -484,39 +520,41 @@ class regex_parser {
         std::array<char, max_read + 1> buffer = {0};  //(max_read + 1);
 
         // get left-side (n) value => min_count
-        auto bytes_read = transform_until(exprp, exprp + max_read, buffer.data(), "},");
-        if (exprp[bytes_read] != '}' && exprp[bytes_read] != ',') {
+        auto bytes_read = transform_until(_expr_ptr, _expr_ptr + max_read, buffer.data(), "},");
+        if (_expr_ptr[bytes_read] != '}' && _expr_ptr[bytes_read] != ',') {
           break;  // re-interpret as CHAR
         }
         auto count = std::atoi(buffer.data());
-        CUDF_EXPECTS(count <= max_value,
-                     "unsupported repeat value at " + std::to_string(exprp - pattern - 1));
-        yy_min_count = static_cast<int16_t>(count);
+        CUDF_EXPECTS(
+          count <= max_value,
+          "unsupported repeat value at " + std::to_string(_expr_ptr - _pattern_begin - 1));
+        _min_count = static_cast<int16_t>(count);
 
-        auto const exprp_backup = exprp;  // save in case ending '}' is not found
-        exprp += bytes_read;
+        auto const expr_ptr_save = _expr_ptr;  // save in case ending '}' is not found
+        _expr_ptr += bytes_read;
 
         // get optional right-side (m) value => max_count
-        yy_max_count = yy_min_count;
-        if (*exprp++ == ',') {
-          bytes_read = transform_until(exprp, exprp + max_read, buffer.data(), "}");
-          if (exprp[bytes_read] != '}') {
-            exprp = exprp_backup;  // abort, rollback and
-            break;                 // re-interpret as CHAR
+        _max_count = _min_count;
+        if (*_expr_ptr++ == ',') {
+          bytes_read = transform_until(_expr_ptr, _expr_ptr + max_read, buffer.data(), "}");
+          if (_expr_ptr[bytes_read] != '}') {
+            _expr_ptr = expr_ptr_save;  // abort, rollback and
+            break;                      // re-interpret as CHAR
           }
 
           count = std::atoi(buffer.data());
-          CUDF_EXPECTS(count <= max_value,
-                       "unsupported repeat value at " + std::to_string(exprp - pattern - 1));
+          CUDF_EXPECTS(
+            count <= max_value,
+            "unsupported repeat value at " + std::to_string(_expr_ptr - _pattern_begin - 1));
 
           // {n,m} and {n,} are both valid
-          yy_max_count = buffer[0] == 0 ? -1 : static_cast<int16_t>(count);
-          exprp += bytes_read + 1;
+          _max_count = buffer[0] == 0 ? -1 : static_cast<int16_t>(count);
+          _expr_ptr += bytes_read + 1;
         }
 
         // {n,m}? pattern is lazy counted quantifier
-        if (*exprp == '?') {
-          exprp++;
+        if (*_expr_ptr == '?') {
+          _expr_ptr++;
           return COUNTED_LAZY;
         }
         // otherwise, fixed counted quantifier
@@ -524,232 +562,13 @@ class regex_parser {
       }
       case '|': return OR;
     }
+    _chr = chr;
     return CHAR;
   }
 
- public:
-  /**
-   * @brief Single parsed pattern element.
-   */
-  struct Item {
-    int t;
-    union {
-      char32_t yy;
-      int yyclass_id;
-      struct {
-        short n;
-        short m;
-      } yycount;
-    } d;
-  };
-  std::vector<Item> m_items;
-
-  bool m_has_counted;
-
-  regex_parser(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), pattern(pattern), exprp(pattern), lexdone(false), m_has_counted(false)
+  std::vector<regex_parser::Item> expand_counted_items() const
   {
-    int token = 0;
-    while ((token = lex(dot_type)) != END) {
-      Item item;
-      item.t = token;
-      if (token == CCLASS || token == NCCLASS)
-        item.d.yyclass_id = yyclass_id;
-      else if (token == COUNTED || token == COUNTED_LAZY) {
-        item.d.yycount.n = yy_min_count;
-        item.d.yycount.m = yy_max_count;
-        m_has_counted    = true;
-      } else
-        item.d.yy = yy;
-      m_items.push_back(item);
-    }
-  }
-};
-
-/**
- * @brief The compiler converts class list into instructions.
- */
-class regex_compiler {
-  reprog& m_prog;
-
-  struct Node {
-    int id_first;
-    int id_last;
-  };
-
-  int cursubid;
-  int pushsubid;
-  std::vector<Node> andstack;
-
-  struct Ator {
-    int t;
-    int subid;
-  };
-
-  std::vector<Ator> atorstack;
-
-  bool lastwasand;
-  int nbra;
-
-  regex_flags flags;
-
-  char32_t yy;
-  int yyclass_id;
-
-  inline void pushand(int f, int l) { andstack.push_back({f, l}); }
-
-  inline Node popand(int op)
-  {
-    if (andstack.size() < 1) {
-      // missing operand for op
-      int inst_id = m_prog.add_inst(NOP);
-      pushand(inst_id, inst_id);
-    }
-    Node node = andstack[andstack.size() - 1];
-    andstack.pop_back();
-    return node;
-  }
-
-  inline void pushator(int t)
-  {
-    Ator ator;
-    ator.t     = t;
-    ator.subid = pushsubid;
-    atorstack.push_back(ator);
-  }
-
-  inline Ator popator()
-  {
-    Ator ator = atorstack[atorstack.size() - 1];
-    atorstack.pop_back();
-    return ator;
-  }
-
-  void evaluntil(int pri)
-  {
-    Node op1;
-    Node op2;
-    int id_inst1 = -1;
-    int id_inst2 = -1;
-    while (pri == RBRA || atorstack[atorstack.size() - 1].t >= pri) {
-      Ator ator = popator();
-      switch (ator.t) {
-        default:
-          // unknown operator in evaluntil
-          break;
-        case LBRA: /* must have been RBRA */
-          op1                                    = popand('(');
-          id_inst2                               = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;
-          m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
-          id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid      = ator.subid;
-          m_prog.inst_at(id_inst1).u2.next_id    = op1.id_first;
-          pushand(id_inst1, id_inst2);
-          return;
-        case OR:
-          op2                                    = popand('|');
-          op1                                    = popand('|');
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
-          id_inst1                               = m_prog.add_inst(OR);
-          m_prog.inst_at(id_inst1).u1.right_id   = op1.id_first;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          pushand(id_inst1, id_inst2);
-          break;
-        case CAT:
-          op2                                    = popand(0);
-          op1                                    = popand(0);
-          m_prog.inst_at(op1.id_last).u2.next_id = op2.id_first;
-          pushand(op1.id_first, op2.id_last);
-          break;
-        case STAR:
-          op2                                    = popand('*');
-          id_inst1                               = m_prog.add_inst(OR);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u1.right_id   = op2.id_first;
-          pushand(id_inst1, id_inst1);
-          break;
-        case STAR_LAZY:
-          op2                                    = popand('*');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id   = id_inst2;
-          pushand(id_inst1, id_inst2);
-          break;
-        case PLUS:
-          op2                                    = popand('+');
-          id_inst1                               = m_prog.add_inst(OR);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u1.right_id   = op2.id_first;
-          pushand(op2.id_first, id_inst1);
-          break;
-        case PLUS_LAZY:
-          op2                                    = popand('+');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id   = id_inst2;
-          pushand(op2.id_first, id_inst2);
-          break;
-        case QUEST:
-          op2                                    = popand('?');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(id_inst1).u2.left_id    = id_inst2;
-          m_prog.inst_at(id_inst1).u1.right_id   = op2.id_first;
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          pushand(id_inst1, id_inst2);
-          break;
-        case QUEST_LAZY:
-          op2                                    = popand('?');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id   = id_inst2;
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          pushand(id_inst1, id_inst2);
-          break;
-      }
-    }
-  }
-
-  void Operator(int t)
-  {
-    if (t == RBRA && --nbra < 0)
-      // unmatched right paren
-      return;
-    if (t == LBRA) {
-      nbra++;
-      if (lastwasand) Operator(CAT);
-    } else
-      evaluntil(t);
-    if (t != RBRA) pushator(t);
-    lastwasand = (t == STAR || t == QUEST || t == PLUS || t == STAR_LAZY || t == QUEST_LAZY ||
-                  t == PLUS_LAZY || t == RBRA);
-  }
-
-  void Operand(int t)
-  {
-    if (lastwasand) Operator(CAT); /* catenate is implicit */
-    int inst_id = m_prog.add_inst(t);
-    if (t == CCLASS || t == NCCLASS) {
-      m_prog.inst_at(inst_id).u1.cls_id = yyclass_id;
-    } else if (t == CHAR) {
-      m_prog.inst_at(inst_id).u1.c = yy;
-    } else if (t == BOL || t == EOL) {
-      m_prog.inst_at(inst_id).u1.c = is_multiline(flags) ? yy : '\n';
-    }
-    pushand(inst_id, inst_id);
-    lastwasand = true;
-  }
-
-  std::vector<regex_parser::Item> expand_counted(std::vector<regex_parser::Item> const& in)
-  {
+    std::vector<regex_parser::Item> const& in = _items;
     std::vector<regex_parser::Item> out;
     std::stack<int> lbra_stack;
     auto repeat_start_index = -1;
@@ -757,15 +576,15 @@ class regex_compiler {
     for (std::size_t index = 0; index < in.size(); index++) {
       auto const item = in[index];
 
-      if (item.t != COUNTED && item.t != COUNTED_LAZY) {
+      if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
-        if (item.t == LBRA || item.t == LBRA_NC) {
+        if (item.type == LBRA || item.type == LBRA_NC) {
           lbra_stack.push(index);
           repeat_start_index = -1;
-        } else if (item.t == RBRA) {
+        } else if (item.type == RBRA) {
           repeat_start_index = lbra_stack.top();
           lbra_stack.pop();
-        } else if ((item.t & ITEM_MASK) != OPERATOR_MASK) {
+        } else if ((item.type & ITEM_MASK) != OPERATOR_MASK) {
           repeat_start_index = index;
         }
       } else {
@@ -778,8 +597,8 @@ class regex_compiler {
         auto const begin = in.begin() + repeat_start_index;
         auto const end   = in.begin() + index;
         // count range values
-        auto const n = item.d.yycount.n;  // minimum count
-        auto const m = item.d.yycount.m;  // maximum count
+        auto const n = item.d.count.n;  // minimum count
+        auto const m = item.d.count.m;  // maximum count
 
         assert(n >= 0 && "invalid repeat count value n");
         // zero-repeat edge-case: need to erase the previous items
@@ -798,15 +617,15 @@ class regex_compiler {
           }
           for (int j = n; j < m; j++) {
             out.push_back(regex_parser::Item{RBRA, 0});
-            out.push_back(regex_parser::Item{item.t == COUNTED ? QUEST : QUEST_LAZY, 0});
+            out.push_back(regex_parser::Item{item.type == COUNTED ? QUEST : QUEST_LAZY, 0});
           }
         } else {
           // infinite repeats
           if (n > 0) {  // append '+' after last repetition
-            out.push_back(regex_parser::Item{item.t == COUNTED ? PLUS : PLUS_LAZY, 0});
+            out.push_back(regex_parser::Item{item.type == COUNTED ? PLUS : PLUS_LAZY, 0});
           } else {  // copy it once then append '*'
             out.insert(out.end(), begin, end);
-            out.push_back(regex_parser::Item{item.t == COUNTED ? STAR : STAR_LAZY, 0});
+            out.push_back(regex_parser::Item{item.type == COUNTED ? STAR : STAR_LAZY, 0});
           }
         }
       }
@@ -815,59 +634,250 @@ class regex_compiler {
   }
 
  public:
-  regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
-    : m_prog(prog),
-      cursubid(0),
-      pushsubid(0),
-      lastwasand(false),
-      nbra(0),
-      flags(flags),
-      yy(0),
-      yyclass_id(0)
+  regex_parser(const char32_t* pattern, int32_t dot_type, reprog& prog)
+    : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern)
   {
-    // Parse
-    std::vector<regex_parser::Item> const items = [&] {
-      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, m_prog);
-      return parser.m_has_counted ? expand_counted(parser.m_items) : parser.m_items;
-    }();
+    int32_t type = 0;
+    while ((type = lex(dot_type)) != END) {
+      auto const item = [type, chr = _chr, cid = _cclass_id, n = _min_count, m = _max_count] {
+        if (type == CCLASS || type == NCCLASS) return Item{type, cid};
+        if (type == COUNTED || type == COUNTED_LAZY) return Item{type, n, m};
+        return Item{type, chr};
+      }();
+      _items.push_back(item);
+      if (type == COUNTED || type == COUNTED_LAZY) _has_counted = true;
+    }
+  }
 
-    /* Start with a low priority operator to prime parser */
-    pushator(START - 1);
+  std::vector<regex_parser::Item> get_items() const
+  {
+    return _has_counted ? expand_counted_items() : _items;
+  }
+};
 
-    for (int i = 0; i < static_cast<int>(items.size()); i++) {
-      auto const item = items[i];
-      int token       = item.t;
-      if (token == CCLASS || token == NCCLASS)
-        yyclass_id = item.d.yyclass_id;
-      else
-        yy = item.d.yy;
+/**
+ * @brief The compiler converts class list into instructions.
+ */
+class regex_compiler {
+  struct and_node {
+    int id_first;
+    int id_last;
+  };
+
+  struct re_operator {
+    int t;
+    int subid;
+  };
+
+  reprog& _prog;
+  std::stack<and_node> _and_stack;
+  std::stack<re_operator> _operator_stack;
+  bool _last_was_and;
+  int _bracket_count;
+  regex_flags _flags;
+
+  inline void push_and(int first, int last) { _and_stack.push({first, last}); }
+
+  inline and_node pop_and()
+  {
+    if (_and_stack.empty()) {
+      auto const inst_id = _prog.add_inst(NOP);
+      push_and(inst_id, inst_id);
+    }
+    auto const node = _and_stack.top();
+    _and_stack.pop();
+    return node;
+  }
+
+  inline void push_operator(int token, int subid = 0)
+  {
+    _operator_stack.push(re_operator{token, subid});
+  }
+
+  inline re_operator const pop_operator()
+  {
+    auto const op = _operator_stack.top();
+    _operator_stack.pop();
+    return op;
+  }
+
+  void eval_until(int min_token)
+  {
+    while (min_token == RBRA || _operator_stack.top().t >= min_token) {
+      auto const op = pop_operator();
+      switch (op.t) {
+        default:
+          // unknown operator
+          break;
+        case LBRA:  // expects matching RBRA
+        {
+          auto const operand                        = pop_and();
+          auto const id_inst2                       = _prog.add_inst(RBRA);
+          _prog.inst_at(id_inst2).u1.subid          = op.subid;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                       = _prog.add_inst(LBRA);
+          _prog.inst_at(id_inst1).u1.subid          = op.subid;
+          _prog.inst_at(id_inst1).u2.next_id        = operand.id_first;
+          push_and(id_inst1, id_inst2);
+          return;
+        }
+        case OR: {
+          auto const operand2                        = pop_and();
+          auto const operand1                        = pop_and();
+          auto const id_inst2                        = _prog.add_inst(NOP);
+          _prog.inst_at(operand2.id_last).u2.next_id = id_inst2;
+          _prog.inst_at(operand1.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                        = _prog.add_inst(OR);
+          _prog.inst_at(id_inst1).u1.right_id        = operand1.id_first;
+          _prog.inst_at(id_inst1).u2.left_id         = operand2.id_first;
+          push_and(id_inst1, id_inst2);
+          break;
+        }
+        case CAT: {
+          auto const operand2                        = pop_and();
+          auto const operand1                        = pop_and();
+          _prog.inst_at(operand1.id_last).u2.next_id = operand2.id_first;
+          push_and(operand1.id_first, operand2.id_last);
+          break;
+        }
+        case STAR: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          push_and(id_inst1, id_inst1);
+          break;
+        }
+        case STAR_LAZY: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          push_and(id_inst1, id_inst2);
+          break;
+        }
+        case PLUS: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          push_and(operand.id_first, id_inst1);
+          break;
+        }
+        case PLUS_LAZY: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          push_and(operand.id_first, id_inst2);
+          break;
+        }
+        case QUEST: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id        = id_inst2;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          push_and(id_inst1, id_inst2);
+          break;
+        }
+        case QUEST_LAZY: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          push_and(id_inst1, id_inst2);
+          break;
+        }
+      }
+    }
+  }
+
+  void handle_operator(int token, int subid = 0)
+  {
+    if (token == RBRA && --_bracket_count < 0) {
+      // unmatched right paren
+      return;
+    }
+    if (token == LBRA) {
+      _bracket_count++;
+      if (_last_was_and) { handle_operator(CAT, subid); }
+    } else {
+      eval_until(token);
+    }
+    if (token != RBRA) { push_operator(token, subid); }
+
+    static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
+    _last_was_and =
+      std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
+  }
+
+  void handle_operand(int token, int subid = 0, char32_t yy = 0, int class_id = 0)
+  {
+    if (_last_was_and) { handle_operator(CAT, subid); }  // catenate is implicit
+
+    auto const inst_id = _prog.add_inst(token);
+    if (token == CCLASS || token == NCCLASS) {
+      _prog.inst_at(inst_id).u1.cls_id = class_id;
+    } else if (token == CHAR) {
+      _prog.inst_at(inst_id).u1.c = yy;
+    } else if (token == BOL || token == EOL) {
+      _prog.inst_at(inst_id).u1.c = is_multiline(_flags) ? yy : '\n';
+    }
+    push_and(inst_id, inst_id);
+    _last_was_and = true;
+  }
+
+ public:
+  regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
+    : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
+  {
+    // Parse pattern into items
+    auto const items = regex_parser(pattern, is_dotall(flags) ? ANYNL : ANY, _prog).get_items();
+
+    int cur_subid{};
+    int push_subid{};
+
+    // Start with a low priority operator
+    push_operator(START - 1);
+
+    for (auto const item : items) {
+      auto token = item.type;
 
       if (token == LBRA) {
-        ++cursubid;
-        pushsubid = cursubid;
+        ++cur_subid;
+        push_subid = cur_subid;
       } else if (token == LBRA_NC) {
-        pushsubid = 0;
-        token     = LBRA;
+        push_subid = 0;
+        token      = LBRA;
       }
 
-      if ((token & 0300) == OPERATOR_MASK)
-        Operator(token);
-      else
-        Operand(token);
+      if ((token & ITEM_MASK) == OPERATOR_MASK) {
+        handle_operator(token, push_subid);
+      } else {
+        handle_operand(token, push_subid, item.d.chr, item.d.cclass_id);
+      }
     }
 
-    /* Close with a low priority operator */
-    evaluntil(START);
-    /* Force END */
-    Operand(END);
-    evaluntil(START);
-    if (nbra)
-      ;  // "unmatched left paren";
-    /* points to first and only operand */
-    m_prog.set_start_inst(andstack[andstack.size() - 1].id_first);
-    m_prog.finalize();
-    m_prog.check_for_errors();
-    m_prog.set_groups_count(cursubid);
+    // Close with a low priority operator
+    eval_until(START);
+    // Force END
+    handle_operand(END, push_subid);
+    eval_until(START);
+
+    CUDF_EXPECTS(_bracket_count == 0, "unmatched left parenthesis");
+
+    _prog.set_start_inst(_and_stack.top().id_first);
+    _prog.finalize();
+    _prog.check_for_errors();
+    _prog.set_groups_count(cur_subid);
   }
 };
 
@@ -1096,15 +1106,16 @@ void reprog::print(regex_flags const flags)
     const reclass& cls = _classes[i];
     auto const size    = static_cast<int>(cls.literals.size());
     printf("%2d: ", i);
-    for (int j = 0; j < size; j += 2) {
-      char32_t c1 = cls.literals[j];
-      char32_t c2 = cls.literals[j + 1];
+    for (int j = 0; j < size; ++j) {
+      auto const l = cls.literals[j];
+      char32_t c1  = l.first;
+      char32_t c2  = l.last;
       if (c1 <= 32 || c1 >= 127 || c2 <= 32 || c2 >= 127) {
         printf("0x%02x-0x%02x", static_cast<unsigned>(c1), static_cast<unsigned>(c2));
       } else {
         printf("%c-%c", static_cast<char>(c1), static_cast<char>(c2));
       }
-      if ((j + 2) < size) { printf(", "); }
+      if ((j + 1) < size) { printf(", "); }
     }
     printf("\n");
     if (cls.builtins) {

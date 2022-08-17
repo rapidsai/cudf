@@ -28,6 +28,7 @@
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/io/text/detail/tile_state.hpp>
 #include <cudf/io/text/detail/trie.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <limits>
@@ -417,12 +418,15 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto reader = source.create_reader();
   reader->skip_bytes(relevant_offset_first);
 
-  auto relevant_bytes = reader->get_next_chunk(string_chars_size, stream);
+  for (int32_t i = 0; i < string_chars_size; i += ITEMS_PER_CHUNK) {
+    auto const read_size   = std::min<int64_t>(ITEMS_PER_CHUNK, string_chars_size - i);
+    auto const chunk_bytes = reader->get_next_chunk(read_size, stream);
 
-  thrust::copy(rmm::exec_policy(stream),
-               relevant_bytes->data(),  //
-               relevant_bytes->data() + relevant_bytes->size(),
-               string_chars.begin());
+    thrust::copy(rmm::exec_policy(stream),
+                 chunk_bytes->data(),
+                 chunk_bytes->data() + chunk_bytes->size(),
+                 string_chars.begin() + i);
+  }
 
   auto string_count = string_offsets_out.size() - 1;
 
@@ -437,7 +441,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::optional<byte_range_info> byte_range,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream      = rmm::cuda_stream_default;
+  auto stream      = cudf::default_stream_value;
   auto stream_pool = rmm::cuda_stream_pool(2);
 
   auto result = detail::multibyte_split(

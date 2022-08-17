@@ -35,7 +35,7 @@ unset GIT_DESCRIBE_TAG
 export INSTALL_DASK_MAIN=0
 
 # ucx-py version
-export UCX_PY_VERSION='0.26.*'
+export UCX_PY_VERSION='0.27.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -82,8 +82,6 @@ conda list --show-channel-urls
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
 
 function install_dask {
     # Install the conda-forge or nightly version of dask and distributed
@@ -94,8 +92,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.7.1 conda-forge::distributed==2022.7.1 conda-forge::dask-core==2022.7.1 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask==2022.7.1 conda-forge::distributed==2022.7.1 conda-forge::dask-core==2022.7.1 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -244,6 +242,17 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
+
+# Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
+# Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
+# Therefore, these runs only verify that benchmarks are valid.
+# They do not generate meaningful performance measurements.
+cd "$WORKSPACE/python/cudf"
+gpuci_logger "Python pytest for cuDF benchmarks"
+CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
+
+gpuci_logger "Python pytest for cuDF benchmarks using pandas"
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log

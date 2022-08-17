@@ -371,6 +371,18 @@ def read_parquet(
 ):
     """{docstring}"""
 
+    if skiprows is not None:
+        warnings.warn(
+            "skiprows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
+    if num_rows is not None:
+        warnings.warn(
+            "num_rows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:

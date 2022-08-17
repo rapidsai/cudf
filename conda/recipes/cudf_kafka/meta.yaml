@@ -29,14 +29,14 @@ requirements:
   host:
     - python
     - cython >=0.29,<0.30
-    - cudf {{ version }}
-    - libcudf_kafka {{ version }}
+    - cudf ={{ version }}
+    - libcudf_kafka ={{ version }}
     - setuptools
   run:
     - python
-    - libcudf_kafka {{ version }}
+    - libcudf_kafka ={{ version }}
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf {{ version }}
+    - cudf ={{ version }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]
@@ -45,8 +45,8 @@ test:                                   # [linux64]
     - cudf_kafka                        # [linux64]
 
 about:
-  home: http://rapids.ai/
+  home: https://rapids.ai/
   license: Apache-2.0
-  license_family: Apache
+  license_family: APACHE
   license_file: LICENSE
   summary: libcudf_kafka library

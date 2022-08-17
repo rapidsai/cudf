@@ -468,7 +468,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     assert gd_data["a"].dtype == expect_dtype
 
     # check mask
-    expect_mask = [True if x is not pd.NA else False for x in pd_data["a"]]
+    expect_mask = [x is not pd.NA for x in pd_data["a"]]
     got_mask = mask_to_bools(
         gd_data["a"]._column.base_mask, 0, len(gd_data)
     ).values_host
@@ -506,7 +506,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     assert gd_data.dtype == expect_dtype
 
     # check mask
-    expect_mask = [True if x is not pd.NA else False for x in pd_data]
+    expect_mask = [x is not pd.NA for x in pd_data]
     got_mask = mask_to_bools(
         gd_data._column.base_mask, 0, len(gd_data)
     ).values_host

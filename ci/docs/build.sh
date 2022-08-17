@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #################################
 # cuDF Docs build script for CI #
 #################################
@@ -29,8 +29,7 @@ conda activate rapids
 
 gpuci_logger "Check versions..."
 python --version
-$CC --version
-$CXX --version
+
 conda info
 conda config --show-sources
 conda list --show-channel-urls
