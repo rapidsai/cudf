@@ -16,17 +16,22 @@
 
 #pragma once
 
-#include <cudf/io/types.hpp>
-#include <cudf/utilities/span.hpp>
+#include <io/csv/datetime.cuh>
 #include <io/utilities/trie.cuh>
+
+#include <cudf/io/types.hpp>
+#include <cudf/lists/list_view.hpp>
+#include <cudf/strings/detail/convert/fixed_point.cuh>
+#include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
+#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include "column_type_histogram.hpp"
 
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
-#include <thrust/find.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
 
@@ -501,33 +506,225 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 }
 
 /**
- * @brief Excludes the prefix from the input range if the string starts with the prefix.
+ * @brief Decodes a numeric value base on templated cudf type T with specified
+ * base.
  *
- * @tparam N length on the prefix, plus one
- * @param[in, out] begin Pointer to the first element of the string
- * @param end Pointer to the first element after the string
- * @param prefix String we're searching for at the start of the input range
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param opts The global parsing behavior options
+ *
+ * @return The parsed numeric value
  */
-template <int N>
-__inline__ __device__ auto skip_if_starts_with(char const* begin,
-                                               char const* end,
-                                               const char (&prefix)[N])
+template <typename T, int base>
+__inline__ __device__ T decode_value(const char* begin,
+                                     const char* end,
+                                     parse_options_view const& opts)
 {
-  static constexpr size_t prefix_len = N - 1;
-  if (end - begin < prefix_len) return begin;
-  return thrust::equal(thrust::seq, begin, begin + prefix_len, prefix) ? begin + prefix_len : begin;
+  return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
 /**
- * @brief Finds the first element after the leading space characters.
+ * @brief Decodes a numeric value base on templated cudf type T
  *
- * @param begin Pointer to the first element of the string
- * @param end Pointer to the first element after the string
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param opts The global parsing behavior options
+ *
+ * @return The parsed numeric value
  */
-__inline__ __device__ auto skip_spaces(char const* begin, char const* end)
+template <typename T,
+          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
+__inline__ __device__ T decode_value(const char* begin,
+                                     const char* end,
+                                     parse_options_view const& opts)
 {
-  return thrust::find_if(thrust::seq, begin, end, [](auto elem) { return elem != ' '; });
+  return cudf::io::parse_numeric<T>(begin, end, opts);
 }
+
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
+{
+  return to_timestamp<T>(begin, end, opts.dayfirst);
+}
+
+template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
+{
+  return to_duration<T>(begin, end);
+}
+
+// The purpose of these is merely to allow compilation ONLY
+template <>
+__inline__ __device__ cudf::string_view decode_value(const char*,
+                                                     const char*,
+                                                     parse_options_view const&)
+{
+  return cudf::string_view{};
+}
+
+template <>
+__inline__ __device__ cudf::dictionary32 decode_value(const char*,
+                                                      const char*,
+                                                      parse_options_view const&)
+{
+  return cudf::dictionary32{};
+}
+
+template <>
+__inline__ __device__ cudf::list_view decode_value(const char*,
+                                                   const char*,
+                                                   parse_options_view const&)
+{
+  return cudf::list_view{};
+}
+template <>
+__inline__ __device__ cudf::struct_view decode_value(const char*,
+                                                     const char*,
+                                                     parse_options_view const&)
+{
+  return cudf::struct_view{};
+}
+
+template <>
+__inline__ __device__ numeric::decimal32 decode_value(const char*,
+                                                      const char*,
+                                                      parse_options_view const&)
+{
+  return numeric::decimal32{};
+}
+
+template <>
+__inline__ __device__ numeric::decimal64 decode_value(const char*,
+                                                      const char*,
+                                                      parse_options_view const&)
+{
+  return numeric::decimal64{};
+}
+
+template <>
+__inline__ __device__ numeric::decimal128 decode_value(const char*,
+                                                       const char*,
+                                                       parse_options_view const&)
+{
+  return numeric::decimal128{};
+}
+
+struct ConvertFunctor {
+  /**
+   * @brief Dispatch for numeric types whose values can be convertible to
+   * 0 or 1 to represent boolean false/true, based upon checking against a
+   * true/false values list.
+   *
+   * @return bool Whether the parsed value is valid.
+   */
+  template <typename T,
+            std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
+                             !cudf::is_fixed_point<T>()>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex = false)
+  {
+    static_cast<T*>(out_buffer)[row] = [as_hex, &opts, begin, end]() -> T {
+      // Check for user-specified true/false values
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
+      return as_hex ? decode_value<T, 16>(begin, end, opts) : decode_value<T>(begin, end, opts);
+    }();
+
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for fixed point types.
+   *
+   * @return bool Whether the parsed value is valid.
+   */
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
+  {
+    static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
+      [&opts, output_type, begin, end]() -> device_storage_type_t<T> {
+      return strings::detail::parse_decimal<device_storage_type_t<T>>(
+        begin, end, output_type.scale());
+    }();
+
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for boolean type types.
+   */
+  template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
+  {
+    static_cast<T*>(out_buffer)[row] = [&opts, begin, end]() {
+      // Check for user-specified true/false values
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
+      return decode_value<T>(begin, end, opts);
+    }();
+
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for floating points, which are set to NaN if the input
+   * is not valid. In such case, the validity mask is set to zero too.
+   */
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
+  {
+    T const value                    = decode_value<T>(begin, end, opts);
+    static_cast<T*>(out_buffer)[row] = value;
+
+    return !std::isnan(value);
+  }
+
+  /**
+   * @brief Dispatch for all other types.
+   */
+  template <typename T,
+            std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
+                             !cudf::is_fixed_point<T>()>* = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(char const* begin,
+                                                      char const* end,
+                                                      void* out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      parse_options_view const& opts,
+                                                      bool as_hex)
+  {
+    static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
+
+    return true;
+  }
+};
 
 }  // namespace io
 }  // namespace cudf
