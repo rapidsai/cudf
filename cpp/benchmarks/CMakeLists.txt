@@ -291,9 +291,7 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(
-  STRINGS_NVBENCH string/like.cpp
-)
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
