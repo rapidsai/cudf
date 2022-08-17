@@ -24,6 +24,7 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
@@ -79,6 +80,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
+    case compression_type::ZSTD: return parquet::Compression::ZSTD;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -1139,83 +1141,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
-void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
-                     device_span<device_span<uint8_t> const> comp_out,
-                     device_span<decompress_status> comp_stats,
-                     size_t max_page_uncomp_data_size,
-                     rmm::cuda_stream_view stream)
-{
-  size_t num_comp_pages = comp_in.size();
-  try {
-    size_t temp_size;
-    nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
-      num_comp_pages, max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &temp_size);
-
-    CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-                 "Error in getting snappy compression scratch size");
-
-    // Not needed now but nvcomp API makes no promises about future
-    rmm::device_buffer scratch(temp_size, stream);
-    // Analogous to comp_in.srcDevice
-    rmm::device_uvector<void const*> uncompressed_data_ptrs(num_comp_pages, stream);
-    // Analogous to comp_in.srcSize
-    rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
-    // Analogous to comp_in.dstDevice
-    rmm::device_uvector<void*> compressed_data_ptrs(num_comp_pages, stream);
-    // Analogous to comp_stat.bytes_written
-    rmm::device_uvector<size_t> compressed_bytes_written(num_comp_pages, stream);
-    // nvcomp does not currently use comp_in.dstSize. Cannot assume that the output will fit in
-    // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
-
-    // Prepare the vectors
-    auto comp_it =
-      thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
-    thrust::transform(
-      rmm::exec_policy(stream),
-      comp_in.begin(),
-      comp_in.end(),
-      comp_it,
-      [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
-
-    thrust::transform(rmm::exec_policy(stream),
-                      comp_out.begin(),
-                      comp_out.end(),
-                      compressed_data_ptrs.begin(),
-                      [] __device__(auto const& out) { return out.data(); });
-    nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
-                                                     uncompressed_data_sizes.data(),
-                                                     max_page_uncomp_data_size,
-                                                     num_comp_pages,
-                                                     scratch.data(),  // Not needed rn but future
-                                                     scratch.size(),
-                                                     compressed_data_ptrs.data(),
-                                                     compressed_bytes_written.data(),
-                                                     nvcompBatchedSnappyDefaultOpts,
-                                                     stream.value());
-    CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in snappy compression");
-
-    // nvcomp also doesn't use comp_out.status . It guarantees that given enough output space,
-    // compression will succeed.
-    // The other `comp_out` field is `reserved` which is for internal cuIO debugging and can be 0.
-    thrust::transform(rmm::exec_policy(stream),
-                      compressed_bytes_written.begin(),
-                      compressed_bytes_written.end(),
-                      comp_stats.begin(),
-                      [] __device__(size_t size) {
-                        decompress_status status{};
-                        status.bytes_written = size;
-                        return status;
-                      });
-    return;
-  } catch (...) {
-    // If we reach this then there was an error in compressing so set an error status for each page
-    thrust::for_each(rmm::exec_policy(stream),
-                     comp_stats.begin(),
-                     comp_stats.end(),
-                     [] __device__(decompress_status & stat) { stat.status = 1; });
-  };
-}
-
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::EncPage> pages,
                                 size_t max_page_uncomp_data_size,
@@ -1245,9 +1170,24 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       if (nvcomp_integration::is_stable_enabled()) {
-        snappy_compress(comp_in, comp_out, comp_stats, max_page_uncomp_data_size, stream);
+        nvcomp::batched_compress(nvcomp::compression_type::SNAPPY,
+                                 comp_in,
+                                 comp_out,
+                                 comp_stats,
+                                 max_page_uncomp_data_size,
+                                 stream);
       } else {
         gpu_snap(comp_in, comp_out, comp_stats, stream);
+      }
+      break;
+      case parquet::Compression::ZSTD:
+      if (nvcomp_integration::is_all_enabled()) {
+        nvcomp::batched_compress(nvcomp::compression_type::ZSTD,
+                                 comp_in,
+                                 comp_out,
+                                 comp_stats,
+                                 max_page_uncomp_data_size,
+                                 stream);
       }
       break;
     default: break;
