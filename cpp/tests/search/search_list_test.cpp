@@ -42,7 +42,6 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::DurationTypes,
                                      cudf::test::TimestampTypes>;
 
-//==================================================================================================
 template <typename T>
 struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {
 };
@@ -86,7 +85,7 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInput)
 
   EXPECT_TRUE(cudf::contains(haystack, needle1));
 
-  // Lists are order-senstive.
+  // Lists are order-sensitive.
   EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
@@ -219,7 +218,6 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
   EXPECT_FALSE(cudf::contains(haystack, needle3));
 }
 
-//==================================================================================================
 template <typename T>
 struct TypedListContainsTestColumnNeedles : public cudf::test::BaseFixture {
 };

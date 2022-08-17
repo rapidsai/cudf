@@ -78,7 +78,6 @@ auto make_struct_scalar(Args&&... args)
 
 }  // namespace
 
-//==================================================================================================
 // Test case when all input columns are empty
 TYPED_TEST(TypedStructSearchTest, EmptyInput)
 {
@@ -362,7 +361,6 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
 }
 
-//==================================================================================================
 template <typename T>
 struct TypedStructContainsTestScalarNeedle : public cudf::test::BaseFixture {
 };
@@ -609,7 +607,6 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNulls)
   }
 }
 
-//==================================================================================================
 template <typename T>
 struct TypedStructContainsTestColumnNeedles : public cudf::test::BaseFixture {
 };
