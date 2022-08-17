@@ -15,8 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -26,8 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringsLike : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
 namespace {
 std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t hit_rate)
@@ -51,11 +49,9 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t
   auto matches = static_cast<int32_t>(n_rows * hit_rate) / 100;
 
   // Create a randomized gather-map to build a column out of the strings in data.
-  data_profile gather_profile;
-  gather_profile.set_distribution_params(
-    cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
-  gather_profile.set_null_frequency(0.0);  // no nulls for gather-map
-  gather_profile.set_cardinality(0);
+  data_profile gather_profile =
+    data_profile_builder().cardinality(0).null_probability(0.0).distribution(
+      cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
   auto gather_table =
     create_random_table({cudf::type_id::INT32}, row_count{n_rows}, gather_profile);
   gather_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
@@ -73,10 +69,11 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t
 
 }  // namespace
 
-static void BM_like(benchmark::State& state)
+static void bench_like(nvbench::state& state)
 {
-  auto const n_rows   = static_cast<cudf::size_type>(state.range(0));
-  auto const hit_rate = static_cast<int32_t>(state.range(1));
+  cudf::rmm_pool_raii pool_raii;
+  auto const n_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const hit_rate = static_cast<int32_t>(state.get_int64("hit_rate"));
 
   auto col   = build_input_column(n_rows, hit_rate);
   auto input = cudf::strings_column_view(col->view());
@@ -84,21 +81,18 @@ static void BM_like(benchmark::State& state)
   // This pattern forces reading the entire target string (when matched expected)
   auto pattern = std::string("% 5W4_");  // regex equivalent: ".* 5W4."
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
-    cudf::strings::like(input, pattern);
-  }
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  // gather some throughput statistics as well
+  auto chars_size = input.chars_size();
+  state.add_element_count(chars_size, "chars_size");           // number of bytes;
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);  // all bytes are read;
+  state.add_global_memory_writes<nvbench::int8_t>(n_rows);     // writes are BOOL8
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto result = cudf::strings::like(input, pattern); });
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                                       \
-  BENCHMARK_DEFINE_F(StringsLike, name)                                      \
-  (::benchmark::State & st) { BM_like(st); }                                 \
-  BENCHMARK_REGISTER_F(StringsLike, name)                                    \
-    ->ArgsProduct({{4096, 32768, 262144, 2097152, 16777216}, /* row count */ \
-                   {1, 5, 10, 25, 70, 100}})                 /* hit rate */  \
-    ->UseManualTime()                                                        \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(like)
+NVBENCH_BENCH(bench_like)
+  .set_name("strings_like")
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_int64_axis("hit_rate", {1, 5, 10, 25, 70, 100});
