@@ -237,7 +237,7 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORK
 
 gpuci_logger "Python py.tests for cuDF with spelling (CUDF_SPILL_DEVICE_LIMIT=1)"
 # Due to time concerns, we only run a limited set of tests
-CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -v -n 8 tests/test_binops.py tests/test_dataframe.py python/cudf/cudf/tests/test_buffer.py python/cudf/cudf/tests/test_onehot.py python/cudf/cudf/tests/test_reshape.py
+CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -v -n 8 tests/test_binops.py tests/test_dataframe.py tests/test_buffer.py tests/test_onehot.py tests/test_reshape.py
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
