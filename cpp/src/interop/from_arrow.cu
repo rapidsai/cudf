@@ -460,8 +460,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
-std::unique_ptr<column> from_arrow_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
-                                       arrow::Field const& field,
+std::unique_ptr<column> from_arrow_ipc(arrow::Field const& field,
                                        ipc::IpcDevicePtr dptr,
                                        uint8_t const* pbase)
 {
@@ -475,7 +474,7 @@ std::unique_ptr<column> from_arrow_ipc(std::shared_ptr<arrow::cuda::CudaContext>
 }  // namespace
 
 std::pair<std::unique_ptr<table>, std::vector<std::string>> import_ipc(
-  std::shared_ptr<arrow::cuda::CudaContext> ctx, std::shared_ptr<arrow::Buffer> ipc_handles)
+  std::shared_ptr<arrow::Buffer> ipc_handles)
 {
   int64_t size{0};
   auto ptr = ipc_handles->data();
@@ -497,7 +496,7 @@ std::pair<std::unique_ptr<table>, std::vector<std::string>> import_ipc(
     uint8_t* pbase;
     CUDF_CUDA_TRY(
       cudaIpcOpenMemHandle((void**)&pbase, dptr.handle, cudaIpcMemLazyEnablePeerAccess));
-    auto c = from_arrow_ipc(ctx, *p_schema->field(n_columns), dptr, pbase);
+    auto c = from_arrow_ipc(*p_schema->field(n_columns), dptr, pbase);
     CUDF_CUDA_TRY(cudaIpcCloseMemHandle(pbase));
     columns.push_back(std::move(c));
     std::cout << "n_columns:" << n_columns << std::endl;

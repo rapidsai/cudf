@@ -4983,7 +4983,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return out.replace_schema_metadata(metadata)
 
-    def export_ipc(self, ctx):
+    def export_ipc(self):
         columns = []
         names = []
         from cudf._lib import ipc
@@ -4991,13 +4991,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns.append(col)
             names.append(name)
 
-        return ipc.export_ipc(ctx, columns, names)
+        return ipc.export_ipc(columns, names)
 
     @classmethod
-    def import_ipc(self, ctx, message):
+    def import_ipc(cls, message):
         from cudf._lib import ipc
-        columns = ipc.import_ipc(ctx, message)
-        return columns
+        return cls._from_data(*ipc.import_ipc(message))
 
     @_cudf_nvtx_annotate
     def to_records(self, index=True):

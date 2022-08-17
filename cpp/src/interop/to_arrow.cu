@@ -430,8 +430,6 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 namespace {
 
 struct dispatch_to_arrow_buffer {
-  std::shared_ptr<arrow::cuda::CudaContext> ctx_;
-
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   arrow::Result<ipc::IpcDevicePtr> operator()(column_view)
   {
@@ -476,13 +474,11 @@ std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
   };
 }
 
-ipc::IpcDevicePtr to_arrow_ipc_handle(column_view column,
-                                      column_metadata const& meta_data,
-                                      std::shared_ptr<arrow::cuda::CudaContext> ctx)
+ipc::IpcDevicePtr to_arrow_ipc_handle(column_view column, column_metadata const& meta_data)
 {
   if (column.type().id() != type_id::EMPTY) {
     auto handle =
-      type_dispatcher(column.type(), dispatch_to_arrow_buffer{ctx}, column).ValueOrElse([]() {
+      type_dispatcher(column.type(), dispatch_to_arrow_buffer{}, column).ValueOrElse([]() {
         CUDF_FAIL("Failed to obtain IPC handle.");
         return ipc::IpcDevicePtr{};
       });
@@ -497,8 +493,7 @@ ipc::IpcDevicePtr to_arrow_ipc_handle(column_view column,
 }
 }  // namespace
 
-std::shared_ptr<arrow::Buffer> export_ipc(std::shared_ptr<arrow::cuda::CudaContext> ctx,
-                                          table_view input,
+std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
                                           std::vector<column_metadata> const& metadata)
 {
   std::vector<std::shared_ptr<arrow::Field>> fields;
@@ -528,10 +523,10 @@ std::shared_ptr<arrow::Buffer> export_ipc(std::shared_ptr<arrow::cuda::CudaConte
 
   CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
   for (size_t i = 0; i < metadata.size(); ++i) {
-    auto p_handle     = to_arrow_ipc_handle(input.column(i), metadata.at(i), ctx);
+    auto p_handle = to_arrow_ipc_handle(input.column(i), metadata.at(i));
     // serialize to message
     p_handle.serialize(&bytes);
-    auto size        = bytes.size();
+    auto size = bytes.size();
     std::cout << "sizeoffset:" << size << std::endl;
   }
   // an owning buffer
