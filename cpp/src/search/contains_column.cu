@@ -17,26 +17,18 @@
 #include <hash/unordered_multiset.cuh>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/structs/struct_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -44,123 +36,6 @@ namespace cudf {
 namespace detail {
 
 namespace {
-
-/**
- * @brief Get the underlying value of a scalar through a scalar device view.
- *
- * @tparam Type The scalar's value type
- * @tparam ScalarDView Type of the input scalar device view
- * @param d_scalar The input scalar device view
- */
-template <typename Type, typename ScalarDView>
-__device__ auto inline get_scalar_value(ScalarDView d_scalar)
-{
-  if constexpr (cudf::is_fixed_point<Type>()) {
-    return d_scalar.rep();
-  } else {
-    return d_scalar.value();
-  }
-}
-
-struct contains_scalar_dispatch {
-  // SFINAE with conditional return type because we need to support device lambda in this function.
-  // This is required due to a limitation of nvcc.
-  template <typename Type>
-  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                        scalar const& needle,
-                                                        rmm::cuda_stream_view stream) const
-  {
-    CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
-    // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
-    // before dispatching to this function.
-
-    using DType           = device_storage_type_t<Type>;
-    auto const d_haystack = column_device_view::create(haystack, stream);
-    auto const d_needle =
-      get_scalar_device_view(static_cast<cudf::scalar_type_t<Type>&>(const_cast<scalar&>(needle)));
-
-    if (haystack.has_nulls()) {
-      auto const begin = d_haystack->pair_begin<DType, true>();
-      auto const end   = d_haystack->pair_end<DType, true>();
-
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
-                 auto const needle_pair = thrust::make_pair(get_scalar_value<Type>(d_needle), true);
-                 return val_pair == needle_pair;
-               }) > 0;
-    } else {
-      auto const begin = d_haystack->begin<DType>();
-      auto const end   = d_haystack->end<DType>();
-
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val) {
-                 return val == get_scalar_value<Type>(d_needle);
-               }) > 0;
-    }
-  }
-
-  template <typename Type>
-  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                       scalar const& needle,
-                                                       rmm::cuda_stream_view stream) const
-  {
-    CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
-    // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
-    // before dispatching to this function.
-    // In addition, haystack and needle structure compatibility will be checked later on by
-    // constructor of the table comparator.
-
-    auto const haystack_tv   = table_view{{haystack}};
-    auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
-    auto const needle_tv     = table_view{{needle_as_col->view()}};
-    auto const has_nulls     = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
-
-    auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
-    auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
-
-    auto const begin = cudf::experimental::row::lhs_iterator(0);
-    auto const end   = begin + haystack.size();
-    using cudf::experimental::row::rhs_index_type;
-
-    if (haystack.has_nulls()) {
-      auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
-      auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
-
-      return thrust::count_if(rmm::exec_policy(stream),
-                              begin,
-                              end,
-                              [d_comp, haystack_valid_it] __device__(auto const idx) {
-                                if (!haystack_valid_it[static_cast<size_type>(idx)]) {
-                                  return false;
-                                }
-                                return d_comp(
-                                  idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
-                              }) > 0;
-    }
-
-    return thrust::count_if(
-             rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
-               return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
-             }) > 0;
-  }
-};
-
-template <>
-bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& haystack,
-                                                              scalar const& needle,
-                                                              rmm::cuda_stream_view stream) const
-{
-  auto const dict_col = cudf::dictionary_column_view(haystack);
-  // first, find the needle in the dictionary's key set
-  auto const index = cudf::dictionary::detail::get_index(dict_col, needle, stream);
-  // if found, check the index is actually in the indices column
-  return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
-                                                          contains_scalar_dispatch{},
-                                                          dict_col.indices(),
-                                                          *index,
-                                                          stream);
-}
 
 struct contains_column_dispatch {
   template <typename ElementType, typename Haystack>
@@ -220,12 +95,12 @@ struct contains_column_dispatch {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    auto result_v = contains(table_view{{haystack}},
-                             table_view{{needles}},
-                             null_equality::EQUAL,
-                             nan_equality::ALL_EQUAL,
-                             stream,
-                             mr);
+    auto result_v = detail::contains(table_view{{haystack}},
+                                     table_view{{needles}},
+                                     null_equality::EQUAL,
+                                     nan_equality::ALL_EQUAL,
+                                     stream,
+                                     mr);
     return std::make_unique<column>(
       std::move(result_v), copy_bitmask(needles, stream, mr), needles.null_count());
   }
@@ -256,16 +131,8 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
                                stream,
                                mr);
 }
+
 }  // namespace
-
-bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream)
-{
-  if (haystack.is_empty()) { return false; }
-  if (not needle.is_valid(stream)) { return haystack.has_nulls(); }
-
-  return cudf::type_dispatcher(
-    haystack.type(), contains_scalar_dispatch{}, haystack, needle, stream);
-}
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
@@ -279,12 +146,6 @@ std::unique_ptr<column> contains(column_view const& haystack,
 }
 
 }  // namespace detail
-
-bool contains(column_view const& haystack, scalar const& needle)
-{
-  CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, cudf::default_stream_value);
-}
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
