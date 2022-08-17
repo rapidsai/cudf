@@ -675,7 +675,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Truncate all rows after this index value.
         axis : {0 or 'index'}, optional
             Axis to truncate. Truncates the index (rows) by default.
-        copy : bool, default is True,
+        copy : bool, default is True
             Return a copy of the truncated section.
         Returns
         -------
