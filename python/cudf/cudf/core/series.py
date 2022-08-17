@@ -677,6 +677,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Axis to truncate. Truncates the index (rows) by default.
         copy : bool, default is True
             Return a copy of the truncated section.
+
         Returns
         -------
             The truncated Series.
