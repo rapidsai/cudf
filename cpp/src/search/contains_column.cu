@@ -71,10 +71,8 @@ struct contains_scalar_dispatch {
                                                         rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
-
-    // If the input scalar is invalid, it should be handled by the caller before
-    // dispatching to this function.
-    // (Handling such case is very simple: just check if the input haystack column has nulls).
+    // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
+    // before dispatching to this function.
 
     using DType           = device_storage_type_t<Type>;
     auto const d_haystack = column_device_view::create(haystack, stream);
@@ -107,12 +105,10 @@ struct contains_scalar_dispatch {
                                                        rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
-    // Haystack and needle structure compatibility will be checked by the table comparator
-    // constructor during call to `contains_nested_element`.
-
-    // If the input scalar is invalid, it should be handled by the caller before
-    // dispatching to this function.
-    // (Handling such case is very simple: just check if the input haystack column has nulls).
+    // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
+    // before dispatching to this function.
+    // In addition, haystack and needle structure compatibility will be checked later on by
+    // constructor of the table comparator.
 
     auto const haystack_tv   = table_view{{haystack}};
     auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
