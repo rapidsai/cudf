@@ -311,3 +311,21 @@ def test_other_buffers(manager: SpillManager):
     buf = Buffer(bytearray(100))
     assert len(manager.other_buffers()) == 1
     assert manager.other_buffers()[0] is buf
+
+
+def test_ptr_restricted(manager: SpillManager):
+    buf = SpillableBuffer(
+        data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+    )
+    assert buf.spillable
+    assert buf.expose_counter == 1
+    _, token1 = buf.ptr_restricted()
+    assert not buf.spillable
+    assert buf.expose_counter == 2
+    _, token2 = buf.ptr_restricted()
+    assert not buf.spillable
+    assert buf.expose_counter == 3
+    del token1
+    del token2
+    assert buf.spillable
+    assert buf.expose_counter == 1

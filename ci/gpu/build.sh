@@ -236,7 +236,8 @@ gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
 gpuci_logger "Python py.tests for cuDF with spelling (CUDF_SPILL_DEVICE_LIMIT=1)"
-CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -v -n 8 tests/test_binops.py tests/test_dataframe.py python/cudf/cudf/tests/test_buffer.py
+# Due to time concerns, we only run a limited set of tests
+CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -v -n 8 tests/test_binops.py tests/test_dataframe.py python/cudf/cudf/tests/test_buffer.py python/cudf/cudf/tests/test_onehot.py python/cudf/cudf/tests/test_reshape.py
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"

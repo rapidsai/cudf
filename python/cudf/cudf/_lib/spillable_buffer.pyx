@@ -4,7 +4,7 @@ import collections.abc
 import pickle
 import time
 from threading import RLock
-from typing import Any, Tuple
+from typing import Any, Tuple, Union
 
 import numpy
 
@@ -24,10 +24,18 @@ from libcpp.vector cimport vector
 
 
 cdef shared_ptr[void] create_expose_counter():
-    """Create a expose counter"""
+    """Create an expose counter"""
     return static_pointer_cast[void, int](
         make_shared[int](42)
     )
+
+
+cdef class ExposeToken:
+    """Create an expose token
+
+    This is just a reference to an expose counter wrapped in Python.
+    """
+    cdef shared_ptr[void] _reference
 
 
 # TODO: this is not support by PyTorch
@@ -221,6 +229,24 @@ cdef class SpillableBuffer():
             base._last_accessed = time.monotonic()
             dereference(owners).push_back(base._expose_counter)
             return <void*><uintptr_t> (base._ptr+offset)
+
+    def ptr_restricted(self) -> Union[int, ExposeToken]:
+        # Get base buffer
+        cdef SpillableBuffer base
+        cdef size_t offset
+        if self._view_desc is None:
+            base = self
+            offset = 0
+        else:
+            base = self._view_desc["base"]
+            offset = self._view_desc["offset"]
+
+        with base._lock:
+            base.move_inplace(target="gpu")
+            base._last_accessed = time.monotonic()
+            token = ExposeToken()
+            token._reference = base._expose_counter
+            return base._ptr+offset, token
 
     @property
     def owner(self) -> Any:

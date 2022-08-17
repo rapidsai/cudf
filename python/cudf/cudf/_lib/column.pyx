@@ -550,6 +550,12 @@ cdef class Column:
                     size=base_nbytes,
                     owner=data_owner
                 )
+                if isinstance(data_owner, SpillableBuffer):
+                    # To prevent data_owner getting spilled, we attach an
+                    # ExposeToken to data. This will make sure that data_owner
+                    # is unspillable as long as data is alive.
+                    _, token = data_owner.ptr_restricted()
+                    data.token = token
         else:
             data = as_device_buffer_like(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0), exposed=False
