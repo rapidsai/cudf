@@ -875,6 +875,25 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
 
 @pytest.mark.parametrize(
+    "ptn,esc,expect",
+    [
+        ("abc", "/", [True, False, False, False, False]),
+        ("b%", "/", [False, True, False, False, False]),
+        ("%b", "/", [False, True, False, False, False]),
+        ("%b%", "/", [True, True, False, False, False]),
+        ("___", "/", [True, True, True, False, False]),
+        ("__/%", "/", [False, False, True, False, False]),
+        ("55/____", "/", [False, False, False, True, False]),
+    ],
+)
+def test_string_like(ptn, esc, expect):
+    gs = cudf.Series(["abc", "bab", "99%", "55_100", ""])
+    got = gs.str.like(ptn, esc)
+    expect = cudf.Series(expect)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [["hello", "world", None, "", "!"]],
 )
