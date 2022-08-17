@@ -30,6 +30,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/ipc.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -460,43 +461,37 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
-std::unique_ptr<column> from_ipc_column(arrow::Field const& field, ipc::IpcColumn ipc_column)
+std::pair<column_view, std::unique_ptr<ipc_imported_column>> from_ipc_column(
+  arrow::Field const& field, ipc::IpcColumn ipc_column)
 {
-  uint8_t* pbase;
-  CUDF_CUDA_TRY(
-    cudaIpcOpenMemHandle((void**)&pbase, ipc_column.data.handle, cudaIpcMemLazyEnablePeerAccess));
-  auto ptr        = pbase + ipc_column.data.offset;
+  ipc_imported_ptr data_base_ptr{ipc_column.data.handle};
+  auto ptr        = data_base_ptr.get<uint8_t>() + ipc_column.data.offset;
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
   size_type size = ipc_column.data.size / size_of(dtype);
 
-  bitmask_type* mask_pbase{nullptr};
-  bitmask_type* mask_ptr{nullptr};
-  std::cout << "from has_nulls:" << ipc_column.has_nulls() << std::endl;
   if (ipc_column.has_nulls()) {
-    CUDF_CUDA_TRY(cudaIpcOpenMemHandle(
-      (void**)&mask_pbase, ipc_column.mask.handle, cudaIpcMemLazyEnablePeerAccess));
-    mask_ptr = mask_pbase + ipc_column.mask.offset;
+    auto mask_base_ptr     = std::make_shared<ipc_imported_ptr>(ipc_column.mask.handle);
+    bitmask_type* mask_ptr = mask_base_ptr->get<bitmask_type>() + ipc_column.mask.offset;
+    auto cview             = column_view{dtype, size, ptr, mask_ptr};
+    return std::make_pair(
+      cview, std::make_unique<ipc_imported_column>(field.name(), std::move(data_base_ptr)));
   }
 
-  auto cview = column_view{dtype, size, ptr, mask_ptr};
-  auto c     = std::make_unique<column>(cview);
-
-  CUDF_CUDA_TRY(cudaIpcCloseMemHandle(pbase));
-  if (ipc_column.has_nulls()) { CUDF_CUDA_TRY(cudaIpcCloseMemHandle(mask_pbase)); }
-
-  return c;
+  auto cview = column_view{dtype, size, ptr};
+  return std::make_pair(
+    cview, std::make_unique<ipc_imported_column>(field.name(), std::move(data_base_ptr)));
 }
 }  // namespace
 
-std::pair<std::unique_ptr<table>, std::vector<std::string>> import_ipc(
+std::pair<table_view, std::vector<std::shared_ptr<ipc_imported_column>>> import_ipc(
   std::shared_ptr<arrow::Buffer> ipc_handles)
 {
   int64_t size{0};
   auto ptr = ipc_handles->data();
   std::memcpy(&size, ptr, sizeof(size));
   ptr += sizeof(size);
-  std::cout << __func__ << ":size:" << size << std::endl;
+
   arrow::io::BufferReader stream(reinterpret_cast<uint8_t const*>(ptr), size);
   auto p_schema = arrow::ipc::ReadSchema(&stream, nullptr).ValueOrElse([]() {
     CUDF_FAIL("Failed to read schema from IPC message");
@@ -505,16 +500,18 @@ std::pair<std::unique_ptr<table>, std::vector<std::string>> import_ipc(
   ptr += size;
 
   size_t n_columns = 0;
-  std::vector<std::unique_ptr<column>> columns;
+  std::vector<column_view> columns;
+  std::vector<std::shared_ptr<ipc_imported_column>> imported_columns;
   while (ptr != ipc_handles->data() + ipc_handles->size()) {
     ipc::IpcColumn ipc_column;
     ptr    = ipc::IpcColumn::from_buffer(ptr, &ipc_column);
     auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
-    columns.push_back(std::move(c));
-    std::cout << "n_columns:" << n_columns << std::endl;
+    columns.push_back(std::move(c.first));
+    imported_columns.push_back(std::move(c.second));
     ++n_columns;
   }
-  auto t = std::make_unique<table>(std::move(columns));
-  return std::make_pair(std::move(t), p_schema->field_names());
+
+  table_view t{std::move(columns)};
+  return std::make_pair(t, imported_columns);
 }
 }  // namespace cudf

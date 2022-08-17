@@ -4996,7 +4996,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @classmethod
     def import_ipc(cls, message):
         from cudf._lib import ipc
-        return cls._from_data(*ipc.import_ipc(message))
+        return cls._from_data(ipc.import_ipc(message))
 
     @_cudf_nvtx_annotate
     def to_records(self, index=True):
