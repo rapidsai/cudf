@@ -552,8 +552,6 @@ inline __device__ void PackLiteralsShuffle(
 inline __device__ void PackLiteralsRoundRobin(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  // TODO (ets): this code is not called any longer.  Is it worth keeping in case there is a
-  // need in the future for odd bit lengths?
   // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
   // words but the destination mem may not be a multiple of 4 bytes.
   // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
@@ -611,8 +609,8 @@ inline __device__ void PackLiterals(
       break;
     default:
       if (w > 16) { CUDF_UNREACHABLE("Unsupported bit width"); }
-      // TODO (ets): This code should never be called, since we prescribe a limited
-      // number of bit widths in build_chunk_dictionaries().
+      // less efficient bit packing that uses atomics, but can handle arbitrary
+      // bit widths up to 16. used for repetition and definition level encoding
       PackLiteralsRoundRobin(dst, v, count, w, t);
   }
 }
