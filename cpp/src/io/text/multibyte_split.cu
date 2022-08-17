@@ -237,13 +237,15 @@ __global__ void multibyte_split_kernel(
 
   // STEP 3: Flag matches
 
-  singlepass_offset thread_offsets[ITEMS_PER_THREAD];
+  singlepass_offset thread_offset{};
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     bool const match      = i < thread_input_size and trie.is_match(thread_states[i]);
-    auto const global_idx = base_input_offset + thread_input_offset + i;
-    bool const past_range = global_idx + 1 >= byte_range_end;
-    thread_offsets[i].init(match, past_range);
+    auto const match_end  = base_input_offset + thread_input_offset + i + 1;
+    bool const past_range = match_end >= byte_range_end;
+    singlepass_offset local_offset{};
+    local_offset.init(match, past_range);
+    thread_offset = thread_offset + local_offset;
   }
 
   // STEP 4: Scan flags to determine absolute thread output offset
@@ -251,18 +253,20 @@ __global__ void multibyte_split_kernel(
   auto prefix_callback = OffsetScanCallback(tile_output_offsets, tile_idx);
 
   __syncthreads();  // required before temp_memory re-use
-  OffsetScan(temp_storage.offset_scan)
-    .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
+  OffsetScan(temp_storage.offset_scan).ExclusiveSum(thread_offset, thread_offset, prefix_callback);
 
   // Step 5: Assign outputs from each thread using match offsets.
 
-  if (output_offsets.size() > 0) {  // TODO this can be removed after refactoring the host code
-    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
-      if (trie.is_match(thread_states[i]) && !thread_offsets[i].is_past_end()) {
-        auto const match_end = base_input_offset + thread_input_offset + i + 1;
-        output_offsets[thread_offsets[i].offset() - base_offset_offset] = match_end;
-      }
+  for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
+    if (trie.is_match(thread_states[i]) && !thread_offset.is_past_end()) {
+      auto const match_end  = base_input_offset + thread_input_offset + i + 1;
+      bool const past_range = match_end >= byte_range_end;
+      output_offsets[thread_offset.offset() - base_offset_offset] = match_end;
+      singlepass_offset local_offset{};
+      local_offset.init(true, past_range);
+      thread_offset = thread_offset + local_offset;
     }
+  }
 }
 
 }  // namespace
@@ -402,11 +406,11 @@ class output_chunks {
 };
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
-  std::string const& delimiter,
-  byte_range_info byte_range,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr,
-  rmm::cuda_stream_pool& stream_pool)
+                                              std::string const& delimiter,
+                                              byte_range_info byte_range,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr,
+                                              rmm::cuda_stream_pool& stream_pool)
 {
   CUDF_FUNC_RANGE();
 
