@@ -13,7 +13,7 @@ import rmm
 import cudf
 from cudf._lib.spillable_buffer import SpillableBuffer
 from cudf.core.abc import Serializable
-from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.spill_manager import (
     SpillManager,
     get_columns,
@@ -305,3 +305,9 @@ def test_concat_of_spilled_views(manager: SpillManager):
     assert not gen_df.is_spilled(df1)
     assert not gen_df.is_spilled(df2)
     assert not gen_df.is_spilled(res)
+
+
+def test_other_buffers(manager: SpillManager):
+    buf = Buffer(bytearray(100))
+    assert len(manager.other_buffers()) == 1
+    assert manager.other_buffers()[0] is buf

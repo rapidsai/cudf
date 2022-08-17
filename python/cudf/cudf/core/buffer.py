@@ -183,6 +183,8 @@ class Buffer(Serializable):
     def __init__(
         self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
+        from cudf.core.spill_manager import global_manager
+
         if isinstance(data, int):
             if size is None:
                 raise ValueError(
@@ -205,20 +207,23 @@ class Buffer(Serializable):
             if isinstance(buf, rmm.DeviceBuffer):
                 self._ptr = buf.ptr
                 self._size = buf.size
-                self._owner = buf
-                return
-            iface = getattr(buf, "__cuda_array_interface__", None)
-            if iface:
-                ptr, size = get_ptr_and_size(iface)
-                self._ptr = ptr
-                self._size = size
-                self._owner = buf
-                return
-            ptr, size = get_ptr_and_size(np.asarray(buf).__array_interface__)
-            buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-            self._ptr = buf.ptr
-            self._size = buf.size
+            else:
+                iface = getattr(buf, "__cuda_array_interface__", None)
+                if iface:
+                    ptr, size = get_ptr_and_size(iface)
+                    self._ptr = ptr
+                    self._size = size
+                else:
+                    ptr, size = get_ptr_and_size(
+                        np.asarray(buf).__array_interface__
+                    )
+                    buf = rmm.DeviceBuffer(ptr=ptr, size=size)
+                    self._ptr = buf.ptr
+                    self._size = buf.size
             self._owner = buf
+
+        if global_manager.enabled:
+            global_manager.get().add_other(self)
 
     def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
