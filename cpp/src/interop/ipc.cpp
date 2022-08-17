@@ -18,28 +18,28 @@
 #include <cudf/ipc.hpp>
 
 namespace cudf {
-struct ipc_imported_column::impl {
-  ipc::ipc_imported_ptr data;
-  ipc::ipc_imported_ptr mask;
+struct imported_column::impl {
+  ipc::imported_ptr data;
+  ipc::imported_ptr mask;
 
-  impl(ipc::ipc_imported_ptr&& d, ipc::ipc_imported_ptr&& m)
-    : data{std::forward<ipc::ipc_imported_ptr>(d)}, mask{std::forward<ipc::ipc_imported_ptr>(m)}
+  impl(ipc::imported_ptr&& d, ipc::imported_ptr&& m)
+    : data{std::forward<ipc::imported_ptr>(d)}, mask{std::forward<ipc::imported_ptr>(m)}
   {
   }
 };
 
-ipc_imported_column::ipc_imported_column(std::string n, ipc::ipc_imported_ptr&& d, ipc::ipc_imported_ptr&& m)
+imported_column::imported_column(std::string n, ipc::imported_ptr&& d, ipc::imported_ptr&& m)
   : name{std::move(n)},
     _pimpl{
-      std::make_unique<impl>(std::forward<ipc::ipc_imported_ptr>(d), std::forward<ipc::ipc_imported_ptr>(m))}
+      std::make_unique<impl>(std::forward<ipc::imported_ptr>(d), std::forward<ipc::imported_ptr>(m))}
 {
 }
 
-ipc_imported_column::ipc_imported_column(std::string n, ipc::ipc_imported_ptr&& d)
+imported_column::imported_column(std::string n, ipc::imported_ptr&& d)
   : name{std::move(n)},
-    _pimpl{std::make_unique<impl>(std::forward<ipc::ipc_imported_ptr>(d), ipc::ipc_imported_ptr{})}
+    _pimpl{std::make_unique<impl>(std::forward<ipc::imported_ptr>(d), ipc::imported_ptr{})}
 {
 }
 
-ipc_imported_column::~ipc_imported_column() = default;
+imported_column::~imported_column() = default;
 }  // namespace cudf

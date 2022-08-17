@@ -1,12 +1,13 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 from cudf._lib.cpp.interop cimport gather_metadata, column_metadata
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.utils cimport table_view_from_columns, columns_from_table_view
-# data_from_unique_ptr
 
 from cudf._lib.cpp.ipc cimport export_ipc as cpp_export_ipc
 from cudf._lib.cpp.ipc cimport import_ipc as cpp_import_ipc
-from cudf._lib.cpp.ipc cimport ipc_imported_column
+from cudf._lib.cpp.ipc cimport imported_column
 
 from libcpp.vector cimport vector
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -26,10 +27,10 @@ def export_ipc(list source_columns, object metadata):
 
 
 cdef class ImportedColumn:
-    cdef shared_ptr[ipc_imported_column] _handle
+    cdef shared_ptr[imported_column] _handle
 
     @staticmethod
-    cdef ImportedColumn from_shared_ptr(shared_ptr[ipc_imported_column] c_col):
+    cdef ImportedColumn from_shared_ptr(shared_ptr[imported_column] c_col):
         col = ImportedColumn()
         col._handle = c_col
 
@@ -37,7 +38,7 @@ cdef class ImportedColumn:
 def import_ipc(object message):
     cdef:
         shared_ptr[CBuffer] cbuf = pyarrow_unwrap_buffer(message)
-        pair[table_view, vector[shared_ptr[ipc_imported_column]]] result = move(
+        pair[table_view, vector[shared_ptr[imported_column]]] result = move(
             cpp_import_ipc(cbuf)
         )
         owners = [ImportedColumn.from_shared_ptr(n) for n in result.second]

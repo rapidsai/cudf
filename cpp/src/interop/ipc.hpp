@@ -19,7 +19,10 @@ inline void check_cu_status(CUresult res)
   }
 }
 
-struct ipc_exported_ptr {
+/**
+ * @brief This struct represents a pointer in exported IPC format.
+ */
+struct exported_ptr {
   cudaIpcMemHandle_t handle{0};
   int64_t offset{0};
   int64_t size{0};
@@ -42,9 +45,12 @@ struct ipc_exported_ptr {
     std::memcpy(ptr, &size, sizeof(size));
   }
 
-  static uint8_t const* from_buffer(uint8_t const* ptr, ipc_exported_ptr* out)
+  /**
+   * @brief Construct an `exported_ptr` from buffer returned by `serialize` method.
+   */
+  static uint8_t const* from_buffer(uint8_t const* ptr, exported_ptr* out)
   {
-    ipc_exported_ptr& dptr = *out;
+    exported_ptr& dptr = *out;
     std::memcpy(&dptr.handle, ptr, sizeof(handle));
     ptr += sizeof(handle);
     std::memcpy(&dptr.offset, ptr, sizeof(offset));
@@ -54,40 +60,70 @@ struct ipc_exported_ptr {
 
     return ptr;
   }
+
+  /**
+   * @brief Construct an `exported_ptr` from a given pointer for exportation.
+   */
+  static exported_ptr from_data(uint8_t const* ptr, int64_t size)
+  {
+    CUdeviceptr pbase;
+    size_t psize;
+    check_cu_status(cuMemGetAddressRange(&pbase, &psize, reinterpret_cast<CUdeviceptr>(ptr)));
+    auto base = reinterpret_cast<uint8_t const*>(pbase);
+
+    cudaIpcMemHandle_t handle;
+    auto non_const = const_cast<void*>(reinterpret_cast<void const*>(ptr));
+    CUDF_CUDA_TRY(cudaIpcGetMemHandle(&handle, non_const));
+
+    return exported_ptr{.handle = handle, .offset = ptr - base, .size = size};
+  }
 };
 
-class ipc_imported_ptr {
-  void* base_ptr{nullptr};
+/**
+ * @brief This class represents an pointer imported from IPC handle.
+ */
+class imported_ptr {
+  // base pointer of the memory allocation
+  uint8_t* base_ptr{nullptr};
+  // offset in bytes
+  int64_t offset{0};
+  // range of this pointer
+  int64_t size{0};
 
  public:
-  ipc_imported_ptr() = default;
-  explicit ipc_imported_ptr(cudaIpcMemHandle_t handle)
+  imported_ptr() = default;
+  explicit imported_ptr(exported_ptr const& handle)
+    : offset{handle.offset}, size{handle.size}
   {
-    CUDF_CUDA_TRY(cudaIpcOpenMemHandle(&base_ptr, handle, cudaIpcMemLazyEnablePeerAccess));
+    CUDF_CUDA_TRY(
+      cudaIpcOpenMemHandle((void**)&base_ptr, handle.handle, cudaIpcMemLazyEnablePeerAccess));
   }
-  ~ipc_imported_ptr() noexcept(false)
+  ~imported_ptr() noexcept(false)
   {
     if (base_ptr) { CUDF_CUDA_TRY(cudaIpcCloseMemHandle(base_ptr)) };
   }
 
-  ipc_imported_ptr(ipc_imported_ptr const& that) = delete;
-  ipc_imported_ptr(ipc_imported_ptr&& that) { std::swap(that.base_ptr, this->base_ptr); }
+  imported_ptr(imported_ptr const& that) = delete;
+  imported_ptr(imported_ptr&& that) { std::swap(that.base_ptr, this->base_ptr); }
 
   template <typename T>
   auto get() const
   {
-    return reinterpret_cast<T const*>(base_ptr);
+    return reinterpret_cast<T const*>(base_ptr + offset);
   }
   template <typename T>
   auto get()
   {
-    return reinterpret_cast<T*>(base_ptr);
+    return reinterpret_cast<T*>(base_ptr + offset);
   }
 };
 
-struct ipc_exported_column {
-  ipc_exported_ptr data;
-  ipc_exported_ptr mask;
+/**
+ * @brief This struct represents a column in exported IPC format.
+ */
+struct exported_column {
+  exported_ptr data;
+  exported_ptr mask;
 
   bool has_nulls() const { return mask.size != 0; }
 
@@ -105,32 +141,18 @@ struct ipc_exported_column {
     if (has_nulls()) { mask.serialize(p_bytes); }
   }
 
-  static uint8_t const* from_buffer(uint8_t const* ptr, ipc_exported_column* out)
+  static uint8_t const* from_buffer(uint8_t const* ptr, exported_column* out)
   {
     bool hn;
     std::memcpy(&hn, ptr, sizeof(hn));
     ptr += sizeof(hn);
     std::cout << "hn:" << hn << std::endl;
 
-    ipc_exported_column& column = *out;
-    ptr = ipc_exported_ptr::from_buffer(ptr, &column.data);
-    if (hn) { ptr = ipc_exported_ptr::from_buffer(ptr, &column.mask); }
+    exported_column& column = *out;
+    ptr = exported_ptr::from_buffer(ptr, &column.data);
+    if (hn) { ptr = exported_ptr::from_buffer(ptr, &column.mask); }
     return ptr;
   }
 };
-
-inline ipc_exported_ptr export_ptr_for_ipc(uint8_t const* ptr, int64_t size)
-{
-  CUdeviceptr pbase;
-  size_t psize;
-  check_cu_status(cuMemGetAddressRange(&pbase, &psize, reinterpret_cast<CUdeviceptr>(ptr)));
-  auto base = reinterpret_cast<uint8_t const*>(pbase);
-
-  cudaIpcMemHandle_t handle;
-  auto non_const = const_cast<void*>(reinterpret_cast<void const*>(ptr));
-  CUDF_CUDA_TRY(cudaIpcGetMemHandle(&handle, non_const));
-
-  return ipc_exported_ptr{.handle = handle, .offset = ptr - base, .size = size};
-}
 }  // namespace ipc
 }  // namespace cudf

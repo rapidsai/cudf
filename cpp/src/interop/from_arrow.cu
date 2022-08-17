@@ -458,30 +458,30 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
-std::pair<column_view, std::unique_ptr<ipc_imported_column>> from_ipc_column(
-  arrow::Field const& field, ipc::ipc_exported_column ipc_column)
+std::pair<column_view, std::unique_ptr<imported_column>> from_ipc_column(
+  arrow::Field const& field, ipc::exported_column ipc_column)
 {
-  ipc::ipc_imported_ptr data_base_ptr{ipc_column.data.handle};
-  auto ptr        = data_base_ptr.get<uint8_t>() + ipc_column.data.offset;
+  ipc::imported_ptr data_base_ptr{ipc_column.data};
+  auto ptr        = data_base_ptr.get<uint8_t>();
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
   size_type size = ipc_column.data.size / size_of(dtype);
 
   if (ipc_column.has_nulls()) {
-    auto mask_base_ptr     = std::make_shared<ipc::ipc_imported_ptr>(ipc_column.mask.handle);
-    bitmask_type* mask_ptr = mask_base_ptr->get<bitmask_type>() + ipc_column.mask.offset;
+    auto mask_base_ptr     = std::make_shared<ipc::imported_ptr>(ipc_column.mask);
+    auto mask_ptr          = mask_base_ptr->get<bitmask_type>();
     auto cview             = column_view{dtype, size, ptr, mask_ptr};
     return std::make_pair(
-      cview, std::make_unique<ipc_imported_column>(field.name(), std::move(data_base_ptr)));
+      cview, std::make_unique<imported_column>(field.name(), std::move(data_base_ptr)));
   }
 
   auto cview = column_view{dtype, size, ptr};
   return std::make_pair(
-    cview, std::make_unique<ipc_imported_column>(field.name(), std::move(data_base_ptr)));
+    cview, std::make_unique<imported_column>(field.name(), std::move(data_base_ptr)));
 }
 }  // namespace
 
-std::pair<table_view, std::vector<std::shared_ptr<ipc_imported_column>>> import_ipc(
+std::pair<table_view, std::vector<std::shared_ptr<imported_column>>> import_ipc(
   std::shared_ptr<arrow::Buffer> ipc_handles)
 {
   int64_t size{0};
@@ -498,10 +498,10 @@ std::pair<table_view, std::vector<std::shared_ptr<ipc_imported_column>>> import_
 
   size_t n_columns = 0;
   std::vector<column_view> columns;
-  std::vector<std::shared_ptr<ipc_imported_column>> imported_columns;
+  std::vector<std::shared_ptr<imported_column>> imported_columns;
   while (ptr != ipc_handles->data() + ipc_handles->size()) {
-    ipc::ipc_exported_column ipc_column;
-    ptr    = ipc::ipc_exported_column::from_buffer(ptr, &ipc_column);
+    ipc::exported_column ipc_column;
+    ptr    = ipc::exported_column::from_buffer(ptr, &ipc_column);
     auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
     columns.push_back(std::move(c.first));
     imported_columns.push_back(std::move(c.second));
