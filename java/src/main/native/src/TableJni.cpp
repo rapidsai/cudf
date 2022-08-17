@@ -1459,7 +1459,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
 
     // there is no need to re-order columns when inferring schema
-    if (result.metadata.column_names.empty() || n_col_names.size() <= 0) {
+    if (result.metadata.schema_info.empty() || n_col_names.size() <= 0) {
       return convert_table_for_return(env, result.tbl);
     } else {
       // json reader will not return the correct column order,
@@ -1467,10 +1467,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
       // turn name and its index in table into map<name, index>
       std::map<std::string, cudf::size_type> m;
-      std::transform(result.metadata.column_names.begin(), result.metadata.column_names.end(),
+      std::transform(result.metadata.schema_info.cbegin(), result.metadata.schema_info.cend(),
                      thrust::make_counting_iterator(0), std::inserter(m, m.end()),
-                     [](auto const &column_name, auto const &index) {
-                       return std::make_pair(column_name, index);
+                     [](auto const &column_info, auto const &index) {
+                       return std::make_pair(column_info.name, index);
                      });
 
       auto col_names_vec = n_col_names.as_cpp_vector();

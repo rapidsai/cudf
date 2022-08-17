@@ -4250,6 +4250,9 @@ TEST_F(ParquetWriterTest, ByteArrayStats)
 
   read_footer(source, &fmd);
 
+  EXPECT_EQ(fmd.schema[1].type, cudf::io::parquet::Type::BYTE_ARRAY);
+  EXPECT_EQ(fmd.schema[2].type, cudf::io::parquet::Type::BYTE_ARRAY);
+
   auto const stats0 = parse_statistics(fmd.row_groups[0].columns[0]);
   auto const stats1 = parse_statistics(fmd.row_groups[0].columns[1]);
 
