@@ -49,9 +49,9 @@ constexpr bool is_begin_utf8_char(uint8_t byte)
  */
 constexpr size_type bytes_in_char_utf8(char_utf8 character)
 {
-  return 1 + static_cast<size_type>((character & unsigned{0x0000FF00}) > 0) +
-         static_cast<size_type>((character & unsigned{0x00FF0000}) > 0) +
-         static_cast<size_type>((character & unsigned{0xFF000000}) > 0);
+  return 1 + static_cast<size_type>((character & 0x0000'FF00u) > 0) +
+         static_cast<size_type>((character & 0x00FF'0000u) > 0) +
+         static_cast<size_type>((character & 0xFF00'0000u) > 0);
 }
 
 /**
@@ -126,23 +126,23 @@ constexpr inline size_type from_char_utf8(char_utf8 character, char* str)
 constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
 {
   uint32_t unchr = 0;
-  if (utf8_char < 0x00000080)  // single-byte pass thru
+  if (utf8_char < 0x0000'0080)  // single-byte pass thru
     unchr = utf8_char;
-  else if (utf8_char < 0x0000E000)  // two bytes
+  else if (utf8_char < 0x0000'E000)  // two bytes
   {
     unchr = (utf8_char & 0x1F00) >> 2;  // shift and
     unchr |= (utf8_char & 0x003F);      // unmask
-  } else if (utf8_char < 0x00F00000)    // three bytes
+  } else if (utf8_char < 0x00F0'0000)   // three bytes
   {
-    unchr = (utf8_char & 0x0F0000) >> 4;         // get upper 4 bits
-    unchr |= (utf8_char & 0x003F00) >> 2;        // shift and
-    unchr |= (utf8_char & 0x00003F);             // unmask
-  } else if (utf8_char <= (unsigned)0xF8000000)  // four bytes
+    unchr = (utf8_char & 0x0F'0000) >> 4;   // get upper 4 bits
+    unchr |= (utf8_char & 0x00'3F00) >> 2;  // shift and
+    unchr |= (utf8_char & 0x00'003F);       // unmask
+  } else if (utf8_char <= 0xF800'0000u)     // four bytes
   {
-    unchr = (utf8_char & 0x03000000) >> 6;   // upper 3 bits
-    unchr |= (utf8_char & 0x003F0000) >> 4;  // next 6 bits
-    unchr |= (utf8_char & 0x00003F00) >> 2;  // next 6 bits
-    unchr |= (utf8_char & 0x0000003F);       // unmask
+    unchr = (utf8_char & 0x0300'0000) >> 6;   // upper 3 bits
+    unchr |= (utf8_char & 0x003F'0000) >> 4;  // next 6 bits
+    unchr |= (utf8_char & 0x0000'3F00) >> 2;  // next 6 bits
+    unchr |= (utf8_char & 0x0000'003F);       // unmask
   }
   return unchr;
 }
@@ -156,26 +156,26 @@ constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
 constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
 {
   cudf::char_utf8 utf8 = 0;
-  if (unchr < 0x00000080)  // single byte utf8
+  if (unchr < 0x0000'0080)  // single byte utf8
     utf8 = unchr;
-  else if (unchr < 0x00000800)  // double byte utf8
+  else if (unchr < 0x0000'0800)  // double byte utf8
   {
     utf8 = (unchr << 2) & 0x1F00;  // shift bits for
     utf8 |= (unchr & 0x3F);        // utf8 encoding
-    utf8 |= 0x0000C080;
-  } else if (unchr < 0x00010000)  // triple byte utf8
+    utf8 |= 0x0000'C080;
+  } else if (unchr < 0x0001'0000)  // triple byte utf8
   {
-    utf8 = (unchr << 4) & 0x0F0000;   // upper 4 bits
-    utf8 |= (unchr << 2) & 0x003F00;  // next 6 bits
-    utf8 |= (unchr & 0x3F);           // last 6 bits
-    utf8 |= 0x00E08080;
-  } else if (unchr < 0x00110000)  // quadruple byte utf8
+    utf8 = (unchr << 4) & 0x0F'0000;   // upper 4 bits
+    utf8 |= (unchr << 2) & 0x00'3F00;  // next 6 bits
+    utf8 |= (unchr & 0x3F);            // last 6 bits
+    utf8 |= 0x00E0'8080;
+  } else if (unchr < 0x0011'0000)  // quadruple byte utf8
   {
-    utf8 = (unchr << 6) & 0x07000000;   // upper 3 bits
-    utf8 |= (unchr << 4) & 0x003F0000;  // next 6 bits
-    utf8 |= (unchr << 2) & 0x00003F00;  // next 6 bits
-    utf8 |= (unchr & 0x3F);             // last 6 bits
-    utf8 |= (unsigned)0xF0808080;
+    utf8 = (unchr << 6) & 0x0700'0000;   // upper 3 bits
+    utf8 |= (unchr << 4) & 0x003F'0000;  // next 6 bits
+    utf8 |= (unchr << 2) & 0x0000'3F00;  // next 6 bits
+    utf8 |= (unchr & 0x3F);              // last 6 bits
+    utf8 |= 0xF080'8080u;
   }
   return utf8;
 }

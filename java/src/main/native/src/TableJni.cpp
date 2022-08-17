@@ -1533,8 +1533,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 
     auto builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-      builder = builder.columns(n_filter_col_names.as_cpp_vector())
-                    .convert_binary_to_strings(n_col_binary_read.to_vector<bool>());
+      builder = builder.columns(n_filter_col_names.as_cpp_vector());
     }
 
     cudf::io::parquet_reader_options opts =

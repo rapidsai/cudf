@@ -73,14 +73,13 @@ void bench_groupby_struct_keys(nvbench::state& state)
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
 
   auto const keys_table = cudf::table(std::move(child_cols));
-  auto const vals_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{n_rows}, profile);
+  auto const vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{n_rows}, profile);
 
   cudf::groupby::groupby gb_obj(keys_table.view());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals_table->get_column(0).view();
+  requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
 
   // Set up nvbench default stream

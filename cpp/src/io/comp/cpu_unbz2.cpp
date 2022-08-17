@@ -212,7 +212,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   // Start-of-block signature
   sig0 = getbits(s, 24);
   sig1 = getbits(s, 24);
-  if (sig0 != 0x314159 || sig1 != 0x265359) { return BZ_DATA_ERROR; }
+  if (sig0 != 0x31'4159 || sig1 != 0x26'5359) { return BZ_DATA_ERROR; }
 
   s->currBlockNo++;
 
@@ -246,7 +246,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
     if (nGroups < 2 || nGroups > 6 || nSelectors < 1 || nSelectors > BZ_MAX_SELECTORS)
       return BZ_DATA_ERROR;
 
-    pos = 0x76543210;
+    pos = 0x7654'3210;
     for (i = 0; i < nSelectors; i++) {
       uint32_t selectorMtf = 0, mask, tmp;
       for (int32_t v = next32bits(s); v < 0; v <<= 1) {
@@ -465,13 +465,13 @@ int32_t bz2_decompress_block(unbz_state_s* s)
     uint32_t save_bitpos    = s->bitpos;
     sig0                    = getbits(s, 24);
     sig1                    = getbits(s, 24);
-    if (sig0 == 0x314159 && sig1 == 0x265359) {
+    if (sig0 == 0x31'4159 && sig1 == 0x26'5359) {
       // Start of another block: restore bitstream location
       s->cur    = save_cur;
       s->bitbuf = save_bitbuf;
       s->bitpos = save_bitpos;
       return BZ_OK;
-    } else if (sig0 == 0x177245 && sig1 == 0x385090) {
+    } else if (sig0 == 0x17'7245 && sig1 == 0x38'5090) {
       // End-of-stream signature
       return BZ_STREAM_END;
     } else {

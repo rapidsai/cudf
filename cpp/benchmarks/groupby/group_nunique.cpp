@@ -43,36 +43,27 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
   cudf::rmm_pool_raii pool_raii;
   const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
-  auto const keys_table = [&] {
-    data_profile profile;
-    profile.set_null_probability(std::nullopt);
-    profile.set_cardinality(0);
-    profile.set_distribution_params<int32_t>(
+  auto const keys = [&] {
+    data_profile profile = data_profile_builder().cardinality(0).no_validity().distribution(
       cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, 100);
-    return create_random_table({cudf::type_to_id<int32_t>()}, row_count{size}, profile);
+    return create_random_column(cudf::type_to_id<int32_t>(), row_count{size}, profile);
   }();
 
-  auto const vals_table = [&] {
-    data_profile profile;
+  auto const vals = [&] {
+    data_profile profile = data_profile_builder().cardinality(0).distribution(
+      cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 1000);
     if (const auto null_freq = state.get_float64("null_probability"); null_freq > 0) {
-      profile.set_null_probability({null_freq});
+      profile.set_null_probability(null_freq);
     } else {
       profile.set_null_probability(std::nullopt);
     }
-    profile.set_cardinality(0);
-    profile.set_distribution_params<Type>(cudf::type_to_id<Type>(),
-                                          distribution_id::UNIFORM,
-                                          static_cast<Type>(0),
-                                          static_cast<Type>(1000));
-    return create_random_table({cudf::type_to_id<Type>()}, row_count{size}, profile);
+    return create_random_column(cudf::type_to_id<Type>(), row_count{size}, profile);
   }();
 
-  auto const& keys = keys_table->get_column(0);
-  auto const& vals = vals_table->get_column(0);
-
-  auto gb_obj         = cudf::groupby::groupby(cudf::table_view({keys, keys, keys}));
+  auto gb_obj =
+    cudf::groupby::groupby(cudf::table_view({keys->view(), keys->view(), keys->view()}));
   auto const requests = make_aggregation_request_vector(
-    vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
+    *vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync,
