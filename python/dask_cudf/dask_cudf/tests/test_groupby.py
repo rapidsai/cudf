@@ -579,10 +579,11 @@ def test_groupby_categorical_key():
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
         .compute()
     )
+    # TODO: Is dask-dataframe result wrong?
+    # (seems to disagree with dask-cudf and pandas)
     expect = (
-        ddf.groupby("name")
+        ddf.compute().groupby("name")
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
     )
     dd.assert_eq(expect, got)
 
