@@ -2031,15 +2031,31 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_exportIPC(JNIEnv *env, jclass, 
   CATCH_STD(env, )
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_ImportIPC(JNIEnv *env, jclass, jbyteArray msg) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_ImportIPC(JNIEnv *env, jclass,
+                                                                 jbyteArray msg,
+                                                                 jobjectArray out_names) {
   try {
     jbyte *buffer = env->GetByteArrayElements(msg, 0);
     auto len = env->GetArrayLength(msg);
-    auto p_buf = std::make_shared<arrow::Buffer>(buffer, len);
+    auto p_buf = std::make_shared<arrow::Buffer>(reinterpret_cast<uint8_t *>(buffer), len);
     std::pair<cudf::table_view, std::vector<std::shared_ptr<cudf::imported_column>>> const &result =
         cudf::import_ipc(p_buf);
+    // data is copied during import as we don't know how the keep the imported_column around.
+    auto t = std::make_unique<cudf::table>(result.first);
+
+    auto const &columns = result.second;
+    auto n_columns = static_cast<int32_t>(columns.size());
+    jsize jlen = (jsize)n_columns;
+
+    jobjectArray jinfos =
+        env->NewObjectArray(jlen, env->FindClass("java/lang/String"), env->NewStringUTF(""));
+    for (int32_t i = 0; i < jlen; i++) {
+      env->SetObjectArrayElement(jinfos, i, env->NewStringUTF(columns[i]->name.c_str()));
+    }
+    env->SetObjectArrayElement(out_names, 0, jinfos);
+    return convert_table_for_return(env, t);
   }
-  CATCH_STD(env, )
+  CATCH_STD(env, NULL)
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv *env, jclass,

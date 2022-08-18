@@ -1655,10 +1655,11 @@ public final class Table implements AutoCloseable {
     return new IPCMessage(result[0]);
   }
 
-  native private static void importIPC(byte [] message);
+  native private static long[] importIPC(byte [] message, String[][] out);
 
   public static Table importIPC(IPCMessage message) {
-
+    String[][] columns_name = new String[1][]; // column name is discarded in java binding?
+    return new Table(importIPC(message.getMessage(), columns_name));
   }
 
 
