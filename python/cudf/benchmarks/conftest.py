@@ -59,6 +59,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 from config import cudf  # noqa: W0611, E402, F401
 from utils import (  # noqa: E402
     OrderedSet,
+    clear_column_cache,
     collapse_fixtures,
     column_generators,
     make_fixture,
@@ -111,7 +112,9 @@ for dtype, column_generator in column_generators.items():
         def series_nulls_false(
             request, nr=nr, column_generator=column_generator
         ):
-            return cudf.Series(column_generator(nr))
+            s = cudf.Series(column_generator(nr))
+            yield s
+            clear_column_cache(s)
 
         make_fixture(
             f"series_dtype_{dtype}_nulls_false_rows_{nr}",
@@ -125,7 +128,8 @@ for dtype, column_generator in column_generators.items():
         ):
             s = cudf.Series(column_generator(nr))
             s.iloc[::2] = None
-            return s
+            yield s
+            clear_column_cache(s)
 
         make_fixture(
             f"series_dtype_{dtype}_nulls_true_rows_{nr}",
@@ -138,7 +142,9 @@ for dtype, column_generator in column_generators.items():
         def index_nulls_false(
             request, nr=nr, column_generator=column_generator
         ):
-            return cudf.Index(column_generator(nr))
+            idx = cudf.Index(column_generator(nr))
+            yield idx
+            clear_column_cache(idx)
 
         make_fixture(
             f"index_dtype_{dtype}_nulls_false_rows_{nr}",
@@ -152,7 +158,9 @@ for dtype, column_generator in column_generators.items():
             def dataframe_nulls_false(
                 request, nr=nr, nc=nc, make_dataframe=make_dataframe
             ):
-                return make_dataframe(nr, nc)
+                df = make_dataframe(nr, nc)
+                yield df
+                clear_column_cache(df)
 
             make_fixture(
                 f"dataframe_dtype_{dtype}_nulls_false_cols_{nc}_rows_{nr}",
@@ -166,7 +174,8 @@ for dtype, column_generator in column_generators.items():
             ):
                 df = make_dataframe(nr, nc)
                 df.iloc[::2, :] = None
-                return df
+                yield df
+                clear_column_cache(df)
 
             make_fixture(
                 f"dataframe_dtype_{dtype}_nulls_true_cols_{nc}_rows_{nr}",

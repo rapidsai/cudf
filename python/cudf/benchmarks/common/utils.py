@@ -255,3 +255,9 @@ column_generators = {
     "int": (lambda nr: random_state.randint(low=0, high=100, size=nr)),
     "float": (lambda nr: random_state.rand(nr)),
 }
+
+
+def clear_column_cache(frame):
+    if frame.__class__.__module__.startswith("cudf"):
+        for col in frame._data.columns:
+            col._clear_cache()
