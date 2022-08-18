@@ -1780,3 +1780,16 @@ def test_orc_columns_and_index_param(index, columns):
         )
     else:
         assert_eq(expected, got, check_index_type=True)
+
+
+def test_orc_writer_cols_as_map_type():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])}
+    )
+    buffer = BytesIO()
+    df.to_orc(buffer, cols_as_map_type=["a"])
+
+    got = pd.read_orc(buffer)
+    expected = pd.DataFrame({"a": pd.Series([[(10, 20)], [(1, 21)]])})
+
+    assert_eq(got, expected)
