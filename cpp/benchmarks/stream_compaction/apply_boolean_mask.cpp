@@ -84,12 +84,11 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
 
   profile.set_bool_probability_true(percent_true / 100.0);
   profile.set_null_probability(std::nullopt);  // no null mask
-  auto mask_table = create_random_table({cudf::type_id::BOOL8}, row_count{column_size}, profile);
-  cudf::column_view mask = mask_table->get_column(0);
+  auto mask = create_random_column(cudf::type_id::BOOL8, row_count{column_size}, profile);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto result = cudf::apply_boolean_mask(*source_table, mask);
+    auto result = cudf::apply_boolean_mask(*source_table, mask->view());
   }
 
   calculate_bandwidth<T>(state, num_columns);

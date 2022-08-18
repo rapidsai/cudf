@@ -45,7 +45,7 @@ using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
 __device__ char_info get_char_info(character_flags_table_type const* d_flags, char_utf8 chr)
 {
   auto const code_point = detail::utf8_to_codepoint(chr);
-  auto const flag = code_point <= 0x00FFFF ? d_flags[code_point] : character_flags_table_type{0};
+  auto const flag = code_point <= 0x00'FFFF ? d_flags[code_point] : character_flags_table_type{0};
   return char_info{code_point, flag};
 }
 
