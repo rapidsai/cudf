@@ -253,7 +253,6 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         if arg == "size":
             return self.size()
 
-        maybe_shuffle_kwarg = _check_shuffle_kwarg(**kwargs)
         arg = _redirect_aggs(arg)
 
         if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
@@ -278,7 +277,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             arg,
             split_every=split_every,
             split_out=split_out,
-            **maybe_shuffle_kwarg,
+            **kwargs,
         )
 
 
@@ -444,7 +443,6 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         if arg == "size":
             return self.size()
 
-        maybe_shuffle_kwarg = _check_shuffle_kwarg(**kwargs)
         arg = _redirect_aggs(arg)
 
         if not isinstance(arg, dict):
@@ -467,7 +465,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             arg,
             split_every=split_every,
             split_out=split_out,
-            **maybe_shuffle_kwarg,
+            **kwargs,
         )
 
 
