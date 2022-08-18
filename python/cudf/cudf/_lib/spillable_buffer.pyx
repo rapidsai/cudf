@@ -151,17 +151,20 @@ cdef class SpillableBuffer:
                 self._size = data.nbytes
                 self._owner = None
 
-        # Then, we inform the spilling manager about this new buffer if:
-        #  - it is not already known to the spilling manager
-        #  - and the buffer hasn't been exposed (exposed=False)
+        # Then, we inform the spilling manager about this new buffer if it is
+        # not already known to the spilling manager.
         self._manager = manager
         base = self._manager.lookup_address_range(
             self._ptr, self._size
         )
         if base is not None:
-            base.ptr  # expose base buffer
-        elif not self._exposed:
-            # `self` is a base buffer that hasn't been exposed
+            # Since this is a view, we expose the buffer permanently.
+            base.ptr
+        elif self._exposed:
+            # Since the buffer has been exposed permanently, we add it to
+            # "others".
+            self._manager.add_other(self)
+        else:
             self._manager.add(self)
 
         # Finally, we spill until we comply with the device limit (if any).
