@@ -248,7 +248,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
   if (tensor.ndim > 1) {
     tensor.shape[1]   = num_cols;
     tensor.strides    = context->strides;
-    tensor.strides[0] = 1;
+    tensor.strides[0] = num_rows > 1 ? 1 : 0;
     tensor.strides[1] = num_rows;
   }
 
