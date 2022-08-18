@@ -44,12 +44,11 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <nvcomp/snappy.h>
-
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
@@ -940,11 +939,27 @@ void writer::impl::gather_fragment_statistics(
   stream.synchronize();
 }
 
+auto to_nvcomp_compression_type(Compression codec)
+{
+  if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
+  if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  CUDF_FAIL("Unsupported compression type");
+}
+
+size_t get_compress_max_output_chunk_size(Compression codec, uint32_t compression_blocksize)
+{
+  if (codec == Compression::UNCOMPRESSED) return 0;
+
+  return batched_compress_get_max_output_chunk_size(to_nvcomp_compression_type(codec),
+                                                    compression_blocksize);
+}
+
 auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      device_span<gpu::parquet_column_device_view const> col_desc,
                      uint32_t num_columns,
                      size_t max_page_size_bytes,
                      size_type max_page_size_rows,
+                     Compression compression_codec,
                      rmm::cuda_stream_view stream)
 {
   if (chunks.is_empty()) { return hostdevice_vector<size_type>{}; }
@@ -989,12 +1004,13 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
   // Get per-page max compressed size
   hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
-  std::transform(page_sizes.begin(), page_sizes.end(), comp_page_sizes.begin(), [](auto page_size) {
-    size_t page_comp_max_size = 0;
-    nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-      page_size, nvcompBatchedSnappyDefaultOpts, &page_comp_max_size);
-    return page_comp_max_size;
-  });
+  std::transform(page_sizes.begin(),
+                 page_sizes.end(),
+                 comp_page_sizes.begin(),
+                 [compression_codec](auto page_size) {
+                   return get_compress_max_output_chunk_size(compression_codec, page_size) +
+                          16;  // DO NOT MERGE
+                 });
   comp_page_sizes.host_to_device(stream);
 
   // Use per-page max compressed size to calculate chunk.compressed_size
@@ -1141,6 +1157,15 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
+void compress_check(device_span<decompress_status const> stats, rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              stats.begin(),
+                              stats.end(),
+                              [] __device__(auto const& stat) { return stat.status == 0; }),
+               "Error during decompression");
+}
+
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::EncPage> pages,
                                 size_t max_page_uncomp_data_size,
@@ -1190,8 +1215,10 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
                                  stream);
       }
       break;
-    default: break;
+    default: CUDF_FAIL("invalid compression type");
   }
+  compress_check(comp_stats, stream);
+
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -1232,6 +1259,9 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
+  if (options.get_compression() == compression_type::ZSTD) {
+    max_page_size_bytes = std::min(max_page_size_bytes, 64 * 1024ul);
+  }
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -1256,6 +1286,9 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
+  if (options.get_compression() == compression_type::ZSTD) {
+    max_page_size_bytes = std::min(max_page_size_bytes, 64 * 1024ul);
+  }
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -1499,8 +1532,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   // Build chunk dictionaries and count pages
-  hostdevice_vector<size_type> comp_page_sizes =
-    init_page_sizes(chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, stream);
+  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
+    chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, compression_, stream);
 
   // Get the maximum page size across all chunks
   size_type max_page_uncomp_data_size =
