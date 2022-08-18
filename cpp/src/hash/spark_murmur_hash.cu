@@ -415,7 +415,7 @@ std::unique_ptr<column> spark_murmur_hash3_32(table_view const& input,
 
   // Compute the hash value for each row
   thrust::tabulate(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     output_view.begin<spark_hash_value_type>(),
     output_view.end<spark_hash_value_type>(),
     row_hasher.device_hasher<SparkMurmurHash3_32, spark_murmur_device_row_hasher>(nullable, seed));

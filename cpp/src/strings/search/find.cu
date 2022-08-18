@@ -85,7 +85,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<int32_t>();
   // set the position values by evaluating the passed function
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -226,7 +226,7 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
 
   // fill the output with `false` unless the `d_target` is empty
   auto results_view = results->mutable_view();
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                results_view.begin<bool>(),
                results_view.end<bool>(),
                d_target.empty());
@@ -234,7 +234,7 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   if (!d_target.empty()) {
     // launch warp per string
     auto d_strings = column_device_view::create(input.parent(), stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<std::size_t>(0),
                        static_cast<std::size_t>(input.size()) * cudf::detail::warp_size,
                        contains_warp_fn{*d_strings, d_target, results_view.data<bool>()});
@@ -291,7 +291,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -346,7 +346,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
     d_results,

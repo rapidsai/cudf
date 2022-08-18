@@ -253,7 +253,7 @@ struct dispatch_round {
                                           stream,
                                           mr);
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       column.begin<Timestamp>(),
                       column.end<Timestamp>(),
                       output->mutable_view().begin<Timestamp>(),
@@ -289,7 +289,7 @@ struct launch_functor {
   std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
     rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -353,7 +353,7 @@ struct add_calendrical_months_functor {
       make_fixed_width_column(output_col_type, size, mask_state::UNALLOCATED, stream, mr);
     auto output_mview = output->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_begin,

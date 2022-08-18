@@ -319,7 +319,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
  * Example output iterator usage.
  * @code
  *  auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
- *  thrust::lower_bound(rmm::exec_policy(stream),
+ *  thrust::lower_bound(rmm::exec_policy_nosync(stream),
  *                      input->begin<Element>(),
  *                      input->end<Element>(),
  *                      values->begin<Element>(),

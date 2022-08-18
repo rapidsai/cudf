@@ -47,7 +47,7 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
   auto offsets_minus_one = thrust::make_transform_iterator(
     offset_begin, [offset_begin] __device__(auto i) { return i - 1; });
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::lower_bound(rmm::exec_policy(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       offsets_minus_one,
                       offsets_minus_one + offsets.size(),
                       counting_iter,

@@ -287,7 +287,7 @@ rmm::device_buffer decompress_data(datasource& source,
                         0);
     uncompressed_data_offsets.host_to_device(stream);
 
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
                      uncompressed_data_ptrs.begin(),
                      uncompressed_data_ptrs.end(),
                      [off  = uncompressed_data_offsets.device_ptr(),
@@ -310,12 +310,12 @@ rmm::device_buffer decompress_data(datasource& source,
                                                 stream);
     CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess, "unable to perform snappy decompression");
 
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy_nosync(stream),
                                uncompressed_data_sizes.d_begin(),
                                uncompressed_data_sizes.d_end(),
                                actual_uncompressed_data_sizes.begin()),
                  "Mismatch in expected and actual decompressed size during snappy decompression");
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+    CUDF_EXPECTS(thrust::equal(rmm::exec_policy_nosync(stream),
                                statuses.begin(),
                                statuses.end(),
                                thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),

@@ -243,7 +243,7 @@ void compute_substring_indices(column_device_view const& d_column,
   auto strings_count = d_column.size();
 
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [delim_itr, delimiter_count, start_char_pos, end_char_pos, d_column] __device__(size_type idx) {

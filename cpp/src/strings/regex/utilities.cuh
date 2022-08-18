@@ -129,7 +129,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   // Convert sizes to offsets
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
   auto const char_bytes = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);

@@ -54,7 +54,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   if (chars_offset > 0) {
     // adjust the individual offset values only if needed
     auto d_offsets = offsets_column->mutable_view();
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       d_offsets.begin<int32_t>(),
                       d_offsets.end<int32_t>(),
                       d_offsets.begin<int32_t>(),

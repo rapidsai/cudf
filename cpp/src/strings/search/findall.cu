@@ -105,8 +105,11 @@ std::unique_ptr<table> findall(strings_column_view const& input,
   auto find_counts     = count_matches(*d_strings, *d_prog, strings_count, stream);
   auto d_find_counts   = find_counts->view().data<size_type>();
 
-  size_type const columns_count = thrust::reduce(
-    rmm::exec_policy(stream), d_find_counts, d_find_counts + strings_count, 0, thrust::maximum{});
+  size_type const columns_count = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                                 d_find_counts,
+                                                 d_find_counts + strings_count,
+                                                 0,
+                                                 thrust::maximum{});
 
   auto indices = rmm::device_uvector<string_index_pair>(strings_count * columns_count, stream);
 

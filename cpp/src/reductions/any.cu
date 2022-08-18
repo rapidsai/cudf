@@ -62,7 +62,7 @@ struct any_fn {
       return thrust::make_transform_iterator(pair_iter, null_iter);
     }();
     auto result = std::make_unique<numeric_scalar<bool>>(false, true, stream, mr);
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),
                        any_true_fn<decltype(iter)>{iter, result->data()});

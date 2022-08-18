@@ -51,10 +51,10 @@ void BM_lists_scatter(::benchmark::State& state)
     data_type{type_to_id<TypeParam>()}, base_size, mask_state::UNALLOCATED, stream, mr);
   auto target_base_col = make_fixed_width_column(
     data_type{type_to_id<TypeParam>()}, base_size, mask_state::UNALLOCATED, stream, mr);
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    source_base_col->mutable_view().begin<TypeParam>(),
                    source_base_col->mutable_view().end<TypeParam>());
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    target_base_col->mutable_view().begin<TypeParam>(),
                    target_base_col->mutable_view().end<TypeParam>());
 
@@ -63,12 +63,12 @@ void BM_lists_scatter(::benchmark::State& state)
   auto target_offsets = make_fixed_width_column(
     data_type{type_to_id<offset_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    source_offsets->mutable_view().begin<offset_type>(),
                    source_offsets->mutable_view().end<offset_type>(),
                    0,
                    num_elements_per_row);
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    target_offsets->mutable_view().begin<offset_type>(),
                    target_offsets->mutable_view().end<offset_type>(),
                    0,
@@ -92,7 +92,7 @@ void BM_lists_scatter(::benchmark::State& state)
   auto scatter_map = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto m_scatter_map = scatter_map->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    m_scatter_map.begin<size_type>(),
                    m_scatter_map.end<size_type>(),
                    num_rows - 1,
@@ -100,7 +100,7 @@ void BM_lists_scatter(::benchmark::State& state)
 
   if (not coalesce) {
     thrust::default_random_engine g;
-    thrust::shuffle(rmm::exec_policy(stream),
+    thrust::shuffle(rmm::exec_policy_nosync(stream),
                     m_scatter_map.begin<size_type>(),
                     m_scatter_map.begin<size_type>(),
                     g);

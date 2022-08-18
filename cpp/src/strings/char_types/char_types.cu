@@ -62,7 +62,7 @@ std::unique_ptr<column> all_characters_of_type(
   // get the static character types table
   auto d_flags = detail::get_character_flags_table();
   // set the output values by checking the character types for each string
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,

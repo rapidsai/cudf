@@ -98,7 +98,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [lhs_begin, rhs_begin, filter_fn, d_offsets, d_chars] __device__(size_type idx) {

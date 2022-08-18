@@ -44,9 +44,10 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   // Markers to denote which rows to be copied to the output.
   auto const output_markers = [&] {
     auto markers = rmm::device_uvector<bool>(input.num_rows(), stream);
-    thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
+    thrust::uninitialized_fill(
+      rmm::exec_policy_nosync(stream), markers.begin(), markers.end(), false);
     thrust::scatter(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::constant_iterator<bool>(true, 0),
       thrust::constant_iterator<bool>(true, static_cast<size_type>(distinct_indices.size())),
       distinct_indices.begin(),

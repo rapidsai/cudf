@@ -84,7 +84,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     return (item.first != nullptr) ? item.second : 0;
   };
   size_t const bytes = thrust::transform_reduce(
-    rmm::exec_policy(stream), begin, end, size_checker, 0, thrust::plus<size_t>());
+    rmm::exec_policy_nosync(stream), begin, end, size_checker, 0, thrust::plus<size_t>());
   CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of strings is too large for cudf column");
 
@@ -131,7 +131,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
         size_type const offset      = thrust::get<1>(item);
         if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
       };
-      thrust::for_each_n(rmm::exec_policy(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
                          thrust::make_zip_iterator(thrust::make_tuple(
                            begin, offsets_column->view().template begin<int32_t>())),
                          strings_count,
@@ -185,7 +185,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     offsets_begin,
                     offsets_end,
                     offsets_view.data<int32_t>(),
@@ -194,7 +194,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   // build chars column
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
-  thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_view.data<char>());
+  thrust::copy(rmm::exec_policy_nosync(stream), chars_begin, chars_end, chars_view.data<char>());
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

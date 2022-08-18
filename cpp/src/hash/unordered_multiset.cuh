@@ -95,7 +95,7 @@ class unordered_multiset {
     size_type* d_hash_bins_end   = hash_bins_end.data();
     Element* d_hash_data         = hash_data.data();
 
-    thrust::for_each(rmm::exec_policy(stream),
+    thrust::for_each(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(col.size()),
                      [d_hash_bins_start, d_col, hasher] __device__(size_t idx) {
@@ -106,17 +106,17 @@ class unordered_multiset {
                        }
                      });
 
-    thrust::exclusive_scan(rmm::exec_policy(stream),
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                            hash_bins_start.begin(),
                            hash_bins_start.end(),
                            hash_bins_end.begin());
 
-    thrust::copy(rmm::exec_policy(stream),
+    thrust::copy(rmm::exec_policy_nosync(stream),
                  hash_bins_end.begin(),
                  hash_bins_end.end(),
                  hash_bins_start.begin());
 
-    thrust::for_each(rmm::exec_policy(stream),
+    thrust::for_each(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(col.size()),
                      [d_hash_bins_end, d_hash_data, d_col, hasher] __device__(size_t idx) {

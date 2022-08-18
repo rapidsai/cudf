@@ -56,7 +56,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
   auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, mr);
 
   // Pull data from the input string into each byte of the output string.
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),
@@ -252,7 +252,7 @@ auto make_strings_children(Func fn,
   // This may be called twice -- once for offsets and once for chars.
   auto for_each_fn = [exec_size, stream](Func& fn) {
     thrust::for_each_n(
-      rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), exec_size, fn);
+      rmm::exec_policy_nosync(stream), thrust::make_counting_iterator<size_type>(0), exec_size, fn);
   };
 
   if (!output_strings_sizes.has_value()) {
@@ -261,12 +261,12 @@ auto make_strings_children(Func fn,
 
     // Compute the offsets values.
     thrust::exclusive_scan(
-      rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+      rmm::exec_policy_nosync(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
   } else {
     // Compute the offsets values from the provided output string sizes.
     auto const string_sizes = output_strings_sizes.value();
     CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
-    thrust::inclusive_scan(rmm::exec_policy(stream),
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                            string_sizes.template begin<size_type>(),
                            string_sizes.template end<size_type>(),
                            d_offsets + 1);
@@ -368,7 +368,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
     output_sizes->mutable_view().template begin<size_type>()};
 
   auto const total_bytes =
-    thrust::transform_reduce(rmm::exec_policy(stream),
+    thrust::transform_reduce(rmm::exec_policy_nosync(stream),
                              thrust::make_counting_iterator<size_type>(0),
                              thrust::make_counting_iterator<size_type>(strings_count),
                              fn,

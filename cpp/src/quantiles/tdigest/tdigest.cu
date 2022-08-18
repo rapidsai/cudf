@@ -204,7 +204,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
         offsets_begin,
         thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
     });
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 keys,
                                 keys + weight.size(),
                                 weight.begin<double>(),
@@ -292,20 +292,20 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
 {
   auto offsets = cudf::make_fixed_width_column(
     data_type(type_id::INT32), 2, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                offsets->mutable_view().begin<offset_type>(),
                offsets->mutable_view().end<offset_type>(),
                0);
 
   auto min_col =
     cudf::make_numeric_column(data_type(type_id::FLOAT64), 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                min_col->mutable_view().begin<double>(),
                min_col->mutable_view().end<double>(),
                0);
   auto max_col =
     cudf::make_numeric_column(data_type(type_id::FLOAT64), 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                max_col->mutable_view().begin<double>(),
                max_col->mutable_view().end<double>(),
                0);
@@ -353,12 +353,12 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
   auto const all_empty_rows =
-    thrust::count_if(rmm::exec_policy(stream),
+    thrust::count_if(rmm::exec_policy_nosync(stream),
                      input.size_begin(),
                      input.size_begin() + input.size(),
                      [] __device__(auto const x) { return x == 0; }) == input.size();
   auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<offset_type>());
@@ -381,8 +381,8 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
     auto tdigest_is_empty = thrust::make_transform_iterator(
       tdv.size_begin(),
       [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; });
-    auto const null_count =
-      thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
+    auto const null_count = thrust::reduce(
+      rmm::exec_policy_nosync(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
     if (null_count == 0) {
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }

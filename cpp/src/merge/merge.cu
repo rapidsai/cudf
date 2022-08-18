@@ -194,7 +194,7 @@ index_vector generate_merged_indices(table_view const& left_table,
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order.data(), d_null_precedence.data());
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -204,7 +204,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order.data());
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -280,7 +280,7 @@ struct column_merger {
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),

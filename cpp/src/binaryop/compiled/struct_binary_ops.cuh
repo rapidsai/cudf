@@ -88,7 +88,7 @@ void apply_struct_binary_op(mutable_column_view& out,
 
   auto tabulate_device_operator = [&](auto device_comparator) {
     thrust::tabulate(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       out.begin<bool>(),
       out.end<bool>(),
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
@@ -125,7 +125,7 @@ void apply_struct_equality_op(mutable_column_view& out,
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
                    out.begin<bool>(),
                    out.end<bool>(),
                    [optional_iter,

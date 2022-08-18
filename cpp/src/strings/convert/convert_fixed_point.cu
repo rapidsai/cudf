@@ -152,7 +152,7 @@ struct dispatch_to_fixed_point_fn {
     auto d_results = results->mutable_view().data<DecimalType>();
 
     // convert strings into decimal values
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,
@@ -295,7 +295,7 @@ struct dispatch_from_fixed_point_fn {
       cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
     auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),
                        decimal_to_string_fn<DecimalType>{*d_column, d_offsets, d_chars});
@@ -361,7 +361,7 @@ struct dispatch_is_fixed_point_fn {
     auto d_results = results->mutable_view().data<bool>();
 
     // check strings for valid fixed-point chars
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
                       d_results,

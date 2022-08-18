@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   auto offsets = make_numeric_column(
     data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr_final);
   auto m_offsets = offsets->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    m_offsets.begin<size_type>(),
                    m_offsets.end<size_type>(),
                    0,

@@ -297,7 +297,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
   auto out_view = result->mutable_view();
   Type const n  = std::pow(10, -input.type().scale());
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),
@@ -326,7 +326,8 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
   if (size == 0) return output;
 
   auto output_view = output->mutable_view();
-  thrust::transform(rmm::exec_policy(stream), begin, end, output_view.begin<OutputType>(), UFN{});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream), begin, end, output_view.begin<OutputType>(), UFN{});
   return output;
 }
 

@@ -72,7 +72,7 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
         (c.offset() > 0 ? cudf::detail::get_value<size_type>(c.offsets(), c.offset(), stream) : 0);
       column_device_view offsets(c.offsets(), nullptr, nullptr);
       thrust::transform(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         offsets.begin<size_type>() + c.offset(),
         offsets.begin<size_type>() + c.offset() + c.size() + 1,
         d_merged_offsets.begin<size_type>() + count,

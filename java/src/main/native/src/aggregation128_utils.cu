@@ -89,7 +89,7 @@ std::unique_ptr<cudf::column> extract_chunk32(cudf::column_view const &in_col, c
                                             [] __device__(auto i) { return i * 4; }};
   thrust::permutation_iterator stride_iter{in_begin + chunk_idx, transform_iter};
 
-  thrust::copy(rmm::exec_policy(stream), stride_iter, stride_iter + num_rows,
+  thrust::copy(rmm::exec_policy_nosync(stream), stride_iter, stride_iter + num_rows,
                out_view.data<int32_t>());
   return out_col;
 }
@@ -115,12 +115,12 @@ std::unique_ptr<cudf::table> assemble128_from_sum(cudf::table_view const &chunks
   columns.push_back(cudf::make_fixed_width_column(output_type, num_rows, copy_bitmask(chunks0)));
   auto overflows_view = columns[0]->mutable_view();
   auto assembled_view = columns[1]->mutable_view();
-  thrust::transform(rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(num_rows),
-                    assembled_view.begin<__int128_t>(),
-                    chunk_assembler(overflows_view.begin<bool>(), chunks0.begin<uint64_t>(),
-                                    chunks1.begin<uint64_t>(), chunks2.begin<uint64_t>(),
-                                    chunks3.begin<int64_t>()));
+  thrust::transform(
+      rmm::exec_policy_nosync(stream), thrust::make_counting_iterator<cudf::size_type>(0),
+      thrust::make_counting_iterator<cudf::size_type>(num_rows), assembled_view.begin<__int128_t>(),
+      chunk_assembler(overflows_view.begin<bool>(), chunks0.begin<uint64_t>(),
+                      chunks1.begin<uint64_t>(), chunks2.begin<uint64_t>(),
+                      chunks3.begin<int64_t>()));
   return std::make_unique<cudf::table>(std::move(columns));
 }
 

@@ -190,7 +190,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
 
   rmm::device_uvector<DeviceType> buf(input.size(), stream);
 
-  thrust::copy(rmm::exec_policy(stream),  //
+  thrust::copy(rmm::exec_policy_nosync(stream),  //
                input.begin<DeviceType>(),
                input.end<DeviceType>(),
                buf.begin());

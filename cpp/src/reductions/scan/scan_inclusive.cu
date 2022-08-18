@@ -51,10 +51,11 @@ rmm::device_buffer mask_scan(column_view const& input_view,
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
-    size_type const first_null =
-      thrust::find_if_not(
-        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), thrust::identity{}) -
-      valid_itr;
+    size_type const first_null = thrust::find_if_not(rmm::exec_policy_nosync(stream),
+                                                     valid_itr,
+                                                     valid_itr + input_view.size(),
+                                                     thrust::identity{}) -
+                                 valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
@@ -118,7 +119,7 @@ struct scan_functor {
     auto const begin =
       make_null_replacement_iterator(*d_input, Op::template identity<T>(), input_view.has_nulls());
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
+      rmm::exec_policy_nosync(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
@@ -136,7 +137,7 @@ struct scan_functor<Op, cudf::string_view> {
     // build indices of the scan operation results
     rmm::device_uvector<size_type> result(input_view.size(), stream);
     thrust::inclusive_scan(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::counting_iterator<size_type>(0),
       thrust::counting_iterator<size_type>(input_view.size()),
       result.begin(),
@@ -163,7 +164,7 @@ struct scan_functor<Op, cudf::struct_view> {
     auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
     auto const binop_generator =
       cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
-    thrust::inclusive_scan(rmm::exec_policy(stream),
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                            thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(input.size()),
                            gather_map.begin(),

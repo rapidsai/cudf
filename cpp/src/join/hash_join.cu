@@ -253,15 +253,17 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
     // Assume all the indices in invalid_index_map are invalid
     auto invalid_index_map =
       std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-    thrust::uninitialized_fill(
-      rmm::exec_policy(stream), invalid_index_map->begin(), invalid_index_map->end(), int32_t{1});
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                               invalid_index_map->begin(),
+                               invalid_index_map->end(),
+                               int32_t{1});
 
     // Functor to check for index validity since left joins can create invalid indices
     valid_range<size_type> valid(0, right_table_row_count);
 
     // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     // Thus specifying that those locations are valid
-    thrust::scatter_if(rmm::exec_policy(stream),
+    thrust::scatter_if(rmm::exec_policy_nosync(stream),
                        thrust::make_constant_iterator(0),
                        thrust::make_constant_iterator(0) + right_indices->size(),
                        right_indices->begin(),      // Index locations
@@ -270,7 +272,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
                        valid);                      // Stencil Predicate
 
     // Create list of indices that have been marked as invalid
-    left_join_complement_size = thrust::count_if(rmm::exec_policy(stream),
+    left_join_complement_size = thrust::count_if(rmm::exec_policy_nosync(stream),
                                                  invalid_index_map->begin(),
                                                  invalid_index_map->end(),
                                                  thrust::identity());

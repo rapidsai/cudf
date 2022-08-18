@@ -80,7 +80,7 @@ void reduce_by_key_fn(column_device_view const& values,
     var_transform<ResultType, decltype(values_iter)>{
       values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof});
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         var_iter,
@@ -129,7 +129,7 @@ struct var_functor {
 
     // set nulls
     auto result_view = mutable_column_device_view::create(*result, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        group_sizes.size(),
                        [d_result = *result_view, d_group_sizes, ddof] __device__(size_type i) {

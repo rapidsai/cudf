@@ -389,14 +389,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   // String offsets point to the first character of a field
   // This finds the first field whose first character starts inside or after the byte range
-  auto relevant_offsets_begin = thrust::lower_bound(rmm::exec_policy(stream),
+  auto relevant_offsets_begin = thrust::lower_bound(rmm::exec_policy_nosync(stream),
                                                     string_offsets.begin(),
                                                     string_offsets.end() - 1,
                                                     byte_range.offset());
 
   // This finds the first field beginning after the byte range.
   // We shift it by 1 to also copy this last offset
-  auto relevant_offsets_end = 1 + thrust::lower_bound(rmm::exec_policy(stream),
+  auto relevant_offsets_end = 1 + thrust::lower_bound(rmm::exec_policy_nosync(stream),
                                                       string_offsets.begin(),
                                                       string_offsets.end() - 1,
                                                       byte_range.offset() + byte_range.size());
@@ -424,7 +424,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto string_chars      = rmm::device_uvector<char>(string_chars_size, stream, mr);
 
   // copy relevant offsets and adjust them to be zero-based.
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     relevant_offsets_begin,
                     relevant_offsets_end,
                     string_offsets_out.begin(),
@@ -439,7 +439,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     auto const read_size   = std::min<int64_t>(ITEMS_PER_CHUNK, string_chars_size - i);
     auto const chunk_bytes = reader->get_next_chunk(read_size, stream);
 
-    thrust::copy(rmm::exec_policy(stream),
+    thrust::copy(rmm::exec_policy_nosync(stream),
                  chunk_bytes->data(),
                  chunk_bytes->data() + chunk_bytes->size(),
                  string_chars.begin() + i);

@@ -67,7 +67,7 @@ std::unique_ptr<column> make_offsets_child_column(
   // Rather than manually computing the final offset using values in device memory,
   // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
   // offset values to zero manually.
-  thrust::inclusive_scan(rmm::exec_policy(stream), begin, end, d_offsets + 1);
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream), begin, end, d_offsets + 1);
   CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
   return offsets_column;
 }
@@ -133,7 +133,7 @@ auto make_strings_children(
   // This is called twice -- once for offsets and once for chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
   auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        exec_size,
                        size_and_exec_fn);
@@ -142,7 +142,7 @@ auto make_strings_children(
   // Compute the offsets values
   for_each_fn(size_and_exec_fn);
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
   auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);

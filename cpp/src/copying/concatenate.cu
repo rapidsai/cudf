@@ -278,7 +278,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto count = 0;
   for (auto& v : views) {
-    thrust::copy(rmm::exec_policy(stream), v.begin<T>(), v.end<T>(), m_view.begin<T>() + count);
+    thrust::copy(
+      rmm::exec_policy_nosync(stream), v.begin<T>(), v.end<T>(), m_view.begin<T>() + count);
     count += v.size();
   }
 

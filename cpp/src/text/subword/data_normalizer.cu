@@ -284,7 +284,7 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   // copy offsets to working memory
   size_t const num_offsets = num_strings + 1;
   auto d_strings_offsets   = std::make_unique<rmm::device_uvector<uint32_t>>(num_offsets, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<uint32_t>(0),
                     thrust::make_counting_iterator<uint32_t>(num_offsets),
                     d_strings_offsets->begin(),
@@ -314,21 +314,21 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
     d_chars_per_thread.data());
 
   // Remove the 'empty' code points from the vector
-  thrust::remove(rmm::exec_policy(stream),
+  thrust::remove(rmm::exec_policy_nosync(stream),
                  d_code_points->begin(),
                  d_code_points->end(),
                  uint32_t{1 << FILTER_BIT});
 
   // We also need to prefix sum the number of characters up to an including
   // the current character in order to get the new strings lengths.
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          d_chars_per_thread.begin(),
                          d_chars_per_thread.end(),
                          d_chars_per_thread.begin());
 
   // This will reset the offsets to the new generated code point values
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<uint32_t>(1),
     num_strings,
     update_strings_lengths_fn{d_chars_per_thread.data(), d_strings_offsets->data()});

@@ -141,7 +141,8 @@ void generate_offsets_for_list(rmm::device_uvector<list_buffer_data> const& buff
     thrust::exclusive_scan(
       thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
   };
-  thrust::for_each(rmm::exec_policy(stream), buff_data.begin(), buff_data.end(), transformer);
+  thrust::for_each(
+    rmm::exec_policy_nosync(stream), buff_data.begin(), buff_data.end(), transformer);
   stream.synchronize();
 }
 
@@ -505,7 +506,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        thrust::copy_if(rmm::exec_policy(stream),
+        thrust::copy_if(rmm::exec_policy_nosync(stream),
                         thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(0) + parent_mask_len,
                         dst_idx.begin(),
@@ -519,7 +520,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
         uint32_t* dst_idx_ptr = dst_idx.data();
         // Copy child valid bits from child column to valid indexes, this will merge both child and
         // parent null masks
-        thrust::for_each(rmm::exec_policy(stream),
+        thrust::for_each(rmm::exec_policy_nosync(stream),
                          thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(0) + dst_idx.size(),
                          [child_valid_map_base, dst_idx_ptr, merged_mask] __device__(auto idx) {
@@ -576,7 +577,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   auto const d_prefix_sums_to_update =
     cudf::detail::make_device_uvector_async(prefix_sums_to_update, stream);
 
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream),
                    d_prefix_sums_to_update.begin(),
                    d_prefix_sums_to_update.end(),
                    [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(

@@ -195,7 +195,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_strings,
       [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
@@ -241,8 +241,11 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
     };
 
     if (not create_mask) {
-      thrust::transform(
-        rmm::exec_policy(stream), index_begin, index_end, device_output->begin<T>(), func_value);
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        index_begin,
+                        index_end,
+                        device_output->begin<T>(),
+                        func_value);
 
       return output;
     }
@@ -252,7 +255,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy(stream),
+    thrust::transform_if(rmm::exec_policy_nosync(stream),
                          index_begin,
                          index_end,
                          device_output->begin<T>(),

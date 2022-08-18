@@ -47,7 +47,7 @@ bool contains_nested_element(column_view const& haystack,
     auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
     auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
 
-    return thrust::count_if(rmm::exec_policy(stream),
+    return thrust::count_if(rmm::exec_policy_nosync(stream),
                             begin,
                             end,
                             [d_comp, haystack_valid_it] __device__(auto const idx) {
@@ -58,7 +58,7 @@ bool contains_nested_element(column_view const& haystack,
   }
 
   return thrust::count_if(
-           rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
+           rmm::exec_policy_nosync(stream), begin, end, [d_comp] __device__(auto const idx) {
              return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
            }) > 0;
 }

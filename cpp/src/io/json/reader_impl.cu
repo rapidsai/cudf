@@ -107,7 +107,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
 {
   auto key_col_map       = col_map_type::create(column_name_hashes.size(), stream);
   auto const column_data = column_name_hashes.data<uint32_t>();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      column_name_hashes.size(),
                      [map = *key_col_map, column_data] __device__(size_type idx) mutable {
@@ -290,7 +290,7 @@ rmm::device_uvector<uint64_t> find_record_starts(json_reader_options const& read
   // Previous call stores the record positions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
-  thrust::sort(rmm::exec_policy(stream), rec_starts.begin(), rec_starts.end());
+  thrust::sort(rmm::exec_policy_nosync(stream), rec_starts.begin(), rec_starts.end());
 
   auto filtered_count = prefilter_count;
 
@@ -331,7 +331,7 @@ rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reade
   // Adjust row start positions to account for the data subcopy
   size_t start_offset = h_rec_starts.front();
   rec_starts.resize(h_rec_starts.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     rec_starts.begin(),
                     rec_starts.end(),
                     thrust::make_constant_iterator(start_offset),

@@ -181,7 +181,7 @@ struct dispatch_index_of {
     auto const out_begin = out_positions->mutable_view().template begin<size_type>();
 
     auto const do_search = [&](auto const keys_iter) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         input_it,
                         input_it + lists.size(),
                         keys_iter,
@@ -237,7 +237,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
     data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
@@ -312,7 +312,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const out_begin     = output->mutable_view().template begin<bool>();
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
                    out_begin,
                    out_begin + lists.size(),
                    [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(

@@ -84,7 +84,7 @@ struct count_checker {
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
         std::numeric_limits<cudf::size_type>::max()) {
       auto max = thrust::reduce(
-        rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, thrust::maximum<T>());
+        rmm::exec_policy_nosync(stream), count.begin<T>(), count.end<T>(), 0, thrust::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
                    "count should not have values larger than size_type maximum.");
     }
@@ -118,16 +118,16 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   rmm::device_uvector<cudf::size_type> offsets(count.size(), stream);
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), count_iter, count_iter + count.size(), offsets.begin());
+    rmm::exec_policy_nosync(stream), count_iter, count_iter + count.size(), offsets.begin());
 
   if (check_count) {
-    CUDF_EXPECTS(thrust::is_sorted(rmm::exec_policy(stream), offsets.begin(), offsets.end()),
+    CUDF_EXPECTS(thrust::is_sorted(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end()),
                  "count has negative values or the resulting table has too many rows.");
   }
 
   size_type output_size{offsets.back_element(stream)};
   rmm::device_uvector<size_type> indices(output_size, stream);
-  thrust::upper_bound(rmm::exec_policy(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       offsets.begin(),
                       offsets.end(),
                       thrust::make_counting_iterator(0),

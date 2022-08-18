@@ -58,7 +58,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  thrust::tabulate(rmm::exec_policy(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
                    [comparator = device_comparator, resolver] __device__(size_type row_index) {
@@ -66,7 +66,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                      row_index);
                    });
 
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          mutable_ranks.begin<size_type>(),
                          mutable_ranks.end<size_type>(),
                          mutable_ranks.begin<size_type>(),
@@ -114,7 +114,7 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   auto percent_rank_result = cudf::make_fixed_width_column(
     data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     rank_view.begin<size_type>(),
                     rank_view.end<size_type>(),
                     percent_rank_result->mutable_view().begin<result_type>(),

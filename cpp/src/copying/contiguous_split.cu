@@ -827,7 +827,7 @@ void copy_data(int num_bufs,
   auto const desired_chunk_size = std::size_t{1 * 1024 * 1024};
   rmm::device_uvector<thrust::pair<std::size_t, std::size_t>> chunks(num_bufs, stream);
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     _d_dst_buf_info,
     _d_dst_buf_info + num_bufs,
     chunks.begin(),
@@ -856,7 +856,7 @@ void copy_data(int num_bufs,
     0, [num_bufs, num_chunks = num_chunks_func{chunks.begin()}] __device__(size_type i) {
       return i == num_bufs ? 0 : num_chunks(i);
     });
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          buf_count_iter,
                          buf_count_iter + num_bufs + 1,
                          chunk_offsets.begin(),
@@ -873,11 +873,11 @@ void copy_data(int num_bufs,
   auto const num_chunks =
     cudf::detail::make_counting_transform_iterator(0, num_chunks_func{chunks.begin()});
   size_type const new_buf_count =
-    thrust::reduce(rmm::exec_policy(stream), num_chunks, num_chunks + chunks.size());
+    thrust::reduce(rmm::exec_policy_nosync(stream), num_chunks, num_chunks + chunks.size());
   rmm::device_uvector<dst_buf_info> d_dst_buf_info(new_buf_count, stream);
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     iter,
     iter + new_buf_count,
     [_d_dst_buf_info,
@@ -937,7 +937,7 @@ void copy_data(int num_bufs,
     0, [out_to_in_index] __device__(size_type i) { return out_to_in_index(i); });
   auto values = thrust::make_transform_iterator(
     d_dst_buf_info.begin(), [] __device__(dst_buf_info const& info) { return info.valid_count; });
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         keys,
                         keys + new_buf_count,
                         values,
@@ -1072,7 +1072,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<std::size_t>(0),
     thrust::make_counting_iterator<std::size_t>(num_bufs),
     d_dst_buf_info,
@@ -1157,7 +1157,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     auto values =
       cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
 
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                           keys,
                           keys + num_bufs,
                           values,
@@ -1172,7 +1172,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
     auto values =
       cudf::detail::make_counting_transform_iterator(0, buf_size_functor{d_dst_buf_info});
 
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+    thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   keys,
                                   keys + num_bufs,
                                   values,

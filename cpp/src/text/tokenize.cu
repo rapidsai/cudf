@@ -57,7 +57,7 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                                                 mr);
   auto d_token_counts = token_counts->mutable_view().data<int32_t>();
   // add the counts to the column
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings_count),
                     d_token_counts,
@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
   rmm::device_uvector<int32_t> token_offsets(strings_count + 1, stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
@@ -89,7 +89,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
   // now go get the tokens
   tokenizer.d_offsets = token_offsets.data();
   tokenizer.d_tokens  = tokens.data();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      tokenizer);
@@ -186,7 +186,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // build the output offsets without an intermediate buffer.
   // In the worst case each byte is a character so the output is 4x the input.
   cudf::size_type num_characters = thrust::count_if(
-    rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
+    rmm::exec_policy_nosync(stream), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
       return cudf::strings::detail::is_begin_utf8_char(byte);
     });
 
@@ -205,7 +205,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
                                                   mr);
   auto d_new_offsets  = offsets_column->mutable_view().begin<int32_t>();
   thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<int32_t>(0),
     thrust::make_counting_iterator<int32_t>(chars_bytes + 1),
     d_new_offsets,

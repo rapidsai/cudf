@@ -88,7 +88,7 @@ std::unique_ptr<column> fill(
   // fill the chars column
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx) {

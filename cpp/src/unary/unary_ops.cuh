@@ -67,8 +67,11 @@ struct launcher {
         rmm::device_buffer{input.null_mask(), bitmask_allocation_size_bytes(input.size())},
         input.null_count());
 
-    thrust::transform(
-      rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), output_view.begin<Tout>(), F{});
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      input.begin<T>(),
+                      input.end<T>(),
+                      output_view.begin<Tout>(),
+                      F{});
 
     CUDF_CHECK_CUDA(stream.value());
 

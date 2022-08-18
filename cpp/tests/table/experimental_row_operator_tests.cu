@@ -59,7 +59,7 @@ auto self_comparison(cudf::table_view input,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input.num_rows()),
                     thrust::make_counting_iterator(0),
@@ -85,7 +85,7 @@ auto two_table_comparison(cudf::table_view lhs,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     lhs_it,
                     lhs_it + lhs.num_rows(),
                     rhs_it,
@@ -108,7 +108,7 @@ auto self_equality(cudf::table_view input,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input.num_rows()),
                     thrust::make_counting_iterator(0),
@@ -134,7 +134,7 @@ auto two_table_equality(cudf::table_view lhs,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     lhs_it,
                     lhs_it + lhs.num_rows(),
                     rhs_it,

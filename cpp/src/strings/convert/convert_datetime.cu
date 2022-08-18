@@ -369,7 +369,7 @@ struct dispatch_to_timestamps_fn {
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       results_view.data<T>(),
@@ -633,7 +633,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -1083,7 +1083,7 @@ struct dispatch_from_timestamps_fn {
     auto d_chars      = chars_column->mutable_view().template data<char>();
 
     datetime_formatter<T> pfn{d_timestamps, d_format_names, d_format_items, d_offsets, d_chars};
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        d_timestamps.size(),
                        pfn);

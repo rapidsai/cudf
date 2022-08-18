@@ -251,7 +251,7 @@ size_type filter_overlap_target_positions(size_type* d_target_positions,
 
   // count the potential number of overlapped target positions
   size_type overlap_count =
-    thrust::count_if(rmm::exec_policy(stream),
+    thrust::count_if(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(target_count),
                      overlap_detector);
@@ -260,7 +260,7 @@ size_type filter_overlap_target_positions(size_type* d_target_positions,
   // create a vector indexing the potential overlapped target positions
   rmm::device_uvector<size_type> potential_overlapped_pos_indices(overlap_count, stream);
   auto d_potential_overlapped_pos_indices = potential_overlapped_pos_indices.data();
-  thrust::copy_if(rmm::exec_policy(stream),
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
                   thrust::make_counting_iterator<size_type>(0),
                   thrust::make_counting_iterator<size_type>(target_count),
                   d_potential_overlapped_pos_indices,
@@ -270,7 +270,7 @@ size_type filter_overlap_target_positions(size_type* d_target_positions,
   rmm::device_uvector<size_type> overlapped_pos_indices(overlap_count, stream);
   auto d_overlapped_pos_indices = overlapped_pos_indices.data();
   auto overlap_end =
-    thrust::remove_copy_if(rmm::exec_policy(stream),
+    thrust::remove_copy_if(rmm::exec_policy_nosync(stream),
                            d_potential_overlapped_pos_indices,
                            d_potential_overlapped_pos_indices + overlap_count,
                            thrust::make_counting_iterator<size_type>(0),
@@ -281,7 +281,7 @@ size_type filter_overlap_target_positions(size_type* d_target_positions,
 
   // In-place remove any target positions that are overlapped by valid target positions
   auto target_pos_end = thrust::remove_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     d_target_positions,
     d_target_positions + target_count,
     thrust::make_counting_iterator<size_type>(0),
@@ -315,7 +315,7 @@ size_type filter_false_target_positions(rmm::device_uvector<size_type>& target_p
   // In-place remove any positions for target strings that crossed string boundaries.
   auto d_target_positions = target_positions.data();
   auto target_pos_end =
-    thrust::remove_if(rmm::exec_policy(stream),
+    thrust::remove_if(rmm::exec_policy_nosync(stream),
                       d_target_positions,
                       d_target_positions + target_positions.size(),
                       [d_offsets_span, target_size] __device__(size_type target_pos) -> bool {
@@ -363,7 +363,7 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
   rmm::device_uvector<size_type> match_counts(target_count, stream);
   auto d_match_counts = match_counts.data();
   thrust::inclusive_scan_by_key(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_transform_iterator(d_target_positions, pos_to_row_fn),
     thrust::make_transform_iterator(d_target_positions + target_count, pos_to_row_fn),
     thrust::make_constant_iterator<size_type>(1),
@@ -371,7 +371,7 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
 
   // In-place remove any positions that exceed the per-row match limit
   auto target_pos_end =
-    thrust::remove_if(rmm::exec_policy(stream),
+    thrust::remove_if(rmm::exec_policy_nosync(stream),
                       d_target_positions,
                       d_target_positions + target_count,
                       d_match_counts,
@@ -427,7 +427,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 
   // Count target string matches across all character positions, ignoring string boundaries and
   // overlapping target strings. This may produce false-positives.
-  size_type target_count = thrust::count_if(rmm::exec_policy(stream),
+  size_type target_count = thrust::count_if(rmm::exec_policy_nosync(stream),
                                             thrust::make_counting_iterator<size_type>(chars_start),
                                             thrust::make_counting_iterator<size_type>(chars_end),
                                             target_detector);
@@ -439,7 +439,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   // create a vector of the potential target match positions
   rmm::device_uvector<size_type> target_positions(target_count, stream);
   auto d_target_positions = target_positions.data();
-  thrust::copy_if(rmm::exec_policy(stream),
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
                   thrust::make_counting_iterator<size_type>(chars_start),
                   thrust::make_counting_iterator<size_type>(chars_end),
                   d_target_positions,
@@ -476,7 +476,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
       thrust::distance(d_target_positions_span.data(), next_target_pos_ptr);
     return offset - chars_start + delta_per_target * num_prev_targets;
   };
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     d_offsets_span.begin(),
                     d_offsets_span.end(),
                     offsets_view.begin<int32_t>(),
@@ -487,7 +487,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
     create_chars_child_column(chars_bytes + (delta_per_target * target_count), stream, mr);
   auto d_out_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(chars_start),
     chars_bytes,
     target_replacer_fn{
@@ -819,7 +819,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {

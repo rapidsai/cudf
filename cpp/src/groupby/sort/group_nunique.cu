@@ -91,7 +91,7 @@ struct nunique_functor {
                                                  null_handling,
                                                  group_offsets.data(),
                                                  group_labels.data()});
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                           group_labels.begin(),
                           group_labels.end(),
                           is_unique_iterator,

@@ -250,7 +250,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 inline void decompress_check(device_span<decompress_status const> stats,
                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy_nosync(stream),
                               stats.begin(),
                               stats.end(),
                               [] __device__(auto const& stat) { return stat.status == 0; }),
@@ -1142,7 +1142,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
   comp_out.reserve(num_comp_pages);
 
   rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
-  thrust::fill(rmm::exec_policy(_stream),
+  thrust::fill(rmm::exec_policy_nosync(_stream),
                comp_stats.begin(),
                comp_stats.end(),
                decompress_status{0, static_cast<uint32_t>(-1000), 0});

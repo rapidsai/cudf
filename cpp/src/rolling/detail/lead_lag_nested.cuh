@@ -136,7 +136,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   auto const input_size = input.size();
   auto const null_index = input.size();
   if (op == aggregation::LEAD) {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
@@ -148,7 +148,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                         return (row_offset > _following) ? null_index : (i + row_offset);
                       });
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
@@ -175,7 +175,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 
   // Find all indices at which LEAD/LAG computed nulls previously.
   auto scatter_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(size_type{0}),
                     thrust::make_counting_iterator(size_type{input.size()}),
                     scatter_map.begin(),

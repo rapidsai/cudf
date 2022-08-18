@@ -64,8 +64,12 @@ struct scan_dispatcher {
     auto identity = Op::template identity<T>();
 
     auto begin = make_null_replacement_iterator(*d_input, identity, input.has_nulls());
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, Op{});
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                           begin,
+                           begin + input.size(),
+                           output.data<T>(),
+                           identity,
+                           Op{});
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;

@@ -76,7 +76,7 @@ struct one_hot_encode_launcher {
     one_hot_encode_functor<InputType> one_hot_encoding_compute_f(
       *d_input_column, *d_category_column, input_column.nullable() || categories.nullable());
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(total_size),
                       all_encodings->mutable_view().begin<bool>(),

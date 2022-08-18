@@ -52,7 +52,7 @@ void row_comparison(cudf::table_view input1,
   auto comparator = cudf::row_lexicographic_comparator(
     cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input1.num_rows()),
                     thrust::make_counting_iterator(0),

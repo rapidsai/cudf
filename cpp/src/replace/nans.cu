@@ -152,7 +152,7 @@ struct normalize_nans_and_zeros_kernel_forwarder {
                   cudf::mutable_column_device_view out,
                   rmm::cuda_stream_view stream)
   {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(in.size()),
                       out.head<T>(),

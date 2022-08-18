@@ -69,7 +69,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream);
 
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_groups),
     null_purged_sizes.begin(),
@@ -98,7 +98,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
     auto offsets_column = make_numeric_column(
       data_type(type_to_id<offset_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
-    thrust::copy(rmm::exec_policy(stream),
+    thrust::copy(rmm::exec_policy_nosync(stream),
                  group_offsets.begin(),
                  group_offsets.end(),
                  offsets_column->mutable_view().template begin<offset_type>());

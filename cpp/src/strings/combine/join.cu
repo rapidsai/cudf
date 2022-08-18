@@ -62,7 +62,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto d_output_offsets = output_offsets.data();
   // using inclusive-scan to compute last entry which is the total size
   thrust::transform_inclusive_scan(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     d_output_offsets + 1,
@@ -104,7 +104,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [d_strings, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx) {

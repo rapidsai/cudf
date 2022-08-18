@@ -340,7 +340,7 @@ struct same_element_type_dispatcher {
     // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
     auto const binop_generator =
       cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
-    auto const minmax_idx = thrust::reduce(rmm::exec_policy(stream),
+    auto const minmax_idx = thrust::reduce(rmm::exec_policy_nosync(stream),
                                            thrust::make_counting_iterator(0),
                                            thrust::make_counting_iterator(input.size()),
                                            size_type{0},

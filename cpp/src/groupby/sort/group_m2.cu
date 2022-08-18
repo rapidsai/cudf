@@ -67,7 +67,7 @@ void compute_m2_fn(column_device_view const& values,
     m2_transform<ResultType, decltype(values_iter)>{
       values, values_iter, d_means, group_labels.data()});
 
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         var_iter,

@@ -1335,7 +1335,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       }
     } catch (...) {
       // There was an error in compressing so set an error status for each block
-      thrust::for_each(rmm::exec_policy(stream),
+      thrust::for_each(rmm::exec_policy_nosync(stream),
                        comp_stat.begin(),
                        comp_stat.end(),
                        [] __device__(decompress_status & stat) { stat.status = 1; });

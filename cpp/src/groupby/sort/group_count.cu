@@ -56,14 +56,14 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
 
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                           group_labels.begin(),
                           group_labels.end(),
                           bitmask_iterator,
                           thrust::make_discard_iterator(),
                           result->mutable_view().begin<size_type>());
   } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream),
+    thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                           group_labels.begin(),
                           group_labels.end(),
                           thrust::make_constant_iterator(1),
@@ -86,7 +86,7 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy(stream),
+  thrust::adjacent_difference(rmm::exec_policy_nosync(stream),
                               group_offsets.begin() + 1,
                               group_offsets.end(),
                               result->mutable_view().begin<size_type>());

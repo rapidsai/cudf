@@ -1171,13 +1171,13 @@ void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
     auto comp_it =
       thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       comp_in.begin(),
       comp_in.end(),
       comp_it,
       [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       comp_out.begin(),
                       comp_out.end(),
                       compressed_data_ptrs.begin(),
@@ -1197,7 +1197,7 @@ void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
     // nvcomp also doesn't use comp_out.status . It guarantees that given enough output space,
     // compression will succeed.
     // The other `comp_out` field is `reserved` which is for internal cuIO debugging and can be 0.
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       compressed_bytes_written.begin(),
                       compressed_bytes_written.end(),
                       comp_stats.begin(),
@@ -1209,7 +1209,7 @@ void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
     return;
   } catch (...) {
     // If we reach this then there was an error in compressing so set an error status for each page
-    thrust::for_each(rmm::exec_policy(stream),
+    thrust::for_each(rmm::exec_policy_nosync(stream),
                      comp_stats.begin(),
                      comp_stats.end(),
                      [] __device__(decompress_status & stat) { stat.status = 1; });

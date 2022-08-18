@@ -75,17 +75,20 @@ struct contains_scalar_dispatch {
       auto const begin = d_haystack->pair_begin<DType, true>();
       auto const end   = d_haystack->pair_end<DType, true>();
 
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
-                 auto const needle_pair = thrust::make_pair(get_scalar_value<Type>(d_needle), true);
-                 return val_pair == needle_pair;
-               }) > 0;
+      return thrust::count_if(rmm::exec_policy_nosync(stream),
+                              begin,
+                              end,
+                              [d_needle] __device__(auto const val_pair) {
+                                auto const needle_pair =
+                                  thrust::make_pair(get_scalar_value<Type>(d_needle), true);
+                                return val_pair == needle_pair;
+                              }) > 0;
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
 
       return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val) {
+               rmm::exec_policy_nosync(stream), begin, end, [d_needle] __device__(auto const val) {
                  return val == get_scalar_value<Type>(d_needle);
                }) > 0;
     }
@@ -147,7 +150,7 @@ struct multi_contains_dispatch {
     auto const out_begin = result->mutable_view().template begin<bool>();
     if (haystack.is_empty()) {
       thrust::uninitialized_fill(
-        rmm::exec_policy(stream), out_begin, out_begin + needles.size(), false);
+        rmm::exec_policy_nosync(stream), out_begin, out_begin + needles.size(), false);
       return result;
     }
 
@@ -156,7 +159,7 @@ struct multi_contains_dispatch {
     auto const needles_it      = thrust::make_counting_iterator<size_type>(0);
 
     if (needles.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         needles_it,
                         needles_it + needles.size(),
                         out_begin,
@@ -166,7 +169,7 @@ struct multi_contains_dispatch {
                                  haystack.contains(needles.template element<Type>(idx));
                         });
     } else {
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         needles_it,
                         needles_it + needles.size(),
                         out_begin,

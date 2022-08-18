@@ -66,9 +66,11 @@ struct inplace_column_sort_fn {
   {
     CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
     if (ascending) {
-      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::less<T>());
+      thrust::sort(
+        rmm::exec_policy_nosync(stream), col.begin<T>(), col.end<T>(), thrust::less<T>());
     } else {
-      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::greater<T>());
+      thrust::sort(
+        rmm::exec_policy_nosync(stream), col.begin<T>(), col.end<T>(), thrust::greater<T>());
     }
   }
 

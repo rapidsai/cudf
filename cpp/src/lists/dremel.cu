@@ -91,12 +91,12 @@ dremel_data get_dremel_data(column_view h_col,
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy(stream),
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator(start),
                       thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
-    auto empties_end = thrust::gather(rmm::exec_policy(stream),
+    auto empties_end = thrust::gather(rmm::exec_policy_nosync(stream),
                                       empties_idx.begin(),
                                       empties_idx_end,
                                       lcv.offsets().begin<size_type>(),
@@ -315,7 +315,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
+    auto ends = thrust::merge_by_key(rmm::exec_policy_nosync(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
                                      thrust::make_counting_iterator(column_offsets[level + 1]),
@@ -334,11 +334,11 @@ dremel_data get_dremel_data(column_view h_col,
         auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
-      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
+      rmm::exec_policy_nosync(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -349,7 +349,7 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -398,7 +398,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
+    auto ends = thrust::merge_by_key(rmm::exec_policy_nosync(stream),
                                      transformed_empties,
                                      transformed_empties + empties_size,
                                      thrust::make_counting_iterator(0),
@@ -418,11 +418,11 @@ dremel_data get_dremel_data(column_view h_col,
         auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
-      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
+      rmm::exec_policy_nosync(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -435,7 +435,7 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),

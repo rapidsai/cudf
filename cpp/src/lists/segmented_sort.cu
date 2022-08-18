@@ -188,7 +188,7 @@ struct SegmentedSortColumn {
         auto device_child = column_device_view::create(child, stream);
         auto keys_in =
           cudf::detail::make_null_replacement_iterator<T>(*device_child, null_replace_T);
-        thrust::copy_n(rmm::exec_policy(stream), keys_in, child.size(), keys.begin());
+        thrust::copy_n(rmm::exec_policy_nosync(stream), keys_in, child.size(), keys.begin());
         return keys;
       }
       return rmm::device_uvector<T>{0, stream};
@@ -197,7 +197,7 @@ struct SegmentedSortColumn {
     std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
       data_type(type_to_id<size_type>()), child.size(), mask_state::UNALLOCATED, stream, mr);
     mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
-    thrust::sequence(rmm::exec_policy(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream),
                      mutable_indices_view.begin<size_type>(),
                      mutable_indices_view.end<size_type>(),
                      0);
@@ -244,7 +244,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
   if (input.is_empty()) return empty_like(input.parent());
   auto output_offset = make_numeric_column(
     input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input.offsets_begin(),
                     input.offsets_end(),
                     output_offset->mutable_view().begin<size_type>(),
@@ -284,7 +284,7 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
 
   auto output_offset = make_numeric_column(
     input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input.offsets_begin(),
                     input.offsets_end(),
                     output_offset->mutable_view().template begin<size_type>(),

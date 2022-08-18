@@ -149,7 +149,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
     auto d_key_sorted_order = _key_sorted_order->mutable_view().data<size_type>();
 
-    thrust::sequence(rmm::exec_policy(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream),
                      d_key_sorted_order,
                      d_key_sorted_order + _key_sorted_order->size(),
                      0);
@@ -196,7 +196,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   decltype(_group_offsets->begin()) result_end;
 
   result_end = thrust::unique_copy(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_keys(stream)),
     _group_offsets->begin(),
@@ -265,7 +265,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto keys_bitmask_view = _keys_bitmask_column->mutable_view();
   using T                = id_to_type<type_id::INT8>;
   thrust::fill(
-    rmm::exec_policy(stream), keys_bitmask_view.begin<T>(), keys_bitmask_view.end<T>(), 0);
+    rmm::exec_policy_nosync(stream), keys_bitmask_view.begin<T>(), keys_bitmask_view.end<T>(), 0);
 
   return _keys_bitmask_column->view();
 }

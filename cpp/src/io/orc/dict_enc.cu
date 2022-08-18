@@ -462,7 +462,7 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
         auto const dict_data_ptr = thrust::device_pointer_cast(stripe_dict.dict_data);
         auto const string_column = stripe_dict.leaf_column;
         // NOTE: Requires the --expt-extended-lambda nvcc flag
-        thrust::sort(rmm::exec_policy(stream),
+        thrust::sort(rmm::exec_policy_nosync(stream),
                      dict_data_ptr,
                      dict_data_ptr + stripe_dict.num_strings,
                      [string_column] __device__(const uint32_t& lhs, const uint32_t& rhs) {

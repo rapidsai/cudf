@@ -58,7 +58,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
 
   // Compute the offsets column of the result:
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     offsets_data + start,
     offsets_data + end + 1,  // size of offsets column is 1 greater than slice length
     out_offsets.data(),

@@ -111,7 +111,7 @@ std::unique_ptr<column> findall_record(
 
   // Convert counts into offsets
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Create indices vector with the total number of groups that will be extracted
   auto const total_matches =

@@ -189,7 +189,7 @@ std::unique_ptr<column> copy_range(
     // copy to the chars column
 
     auto p_chars = (p_chars_column->mutable_view()).template data<char>();
-    thrust::for_each(rmm::exec_policy(stream),
+    thrust::for_each(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(target.size()),
                      [source_value_begin,

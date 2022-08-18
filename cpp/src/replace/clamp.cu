@@ -140,7 +140,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
       }
     };
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size(),
                      copy_transformer);
@@ -189,7 +189,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 
   auto input_pair_iterator =
     make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     input_pair_iterator,
                     input_pair_iterator + input.size(),
                     scalar_zip_itr,

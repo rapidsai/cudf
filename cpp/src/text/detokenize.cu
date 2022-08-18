@@ -110,13 +110,13 @@ struct token_row_offsets_fn {
   {
     index_changed_fn<T> pfn{row_indices.data<T>(), sorted_indices.template data<int32_t>()};
     auto const output_count =
-      thrust::count_if(rmm::exec_policy(stream),
+      thrust::count_if(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                        pfn);
     auto tokens_offsets =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(output_count + 1, stream);
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                     tokens_offsets->begin(),
@@ -181,7 +181,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   auto chars_column = cudf::strings::detail::create_chars_child_column(total_bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     output_count,
     detokenizer_fn{

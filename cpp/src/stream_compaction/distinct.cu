@@ -102,7 +102,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     if (keep == duplicate_keep_option::KEEP_NONE) {
       // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
       // Thus, we only output index of the rows in the groups having group size of `1`.
-      return thrust::copy_if(rmm::exec_policy(stream),
+      return thrust::copy_if(rmm::exec_policy_nosync(stream),
                              thrust::make_counting_iterator(0),
                              thrust::make_counting_iterator(input.num_rows()),
                              output_indices.begin(),
@@ -113,7 +113,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     // Reduction results with `KEEP_FIRST` and `KEEP_LAST` are row indices of the first/last row in
     // each group of equal rows (which are the desired output indices), or the value given by
     // `reduction_init_value()`.
-    return thrust::copy_if(rmm::exec_policy(stream),
+    return thrust::copy_if(rmm::exec_policy_nosync(stream),
                            reduction_results.begin(),
                            reduction_results.end(),
                            output_indices.begin(),

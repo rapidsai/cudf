@@ -300,8 +300,10 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
 
   auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
 
-  thrust::copy_n(
-    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
+  thrust::copy_n(rmm::exec_policy_nosync(stream),
+                 begin,
+                 num_rows,
+                 window_column->mutable_view().data<size_type>());
 
   return window_column;
 }
@@ -420,7 +422,7 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(static_cast<size_type>(0)),
       thrust::make_counting_iterator(static_cast<size_type>(num_groups)),
       [d_orderby       = *p_orderby_device_view,

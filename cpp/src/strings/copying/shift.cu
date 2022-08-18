@@ -109,7 +109,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   // run kernel to simultaneously shift and adjust the values in the output offsets column
   auto d_offsets = mutable_column_device_view::create(offsets_column->mutable_view(), stream);
   auto const d_input_offsets = column_device_view::create(input_offsets, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(offsets_size),
                     d_offsets->data<offset_type>(),
@@ -130,7 +130,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   auto const d_input_chars = column_device_view::create(input.chars(), stream);
 
   // run kernel to shift the characters
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(chars_size),
                     d_chars->data<char>(),

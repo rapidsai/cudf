@@ -444,7 +444,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
 
   // count the number of delimiters in the entire column
   auto const delimiter_count =
-    thrust::count_if(rmm::exec_policy(stream),
+    thrust::count_if(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(chars_bytes),
                      [tokenizer, d_offsets, chars_bytes] __device__(size_type idx) {
@@ -454,7 +454,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   // create vector of every delimiter position in the chars column
   rmm::device_uvector<size_type> delimiter_positions(delimiter_count, stream);
   auto d_positions = delimiter_positions.data();
-  auto copy_end    = thrust::copy_if(rmm::exec_policy(stream),
+  auto copy_end    = thrust::copy_if(rmm::exec_policy_nosync(stream),
                                   thrust::make_counting_iterator<size_type>(0),
                                   thrust::make_counting_iterator<size_type>(chars_bytes),
                                   delimiter_positions.begin(),
@@ -465,7 +465,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   // create vector of string indices for each delimiter
   rmm::device_uvector<size_type> string_indices(delimiter_count, stream);  // these will
   auto d_string_indices = string_indices.data();  // be strings that only contain delimiters
-  thrust::upper_bound(rmm::exec_policy(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       d_offsets,
                       d_offsets + strings_count,
                       delimiter_positions.begin(),
@@ -476,7 +476,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   rmm::device_uvector<size_type> token_counts(strings_count, stream);
   auto d_token_counts = token_counts.data();
   // first, initialize token counts for strings without delimiters in them
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_token_counts,
@@ -487,7 +487,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
 
   // now compute the number of tokens in each string
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     delimiter_count,
     [tokenizer, d_positions, delimiter_count, d_string_indices, d_token_counts] __device__(
@@ -496,8 +496,11 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     });
 
   // the columns_count is the maximum number of tokens for any string
-  auto const columns_count = thrust::reduce(
-    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
+  auto const columns_count = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                            token_counts.begin(),
+                                            token_counts.end(),
+                                            0,
+                                            thrust::maximum{});
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(std::make_unique<column>(
@@ -513,7 +516,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   string_index_pair* d_tokens = tokens.data();
   // initialize the token positions
   // -- accounts for nulls, empty, and strings with no delimiter in them
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [tokenizer, columns_count, d_tokens] __device__(size_type idx) {
@@ -522,7 +525,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
 
   // get the positions for every token using the delimiter positions
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     delimiter_count,
     [tokenizer,
@@ -744,15 +747,18 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   // compute the number of tokens per string
   rmm::device_uvector<size_type> token_counts(strings_count, stream);
   auto d_token_counts = token_counts.data();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_token_counts,
                     [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
 
   // column count is the maximum number of tokens for any string
-  size_type const columns_count = thrust::reduce(
-    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
+  size_type const columns_count = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                                 token_counts.begin(),
+                                                 token_counts.end(),
+                                                 0,
+                                                 thrust::maximum{});
 
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
@@ -768,11 +774,11 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   // get the positions for every token
   rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
   string_index_pair* d_tokens = tokens.data();
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                d_tokens,
                d_tokens + (columns_count * strings_count),
                string_index_pair{nullptr, 0});
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {

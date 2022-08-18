@@ -47,7 +47,7 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
   if (length > 0) {
     auto mutable_view = out_col->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<cudf::size_type>(begin_bit),
                       thrust::make_counting_iterator<cudf::size_type>(end_bit),
                       mutable_view.begin<bool>(),

@@ -179,7 +179,7 @@ struct dispatch_to_floats_fn {
                   rmm::cuda_stream_view stream) const
   {
     auto d_results = output_column.data<FloatType>();
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -512,7 +512,7 @@ struct dispatch_from_floats_fn {
     auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto chars_view   = chars_column->mutable_view();
     auto d_chars      = chars_view.template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        float_to_string_fn<FloatType>{d_column, d_offsets, d_chars});
@@ -573,7 +573,7 @@ std::unique_ptr<column> is_float(
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,

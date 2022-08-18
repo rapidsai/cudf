@@ -172,7 +172,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto d_offsets_per_tensor = offsets_per_tensor.data();
 
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     offsets_per_tensor.begin(),
@@ -194,7 +194,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   rmm::device_uvector<uint32_t> row2row_within_tensor(nrows_tensor_token_ids, stream);
   auto d_row2row_within_tensor = row2row_within_tensor.data();
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<uint32_t>(0),
     strings_count,
     [d_offsets_per_tensor, d_row2tensor, d_row2row_within_tensor] __device__(auto idx) {

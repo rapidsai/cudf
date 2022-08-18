@@ -38,14 +38,16 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
   // Prepare the input vectors
   auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
   thrust::transform(
-    rmm::exec_policy(stream), inputs.begin(), inputs.end(), ins_it, [] __device__(auto const& in) {
-      return thrust::make_tuple(in.data(), in.size());
-    });
+    rmm::exec_policy_nosync(stream),
+    inputs.begin(),
+    inputs.end(),
+    ins_it,
+    [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
 
   // Prepare the output vectors
   auto outs_it = thrust::make_zip_iterator(output_data_ptrs.begin(), output_data_sizes.begin());
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     outputs.begin(),
     outputs.end(),
     outs_it,
@@ -64,7 +66,7 @@ void convert_status(std::optional<device_span<nvcompStatus_t const>> nvcomp_stat
 {
   if (nvcomp_stats.has_value()) {
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       nvcomp_stats->begin(),
       nvcomp_stats->end(),
       actual_uncompressed_sizes.begin(),
@@ -73,7 +75,7 @@ void convert_status(std::optional<device_span<nvcompStatus_t const>> nvcomp_stat
         return decompress_status{size, status == nvcompStatus_t::nvcompSuccess ? 0u : 1u};
       });
   } else {
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       actual_uncompressed_sizes.begin(),
                       actual_uncompressed_sizes.end(),
                       cudf_stats.begin(),

@@ -486,7 +486,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   // simple case.  if we have no complex types (lists, strings, etc), the per-row size is already
   // trivially computed
   if (h_info.complex_type_count <= 0) {
-    thrust::fill(rmm::exec_policy(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream),
                  mcv.begin<size_type>(),
                  mcv.end<size_type>(),
                  h_info.simple_per_row_size);

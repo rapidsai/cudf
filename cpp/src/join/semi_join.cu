@@ -56,7 +56,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   if ((join_kind::LEFT_ANTI_JOIN == kind) && (0 == right_keys.num_rows())) {
     auto result =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(left_keys.num_rows(), stream, mr);
-    thrust::sequence(rmm::exec_policy(stream), result->begin(), result->end());
+    thrust::sequence(rmm::exec_policy_nosync(stream), result->begin(), result->end());
     return result;
   }
 
@@ -73,7 +73,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(left_num_rows),
                     gather_map->begin(),

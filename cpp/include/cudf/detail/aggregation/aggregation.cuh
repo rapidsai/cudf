@@ -639,7 +639,7 @@ struct identity_initializer {
                                                           rmm::cuda_stream_view stream)
   {
     using DeviceType = device_storage_type_t<T>;
-    thrust::fill(rmm::exec_policy(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream),
                  col.begin<DeviceType>(),
                  col.end<DeviceType>(),
                  get_identity<DeviceType, k>());

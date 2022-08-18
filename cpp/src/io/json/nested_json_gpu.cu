@@ -806,7 +806,7 @@ void get_token_stream(device_span<SymbolT const> json_in,
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
   auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     zip_in,
                     zip_in + json_in.size(),
                     pda_sgids.data(),
@@ -1305,7 +1305,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         cudf::detail::make_device_uvector_async(json_col.string_lengths, stream);
       auto offset_length_it =
         thrust::make_zip_iterator(d_string_offsets.begin(), d_string_lengths.begin());
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream),
                         offset_length_it,
                         offset_length_it + col_size,
                         d_string_data.data(),

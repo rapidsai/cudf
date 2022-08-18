@@ -74,7 +74,7 @@ cudf::size_type unique_count(table_view const& keys,
   row_equality_comparator comp(
     nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr, *table_ptr, nulls_equal);
   return thrust::count_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
     [comp] __device__(cudf::size_type i) { return (i == 0 or not comp(i, i - 1)); });
@@ -102,7 +102,7 @@ cudf::size_type unique_count(column_view const& input,
                                null_equality::EQUAL);
 
   return thrust::count_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(num_rows),
     [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {

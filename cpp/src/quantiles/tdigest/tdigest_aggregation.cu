@@ -542,7 +542,7 @@ generate_group_cluster_info(int delta,
     0, [group_num_clusters = group_num_clusters.begin(), num_groups] __device__(size_type index) {
       return index == num_groups ? 0 : group_num_clusters[index];
     });
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          cluster_size,
                          cluster_size + num_groups + 1,
                          group_cluster_offsets->mutable_view().begin<offset_type>(),
@@ -591,7 +591,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   size_type const num_stubs = [&]() {
     if (!has_nulls) { return 0; }
     auto iter = cudf::detail::make_counting_transform_iterator(0, is_stub_digest);
-    return thrust::reduce(rmm::exec_policy(stream), iter, iter + num_rows);
+    return thrust::reduce(rmm::exec_policy_nosync(stream), iter, iter + num_rows);
   }();
 
   // if there are no stub tdigests, we can return immediately.
@@ -610,7 +610,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   auto remove_stubs = [&](column_view const& col, size_type num_stubs) {
     auto result = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, col.size() - num_stubs, mask_state::UNALLOCATED, stream, mr);
-    thrust::remove_copy_if(rmm::exec_policy(stream),
+    thrust::remove_copy_if(rmm::exec_policy_nosync(stream),
                            col.begin<double>(),
                            col.end<double>(),
                            thrust::make_counting_iterator(0),
@@ -624,7 +624,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
 
   // adjust offsets.
   rmm::device_uvector<offset_type> sizes(num_rows, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(0) + num_rows,
                     sizes.begin(),
@@ -635,7 +635,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
     0, [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
       return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
     });
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          iter,
                          iter + num_rows + 1,
                          offsets->mutable_view().begin<offset_type>(),
@@ -757,7 +757,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
     mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         keys,
                         keys + num_values,                // keys
                         centroids_begin,                  // values
@@ -844,7 +844,7 @@ struct typed_group_tdigest {
     auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
@@ -924,7 +924,7 @@ struct typed_reduce_tdigest {
     auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + 1,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
@@ -1070,7 +1070,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto min_iter = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(tdv.min_begin(), tdv.size_begin())),
     tdigest_min{});
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels,
                         group_labels + num_group_labels,
                         min_iter,
@@ -1084,7 +1084,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto max_iter = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(tdv.max_begin(), tdv.size_begin())),
     tdigest_max{});
-  thrust::reduce_by_key(rmm::exec_policy(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         group_labels,
                         group_labels + num_group_labels,
                         max_iter,
@@ -1099,13 +1099,13 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     0,
     group_num_weights_func<decltype(group_offsets)>{group_offsets,
                                                     tdigest_offsets.begin<size_type>()});
-  thrust::replace_if(rmm::exec_policy(stream),
+  thrust::replace_if(rmm::exec_policy_nosync(stream),
                      merged_min_col->mutable_view().begin<double>(),
                      merged_min_col->mutable_view().end<double>(),
                      group_num_weights,
                      group_is_empty{},
                      0);
-  thrust::replace_if(rmm::exec_policy(stream),
+  thrust::replace_if(rmm::exec_policy_nosync(stream),
                      merged_max_col->mutable_view().begin<double>(),
                      merged_max_col->mutable_view().end<double>(),
                      group_num_weights,
@@ -1129,7 +1129,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     0,
     group_key_func<decltype(group_labels)>{
       group_labels, tdigest_offsets.begin<size_type>(), tdigest_offsets.size()});
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 keys,
                                 keys + cumulative_weights->size(),
                                 merged_weights.begin<double>(),

@@ -104,7 +104,7 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
 
   auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
 
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              reduction_results.begin(),
                              reduction_results.end(),
                              reduction_init_value(keep));
@@ -117,7 +117,7 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   auto const reduce_by_row = [&](auto const value_comp) {
     auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal, value_comp);
     thrust::for_each(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(num_rows),
       reduce_by_row_fn{

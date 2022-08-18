@@ -143,8 +143,13 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
   auto map_fn = [d_strings, d_offsets, max_tokens] __device__(auto idx) {
     return d_strings.is_null(idx) ? 0 : std::min(d_offsets[idx], max_tokens) + 1;
   };
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<offset_type>{});
+  thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream),
+                                   begin,
+                                   end + 1,
+                                   d_offsets,
+                                   map_fn,
+                                   0,
+                                   thrust::plus<offset_type>{});
 
   // the last offset entry is the total number of tokens to be generated
   auto const total_tokens = cudf::detail::get_value<offset_type>(offsets, strings_count, stream);
@@ -214,7 +219,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_offsets] __device__(auto const idx) -> size_type {

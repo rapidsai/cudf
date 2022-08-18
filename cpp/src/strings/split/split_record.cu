@@ -236,13 +236,13 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
   auto offsets       = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<int32_t>();
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_offsets,
                     counter);
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // last entry is the total number of tokens to be generated
   auto total_tokens = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
@@ -250,8 +250,10 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   reader.d_token_offsets = d_offsets;
   reader.d_tokens        = tokens.data();
-  thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), strings_count, reader);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     strings_count,
+                     reader);
   // convert the index-pairs into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
   // create a lists column using the offsets and the strings columns

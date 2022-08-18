@@ -92,7 +92,7 @@ std::unique_ptr<column> pad(
 
   if (side == side_type::LEFT) {
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
@@ -106,7 +106,7 @@ std::unique_ptr<column> pad(
       });
   } else if (side == side_type::RIGHT) {
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
@@ -120,7 +120,7 @@ std::unique_ptr<column> pad(
       });
   } else if (side == side_type::BOTH) {
     thrust::for_each_n(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
@@ -180,7 +180,7 @@ std::unique_ptr<column> zfill(
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      [d_strings, width, d_offsets, d_chars] __device__(size_type idx) {

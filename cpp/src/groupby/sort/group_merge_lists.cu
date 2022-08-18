@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
   //
   //   then, the output offsets_column is [0, 5, 8].
   //
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_column_view(values).offsets_begin(),

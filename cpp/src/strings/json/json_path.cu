@@ -1000,7 +1000,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       options);
 
   // convert sizes to offsets
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          offsets_view.head<offset_type>(),
                          offsets_view.head<offset_type>() + col.size() + 1,
                          offsets_view.head<offset_type>(),

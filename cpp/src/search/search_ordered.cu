@@ -75,7 +75,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
 
   if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream),
                         haystack_it,
                         haystack_it + haystack.num_rows(),
                         needles_it,
@@ -83,7 +83,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                         out_it,
                         d_comparator);
   } else {
-    thrust::upper_bound(rmm::exec_policy(stream),
+    thrust::upper_bound(rmm::exec_policy_nosync(stream),
                         haystack_it,
                         haystack_it + haystack.num_rows(),
                         needles_it,

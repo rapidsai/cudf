@@ -376,12 +376,14 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
                            d_offsets,
                            string_hasher_type{},
                            d_byte_indices.data()};
-  thrust::for_each_n(
-    rmm::exec_policy(stream), thrust::make_counting_iterator<cudf::size_type>(0), input.size(), fn);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator<cudf::size_type>(0),
+                     input.size(),
+                     fn);
 
   // build the output: add spaces between the remaining pairs in each string
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + input.size() + 1, d_offsets);
+    rmm::exec_policy_nosync(stream), d_offsets, d_offsets + input.size() + 1, d_offsets);
 
   auto const bytes =
     cudf::detail::get_value<cudf::size_type>(offsets->view(), input.size(), stream);
@@ -389,7 +391,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
     bytes, stream, rmm::mr::get_current_device_resource());
   auto d_chars = chars->mutable_view().data<char>();
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      input.size(),
                      build_encoding_fn{*d_strings, d_byte_indices.data(), d_offsets, d_chars});
@@ -450,11 +452,12 @@ std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& inp
   auto const begin = thrust::make_counting_iterator<cudf::size_type>(1);
   auto const end   = thrust::make_counting_iterator<cudf::size_type>(input.chars().size());
   edge_of_space_fn edge_of_space{d_strings};
-  auto const space_count = thrust::count_if(rmm::exec_policy(stream), begin, end, edge_of_space);
+  auto const space_count =
+    thrust::count_if(rmm::exec_policy_nosync(stream), begin, end, edge_of_space);
 
   // copy space offsets
   rmm::device_uvector<cudf::offset_type> space_offsets(space_count, stream);
-  thrust::copy_if(rmm::exec_policy(stream), begin, end, space_offsets.data(), edge_of_space);
+  thrust::copy_if(rmm::exec_policy_nosync(stream), begin, end, space_offsets.data(), edge_of_space);
 
   // create output offsets
   auto result =
@@ -465,7 +468,7 @@ std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& inp
                               rmm::mr::get_current_device_resource());
 
   // combine current offsets with space offsets
-  thrust::merge(rmm::exec_policy(stream),
+  thrust::merge(rmm::exec_policy_nosync(stream),
                 input.offsets_begin(),
                 input.offsets_end(),
                 space_offsets.begin(),

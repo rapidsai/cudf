@@ -134,7 +134,7 @@ std::unique_ptr<column> extract_all_record(
   // Convert counts into offsets.
   // Multiply each count by the number of groups.
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     d_offsets,
     d_offsets + strings_count + 1,
     d_offsets,

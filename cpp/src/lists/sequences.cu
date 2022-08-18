@@ -119,7 +119,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
     auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
-    thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+    thrust::tabulate(rmm::exec_policy_nosync(stream), result_begin, result_begin + n_elements, op);
 
     return result;
   }
@@ -166,7 +166,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin);
+    rmm::exec_policy_nosync(stream), sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin);
   auto const n_elements = cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
 
   auto child = type_dispatcher(starts.type(),

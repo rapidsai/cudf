@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
   // initialized to ARGMAX_SENTINEL. Using gather_if.
   // This can't use gather because nulls in gathered column will not store ARGMAX_SENTINEL.
   auto indices_view = indices->mutable_view();
-  thrust::gather_if(rmm::exec_policy(stream),
+  thrust::gather_if(rmm::exec_policy_nosync(stream),
                     indices_view.begin<size_type>(),    // map first
                     indices_view.end<size_type>(),      // map last
                     indices_view.begin<size_type>(),    // stencil

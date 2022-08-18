@@ -153,7 +153,7 @@ std::unique_ptr<column> url_encode(
   // build chars column
   auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      url_encoder_fn{d_strings, d_offsets, d_chars});
@@ -417,7 +417,7 @@ std::unique_ptr<column> url_decode(
       *d_strings, offsets_mutable_view.begin<offset_type>());
 
   // use scan to transform number of bytes into offsets
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          offsets_view.begin<offset_type>(),
                          offsets_view.end<offset_type>(),
                          offsets_mutable_view.begin<offset_type>());

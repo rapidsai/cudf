@@ -91,7 +91,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   // merge the strings
   auto d_chars = chars_column->mutable_view().template data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {

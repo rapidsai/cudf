@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ bool check_nvcomp_output_sizes(std::size_t const *dev_uncompressed_sizes,
                                std::size_t const *dev_actual_uncompressed_sizes,
                                std::size_t num_chunks, rmm::cuda_stream_view stream) {
   NVTX3_FUNC_RANGE_IN(java_domain);
-  return thrust::equal(rmm::exec_policy(stream), dev_uncompressed_sizes,
+  return thrust::equal(rmm::exec_policy_nosync(stream), dev_uncompressed_sizes,
                        dev_uncompressed_sizes + num_chunks, dev_actual_uncompressed_sizes);
 }
 
