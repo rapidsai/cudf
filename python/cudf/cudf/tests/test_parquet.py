@@ -2518,3 +2518,14 @@ def test_parquet_columns_and_index_param(index, columns):
     got = cudf.read_parquet(buffer, columns=columns)
 
     assert_eq(expected, got, check_index_type=True)
+
+
+def test_parquet_writer_nvcomp(list_struct_buff, compression):
+    expected = cudf.read_parquet(datadir / "spark_zstd.parquet")
+    try:
+        buff = BytesIO()
+        expected.to_parquet(buff, compression="ZSTD")
+        got = cudf.read_parquet(buff)
+        assert_eq(expected, got)
+    except RuntimeError:
+        pytest.mark.xfail(reason="Newer nvCOMP version is required")

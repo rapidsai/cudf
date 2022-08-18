@@ -1180,7 +1180,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
         gpu_snap(comp_in, comp_out, comp_stats, stream);
       }
       break;
-      case parquet::Compression::ZSTD:
+    case parquet::Compression::ZSTD:
       if (nvcomp_integration::is_all_enabled()) {
         nvcomp::batched_compress(nvcomp::compression_type::ZSTD,
                                  comp_in,
