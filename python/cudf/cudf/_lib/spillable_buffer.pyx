@@ -201,6 +201,11 @@ cdef class SpillableBuffer:
                 self._ptr = 0
                 self._owner = None
             elif (ptr_type, target) == ("cpu", "gpu"):
+                # Notice, this operation is prone to deadlock because the RMM
+                # allocation might trigger spilling-on-demand which in turn
+                # trigger a new call to this buffer's `move_inplace()`.
+                # Therefore, it is important that spilling-on-demand doesn't
+                # tries to unspill an already locked buffer!
                 dev_mem = rmm.DeviceBuffer.to_device(
                     self._ptr_desc.pop("memoryview")
                 )

@@ -42,7 +42,11 @@ class SpillManager:
         # TODO: check if a `FailureCallbackResourceAdaptor` has been
         #       registered already
         def oom(nbytes: int) -> bool:
-            """Try to handle an out-of-memory error by spilling"""
+            """Try to handle an out-of-memory error by spilling
+
+            Warning: in order to avoid deadlock, this function should
+            not lock already locked buffers.
+            """
 
             # Keep spilling until `nbytes` been spilled
             total_spilled = 0
@@ -110,11 +114,24 @@ class SpillManager:
         return spilled, unspilled
 
     def spill_device_memory(self) -> int:
+        """Try to spill device memory
+
+        This function is safe to call doing spill-on-demand
+        since it does not lock buffers already locked.
+
+        Return
+        ------
+        int
+            Number of bytes spilled.
+        """
         for buf in self.base_buffers(order_by_access_time=True):
-            with buf.lock:
-                if not buf.is_spilled and buf.spillable:
-                    buf.move_inplace(target="cpu")
-                    return buf.size
+            if buf.lock.acquire(blocking=False):
+                try:
+                    if not buf.is_spilled and buf.spillable:
+                        buf.move_inplace(target="cpu")
+                        return buf.size
+                finally:
+                    buf.lock.release()
         return 0
 
     def spill_to_device_limit(self, device_limit: int = None) -> int:
