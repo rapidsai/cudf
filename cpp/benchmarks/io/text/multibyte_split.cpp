@@ -135,22 +135,99 @@ static void BM_multibyte_split(benchmark::State& state)
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
+static void BM_multibyte_split_byte_range(benchmark::State& state)
+{
+  auto source_type        = static_cast<data_chunk_source_type>(state.range(0));
+  auto delim_size         = state.range(1);
+  auto delim_percent      = state.range(2);
+  auto file_size_approx   = state.range(3);
+  auto byte_range_percent = state.range(4);
+
+  auto byte_range_factor = static_cast<double>(byte_range_percent) / 100;
+  CUDF_EXPECTS(delim_percent >= 1, "delimiter percent must be at least 1");
+  CUDF_EXPECTS(delim_percent <= 50, "delimiter percent must be at most 50");
+  CUDF_EXPECTS(byte_range_percent >= 1, "byte range percent must be at least 1");
+  CUDF_EXPECTS(byte_range_percent <= 50, "byte range percent must be at most 50");
+
+  auto delim = std::string(":", delim_size);
+
+  auto delim_factor = static_cast<double>(delim_percent) / 100;
+  auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
+  auto host_input   = thrust::host_vector<char>(device_input.size());
+  auto host_string  = std::string(host_input.data(), host_input.size());
+
+  cudaMemcpyAsync(host_input.data(),
+                  device_input.data(),
+                  device_input.size() * sizeof(char),
+                  cudaMemcpyDeviceToHost,
+                  cudf::default_stream_value);
+
+  auto temp_file_name = random_file_in_dir(temp_dir.path());
+
+  {
+    auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
+    temp_fostream.write(host_input.data(), host_input.size());
+  }
+
+  cudaDeviceSynchronize();
+
+  auto source = std::unique_ptr<cudf::io::text::data_chunk_source>(nullptr);
+
+  switch (source_type) {
+    case data_chunk_source_type::file:  //
+      source = cudf::io::text::make_source_from_file(temp_file_name);
+      break;
+    case data_chunk_source_type::host:  //
+      source = cudf::io::text::make_source(host_string);
+      break;
+    case data_chunk_source_type::device:  //
+      source = cudf::io::text::make_source(device_input);
+      break;
+    default: CUDF_FAIL();
+  }
+
+  auto mem_stats_logger = cudf::memory_stats_logger();
+  auto range_size       = static_cast<int64_t>(file_size_approx * byte_range_factor);
+  auto range_offset     = (file_size_approx - range_size) / 2;
+  cudf::io::text::byte_range_info range{range_offset, range_size};
+  std::unique_ptr<cudf::column> output;
+  for (auto _ : state) {
+    try_drop_l3_cache();
+    cuda_event_timer raii(state, true);
+    output = cudf::io::text::multibyte_split(*source, delim, range);
+  }
+  auto output_size =
+    output->num_children() == 2 ? static_cast<int64_t>(output->child(1).size()) : 0;
+  state.SetBytesProcessed(state.iterations() * std::max(output_size, range_size));
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+}
+
 class MultibyteSplitBenchmark : public cudf::benchmark {
 };
 
-#define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                     \
-  BENCHMARK_DEFINE_F(MultibyteSplitBenchmark, name)(::benchmark::State & state) \
-  {                                                                             \
-    BM_multibyte_split(state);                                                  \
-  }                                                                             \
-  BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, name)                           \
-    ->ArgsProduct({{data_chunk_source_type::device,                             \
-                    data_chunk_source_type::file,                               \
-                    data_chunk_source_type::host},                              \
-                   {1, 4, 7},                                                   \
-                   {1, 25},                                                     \
-                   {1 << 15, 1 << 30}})                                         \
-    ->UseManualTime()                                                           \
-    ->Unit(::benchmark::kMillisecond);
+BENCHMARK_DEFINE_F(MultibyteSplitBenchmark, multibyte_split_simple)(::benchmark::State& state)
+{
+  BM_multibyte_split(state);
+}
+BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, multibyte_split_simple)
+  ->ArgsProduct(
+    {{data_chunk_source_type::device, data_chunk_source_type::file, data_chunk_source_type::host},
+     {1, 4, 7},
+     {1, 25},
+     {1 << 15, 1 << 30}})
+  ->UseManualTime()
+  ->Unit(::benchmark::kMillisecond);
 
-TRANSPOSE_BM_BENCHMARK_DEFINE(multibyte_split_simple);
+BENCHMARK_DEFINE_F(MultibyteSplitBenchmark, multibyte_split_byte_range)(::benchmark::State& state)
+{
+  BM_multibyte_split_byte_range(state);
+}
+BENCHMARK_REGISTER_F(MultibyteSplitBenchmark, multibyte_split_byte_range)
+  ->ArgsProduct(
+    {{data_chunk_source_type::device, data_chunk_source_type::file, data_chunk_source_type::host},
+     {1, 4, 7},
+     {1, 25},
+     {1 << 15, 1 << 30},
+     {1, 5, 12, 25, 50}})
+  ->UseManualTime()
+  ->Unit(::benchmark::kMillisecond);
