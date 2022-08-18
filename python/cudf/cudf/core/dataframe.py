@@ -4984,6 +4984,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out.replace_schema_metadata(metadata)
 
     def export_ipc(self):
+        """Export the dataframe as an IPC message which can be imported by another
+        process on the same device.
+
+        Returns
+        -------
+        arrow buffer
+        """
         columns = []
         names = []
         from cudf._lib import ipc
@@ -4995,6 +5002,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     def import_ipc(cls, message):
+        """Import the message created by :py:meth:`export_ipc` and returns the imported
+        dataframe.
+
+        Returns
+        -------
+        A dataframe from another process.
+        """
         from cudf._lib import ipc
         return cls._from_data(ipc.import_ipc(message))
 

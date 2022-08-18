@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <arrow/io/memory.h>   // arrow::io::BufferReader
+#include <arrow/buffer.h>     // arrow::Buffer
+#include <arrow/io/memory.h>  // arrow::io::BufferReader
 #include <arrow/ipc/reader.h>  // arrow::ipc::ReadSchema
 
 #include <cudf/column/column_factories.hpp>

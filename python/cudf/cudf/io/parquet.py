@@ -589,7 +589,7 @@ def _read_parquet(
 @ioutils.doc_to_parquet()
 @_cudf_nvtx_annotate
 def to_parquet(
-    df: cudf.DataFrame,
+    df,
     path,
     engine="cudf",
     compression="snappy",

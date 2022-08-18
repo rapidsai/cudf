@@ -20,7 +20,6 @@
 #include <cstring>
 #include <cuda.h>
 #include <cudf/utilities/error.hpp>
-#include <iostream>
 
 namespace cudf {
 namespace ipc {

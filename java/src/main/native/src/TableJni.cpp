@@ -2012,18 +2012,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_importIPC(JNIEnv *env, jc
   CATCH_STD(env, NULL)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv *env, jclass,
-                                                                 jlong arrow_buffer_handle) {
-  std::shared_ptr<arrow::Buffer> *handle =
-      reinterpret_cast<std::shared_ptr<arrow::Buffer> *>(arrow_buffer_handle);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    delete handle;
-  }
-  CATCH_STD(env, )
-}
-
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCArrowChunk(JNIEnv *env, jclass,
                                                                          jlong j_state,
                                                                          jlong arrow_table_handle,
@@ -2096,6 +2084,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readArrowIPCChunkToArrowTable(
     return result ? ptr_as_jlong(new std::shared_ptr<arrow::Table>{result}) : 0;
   }
   CATCH_STD(env, 0)
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv *env, jclass,
+                                                                 jlong arrow_table_handle) {
+  std::shared_ptr<arrow::Table> *handle =
+      reinterpret_cast<std::shared_ptr<arrow::Table> *>(arrow_table_handle);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    delete handle;
+  }
+  CATCH_STD(env, )
 }
 
 JNIEXPORT jlongArray JNICALL
