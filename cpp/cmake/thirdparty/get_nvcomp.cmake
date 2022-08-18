@@ -15,7 +15,8 @@
 # This function finds nvcomp and sets any additional necessary environment variables.
 function(find_and_configure_nvcomp)
   # WORKAROUND; DO NOT MERGE
-  rapids_find_package(nvcomp REQUIRED
+  rapids_find_package(
+    nvcomp REQUIRED
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
   )
