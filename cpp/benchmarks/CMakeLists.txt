@@ -297,7 +297,7 @@ ConfigureNVBench(FST_NVBENCH io/fst.cu)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
-ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
+ConfigureNVBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
 
 add_custom_target(
   run_benchmarks
