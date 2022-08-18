@@ -31,6 +31,7 @@
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/ipc.hpp>
 #include <cudf/join.hpp>
 #include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
@@ -219,6 +220,62 @@ public:
 
 typedef jni_table_writer_handle<cudf::io::parquet_chunked_writer> native_parquet_writer_handle;
 typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_handle;
+
+namespace {
+cudf::column_metadata build_one_column_meta(const cudf::column_view &cview, size_t &idx,
+                                            std::vector<std::string> const &column_names,
+                                            const bool consume_name = true) {
+  auto get_column_name = [&column_names](const size_t idx) -> std::string const & {
+    if (idx < 0 || idx >= column_names.size()) {
+      throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
+    }
+    return column_names[idx];
+  };
+
+  auto col_meta = cudf::column_metadata{};
+  if (consume_name) {
+    col_meta.name = get_column_name(idx++);
+  }
+  // Process children
+  if (cview.type().id() == cudf::type_id::LIST) {
+    // list type:
+    //   - requires a stub metadata for offset column(index: 0).
+    //   - does not require a name for the child column(index 1).
+    col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), idx, column_names, false)};
+  } else if (cview.type().id() == cudf::type_id::STRUCT) {
+    // struct type always consumes the column names.
+    col_meta.children_meta.reserve(cview.num_children());
+    for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
+      col_meta.children_meta.push_back(build_one_column_meta(*itr, idx, column_names));
+    }
+  } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
+    // not supported yet in JNI, nested type?
+    throw cudf::jni::jni_exception("Unsupported type 'DICTIONARY32'");
+  }
+  return col_meta;
+}
+
+std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view &tview,
+                                                       std::vector<std::string> const &column_names,
+                                                       std::vector<cudf::column_metadata> *p_out) {
+  auto &columns_meta = *p_out;
+  // Rebuild the structure of column meta according to table schema.
+  // All the tables written by this writer should share the same schema,
+  // so build column metadata only once.
+  columns_meta.reserve(tview.num_columns());
+  size_t idx = 0;
+  for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
+    // It should consume the column names only when a column is
+    //   - type of struct, or
+    //   - not a child.
+    columns_meta.push_back(build_one_column_meta(*itr, idx, column_names));
+  }
+  if (idx < column_names.size()) {
+    throw cudf::jni::jni_exception("Too many column names are provided.");
+  }
+  return columns_meta;
+}
+} // namespace
 
 class native_arrow_ipc_writer_handle final {
 public:
@@ -1956,9 +2013,45 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_exportIPC(JNIEnv *env, jclass, jlong j_table) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_exportIPC(JNIEnv *env, jclass, jlong j_table,
+                                                           jobjectArray j_col_names,
+                                                           jobjectArray j_out) {
   cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
-  CATCH_STD(env, 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    std::vector<cudf::column_metadata> meta;
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::get_column_metadata(*tview, col_names.as_cpp_vector(), &meta);
+    auto result = cudf::export_ipc(*tview, meta);
+
+    jbyteArray jarray = env->NewByteArray(result->size());
+    env->SetByteArrayRegion(jarray, 0, result->size(), (jbyte *)result->data());
+    env->SetObjectArrayElement(j_out, 0, jarray);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_ImportIPC(JNIEnv *env, jclass, jbyteArray msg) {
+  try {
+    jbyte *buffer = env->GetByteArrayElements(msg, 0);
+    auto len = env->GetArrayLength(msg);
+    auto p_buf = std::make_shared<arrow::Buffer>(buffer, len);
+    std::pair<cudf::table_view, std::vector<std::shared_ptr<cudf::imported_column>>> const &result =
+        cudf::import_ipc(p_buf);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv *env, jclass,
+                                                                 jlong arrow_buffer_handle) {
+  std::shared_ptr<arrow::Buffer> *handle =
+      reinterpret_cast<std::shared_ptr<arrow::Buffer> *>(arrow_buffer_handle);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    delete handle;
+  }
+  CATCH_STD(env, )
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCArrowChunk(JNIEnv *env, jclass,
@@ -2033,18 +2126,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readArrowIPCChunkToArrowTable(
     return result ? ptr_as_jlong(new std::shared_ptr<arrow::Table>{result}) : 0;
   }
   CATCH_STD(env, 0)
-}
-
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_closeArrowTable(JNIEnv *env, jclass,
-                                                                 jlong arrow_table_handle) {
-  std::shared_ptr<arrow::Table> *handle =
-      reinterpret_cast<std::shared_ptr<arrow::Table> *>(arrow_table_handle);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    delete handle;
-  }
-  CATCH_STD(env, )
 }
 
 JNIEXPORT jlongArray JNICALL

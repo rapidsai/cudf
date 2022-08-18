@@ -33,6 +33,8 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
 
+import javax.swing.text.TableView;
+
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
  * collectively.
@@ -1633,12 +1635,32 @@ public final class Table implements AutoCloseable {
     return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, provider);
   }
 
-  native private static byte[] exportICPImpl(long tableHandle);
+  native private static byte[] exportICP(long tableHandle, String[] columnNames, byte[][] out_bytes);
 
-  public byte[] exportIPC() {
-    byte[] result = new byte[10];
-    return result;
+  public class IPCMessage {
+    private byte[] message;
+
+    public IPCMessage(byte[] msg) {
+      this.message = msg;
+    }
+
+    public byte[] getMessage() {
+      return message;
+    }
   }
+
+  public IPCMessage exportIPC(IPCWriterOptions options) {
+    byte[][] result = new byte[1][];
+    exportICP(this.nativeHandle, options.getColumnNames(), result);
+    return new IPCMessage(result[0]);
+  }
+
+  native private static void importIPC(byte [] message);
+
+  public static Table importIPC(IPCMessage message) {
+
+  }
+
 
   /**
    * Concatenate multiple tables together to form a single table.
