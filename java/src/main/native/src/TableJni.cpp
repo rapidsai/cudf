@@ -1361,7 +1361,8 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getColumnNames(
     auto ret = static_cast<jobjectArray>(
         env->NewObjectArray(length, env->FindClass("java/lang/String"), nullptr));
     for (size_t i = 0; i < length; i++) {
-      env->SetObjectArrayElement(ret, i, env->NewStringUTF(ptr->metadata.schema_info[i].name.c_str()));
+      env->SetObjectArrayElement(ret, i,
+                                 env->NewStringUTF(ptr->metadata.schema_info[i].name.c_str()));
     }
 
     return ret;
