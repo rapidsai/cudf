@@ -38,7 +38,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include "./ipc.hpp"
+#include "ipc.hpp"
 #include <thrust/gather.h>
 
 namespace cudf {

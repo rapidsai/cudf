@@ -30,8 +30,8 @@ struct imported_column::impl {
 
 imported_column::imported_column(std::string n, ipc::imported_ptr&& d, ipc::imported_ptr&& m)
   : name{std::move(n)},
-    _pimpl{
-      std::make_unique<impl>(std::forward<ipc::imported_ptr>(d), std::forward<ipc::imported_ptr>(m))}
+    _pimpl{std::make_unique<impl>(std::forward<ipc::imported_ptr>(d),
+                                  std::forward<ipc::imported_ptr>(m))}
 {
 }
 

@@ -33,8 +33,6 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import javax.swing.text.TableView;
-
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
  * collectively.

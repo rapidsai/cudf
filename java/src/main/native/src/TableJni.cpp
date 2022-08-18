@@ -255,9 +255,9 @@ cudf::column_metadata build_one_column_meta(const cudf::column_view &cview, size
   return col_meta;
 }
 
-std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view &tview,
-                                                       std::vector<std::string> const &column_names,
-                                                       std::vector<cudf::column_metadata> *p_out) {
+void get_column_metadata(const cudf::table_view &tview,
+                         std::vector<std::string> const &column_names,
+                         std::vector<cudf::column_metadata> *p_out) {
   auto &columns_meta = *p_out;
   // Rebuild the structure of column meta according to table schema.
   // All the tables written by this writer should share the same schema,
@@ -273,7 +273,6 @@ std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view &t
   if (idx < column_names.size()) {
     throw cudf::jni::jni_exception("Too many column names are provided.");
   }
-  return columns_meta;
 }
 } // namespace
 
@@ -314,68 +313,23 @@ public:
       writer = *tmp_writer;
       initialized = true;
     }
-    writer->WriteTable(*arrow_tab, max_chunk);
+    if (writer->WriteTable(*arrow_tab, max_chunk).ok()) {
+      CUDF_FAIL("Failed to write table.");
+    }
   }
 
   void close() {
     if (initialized) {
-      writer->Close();
-      sink->Close();
+      if (!(writer->Close().ok() && sink->Close().ok())) {
+        CUDF_FAIL("Failed to close writer.");
+      }
     }
     initialized = false;
   }
 
   std::vector<cudf::column_metadata> get_column_metadata(const cudf::table_view &tview) {
-    if (!column_names.empty() && columns_meta.empty()) {
-      // Rebuild the structure of column meta according to table schema.
-      // All the tables written by this writer should share the same schema,
-      // so build column metadata only once.
-      columns_meta.reserve(tview.num_columns());
-      size_t idx = 0;
-      for (auto itr = tview.begin(); itr < tview.end(); ++itr) {
-        // It should consume the column names only when a column is
-        //   - type of struct, or
-        //   - not a child.
-        columns_meta.push_back(build_one_column_meta(*itr, idx));
-      }
-      if (idx < column_names.size()) {
-        throw cudf::jni::jni_exception("Too many column names are provided.");
-      }
-    }
+    ::cudf::jni::get_column_metadata(tview, column_names, &columns_meta);
     return columns_meta;
-  }
-
-private:
-  cudf::column_metadata build_one_column_meta(const cudf::column_view &cview, size_t &idx,
-                                              const bool consume_name = true) {
-    auto col_meta = cudf::column_metadata{};
-    if (consume_name) {
-      col_meta.name = get_column_name(idx++);
-    }
-    // Process children
-    if (cview.type().id() == cudf::type_id::LIST) {
-      // list type:
-      //   - requires a stub metadata for offset column(index: 0).
-      //   - does not require a name for the child column(index 1).
-      col_meta.children_meta = {{}, build_one_column_meta(cview.child(1), idx, false)};
-    } else if (cview.type().id() == cudf::type_id::STRUCT) {
-      // struct type always consumes the column names.
-      col_meta.children_meta.reserve(cview.num_children());
-      for (auto itr = cview.child_begin(); itr < cview.child_end(); ++itr) {
-        col_meta.children_meta.push_back(build_one_column_meta(*itr, idx));
-      }
-    } else if (cview.type().id() == cudf::type_id::DICTIONARY32) {
-      // not supported yet in JNI, nested type?
-      throw cudf::jni::jni_exception("Unsupported type 'DICTIONARY32'");
-    }
-    return col_meta;
-  }
-
-  std::string &get_column_name(const size_t idx) {
-    if (idx < 0 || idx >= column_names.size()) {
-      throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
-    }
-    return column_names[idx];
   }
 };
 
