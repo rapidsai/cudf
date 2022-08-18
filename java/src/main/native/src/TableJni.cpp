@@ -2031,7 +2031,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_exportIPC(JNIEnv *env, jclass, 
   CATCH_STD(env, )
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_ImportIPC(JNIEnv *env, jclass,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_importIPC(JNIEnv *env, jclass,
                                                                  jbyteArray msg,
                                                                  jobjectArray out_names) {
   try {

@@ -1635,7 +1635,7 @@ public final class Table implements AutoCloseable {
     return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, provider);
   }
 
-  native private static byte[] exportICP(long tableHandle, String[] columnNames, byte[][] out_bytes);
+  native private static byte[] exportIPC(long tableHandle, String[] columnNames, byte[][] out_bytes);
 
   public class IPCMessage {
     private byte[] message;
@@ -1651,7 +1651,7 @@ public final class Table implements AutoCloseable {
 
   public IPCMessage exportIPC(IPCWriterOptions options) {
     byte[][] result = new byte[1][];
-    exportICP(this.nativeHandle, options.getColumnNames(), result);
+    exportIPC(this.nativeHandle, options.getColumnNames(), result);
     return new IPCMessage(result[0]);
   }
 

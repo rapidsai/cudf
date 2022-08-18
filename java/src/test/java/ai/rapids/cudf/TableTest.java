@@ -8274,4 +8274,13 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testIPC() {
+    Table t = new Table.TestBuilder().column(0, 1, null, 2, 3, 4).column(3.0, 5.0, null, 2.0, 1.0, 0.0).build();
+    IPCWriterOptions options = IPCWriterOptions.builder().withColumnNames("a", "b").build();
+    Table.IPCMessage msg = t.exportIPC(options);
+    Table imported = Table.importIPC(msg);
+    assertTablesAreEqual(t, imported);
+  }
 }

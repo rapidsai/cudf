@@ -483,7 +483,7 @@ std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
   };
 }
 
-ipc::exported_column to_ipc_column(column_view column, column_metadata const& meta_data)
+ipc::exported_column to_ipc_column(column_view column)
 {
   if (column.type().id() != type_id::EMPTY) {
     auto handle =
@@ -531,7 +531,7 @@ std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
 
   CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
   for (size_t i = 0; i < metadata.size(); ++i) {
-    ipc::exported_column p_handle = to_ipc_column(input.column(i), metadata.at(i));
+    ipc::exported_column p_handle = to_ipc_column(input.column(i));
     // serialize to message
     p_handle.serialize(&bytes);
     auto size = bytes.size();
