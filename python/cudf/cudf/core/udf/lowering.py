@@ -289,19 +289,37 @@ def pack_return_scalar_impl(context, builder, sig, args):
 
 
 @cuda_lower(operator.truth, MaskedType)
-def masked_scalar_truth_impl(context, builder, sig, args):
-    indata = cgutils.create_struct_proxy(MaskedType(types.boolean))(
-        context, builder, value=args[0]
-    )
-    return indata.value
-
-
 @cuda_lower(bool, MaskedType)
 def masked_scalar_bool_impl(context, builder, sig, args):
-    indata = cgutils.create_struct_proxy(MaskedType(types.boolean))(
+    breakpoint()
+    indata = cgutils.create_struct_proxy(sig.args[0])(
         context, builder, value=args[0]
     )
-    return indata.value
+    result = context.get_constant(types.boolean, 0)
+    with builder.if_then(indata.valid):
+        result = context.cast(
+            builder, indata.value, sig.args[0].value_type, types.boolean
+        )
+    return result
+
+
+@cuda_lower(float, MaskedType)
+@cuda_lower(int, MaskedType)
+def masked_scalar_cast_impl(context, builder, sig, args):
+    input = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+    result = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+
+    casted = context.cast(
+        builder,
+        input.value,
+        sig.args[0].value_type,
+        sig.return_type.value_type,
+    )
+    result.value = casted
+    result.valid = input.valid
+    return result._getvalue()
 
 
 # To handle the unification, we need to support casting from any type to a
