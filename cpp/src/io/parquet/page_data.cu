@@ -19,6 +19,8 @@
 #include <io/utilities/column_buffer.hpp>
 
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -87,62 +89,6 @@ struct page_state_s {
   const uint8_t* lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
   int32_t lvl_count[NUM_LEVEL_TYPES];         // how many of each of the streams we've decoded
 };
-
-/**
- * @brief Computes a 32-bit hash when given a byte stream and range.
- *
- * MurmurHash3_32 implementation from
- * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
- *
- * MurmurHash3 was written by Austin Appleby, and is placed in the public
- * domain. The author hereby disclaims copyright to this source code.
- *
- * @param[in] key The input data to hash
- * @param[in] len The length of the input data
- * @param[in] seed An initialization value
- *
- * @return The hash value
- */
-__device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed = 33)
-{
-  const auto* p     = reinterpret_cast<const uint8_t*>(key);
-  uint32_t h1       = seed, k1;
-  const uint32_t c1 = 0xcc9e2d51;
-  const uint32_t c2 = 0x1b873593;
-  int l             = len;
-  // body
-  while (l >= 4) {
-    k1 = p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-    p += 4;
-    l -= 4;
-  }
-  // tail
-  k1 = 0;
-  switch (l) {
-    case 3: k1 ^= p[2] << 16;
-    case 2: k1 ^= p[1] << 8;
-    case 1:
-      k1 ^= p[0];
-      k1 *= c1;
-      k1 = rotl32(k1, 15);
-      k1 *= c2;
-      h1 ^= k1;
-  }
-  // finalization
-  h1 ^= len;
-  h1 ^= h1 >> 16;
-  h1 *= 0x85ebca6b;
-  h1 ^= h1 >> 13;
-  h1 *= 0xc2b2ae35;
-  h1 ^= h1 >> 16;
-  return h1;
-}
 
 /**
  * @brief Read a 32-bit varint integer
@@ -538,8 +484,11 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
     }
   }
   if (s->dtype_len == 4) {
-    // Output hash
-    *static_cast<uint32_t*>(dstv) = device_str2hash32(ptr, len);
+    // Output hash. This hash value is used if the option to convert strings to
+    // categoricals is enabled. The seed value is chosen arbitrarily.
+    uint32_t constexpr hash_seed = 33;
+    cudf::string_view const sv{ptr, static_cast<size_type>(len)};
+    *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
   } else {
     // Output string descriptor
     auto* dst   = static_cast<string_index_pair*>(dstv);
