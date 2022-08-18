@@ -165,6 +165,8 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
+    install_dask
+
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
