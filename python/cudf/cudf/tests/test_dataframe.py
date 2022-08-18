@@ -330,7 +330,8 @@ def test_dataframe_truncate_axis_1():
 
 def test_dataframe_truncate_datetimeindex():
     dates = cudf.date_range(
-        '2021-01-01 23:45:00', '2021-01-02 23:46:00', freq="s")
+        "2021-01-01 23:45:00", "2021-01-02 23:46:00", freq="s"
+    )
     df = cudf.DataFrame(data={"A": 1, "B": 2}, index=dates)
     pdf = df.to_pandas()
     expected = pdf.truncate(
