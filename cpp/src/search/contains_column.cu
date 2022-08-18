@@ -17,22 +17,18 @@
 #include <hash/unordered_multiset.cuh>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/structs/struct_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -41,96 +37,25 @@ namespace detail {
 
 namespace {
 
-/**
- * @brief Get the underlying value of a scalar through a scalar device view.
- *
- * @tparam Type The scalar's value type
- * @tparam ScalarDView Type of the input scalar device view
- * @param d_scalar The input scalar device view
- */
-template <typename Type, typename ScalarDView>
-__device__ auto inline get_scalar_value(ScalarDView d_scalar)
-{
-  if constexpr (cudf::is_fixed_point<Type>()) {
-    return d_scalar.rep();
-  } else {
-    return d_scalar.value();
-  }
-}
+struct contains_column_dispatch {
+  template <typename Element, typename Haystack>
+  struct contains_fn {
+    bool __device__ operator()(size_type const idx) const
+    {
+      if (needles_have_nulls && needles.is_null_nocheck(idx)) {
+        // Exit early. The value doesn't matter, and will be masked as a null element.
+        return true;
+      }
 
-struct contains_scalar_dispatch {
-  template <typename Type>
-  bool operator()(column_view const& haystack,
-                  scalar const& needle,
-                  rmm::cuda_stream_view stream) const
-  {
-    CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
-
-    using DType           = device_storage_type_t<Type>;
-    auto const d_haystack = column_device_view::create(haystack, stream);
-    auto const d_needle =
-      get_scalar_device_view(static_cast<cudf::scalar_type_t<Type>&>(const_cast<scalar&>(needle)));
-
-    if (haystack.has_nulls()) {
-      auto const begin = d_haystack->pair_begin<DType, true>();
-      auto const end   = d_haystack->pair_end<DType, true>();
-
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
-                 auto const needle_pair = thrust::make_pair(get_scalar_value<Type>(d_needle), true);
-                 return val_pair == needle_pair;
-               }) > 0;
-    } else {
-      auto const begin = d_haystack->begin<DType>();
-      auto const end   = d_haystack->end<DType>();
-
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val) {
-                 return val == get_scalar_value<Type>(d_needle);
-               }) > 0;
+      return haystack.contains(needles.template element<Element>(idx));
     }
-  }
-};
 
-template <>
-bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
-                                                           scalar const&,
-                                                           rmm::cuda_stream_view) const
-{
-  CUDF_FAIL("list_view type not supported yet");
-}
+    Haystack const haystack;
+    column_device_view const needles;
+    bool const needles_have_nulls;
+  };
 
-template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& haystack,
-                                                             scalar const& needle,
-                                                             rmm::cuda_stream_view stream) const
-{
-  CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
-  // Haystack and needle structure compatibility will be checked by the table comparator
-  // constructor during call to `contains_nested_element`.
-
-  auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
-  return contains_nested_element(haystack, needle_as_col->view(), stream);
-}
-
-template <>
-bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& haystack,
-                                                              scalar const& needle,
-                                                              rmm::cuda_stream_view stream) const
-{
-  auto const dict_col = cudf::dictionary_column_view(haystack);
-  // first, find the needle in the dictionary's key set
-  auto const index = cudf::dictionary::detail::get_index(dict_col, needle, stream);
-  // if found, check the index is actually in the indices column
-  return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
-                                                          contains_scalar_dispatch{},
-                                                          dict_col.indices(),
-                                                          *index,
-                                                          stream);
-}
-
-struct multi_contains_dispatch {
-  template <typename Type>
+  template <typename Element, CUDF_ENABLE_IF(!is_nested<Element>())>
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
                                      rmm::cuda_stream_view stream,
@@ -138,7 +63,7 @@ struct multi_contains_dispatch {
   {
     auto result = make_numeric_column(data_type{type_to_id<bool>()},
                                       needles.size(),
-                                      copy_bitmask(needles),
+                                      copy_bitmask(needles, stream, mr),
                                       needles.null_count(),
                                       stream,
                                       mr);
@@ -151,57 +76,38 @@ struct multi_contains_dispatch {
       return result;
     }
 
-    auto const haystack_set    = cudf::detail::unordered_multiset<Type>::create(haystack, stream);
+    auto const haystack_set = cudf::detail::unordered_multiset<Element>::create(haystack, stream);
+    auto const haystack_set_dv = haystack_set.to_device();
     auto const needles_cdv_ptr = column_device_view::create(needles, stream);
-    auto const needles_it      = thrust::make_counting_iterator<size_type>(0);
 
-    if (needles.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream),
-                        needles_it,
-                        needles_it + needles.size(),
-                        out_begin,
-                        [haystack = haystack_set.to_device(),
-                         needles  = *needles_cdv_ptr] __device__(size_type const idx) {
-                          return needles.is_null_nocheck(idx) ||
-                                 haystack.contains(needles.template element<Type>(idx));
-                        });
-    } else {
-      thrust::transform(rmm::exec_policy(stream),
-                        needles_it,
-                        needles_it + needles.size(),
-                        out_begin,
-                        [haystack = haystack_set.to_device(),
-                         needles  = *needles_cdv_ptr] __device__(size_type const index) {
-                          return haystack.contains(needles.template element<Type>(index));
-                        });
-    }
-
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(needles.size()),
+                      out_begin,
+                      contains_fn<Element, decltype(haystack_set_dv)>{
+                        haystack_set_dv, *needles_cdv_ptr, needles.has_nulls()});
     return result;
+  }
+
+  template <typename Element, CUDF_ENABLE_IF(is_nested<Element>())>
+  std::unique_ptr<column> operator()(column_view const& haystack,
+                                     column_view const& needles,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    auto result_v = detail::contains(table_view{{haystack}},
+                                     table_view{{needles}},
+                                     null_equality::EQUAL,
+                                     nan_equality::ALL_EQUAL,
+                                     stream,
+                                     mr);
+    return std::make_unique<column>(
+      std::move(result_v), copy_bitmask(needles, stream, mr), needles.null_count());
   }
 };
 
 template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
-  column_view const&,
-  column_view const&,
-  rmm::cuda_stream_view,
-  rmm::mr::device_memory_resource*) const
-{
-  CUDF_FAIL("list_view type not supported");
-}
-
-template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
-  column_view const&,
-  column_view const&,
-  rmm::cuda_stream_view,
-  rmm::mr::device_memory_resource*) const
-{
-  CUDF_FAIL("struct_view type not supported");
-}
-
-template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
+std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
   column_view const& haystack_in,
   column_view const& needles_in,
   rmm::cuda_stream_view stream,
@@ -219,22 +125,14 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
   column_view const haystack_indices = haystack_view.get_indices_annotated();
   column_view const needles_indices  = needles_view.get_indices_annotated();
   return cudf::type_dispatcher(haystack_indices.type(),
-                               multi_contains_dispatch{},
+                               contains_column_dispatch{},
                                haystack_indices,
                                needles_indices,
                                stream,
                                mr);
 }
+
 }  // namespace
-
-bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream)
-{
-  if (haystack.is_empty()) { return false; }
-  if (not needle.is_valid(stream)) { return haystack.has_nulls(); }
-
-  return cudf::type_dispatcher(
-    haystack.type(), contains_scalar_dispatch{}, haystack, needle, stream);
-}
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
@@ -244,16 +142,10 @@ std::unique_ptr<column> contains(column_view const& haystack,
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
   return cudf::type_dispatcher(
-    haystack.type(), multi_contains_dispatch{}, haystack, needles, stream, mr);
+    haystack.type(), contains_column_dispatch{}, haystack, needles, stream, mr);
 }
 
 }  // namespace detail
-
-bool contains(column_view const& haystack, scalar const& needle)
-{
-  CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, cudf::default_stream_value);
-}
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,

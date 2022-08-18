@@ -1587,8 +1587,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jbooleanArray j_is_map, jbooleanArray j_hasParquetFieldIds, jintArray j_parquetFieldIds,
-    jobject consumer) {
+    jbooleanArray j_is_map, jbooleanArray j_is_binary, jbooleanArray j_hasParquetFieldIds,
+    jintArray j_parquetFieldIds, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1597,9 +1597,6 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
   try {
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
-
-    // temp stub
-    jbooleanArray j_is_binary = NULL;
 
     using namespace cudf::io;
     using namespace cudf::jni;
@@ -1636,8 +1633,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jbooleanArray j_is_map, jbooleanArray j_hasParquetFieldIds, jintArray j_parquetFieldIds,
-    jstring j_output_path) {
+    jbooleanArray j_is_map, jbooleanArray j_is_binary, jbooleanArray j_hasParquetFieldIds,
+    jintArray j_parquetFieldIds, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1645,9 +1642,6 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
     cudf::jni::native_jstring output_path(env, j_output_path);
-
-    // temp stub
-    jbooleanArray j_is_binary = NULL;
 
     using namespace cudf::io;
     using namespace cudf::jni;
