@@ -877,11 +877,11 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 @pytest.mark.parametrize(
     "ptn,esc,expect",
     [
-        ("abc", "/", [True, False, False, False, False]),
+        ("abc", "", [True, False, False, False, False]),
         ("b%", "/", [False, True, False, False, False]),
-        ("%b", "/", [False, True, False, False, False]),
-        ("%b%", "/", [True, True, False, False, False]),
-        ("___", "/", [True, True, True, False, False]),
+        ("%b", ":", [False, True, False, False, False]),
+        ("%b%", "*", [True, True, False, False, False]),
+        ("___", "", [True, True, True, False, False]),
         ("__/%", "/", [False, False, True, False, False]),
         ("55/____", "/", [False, False, False, True, False]),
     ],
