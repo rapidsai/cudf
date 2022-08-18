@@ -706,7 +706,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         >>> import cudf
         >>> dates = cudf.date_range(
-        ... '2021-01-01 23:45:00', '2021-01-02 23:46:00', freq='s')
+        ... '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s')
         >>> cs2 = cudf.Series(range(len(dates)), index=dates)
         >>> cs2
         2021-01-01 23:45:00     0
