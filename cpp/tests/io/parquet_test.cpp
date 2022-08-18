@@ -4204,22 +4204,4 @@ TEST_F(ParquetReaderTest, StructByteArray)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TEST_F(ParquetReaderTest, ZSTD)
-{
-  srand(31337);
-  auto const expected = create_random_fixed_table<int>(2, 4, false);
-
-  std::vector<char> out_buffer;
-  cudf_io::parquet_writer_options args =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected)
-      .compression(cudf_io::compression_type::ZSTD);
-  cudf_io::write_parquet(args);
-
-  cudf_io::parquet_reader_options read_opts = cudf_io::parquet_reader_options::builder(
-    cudf_io::source_info{out_buffer.data(), out_buffer.size()});
-  auto const result = cudf_io::read_parquet(read_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-}
-
 CUDF_TEST_PROGRAM_MAIN()

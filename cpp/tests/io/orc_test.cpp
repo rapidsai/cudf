@@ -1521,15 +1521,16 @@ TEST_F(OrcReaderTest, EmptyColumnsParam)
 
   std::vector<char> out_buffer;
   cudf_io::orc_writer_options args =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected)
-      .compression(cudf_io::compression_type::ZSTD);
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected);
   cudf_io::write_orc(args);
 
-  cudf_io::orc_reader_options read_opts = cudf_io::orc_reader_options::builder(
-    cudf_io::source_info{out_buffer.data(), out_buffer.size()});
+  cudf_io::orc_reader_options read_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{out_buffer.data(), out_buffer.size()})
+      .columns({});
   auto const result = cudf_io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  EXPECT_EQ(result.tbl->num_columns(), 0);
+  EXPECT_EQ(result.tbl->num_rows(), 0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
