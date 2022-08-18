@@ -8280,7 +8280,14 @@ public class TableTest extends CudfTestBase {
     Table t = new Table.TestBuilder().column(0, 1, null, 2, 3, 4).column(3.0, 5.0, null, 2.0, 1.0, 0.0).build();
     IPCWriterOptions options = IPCWriterOptions.builder().withColumnNames("a", "b").build();
     Table.IPCMessage msg = t.exportIPC(options);
-    Table imported = Table.importIPC(msg);
-    assertTablesAreEqual(t, imported);
+    // Must have a new CUDA context for reading IPC handle.
+    assertThrows(CudaException.class, () -> {
+        try {
+          Table.importIPC(msg);
+        } catch (CudaException ex) {
+          assertEquals(CudaException.CudaError.cudaErrorDeviceUninitialized, ex.cudaError);
+          throw ex;
+        }
+      });
   }
 }
