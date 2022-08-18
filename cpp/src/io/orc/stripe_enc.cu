@@ -31,6 +31,7 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
@@ -1351,6 +1352,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
   }
+
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              comp_stat.begin(),
+                              comp_stat.end(),
+                              [] __device__(auto const& stat) { return stat.status == 0; }),
+               "Error during decompression");
 
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
