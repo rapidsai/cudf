@@ -87,7 +87,7 @@ static void BM_multibyte_split(benchmark::State& state)
   CUDF_EXPECTS(delim_percent >= 1, "delimiter percent must be at least 1");
   CUDF_EXPECTS(delim_percent <= 50, "delimiter percent must be at most 50");
 
-  auto delim = std::string(":", delim_size);
+  auto delim = std::string(delim_size, ':');
 
   auto delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
@@ -149,7 +149,7 @@ static void BM_multibyte_split_byte_range(benchmark::State& state)
   CUDF_EXPECTS(byte_range_percent >= 1, "byte range percent must be at least 1");
   CUDF_EXPECTS(byte_range_percent <= 50, "byte range percent must be at most 50");
 
-  auto delim = std::string(":", delim_size);
+  auto delim = std::string(delim_size, ':');
 
   auto delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
