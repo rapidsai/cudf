@@ -1008,10 +1008,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
  * first node encountered in \p input
  * @param[in] input The JSON input in host memory
  * @param[in] d_input The JSON input in device memory
- * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] options Parsing options specifying the parsing behaviour
  * @param[in] include_quote_char Whether to include the original quote chars for string values,
  * allowing to distinguish string values from numeric and literal values
+ * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] mr Optional, resource with which to allocate
  * @return The columnar representation of the data from the given JSON input
  */
@@ -1518,12 +1518,13 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   constexpr uint32_t node_init_child_count_zero = 0;
   constexpr bool include_quote_chars            = false;
 
-  // We initialize the very root node and root column that represents a list column that contains
-  // all the values found at the root "level" of the given JSON string Initialize the root column
-  // For JSON lines: we expect to find a list of values that all will be inserted into this list
+  // We initialize the very root node and root column, which represent the JSON document being
+  // parsed. That root node is a list node and that root column is a list column. The column has the
+  // root node as its only row. The values parsed from the JSON input will be treated as follows:
+  // (1) For JSON lines: we expect to find a list of JSON values that all
+  // will be inserted into this root list column. (2) For regular JSON: we expect to have only a
+  // single value (list, struct, string, number, literal) that will be inserted into this root
   // column.
-  // For regular JSON: we expect to have only a single value (single row) that will be inserted into
-  // this column
   root_column.append_row(
     row_offset_zero, json_col_t::ListColumn, token_begin_offset_zero, token_end_offset_zero, 1);
 

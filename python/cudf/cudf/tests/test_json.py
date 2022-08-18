@@ -579,3 +579,18 @@ def test_json_experimental():
     # should raise an exception, for now
     with pytest.raises(RuntimeError):
         cudf.read_json("", engine="cudf_experimental")
+
+
+def test_json_nested_basic(tmpdir):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_basic")
+    data = {
+        "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+        "c2": [["l11", "l21"], ["l12", "l22"]],
+    }
+    pdf = pd.DataFrame(data)
+    pdf.to_json(fname, orient="records")
+
+    df = cudf.read_json(fname, engine="cudf_experimental", orient="records")
+    pdf = pd.read_json(fname, orient="records")
+
+    assert_eq(pdf, df)

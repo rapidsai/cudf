@@ -33,11 +33,10 @@ static void BM_clamp(benchmark::State& state, bool include_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
-  auto const table = create_random_table({dtype}, row_count{n_rows});
-  if (!include_nulls) { table->get_column(0).set_null_mask(rmm::device_buffer{}, 0); }
-  cudf::column_view input(table->view().column(0));
+  auto const input = create_random_column(dtype, row_count{n_rows});
+  if (!include_nulls) input->set_null_mask(rmm::device_buffer{}, 0);
 
-  auto [low_scalar, high_scalar] = cudf::minmax(input);
+  auto [low_scalar, high_scalar] = cudf::minmax(*input);
 
   // set the clamps 2 in from the min and max
   {
@@ -53,7 +52,7 @@ static void BM_clamp(benchmark::State& state, bool include_nulls)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::clamp(input, *low_scalar, *high_scalar);
+    auto result = cudf::clamp(*input, *low_scalar, *high_scalar);
   }
 }
 

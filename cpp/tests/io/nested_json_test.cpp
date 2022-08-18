@@ -513,37 +513,3 @@ TEST_F(JsonTest, FromParquet)
   // Verify that the schema read via parquet matches the schema read via JSON
   cudf::test::expect_metadata_equal(cudf_table.metadata, result.metadata);
 }
-
-TEST_F(JsonTest, JsonLines)
-{
-  // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
-
-  // Default parsing options
-  cudf::io::json_reader_options json_lines_options =
-    cudf::io::json_reader_options_builder{}.lines(true);
-
-  using cuio_json::SymbolT;
-
-  std::string json_string =
-    R"({"a":"a0"}
-    {"a":"a1"}
-    {"a":"a2", "b":"b2"}
-    {"a":"a3", "c":"c3"}
-    {"a":"a4"})";
-
-  cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.c_str(), json_string.size()})
-      .lines(true);
-  cudf::io::table_with_metadata old_reader_table = cudf::io::read_json(in_options);
-
-  auto const new_reader_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{json_string.data(), json_string.size()},
-    json_lines_options,
-    stream_view);
-
-  // Verify that the data read via parquet matches the data read via JSON
-  CUDF_TEST_EXPECT_TABLES_EQUAL(old_reader_table.tbl->view(), new_reader_table.tbl->view());
-}

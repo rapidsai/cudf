@@ -846,7 +846,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr));
       } else {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream, mr));
       }
     }
   } else {

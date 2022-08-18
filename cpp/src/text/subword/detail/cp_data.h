@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 
 #include <cstdint>
 
-constexpr uint32_t NEW_CP_MASK = 0x1fffff;
+constexpr uint32_t NEW_CP_MASK = 0x1f'ffffu;
 
 constexpr uint32_t MULTICHAR_SHIFT = 23;
 constexpr uint32_t MULTICHAR_MASK  = 1;
