@@ -986,9 +986,7 @@ def pivot(data, index=None, columns=None, values=None):
 
     # MultiIndex to Index
     if not values_is_list:
-        column_name = result._data.level_names[1]
-        table_columns = [multi_col[1] for multi_col in result._data.names]
-        result.columns = cudf.Index(data=table_columns, name=column_name)
+        result._data.droplevel(0)
 
     return result
 
