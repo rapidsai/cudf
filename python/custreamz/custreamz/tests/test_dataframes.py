@@ -503,8 +503,8 @@ def test_cumulative_aggregations(op, getter, stream):
 
 
 @pytest.mark.xfail(
-    reason="IPyWidgets 8.0 broke streamz 0.6.4."
-    "We should remove this xfail when this is fixed in streamz"
+    reason="IPyWidgets 8.0 broke streamz 0.6.4. "
+    "We should remove this xfail when this is fixed in streamz."
 )
 def test_display(stream):
     pytest.importorskip("ipywidgets")
