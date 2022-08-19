@@ -1357,11 +1357,12 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getColumnNames(
   try {
     cudf::jni::auto_set_device(env);
     auto ptr = reinterpret_cast<cudf::io::table_with_metadata *>(handle);
-    auto length = ptr->metadata.column_names.size();
+    auto length = ptr->metadata.schema_info.size();
     auto ret = static_cast<jobjectArray>(
         env->NewObjectArray(length, env->FindClass("java/lang/String"), nullptr));
     for (size_t i = 0; i < length; i++) {
-      env->SetObjectArrayElement(ret, i, env->NewStringUTF(ptr->metadata.column_names[i].c_str()));
+      env->SetObjectArrayElement(ret, i,
+                                 env->NewStringUTF(ptr->metadata.schema_info[i].name.c_str()));
     }
 
     return ret;
