@@ -114,6 +114,8 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
                   "rmm=$MINOR_VERSION.*" \
                   "ucx-py=${UCX_PY_VERSION}"
 
+    gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env # This is because those package have a cupy pin of <11
+    gpuci_mamba_retry install -y "cupy=11"
     # https://docs.rapids.ai/maintainers/depmgmt/
     # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
     # gpuci_mamba_retry install -y "your-pkg=1.0.0"
