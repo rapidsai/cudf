@@ -33,6 +33,10 @@ def test_ipc_simple() -> None:
     check_roundtrip(df)
 
     df = cudf.DataFrame(cp.arange(0, 16).reshape(4, 4))
+
+    with pytest.raises(TypeError):
+        df.import_ipc(bytes("012345", "utf-8"))
+
     with pytest.raises(TypeError):
         # export IPC uses the smae column meta as interop, which doesn't support integer
         # index. df.to_arrow() should fail as well.

@@ -15,6 +15,7 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
+import pyarrow as pa
 from pyarrow.lib cimport CBuffer, pyarrow_wrap_buffer, pyarrow_unwrap_buffer
 from cython.operator cimport dereference
 
@@ -36,6 +37,10 @@ cdef class ImportedColumn:
 
 
 def import_ipc(object message):
+    if not isinstance(message, pa.Buffer):
+        raise TypeError(
+            f"Invalid input for `import_ipc`, expected a `pyarrow.Buffer`, got {type(message)}"
+        )
     cdef:
         shared_ptr[CBuffer] cbuf = pyarrow_unwrap_buffer(message)
         pair[table_view, vector[shared_ptr[imported_column]]] result = move(
