@@ -125,6 +125,7 @@ struct json_column {
   // Following "items" as the default child column's name of a list column
   // Using the struct's field names
   std::map<std::string, json_column> child_columns;
+  std::vector<std::string> column_order;
 
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;

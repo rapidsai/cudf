@@ -18,7 +18,10 @@
 
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
+#include <io/json/data_casting.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_inference.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -34,6 +37,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/device_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 #include <stack>
@@ -1167,6 +1171,7 @@ void make_json_column(json_column& root_column,
         if (current_data_path.top().column->child_columns.size() == 0) {
           current_data_path.top().column->child_columns.emplace(std::string{list_child_name},
                                                                 json_column{json_col_t::Unknown});
+          current_data_path.top().column->column_order.push_back(list_child_name);
         }
         current_data_path.top().current_selected_col =
           &current_data_path.top().column->child_columns.begin()->second;
@@ -1206,6 +1211,7 @@ void make_json_column(json_column& root_column,
 
     // The field name's column does not exist yet, so we have to append the child column to the
     // struct column
+    struct_col->column_order.push_back(field_name);
     return &struct_col->child_columns.emplace(field_name, json_column{}).first->second;
   };
 
@@ -1402,16 +1408,37 @@ void make_json_column(json_column& root_column,
   root_column.level_child_cols_recursively(root_column.current_offset);
 }
 
+auto default_json_options()
+{
+  auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
+
+  auto const stream     = rmm::cuda_stream_default;
+  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  return parse_opts;
+}
+
+auto default_inference_options()
+{
+  fst::detail::inference_options parse_opts{};
+
+  auto const stream     = rmm::cuda_stream_default;
+  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  return parse_opts;
+}
+
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column(
   json_column const& json_col,
   device_span<SymbolT const> d_input,
+  cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   auto make_validity =
     [stream, mr](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
-    if (json_col.current_offset == json_col.valid_count) { return {rmm::device_buffer{}, 0}; }
-
     return {rmm::device_buffer{json_col.validity.data(),
                                bitmask_allocation_size_bytes(json_col.current_offset),
                                stream,
@@ -1421,29 +1448,48 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
   switch (json_col.type) {
     case json_col_t::StringColumn: {
-      // move string_offsets to GPU and transform to string column
-      auto const col_size      = json_col.string_offsets.size();
-      using char_length_pair_t = thrust::pair<const char*, size_type>;
+      auto const col_size = json_col.string_offsets.size();
       CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
                    "string offset, string length mismatch");
-      rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
+
+      // Move string_offsets and string_lengths to GPU
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
         cudf::detail::make_device_uvector_async(json_col.string_offsets, stream);
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
         cudf::detail::make_device_uvector_async(json_col.string_lengths, stream);
+
+      // Prepare iterator that returns (string_offset, string_length)-tuples
       auto offset_length_it =
         thrust::make_zip_iterator(d_string_offsets.begin(), d_string_lengths.begin());
-      thrust::transform(rmm::exec_policy(stream),
-                        offset_length_it,
-                        offset_length_it + col_size,
-                        d_string_data.data(),
-                        [data = d_input.data()] __device__(auto ip) {
-                          return char_length_pair_t{data + thrust::get<0>(ip), thrust::get<1>(ip)};
-                        });
-      auto str_col_ptr                  = make_strings_column(d_string_data, stream, mr);
-      auto [result_bitmask, null_count] = make_validity(json_col);
-      str_col_ptr->set_null_mask(result_bitmask, null_count);
-      return {std::move(str_col_ptr), {{"offsets"}, {"chars"}}};
+
+      // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
+      auto string_ranges_it =
+        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
+          return thrust::pair<json_column::row_offset_t, std::size_t>{
+            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+        });
+
+      // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
+      auto string_spans_it = thrust::make_transform_iterator(
+        offset_length_it, [data = d_input.data()] __device__(auto ip) {
+          return thrust::pair<const char*, std::size_t>{
+            data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+        });
+
+      // Infer column type
+      auto target_type = fst::detail::detect_data_type(
+        default_inference_options().view(), d_input, string_ranges_it, col_size, stream);
+
+      // Convert strings to the inferred data type
+      auto col = cudf::io::json::experimental::parse_data(string_spans_it,
+                                                          col_size,
+                                                          target_type,
+                                                          make_validity(json_col).first,
+                                                          default_json_options().view(),
+                                                          stream,
+                                                          mr);
+
+      return {std::move(col), {{"offsets"}, {"chars"}}};
       break;
     }
     case json_col_t::StructColumn: {
@@ -1453,8 +1499,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Create children columns
       for (auto const& col : json_col.child_columns) {
         column_names.emplace_back(col.first);
-        auto const& child_col      = col.second;
-        auto [child_column, names] = json_column_to_cudf_column(child_col, d_input, stream, mr);
+        auto const& child_col = col.second;
+        auto [child_column, names] =
+          json_column_to_cudf_column(child_col, d_input, options, stream, mr);
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));
@@ -1478,8 +1525,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto offsets_column =
         std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
       // Create children column
-      auto [child_column, names] =
-        json_column_to_cudf_column(json_col.child_columns.begin()->second, d_input, stream, mr);
+      auto [child_column, names] = json_column_to_cudf_column(
+        json_col.child_columns.begin()->second, d_input, options, stream, mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows - 1,
@@ -1516,7 +1563,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   constexpr uint32_t token_begin_offset_zero    = 0;
   constexpr uint32_t token_end_offset_zero      = 0;
   constexpr uint32_t node_init_child_count_zero = 0;
-  constexpr bool include_quote_chars            = false;
+  constexpr bool include_quote_chars            = true;
 
   // We initialize the very root node and root column, which represent the JSON document being
   // parsed. That root node is a list node and that root column is a list column. The column has the
@@ -1553,12 +1600,14 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   std::vector<column_name_info> out_column_names;
 
   // Iterate over the struct's child columns and convert to cudf column
-  for (auto const& [col_name, json_col] : root_struct_col.child_columns) {
+  for (auto const& col_name : root_struct_col.column_order) {
+    auto const& json_col = root_struct_col.child_columns.find(col_name)->second;
     // Insert this columns name into the schema
     out_column_names.emplace_back(col_name);
 
     // Get this JSON column's cudf column and schema info
-    auto [cudf_col, col_name_info]   = json_column_to_cudf_column(json_col, d_input, stream, mr);
+    auto [cudf_col, col_name_info] =
+      json_column_to_cudf_column(json_col, d_input, options, stream, mr);
     out_column_names.back().children = std::move(col_name_info);
     out_columns.emplace_back(std::move(cudf_col));
   }
