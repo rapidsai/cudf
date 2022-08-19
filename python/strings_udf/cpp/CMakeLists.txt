@@ -85,6 +85,7 @@ set_target_properties(
              CUDA_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
+             PUBLIC_HEADER "include/cudf/strings/udf/udf_apis.hpp"
 )
 
 target_compile_options(
@@ -101,7 +102,9 @@ target_include_directories(
 )
 target_link_libraries(cudf_strings_udf PUBLIC ${UDF_LIBS})
 
-install(TARGETS cudf_strings_udf)
+install(TARGETS cudf_strings_udf
+        PUBLIC_HEADER DESTINATION ${CONDA_PREFIX}/include/cudf/strings/udf/
+)
 install(FILES ${CMAKE_SOURCE_DIR}/build/CMakeFiles/shim.dir/src/strings/udf/shim.ptx
         DESTINATION ${CONDA_PREFIX}/lib
 )
