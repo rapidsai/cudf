@@ -82,7 +82,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         sort=False,
         as_index=True,
         dropna=True,
-        engine="nonjit",
         cache=True,
     ):
         """
@@ -119,8 +118,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._level = level
         self._sort = sort
         self._dropna = dropna
-        self._engine = engine
-        self._cache = cache
 
         if isinstance(by, _Grouping):
             by._obj = self.obj
@@ -551,7 +548,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function, *args, engine="nonjit", cache=True):
+    def apply(self, function, *args, engine=None, cache=True):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -620,44 +617,39 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, _, grouped_values = self._grouped()
 
-        self._engine = engine
-        self._cache = cache
-        if self._engine == "jit":
+        if engine == "numba":
             chunk_results = jit_groupby_apply(
                 offsets, grouped_values, function, *args, cache=cache
             )
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
-            if self._sort:
-                result = result.sort_index()
-            return result
+        else:
+            ngroups = len(offsets) - 1
+            if ngroups > self._MAX_GROUPS_BEFORE_WARN:
+                warnings.warn(
+                    f"GroupBy.apply() performance scales poorly with "
+                    f"number of groups. Got {ngroups} groups."
+                )
 
-        ngroups = len(offsets) - 1
-        if ngroups > self._MAX_GROUPS_BEFORE_WARN:
-            warnings.warn(
-                f"GroupBy.apply() performance scales poorly with "
-                f"number of groups. Got {ngroups} groups."
-            )
+            chunks = [
+                grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
+            ]
+            chunk_results = [function(chk, *args) for chk in chunks]
 
-        chunks = [
-            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
-        ]
-        chunk_results = [function(chk, *args) for chk in chunks]
+            if not len(chunk_results):
+                return self.obj.head(0)
 
-        if not len(chunk_results):
-            return self.obj.head(0)
-
-        if cudf.api.types.is_scalar(chunk_results[0]):
-            result = cudf.Series(chunk_results, index=group_names)
-            result.index.names = self.grouping.names
-        elif isinstance(chunk_results[0], cudf.Series):
-            if isinstance(self.obj, cudf.DataFrame):
-                result = cudf.concat(chunk_results, axis=1).T
+            if cudf.api.types.is_scalar(chunk_results[0]):
+                result = cudf.Series(chunk_results, index=group_names)
                 result.index.names = self.grouping.names
+            elif isinstance(chunk_results[0], cudf.Series):
+                if isinstance(self.obj, cudf.DataFrame):
+                    result = cudf.concat(chunk_results, axis=1).T
+                    result.index.names = self.grouping.names
+                else:
+                    result = cudf.concat(chunk_results)
             else:
                 result = cudf.concat(chunk_results)
-        else:
-            result = cudf.concat(chunk_results)
 
         if self._sort:
             result = result.sort_index()
