@@ -518,16 +518,12 @@ def groupby_agg(
     # Deal with sort/shuffle defaults
     if split_out > 1 and sort is True:
         # NOTE: This can be changed when `shuffle` is not `None`
-        # as soon as `sort_value` is updated to accept `npartitions`
-        # and `shuffle` arguments.
-        # (TODO: Link cudf issue describing this blocker)
+        # as soon as the shuffle-based groupby is implemented
         raise ValueError(
             "dask-cudf's groupby algorithm does not yet support "
             "`sort=True` when `split_out>1`. Please use `split_out=1`, "
             "or try grouping with `sort=False`."
         )
-    if shuffle is True:
-        shuffle = "tasks"
 
     # Standardize `gb_cols`, `columns`, and `aggs`
     if isinstance(gb_cols, str):
