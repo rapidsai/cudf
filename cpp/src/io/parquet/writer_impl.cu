@@ -1066,19 +1066,11 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       // bitsize we efficiently support
       if (nbits > 24) { return std::pair(false, 0); }
 
-      // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-      constexpr auto allowed_bitsizes =
-        std::array<size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
-
-      // ceil to (1/2/3/4/5/6/8/10/12/16/20/24)
-      auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
-      auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
-
+      auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
+      if (ck.plain_data_size <= dict_enc_size) { return std::pair(false, 0); }
 
-      bool use_dict = (ck.plain_data_size > dict_enc_size);
-      if (not use_dict) { rle_bits = 0; }
-      return std::pair(use_dict, rle_bits);
+      return std::pair(true, nbits);
     }();
   }
 

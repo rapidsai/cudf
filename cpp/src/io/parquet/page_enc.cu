@@ -468,15 +468,16 @@ inline __device__ void PackLiteralsShuffle(
   constexpr uint32_t MASK2T = 1;  // mask for 2 thread leader
   constexpr uint32_t MASK4T = 3;  // mask for 4 thread leader
   constexpr uint32_t MASK8T = 7;  // mask for 8 thread leader
-  uint64_t vt;
+  uint64_t v64;
 
   if (t > (count | 0x1f)) { return; }
 
   switch (w) {
     case 1:
-      v |= shuffle_xor(v, 1) << 1;
-      v |= shuffle_xor(v, 2) << 2;
-      v |= shuffle_xor(v, 4) << 4;
+      v |= shuffle_xor(v, 1) << 1;  // grab bit 1 from neighbor
+      v |= shuffle_xor(v, 2) << 2;  // grab bits 2-3 from 2 lanes over
+      v |= shuffle_xor(v, 4) << 4;  // grab bits 4-7 from 4 lanes over
+      // sub-warp leader writes the combined bits
       if (t < count && !(t & MASK8T)) { dst[(t * w) >> 3] = v; }
       return;
     case 2:
@@ -501,14 +502,13 @@ inline __device__ void PackLiteralsShuffle(
     case 5:
       v |= shuffle_xor(v, 1) << 5;
       v |= shuffle_xor(v, 2) << 10;
-      vt = shuffle_xor(v, 4);
-      vt = vt << 20 | v;
+      v64 = static_cast<uint64_t>(shuffle_xor(v, 4)) << 20 | v;
       if (t < count && !(t & MASK8T)) {
-        dst[(t >> 3) * 5 + 0] = vt;
-        dst[(t >> 3) * 5 + 1] = vt >> 8;
-        dst[(t >> 3) * 5 + 2] = vt >> 16;
-        dst[(t >> 3) * 5 + 3] = vt >> 24;
-        dst[(t >> 3) * 5 + 4] = vt >> 32;
+        dst[(t >> 3) * 5 + 0] = v64;
+        dst[(t >> 3) * 5 + 1] = v64 >> 8;
+        dst[(t >> 3) * 5 + 2] = v64 >> 16;
+        dst[(t >> 3) * 5 + 3] = v64 >> 24;
+        dst[(t >> 3) * 5 + 4] = v64 >> 32;
       }
       return;
     case 6:
@@ -525,14 +525,13 @@ inline __device__ void PackLiteralsShuffle(
       return;
     case 10:
       v |= shuffle_xor(v, 1) << 10;
-      vt = shuffle_xor(v, 2);
-      vt = vt << 20 | v;
+      v64 = static_cast<uint64_t>(shuffle_xor(v, 2)) << 20 | v;
       if (t < count && !(t & MASK4T)) {
-        dst[(t >> 2) * 5 + 0] = vt;
-        dst[(t >> 2) * 5 + 1] = vt >> 8;
-        dst[(t >> 2) * 5 + 2] = vt >> 16;
-        dst[(t >> 2) * 5 + 3] = vt >> 24;
-        dst[(t >> 2) * 5 + 4] = vt >> 32;
+        dst[(t >> 2) * 5 + 0] = v64;
+        dst[(t >> 2) * 5 + 1] = v64 >> 8;
+        dst[(t >> 2) * 5 + 2] = v64 >> 16;
+        dst[(t >> 2) * 5 + 3] = v64 >> 24;
+        dst[(t >> 2) * 5 + 4] = v64 >> 32;
       }
       return;
     case 12:
@@ -550,14 +549,13 @@ inline __device__ void PackLiteralsShuffle(
       }
       return;
     case 20:
-      vt = shuffle_xor(v, 1);
-      vt = vt << 20 | v;
+      v64 = static_cast<uint64_t>(shuffle_xor(v, 1)) << 20 | v;
       if (t < count && !(t & MASK2T)) {
-        dst[(t >> 1) * 5 + 0] = vt;
-        dst[(t >> 1) * 5 + 1] = vt >> 8;
-        dst[(t >> 1) * 5 + 2] = vt >> 16;
-        dst[(t >> 1) * 5 + 3] = vt >> 24;
-        dst[(t >> 1) * 5 + 4] = vt >> 32;
+        dst[(t >> 1) * 5 + 0] = v64;
+        dst[(t >> 1) * 5 + 1] = v64 >> 8;
+        dst[(t >> 1) * 5 + 2] = v64 >> 16;
+        dst[(t >> 1) * 5 + 3] = v64 >> 24;
+        dst[(t >> 1) * 5 + 4] = v64 >> 32;
       }
       return;
     case 24:
@@ -580,10 +578,13 @@ inline __device__ void PackLiteralsRoundRobin(
 {
   // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
   // words but the destination mem may not be a multiple of 4 bytes.
-  // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
-  // To allow up to 24 bit this needs to be sized at 96 words.
-  __shared__ uint32_t scratch[64];
-  if (t < 64) { scratch[t] = 0; }
+  // TODO (dm): This assumes blockdim = 128 and max bits per value = 24. Reduce magic numbers.
+  constexpr uint32_t NUM_THREADS  = 128;  // this needs to match gpuEncodePages block_size parameter
+  constexpr uint32_t MAX_BITS     = 24;   // this needs to match value in XXXX
+  constexpr uint32_t NUM_BYTES    = (NUM_THREADS * MAX_BITS) >> 3;
+  constexpr uint32_t SCRATCH_SIZE = NUM_BYTES / sizeof(uint32_t);
+  __shared__ uint32_t scratch[SCRATCH_SIZE];
+  if (t < SCRATCH_SIZE) { scratch[t] = 0; }
   __syncthreads();
 
   if (t <= count) {
@@ -607,8 +608,7 @@ inline __device__ void PackLiteralsRoundRobin(
   auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
   if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
   if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
-  // would need the following for up to 24 bits
-  // if (t + 256 < available_bytes) { dst[t + 256] = scratch_bytes[t + 256]; }
+  if (t + 256 < available_bytes) { dst[t + 256] = scratch_bytes[t + 256]; }
   __syncthreads();
 }
 
@@ -618,6 +618,7 @@ inline __device__ void PackLiteralsRoundRobin(
 inline __device__ void PackLiterals(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
+  if (w > 24) { CUDF_UNREACHABLE("Unsupported bit width"); }
   switch (w) {
     case 1:
     case 2:
@@ -634,11 +635,9 @@ inline __device__ void PackLiterals(
       // bit widths that lie on easy boundaries can be handled either directly
       // (8, 16, 24) or through fast shuffle operations.
       PackLiteralsShuffle(dst, v, count, w, t);
-      break;
+      return;
     default:
-      if (w > 16) { CUDF_UNREACHABLE("Unsupported bit width"); }
-      // less efficient bit packing that uses atomics, but can handle arbitrary
-      // bit widths up to 16. used for repetition and definition level encoding
+      // bit packing that uses atomics, but can handle arbitrary bit widths up to 24.
       PackLiteralsRoundRobin(dst, v, count, w, t);
   }
 }

@@ -388,11 +388,10 @@ class ParquetSizedTest : public ::testing::TestWithParam<int> {
 
 // test the allowed bit widths for dictionary encoding
 // values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
-INSTANTIATE_TEST_SUITE_P(
-  ParquetDictionaryTest,
-  ParquetSizedTest,
-  testing::Values(2, 4, 8, 16, 32, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
-  testing::PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
+                         ParquetSizedTest,
+                         testing::Range(1, 25),
+                         testing::PrintToStringParamName());
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -4238,10 +4237,11 @@ TEST_F(ParquetReaderTest, StructByteArray)
 
 TEST_P(ParquetSizedTest, DictionaryTest)
 {
-  constexpr int nrows = 3'000'000;
+  const unsigned int cardinality = (1 << (GetParam() - 1)) + 1;
+  const unsigned int nrows       = std::max(cardinality * 3 / 2, 3'000'000U);
 
-  auto elements       = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    return "a unique string value suffixed with " + std::to_string(i % GetParam());
+  auto elements       = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
+    return "a unique string value suffixed with " + std::to_string(i % cardinality);
   });
   auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
@@ -4254,7 +4254,7 @@ TEST_P(ParquetSizedTest, DictionaryTest)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .row_group_size_rows(nrows)
-      .row_group_size_bytes(256 * 1024 * 1024);
+      .row_group_size_bytes(512 * 1024 * 1024);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options default_in_opts =
@@ -4282,16 +4282,7 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   // and check that the correct number of bits was used
   auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
   auto const nbits = read_dict_bits(source, oi.page_locations[0]);
-  auto const expected_bits =
-    cudf::io::parquet::CompactProtocolReader::NumRequiredBits(GetParam() - 1);
-
-  // copied from writer_impl.cu
-  constexpr auto allowed_bitsizes =
-    std::array<cudf::size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
-  auto const rle_bits =
-    *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), expected_bits);
-
-  EXPECT_EQ(nbits, rle_bits);
+  EXPECT_EQ(nbits, GetParam());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
