@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <io/fst/type_inference.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/trie.cuh>
+#include <io/utilities/type_inference.cuh>
 
 #include <cudf_test/base_fixture.hpp>
 
@@ -27,8 +27,8 @@
 #include <string>
 #include <vector>
 
-using cudf::io::fst::detail::detect_data_type;
-using cudf::io::fst::detail::inference_options;
+using cudf::io::detail::detect_data_type;
+using cudf::io::detail::inference_options;
 
 // Base test fixture for tests
 struct TypeInference : public cudf::test::BaseFixture {
