@@ -52,4 +52,5 @@ def import_ipc(object message):
 
     columns = columns_from_table_view(move(result.first), owners)
     data = {n: columns[i] for i, n in enumerate(names)}
+    assert len(data) == len(columns), "This is probably caused by a bug in arrow schema serialization."
     return data
