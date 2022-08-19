@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 
 #include <cstddef>
