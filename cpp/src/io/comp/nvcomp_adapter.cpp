@@ -336,6 +336,12 @@ static void batched_compress_async(compression_type compression,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
 }
 
+inline bool is_aligned(const void* ptr, std::uintptr_t alignment) noexcept
+{
+  auto iptr = reinterpret_cast<std::uintptr_t>(ptr);
+  return !(iptr % alignment);
+}
+
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
@@ -347,6 +353,7 @@ void batched_compress(compression_type compression,
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);
+  CUDF_EXPECTS(is_aligned(scratch.data(), 8), "misaligned scratch");
 
   rmm::device_uvector<size_t> actual_compressed_data_sizes(num_chunks, stream);
   auto const nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);

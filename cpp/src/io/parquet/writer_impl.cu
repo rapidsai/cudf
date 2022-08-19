@@ -1215,6 +1215,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
                                  stream);
       }
       break;
+    case parquet::Compression::UNCOMPRESSED: break;
     default: CUDF_FAIL("invalid compression type");
   }
   compress_check(comp_stats, stream);
