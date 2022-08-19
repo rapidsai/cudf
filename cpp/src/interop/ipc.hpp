@@ -182,5 +182,7 @@ struct exported_column {
     return ptr;
   }
 };
+
+constexpr int64_t magic_number() { return 0xf9f9f9; }
 }  // namespace ipc
 }  // namespace cudf

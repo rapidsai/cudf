@@ -511,18 +511,25 @@ std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
                    auto field = arrow::field(meta.name, cudf_to_arrow_type(column.type()));
                    return field;
                  });
+
+  std::string bytes;
+  auto magic = ipc::magic_number();
+  bytes.resize(sizeof(magic));
+  auto ptr = bytes.data();
+  std::memcpy(ptr, &magic, sizeof(magic));
+
   std::shared_ptr<arrow::Schema> schema = arrow::schema(fields);
   auto p_schema_buf                     = arrow::ipc::SerializeSchema(*schema).ValueOrElse([]() {
     CUDF_FAIL("Failed to serialize schema.");
     return std::shared_ptr<arrow::Buffer>{nullptr};
   });
-  int64_t size                          = p_schema_buf->size();
-  std::string bytes;
-  bytes.resize(size + sizeof(int64_t));
+  int64_t schema_size                   = p_schema_buf->size();
+  size_t orig                           = bytes.size();
+  bytes.resize(orig + schema_size + sizeof(int64_t));
   {
-    auto ptr = bytes.data();
-    std::memcpy(ptr, &size, sizeof(size));
-    ptr += sizeof(size);
+    auto ptr = bytes.data() + orig;
+    std::memcpy(ptr, &schema_size, sizeof(schema_size));
+    ptr += sizeof(schema_size);
     std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), ptr);
   }
 

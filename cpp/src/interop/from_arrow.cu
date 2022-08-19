@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <arrow/buffer.h>     // arrow::Buffer
-#include <arrow/io/memory.h>  // arrow::io::BufferReader
+#include <arrow/buffer.h>      // arrow::Buffer
+#include <arrow/io/memory.h>   // arrow::io::BufferReader
 #include <arrow/ipc/reader.h>  // arrow::ipc::ReadSchema
 
 #include <cudf/column/column_factories.hpp>
@@ -486,22 +486,34 @@ std::pair<column_view, std::shared_ptr<imported_column>> from_ipc_column(
 std::pair<table_view, std::vector<std::shared_ptr<imported_column>>> import_ipc(
   std::shared_ptr<arrow::Buffer> ipc_handles)
 {
-  int64_t size{0};
-  auto ptr = ipc_handles->data();
-  std::memcpy(&size, ptr, sizeof(size));
-  ptr += sizeof(size);
+  auto const end = ipc_handles->data() + ipc_handles->size();
 
-  arrow::io::BufferReader stream(reinterpret_cast<uint8_t const*>(ptr), size);
+  int64_t magic{0};
+  auto ptr = ipc_handles->data();
+  CUDF_EXPECTS(static_cast<size_t>(ipc_handles->size()) > sizeof(magic), "Invalid IPC message.");
+  std::memcpy(&magic, ptr, sizeof(magic));
+  CUDF_EXPECTS(magic == ipc::magic_number(), "Invalid IPC message");
+
+  ptr += sizeof(magic);
+  CUDF_EXPECTS(ptr < end, "Invalid IPC message");
+
+  int64_t schema_size{0};
+  std::memcpy(&schema_size, ptr, sizeof(schema_size));
+  ptr += sizeof(schema_size);
+  CUDF_EXPECTS(ptr < end, "Invalid IPC message");
+
+  arrow::io::BufferReader stream(reinterpret_cast<uint8_t const*>(ptr), schema_size);
   auto p_schema = arrow::ipc::ReadSchema(&stream, nullptr).ValueOrElse([]() {
     CUDF_FAIL("Failed to read schema from IPC message");
     return std::shared_ptr<arrow::Schema>{nullptr};
   });
-  ptr += size;
+  ptr += schema_size;
+  CUDF_EXPECTS(ptr < end, "Invalid IPC message");
 
   size_t n_columns = 0;
   std::vector<column_view> columns;
   std::vector<std::shared_ptr<imported_column>> imported_columns;
-  while (ptr != ipc_handles->data() + ipc_handles->size()) {
+  while (ptr != end) {
     ipc::exported_column ipc_column;
     ptr    = ipc::exported_column::from_buffer(ptr, &ipc_column);
     auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
