@@ -517,12 +517,15 @@ def groupby_agg(
 
     # Deal with sort/shuffle defaults
     if split_out > 1 and sort is True:
-        if shuffle is False:
-            raise ValueError(
-                "shuffle-based groupby algorithm required for `sort=True`"
-                "when `split_out>1`"
-            )
-        shuffle = shuffle or True
+        # NOTE: This can be changed when `shuffle` is not `None`
+        # as soon as `sort_value` is updated to accept `npartitions`
+        # and `shuffle` arguments.
+        # (TODO: Link cudf issue describing this blocker)
+        raise ValueError(
+            "dask-cudf's groupby algorithm does not yet support "
+            "`sort=True` when `split_out>1`. Please use `split_out=1`, "
+            "or try grouping with `sort=False`."
+        )
     if shuffle is True:
         shuffle = "tasks"
 
@@ -612,6 +615,7 @@ def groupby_agg(
                 **chunk_kwargs,
             ),
             token=chunk_name,
+            enforce_metadata=False,
             **chunk_kwargs,
         )
 
@@ -627,11 +631,14 @@ def groupby_agg(
 
         # Perform global sort or shuffle
         if sort and split_out > 1:
-            result = chunked.sort_values(
-                gb_cols,
-                npartitions=shuffle_npartitions,
-                shuffle=shuffle,
-            ).map_partitions(aggregate, **aggregate_kwargs)
+            # NOTE: This can be changed to a `sort_value` operation
+            # as soon as that API is updated to accept `npartitions`
+            # and `shuffle` arguments.
+            # (TODO: Link cudf issue describing this blocker)
+            raise NotImplementedError(
+                "shuffle option is not yet supported for dask_cudf "
+                "when `sort=True` and `split_out>1`"
+            )
         else:
             result = chunked.shuffle(
                 gb_cols,
