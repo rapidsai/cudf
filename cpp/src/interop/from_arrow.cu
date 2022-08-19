@@ -514,6 +514,7 @@ std::pair<table_view, std::vector<std::shared_ptr<imported_column>>> import_ipc(
   std::vector<column_view> columns;
   std::vector<std::shared_ptr<imported_column>> imported_columns;
   while (ptr != end) {
+    CUDF_EXPECTS(ptr < end, "Invalid IPC message");
     ipc::exported_column ipc_column;
     ptr    = ipc::exported_column::from_buffer(ptr, &ipc_column);
     auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
