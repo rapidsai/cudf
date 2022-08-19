@@ -71,7 +71,10 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::encode(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::encode(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

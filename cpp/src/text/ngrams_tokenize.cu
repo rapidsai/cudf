@@ -262,8 +262,10 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ngrams_tokenize(
-    strings, ngrams, delimiter, separator, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::ngrams_tokenize(strings, ngrams, delimiter, separator, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

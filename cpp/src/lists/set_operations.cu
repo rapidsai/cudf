@@ -265,7 +265,10 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::have_overlap(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::have_overlap(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
@@ -275,8 +278,10 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::intersect_distinct(
-    lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::intersect_distinct(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
@@ -286,7 +291,10 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::union_distinct(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::union_distinct(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
@@ -296,8 +304,10 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::difference_distinct(
-    lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::difference_distinct(lhs, rhs, nulls_equal, nans_equal, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf::lists

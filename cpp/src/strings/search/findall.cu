@@ -160,7 +160,10 @@ std::unique_ptr<table> findall(strings_column_view const& input,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, pattern, flags, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::findall(input, pattern, flags, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

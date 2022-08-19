@@ -65,7 +65,10 @@ std::unique_ptr<table> tile(const table_view& in,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tile(in, count, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::tile(in, count, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

@@ -263,15 +263,18 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(strings,
-                                  vocabulary_table,
-                                  max_sequence_length,
-                                  stride,
-                                  do_lower_case,
-                                  do_truncate,
-                                  max_rows_tensor,
-                                  cudf::default_stream_value,
-                                  mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::subword_tokenize(strings,
+                                         vocabulary_table,
+                                         max_sequence_length,
+                                         stride,
+                                         do_lower_case,
+                                         do_truncate,
+                                         max_rows_tensor,
+                                         stream,
+                                         mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

@@ -338,7 +338,7 @@ std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
     std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
 }
 
-}  // namespace tdigest.
+}  // namespace tdigest
 
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
@@ -406,7 +406,10 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::mr::device_memory_resource* mr)
 {
-  return percentile_approx(input, percentiles, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::percentile_approx(input, percentiles, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

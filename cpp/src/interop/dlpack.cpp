@@ -293,12 +293,18 @@ DLManagedTensor* to_dlpack(table_view const& input,
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::from_dlpack(managed_tensor, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::from_dlpack(managed_tensor, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::to_dlpack(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::to_dlpack(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

@@ -299,7 +299,10 @@ std::unique_ptr<table> explode(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode(input_table, explode_column_idx, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::explode(input_table, explode_column_idx, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -312,7 +315,10 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_position(input_table, explode_column_idx, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::explode_position(input_table, explode_column_idx, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -325,8 +331,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_outer(
-    input_table, explode_column_idx, false, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::explode_outer(input_table, explode_column_idx, false, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -340,8 +348,10 @@ std::unique_ptr<table> explode_outer_position(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_outer(
-    input_table, explode_column_idx, true, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::explode_outer(input_table, explode_column_idx, true, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

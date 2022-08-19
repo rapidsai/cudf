@@ -347,7 +347,10 @@ std::unique_ptr<column> round(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round(input, decimal_places, method, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::round(input, decimal_places, method, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

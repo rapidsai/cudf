@@ -268,8 +268,10 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round_robin_partition(
-    input, num_partitions, start_partition, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result = detail::round_robin_partition(input, num_partitions, start_partition, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

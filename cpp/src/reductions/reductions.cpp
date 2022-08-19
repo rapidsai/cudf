@@ -186,7 +186,10 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, std::nullopt, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::reduce(col, agg, output_dtype, std::nullopt, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
@@ -196,6 +199,9 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, init, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::reduce(col, agg, output_dtype, init, stream, mr);
+  stream.synchronize();
+  return result;
 }
 }  // namespace cudf

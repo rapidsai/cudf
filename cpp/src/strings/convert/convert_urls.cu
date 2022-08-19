@@ -172,7 +172,10 @@ std::unique_ptr<column> url_encode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_encode(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::url_encode(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 namespace detail {
@@ -454,7 +457,10 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_decode(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::url_decode(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

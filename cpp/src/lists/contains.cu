@@ -335,7 +335,10 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_key, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::contains(lists, search_key, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
@@ -343,14 +346,20 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_keys, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::contains(lists, search_keys, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_nulls(lists, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::contains_nulls(lists, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -359,7 +368,10 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_key, find_option, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::index_of(lists, search_key, find_option, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -368,7 +380,10 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_keys, find_option, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::index_of(lists, search_keys, find_option, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf::lists

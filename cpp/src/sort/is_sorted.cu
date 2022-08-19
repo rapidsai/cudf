@@ -83,8 +83,10 @@ bool is_sorted(cudf::table_view const& in,
       "Number of columns in the table doesn't match the vector null_precedence's size .\n");
   }
 
-  return detail::is_sorted(
-    in, column_order, has_nulls(in), null_precedence, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::is_sorted(in, column_order, has_nulls(in), null_precedence, stream);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

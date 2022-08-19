@@ -174,7 +174,10 @@ std::unique_ptr<column> shift(column_view const& input,
                               scalar const& fill_value,
                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::shift(input, offset, fill_value, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::shift(input, offset, fill_value, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

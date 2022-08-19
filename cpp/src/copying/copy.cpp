@@ -183,7 +183,10 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, input.size(), mask_alloc, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::allocate_like(input, input.size(), mask_alloc, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input,
@@ -192,7 +195,10 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, size, mask_alloc, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::allocate_like(input, size, mask_alloc, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

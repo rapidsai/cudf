@@ -539,8 +539,10 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::merge(
-    tables_to_merge, key_cols, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result = detail::merge(tables_to_merge, key_cols, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

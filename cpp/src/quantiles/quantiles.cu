@@ -80,18 +80,18 @@ std::unique_ptr<table> quantiles(table_view const& input,
 
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
+  auto const stream = cudf::default_stream_value;
+  std::unique_ptr<table> result{};
   if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(input,
-                             thrust::make_counting_iterator<size_type>(0),
-                             q,
-                             interp,
-                             cudf::default_stream_value,
-                             mr);
+    result =
+      detail::quantiles(input, thrust::make_counting_iterator<size_type>(0), q, interp, stream, mr);
   } else {
-    auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
-    return detail::quantiles(
-      input, sorted_idx->view().data<size_type>(), q, interp, cudf::default_stream_value, mr);
+    auto sorted_idx = detail::sorted_order(
+      input, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
+    result = detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, stream, mr);
   }
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

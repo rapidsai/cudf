@@ -185,21 +185,30 @@ std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::to_lower(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::to_upper(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::swapcase(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

@@ -246,7 +246,10 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(strings, delimiter, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::partition(strings, delimiter, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<table> rpartition(strings_column_view const& strings,
@@ -254,7 +257,10 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rpartition(strings, delimiter, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::rpartition(strings, delimiter, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

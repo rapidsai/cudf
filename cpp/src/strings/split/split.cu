@@ -858,7 +858,10 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(strings_column, delimiter, maxsplit, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::split(strings_column, delimiter, maxsplit, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
@@ -867,7 +870,10 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit(strings_column, delimiter, maxsplit, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::rsplit(strings_column, delimiter, maxsplit, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

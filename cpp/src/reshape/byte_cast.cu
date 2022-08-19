@@ -137,7 +137,10 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input_column, endian_configuration, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::byte_cast(input_column, endian_configuration, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

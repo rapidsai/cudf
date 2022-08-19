@@ -132,7 +132,10 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::add_keys(dictionary_column, keys, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace dictionary

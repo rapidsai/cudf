@@ -95,7 +95,10 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::nans_to_nulls(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

@@ -843,7 +843,10 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, target, repl, maxrepl, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::replace(strings, target, repl, maxrepl, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> replace_slice(strings_column_view const& strings,
@@ -853,7 +856,10 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_slice(strings, repl, start, stop, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::replace_slice(strings, repl, start, stop, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> replace(strings_column_view const& strings,
@@ -862,7 +868,10 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::replace(strings, targets, repls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

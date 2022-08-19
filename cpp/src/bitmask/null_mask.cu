@@ -158,7 +158,10 @@ rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::create_null_mask(size, state, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::create_null_mask(size, state, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 // Set pre-allocated null mask of given bit range [begin_bit, end_bit) to valid, if valid==true,
@@ -510,25 +513,37 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 size_type end_bit,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(mask, begin_bit, end_bit, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::copy_bitmask(mask, begin_bit, end_bit, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 // Create a bitmask from a column view
 rmm::device_buffer copy_bitmask(column_view const& view, rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(view, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::copy_bitmask(view, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_and(view, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::bitmask_and(view, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_or(view, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::bitmask_or(view, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

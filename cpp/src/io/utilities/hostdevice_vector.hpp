@@ -162,7 +162,7 @@ class hostdevice_vector {
     v.h_data       = nullptr;
   }
 
-  rmm::cuda_stream_view stream{cudf::default_stream_value};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};  // TODO: remove stream member?
   size_t max_elements{};
   size_t num_elements{};
   T* h_data{};

@@ -137,7 +137,10 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::compute_column(table, expr, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

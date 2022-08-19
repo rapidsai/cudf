@@ -530,7 +530,11 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& replacement_values,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return cudf::detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, cudf::default_stream_value, mr);
+  CUDF_FUNC_RANGE();
+  auto const stream = cudf::default_stream_value;
+  auto result =
+    detail::find_and_replace_all(input_col, values_to_replace, replacement_values, stream, mr);
+  stream.synchronize();
+  return result;
 }
 }  // namespace cudf

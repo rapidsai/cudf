@@ -127,6 +127,9 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::one_hot_encode(input, categories, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::one_hot_encode(input, categories, stream, mr);
+  stream.synchronize();
+  return result;
 }
 }  // namespace cudf

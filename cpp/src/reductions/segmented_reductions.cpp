@@ -127,14 +127,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_reduce(segmented_values,
-                                  offsets,
-                                  agg,
-                                  output_dtype,
-                                  null_handling,
-                                  std::nullopt,
-                                  cudf::default_stream_value,
-                                  mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::segmented_reduce(
+    segmented_values, offsets, agg, output_dtype, null_handling, std::nullopt, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
@@ -146,14 +143,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_reduce(segmented_values,
-                                  offsets,
-                                  agg,
-                                  output_dtype,
-                                  null_handling,
-                                  init,
-                                  cudf::default_stream_value,
-                                  mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::segmented_reduce(
+    segmented_values, offsets, agg, output_dtype, null_handling, init, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

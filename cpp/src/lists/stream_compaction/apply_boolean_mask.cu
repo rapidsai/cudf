@@ -102,7 +102,10 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::mr::device_memory_resource* mr)
 {
-  return detail::apply_boolean_mask(input, boolean_mask, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::apply_boolean_mask(input, boolean_mask, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf::lists

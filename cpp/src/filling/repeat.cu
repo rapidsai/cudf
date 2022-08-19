@@ -166,7 +166,10 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, check_count, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::repeat(input_table, count, check_count, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -174,7 +177,10 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::repeat(input_table, count, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

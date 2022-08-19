@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -344,13 +345,11 @@ std::unique_ptr<column> rank(column_view const& input,
                              bool percentage,
                              rmm::mr::device_memory_resource* mr)
 {
-  return detail::rank(input,
-                      method,
-                      column_order,
-                      null_handling,
-                      null_precedence,
-                      percentage,
-                      cudf::default_stream_value,
-                      mr);
+  CUDF_FUNC_RANGE();
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::rank(
+    input, method, column_order, null_handling, null_precedence, percentage, stream, mr);
+  stream.synchronize();
+  return result;
 }
 }  // namespace cudf

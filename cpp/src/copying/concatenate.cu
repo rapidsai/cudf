@@ -530,6 +530,7 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
 rmm::device_buffer concatenate_masks(host_span<column_view const> views,
                                      rmm::mr::device_memory_resource* mr)
 {
+  auto const stream = cudf::default_stream_value;
   bool const has_nulls =
     std::any_of(views.begin(), views.end(), [](const column_view col) { return col.has_nulls(); });
   if (has_nulls) {
@@ -541,13 +542,14 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
     rmm::device_buffer null_mask =
       create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
-    detail::concatenate_masks(
-      views, static_cast<bitmask_type*>(null_mask.data()), cudf::default_stream_value);
-
+    detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), stream);
+    stream.synchronize();
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{0, cudf::default_stream_value, mr};
+  auto result = rmm::device_buffer{0, stream, mr};
+  stream.synchronize();
+  return result;
 }
 
 // Concatenates the elements from a vector of column_views
@@ -555,14 +557,20 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::concatenate(columns_to_concat, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::concatenate(tables_to_concat, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

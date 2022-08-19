@@ -297,7 +297,10 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::interleave_columns(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

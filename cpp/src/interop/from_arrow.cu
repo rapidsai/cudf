@@ -449,8 +449,10 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-
-  return detail::from_arrow(input_table, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::from_arrow(input_table, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

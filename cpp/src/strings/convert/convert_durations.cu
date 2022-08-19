@@ -749,7 +749,10 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_durations(durations, format, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::from_durations(durations, format, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& strings,
@@ -758,7 +761,10 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_durations(strings, duration_type, format, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::to_durations(strings, duration_type, format, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

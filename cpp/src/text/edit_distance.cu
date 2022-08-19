@@ -311,7 +311,10 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance(strings, targets, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::edit_distance(strings, targets, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -321,7 +324,10 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance_matrix(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::edit_distance_matrix(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

@@ -1048,7 +1048,10 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, options, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::get_json_object(col, json_path, options, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

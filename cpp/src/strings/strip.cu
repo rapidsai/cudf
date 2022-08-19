@@ -131,7 +131,10 @@ std::unique_ptr<column> strip(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::strip(input, side, to_strip, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::strip(input, side, to_strip, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

@@ -235,7 +235,10 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::format_list_column(input, na_rep, separators, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

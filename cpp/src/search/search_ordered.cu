@@ -126,8 +126,10 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::lower_bound(
-    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result = detail::lower_bound(haystack, needles, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> upper_bound(table_view const& haystack,
@@ -137,8 +139,10 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::upper_bound(
-    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result = detail::upper_bound(haystack, needles, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

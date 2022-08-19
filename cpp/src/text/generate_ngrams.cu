@@ -151,7 +151,10 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_ngrams(strings, ngrams, separator, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::generate_ngrams(strings, ngrams, separator, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 namespace detail {
@@ -261,7 +264,10 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_character_ngrams(strings, ngrams, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::generate_character_ngrams(strings, ngrams, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

@@ -796,7 +796,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::partition(t, partition_map, num_partitions, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

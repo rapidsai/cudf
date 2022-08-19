@@ -201,7 +201,10 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(strings, row_indices, separator, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::detokenize(strings, row_indices, separator, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

@@ -208,7 +208,10 @@ std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::get_element(input, index, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::get_element(input, index, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

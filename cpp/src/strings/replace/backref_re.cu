@@ -152,8 +152,10 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(
-    strings, pattern, replacement, flags, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result = detail::replace_with_backrefs(strings, pattern, replacement, flags, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

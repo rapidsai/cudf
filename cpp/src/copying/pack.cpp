@@ -219,7 +219,10 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::pack(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**

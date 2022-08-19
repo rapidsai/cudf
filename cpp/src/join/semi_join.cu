@@ -94,8 +94,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::left_semi_anti_join(
+    detail::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
@@ -105,8 +108,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::left_semi_anti_join(
+    detail::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

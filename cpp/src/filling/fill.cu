@@ -248,7 +248,9 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  detail::fill_in_place(destination, begin, end, value, stream);
+  stream.synchronize();
 }
 
 std::unique_ptr<column> fill(column_view const& input,
@@ -258,7 +260,10 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::fill(input, begin, end, value, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

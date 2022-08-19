@@ -172,7 +172,10 @@ bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_strea
 bool contains(column_view const& haystack, scalar const& needle)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::contains(haystack, needle, stream);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

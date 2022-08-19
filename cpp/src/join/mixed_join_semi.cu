@@ -496,15 +496,18 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_mixed_join_output_size_semi(left_equality,
-                                                     right_equality,
-                                                     left_conditional,
-                                                     right_conditional,
-                                                     binary_predicate,
-                                                     compare_nulls,
-                                                     detail::join_kind::LEFT_SEMI_JOIN,
-                                                     cudf::default_stream_value,
-                                                     mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::compute_mixed_join_output_size_semi(left_equality,
+                                                            right_equality,
+                                                            left_conditional,
+                                                            right_conditional,
+                                                            binary_predicate,
+                                                            compare_nulls,
+                                                            detail::join_kind::LEFT_SEMI_JOIN,
+                                                            stream,
+                                                            mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
@@ -518,16 +521,19 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join_semi(left_equality,
-                                 right_equality,
-                                 left_conditional,
-                                 right_conditional,
-                                 binary_predicate,
-                                 compare_nulls,
-                                 detail::join_kind::LEFT_SEMI_JOIN,
-                                 output_size_data,
-                                 cudf::default_stream_value,
-                                 mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::mixed_join_semi(left_equality,
+                                        right_equality,
+                                        left_conditional,
+                                        right_conditional,
+                                        binary_predicate,
+                                        compare_nulls,
+                                        detail::join_kind::LEFT_SEMI_JOIN,
+                                        output_size_data,
+                                        stream,
+                                        mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_anti_join_size(
@@ -540,15 +546,18 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_mixed_join_output_size_semi(left_equality,
-                                                     right_equality,
-                                                     left_conditional,
-                                                     right_conditional,
-                                                     binary_predicate,
-                                                     compare_nulls,
-                                                     detail::join_kind::LEFT_ANTI_JOIN,
-                                                     cudf::default_stream_value,
-                                                     mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::compute_mixed_join_output_size_semi(left_equality,
+                                                            right_equality,
+                                                            left_conditional,
+                                                            right_conditional,
+                                                            binary_predicate,
+                                                            compare_nulls,
+                                                            detail::join_kind::LEFT_ANTI_JOIN,
+                                                            stream,
+                                                            mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
@@ -562,16 +571,19 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join_semi(left_equality,
-                                 right_equality,
-                                 left_conditional,
-                                 right_conditional,
-                                 binary_predicate,
-                                 compare_nulls,
-                                 detail::join_kind::LEFT_ANTI_JOIN,
-                                 output_size_data,
-                                 cudf::default_stream_value,
-                                 mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::mixed_join_semi(left_equality,
+                                        right_equality,
+                                        left_conditional,
+                                        right_conditional,
+                                        binary_predicate,
+                                        compare_nulls,
+                                        detail::join_kind::LEFT_ANTI_JOIN,
+                                        output_size_data,
+                                        stream,
+                                        mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

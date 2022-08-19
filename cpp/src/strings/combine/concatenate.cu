@@ -269,8 +269,10 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result = detail::concatenate(strings_columns, separator, narep, separate_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -281,13 +283,11 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns,
-                             separators,
-                             separator_narep,
-                             col_narep,
-                             separate_nulls,
-                             cudf::default_stream_value,
-                             mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::concatenate(
+    strings_columns, separators, separator_narep, col_narep, separate_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

@@ -653,7 +653,10 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_timestamps(input, timestamp_type, format, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::to_timestamps(input, timestamp_type, format, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
@@ -661,7 +664,10 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_timestamp(input, format, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::is_timestamp(input, format, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 namespace detail {
@@ -1149,7 +1155,10 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_timestamps(timestamps, format, names, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::from_timestamps(timestamps, format, names, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

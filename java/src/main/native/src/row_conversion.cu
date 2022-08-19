@@ -1273,7 +1273,7 @@ static std::unique_ptr<column> fixed_width_convert_to_rows(
       input_data.data(), input_nm.data(), data->mutable_view().data<int8_t>());
 
   return make_lists_column(num_rows, std::move(offsets), std::move(data), 0,
-                           rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
+                           rmm::device_buffer{0, stream, mr}, stream, mr);
 }
 
 static inline bool are_all_fixed_width(std::vector<data_type> const &schema) {
@@ -1875,20 +1875,20 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   std::vector<std::unique_ptr<column>> ret;
   ret.reserve(batch_info.row_batches.size());
   auto counting_iter = thrust::make_counting_iterator(0);
-  std::transform(counting_iter, counting_iter + batch_info.row_batches.size(),
-                 std::back_inserter(ret), [&](auto batch) {
-                   auto const offset_count = batch_info.row_batches[batch].row_offsets.size();
-                   auto offsets = std::make_unique<column>(
-                       data_type{type_id::INT32}, (size_type)offset_count,
-                       batch_info.row_batches[batch].row_offsets.release());
-                   auto data = std::make_unique<column>(data_type{type_id::INT8},
-                                                        batch_info.row_batches[batch].num_bytes,
-                                                        std::move(output_buffers[batch]));
+  std::transform(
+      counting_iter, counting_iter + batch_info.row_batches.size(), std::back_inserter(ret),
+      [&](auto batch) {
+        auto const offset_count = batch_info.row_batches[batch].row_offsets.size();
+        auto offsets =
+            std::make_unique<column>(data_type{type_id::INT32}, (size_type)offset_count,
+                                     batch_info.row_batches[batch].row_offsets.release());
+        auto data = std::make_unique<column>(data_type{type_id::INT8},
+                                             batch_info.row_batches[batch].num_bytes,
+                                             std::move(output_buffers[batch]));
 
-                   return make_lists_column(
-                       batch_info.row_batches[batch].row_count, std::move(offsets), std::move(data),
-                       0, rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
-                 });
+        return make_lists_column(batch_info.row_batches[batch].row_count, std::move(offsets),
+                                 std::move(data), 0, rmm::device_buffer{0, stream, mr}, stream, mr);
+      });
 
   return ret;
 }

@@ -159,8 +159,11 @@ std::unique_ptr<column> filter_characters(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_characters(
-    strings, characters_to_filter, keep_characters, replacement, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::filter_characters(
+    strings, characters_to_filter, keep_characters, replacement, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

@@ -158,8 +158,10 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(
-    input, keys, keep, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

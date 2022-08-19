@@ -113,7 +113,10 @@ inner_join(table_view const& left,
            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::inner_join(left, right, compare_nulls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::inner_join(left, right, compare_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -124,7 +127,10 @@ left_join(table_view const& left,
           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::left_join(left, right, compare_nulls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::left_join(left, right, compare_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -135,7 +141,10 @@ full_join(table_view const& left,
           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::full_join(left, right, compare_nulls, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::full_join(left, right, compare_nulls, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

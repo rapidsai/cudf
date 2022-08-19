@@ -99,7 +99,10 @@ std::unique_ptr<table> unique(table_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique(input, keys, keep, nulls_equal, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::unique(input, keys, keep, nulls_equal, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

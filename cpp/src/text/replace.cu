@@ -281,8 +281,10 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_tokens(
-    strings, targets, replacements, delimiter, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::replace_tokens(strings, targets, replacements, delimiter, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& strings,
@@ -292,8 +294,11 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_tokens(
-    strings, min_token_length, replacement, delimiter, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result =
+    detail::filter_tokens(strings, min_token_length, replacement, delimiter, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

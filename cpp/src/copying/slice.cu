@@ -114,25 +114,37 @@ std::vector<table_view> slice(table_view const& input,
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::slice(input, indices, stream);
+  stream.synchronize();
+  return result;
 }
 
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::slice(input, indices, stream);
+  stream.synchronize();
+  return result;
 };
 
 std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::slice(input, indices, stream);
+  stream.synchronize();
+  return result;
 }
 
 std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::slice(input, indices, stream);
+  stream.synchronize();
+  return result;
 };
 
 }  // namespace cudf

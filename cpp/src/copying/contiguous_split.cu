@@ -1269,7 +1269,10 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::contiguous_split(input, splits, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::contiguous_split(input, splits, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 };  // namespace cudf

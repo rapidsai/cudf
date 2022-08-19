@@ -249,11 +249,11 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(strings,
-                           ltype,
-                           thrust::make_constant_iterator<cudf::size_type>(character_index),
-                           cudf::default_stream_value,
-                           mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::is_letter(
+    strings, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings,
@@ -262,7 +262,10 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(strings, ltype, indices, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::is_letter(strings, ltype, indices, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -272,7 +275,10 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::porter_stemmer_measure(strings, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::porter_stemmer_measure(strings, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace nvtext

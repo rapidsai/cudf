@@ -450,16 +450,19 @@ mixed_inner_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_equality,
-                            right_equality,
-                            left_conditional,
-                            right_conditional,
-                            binary_predicate,
-                            compare_nulls,
-                            detail::join_kind::INNER_JOIN,
-                            output_size_data,
-                            cudf::default_stream_value,
-                            mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::mixed_join(left_equality,
+                                   right_equality,
+                                   left_conditional,
+                                   right_conditional,
+                                   binary_predicate,
+                                   compare_nulls,
+                                   detail::join_kind::INNER_JOIN,
+                                   output_size_data,
+                                   stream,
+                                   mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
@@ -472,15 +475,18 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_mixed_join_output_size(left_equality,
-                                                right_equality,
-                                                left_conditional,
-                                                right_conditional,
-                                                binary_predicate,
-                                                compare_nulls,
-                                                detail::join_kind::INNER_JOIN,
-                                                cudf::default_stream_value,
-                                                mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::compute_mixed_join_output_size(left_equality,
+                                                       right_equality,
+                                                       left_conditional,
+                                                       right_conditional,
+                                                       binary_predicate,
+                                                       compare_nulls,
+                                                       detail::join_kind::INNER_JOIN,
+                                                       stream,
+                                                       mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -496,16 +502,19 @@ mixed_left_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_equality,
-                            right_equality,
-                            left_conditional,
-                            right_conditional,
-                            binary_predicate,
-                            compare_nulls,
-                            detail::join_kind::LEFT_JOIN,
-                            output_size_data,
-                            cudf::default_stream_value,
-                            mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::mixed_join(left_equality,
+                                   right_equality,
+                                   left_conditional,
+                                   right_conditional,
+                                   binary_predicate,
+                                   compare_nulls,
+                                   detail::join_kind::LEFT_JOIN,
+                                   output_size_data,
+                                   stream,
+                                   mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
@@ -518,15 +527,18 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_mixed_join_output_size(left_equality,
-                                                right_equality,
-                                                left_conditional,
-                                                right_conditional,
-                                                binary_predicate,
-                                                compare_nulls,
-                                                detail::join_kind::LEFT_JOIN,
-                                                cudf::default_stream_value,
-                                                mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::compute_mixed_join_output_size(left_equality,
+                                                       right_equality,
+                                                       left_conditional,
+                                                       right_conditional,
+                                                       binary_predicate,
+                                                       compare_nulls,
+                                                       detail::join_kind::LEFT_JOIN,
+                                                       stream,
+                                                       mr);
+  stream.synchronize();
+  return result;
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -542,16 +554,19 @@ mixed_full_join(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_equality,
-                            right_equality,
-                            left_conditional,
-                            right_conditional,
-                            binary_predicate,
-                            compare_nulls,
-                            detail::join_kind::FULL_JOIN,
-                            output_size_data,
-                            cudf::default_stream_value,
-                            mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::mixed_join(left_equality,
+                                   right_equality,
+                                   left_conditional,
+                                   right_conditional,
+                                   binary_predicate,
+                                   compare_nulls,
+                                   detail::join_kind::FULL_JOIN,
+                                   output_size_data,
+                                   stream,
+                                   mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

@@ -204,15 +204,18 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
-  return detail::grouped_rolling_window(group_keys,
-                                        input,
-                                        default_outputs,
-                                        preceding_window_bounds,
-                                        following_window_bounds,
-                                        min_periods,
-                                        aggr,
-                                        cudf::default_stream_value,
-                                        mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::grouped_rolling_window(group_keys,
+                                               input,
+                                               default_outputs,
+                                               preceding_window_bounds,
+                                               following_window_bounds,
+                                               min_periods,
+                                               aggr,
+                                               stream,
+                                               mr);
+  stream.synchronize();
+  return result;
 }
 
 namespace {
@@ -1039,15 +1042,19 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   auto preceding = to_range_bounds(preceding_window_in_days, timestamp_column.type());
   auto following = to_range_bounds(following_window_in_days, timestamp_column.type());
 
-  return grouped_range_rolling_window(group_keys,
-                                      timestamp_column,
-                                      timestamp_order,
-                                      input,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      aggr,
-                                      mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::grouped_range_rolling_window(group_keys,
+                                                     timestamp_column,
+                                                     timestamp_order,
+                                                     input,
+                                                     preceding,
+                                                     following,
+                                                     min_periods,
+                                                     aggr,
+                                                     stream,
+                                                     mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -1077,16 +1084,19 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   range_window_bounds following =
     to_range_bounds(following_window_in_days, timestamp_column.type());
 
-  return grouped_range_rolling_window(group_keys,
-                                      timestamp_column,
-                                      timestamp_order,
-                                      input,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      aggr,
-                                      cudf::default_stream_value,
-                                      mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::grouped_range_rolling_window(group_keys,
+                                                     timestamp_column,
+                                                     timestamp_order,
+                                                     input,
+                                                     preceding,
+                                                     following,
+                                                     min_periods,
+                                                     aggr,
+                                                     stream,
+                                                     mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -1111,16 +1121,20 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      rolling_aggregation const& aggr,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  return detail::grouped_range_rolling_window(group_keys,
-                                              timestamp_column,
-                                              timestamp_order,
-                                              input,
-                                              preceding,
-                                              following,
-                                              min_periods,
-                                              aggr,
-                                              cudf::default_stream_value,
-                                              mr);
+  CUDF_FUNC_RANGE();
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::grouped_range_rolling_window(group_keys,
+                                                     timestamp_column,
+                                                     timestamp_order,
+                                                     input,
+                                                     preceding,
+                                                     following,
+                                                     min_periods,
+                                                     aggr,
+                                                     stream,
+                                                     mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

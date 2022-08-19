@@ -63,7 +63,10 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
                                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transpose(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::transpose(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

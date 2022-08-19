@@ -273,8 +273,9 @@ void copy_range_in_place(column_view const& source,
                          size_type target_begin)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_range_in_place(
-    source, target, source_begin, source_end, target_begin, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  detail::copy_range_in_place(source, target, source_begin, source_end, target_begin, stream);
+  stream.synchronize();
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,
@@ -285,8 +286,11 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_range(
-    source, target, source_begin, source_end, target_begin, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result =
+    detail::copy_range(source, target, source_begin, source_end, target_begin, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

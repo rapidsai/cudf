@@ -485,8 +485,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
     JNI_ARG_CHECK(env, keys_vals.num_children() == 2,
                   "Input column has child that does not have 2 children.", 0);
 
-    return release_as_jlong(
-        cudf::jni::lists_distinct_by_key(lists_keys_vals, cudf::default_stream_value));
+    auto const stream = cudf::default_stream_value;
+    auto result = release_as_jlong(cudf::jni::lists_distinct_by_key(lists_keys_vals, stream));
+    stream.synchronize();
+    return result;
   }
   CATCH_STD(env, 0);
 }

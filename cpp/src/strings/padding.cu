@@ -211,7 +211,10 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(input, width, side, fill_char, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::pad(input, width, side, fill_char, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> zfill(strings_column_view const& input,
@@ -219,7 +222,10 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(input, width, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::zfill(input, width, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

@@ -196,7 +196,10 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = dispatch_aggregation(requests, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 // Compute scan requests
@@ -214,7 +217,10 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return sort_scan(requests, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = sort_scan(requests, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)

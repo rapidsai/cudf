@@ -195,8 +195,11 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_sorted_order(
-    keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::segmented_sorted_order(
+    keys, segment_offsets, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> stable_segmented_sorted_order(
@@ -207,8 +210,11 @@ std::unique_ptr<column> stable_segmented_sorted_order(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_segmented_sorted_order(
-    keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::stable_segmented_sorted_order(
+    keys, segment_offsets, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
@@ -219,8 +225,11 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_sort_by_key(
-    values, keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::segmented_sort_by_key(
+    values, keys, segment_offsets, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<table> stable_segmented_sort_by_key(table_view const& values,
@@ -231,8 +240,11 @@ std::unique_ptr<table> stable_segmented_sort_by_key(table_view const& values,
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::stable_segmented_sort_by_key(
-    values, keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::stable_segmented_sort_by_key(
+    values, keys, segment_offsets, column_order, null_precedence, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

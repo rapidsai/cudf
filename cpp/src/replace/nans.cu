@@ -114,7 +114,10 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::replace_nans(input, replacement, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,
@@ -122,7 +125,10 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::replace_nans(input, replacement, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf
@@ -223,7 +229,10 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_nans_and_zeros(input, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::normalize_nans_and_zeros(input, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 /**
@@ -239,7 +248,9 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
 void normalize_nans_and_zeros(mutable_column_view& in_out)
 {
   CUDF_FUNC_RANGE();
-  detail::normalize_nans_and_zeros(in_out, cudf::default_stream_value);
+  auto const stream = cudf::default_stream_value;
+  detail::normalize_nans_and_zeros(in_out, stream);
+  stream.synchronize();
 }
 
 }  // namespace cudf

@@ -303,13 +303,11 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_list_elements(lists_strings_column,
-                                    separator,
-                                    narep,
-                                    separate_nulls,
-                                    empty_list_policy,
-                                    cudf::default_stream_value,
-                                    mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::join_list_elements(
+    lists_strings_column, separator, narep, separate_nulls, empty_list_policy, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
@@ -321,14 +319,17 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_list_elements(lists_strings_column,
-                                    separators,
-                                    separator_narep,
-                                    string_narep,
-                                    separate_nulls,
-                                    empty_list_policy,
-                                    cudf::default_stream_value,
-                                    mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::join_list_elements(lists_strings_column,
+                                           separators,
+                                           separator_narep,
+                                           string_narep,
+                                           separate_nulls,
+                                           empty_list_policy,
+                                           stream,
+                                           mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings

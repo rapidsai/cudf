@@ -182,7 +182,10 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_index(dictionary, key, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::get_index(dictionary, key, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace dictionary

@@ -391,7 +391,10 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::clamp(input, lo, lo_replace, hi, hi_replace, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 // clamp input at lo and hi
@@ -401,6 +404,9 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo, hi, hi, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::clamp(input, lo, lo, hi, hi, stream, mr);
+  stream.synchronize();
+  return result;
 }
 }  // namespace cudf

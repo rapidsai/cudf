@@ -415,7 +415,10 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 {
   CUDF_FUNC_RANGE();
 
-  return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::to_arrow(input, metadata, stream, ar_mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace cudf

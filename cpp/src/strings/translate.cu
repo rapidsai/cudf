@@ -130,7 +130,10 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::translate(strings, chars_table, cudf::default_stream_value, mr);
+  auto const stream = cudf::default_stream_value;
+  auto result       = detail::translate(strings, chars_table, stream, mr);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace strings
