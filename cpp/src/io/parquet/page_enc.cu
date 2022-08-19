@@ -211,6 +211,8 @@ __global__ void __launch_bounds__(128)
   if (frag_id < num_fragments_per_column and lane_id == 0) groups[column_id][frag_id] = *g;
 }
 
+constexpr size_t nvcomp_pad(size_t size) { return (size + 3) & ~3; }
+
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
@@ -278,7 +280,7 @@ __global__ void __launch_bounds__(128)
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
-        page_offset += page_g.max_hdr_size + page_g.max_data_size;
+        page_offset += nvcomp_pad(page_g.max_hdr_size + page_g.max_data_size);
         if (not comp_page_sizes.empty()) {
           comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
         }
@@ -354,7 +356,9 @@ __global__ void __launch_bounds__(128)
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+          // pad max_hdr_size
+          page_g.max_hdr_size = nvcomp_pad(page_g.max_hdr_size);
+          page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
           }
@@ -378,7 +382,7 @@ __global__ void __launch_bounds__(128)
 
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
-          page_offset += page_g.max_hdr_size + page_g.max_data_size;
+          page_offset += nvcomp_pad(page_g.max_hdr_size + page_g.max_data_size);
           if (not comp_page_sizes.empty()) {
             comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page + num_pages];
           }
@@ -416,7 +420,7 @@ __global__ void __launch_bounds__(128)
     __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
-        uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
+        uint32_t ck_stat_size = nvcomp_pad(48 + 2 * ck_max_stats_len);
         page_offset += ck_stat_size;
         comp_page_offset += ck_stat_size;
         ck_g.ck_stat_size = ck_stat_size;
@@ -1115,7 +1119,8 @@ __global__ void __launch_bounds__(128, 8)
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
     if (not comp_in.empty()) {
-      comp_in[blockIdx.x]  = {base, actual_data_size};
+      comp_in[blockIdx.x] = {base, actual_data_size};
+      printf("%lX ", (long)base);
       comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, compressed_bfr_size};
     }
     pages[blockIdx.x] = s->page;
