@@ -27,8 +27,6 @@
 
 constexpr int64_t data_size = 512 << 20;
 
-namespace cudf_io = cudf::io;
-
 enum class uses_index : bool { YES, NO };
 
 enum class uses_numpy_dtype : bool { YES, NO };
@@ -90,11 +88,11 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   },
   [](auto) { return std::string{}; })
 
-std::vector<std::string> get_col_names(cudf_io::source_info const& source)
+std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
-  cudf_io::orc_reader_options const read_options =
-    cudf_io::orc_reader_options::builder(source).num_rows(1);
-  return cudf_io::read_orc(read_options).metadata.column_names;
+  cudf::io::orc_reader_options const read_options =
+    cudf::io::orc_reader_options::builder(source).num_rows(1);
+  return cudf::io::read_orc(read_options).metadata.column_names;
 }
 
 template <column_selection ColSelection,
@@ -111,7 +109,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto const num_chunks = state.get_int64("num_chunks");
+  auto constexpr num_chunks = 1;
 
   auto const use_index     = UsesIndex == uses_index::YES;
   auto const use_np_dtypes = UsesNumpyDType == uses_numpy_dtype::YES;
@@ -129,14 +127,14 @@ void BM_orc_read_varying_options(nvbench::state& state,
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
-  cudf_io::orc_writer_options options =
-    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view);
-  cudf_io::write_orc(options);
+  cudf::io::orc_writer_options options =
+    cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
+  cudf::io::write_orc(options);
 
   auto const cols_to_read =
     select_column_names(get_col_names(source_sink.make_source_info()), ColSelection);
-  cudf_io::orc_reader_options read_options =
-    cudf_io::orc_reader_options::builder(source_sink.make_source_info())
+  cudf::io::orc_reader_options read_options =
+    cudf::io::orc_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)
       .use_index(use_index)
       .use_np_dtypes(use_np_dtypes)
@@ -173,7 +171,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
           default: CUDF_FAIL("Unsupported row selection method");
         }
 
-        rows_read += cudf_io::read_orc(read_options).tbl->num_rows();
+        rows_read += cudf::io::read_orc(read_options).tbl->num_rows();
       }
 
       CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
@@ -200,19 +198,7 @@ NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
                                       nvbench::enum_type_list<cudf::type_id::EMPTY>))
   .set_name("orc_read_column_selection")
   .set_type_axes_names(
-    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .add_int64_axis("num_chunks", {1});
-
-NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
-                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
-                                      nvbench::enum_type_list<row_selection::NROWS>,
-                                      nvbench::enum_type_list<uses_index::YES>,
-                                      nvbench::enum_type_list<uses_numpy_dtype::YES>,
-                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
-  .set_name("orc_read_num_chunks")
-  .set_type_axes_names(
-    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .add_int64_axis("num_chunks", {1, 8});
+    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"});
 
 NVBENCH_BENCH_TYPES(
   BM_orc_read_varying_options,
@@ -224,5 +210,4 @@ NVBENCH_BENCH_TYPES(
     nvbench::enum_type_list<cudf::type_id::EMPTY, cudf::type_id::TIMESTAMP_NANOSECONDS>))
   .set_name("orc_read_misc_options")
   .set_type_axes_names(
-    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
-  .add_int64_axis("num_chunks", {1});
+    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"});

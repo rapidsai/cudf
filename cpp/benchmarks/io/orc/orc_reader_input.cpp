@@ -28,8 +28,6 @@
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-namespace cudf_io = cudf::io;
-
 enum class data_type : int32_t {
   INTEGRAL  = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
   FLOAT     = static_cast<int32_t>(type_group_id::FLOATING_POINT),
@@ -58,35 +56,35 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto) { return std::string{}; })
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf_io::io_type,
+  cudf::io::io_type,
   [](auto value) {
     switch (value) {
-      case cudf_io::io_type::FILEPATH: return "FILEPATH";
-      case cudf_io::io_type::HOST_BUFFER: return "HOST_BUFFER";
+      case cudf::io::io_type::FILEPATH: return "FILEPATH";
+      case cudf::io::io_type::HOST_BUFFER: return "HOST_BUFFER";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf_io::compression_type,
+  cudf::io::compression_type,
   [](auto value) {
     switch (value) {
-      case cudf_io::compression_type::SNAPPY: return "SNAPPY";
-      case cudf_io::compression_type::NONE: return "NONE";
+      case cudf::io::compression_type::SNAPPY: return "SNAPPY";
+      case cudf::io::compression_type::NONE: return "NONE";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
-void orc_read_common(cudf_io::orc_writer_options const& opts,
+void orc_read_common(cudf::io::orc_writer_options const& opts,
                      cuio_source_sink_pair& source_sink,
                      nvbench::state& state)
 {
-  cudf_io::write_orc(opts);
+  cudf::io::write_orc(opts);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(source_sink.make_source_info());
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
@@ -95,7 +93,7 @@ void orc_read_common(cudf_io::orc_writer_options const& opts,
                try_drop_l3_cache();
 
                timer.start();
-               cudf_io::read_orc(read_opts);
+               cudf::io::read_orc(read_opts);
                timer.stop();
              });
 
@@ -121,13 +119,13 @@ void BM_orc_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
-  cudf_io::orc_writer_options opts =
-    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view);
+  cudf::io::orc_writer_options opts =
+    cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
 
   orc_read_common(opts, source_sink, state);
 }
 
-template <cudf_io::io_type IO, cudf_io::compression_type Compression>
+template <cudf::io::io_type IO, cudf::io::compression_type Compression>
 void BM_orc_read_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
@@ -152,8 +150,8 @@ void BM_orc_read_io_compression(
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(IO);
-  cudf_io::orc_writer_options opts =
-    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
+  cudf::io::orc_writer_options opts =
+    cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
       .compression(Compression);
 
   orc_read_common(opts, source_sink, state);
@@ -167,10 +165,11 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<cudf_io::io_type::FILEPATH, cudf_io::io_type::HOST_BUFFER>;
+using io_list =
+  nvbench::enum_type_list<cudf::io::io_type::FILEPATH, cudf::io::io_type::HOST_BUFFER>;
 
 using compression_list =
-  nvbench::enum_type_list<cudf_io::compression_type::SNAPPY, cudf_io::compression_type::NONE>;
+  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
 NVBENCH_BENCH_TYPES(BM_orc_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("orc_read_decode")
