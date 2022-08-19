@@ -157,7 +157,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     fi
 else
     #Project Flash
-    gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env # This is because those package have a cupy pin of <11
+    #gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env # This is because those package have a cupy pin of <11
     gpuci_mamba_retry install -y "cupy=11"
     conda list --show-channel-urls
 
