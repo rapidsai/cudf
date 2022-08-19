@@ -25,9 +25,15 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.08.00
+  VERSION 22.10.00
   LANGUAGES C CXX CUDA
 )
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
+  message(
+    FATAL_ERROR
+      "libcudf requires CUDA Toolkit 11.5+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+  )
+endif()
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
@@ -47,7 +53,7 @@ option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
 option(
   CUDF_USE_PER_THREAD_DEFAULT_STREAM
   "Build cuDF with per-thread default stream, including passing the per-thread default
@@ -299,6 +305,7 @@ add_library(
   src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmur_hash.cu
+  src/hash/spark_murmur_hash.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -323,6 +330,7 @@ add_library(
   src/io/json/json_gpu.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
+  src/io/json/experimental/read_json.cpp
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -379,6 +387,7 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
+  src/lists/dremel.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
@@ -386,6 +395,7 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/set_operations.cu
   src/lists/stream_compaction/apply_boolean_mask.cu
   src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
@@ -439,8 +449,8 @@ add_library(
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
+  src/search/contains_scalar.cu
   src/search/contains_table.cu
-  src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu

@@ -1032,7 +1032,7 @@ __launch_bounds__(block_size) __global__
 
   size_type warp_valid_count{0};
 
-  auto active_threads = __ballot_sync(0xffffffff, i < input.size());
+  auto active_threads = __ballot_sync(0xffff'ffffu, i < input.size());
   while (i < input.size()) {
     // to prevent overflow issues when computing bounds use int64_t
     int64_t const preceding_window = preceding_window_begin[i];

@@ -912,7 +912,7 @@ __launch_bounds__(block_size) __global__
   if (out_valid_count.has_value()) { *(out_valid_count.value()) = 0; }
   size_type warp_valid_count{0};
 
-  auto active_threads = __ballot_sync(0xffffffff, tid < col.size());
+  auto active_threads = __ballot_sync(0xffff'ffffu, tid < col.size());
   while (tid < col.size()) {
     bool is_valid         = false;
     string_view const str = col.element<string_view>(tid);

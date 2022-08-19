@@ -30,11 +30,14 @@ namespace cudf::lists::detail {
  * @param input The input lists column
  * @param n_elements The number of elements in the child column of the input lists column
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
  * @return A column containing list labels corresponding to each element in the child column
  */
-std::unique_ptr<column> generate_labels(lists_column_view const& input,
-                                        size_type n_elements,
-                                        rmm::cuda_stream_view stream);
+std::unique_ptr<column> generate_labels(
+  lists_column_view const& input,
+  size_type n_elements,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Reconstruct an offsets column from the input list labels column.

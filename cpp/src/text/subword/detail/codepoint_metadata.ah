@@ -22,9 +22,9 @@
 // it is broken into pieces since only 10% of the values are unique
 
 // some magic numbers
-constexpr uint32_t codepoint_metadata_size = 1114112; // 0x110000
+constexpr uint32_t codepoint_metadata_size = 1114112; // 0x11'0000
 constexpr uint32_t aux_codepoint_data_size = 119233;
-constexpr uint32_t codepoint_metadata_default_value = 83886080; // 0x05000000
+constexpr uint32_t codepoint_metadata_default_value = 83886080; // 0x0500'0000
 constexpr uint32_t aux_codepoint_default_value = 0;
 constexpr uint32_t cp_section1_end = 195104;
 constexpr uint32_t cp_section2_begin = 917505;

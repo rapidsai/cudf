@@ -39,7 +39,8 @@ performance in repeated iterations.
 
 For generating benchmark input data, helper functions are available at [cpp/benchmarks/common/generate_input.hpp](/cpp/benchmarks/common/generate_input.hpp). The input data generation happens on device, in contrast to any `column_wrapper` where data generation happens on the host.
 * `create_sequence_table` can generate sequence columns starting with value 0 in first row and increasing by 1 in subsequent rows.
-* `create_random_table` can generate a table filled with random data. The random data parameters are configurable.
+* `create_random_column` can generate a column filled with random data. The random data parameters are configurable.
+* `create_random_table` can generate a table of columns filled with random data. The random data parameters are configurable.
 
 ## What should we benchmark?
 

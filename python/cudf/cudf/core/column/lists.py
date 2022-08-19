@@ -70,9 +70,9 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[0][
-                current_offset
-            ]
+            current_offset = current_base_child.base_children[
+                0
+            ].element_indexing(current_offset)
             n += child0_size
             current_base_child = current_base_child.base_children[1]
 
@@ -147,8 +147,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
+            nbuf = pa.py_buffer(self.mask.memoryview())
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()

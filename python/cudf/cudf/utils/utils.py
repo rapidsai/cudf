@@ -14,7 +14,7 @@ import rmm
 
 import cudf
 from cudf.core import column
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 
 # The size of the mask in bytes
 mask_dtype = cudf.dtype(np.int32)
@@ -277,8 +277,8 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return Buffer(dbuf)
-    return Buffer(mask_buf)
+        return as_device_buffer_like(dbuf)
+    return as_device_buffer_like(mask_buf)
 
 
 def _isnat(val):
