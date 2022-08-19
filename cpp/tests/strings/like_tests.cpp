@@ -115,6 +115,24 @@ TEST_F(StringsLikeTests, Escape)
       {false, false, false, false, false, true, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
+  {
+    auto results = cudf::strings::like(sv, std::string("10%%%%-20%%"), std::string("%"));
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      {false, false, true, false, false, false, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
+  {
+    auto results = cudf::strings::like(sv, std::string("_%__"), std::string("%"));
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      {false, false, false, true, true, true, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
+  {
+    auto results = cudf::strings::like(sv, std::string("a__b"), std::string("_"));
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      {false, false, false, true, false, false, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
 }
 
 TEST_F(StringsLikeTests, Empty)
