@@ -1,23 +1,16 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import math
-from operator import getitem
 from typing import Set
 
 import numpy as np
 import pandas as pd
 
-from dask.base import tokenize
 from dask.dataframe.core import (
-    aca,
     DataFrame as DaskDataFrame,
-    _concat,
-    hash_shard,
-    new_dd_object,
+    aca,
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
-from dask.highlevelgraph import HighLevelGraph
 
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
@@ -276,7 +269,12 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             )
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle,
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            # TODO: Change following line to `shuffle=shuffle,`
+            # when dask_cudf is pinned to dask>2022.8.0
+            **({} if shuffle is None else {"shuffle": shuffle}),
         )
 
 
@@ -462,7 +460,12 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             )[self._slice]
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            # TODO: Change following line to `shuffle=shuffle,`
+            # when dask_cudf is pinned to dask>2022.8.0
+            **({} if shuffle is None else {"shuffle": shuffle}),
         )
 
 
@@ -653,8 +656,8 @@ def groupby_agg(
             token="cudf-aggregate",
             split_every=split_every,
             split_out=split_out,
-            split_out_setup = split_out_on_cols,
-            split_out_setup_kwargs = {"cols": gb_cols},
+            split_out_setup=split_out_on_cols,
+            split_out_setup_kwargs={"cols": gb_cols},
             sort=sort,
             ignore_index=True,
         )
@@ -728,9 +731,7 @@ def _make_name(col_name, sep="_"):
 
 
 @_dask_cudf_nvtx_annotate
-def _groupby_partition_agg(
-    df, gb_cols, aggs, columns, dropna, sort, sep
-):
+def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     """Initial partition-level aggregation task.
 
     This is the first operation to be executed on each input

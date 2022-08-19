@@ -229,6 +229,26 @@ void read_footer(const std::unique_ptr<cudf::io::datasource>& source,
   CUDF_EXPECTS(res, "Cannot parse file metadata");
 }
 
+// returns the number of bits used for dictionary encoding data at the given page location.
+// this assumes the data is uncompressed.
+// throws cudf::logic_error if the page_loc data is invalid.
+int read_dict_bits(const std::unique_ptr<cudf::io::datasource>& source,
+                   const cudf::io::parquet::PageLocation& page_loc)
+{
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+
+  cudf::io::parquet::PageHeader page_hdr;
+  const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+  cudf::io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
+  bool res = cp.read(&page_hdr);
+  CUDF_EXPECTS(res, "Cannot parse page header");
+
+  // cp should be pointing at the start of page data now. the first byte
+  // should be the encoding bit size
+  return cp.getb();
+}
+
 // read column index from datasource at location indicated by chunk,
 // parse and return as a ColumnIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
@@ -361,6 +381,18 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 
 // Declare typed test cases
 TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
+
+// Base test fixture for size-parameterized tests
+class ParquetSizedTest : public ::testing::TestWithParam<int> {
+};
+
+// test the allowed bit widths for dictionary encoding
+// values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
+INSTANTIATE_TEST_SUITE_P(
+  ParquetDictionaryTest,
+  ParquetSizedTest,
+  testing::Values(2, 4, 8, 16, 32, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
+  testing::PrintToStringParamName());
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -4202,6 +4234,64 @@ TEST_F(ParquetReaderTest, StructByteArray)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_P(ParquetSizedTest, DictionaryTest)
+{
+  constexpr int nrows = 3'000'000;
+
+  auto elements       = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    return "a unique string value suffixed with " + std::to_string(i % GetParam());
+  });
+  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  // set row group size so that there will be only one row group
+  // no compression so we can easily read page data
+  cudf::io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::NONE)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .row_group_size_rows(nrows)
+      .row_group_size_bytes(256 * 1024 * 1024);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto const result = cudf_io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  // make sure dictionary was used
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  auto used_dict = [&fmd]() {
+    for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
+      if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+          enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
+        return true;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(used_dict());
+
+  // and check that the correct number of bits was used
+  auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
+  auto const nbits = read_dict_bits(source, oi.page_locations[0]);
+  auto const expected_bits =
+    cudf::io::parquet::CompactProtocolReader::NumRequiredBits(GetParam() - 1);
+
+  // copied from writer_impl.cu
+  constexpr auto allowed_bitsizes =
+    std::array<cudf::size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
+  auto const rle_bits =
+    *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), expected_bits);
+
+  EXPECT_EQ(nbits, rle_bits);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
