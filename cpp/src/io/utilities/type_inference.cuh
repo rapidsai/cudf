@@ -32,7 +32,6 @@
 
 namespace cudf {
 namespace io {
-namespace fst {
 namespace detail {
 /**
  * @brief Structure for type inference options
@@ -245,6 +244,5 @@ cudf::data_type detect_data_type(inference_options_view const& options,
   return cudf::data_type{get_type_id(h_column_info)};
 }
 }  // namespace detail
-}  // namespace fst
 }  // namespace io
 }  // namespace cudf
