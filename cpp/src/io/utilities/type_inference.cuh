@@ -40,18 +40,21 @@ struct inference_options_view {
   cudf::detail::trie_view trie_true;
   cudf::detail::trie_view trie_false;
   cudf::detail::trie_view trie_na;
+  char quote_char;
 };
 
 struct inference_options {
   cudf::detail::optional_trie trie_true;
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
+  char quote_char;
 
   [[nodiscard]] inference_options_view view() const
   {
     return {cudf::detail::make_trie_view(trie_true),
             cudf::detail::make_trie_view(trie_false),
-            cudf::detail::make_trie_view(trie_na)};
+            cudf::detail::make_trie_view(trie_na),
+            quote_char};
   }
 };
 
@@ -114,8 +117,16 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
   while (idx < size) {
     auto const [field_offset, field_len] = *(column_strings_begin + idx);
     auto const field_begin               = data.begin() + field_offset;
-    if (cudf::detail::serialized_trie_contains(options.trie_na, {field_begin, field_len})) {
+    if (cudf::detail::serialized_trie_contains(
+          options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
       atomicAdd(&column_info->null_count, 1);
+      continue;
+    }
+
+    // Handling strings
+    if (field_len == 0) continue;
+    if (*field_begin == options.quote_char && field_begin[field_len - 1] == options.quote_char) {
+      atomicAdd(&column_info->string_count, 1);
       continue;
     }
 
@@ -160,8 +171,10 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
     if ((*field_begin == '-' || *field_begin == '+') && field_len > 1) { --int_req_number_cnt; }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
-    if (cudf::detail::serialized_trie_contains(options.trie_true, {field_begin, field_len}) ||
-        cudf::detail::serialized_trie_contains(options.trie_false, {field_begin, field_len})) {
+    if (cudf::detail::serialized_trie_contains(
+          options.trie_true, {field_begin, static_cast<std::size_t>(field_len)}) ||
+        cudf::detail::serialized_trie_contains(
+          options.trie_false, {field_begin, static_cast<std::size_t>(field_len)})) {
       atomicAdd(&column_info->bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
       bool is_negative       = (*field_begin == '-');
@@ -224,7 +237,7 @@ cudf::data_type detect_data_type(inference_options_view const& options,
       // Entire column is NULL; allocate the smallest amount of memory
       return type_id::INT8;
     } else if (cinfo.string_count > 0) {
-      CUDF_FAIL("Unexpected string type in type inference.");
+      return type_id::STRING;
     } else if (cinfo.datetime_count > 0) {
       return type_id::TIMESTAMP_MILLISECONDS;
     } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
