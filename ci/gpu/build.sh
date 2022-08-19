@@ -163,6 +163,7 @@ else
 
     gpuci_logger "Check GPU usage"
     nvidia-smi
+    
 
     #install_dask
 
@@ -182,6 +183,9 @@ else
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
     gpuci_logger "Check conda environment"
     conda info
+    conda config --show-sources
+    conda list --show-channel-urls
+
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
