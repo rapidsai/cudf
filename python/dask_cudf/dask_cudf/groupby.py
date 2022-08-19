@@ -606,68 +606,27 @@ def groupby_agg(
     }
 
     if shuffle:
-        # Shuffle-based groupby aggregation
-        chunk_name = "cudf-aggregate-chunk"
-        chunked = ddf.map_partitions(
-            chunk,
-            meta=chunk(
-                ddf._meta,
-                **chunk_kwargs,
-            ),
-            token=chunk_name,
-            enforce_metadata=False,
-            **chunk_kwargs,
+        # Temporary error until shuffle-based groupby is implemented
+        raise NotImplementedError(
+            "The shuffle option is not yet implemented in dask_cudf."
         )
 
-        shuffle_npartitions = max(
-            chunked.npartitions // split_every,
-            split_out,
-        )
-
-        # Handle sort kwarg
-        if sort is not None:
-            aggregate_kwargs = aggregate_kwargs or {}
-            aggregate_kwargs["sort"] = sort
-
-        # Perform global sort or shuffle
-        if sort and split_out > 1:
-            # NOTE: This can be changed to a `sort_value` operation
-            # as soon as that API is updated to accept `npartitions`
-            # and `shuffle` arguments.
-            # (TODO: Link cudf issue describing this blocker)
-            raise NotImplementedError(
-                "shuffle option is not yet supported for dask_cudf "
-                "when `sort=True` and `split_out>1`"
-            )
-        else:
-            result = chunked.shuffle(
-                gb_cols,
-                ignore_index=True,
-                npartitions=shuffle_npartitions,
-                shuffle=shuffle,
-            ).map_partitions(aggregate, **aggregate_kwargs)
-
-        if split_out < shuffle_npartitions:
-            return result.repartition(npartitions=split_out)
-        return result
-
-    else:
-        return aca(
-            [ddf],
-            chunk=chunk,
-            chunk_kwargs=chunk_kwargs,
-            combine=combine,
-            combine_kwargs=combine_kwargs,
-            aggregate=aggregate,
-            aggregate_kwargs=aggregate_kwargs,
-            token="cudf-aggregate",
-            split_every=split_every,
-            split_out=split_out,
-            split_out_setup=split_out_on_cols,
-            split_out_setup_kwargs={"cols": gb_cols},
-            sort=sort,
-            ignore_index=True,
-        )
+    return aca(
+        [ddf],
+        chunk=chunk,
+        chunk_kwargs=chunk_kwargs,
+        combine=combine,
+        combine_kwargs=combine_kwargs,
+        aggregate=aggregate,
+        aggregate_kwargs=aggregate_kwargs,
+        token="cudf-aggregate",
+        split_every=split_every,
+        split_out=split_out,
+        split_out_setup=split_out_on_cols,
+        split_out_setup_kwargs={"cols": gb_cols},
+        sort=sort,
+        ignore_index=True,
+    )
 
 
 @_dask_cudf_nvtx_annotate
