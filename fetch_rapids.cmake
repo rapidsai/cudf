@@ -17,7 +17,7 @@ if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
   FetchContent_Declare(
     rapids-cmake
     GIT_REPOSITORY https://github.com/robertmaynard/rapids-cmake.git
-    GIT_TAG        update_to_cpm_3.35.5
+    GIT_TAG update_to_cpm_3.35.5
   )
 
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.10/RAPIDS.cmake
