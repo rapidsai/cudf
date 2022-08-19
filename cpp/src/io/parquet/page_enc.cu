@@ -1120,7 +1120,7 @@ __global__ void __launch_bounds__(128, 8)
     s->page.max_data_size        = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x] = {base, actual_data_size};
-      printf("%lX ", (long)base);
+      // printf("%lX ", (long)base);
       comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, compressed_bfr_size};
     }
     pages[blockIdx.x] = s->page;
