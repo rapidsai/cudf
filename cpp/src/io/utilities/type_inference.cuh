@@ -48,7 +48,7 @@ struct inference_options {
   cudf::detail::optional_trie trie_true;
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
-  char quote_char;
+  char quote_char = '"';
 
   [[nodiscard]] inference_options_view view() const
   {
@@ -116,7 +116,6 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
   auto idx = threadIdx.x + blockDim.x * blockIdx.x;
 
   while (idx < size) {
-    // auto const [field_offset, field_len] = *(column_strings_begin + idx);
     auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
     auto const field_len    = thrust::get<1>(*(column_strings_begin + idx));
     auto const field_begin  = data.begin() + field_offset;
