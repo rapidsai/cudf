@@ -113,12 +113,12 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
                                           std::size_t const size,
                                           cudf::io::column_type_histogram* column_info)
 {
-  auto idx = threadIdx.x + blockDim.x * blockIdx.x;
-
-  while (idx < size) {
+  for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
+       idx += gridDim.x + blockDim.x) {
     auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
     auto const field_len    = thrust::get<1>(*(column_strings_begin + idx));
     auto const field_begin  = data.begin() + field_offset;
+
     if (cudf::detail::serialized_trie_contains(
           options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
       atomicAdd(&column_info->null_count, 1);
@@ -196,9 +196,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
              colon_count <= 2) {
       atomicAdd(&column_info->datetime_count, 1);
     }
-
-    idx += gridDim.x + blockDim.x;
-  }  // while
+  }  // for
 }
 
 template <typename ColumnStringIter>
