@@ -28,17 +28,17 @@ class Sort : public cudf::benchmark {
 template <bool stable>
 static void BM_sort(benchmark::State& state, bool nulls)
 {
-  using Type = int;
+  using Type       = int;
+  auto const dtype = cudf::type_to_id<Type>();
   const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
   const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
 
   // Create table with values in the range [0,100)
-  data_profile profile;
-  profile.set_null_frequency(nulls ? std::optional{0.01} : std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
-  auto input_table = create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
+  data_profile const profile = data_profile_builder()
+                                 .cardinality(0)
+                                 .null_probability(nulls ? std::optional{0.01} : std::nullopt)
+                                 .distribution(dtype, distribution_id::UNIFORM, 0, 100);
+  auto input_table = create_random_table(cycle_dtypes({dtype}, n_cols), row_count{n_rows}, profile);
   cudf::table_view input{*input_table};
 
   for (auto _ : state) {

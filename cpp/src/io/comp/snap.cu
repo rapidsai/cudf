@@ -91,7 +91,7 @@ static __device__ uint8_t* StoreLiterals(
       dst[2] = len_minus1 >> 8;
     }
     dst += 3;
-  } else if (len_minus1 <= 0xffffff) {
+  } else if (len_minus1 <= 0xff'ffff) {
     if (!t && dst + 3 < end) {
       dst[0] = 62 << 2;
       dst[1] = len_minus1;
@@ -205,7 +205,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
         offset = pos + local_match_lane;
       } else {
         offset = (pos & ~0xffff) | s->hash_map[hash];
-        if (offset >= pos) { offset = (offset >= 0x10000) ? offset - 0x10000 : pos; }
+        if (offset >= pos) { offset = (offset >= 0x1'0000) ? offset - 0x1'0000 : pos; }
         match =
           (offset < pos && offset + max_copy_distance >= pos + t && fetch4(src + offset) == data32);
       }

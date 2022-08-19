@@ -169,16 +169,16 @@ auto __device__ inline get_element_pointer_and_size(string_view const& element)
  */
 void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destination)
 {
-  // Transform 0xABCD1234 => 0x0000ABCD00001234 => 0x0B0A0D0C02010403
+  // Transform 0xABCD'1234 => 0x0000'ABCD'0000'1234 => 0x0B0A'0D0C'0201'0403
   uint64_t x = num;
-  x          = ((x & 0xFFFF0000) << 16) | ((x & 0xFFFF));
-  x          = ((x & 0xF0000000F) << 8) | ((x & 0xF0000000F0) >> 4) | ((x & 0xF0000000F00) << 16) |
-      ((x & 0xF0000000F000) << 4);
+  x          = ((x & 0xFFFF'0000u) << 16) | ((x & 0xFFFF));
+  x          = ((x & 0x000F'0000'000Fu) << 8) | ((x & 0x00F0'0000'00F0u) >> 4) |
+      ((x & 0x0F00'0000'0F00u) << 16) | ((x & 0xF000'0000'F000) << 4);
 
   // Calculate a mask of ascii value offsets for bytes that contain alphabetical hex digits
-  uint64_t offsets = (((x + 0x0606060606060606) >> 4) & 0x0101010101010101) * 0x27;
+  uint64_t offsets = (((x + 0x0606'0606'0606'0606) >> 4) & 0x0101'0101'0101'0101) * 0x27;
 
-  x |= 0x3030303030303030;
+  x |= 0x3030'3030'3030'3030;
   x += offsets;
   std::memcpy(destination, reinterpret_cast<uint8_t*>(&x), 8);
 }
