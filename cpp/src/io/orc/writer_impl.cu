@@ -2179,8 +2179,6 @@ void writer::impl::write(table_view const& table)
 
     // Compress the data streams
     rmm::device_buffer compressed_data(compressed_bfr_size, stream);
-    hostdevice_vector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
-    hostdevice_vector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
     hostdevice_vector<decompress_status> comp_stats(num_compressed_blocks, stream);
     if (compression_kind_ != NONE) {
       strm_descs.host_to_device(stream);
@@ -2191,8 +2189,6 @@ void writer::impl::write(table_view const& table)
                                   max_compressed_block_size,
                                   strm_descs,
                                   enc_data.streams,
-                                  comp_in,
-                                  comp_out,
                                   comp_stats,
                                   stream);
       strm_descs.device_to_host(stream);

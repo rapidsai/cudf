@@ -1310,11 +1310,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<device_span<uint8_t const>> comp_in,
-                            device_span<device_span<uint8_t>> comp_out,
                             device_span<decompress_status> comp_stat,
                             rmm::cuda_stream_view stream)
 {
+  rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
+  rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
+
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(strm_desc,
@@ -1357,7 +1358,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                               comp_stat.begin(),
                               comp_stat.end(),
                               [] __device__(auto const& stat) { return stat.status == 0; }),
-               "Error during decompression");
+               "Error during compression");
 
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
