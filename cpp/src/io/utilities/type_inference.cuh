@@ -27,6 +27,7 @@
 #include <rmm/device_scalar.hpp>
 
 #include <thrust/distance.h>
+#include <thrust/tuple.h>
 
 #include <cstddef>
 
@@ -115,8 +116,10 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
   auto idx = threadIdx.x + blockDim.x * blockIdx.x;
 
   while (idx < size) {
-    auto const [field_offset, field_len] = *(column_strings_begin + idx);
-    auto const field_begin               = data.begin() + field_offset;
+    // auto const [field_offset, field_len] = *(column_strings_begin + idx);
+    auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
+    auto const field_len    = thrust::get<1>(*(column_strings_begin + idx));
+    auto const field_begin  = data.begin() + field_offset;
     if (cudf::detail::serialized_trie_contains(
           options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
       atomicAdd(&column_info->null_count, 1);

@@ -23,6 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/tuple.h>
+
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -49,12 +51,15 @@ TEST_F(TypeInference, Basic)
     d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
 
   std::size_t constexpr size = 3;
-  rmm::device_uvector<thrust::pair<int32_t, std::size_t>> d_col_strings{size, stream};
-  d_col_strings.set_element(0, {1, 2}, stream);
-  d_col_strings.set_element(1, {4, 2}, stream);
-  d_col_strings.set_element(2, {7, 1}, stream);
+  auto const string_offset   = std::vector<int32_t>{1, 4, 7};
+  auto const string_length   = std::vector<std::size_t>{2, 2, 1};
+  rmm::device_vector<int32_t> d_string_offset{string_offset};
+  rmm::device_vector<std::size_t> d_string_length{string_length};
 
-  auto res_type = detect_data_type(options.view(), d_data, d_col_strings.begin(), size, stream);
+  auto d_col_strings =
+    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+
+  auto res_type = detect_data_type(options.view(), d_data, d_col_strings, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }
