@@ -4310,28 +4310,14 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
                                  "\xf4\x8f\xbf\xbf\xf4\x90\x80\x80",
                                  "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
 
-  column_wrapper<cudf::string_view> col0{coldata[0]};
-  column_wrapper<cudf::string_view> col1{coldata[1]};
-  column_wrapper<cudf::string_view> col2{coldata[2]};
-  column_wrapper<cudf::string_view> col3{coldata[3]};
-  column_wrapper<cudf::string_view> col4{coldata[4]};
-  column_wrapper<cudf::string_view> col5{coldata[5]};
-  column_wrapper<cudf::string_view> col6{coldata[6]};
-  column_wrapper<cudf::string_view> col7{coldata[7]};
-  column_wrapper<cudf::string_view> col8{coldata[8]};
-  column_wrapper<cudf::string_view> col9{coldata[9]};
-
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col0.release());
-  cols.push_back(col1.release());
-  cols.push_back(col2.release());
-  cols.push_back(col3.release());
-  cols.push_back(col4.release());
-  cols.push_back(col5.release());
-  cols.push_back(col6.release());
-  cols.push_back(col7.release());
-  cols.push_back(col8.release());
-  cols.push_back(col9.release());
+  auto cols = [&]() {
+    using string_wrapper = column_wrapper<cudf::string_view>;
+    std::vector<std::unique_ptr<column>> cols;
+    for (auto const str : coldata) {
+      cols.push_back(string_wrapper{str}.release());
+    }
+    return cols;
+  }();
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto const filepath = temp_env->get_temp_filepath("CheckColumnIndexTruncation.parquet");
@@ -4384,21 +4370,17 @@ TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
   cudf::test::lists_column_wrapper<uint8_t> col2{
     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
 
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col0.release());
-  cols.push_back(col1.release());
-  cols.push_back(col2.release());
-  auto expected = std::make_unique<table>(std::move(cols));
+  auto expected = table_view{{col0, col1, col2}};
 
-  cudf::io::table_input_metadata ouput_metadata(*expected);
-  ouput_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
-  ouput_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
-  ouput_metadata.column_metadata[2].set_name("col_binary2").set_output_as_binary(true);
+  cudf::io::table_input_metadata output_metadata(expected);
+  output_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
+  output_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
+  output_metadata.column_metadata[2].set_name("col_binary2").set_output_as_binary(true);
 
   auto const filepath = temp_env->get_temp_filepath("BinaryColumnIndexTruncation.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
-      .metadata(&ouput_metadata)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(&output_metadata)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .column_index_truncate_length(8);
   cudf::io::write_parquet(out_opts);
