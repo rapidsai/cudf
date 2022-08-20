@@ -114,7 +114,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
                                           cudf::io::column_type_histogram* column_info)
 {
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
-       idx += gridDim.x + blockDim.x) {
+       idx += gridDim.x * blockDim.x) {
     auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
     auto const field_len    = thrust::get<1>(*(column_strings_begin + idx));
     auto const field_begin  = data.begin() + field_offset;
