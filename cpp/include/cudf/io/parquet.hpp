@@ -892,6 +892,7 @@ class parquet_writer_options_builder {
 
   /**
    * @brief Sets the desired maximum size in bytes for min and max values in the column index.
+   *
    * Values exceeding this limit will be truncated, but modified such that they will still
    * be valid lower and upper bounds. This only applies to variable length types, such as string.
    * Maximum values will not be truncated if there is no suitable truncation that results in
@@ -1360,6 +1361,7 @@ class chunked_parquet_writer_options_builder {
 
   /**
    * @brief Sets the desired maximum size in bytes for min and max values in the column index.
+   *
    * Values exceeding this limit will be truncated, but modified such that they will still
    * be valid lower and upper bounds. This only applies to variable length types, such as string.
    * Maximum values will not be truncated if there is no suitable truncation that results in
