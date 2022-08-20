@@ -81,7 +81,7 @@ inline void test_single_agg(column_view const& keys,
 
   if (use_sort == force_use_sort_impl::YES) {
     // WAR to force groupby to use sort implementation
-    requests[0].aggregations.push_back(make_nth_element_aggregation<groupby_aggregation>(0));
+    requests[0].aggregations.push_back(make_nth_element_aggregation<groupby_aggregation>(1));
   }
 
   groupby::groupby gb_obj(

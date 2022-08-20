@@ -82,9 +82,9 @@ struct compute_single_pass_aggs_fn {
    * @param aggs The set of aggregation operations to perform across the
    * columns of the `input_values` rows
    * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
-   * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
+   * value in row `i` of input keys. Used only if `skip_rows_with_nulls` is `true`
    * @param skip_rows_with_nulls Indicates if rows in `input_keys` containing
-   * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
+   * null values should be skipped. If `true`, it is assumed `row_bitmask` is a
    * bitmask where bit `i` indicates the presence of a null value in row `i`.
    */
   compute_single_pass_aggs_fn(Map map,
