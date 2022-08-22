@@ -1421,7 +1421,7 @@ auto default_json_options()
 
 auto default_inference_options()
 {
-  fst::detail::inference_options parse_opts{};
+  cudf::io::detail::inference_options parse_opts{};
 
   auto const stream     = rmm::cuda_stream_default;
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -1477,7 +1477,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         });
 
       // Infer column type
-      auto target_type = fst::detail::detect_data_type(
+      auto target_type = cudf::io::detail::detect_data_type(
         default_inference_options().view(), d_input, string_ranges_it, col_size, stream);
 
       // Convert strings to the inferred data type
