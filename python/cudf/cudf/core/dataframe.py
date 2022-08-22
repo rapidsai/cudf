@@ -4996,7 +4996,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         from cudf._lib import ipc
         for name, col in self._data.items():
             columns.append(col)
-            names.append(name)
+            names.append([name])
 
         return ipc.export_ipc(columns, names)
 

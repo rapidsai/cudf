@@ -1149,16 +1149,6 @@ class Frame(BinaryOperand, Scannable):
             {name: col.to_arrow() for name, col in self._data.items()}
         )
 
-    def export_ipc(self):
-        columns = []
-        names = []
-        for name, col in self._data.items():
-            columns.append(col)
-            names.append(name)
-
-        return libcudf.ipc.export_ipc(columns, names)
-
-
     def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
 

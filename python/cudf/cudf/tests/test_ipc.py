@@ -29,18 +29,21 @@ def check_roundtrip(df: cudf.DataFrame) -> None:
 
 
 def test_ipc_simple() -> None:
+    # basic
     df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [2, 3, 4, 5]})
     check_roundtrip(df)
 
-    df = cudf.DataFrame(cp.arange(0, 16).reshape(4, 4))
+    # correct serialization of meta data (names).
+    df = cudf.DataFrame({"fea-" + str(i): [1, 2, 3, 4] for i in range(11)})
+    check_roundtrip(df)
+
+    with pytest.raises(AssertionError):
+        # dataframe.columns are different due to Index is not supported as meta data.
+        df = cudf.DataFrame(cp.arange(0, 16).reshape(4, 4))
+        check_roundtrip(df)
 
     with pytest.raises(TypeError):
         df.import_ipc(bytes("012345", "utf-8"))
-
-    with pytest.raises(TypeError):
-        # export IPC uses the smae column meta as interop, which doesn't support integer
-        # index. df.to_arrow() should fail as well.
-        df.export_ipc()
 
     with pytest.raises(RuntimeError):
         # list is not supported yet.
