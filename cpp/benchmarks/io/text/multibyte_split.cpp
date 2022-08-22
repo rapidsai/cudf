@@ -16,6 +16,7 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -81,6 +82,8 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
 
 static void bench_multibyte_split(nvbench::state& state)
 {
+  cudf::rmm_pool_raii pool_raii;
+
   auto const source_type      = static_cast<data_chunk_source_type>(state.get_int64("source_type"));
   auto const delim_size       = state.get_int64("delim_size");
   auto const delim_percent    = state.get_int64("delim_percent");
