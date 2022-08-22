@@ -122,7 +122,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           // Check
           bool escape = false;
 
-          // Exclude quote chars from string range
+          // Exclude beginning and ending quote chars from string range
           auto end_index = in.second - 1;
           for (decltype(in.second) i = 1; i < end_index; ++i) {
             // Previous char was escape char
@@ -142,7 +142,6 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                   auto hex_val = string_to_hex(&in.first[i + 1]);
                   if (hex_val < 0) {
                     // TODO signal parsing error: not all 4 hex digits
-                    // printf("PROBLEMa!\n");
                     continue;
                   }
                   // Skip over the four hex digits
@@ -154,7 +153,6 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                     auto hex_low_val = string_to_hex(&in.first[i + 3]);
                     if (hex_val < 0xD800 && hex_low_val < 0xDC00) {
                       // TODO signal parsing error: not all 4 hex digits
-                      // printf("PROBLEMb!\n");
                       continue;
                     }
                     // Skip over the second \uXXXX sequence
@@ -171,11 +169,9 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                   }
                 } else {
                   // TODO signal parsing error: expected 4 hex digits
-                  // printf("PROBLEMc!\n");
                 }
               } else if (escaped_char == NON_ESCAPE_CHAR) {
                 // TODO signal parsing error: this char does not need to be escape
-                // printf("PROBLEMd!\n");
               } else {
                 out_size++;
               }
@@ -187,7 +183,6 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           if (escape) {
             // TODO signal parsing error: last char was escape, not followed by
             // anything to escape
-            // printf("PROBLEMe!\n");
           }
         }
 
@@ -233,25 +228,12 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
               // This is an escape sequence of a unicode code point: \uXXXX,
               // where each X in XXXX represents a hex digit
               if (escaped_char == UNICODE_SEQ) {
-                // printf("UNICODE!\n");
                 //  Make sure that there's at least 4 characters left from the
                 //  input, which are expected to be hex digits
                 if (i + 4 < end_index) {
                   auto hex_val = string_to_hex(&in.first[i + 1]);
-                  // printf("HEX 0x%08X '%c%c%c%c'!\n",
-                  //  static_cast<uint32_t>(hex_val),
-                  //  in.first[i + 1 + 0],
-                  //  in.first[i + 1 + 1],
-                  //  in.first[i + 1 + 2],
-                  //  in.first[i + 1 + 3]);
                   if (hex_val < 0) {
                     // TODO signal parsing error: not all 4 hex digits
-                    // printf("PROBLEM1 %lld '%c%c%c%c'!\n",
-                    //  hex_val,
-                    //  in.first[i + 1 + 0],
-                    //  in.first[i + 1 + 1],
-                    //  in.first[i + 1 + 2],
-                    //  in.first[i + 1 + 3]);
                     continue;
                   }
                   // Skip over the four hex digits
@@ -260,40 +242,28 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                   // If this may be a UTF-16 encoded surrogate pair:
                   // we expect another \uXXXX sequence
                   if (i + 6 < end_index && in.first[i + 1] == '\\' && in.first[i + 2] == 'u') {
-                    // printf("UNICODE UTF16!\n");
                     auto hex_low_val = string_to_hex(&in.first[i + 3]);
-                    // printf("HEX 0x%08X '%c%c%c%c'!\n",
-                    //        static_cast<uint32_t>(hex_low_val),
-                    //        in.first[i + 3 + 0],
-                    //        in.first[i + 3 + 1],
-                    //        in.first[i + 3 + 2],
-                    //        in.first[i + 3 + 3]);
                     if (hex_val < 0xD800 && hex_low_val < 0xDC00) {
                       // TODO signal parsing error: not all 4 hex digits
-                      // printf("PROBLEM2!\n");
                       continue;
                     }
                     // Skip over the second \uXXXX sequence
                     i += 6;
                     uint32_t unicode_code_point =
                       0x10000 + ((hex_val - 0xD800) << 10) + (hex_low_val - 0xDC00);
-                    // printf("0x%08X\n", unicode_code_point);
                     auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
                     j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
                   }
                   // Just a single \uXXXX sequence
                   else {
-                    // printf("0x%08X\n", static_cast<uint32_t>(hex_val));
                     auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
                     j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
                   }
                 } else {
                   // TODO signal parsing error: expected 4 hex digits
-                  // printf("PROBLEM3!\n");
                 }
               } else if (escaped_char == NON_ESCAPE_CHAR) {
                 // TODO signal parsing error: this char does not need to be escape
-                // printf("PROBLE4M!\n");
               } else {
                 chars[offsets[row] + j] = escaped_char;
                 j++;
@@ -307,7 +277,6 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
             }
           }
           if (escape) {
-            // printf("PROBLEM5!\n");
             // TODO signal parsing error: last char was escape, not followed by
             // anything to escape
           }
