@@ -1102,23 +1102,23 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullLists)
   auto const lists = [] {
     auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
+    auto data1    = tdata_col{0, 1, 2, 1,
+                              3, 4, 5,
+                              6, 7, 8,
+                              9, 0, 1, 3, 1,
+                              2, 3, 4,
+                              5, 6, 7,
+                              8, 9, 0,
+                              1, 2, 1, 3
     };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
+    auto data2    = tdata_col{0, 1, 2, 3,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 1, 2, 2, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 0, 1, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -1166,23 +1166,23 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
   auto const lists = [] {
     auto offsets = indices_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
+    auto data1    = tdata_col{0, 1, 2, 1,
+                              3, 4, 5,
+                              6, 7, 8,
+                              9, 0, 1, 3, 1,
+                              2, 3, 4,
+                              5, 6, 7,
+                              8, 9, 0,
+                              1, 2, 1, 3
     };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
+    auto data2    = tdata_col{0, 1, 2, 3,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 1, 2, 2, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 0, 1, 1
     };
     // clang-format on
     auto child               = structs_col{{data1, data2}};
@@ -1235,23 +1235,23 @@ TYPED_TEST(TypedStructContainsTest, SlicedListsColumnNoNulls)
   auto const lists_original = [] {
     auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
+    auto data1    = tdata_col{0, 1, 2, 1,
+                              3, 4, 5,
+                              6, 7, 8,
+                              9, 0, 1, 3, 1,
+                              2, 3, 4,
+                              5, 6, 7,
+                              8, 9, 0,
+                              1, 2, 1, 3
     };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
+    auto data2    = tdata_col{0, 1, 2, 3,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 1, 2, 2, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 0, 1, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -1298,23 +1298,23 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullListsWithNullStructs)
   auto const lists = [] {
     auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, X, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              X, 0, 1, 3, 1, //
-                              X, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              X, 2, 1, 3     //
+    auto data1    = tdata_col{0, X, 2, 1,
+                              3, 4, 5,
+                              6, 7, 8,
+                              X, 0, 1, 3, 1,
+                              X, 3, 4,
+                              5, 6, 7,
+                              8, 9, 0,
+                              X, 2, 1, 3
     };
-    auto data2    = tdata_col{0, X, 2, 1,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              X, 1, 2, 2, 2, //
-                              X, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              X, 0, 1, 1     //
+    auto data2    = tdata_col{0, X, 2, 1,
+                              0, 1, 2,
+                              0, 1, 2,
+                              X, 1, 2, 2, 2,
+                              X, 1, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              X, 0, 1, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
@@ -1362,23 +1362,23 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyNoNullLists)
   auto const lists = [] {
     auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 3,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
+    auto data1    = tdata_col{0, 1, 2, 1,
+                              3, 4, 3,
+                              6, 7, 8,
+                              9, 0, 1, 3, 1,
+                              2, 3, 4,
+                              5, 6, 7,
+                              8, 9, 0,
+                              1, 2, 1, 3
     };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 0, 0,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
+    auto data2    = tdata_col{0, 1, 2, 3,
+                              0, 0, 0,
+                              0, 1, 2,
+                              1, 1, 2, 2, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 0, 1, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -1420,23 +1420,23 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
   auto const lists_original = [] {
     auto offsets = indices_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 3,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
+    auto data1    = tdata_col{0, 1, 2, 1,
+                              3, 4, 3,
+                              6, 7, 8,
+                              9, 0, 1, 3, 1,
+                              2, 3, 4,
+                              5, 6, 7,
+                              8, 9, 0,
+                              1, 2, 1, 3
     };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 0, 0,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
+    auto data2    = tdata_col{0, 1, 2, 3,
+                              0, 0, 0,
+                              0, 1, 2,
+                              1, 1, 2, 2, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              0, 1, 2,
+                              1, 0, 1, 1
     };
     // clang-format on
     auto child = structs_col{{data1, data2}};
@@ -1479,23 +1479,23 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
   auto const lists_original = [] {
     auto offsets = indices_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
     // clang-format off
-    auto data1    = tdata_col{0, X, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              X, 0, 1, 3, 1, //
-                              X, 3, 4,       //
-                              5, 6, 6,       //
-                              8, 9, 0,       //
-                              X, 2, 1, 3     //
+    auto data1    = tdata_col{0, X, 2, 1,
+                              3, 4, 5,
+                              6, 7, 8,
+                              X, 0, 1, 3, 1,
+                              X, 3, 4,
+                              5, 6, 6,
+                              8, 9, 0,
+                              X, 2, 1, 3
     };
-    auto data2    = tdata_col{0, X, 2, 1,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              X, 1, 2, 2, 2, //
-                              X, 1, 2,       //
-                              0, 1, 1,       //
-                              0, 1, 2,       //
-                              X, 0, 1, 1     //
+    auto data2    = tdata_col{0, X, 2, 1,
+                              0, 1, 2,
+                              0, 1, 2,
+                              X, 1, 2, 2, 2,
+                              X, 1, 2,
+                              0, 1, 1,
+                              0, 1, 2,
+                              X, 0, 1, 1
     };
     // clang-format on
     auto child               = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
@@ -1772,23 +1772,23 @@ TYPED_TEST(TypedListContainsTest, ColumnKeyWithListsOfStructsNoNulls)
   auto const lists = [] {
     auto child_offsets = indices_col{0, 3, 6, 9, 14, 17, 20, 23, 23};
     // clang-format off
-    auto data1 = tdata_col{0, 0, 2,       //
-                           3, 4, 5,       //
-                           0, 0, 2,       //
-                           9, 0, 1, 3, 1, //
-                           0, 2, 0,       //
-                           0, 0, 2,       //
-                           3, 4, 5        //
-                                          //
+    auto data1 = tdata_col{0, 0, 2,
+                           3, 4, 5,
+                           0, 0, 2,
+                           9, 0, 1, 3, 1,
+                           0, 2, 0,
+                           0, 0, 2,
+                           3, 4, 5
+
     };
-    auto data2 = tdata_col{10, 10, 12,         //
-                           13, 14, 15,         //
-                           10, 10, 12,         //
-                           19, 10, 11, 13, 11, //
-                           10, 12, 10,         //
-                           10, 10, 12,         //
-                           13, 14, 15          //
-                                               //
+    auto data2 = tdata_col{10, 10, 12,
+                           13, 14, 15,
+                           10, 10, 12,
+                           19, 10, 11, 13, 11,
+                           10, 12, 10,
+                           10, 10, 12,
+                           13, 14, 15
+
     };
     // clang-format on
     auto structs = structs_col{{data1, data2}};
