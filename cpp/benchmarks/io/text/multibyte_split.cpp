@@ -32,11 +32,11 @@
 #include <thrust/host_vector.h>
 #include <thrust/transform.h>
 
+#include <nvbench/nvbench.cuh>
+
 #include <cstdio>
 #include <fstream>
 #include <memory>
-
-#include <nvbench/nvbench.cuh>
 
 temp_directory const temp_dir("cudf_nvbench");
 
