@@ -283,10 +283,10 @@ void get_stack_context(device_span<SymbolT const> json_in,
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
  * sections from the input.
  *
- * @param[in] json_in The JSON input
- * @param[in] options Parsing options specifying the parsing behaviour
- * @param[in] stream The CUDA stream to which kernels are dispatched
- * @param[in] mr Optional, resource with which to allocate
+ * @param json_in The JSON input
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
  * @return Pair of device vectors, where the first vector represents the token types and the second
  * vector represents the index within the input corresponding to each token
  */
@@ -299,10 +299,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 /**
  * @brief Parses the given JSON string and generates table from the given input.
  *
- * @param[in] input The JSON input
- * @param[in] options Parsing options specifying the parsing behaviour
- * @param[in] stream The CUDA stream to which kernels are dispatched
- * @param[in] mr Optional, resource with which to allocate
+ * @param input The JSON input
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
 table_with_metadata parse_nested_json(
