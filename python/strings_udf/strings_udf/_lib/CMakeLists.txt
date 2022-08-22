@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources cudf_jit_udf.pyx tables.pyx)
-set(linked_libraries cudf::cudf)
+set(linked_libraries cudf::cudf cudf_strings_udf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
