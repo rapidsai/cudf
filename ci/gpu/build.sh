@@ -166,6 +166,7 @@ else
     
 
     #install_dask
+    conda config --system --remove channels dask/label/dev
 
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
