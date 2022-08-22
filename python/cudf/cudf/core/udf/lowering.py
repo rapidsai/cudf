@@ -291,16 +291,24 @@ def pack_return_scalar_impl(context, builder, sig, args):
 @cuda_lower(operator.truth, MaskedType)
 @cuda_lower(bool, MaskedType)
 def masked_scalar_bool_impl(context, builder, sig, args):
-    breakpoint()
     indata = cgutils.create_struct_proxy(sig.args[0])(
         context, builder, value=args[0]
     )
-    result = context.get_constant(types.boolean, 0)
-    with builder.if_then(indata.valid):
-        result = context.cast(
-            builder, indata.value, sig.args[0].value_type, types.boolean
-        )
-    return result
+    result = cgutils.alloca_once(builder, ir.IntType(1))
+    with builder.if_else(indata.valid) as (then, otherwise):
+        with then:
+            builder.store(
+                context.cast(
+                    builder,
+                    indata.value,
+                    sig.args[0].value_type,
+                    types.boolean,
+                ),
+                result,
+            )
+        with otherwise:
+            builder.store(context.get_constant(types.boolean, 0), result)
+    return builder.load(result)
 
 
 @cuda_lower(float, MaskedType)
