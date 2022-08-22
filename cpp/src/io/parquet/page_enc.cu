@@ -578,10 +578,9 @@ inline __device__ void PackLiteralsRoundRobin(
 {
   // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
   // words but the destination mem may not be a multiple of 4 bytes.
-  // TODO (dm): This assumes blockdim = 128 and max bits per value = 24. Reduce magic numbers.
+  // TODO (dm): This assumes blockdim = 128. Reduce magic numbers.
   constexpr uint32_t NUM_THREADS  = 128;  // this needs to match gpuEncodePages block_size parameter
-  constexpr uint32_t MAX_BITS     = 24;   // this needs to match value in XXXX
-  constexpr uint32_t NUM_BYTES    = (NUM_THREADS * MAX_BITS) >> 3;
+  constexpr uint32_t NUM_BYTES    = (NUM_THREADS * MAX_DICT_BITS) >> 3;
   constexpr uint32_t SCRATCH_SIZE = NUM_BYTES / sizeof(uint32_t);
   __shared__ uint32_t scratch[SCRATCH_SIZE];
   if (t < SCRATCH_SIZE) { scratch[t] = 0; }

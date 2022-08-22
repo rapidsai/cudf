@@ -1064,7 +1064,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       // We don't use dictionary if the indices are > 24 bits because that's the maximum bitpacking
       // bitsize we efficiently support
-      if (nbits > 24) { return std::pair(false, 0); }
+      if (nbits > MAX_DICT_BITS) { return std::pair(false, 0); }
 
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
