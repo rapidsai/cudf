@@ -9506,3 +9506,11 @@ def test_multiindex_wildcard_selection_three_level_all():
     expect = df.to_pandas().loc[:, (slice("a", "c"), slice("a", "b"), "b")]
     got = df.loc[:, (slice(None), "b")]
     assert_eq(expect, got)
+
+
+def test_dataframe_assign_scalar_to_empty_series():
+    expected = pd.DataFrame({"a": []})
+    actual = cudf.DataFrame({"a": []})
+    expected.a = 0
+    actual.a = 0
+    assert_eq(expected, actual)
