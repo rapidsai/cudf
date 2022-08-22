@@ -181,8 +181,9 @@ void BM_orc_read_varying_options(nvbench::state& state,
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.add_element_count(static_cast<double>(data_processed) / elapsed_time, "bytes_per_second");
-  state.add_element_count(mem_stats_logger.peak_memory_usage(), "peak_memory_usage");
-  state.add_element_count(source_sink.size(), "encoded_file_size");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
 using col_selections = nvbench::enum_type_list<column_selection::ALL,

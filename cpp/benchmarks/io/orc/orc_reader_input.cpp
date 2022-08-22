@@ -99,8 +99,9 @@ void orc_read_common(cudf::io::orc_writer_options const& opts,
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
-  state.add_element_count(mem_stats_logger.peak_memory_usage(), "peak_memory_usage");
-  state.add_element_count(source_sink.size(), "encoded_file_size");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
 template <data_type DataType>
