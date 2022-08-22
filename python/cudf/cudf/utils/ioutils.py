@@ -444,8 +444,8 @@ row_index_stride: integer or None, default None
     If None, 10000 will be used.
 cols_as_map_type : list of column names or None, default None
     A list of column names which should be written as map type in the ORC file.
-    Note that this applies to a column of ListDtype only, other column names
-    if passed will be ignored as written as is.
+    Note that this option only affects columns of ListDtype. Names of other
+    column types will be ignored.
 
 Notes
 -----

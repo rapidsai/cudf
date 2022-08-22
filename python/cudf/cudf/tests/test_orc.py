@@ -1835,6 +1835,6 @@ def test_orc_writer_cols_as_map_type_error():
     )
     buffer = BytesIO()
     with pytest.raises(
-        TypeError, match="cols_as_map_type can only be a list of column names"
+        TypeError, match="cols_as_map_type must be a list of column names."
     ):
         df.to_orc(buffer, cols_as_map_type=1)
