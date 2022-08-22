@@ -52,7 +52,7 @@ public class TableWithMeta implements AutoCloseable {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     if (handle != 0) {
       close(handle);
       handle = 0;
