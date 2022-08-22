@@ -1064,12 +1064,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return pd.Series(self._dtypes)
 
     @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
-
-    @property
     def ndim(self):
         """Dimension of the data. DataFrame ndim is always 2."""
         return 2
@@ -1231,7 +1225,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             else:
                 if arg in self._data:
-                    if len(self) == 0:
+                    if not is_scalar(value) and len(self) == 0:
                         if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
                         elif len(value) > 0:

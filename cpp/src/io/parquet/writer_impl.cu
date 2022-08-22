@@ -30,8 +30,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/column.hpp>
+#include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -46,6 +47,7 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -848,8 +850,8 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // size of the leaf column
     // Calculate row offset into dremel data (repetition/definition values) and the respective
     // definition and repetition levels
-    gpu::dremel_data dremel = gpu::get_dremel_data(
-      cudf_col, _d_nullability, _nullability, schema_node.output_as_byte_array, stream);
+    cudf::detail::dremel_data dremel =
+      get_dremel_data(cudf_col, _nullability, schema_node.output_as_byte_array, stream);
     _dremel_offsets = std::move(dremel.dremel_offsets);
     _rep_level      = std::move(dremel.rep_level);
     _def_level      = std::move(dremel.def_level);
@@ -1065,9 +1067,10 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       if (nbits > 24) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-      constexpr auto allowed_bitsizes = std::array<size_type, 7>{1, 2, 4, 8, 12, 16, 24};
+      constexpr auto allowed_bitsizes =
+        std::array<size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
 
-      // ceil to (1/2/4/8/12/16/24)
+      // ceil to (1/2/3/4/5/6/8/10/12/16/20/24)
       auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 

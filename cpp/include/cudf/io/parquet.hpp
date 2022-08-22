@@ -51,15 +51,11 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Path in schema of column to read; empty is all
+  // Path in schema of column to read; `nullopt` is all
   std::optional<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
-  // Number of rows to skip from the start
-  size_type _skip_rows = 0;
-  // Number of rows to read; -1 is all
-  size_type _num_rows = -1;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -67,8 +63,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
-  // Whether to store binary data as a string column
-  std::optional<std::vector<bool>> _convert_binary_to_strings{std::nullopt};
+
+  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
   /**
    * @brief Constructor from source info.
@@ -121,48 +117,28 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
-   * @brief Returns optional vector of true/false values depending on whether binary data should be
-   * converted to strings or not.
+   * @brief Returns optional tree of metadata.
    *
-   * @return vector with ith value `true` if binary data should be converted to strings for the ith
-   * column. Will return std::nullopt if the user did not set this option, which defaults to all
-   * binary data being converted to strings.
+   * @return vector of reader_column_schema objects.
    */
-  [[nodiscard]] std::optional<std::vector<bool>> get_convert_binary_to_strings() const
+  [[nodiscard]] std::optional<std::vector<reader_column_schema>> get_column_schema() const
   {
-    return _convert_binary_to_strings;
+    return _reader_column_schema;
   }
-
-  /**
-   * @brief Returns number of rows to skip from the start.
-   *
-   * @return Number of rows to skip from the start
-   */
-  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
-
-  /**
-   * @brief Returns number of rows to read.
-   *
-   * @return Number of rows to read
-   */
-  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns names of column to be read, if set.
    *
    * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
-  {
-    return _columns;
-  }
+  [[nodiscard]] auto const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read.
    *
    * @return List of individual row groups to be read
    */
-  std::vector<std::vector<size_type>> const& get_row_groups() const { return _row_groups; }
+  [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
 
   /**
    * @brief Returns timestamp type used to cast timestamp columns.
@@ -185,10 +161,6 @@ class parquet_reader_options {
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups)
   {
-    if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
-      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
-    }
-
     _row_groups = std::move(row_groups);
   }
 
@@ -207,42 +179,14 @@ class parquet_reader_options {
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
-   * @brief Sets to enable/disable conversion of binary to strings per column.
+   * @brief Sets reader column schema.
    *
-   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
+   * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
    * Note default is to convert to string columns.
    */
-  void set_convert_binary_to_strings(std::vector<bool> val)
+  void set_column_schema(std::vector<reader_column_schema> val)
   {
-    _convert_binary_to_strings = std::move(val);
-  }
-
-  /**
-   * @brief Sets number of rows to skip.
-   *
-   * @param val Number of rows to skip from start
-   */
-  void set_skip_rows(size_type val)
-  {
-    if ((val != 0) and (!_row_groups.empty())) {
-      CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-    }
-
-    _skip_rows = val;
-  }
-
-  /**
-   * @brief Sets number of rows to read.
-   *
-   * @param val Number of rows to read after skip
-   */
-  void set_num_rows(size_type val)
-  {
-    if ((val != -1) and (!_row_groups.empty())) {
-      CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-    }
-
-    _num_rows = val;
+    _reader_column_schema = std::move(val);
   }
 
   /**
@@ -323,39 +267,14 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets enable/disable conversion of binary to strings per column.
+   * @brief Sets reader metadata.
    *
-   * @param val Vector of boolean values to enable/disable conversion of binary to string columns.
-   * Note default is to convert to string columns.
+   * @param val Tree of metadata information.
    * @return this for chaining
    */
-  parquet_reader_options_builder& convert_binary_to_strings(std::vector<bool> val)
+  parquet_reader_options_builder& set_column_schema(std::vector<reader_column_schema> val)
   {
-    options._convert_binary_to_strings = std::move(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets number of rows to skip.
-   *
-   * @param val Number of rows to skip from start
-   * @return this for chaining
-   */
-  parquet_reader_options_builder& skip_rows(size_type val)
-  {
-    options.set_skip_rows(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets number of rows to read.
-   *
-   * @param val Number of rows to read after skip
-   * @return this for chaining
-   */
-  parquet_reader_options_builder& num_rows(size_type val)
-  {
-    options.set_num_rows(val);
+    options._reader_column_schema = std::move(val);
     return *this;
   }
 

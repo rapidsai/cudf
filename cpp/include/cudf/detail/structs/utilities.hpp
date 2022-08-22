@@ -152,35 +152,6 @@ flattened_table flatten_nested_columns(
   column_nullability nullability = column_nullability::MATCH_INCOMING);
 
 /**
- * @brief Unflatten columns flattened as by `flatten_nested_columns()`,
- *        based on the provided `blueprint`.
- *
- * cudf::flatten_nested_columns() executes depth first, and serializes the struct null vector
- * before the child/member columns.
- * E.g. STRUCT_1< STRUCT_2< A, B >, C > is flattened to:
- *      1. Null Vector for STRUCT_1
- *      2. Null Vector for STRUCT_2
- *      3. Member STRUCT_2::A
- *      4. Member STRUCT_2::B
- *      5. Member STRUCT_1::C
- *
- * `unflatten_nested_columns()` reconstructs nested columns from flattened input that follows
- * the convention above.
- *
- * Note: This function requires a null-mask vector for each STRUCT column, including for nested
- * STRUCT members.
- *
- * @param flattened "Flattened" `table` of input columns, following the conventions in
- * `flatten_nested_columns()`.
- * @param blueprint The exemplar `table_view` with nested columns intact, whose structure defines
- * the nesting of the reconstructed output table.
- * @return std::unique_ptr<cudf::table> Unflattened table (with nested STRUCT columns) reconstructed
- * based on `blueprint`.
- */
-std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::table>&& flattened,
-                                                      table_view const& blueprint);
-
-/**
  * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
  *
  * This function will recurse through all struct descendants. It is expected that

@@ -32,6 +32,7 @@ public class ColumnWriterOptions {
   private int precision;
   private boolean isNullable;
   private boolean isMap = false;
+  private boolean isBinary = false;
   private String columnName;
   // only for Parquet
   private boolean hasParquetFieldId;
@@ -141,6 +142,26 @@ public class ColumnWriterOptions {
     protected ColumnWriterOptions withTimestamp(String name, boolean isInt96,
                                                 boolean isNullable, int parquetFieldId) {
       return new ColumnWriterOptions(name, isInt96, UNKNOWN_PRECISION, isNullable, parquetFieldId);
+    }
+
+    protected ColumnWriterOptions withBinary(String name, boolean isNullable) {
+      ColumnWriterOptions opt = listBuilder(name, isNullable)
+          // The name here does not matter. It will not be included in the final file
+          // This is just to get the metadata to line up properly for the C++ APIs
+          .withColumns(false, "BINARY_DATA")
+          .build();
+      opt.isBinary = true;
+      return opt;
+    }
+
+    protected ColumnWriterOptions withBinary(String name, boolean isNullable, int parquetFieldId) {
+      ColumnWriterOptions opt = listBuilder(name, isNullable)
+          // The name here does not matter. It will not be included in the final file
+          // This is just to get the metadata to line up properly for the C++ APIs
+          .withColumn(false, "BINARY_DATA", parquetFieldId)
+          .build();
+      opt.isBinary = true;
+      return opt;
     }
 
     /**
@@ -255,6 +276,24 @@ public class ColumnWriterOptions {
      */
     public T withDecimalColumn(String name, int precision) {
       withDecimalColumn(name, precision, false);
+      return (T) this;
+    }
+
+    /**
+     * Set a binary child meta data
+     * @return this for chaining.
+     */
+    public T withBinaryColumn(String name, boolean nullable, int parquetFieldId) {
+      children.add(withBinary(name, nullable, parquetFieldId));
+      return (T) this;
+    }
+
+    /**
+     * Set a binary child meta data
+     * @return this for chaining.
+     */
+    public T withBinaryColumn(String name, boolean nullable) {
+      children.add(withBinary(name, nullable));
       return (T) this;
     }
 
@@ -407,6 +446,15 @@ public class ColumnWriterOptions {
     boolean[] ret = {isMap};
     if (childColumnOptions.length > 0) {
       return getFlatBooleans(ret, (opt) -> opt.getFlatIsMap());
+    } else {
+      return ret;
+    }
+  }
+
+  boolean[] getFlatIsBinary() {
+    boolean[] ret = {isBinary};
+    if (childColumnOptions.length > 0) {
+      return getFlatBooleans(ret, (opt) -> opt.getFlatIsBinary());
     } else {
       return ret;
     }
