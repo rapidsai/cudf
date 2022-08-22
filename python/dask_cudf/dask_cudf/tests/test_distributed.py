@@ -83,7 +83,7 @@ def test_shuffle_explicit_comms():
     with dask_cuda.LocalCUDACluster(n_workers=2) as cluster:
         with Client(cluster):
             df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [3, 1, 2, 4]})
-            ddf = dask_cudf.from_cudf(df, npartitions=2)
+            ddf = dask_cudf.from_cudf(df, npartitions=4)
 
             # Test shuffle API
             got_ec = ddf.shuffle(["a"], shuffle="explicit-comms")
