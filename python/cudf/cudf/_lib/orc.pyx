@@ -275,6 +275,9 @@ cpdef write_orc(table,
         tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
+    if cols_as_map_type is not None:
+        cols_as_map_type = set(cols_as_map_type)
+
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_children_metadata(
@@ -383,7 +386,8 @@ cdef class ORCWriter:
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
-        self.cols_as_map_type = cols_as_map_type
+        self.cols_as_map_type = cols_as_map_type \
+            if cols_as_map_type is None else set(cols_as_map_type)
 
     def write_table(self, table):
         """ Writes a single table to the file """

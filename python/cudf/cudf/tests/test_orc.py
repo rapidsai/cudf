@@ -1782,14 +1782,59 @@ def test_orc_columns_and_index_param(index, columns):
         assert_eq(expected, got, check_index_type=True)
 
 
-def test_orc_writer_cols_as_map_type():
+@pytest.mark.parametrize(
+    "df_data,cols_as_map_type,expected_data",
+    [
+        (
+            {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])},
+            ["a"],
+            {"a": pd.Series([[(10, 20)], [(1, 21)]])},
+        ),
+        (
+            {
+                "a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]),
+                "b": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]),
+            },
+            ["b"],
+            {
+                "a": pd.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]),
+                "b": pd.Series([[(10, 20)], [(1, 21)]]),
+            },
+        ),
+        (
+            {
+                "a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]),
+                "b": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]),
+                "c": cudf.Series(
+                    [[{"a": {"a": 10}, "b": 20}], [{"a": {"a": 12}, "b": 21}]]
+                ),
+            },
+            ["b", "c"],
+            {
+                "a": pd.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]),
+                "b": pd.Series([[(10, 20)], [(1, 21)]]),
+                "c": pd.Series([[({"a": 10}, 20)], [({"a": 12}, 21)]]),
+            },
+        ),
+    ],
+)
+def test_orc_writer_cols_as_map_type(df_data, cols_as_map_type, expected_data):
+    df = cudf.DataFrame(df_data)
+    buffer = BytesIO()
+    df.to_orc(buffer, cols_as_map_type=cols_as_map_type)
+
+    got = pd.read_orc(buffer)
+    expected = pd.DataFrame(expected_data)
+
+    assert_eq(got, expected)
+
+
+def test_orc_writer_cols_as_map_type_error():
     df = cudf.DataFrame(
         {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])}
     )
     buffer = BytesIO()
-    df.to_orc(buffer, cols_as_map_type=["a"])
-
-    got = pd.read_orc(buffer)
-    expected = pd.DataFrame({"a": pd.Series([[(10, 20)], [(1, 21)]])})
-
-    assert_eq(got, expected)
+    with pytest.raises(
+        TypeError, match="cols_as_map_type can only be a list of column names"
+    ):
+        df.to_orc(buffer, cols_as_map_type=1)
