@@ -56,6 +56,8 @@ def _write_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     partitions_info=None,
     **kwargs,
 ):
@@ -82,6 +84,8 @@ def _write_parquet(
         "int96_timestamps": int96_timestamps,
         "row_group_size_bytes": row_group_size_bytes,
         "row_group_size_rows": row_group_size_rows,
+        "max_page_size_bytes": max_page_size_bytes,
+        "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
@@ -359,8 +363,6 @@ def read_parquet(
     columns=None,
     filters=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
@@ -473,8 +475,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        skiprows=skiprows,
-        num_rows=num_rows,
         strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
@@ -563,8 +563,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
@@ -577,8 +575,6 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            skiprows=skiprows,
-            num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
@@ -606,6 +602,8 @@ def to_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     *args,
     **kwargs,
 ):
@@ -635,6 +633,8 @@ def to_parquet(
                     "int96_timestamps": int96_timestamps,
                     "row_group_size_bytes": row_group_size_bytes,
                     "row_group_size_rows": row_group_size_rows,
+                    "max_page_size_bytes": max_page_size_bytes,
+                    "max_page_size_rows": max_page_size_rows,
                 }
             )
             return write_to_dataset(
@@ -664,6 +664,8 @@ def to_parquet(
             int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
             row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
             **kwargs,
         )
 

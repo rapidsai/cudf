@@ -150,10 +150,6 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-skiprows : int, default None
-    If not None, the number of rows to skip from the start of the file.
-num_rows : int, default None
-    If not None, the total number of rows to read.
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
@@ -251,6 +247,12 @@ row_group_size_bytes: integer or None, default None
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
+max_page_size_bytes: integer or None, default None
+    Maximum uncompressed size of each page of the output.
+    If None, 524288 (512KB) will be used.
+max_page_size_rows: integer or None, default None
+    Maximum number of rows of each page of the output.
+    If None, 20000 will be used.
 **kwargs
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
@@ -382,8 +384,10 @@ stripes: list, default None
     concatenated with index ignored.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
+    This parameter is deprecated.
 num_rows : int, default None
     If not None, the total number of rows to read.
+    This parameter is deprecated.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
 use_python_file_object : boolean, default True
@@ -463,7 +467,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'cudf_experimental', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters.
 orient : string,

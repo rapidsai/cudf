@@ -19,8 +19,15 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf::lists {
+
+/**
+ * @addtogroup lists_filtering
+ * @{
+ * @file
+ */
 
 /**
  * @brief Filters elements in each row of `input` LIST column using `boolean_mask`
@@ -79,5 +86,7 @@ std::unique_ptr<column> distinct(
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 
 }  // namespace cudf::lists

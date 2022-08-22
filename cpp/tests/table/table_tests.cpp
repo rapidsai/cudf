@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,8 @@ TEST_F(TableTest, SelectingOutOfBounds)
 
   Table t(std::move(cols));
 
-  EXPECT_THROW(t.select(std::vector<cudf::size_type>{0, 1, 2}), std::out_of_range);
+  EXPECT_THROW(cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{0, 1, 2}),
+               std::out_of_range);
 }
 
 TEST_F(TableTest, SelectingNoColumns)

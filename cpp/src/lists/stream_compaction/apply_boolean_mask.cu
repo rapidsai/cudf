@@ -30,6 +30,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/reduce.h>
+#include <thrust/scan.h>
 
 namespace cudf::lists {
 namespace detail {
@@ -67,6 +68,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                                       boolean_mask_sliced_offsets,
                                                       offset_data_type,
                                                       null_policy::EXCLUDE,
+                                                      std::nullopt,
                                                       stream);
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, offset_type{0});

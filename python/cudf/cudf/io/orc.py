@@ -294,6 +294,18 @@ def read_orc(
     """{docstring}"""
     from cudf import DataFrame
 
+    if skiprows is not None:
+        warnings.warn(
+            "skiprows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
+    if num_rows is not None:
+        warnings.warn(
+            "num_rows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
     if not is_list_like(filepath_or_buffer):

@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
+
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace strings {
@@ -147,7 +148,7 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
 
   if (!builtins) return false;
   uint32_t codept = utf8_to_codepoint(ch);
-  if (codept > 0x00FFFF) return false;
+  if (codept > 0x00'FFFF) return false;
   int8_t fl = codepoint_flags[codept];
   if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
     return true;

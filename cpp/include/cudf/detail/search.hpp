@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf::detail {
 /**
@@ -66,19 +67,34 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Check if the (unique) row of the `needle` column is contained in the `haystack` column.
+ * @brief Check if rows in the given `needles` table exist in the `haystack` table.
  *
- * If the input `needle` column has more than one row, only the first row will be considered.
+ * Given two tables, each row in the `needles` table is checked to see if there is any matching row
+ * (i.e., compared equal to it) in the `haystack` table. The boolean search results are written into
+ * the corresponding rows of the output array.
  *
- * This function is designed for nested types only. It can also work with non-nested types
- * but with lower performance due to the complexity of the implementation.
+ * @code{.pseudo}
+ * Example:
  *
- * @param haystack The column containing search space.
- * @param needle A scalar value to check for existence in the search space.
- * @return true if the given `needle` value exists in the `haystack` column.
+ * haystack = { { 5, 4, 1, 2, 3 } }
+ * needles  = { { 0, 1, 2 } }
+ * output   = { false, true, true }
+ * @endcode
+ *
+ * @param haystack The table containing the search space
+ * @param needles A table of rows whose existence to check in the search space
+ * @param compare_nulls Control whether nulls should be compared as equal or not
+ * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-bool contains_nested_element(column_view const& haystack,
-                             column_view const& needle,
-                             rmm::cuda_stream_view stream);
+rmm::device_uvector<bool> contains(
+  table_view const& haystack,
+  table_view const& needles,
+  null_equality compare_nulls,
+  nan_equality compare_nans,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf::detail

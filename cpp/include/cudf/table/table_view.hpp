@@ -38,13 +38,14 @@ namespace detail {
  * @brief Base class for a table of `ColumnView`s
  *
  * This class should not be used directly. Instead:
- * -`table_view` should be used for a table of `column_view`s
- * -`mutable_table_view` should be used for a table of `mutable_column_view`s
+ * - `table_view` should be used for a table of columns of type `column_view`
+ * - `mutable_table_view` should be used for a table of columns of type `mutable_column_view`
  *
  * All public constructors and member functions of `table_view_base` are
  * available in both `table_view` and `mutable_table_view`.
  *
- * @tparam ColumnView The type of column view the table contains
+ * @tparam ColumnView The type of column view the table contains:
+ *                    expects column_view or mutable_column_view
  */
 template <typename ColumnView>
 class table_view_base {
@@ -326,6 +327,14 @@ inline bool has_nested_nulls(table_view const& input)
            });
   });
 }
+
+/**
+ * @brief The function to collect all nullable columns at all nested levels in a given table.
+ *
+ * @param table The input table
+ * @return A vector containing all nullable columns in the input table
+ */
+std::vector<column_view> get_nullable_columns(table_view const& table);
 
 /**
  * @brief Checks if two `table_view`s have columns of same types

@@ -47,9 +47,7 @@ class StructColumn(ColumnBase):
         )
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
-            buffers = (nbuf,)
+            buffers = (pa.py_buffer(self.mask.memoryview()),)
         else:
             buffers = (None,)
 
@@ -114,7 +112,13 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
-        if isinstance(dtype, StructDtype):
+        from cudf.core.column import IntervalColumn
+        from cudf.core.dtypes import IntervalDtype
+
+        # Check IntervalDtype first because it's a subclass of StructDtype
+        if isinstance(dtype, IntervalDtype):
+            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+        elif isinstance(dtype, StructDtype):
             return build_struct_column(
                 names=dtype.fields.keys(),
                 children=tuple(

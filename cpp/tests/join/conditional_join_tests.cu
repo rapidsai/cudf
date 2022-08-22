@@ -24,10 +24,12 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/device_vector.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 
 #include <algorithm>
 #include <iostream>
