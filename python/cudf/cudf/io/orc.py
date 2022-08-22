@@ -436,7 +436,7 @@ def to_orc(
         )
 
     if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):
-        raise TypeError("cols_as_map_type can only be a list of column names")
+        raise TypeError("cols_as_map_type must be a list of column names.")
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs

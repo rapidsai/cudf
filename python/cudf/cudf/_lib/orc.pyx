@@ -387,9 +387,9 @@ cdef class ORCWriter:
         self.stat_freq = _get_orc_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
-        self.initialized = False
         self.cols_as_map_type = cols_as_map_type \
             if cols_as_map_type is None else set(cols_as_map_type)
+        self.initialized = False
 
     def write_table(self, table):
         """ Writes a single table to the file """
