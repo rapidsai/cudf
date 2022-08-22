@@ -34,6 +34,9 @@ unset GIT_DESCRIBE_TAG
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=1
 
+# Dask version to install when `INSTALL_DASK_MAIN=0`
+export DASK_STABLE_VERSION="2022.8.0"
+
 # ucx-py version
 export UCX_PY_VERSION='0.28.*'
 
@@ -92,8 +95,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+    gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -163,10 +166,6 @@ else
 
     gpuci_logger "Check GPU usage"
     nvidia-smi
-    
-
-    #install_dask
-    conda config --system --remove channels dask/label/dev
 
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
@@ -182,9 +181,8 @@ else
 
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
-    gpuci_logger "Check conda environment"
-    conda info
-    conda config --show-sources
+    
+    gpuci_logger "Check current conda environment"
     conda list --show-channel-urls
 
     gpuci_logger "GoogleTests"

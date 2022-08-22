@@ -24,8 +24,8 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask>=2022.7.1
-    - distributed>=2022.7.1
+    - dask>=2022.8.0
+    - distributed>=2022.8.0
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
