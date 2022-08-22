@@ -235,6 +235,9 @@ cdef class SpillableBuffer:
             return self._ptr
 
     cdef void* ptr_raw(self, SpillLock spill_lock) except *:
+        if spill_lock is None:
+            return <void*><uintptr_t> self.ptr
+
         # Get base buffer
         cdef SpillableBuffer base
         cdef size_t offset
@@ -244,9 +247,6 @@ cdef class SpillableBuffer:
         else:
             base = self._view_desc["base"]
             offset = self._view_desc["offset"]
-
-        if spill_lock is None:
-            return <void*><uintptr_t> base.ptr
 
         with base._lock:
             base.move_inplace(target="gpu")
