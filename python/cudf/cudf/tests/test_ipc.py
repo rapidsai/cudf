@@ -70,3 +70,8 @@ def test_ipc_with_null_mask():
         assert p.exitcode == 0
         res = cudf.read_csv(tmpfile)
         assert_eq(df, res)
+
+
+def test_list_type():
+    df = cudf.DataFrame({"x": [cp.arange(0, 4)] * 4, "y": [cp.arange(0, 4)] * 4})
+    check_roundtrip(df)

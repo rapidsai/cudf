@@ -57,6 +57,10 @@ class imported_column {
   imported_column(imported_column const& that) = delete;
   imported_column(std::string n, ipc::imported_ptr&& d, ipc::imported_ptr&& m);
   imported_column(std::string n, ipc::imported_ptr&& d);
+  imported_column(std::string n,
+                  ipc::imported_ptr&& d,
+                  ipc::imported_ptr&& m,
+                  std::vector<std::shared_ptr<imported_column>>&& children);
   ~imported_column();
 };
 

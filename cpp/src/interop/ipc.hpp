@@ -19,7 +19,9 @@
 #include <cinttypes>
 #include <cstring>
 #include <cuda.h>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <vector>
 
 namespace cudf {
 namespace ipc {
@@ -55,12 +57,11 @@ struct exported_ptr {
 
   void serialize(std::string* p_bytes) const
   {
-    std::string& bytes = *p_bytes;
-    size_t this_size   = sizeof(_handle) + sizeof(_offset) + sizeof(_size);
-    size_t orig_size   = p_bytes->size();
+    size_t this_size = sizeof(_handle) + sizeof(_offset) + sizeof(_size);
+    size_t orig_size = p_bytes->size();
 
     p_bytes->resize(orig_size + this_size);
-    char* ptr = bytes.data() + orig_size;
+    char* ptr = p_bytes->data() + orig_size;
 
     std::memcpy(ptr, &_handle, sizeof(_handle));
     ptr += sizeof(_handle);
@@ -124,8 +125,10 @@ class imported_ptr {
   imported_ptr() = default;
   explicit imported_ptr(exported_ptr const& handle) : offset{handle.offset()}
   {
-    CUDF_CUDA_TRY(
-      cudaIpcOpenMemHandle((void**)&base_ptr, handle.handle(), cudaIpcMemLazyEnablePeerAccess));
+    if (handle.size() != 0) {
+      CUDF_CUDA_TRY(
+        cudaIpcOpenMemHandle((void**)&base_ptr, handle.handle(), cudaIpcMemLazyEnablePeerAccess));
+    }
   }
   ~imported_ptr() noexcept(false)
   {
@@ -133,23 +136,30 @@ class imported_ptr {
   }
 
   imported_ptr(imported_ptr const& that) = delete;
-  imported_ptr(imported_ptr&& that) { std::swap(that.base_ptr, this->base_ptr); }
+  imported_ptr(imported_ptr&& that)
+  {
+    std::swap(that.base_ptr, this->base_ptr);
+    std::swap(that.offset, this->offset);
+  }
   imported_ptr& operator=(imported_ptr const& that) = delete;
   imported_ptr& operator                            =(imported_ptr&& that)
   {
     std::swap(that.base_ptr, this->base_ptr);
+    std::swap(that.offset, this->offset);
     return *this;
   }
 
   template <typename T>
-  auto get() const
+  T const* get() const
   {
-    return reinterpret_cast<T const*>(base_ptr + offset);
+    if (base_ptr) { return reinterpret_cast<T const*>(base_ptr + offset); }
+    return nullptr;
   }
   template <typename T>
-  auto get()
+  T* get()
   {
-    return reinterpret_cast<T*>(base_ptr + offset);
+    if (base_ptr) { return reinterpret_cast<T*>(base_ptr + offset); }
+    return nullptr;
   }
 };
 
@@ -159,37 +169,17 @@ class imported_ptr {
 struct exported_column {
   exported_ptr data;
   exported_ptr mask;
+  std::vector<exported_column> children;
+  size_type size{0};
 
   [[nodiscard]] bool has_nulls() const { return mask.size() != 0; }
 
-  void serialize(std::string* p_bytes) const
-  {
-    std::string& bytes = *p_bytes;
-    size_t orig_size   = p_bytes->size();
-    auto hn            = has_nulls();
-
-    bytes.resize(orig_size + sizeof(hn));
-    auto ptr = bytes.data() + orig_size;
-    std::memcpy(ptr, &hn, sizeof(hn));
-
-    data.serialize(p_bytes);
-    if (has_nulls()) { mask.serialize(p_bytes); }
-  }
+  void serialize(std::string* p_bytes) const;
 
   /**
    * @brief Construct an `exported_column` from the buffer created by `serialize` method.
    */
-  static uint8_t const* from_buffer(uint8_t const* ptr, exported_column* out)
-  {
-    bool hn;
-    std::memcpy(&hn, ptr, sizeof(hn));
-    ptr += sizeof(hn);
-
-    exported_column& column = *out;
-    ptr                     = exported_ptr::from_buffer(ptr, &column.data);
-    if (hn) { ptr = exported_ptr::from_buffer(ptr, &column.mask); }
-    return ptr;
-  }
+  static uint8_t const* from_buffer(uint8_t const* ptr, exported_column* out);
 };
 
 constexpr int64_t magic_number() { return 0xf9f9f9; }

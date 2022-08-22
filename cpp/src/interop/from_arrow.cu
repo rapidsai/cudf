@@ -459,27 +459,89 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 }
 
 namespace {
+struct dispatch_to_column_view {
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  arrow::Result<std::pair<column_view, std::shared_ptr<imported_column>>> operator()(
+    arrow::Field const&, ipc::exported_column const&) const
+  {
+    return arrow::Status::Invalid("Unsupported type for from_ipc.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  arrow::Result<std::pair<column_view, std::shared_ptr<imported_column>>> operator()(
+    arrow::Field const& field, ipc::exported_column const& ipc_column) const
+  {
+    data_type dtype = detail::arrow_to_cudf_type(*field.type());
+    ipc::imported_ptr data_base_ptr{ipc_column.data};
+    auto data_ptr = data_base_ptr.get<uint8_t>();
+
+    size_type size = ipc_column.data.size() / size_of(dtype);
+    CUDF_EXPECTS(size == ipc_column.size, "Invalid IPC message");
+
+    if (ipc_column.has_nulls()) {
+      ipc::imported_ptr mask_base_ptr{ipc_column.mask};
+      auto mask_ptr = mask_base_ptr.get<bitmask_type>();
+      auto cview    = column_view{dtype, size, data_ptr, mask_ptr};
+      return std::make_pair(cview,
+                            std::make_shared<imported_column>(
+                              field.name(), std::move(data_base_ptr), std::move(mask_base_ptr)));
+    }
+
+    auto cview = column_view{dtype, size, data_ptr};
+    return std::make_pair(
+      cview, std::make_shared<imported_column>(field.name(), std::move(data_base_ptr)));
+  }
+};
+
+template <>
+arrow::Result<std::pair<column_view, std::shared_ptr<imported_column>>>
+dispatch_to_column_view::operator()<cudf::list_view>(arrow::Field const& field,
+                                                     ipc::exported_column const& ipc_column) const
+{
+  data_type dtype = detail::arrow_to_cudf_type(*field.type());
+
+  std::vector<column_view> children;
+  std::vector<std::shared_ptr<imported_column>> imported_children;
+  for (size_t i = 0; i < ipc_column.children.size(); ++i) {
+    auto child = type_dispatcher(dtype, dispatch_to_column_view{}, field, ipc_column.children[i]);
+    if (!child.ok()) { return child; }
+
+    children.push_back(child.ValueUnsafe().first);
+    imported_children.push_back(child.ValueUnsafe().second);
+  }
+
+  ipc::imported_ptr data_ptr;
+  ipc::imported_ptr mask_base{ipc_column.mask};
+
+  if (ipc_column.has_nulls()) {
+    auto mask_ptr = mask_base.get<bitmask_type>();
+    auto cview =
+      column_view{dtype, ipc_column.size, nullptr, mask_ptr, UNKNOWN_NULL_COUNT, 0, children};
+
+    auto imported = std::make_shared<imported_column>(
+      field.name(), std::move(data_ptr), std::move(mask_base), std::move(imported_children));
+
+    return std::make_pair(cview, imported);
+  }
+
+  auto cview =
+    column_view{dtype, ipc_column.size, nullptr, nullptr, UNKNOWN_NULL_COUNT, 0, children};
+  return std::make_pair(
+    cview,
+    std::make_shared<imported_column>(
+      field.name(), std::move(data_ptr), std::move(mask_base), std::move(imported_children)));
+}
+
 std::pair<column_view, std::shared_ptr<imported_column>> from_ipc_column(
   arrow::Field const& field, ipc::exported_column ipc_column)
 {
-  ipc::imported_ptr data_base_ptr{ipc_column.data};
-  auto data_ptr   = data_base_ptr.get<uint8_t>();
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
-  size_type size = ipc_column.data.size() / size_of(dtype);
-
-  if (ipc_column.has_nulls()) {
-    ipc::imported_ptr mask_base_ptr{ipc_column.mask};
-    auto mask_ptr = mask_base_ptr.get<bitmask_type>();
-    auto cview    = column_view{dtype, size, data_ptr, mask_ptr};
-    return std::make_pair(cview,
-                          std::make_shared<imported_column>(
-                            field.name(), std::move(data_base_ptr), std::move(mask_base_ptr)));
-  }
-
-  auto cview = column_view{dtype, size, data_ptr};
-  return std::make_pair(cview,
-                        std::make_shared<imported_column>(field.name(), std::move(data_base_ptr)));
+  return type_dispatcher(dtype, dispatch_to_column_view{}, field, ipc_column)
+    .ValueOrElse([]() -> std::pair<column_view, std::shared_ptr<imported_column>> {
+      CUDF_FAIL("Failed to restore cuDF column from IPC message.");
+      return {};
+    });
 }
 }  // namespace
 
