@@ -1028,7 +1028,7 @@ void make_json_column(json_column& root_column,
   const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
   // Copy the JSON tokens to the host
-  thrust::host_vector<PdaTokenT> tokens_gpu =
+  thrust::host_vector<PdaTokenT> tokens =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
   thrust::host_vector<SymbolOffsetT> token_indices_gpu =
     cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
@@ -1219,12 +1219,12 @@ void make_json_column(json_column& root_column,
   // INITIALIZE JSON ROOT NODE
   //--------------------------------------------------------------------------------
   // The JSON root may only be a struct, list, string, or value node
-  CUDF_EXPECTS(tokens_gpu.size() == token_indices_gpu.size(),
+  CUDF_EXPECTS(tokens.size() == token_indices_gpu.size(),
                "Unexpected mismatch in number of token types and token indices");
-  CUDF_EXPECTS(tokens_gpu.size() > 0, "Empty JSON input not supported");
-  CUDF_EXPECTS(is_valid_root_token(tokens_gpu[offset]), "Invalid beginning of JSON document");
+  CUDF_EXPECTS(tokens.size() > 0, "Empty JSON input not supported");
+  CUDF_EXPECTS(is_valid_root_token(tokens[offset]), "Invalid beginning of JSON document");
 
-  while (offset < tokens_gpu.size()) {
+  while (offset < tokens.size()) {
     // Verify there's at least the JSON root node left on the stack to which we can append data
     CUDF_EXPECTS(current_data_path.size() > 0, "Invalid JSON structure");
 
@@ -1234,7 +1234,7 @@ void make_json_column(json_column& root_column,
                  "Invalid JSON structure");
 
     // The token we're currently parsing
-    auto const& token = tokens_gpu[offset];
+    auto const& token = tokens[offset];
 
 #ifdef NJP_DEBUG_PRINT
     std::cout << "[" << token_to_string(token) << "]\n";
@@ -1257,9 +1257,9 @@ void make_json_column(json_column& root_column,
 
       // Add this struct node to the current column
       selected_col->append_row(target_row_index,
-                               token_to_column_type(tokens_gpu[offset]),
-                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                               token_to_column_type(tokens[offset]),
+                               get_token_index(tokens[offset], token_indices_gpu[offset]),
+                               get_token_index(tokens[offset], token_indices_gpu[offset]),
                                zero_child_count);
     }
 
@@ -1274,7 +1274,7 @@ void make_json_column(json_column& root_column,
       // Update row to account for string offset
       update_row(current_data_path.top().column,
                  current_data_path.top().row_index,
-                 get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                 get_token_index(tokens[offset], token_indices_gpu[offset]),
                  current_data_path.top().num_children);
 
       // Pop struct from the path stack
@@ -1295,9 +1295,9 @@ void make_json_column(json_column& root_column,
 
       // Add this struct node to the current column
       selected_col->append_row(target_row_index,
-                               token_to_column_type(tokens_gpu[offset]),
-                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
-                               get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                               token_to_column_type(tokens[offset]),
+                               get_token_index(tokens[offset], token_indices_gpu[offset]),
+                               get_token_index(tokens[offset], token_indices_gpu[offset]),
                                zero_child_count);
     }
 
@@ -1312,7 +1312,7 @@ void make_json_column(json_column& root_column,
       // Update row to account for string offset
       update_row(current_data_path.top().column,
                  current_data_path.top().row_index,
-                 get_token_index(tokens_gpu[offset], token_indices_gpu[offset]),
+                 get_token_index(tokens[offset], token_indices_gpu[offset]),
                  current_data_path.top().num_children);
 
       // Pop list from the path stack
@@ -1323,7 +1323,7 @@ void make_json_column(json_column& root_column,
     else if (token == token_t::ErrorBegin) {
 #ifdef NJP_DEBUG_PRINT
       std::cout << "[ErrorBegin]\n";
-      std::cout << "@" << get_token_index(tokens_gpu[offset], token_indices_gpu[offset]);
+      std::cout << "@" << get_token_index(tokens[offset], token_indices_gpu[offset]);
 #endif
       CUDF_FAIL("Parser encountered an invalid format.");
     }
@@ -1332,16 +1332,15 @@ void make_json_column(json_column& root_column,
     else if (token == token_t::FieldNameBegin or token == token_t::StringBegin or
              token == token_t::ValueBegin) {
       // Verify that this token has the right successor to build a correct (being, end) token pair
-      CUDF_EXPECTS((offset + 1) < tokens_gpu.size(), "Invalid JSON token sequence");
-      CUDF_EXPECTS(tokens_gpu[offset + 1] == end_of_partner(token), "Invalid JSON token sequence");
+      CUDF_EXPECTS((offset + 1) < tokens.size(), "Invalid JSON token sequence");
+      CUDF_EXPECTS(tokens[offset + 1] == end_of_partner(token), "Invalid JSON token sequence");
 
       // The offset to the first symbol from the JSON input associated with the current token
-      auto const& token_begin_offset =
-        get_token_index(tokens_gpu[offset], token_indices_gpu[offset]);
+      auto const& token_begin_offset = get_token_index(tokens[offset], token_indices_gpu[offset]);
 
       // The offset to one past the last symbol associated with the current token
       auto const& token_end_offset =
-        get_token_index(tokens_gpu[offset + 1], token_indices_gpu[offset + 1]);
+        get_token_index(tokens[offset + 1], token_indices_gpu[offset + 1]);
 
       // FieldNameBegin
       // For the current struct node in the tree, select the child column corresponding to this
