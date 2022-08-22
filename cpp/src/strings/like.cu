@@ -25,11 +25,16 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/transform.h>
+
 namespace cudf {
 namespace strings {
 namespace detail {
 
 namespace {
+
+constexpr char multi_wildcard  = '%';
+constexpr char single_wildcard = '_';
 
 struct like_fn {
   column_device_view const d_strings;
@@ -59,9 +64,10 @@ struct like_fn {
         auto const escaped = *ptn_itr == esc_char;
         auto const ptn_ch  = escaped && (ptn_itr + 1 < ptn_end) ? *(++ptn_itr) : *ptn_itr;
 
-        if (escaped || (ptn_ch != '%')) {
+        if (escaped || (ptn_ch != multi_wildcard)) {
           // check match with the current character
-          result = ((tgt_itr != tgt_end) && ((!escaped && ptn_ch == '_') || (ptn_ch == *tgt_itr)));
+          result = ((tgt_itr != tgt_end) &&
+                    ((!escaped && ptn_ch == single_wildcard) || (ptn_ch == *tgt_itr)));
           if (!result) { break; }
           ++tgt_itr;
           ++ptn_itr;
@@ -132,13 +138,13 @@ std::unique_ptr<column> like(
 
 // external API
 
-std::unique_ptr<column> like(strings_column_view const& strings,
+std::unique_ptr<column> like(strings_column_view const& input,
                              string_scalar const& pattern,
                              string_scalar const& escape_character,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(strings, pattern, escape_character, cudf::default_stream_value, mr);
+  return detail::like(input, pattern, escape_character, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings
