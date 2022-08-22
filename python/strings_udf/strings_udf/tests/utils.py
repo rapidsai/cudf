@@ -9,6 +9,7 @@ from numba.types import CPointer, void
 
 import cudf
 from cudf.testing._utils import assert_eq
+
 from strings_udf import ptxpath
 from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view

@@ -5,11 +5,10 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport size_type
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 
 cdef extern from "udf_apis.hpp":
