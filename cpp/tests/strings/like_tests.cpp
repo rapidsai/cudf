@@ -101,36 +101,36 @@ TEST_F(StringsLikeTests, Place)
 TEST_F(StringsLikeTests, Escape)
 {
   cudf::test::strings_column_wrapper input(
-    {"10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", ""});
+    {"10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "axb"});
   auto sv = cudf::strings_column_view(input);
   {
     auto results = cudf::strings::like(sv, std::string("10\\%-20\\%"), std::string("\\"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {true, false, false, false, false, false, false});
+      {true, false, false, false, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto results = cudf::strings::like(sv, std::string("\\__\\_"), std::string("\\"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, false, false, false, true, false});
+      {false, false, false, false, false, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto results = cudf::strings::like(sv, std::string("10%%%%-20%%"), std::string("%"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, true, false, false, false, false});
+      {false, false, true, false, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto results = cudf::strings::like(sv, std::string("_%__"), std::string("%"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, false, true, true, true, false});
+      {false, false, false, true, true, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto results = cudf::strings::like(sv, std::string("a__b"), std::string("_"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, false, true, false, false, false});
+      {false, false, false, true, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
