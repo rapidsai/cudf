@@ -382,7 +382,7 @@ void batched_compress(compression_type compression,
     for (auto& input : h_inputs) {
       std::vector<uint8_t> h_input(input.size());
       cudaMemcpy(
-        h_inputs.data(), inputs.data(), sizeof(uint8_t) * input.size(), cudaMemcpyDeviceToHost);
+        h_input.data(), inputs.data(), sizeof(uint8_t) * input.size(), cudaMemcpyDeviceToHost);
       std::ofstream myFile("comp_in" + std::to_string(idx++), std::ios::out | std::ios::binary);
       myFile.write(reinterpret_cast<char*>(h_input.data()), h_input.size());
     }
