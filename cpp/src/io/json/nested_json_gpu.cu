@@ -957,7 +957,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   constexpr std::size_t single_item_count = 1ULL;
   rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
-  rmm::device_uvector<SymbolOffsetT> num_written_tokens{single_item_count, stream};
+  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream, mr};
 
   auto const new_line_delimited_json = options.is_enabled_lines();
 
@@ -985,9 +985,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
   // Instantiating PDA transducer
   std::vector<std::vector<char>> pda_sgid_identity{tokenizer_pda::NUM_PDA_SGIDS};
-  std::generate(std::begin(pda_sgid_identity), std::end(pda_sgid_identity), [i = 0]() mutable {
-    return std::vector<char>{static_cast<char>(i++)};
-  });
+  std::generate(std::begin(pda_sgid_identity),
+                std::end(pda_sgid_identity),
+                [i = char{0}]() mutable { return std::vector<char>{i++}; });
   ToTokenStreamFstT json_to_tokens_fst{pda_sgid_identity,
                                        tokenizer_pda::get_transition_table(new_line_delimited_json),
                                        tokenizer_pda::get_translation_table(),
@@ -1002,7 +1002,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                tokenizer_pda::start_state,
                                stream);
 
-  auto num_total_tokens = num_written_tokens.front_element(stream);
+  auto num_total_tokens = num_written_tokens.value(stream);
   tokens.resize(num_total_tokens, stream);
   tokens_indices.resize(num_total_tokens, stream);
 
