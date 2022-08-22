@@ -38,26 +38,37 @@ inline void check_cu_status(CUresult res)
  * @brief This struct represents a pointer in exported IPC format.
  */
 struct exported_ptr {
-  cudaIpcMemHandle_t handle{0};
-  int64_t offset{0};
-  int64_t size{0};
+ private:
+  cudaIpcMemHandle_t _handle{0};
+  int64_t _offset{0};
+  int64_t _size{0};
+
+ public:
+  exported_ptr() = default;
+  exported_ptr(cudaIpcMemHandle_t handle, int64_t offset, int64_t size)
+    : _handle{handle}, _offset{offset}, _size{size}
+  {
+  }
+  [[nodiscard]] int64_t size() const { return _size; }
+  [[nodiscard]] cudaIpcMemHandle_t handle() const { return _handle; }
+  [[nodiscard]] int64_t offset() const { return _offset; }
 
   void serialize(std::string* p_bytes) const
   {
     std::string& bytes = *p_bytes;
-    size_t this_size   = sizeof(handle) + sizeof(offset) + sizeof(size);
+    size_t this_size   = sizeof(_handle) + sizeof(_offset) + sizeof(_size);
     size_t orig_size   = p_bytes->size();
 
     p_bytes->resize(orig_size + this_size);
     char* ptr = bytes.data() + orig_size;
 
-    std::memcpy(ptr, &handle, sizeof(handle));
-    ptr += sizeof(handle);
+    std::memcpy(ptr, &_handle, sizeof(_handle));
+    ptr += sizeof(_handle);
 
-    std::memcpy(ptr, &offset, sizeof(offset));
-    ptr += sizeof(offset);
+    std::memcpy(ptr, &_offset, sizeof(_offset));
+    ptr += sizeof(_offset);
 
-    std::memcpy(ptr, &size, sizeof(size));
+    std::memcpy(ptr, &_size, sizeof(_size));
   }
 
   /**
@@ -66,12 +77,12 @@ struct exported_ptr {
   static uint8_t const* from_buffer(uint8_t const* ptr, exported_ptr* out)
   {
     exported_ptr& dptr = *out;
-    std::memcpy(&dptr.handle, ptr, sizeof(handle));
-    ptr += sizeof(handle);
-    std::memcpy(&dptr.offset, ptr, sizeof(offset));
-    ptr += sizeof(offset);
-    std::memcpy(&dptr.size, ptr, sizeof(size));
-    ptr += sizeof(size);
+    std::memcpy(&dptr._handle, ptr, sizeof(_handle));
+    ptr += sizeof(_handle);
+    std::memcpy(&dptr._offset, ptr, sizeof(_offset));
+    ptr += sizeof(_offset);
+    std::memcpy(&dptr._size, ptr, sizeof(_size));
+    ptr += sizeof(_size);
 
     return ptr;
   }
@@ -96,7 +107,7 @@ struct exported_ptr {
     auto non_const = const_cast<void*>(reinterpret_cast<void const*>(ptr));
     CUDF_CUDA_TRY(cudaIpcGetMemHandle(&handle, non_const));
 
-    return exported_ptr{.handle = handle, .offset = ptr - base, .size = size};
+    return exported_ptr{handle, ptr - base, size};
   }
 };
 
@@ -108,15 +119,13 @@ class imported_ptr {
   uint8_t* base_ptr{nullptr};
   // offset in bytes
   int64_t offset{0};
-  // range of this pointer
-  int64_t size{0};
 
  public:
   imported_ptr() = default;
-  explicit imported_ptr(exported_ptr const& handle) : offset{handle.offset}, size{handle.size}
+  explicit imported_ptr(exported_ptr const& handle) : offset{handle.offset()}
   {
     CUDF_CUDA_TRY(
-      cudaIpcOpenMemHandle((void**)&base_ptr, handle.handle, cudaIpcMemLazyEnablePeerAccess));
+      cudaIpcOpenMemHandle((void**)&base_ptr, handle.handle(), cudaIpcMemLazyEnablePeerAccess));
   }
   ~imported_ptr() noexcept(false)
   {
@@ -126,7 +135,7 @@ class imported_ptr {
   imported_ptr(imported_ptr const& that) = delete;
   imported_ptr(imported_ptr&& that) { std::swap(that.base_ptr, this->base_ptr); }
   imported_ptr& operator=(imported_ptr const& that) = delete;
-  imported_ptr& operator=(imported_ptr&& that)
+  imported_ptr& operator                            =(imported_ptr&& that)
   {
     std::swap(that.base_ptr, this->base_ptr);
     return *this;
@@ -151,7 +160,7 @@ struct exported_column {
   exported_ptr data;
   exported_ptr mask;
 
-  [[nodiscard]] bool has_nulls() const { return mask.size != 0; }
+  [[nodiscard]] bool has_nulls() const { return mask.size() != 0; }
 
   void serialize(std::string* p_bytes) const
   {

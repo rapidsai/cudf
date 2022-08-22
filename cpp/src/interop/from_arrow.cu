@@ -466,7 +466,7 @@ std::pair<column_view, std::shared_ptr<imported_column>> from_ipc_column(
   auto data_ptr   = data_base_ptr.get<uint8_t>();
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
   if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
-  size_type size = ipc_column.data.size / size_of(dtype);
+  size_type size = ipc_column.data.size() / size_of(dtype);
 
   if (ipc_column.has_nulls()) {
     ipc::imported_ptr mask_base_ptr{ipc_column.mask};
