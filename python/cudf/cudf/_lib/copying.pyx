@@ -21,7 +21,6 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -38,12 +37,14 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.spillable_buffer cimport SpillLock
 from cudf._lib.utils cimport (
     columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
     data_from_unique_ptr,
     table_view_from_columns,
+    table_view_from_table,
 )
 
 # workaround for https://github.com/cython/cython/issues/3885
@@ -350,15 +351,16 @@ def columns_slice(list input_columns, list indices):
     `len(indices) / 2`. The `i`th item in return is a list of columns sliced
     from ``input_columns`` with `slice(indices[i*2], indices[i*2 + 1])`.
     """
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef SpillLock slock = SpillLock()
+    cdef table_view input_table_view = table_view_from_columns(
+        input_columns, slock
+    )
     cdef vector[size_type] c_indices = indices
     cdef vector[table_view] c_result
 
     with nogil:
         c_result = move(
-            cpp_copying.slice(
-                input_table_view,
-                c_indices)
+            cpp_copying.slice(input_table_view, c_indices)
         )
 
     return [

@@ -5,7 +5,12 @@ from libc.stdint cimport uintptr_t
 from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 
-ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
+
+cdef class SpillLock:
+    cdef vector[shared_ptr[void]] _expose_counters
+
+    cdef add(self, shared_ptr[void] expose_counter)
+
 
 cdef class SpillableBuffer:
     cdef object __weakref__
@@ -20,4 +25,4 @@ cdef class SpillableBuffer:
     cdef object _owner
     cdef object _manager
 
-    cdef void* ptr_raw(self, shared_ptr[OwnersVecT] owners) except *
+    cdef void* ptr_raw(self, SpillLock spill_lock) except *

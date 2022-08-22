@@ -30,12 +30,11 @@ cdef shared_ptr[void] create_expose_counter():
     )
 
 
-cdef class ExposeToken:
-    """Create an expose token
+cdef class SpillLock:
+    """Disable spilling temporarily for specify buffers"""
 
-    This is just a reference to an expose counter wrapped in Python.
-    """
-    cdef shared_ptr[void] _reference
+    cdef add(self, shared_ptr[void] expose_counter):
+        self._expose_counters.push_back(expose_counter)
 
 
 # TODO: this is not support by PyTorch
@@ -235,7 +234,7 @@ cdef class SpillableBuffer:
             self._last_accessed = time.monotonic()
             return self._ptr
 
-    cdef void* ptr_raw(self, shared_ptr[OwnersVecT] owners) except *:
+    cdef void* ptr_raw(self, SpillLock spill_lock) except *:
         # Get base buffer
         cdef SpillableBuffer base
         cdef size_t offset
@@ -246,13 +245,16 @@ cdef class SpillableBuffer:
             base = self._view_desc["base"]
             offset = self._view_desc["offset"]
 
+        if spill_lock is None:
+            return <void*><uintptr_t> base.ptr
+
         with base._lock:
             base.move_inplace(target="gpu")
             base._last_accessed = time.monotonic()
-            dereference(owners).push_back(base._expose_counter)
+            spill_lock.add(base._expose_counter)
             return <void*><uintptr_t> (base._ptr+offset)
 
-    def ptr_restricted(self) -> Union[int, ExposeToken]:
+    def ptr_restricted(self) -> Union[int, SpillLock]:
         # Get base buffer
         cdef SpillableBuffer base
         cdef size_t offset
@@ -266,9 +268,9 @@ cdef class SpillableBuffer:
         with base._lock:
             base.move_inplace(target="gpu")
             base._last_accessed = time.monotonic()
-            token = ExposeToken()
-            token._reference = base._expose_counter
-            return base._ptr+offset, token
+            spill_lock = SpillLock()
+            spill_lock.add(base._expose_counter)
+            return base._ptr+offset, spill_lock
 
     @property
     def owner(self) -> Any:

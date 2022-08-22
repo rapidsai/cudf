@@ -8,6 +8,7 @@ from rmm._lib.device_buffer cimport device_buffer
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.spillable_buffer cimport SpillLock
 
 
 cdef class Column:
@@ -23,8 +24,10 @@ cdef class Column:
         cdef object _mask
         cdef object _null_count
 
-    cdef column_view _view(self, size_type null_count) except *
-    cdef column_view view(self) except *
+    cdef column_view _view(
+        self, size_type null_count, SpillLock spill_lock
+    ) except *
+    cdef column_view view(self, SpillLock spill_lock=*) except *
     cdef mutable_column_view mutable_view(self) except *
 
     @staticmethod

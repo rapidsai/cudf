@@ -10,6 +10,7 @@ from libcpp.utility cimport move
 
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
+from cudf._lib.spillable_buffer cimport SpillLock
 
 from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_device_scalar
@@ -102,9 +103,9 @@ class BinaryOperation(IntEnum):
 
 cdef binaryop_v_v(Column lhs, Column rhs,
                   binary_operator c_op, data_type c_dtype):
-    cdef column_view c_lhs = lhs.view()
-    cdef column_view c_rhs = rhs.view()
-
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_lhs = lhs.view(slock)
+    cdef column_view c_rhs = rhs.view(slock)
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -122,7 +123,8 @@ cdef binaryop_v_v(Column lhs, Column rhs,
 
 cdef binaryop_v_s(Column lhs, DeviceScalar rhs,
                   binary_operator c_op, data_type c_dtype):
-    cdef column_view c_lhs = lhs.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_lhs = lhs.view(slock)
     cdef const scalar* c_rhs = rhs.get_raw_ptr()
 
     cdef unique_ptr[column] c_result
@@ -142,7 +144,8 @@ cdef binaryop_v_s(Column lhs, DeviceScalar rhs,
 cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
                   binary_operator c_op, data_type c_dtype):
     cdef const scalar* c_lhs = lhs.get_raw_ptr()
-    cdef column_view c_rhs = rhs.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_rhs = rhs.view(slock)
 
     cdef unique_ptr[column] c_result
 
@@ -213,8 +216,9 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     has to be specified in `dtype`, a numpy data type.
     Currently ONLY int32, int64, float32 and float64 are supported.
     """
-    cdef column_view c_lhs = lhs.view()
-    cdef column_view c_rhs = rhs.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_lhs = lhs.view(slock)
+    cdef column_view c_rhs = rhs.view(slock)
 
     cdef type_id tid = (
         <type_id> (

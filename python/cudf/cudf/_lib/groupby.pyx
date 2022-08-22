@@ -26,6 +26,7 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.spillable_buffer cimport SpillLock
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_unique_ptr,
@@ -106,7 +107,10 @@ cdef class GroupBy:
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        cdef table_view keys_view = table_view_from_columns(keys)
+        self._spill_lock = SpillLock()
+        cdef table_view keys_view = table_view_from_columns(
+            keys, self._spill_lock
+        )
 
         with nogil:
             self.c_obj.reset(
@@ -121,7 +125,9 @@ cdef class GroupBy:
         self.dropna = dropna
 
     def groups(self, list values):
-        cdef table_view values_view = table_view_from_columns(values)
+        cdef table_view values_view = table_view_from_columns(
+            values, self._spill_lock
+        )
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))

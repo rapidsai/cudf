@@ -30,7 +30,7 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
 )
-from cudf._lib.spillable_buffer cimport OwnersVecT, SpillableBuffer
+from cudf._lib.spillable_buffer cimport SpillableBuffer
 
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
@@ -342,7 +342,8 @@ cdef class Column:
             return other_col
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
+        cdef SpillLock slock = SpillLock()
+        return self._view(libcudf_types.UNKNOWN_NULL_COUNT, slock).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
@@ -389,14 +390,18 @@ cdef class Column:
             offset,
             children)
 
-    cdef column_view view(self) except *:
+    cdef column_view view(self, SpillLock spill_lock=None) except *:
         null_count = self.null_count
         if null_count is None:
             null_count = libcudf_types.UNKNOWN_NULL_COUNT
         cdef libcudf_types.size_type c_null_count = null_count
-        return self._view(c_null_count)
+        return self._view(c_null_count, spill_lock)
 
-    cdef column_view _view(self, libcudf_types.size_type null_count) except *:
+    cdef column_view _view(
+        self,
+        libcudf_types.size_type null_count,
+        SpillLock spill_lock
+    ) except *:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
             data_dtype = col.dtype
@@ -407,12 +412,11 @@ cdef class Column:
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
-        cdef shared_ptr[OwnersVecT] owners = make_shared[OwnersVecT]()
         cdef void* data
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):
-            data = (<SpillableBuffer>col.base_data).ptr_raw(owners)
+            data = (<SpillableBuffer>col.base_data).ptr_raw(spill_lock)
         else:
             data = <void*><uintptr_t>(col.base_data.ptr)
 
@@ -436,8 +440,7 @@ cdef class Column:
             mask,
             c_null_count,
             offset,
-            children,
-            static_pointer_cast[void, OwnersVecT](owners)
+            children
         )
 
     @staticmethod
@@ -552,7 +555,7 @@ cdef class Column:
                 )
                 if isinstance(data_owner, SpillableBuffer):
                     # To prevent data_owner getting spilled, we attach an
-                    # ExposeToken to data. This will make sure that data_owner
+                    # SpillLock to data. This will make sure that data_owner
                     # is unspillable as long as data is alive.
                     _, token = data_owner.ptr_restricted()
                     data.token = token

@@ -36,13 +36,14 @@ PARQUET_META_TYPE_MAP = {
     for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
-cdef table_view table_view_from_columns(columns) except*:
+cdef table_view table_view_from_columns(
+    columns, SpillLock spill_lock=None
+) except *:
     """Create a cudf::table_view from an iterable of Columns."""
     cdef vector[column_view] column_views
-
     cdef Column col
     for col in columns:
-        column_views.push_back(col.view())
+        column_views.push_back(col.view(spill_lock=spill_lock))
 
     return table_view(column_views)
 
