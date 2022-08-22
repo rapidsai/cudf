@@ -228,6 +228,7 @@ ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
+ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
@@ -359,8 +360,8 @@ ConfigureTest(
 # ##################################################################################################
 # * search test -----------------------------------------------------------------------------------
 ConfigureTest(
-  SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
-  search/search_test.cpp
+  SEARCH_TEST search/search_dictionary_test.cpp search/search_list_test.cpp
+  search/search_struct_test.cpp search/search_test.cpp
 )
 
 # ##################################################################################################

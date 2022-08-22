@@ -460,89 +460,186 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 }
 
 /**
- * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
+ * @brief Pack literal values in output bitstream (1,2,3,4,5,6,8,10,12,16,20 or 24 bits per value)
+ */
+inline __device__ void PackLiteralsShuffle(
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
+  constexpr uint32_t MASK2T = 1;  // mask for 2 thread leader
+  constexpr uint32_t MASK4T = 3;  // mask for 4 thread leader
+  constexpr uint32_t MASK8T = 7;  // mask for 8 thread leader
+  uint64_t vt;
+
+  if (t > (count | 0x1f)) { return; }
+
+  switch (w) {
+    case 1:
+      v |= shuffle_xor(v, 1) << 1;
+      v |= shuffle_xor(v, 2) << 2;
+      v |= shuffle_xor(v, 4) << 4;
+      if (t < count && !(t & MASK8T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 2:
+      v |= shuffle_xor(v, 1) << 2;
+      v |= shuffle_xor(v, 2) << 4;
+      if (t < count && !(t & MASK4T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 3:
+      v |= shuffle_xor(v, 1) << 3;
+      v |= shuffle_xor(v, 2) << 6;
+      v |= shuffle_xor(v, 4) << 12;
+      if (t < count && !(t & MASK8T)) {
+        dst[(t >> 3) * 3 + 0] = v;
+        dst[(t >> 3) * 3 + 1] = v >> 8;
+        dst[(t >> 3) * 3 + 2] = v >> 16;
+      }
+      return;
+    case 4:
+      v |= shuffle_xor(v, 1) << 4;
+      if (t < count && !(t & MASK2T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 5:
+      v |= shuffle_xor(v, 1) << 5;
+      v |= shuffle_xor(v, 2) << 10;
+      vt = shuffle_xor(v, 4);
+      vt = vt << 20 | v;
+      if (t < count && !(t & MASK8T)) {
+        dst[(t >> 3) * 5 + 0] = vt;
+        dst[(t >> 3) * 5 + 1] = vt >> 8;
+        dst[(t >> 3) * 5 + 2] = vt >> 16;
+        dst[(t >> 3) * 5 + 3] = vt >> 24;
+        dst[(t >> 3) * 5 + 4] = vt >> 32;
+      }
+      return;
+    case 6:
+      v |= shuffle_xor(v, 1) << 6;
+      v |= shuffle_xor(v, 2) << 12;
+      if (t < count && !(t & MASK4T)) {
+        dst[(t >> 2) * 3 + 0] = v;
+        dst[(t >> 2) * 3 + 1] = v >> 8;
+        dst[(t >> 2) * 3 + 2] = v >> 16;
+      }
+      return;
+    case 8:
+      if (t < count) { dst[t] = v; }
+      return;
+    case 10:
+      v |= shuffle_xor(v, 1) << 10;
+      vt = shuffle_xor(v, 2);
+      vt = vt << 20 | v;
+      if (t < count && !(t & MASK4T)) {
+        dst[(t >> 2) * 5 + 0] = vt;
+        dst[(t >> 2) * 5 + 1] = vt >> 8;
+        dst[(t >> 2) * 5 + 2] = vt >> 16;
+        dst[(t >> 2) * 5 + 3] = vt >> 24;
+        dst[(t >> 2) * 5 + 4] = vt >> 32;
+      }
+      return;
+    case 12:
+      v |= shuffle_xor(v, 1) << 12;
+      if (t < count && !(t & MASK2T)) {
+        dst[(t >> 1) * 3 + 0] = v;
+        dst[(t >> 1) * 3 + 1] = v >> 8;
+        dst[(t >> 1) * 3 + 2] = v >> 16;
+      }
+      return;
+    case 16:
+      if (t < count) {
+        dst[t * 2 + 0] = v;
+        dst[t * 2 + 1] = v >> 8;
+      }
+      return;
+    case 20:
+      vt = shuffle_xor(v, 1);
+      vt = vt << 20 | v;
+      if (t < count && !(t & MASK2T)) {
+        dst[(t >> 1) * 5 + 0] = vt;
+        dst[(t >> 1) * 5 + 1] = vt >> 8;
+        dst[(t >> 1) * 5 + 2] = vt >> 16;
+        dst[(t >> 1) * 5 + 3] = vt >> 24;
+        dst[(t >> 1) * 5 + 4] = vt >> 32;
+      }
+      return;
+    case 24:
+      if (t < count) {
+        dst[t * 3 + 0] = v;
+        dst[t * 3 + 1] = v >> 8;
+        dst[t * 3 + 2] = v >> 16;
+      }
+      return;
+
+    default: CUDF_UNREACHABLE("Unsupported bit width");
+  }
+}
+
+/**
+ * @brief Pack literals of arbitrary bit-length in output bitstream.
+ */
+inline __device__ void PackLiteralsRoundRobin(
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
+  // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
+  // words but the destination mem may not be a multiple of 4 bytes.
+  // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
+  // To allow up to 24 bit this needs to be sized at 96 words.
+  __shared__ uint32_t scratch[64];
+  if (t < 64) { scratch[t] = 0; }
+  __syncthreads();
+
+  if (t <= count) {
+    // shift symbol left by up to 31 bits
+    uint64_t v64 = v;
+    v64 <<= (t * w) & 0x1f;
+
+    // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
+    uint32_t v32[2];
+    memcpy(&v32, &v64, sizeof(uint64_t));
+
+    // Atomically write result to scratch
+    if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
+    if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
+  }
+  __syncthreads();
+
+  // Copy scratch data to final destination
+  auto available_bytes = (count * w + 7) / 8;
+
+  auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
+  if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
+  if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
+  // would need the following for up to 24 bits
+  // if (t + 256 < available_bytes) { dst[t + 256] = scratch_bytes[t + 256]; }
+  __syncthreads();
+}
+
+/**
+ * @brief Pack literal values in output bitstream
  */
 inline __device__ void PackLiterals(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 24) {
-    if (t <= (count | 0x1f)) {
-      if (w == 1 || w == 2 || w == 4) {
-        uint32_t mask = 0;
-        if (w == 1) {
-          v |= shuffle_xor(v, 1) << 1;
-          v |= shuffle_xor(v, 2) << 2;
-          v |= shuffle_xor(v, 4) << 4;
-          mask = 0x7;
-        } else if (w == 2) {
-          v |= shuffle_xor(v, 1) << 2;
-          v |= shuffle_xor(v, 2) << 4;
-          mask = 0x3;
-        } else if (w == 4) {
-          v |= shuffle_xor(v, 1) << 4;
-          mask = 0x1;
-        }
-        if (t < count && mask && !(t & mask)) { dst[(t * w) >> 3] = v; }
-        return;
-      } else if (w == 8) {
-        if (t < count) { dst[t] = v; }
-        return;
-      } else if (w == 12) {
-        v |= shuffle_xor(v, 1) << 12;
-        if (t < count && !(t & 1)) {
-          dst[(t >> 1) * 3 + 0] = v;
-          dst[(t >> 1) * 3 + 1] = v >> 8;
-          dst[(t >> 1) * 3 + 2] = v >> 16;
-        }
-        return;
-      } else if (w == 16) {
-        if (t < count) {
-          dst[t * 2 + 0] = v;
-          dst[t * 2 + 1] = v >> 8;
-        }
-        return;
-      } else if (w == 24) {
-        if (t < count) {
-          dst[t * 3 + 0] = v;
-          dst[t * 3 + 1] = v >> 8;
-          dst[t * 3 + 2] = v >> 16;
-        }
-        return;
-      }
-    } else {
-      return;
-    }
-  } else if (w <= 16) {
-    // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
-    // words but the destination mem may not be a multiple of 4 bytes.
-    // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
-    __shared__ uint32_t scratch[64];
-    if (t < 64) { scratch[t] = 0; }
-    __syncthreads();
-
-    if (t <= count) {
-      uint64_t v64 = v;
-      v64 <<= (t * w) & 0x1f;
-
-      // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
-      uint32_t v32[2];
-      memcpy(&v32, &v64, sizeof(uint64_t));
-
-      // Atomically write result to scratch
-      if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
-      if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
-    }
-    __syncthreads();
-
-    // Copy scratch data to final destination
-    auto available_bytes = (count * w + 7) / 8;
-
-    auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
-    if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
-    if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
-    __syncthreads();
-  } else {
-    CUDF_UNREACHABLE("Unsupported bit width");
+  switch (w) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 6:
+    case 8:
+    case 10:
+    case 12:
+    case 16:
+    case 20:
+    case 24:
+      // bit widths that lie on easy boundaries can be handled either directly
+      // (8, 16, 24) or through fast shuffle operations.
+      PackLiteralsShuffle(dst, v, count, w, t);
+      break;
+    default:
+      if (w > 16) { CUDF_UNREACHABLE("Unsupported bit width"); }
+      // less efficient bit packing that uses atomics, but can handle arbitrary
+      // bit widths up to 16. used for repetition and definition level encoding
+      PackLiteralsRoundRobin(dst, v, count, w, t);
   }
 }
 
