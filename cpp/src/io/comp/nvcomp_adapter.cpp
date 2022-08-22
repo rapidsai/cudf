@@ -21,6 +21,8 @@
 
 #include <nvcomp/snappy.h>
 
+#include <fstream>
+
 #define NVCOMP_DEFLATE_HEADER <nvcomp/deflate.h>
 #if __has_include(NVCOMP_DEFLATE_HEADER)
 #include NVCOMP_DEFLATE_HEADER
@@ -368,6 +370,23 @@ void batched_compress(compression_type compression,
                          nvcomp_args.output_data_ptrs.data(),
                          actual_compressed_data_sizes.data(),
                          stream.value());
+
+  if (detail::getenv_or("DUMP_NVCOMP_INPUT", 0)) {
+    std::vector<device_span<uint8_t const>> h_inputs(num_chunks);
+    cudaMemcpy(h_inputs.data(),
+               inputs.data(),
+               sizeof(device_span<uint8_t const>) * num_chunks,
+               cudaMemcpyDeviceToHost);
+    stream.synchronize();
+    int idx = 0;
+    for (auto& input : h_inputs) {
+      std::vector<uint8_t> h_input(input.size());
+      cudaMemcpy(
+        h_inputs.data(), inputs.data(), sizeof(uint8_t) * input.size(), cudaMemcpyDeviceToHost);
+      std::ofstream myFile("comp_in" + std::to_string(idx++), std::ios::out | std::ios::binary);
+      myFile.write(reinterpret_cast<char*>(h_input.data()), h_input.size());
+    }
+  }
 
   convert_status(std::nullopt, actual_compressed_data_sizes, statuses, stream);
 }
