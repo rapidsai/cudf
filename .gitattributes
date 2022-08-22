@@ -1,2 +1,3 @@
 python/cudf/cudf/_version.py export-subst
+python/strings_udf/strings_udf/_version.py export-subst
 CHANGELOG.md merge=union

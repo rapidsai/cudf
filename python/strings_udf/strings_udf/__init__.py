@@ -5,3 +5,7 @@ import os
 ENABLED = False if patch_needed() else True
 
 ptxpath = os.getenv("CONDA_PREFIX") + "/lib/shim.ptx"
+
+from . import _version
+
+__version__ = _version.get_versions()["version"]
