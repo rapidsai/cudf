@@ -56,7 +56,7 @@ The details are based on features documented at https://www.regular-expressions.
 | Character class | `[` | `[` begins a character class. | |
 | Literal character | Any character except `\^-]` | All characters except the listed special characters are literal characters that add themselves to the character class. | `[abc]` matches `a`, `b` or `c` |
 | Backslash escapes a metacharacter	| `\` (backslash) followed by any of `\^-]` | A backslash escapes special characters to suppress their special meaning. | `[\^\]]` matches `^` or `]` |
-| Range | `-` (hyphen) between two tokens that each specify a single character. | Adds a range of characters to the character class. | `[a-zA-Z0-9]` matches any ASCII letter or digit |
+| Range | `-` (hyphen) between two tokens that each specify a single character. | Adds a range of characters to the character class. If '`-`' is the first or last character (e.g. `[a-]` or `[-z]`), it will match a literal '`-`' and not infer a range. | `[a-zA-Z0-9]` matches any ASCII letter or digit |
 | Negated character class | `^` (caret) immediately after the opening `[` | Negates the character class, causing it to match a single character not listed in the character class. | `[^a-d]` matches `x` (any character except `a`, `b`, `c` or `d`) |
 | Literal opening bracket | `[` | An opening square bracket is a literal character that adds an opening square bracket to the character class. | `[ab[cd]ef]` matches `aef]`, `bef]`, `[ef]`, `cef]`, and `def]` |
 | Character escape | `\n`, `\r` and `\t` | Add an LF character, a CR character, or a tab character to the character class, respectively. | `[\n\r\t]` matches a line feed, a carriage return, or a tab character |
