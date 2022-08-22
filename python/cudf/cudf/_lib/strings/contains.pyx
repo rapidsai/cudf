@@ -84,8 +84,8 @@ def match_re(Column source_strings, object reg_ex, uint32_t flags):
 
 def like(Column source_strings, object py_pattern, object py_escape):
     """
-    Returns a Column with each value True if the string matches `pattern`
-    like expression with each record of `source_strings`
+    Returns a Column with each value True if the string matches the
+    `py_pattern` like expression with each record of `source_strings`
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

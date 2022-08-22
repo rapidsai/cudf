@@ -123,9 +123,9 @@ std::unique_ptr<column> count_re(
  * @code{.pseudo}
  * Example:
  * s = ["azaa", "ababaabba", "aaxa"]
- * r = like(s,"%a_aa%")
+ * r = like(s, "%a_aa%")
  * r is now [1, 1, 0]
- * r = like(s,"a__a")
+ * r = like(s, "a__a")
  * r is now [1, 0, 1]
  * @endcode
  *
@@ -134,7 +134,7 @@ std::unique_ptr<column> count_re(
  * @code{.pseudo}
  * Example:
  * s = ["abc_def", "abc1def", "abc_"]
- * r = like(s,"abc\_d%", "\")
+ * r = like(s, "abc/_d%", "/")
  * r is now [1, 0, 0]
  * @endcode
  *
@@ -142,15 +142,15 @@ std::unique_ptr<column> count_re(
  *
  * @throw cudf::logic_error if `pattern` or `escape_character` is invalid
  *
- * @param strings Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param pattern Like pattern to match within each string
- * @param escape_character Optional character to identify as the escape prefix;
- *                         default is not escape character
+ * @param escape_character Optional character specifies the escape prefix;
+ *                         default is no escape character
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New boolean column
  */
 std::unique_ptr<column> like(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& pattern,
   string_scalar const& escape_character = string_scalar(""),
   rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());

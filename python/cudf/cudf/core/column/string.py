@@ -784,17 +784,16 @@ class StringMethods(ColumnMethods):
 
     def like(self, pat: str, esc: str = None) -> SeriesOrIndex:
         """
-        Test if pattern matches a string of a Series or Index.
+        Test if a like pattern matches a string of a Series or Index.
 
         Return boolean Series or Index based on whether a given pattern
-        matches a string of a Series or Index.
+        matches strings in a Series or Index.
 
         Parameters
         ----------
         pat : str
-            Pattern to search. Use '%' for any number of any character
-            including no characters.
-            Use '_' for any single character.
+            Pattern for matching. Use '%' for any number of any character
+            including no characters. Use '_' for any single character.
 
         esc : str
             Character to use if escape is necessary to match '%' or '_'
@@ -809,7 +808,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['abc', 'a','b' ,'ddbc', '%bb'])
+        >>> s = cudf.Series(['abc', 'a', 'b' ,'ddbc', '%bb'])
         >>> s.str.like('%b_')
         0   False
         1   False
@@ -818,7 +817,7 @@ class StringMethods(ColumnMethods):
         4   True
         dtype: boolean
 
-        Parameter `esc` can be used to match wildcard literal.
+        Parameter `esc` can be used to match a wildcard literal.
 
         >>> s.str.like('/%b_', esc='/' )
         0   False
@@ -826,7 +825,7 @@ class StringMethods(ColumnMethods):
         2   False
         3   False
         4   True
-        dtype: int32
+        dtype: boolean
         """
         if not isinstance(pat, str):
             raise TypeError(
