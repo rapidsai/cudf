@@ -473,6 +473,7 @@ arrow::Result<ipc::exported_column> dispatch_to_ipc_column::operator()<cudf::lis
         });
       return column;
     });
+
   ipc::exported_column column{};
   column.children = std::move(child_columns);
   column.size     = input_view.size();
@@ -513,9 +514,9 @@ std::shared_ptr<arrow::DataType> get_arrow_dtype(column_view const& column)
   auto dtype = column.type();
   switch (dtype.id()) {
     case type_id::LIST: {
-      auto ftype = column.child_begin()->type();
-      auto ret   = cudf_to_arrow_type(ftype);
-      return arrow::list(ret);
+      // the first child is offset, the second one is data.
+      auto dtype = arrow::list(cudf_to_arrow_type(column.child(1).type()));
+      return dtype;
     }
     default: return cudf_to_arrow_type(dtype);
   }

@@ -499,11 +499,25 @@ dispatch_to_column_view::operator()<cudf::list_view>(arrow::Field const& field,
                                                      ipc::exported_column const& ipc_column) const
 {
   data_type dtype = detail::arrow_to_cudf_type(*field.type());
+  CUDF_EXPECTS(dtype == data_type(type_id::LIST), "Failed to dispatch column type.");
 
   std::vector<column_view> children;
   std::vector<std::shared_ptr<imported_column>> imported_children;
+  CUDF_EXPECTS(ipc_column.children.size() == 2, "Invalid list.");
+
   for (size_t i = 0; i < ipc_column.children.size(); ++i) {
-    auto child = type_dispatcher(dtype, dispatch_to_column_view{}, field, ipc_column.children[i]);
+    std::shared_ptr<arrow::DataType> child_dtype;
+    if (i == 0) {
+      // size_type is int32
+      child_dtype = std::make_shared<arrow::Int32Type>();
+    } else {
+      child_dtype = field.type()->field(0)->type();
+    }
+    auto child_field = arrow::field("", child_dtype);
+    auto child       = type_dispatcher(detail::arrow_to_cudf_type(*child_dtype),
+                                 dispatch_to_column_view{},
+                                 *child_field,
+                                 ipc_column.children.at(i));
     if (!child.ok()) { return child; }
 
     children.push_back(child.ValueUnsafe().first);
