@@ -485,7 +485,7 @@ cdef _set_col_children_metadata(Column col,
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(
-            col.children[1],
+            col.children[cpp_lists_column_view.child_column_index],
             col_meta.child(cpp_lists_column_view.child_column_index),
             list_column_as_map
         )
