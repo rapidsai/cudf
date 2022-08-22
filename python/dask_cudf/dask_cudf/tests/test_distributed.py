@@ -79,25 +79,24 @@ def test_str_series_roundtrip():
             assert_eq(actual, expected)
 
 
-@pytest.mark.parametrize("ignore_index", [True, False])
-def test_shuffle_explicit_comms(ignore_index):
+def test_shuffle_explicit_comms():
     with dask_cuda.LocalCUDACluster(n_workers=2) as cluster:
         with Client(cluster):
             df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [3, 1, 2, 4]})
             ddf = dask_cudf.from_cudf(df, npartitions=2)
 
-            got_ec = ddf.shuffle(
-                ["a"], shuffle="explicit-comms", ignore_index=ignore_index
-            )
-            got_tasks = ddf.shuffle(
-                ["a"], shuffle="tasks", ignore_index=ignore_index
-            )
+            # Test shuffle API
+            got_ec = ddf.shuffle(["a"], shuffle="explicit-comms")
+            got_tasks = ddf.shuffle(["a"], shuffle="tasks")
             assert_eq(got_ec.compute(), got_tasks.compute())
 
-            got_ec = ddf.sort_values(
-                ["a"], shuffle="explicit-comms", ignore_index=ignore_index
-            )
-            got_tasks = ddf.sort_values(
-                ["a"], shuffle="tasks", ignore_index=ignore_index
-            )
+            # Test sort_values API
+            got_ec = ddf.sort_values(["a"], shuffle="explicit-comms")
+            got_tasks = ddf.sort_values(["a"], shuffle="tasks")
+            assert_eq(got_ec.compute(), got_tasks.compute())
+
+            # Test set_index API
+            got_ec = ddf.set_index("a", shuffle="explicit-comms")
+            got_tasks = ddf.set_index("a", shuffle="tasks")
+            assert got_ec.divisions == got_tasks.divisions
             assert_eq(got_ec.compute(), got_tasks.compute())

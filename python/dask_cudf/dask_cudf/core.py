@@ -163,8 +163,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
 
     @_dask_cudf_nvtx_annotate
-    def set_index(self, other, sorted=False, divisions=None, **kwargs):
-        if kwargs.pop("shuffle", "tasks") != "tasks":
+    def set_index(
+        self, other, sorted=False, divisions=None, shuffle="tasks", **kwargs
+    ):
+        if shuffle not in ("tasks", "explicit-comms"):
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"
                 % kwargs["shuffle"]
@@ -203,6 +205,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions=divisions,
                 set_divisions=True,
                 ignore_index=True,
+                shuffle=shuffle,
             )
 
             # Ignore divisions if its a dataframe
