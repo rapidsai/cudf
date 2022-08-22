@@ -81,7 +81,7 @@ TEST_F(DLPackUntypedTests, EmptyColsToDlpack)
   EXPECT_NE(nullptr, tensor);
   EXPECT_EQ(nullptr, tensor->dl_tensor.data);
   EXPECT_EQ(2, tensor->dl_tensor.ndim);
-  EXPECT_EQ(1, tensor->dl_tensor.strides[0]);
+  EXPECT_EQ(0, tensor->dl_tensor.strides[0]);
   EXPECT_EQ(0, tensor->dl_tensor.strides[1]);
   EXPECT_EQ(0, tensor->dl_tensor.shape[0]);
   EXPECT_EQ(2, tensor->dl_tensor.shape[1]);
