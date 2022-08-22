@@ -77,3 +77,27 @@ def test_str_series_roundtrip():
 
             actual = dask_series.compute()
             assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_shuffle_explicit_comms(ignore_index):
+    with dask_cuda.LocalCUDACluster(n_workers=2) as cluster:
+        with Client(cluster):
+            df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [3, 1, 2, 4]})
+            ddf = dask_cudf.from_cudf(df, npartitions=2)
+
+            got_ec = ddf.shuffle(
+                ["a"], shuffle="explicit-comms", ignore_index=ignore_index
+            )
+            got_tasks = ddf.shuffle(
+                ["a"], shuffle="tasks", ignore_index=ignore_index
+            )
+            assert_eq(got_ec.compute(), got_tasks.compute())
+
+            got_ec = ddf.sort_values(
+                ["a"], shuffle="explicit-comms", ignore_index=ignore_index
+            )
+            got_tasks = ddf.sort_values(
+                ["a"], shuffle="tasks", ignore_index=ignore_index
+            )
+            assert_eq(got_ec.compute(), got_tasks.compute())

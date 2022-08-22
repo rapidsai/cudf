@@ -246,6 +246,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         na_position="last",
         sort_function=None,
         sort_function_kwargs=None,
+        shuffle=None,
         **kwargs,
     ):
         if kwargs:
@@ -262,6 +263,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             ignore_index=ignore_index,
             ascending=ascending,
             na_position=na_position,
+            shuffle=shuffle,
             sort_function=sort_function,
             sort_function_kwargs=sort_function_kwargs,
         )
@@ -341,7 +343,28 @@ class DataFrame(_Frame, dd.core.DataFrame):
     def shuffle(self, *args, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
         shuffle_arg = kwargs.pop("shuffle", None)
-        if shuffle_arg and shuffle_arg != "tasks":
+        if shuffle_arg == "explicit-comms":
+            # Use "explicit-comms" shuffle
+            #
+            # NOTE: This experimental algorithm is not documented in
+            # the ``sort_values`` or ``shuffle`` docstrings, because
+            # it is not recommended for general use (yet).
+            if kwargs.pop("max_branch", None):
+                raise ValueError(
+                    "max_branch not supported by explicit-comms shuffle."
+                )
+            try:
+                from dask_cuda import explicit_comms
+
+                return explicit_comms.dataframe.shuffle.shuffle(
+                    self, *args, **kwargs
+                )
+            except ImportError:
+                raise ValueError(
+                    "The explicit-comms shuffle requires dask-cuda. Please "
+                    "install dask-cuda, or select a different algorithm."
+                )
+        elif shuffle_arg and shuffle_arg != "tasks":
             raise ValueError("dask_cudf does not support disk-based shuffle.")
         return super().shuffle(*args, shuffle="tasks", **kwargs)
 
