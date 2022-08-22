@@ -505,7 +505,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu

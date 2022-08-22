@@ -3557,7 +3557,7 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data = libstrings.findall_record(self._column, pat, flags)
+        data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:
