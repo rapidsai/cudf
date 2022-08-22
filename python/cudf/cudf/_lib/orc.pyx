@@ -10,6 +10,8 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from collections import OrderedDict
 
+cimport cudf._lib.cpp.lists.lists_column_view as cpp_lists_column_view
+
 try:
     import ujson as json
 except ImportError:
@@ -483,7 +485,9 @@ cdef _set_col_children_metadata(Column col,
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(
-            col.children[1], col_meta.child(1), list_column_as_map
+            col.children[1],
+            col_meta.child(cpp_lists_column_view.child_column_index),
+            list_column_as_map
         )
     else:
         return
