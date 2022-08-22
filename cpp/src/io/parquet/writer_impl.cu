@@ -1033,8 +1033,8 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
       auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
 
-      // We don't use dictionary if the indices are > 24 bits because that's the maximum bitpacking
-      // bitsize we efficiently support
+      // We don't use dictionary if the indices are > MAX_DICT_BITS bits because that's the maximum
+      // bitpacking bitsize we efficiently support
       if (nbits > MAX_DICT_BITS) { return std::pair(false, 0); }
 
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
