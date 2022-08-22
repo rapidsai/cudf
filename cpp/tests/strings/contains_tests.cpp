@@ -466,8 +466,10 @@ TEST_F(StringsContainsTests, IncompleteClassesRange)
   auto sv    = cudf::strings_column_view(input);
 
   {
-    auto results = cudf::strings::contains_re(sv, "[a-z]");
     cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 0, 1, 1});
+    auto results = cudf::strings::contains_re(sv, "[a-z]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[a-m-z]");  // same as [a-z]
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -480,6 +482,12 @@ TEST_F(StringsContainsTests, IncompleteClassesRange)
   {
     cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 0, 0, 1});
     auto results = cudf::strings::contains_re(sv, "[-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[+--]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[a-c-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[-d-f]");
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
