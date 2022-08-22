@@ -969,27 +969,4 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
 }
 
-TEST_F(JsonReaderTest, JsonExperimentalLarge)
-{
-  // std::string json_path = "/raid/estehle/rapids/cudf/large.json";
-  std::string json_path = "/raid/estehle/rapids/cudf/large32x.json";
-
-  // Initialize parsing options (reading json lines)
-  cudf::io::json_reader_options json_lines_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{json_path}).lines(true);
-
-  // Read test data via existing, non-nested json lines reader
-  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
-
-  // Read test data via new, nested json reader
-  json_lines_options.enable_experimental(true);
-  cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
-
-  // Verify that the data read via parquet matches the data read via JSON
-  CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
-
-  // TODO enable once existing JSON lines reader's schema generation has been adjusted
-  // cudf::test::expect_metadata_equal(current_reader_table.metadata, new_reader_table.metadata);
-}
-
 CUDF_TEST_PROGRAM_MAIN()
