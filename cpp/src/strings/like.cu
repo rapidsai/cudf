@@ -47,53 +47,54 @@ struct like_fn {
     auto const d_str = d_strings.element<string_view>(idx);
 
     // using only iterators to better handle UTF-8 characters
-    auto tgt_itr = d_str.begin();
-    auto ptn_itr = d_pattern.begin();
+    auto target_itr  = d_str.begin();
+    auto pattern_itr = d_pattern.begin();
 
-    auto const tgt_end  = d_str.end();
-    auto const ptn_end  = d_pattern.end();
-    auto const esc_char = d_escape.empty() ? 0 : d_escape[0];
+    auto const target_end  = d_str.end();
+    auto const pattern_end = d_pattern.end();
+    auto const esc_char    = d_escape.empty() ? 0 : d_escape[0];
 
-    auto last_tgt = tgt_end;
-    auto last_ptn = ptn_end;
+    auto last_target_itr  = target_end;
+    auto last_pattern_itr = pattern_end;
 
     bool result = true;
     while (true) {
       // walk through the pattern and check against the current character
-      while (ptn_itr < ptn_end) {
-        auto const escaped = *ptn_itr == esc_char;
-        auto const ptn_ch  = escaped && (ptn_itr + 1 < ptn_end) ? *(++ptn_itr) : *ptn_itr;
+      while (pattern_itr < pattern_end) {
+        auto const escaped = *pattern_itr == esc_char;
+        auto const ptn_ch =
+          escaped && (pattern_itr + 1 < pattern_end) ? *(++pattern_itr) : *pattern_itr;
 
         if (escaped || (ptn_ch != multi_wildcard)) {
           // check match with the current character
-          result = ((tgt_itr != tgt_end) &&
-                    ((!escaped && ptn_ch == single_wildcard) || (ptn_ch == *tgt_itr)));
+          result = ((target_itr != target_end) &&
+                    ((!escaped && ptn_ch == single_wildcard) || (ptn_ch == *target_itr)));
           if (!result) { break; }
-          ++tgt_itr;
-          ++ptn_itr;
+          ++target_itr;
+          ++pattern_itr;
         } else {
           // process wildcard '%'
           result = true;
-          ++ptn_itr;
-          if (ptn_itr == ptn_end) {  // pattern ends with '%' so we are done
-            tgt_itr = tgt_end;
+          ++pattern_itr;
+          if (pattern_itr == pattern_end) {  // pattern ends with '%' so we are done
+            target_itr = target_end;
             break;
           }
           // save positions
-          last_ptn = ptn_itr;
-          last_tgt = tgt_itr;
+          last_pattern_itr = pattern_itr;
+          last_target_itr  = target_itr;
         }
       }  // next pattern character
 
-      if (result && (tgt_itr == tgt_end)) { break; }  // success
+      if (result && (target_itr == target_end)) { break; }  // success
 
       result = false;
       // check if exhausted either the pattern or the target string
-      if (last_ptn == ptn_end || last_tgt == tgt_end) { break; }
+      if (last_pattern_itr == pattern_end || last_target_itr == target_end) { break; }
 
       // restore saved positions
-      ptn_itr = last_ptn;
-      tgt_itr = ++last_tgt;
+      pattern_itr = last_pattern_itr;
+      target_itr  = ++last_target_itr;
     }
     return result;
   }
