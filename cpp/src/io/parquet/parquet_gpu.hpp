@@ -594,10 +594,12 @@ void GatherPages(device_span<EncColumnChunk> chunks,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] column_stats Page-level statistics to be encoded
+ * @param[in] column_index_truncate_length Max length of min/max values
  * @param[in] stream CUDA stream to use
  */
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
+                         size_type column_index_truncate_length,
                          rmm::cuda_stream_view stream);
 
 }  // namespace gpu

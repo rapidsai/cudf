@@ -440,7 +440,7 @@ class column_in_metadata {
   }
 
   /**
-   * @brief Specify that this list column should be encoded as a map in the written parquet file
+   * @brief Specify that this list column should be encoded as a map in the written file
    *
    * The column must have the structure list<struct<key, value>>. This option is invalid otherwise
    *

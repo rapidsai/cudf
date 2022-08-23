@@ -22,6 +22,7 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -30,7 +31,6 @@
 
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/logical.h>
@@ -42,7 +42,6 @@
 #include <type_traits>
 
 namespace cudf::lists {
-
 namespace {
 
 /**
@@ -54,13 +53,13 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 
 /**
  * @brief A sentinel value used for marking that a given output row should be null.
+ *
+ * This value should be different from `NOT_FOUND_SENTINEL`.
  */
 auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
 /**
- * @brief Indicate the current supported types in `cudf::lists::contains`.
- *
- * TODO: Add supported nested types.
+ * @brief Check if the given type is a supported non-nested type in `cudf::lists::contains`.
  */
 template <typename Element>
 static auto constexpr is_supported_non_nested_type()
@@ -69,13 +68,52 @@ static auto constexpr is_supported_non_nested_type()
 }
 
 /**
- * @brief Functor to perform searching for index of a key element in a given list.
+ * @brief Check if the given type is supported in `cudf::lists::contains`.
  */
-struct search_list_fn {
+template <typename Element>
+auto constexpr is_supported_type()
+{
+  return is_supported_non_nested_type<Element>() || cudf::is_nested<Element>();
+}
+
+/**
+ * @brief Return a pair of index iterators {begin, end} to loop through elements within a
+ * list.
+ *
+ * Depending on the value of `forward`, a pair of forward or reverse iterators will be
+ * returned, allowing to loop through elements in the list in first-to-last or last-to-first
+ * order.
+ *
+ * Note that the element indices always restart to `0` at the first position in each list.
+ *
+ * @tparam forward A boolean value indicating whether we want to iterate elements in the list
+ *         by forward or reverse order.
+ * @param size The number of elements in the list.
+ * @return A pair of {begin, end} iterators to iterate through the range `[0, size)`.
+ */
+template <bool forward>
+__device__ auto element_index_pair_iter(size_type const size)
+{
+  auto const begin = thrust::make_counting_iterator(0);
+  auto const end   = thrust::make_counting_iterator(size);
+
+  if constexpr (forward) {
+    return thrust::pair{begin, end};
+  } else {
+    return thrust::pair{thrust::make_reverse_iterator(end), thrust::make_reverse_iterator(begin)};
+  }
+}
+
+/**
+ * @brief Functor to perform searching for index of a key element in a given list, specialized
+ * for non-nested types.
+ */
+struct search_list_non_nested_types_fn {
   duplicate_find_option const find_option;
 
   template <typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
-  __device__ size_type operator()(list_device_view list, thrust::optional<Element> key_opt) const
+  __device__ size_type operator()(list_device_view const list,
+                                  thrust::optional<Element> const key_opt) const
   {
     // A null list or null key will result in a null output row.
     if (list.is_null() || !key_opt) { return NULL_SENTINEL; }
@@ -86,7 +124,7 @@ struct search_list_fn {
   }
 
   template <typename Element, CUDF_ENABLE_IF(!is_supported_non_nested_type<Element>())>
-  __device__ size_type operator()(list_device_view, thrust::optional<Element>) const
+  __device__ size_type operator()(list_device_view const, thrust::optional<Element> const) const
   {
     CUDF_UNREACHABLE("Unsupported type.");
   }
@@ -98,55 +136,179 @@ struct search_list_fn {
   {
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
+      thrust::find_if(thrust::seq, begin, end, [=] __device__(auto const idx) {
         return !list.is_null(idx) &&
                cudf::equality_compare(list.template element<Element>(idx), search_key);
       });
     // If the key is found, return its found position in the list from `found_iter`.
     return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
   }
+};
 
-  /**
-   * @brief Return a pair of index iterators {begin, end} to loop through elements within a list.
-   *
-   * Depending on the value of `forward`, a pair of forward or reverse iterators will be
-   * returned, allowing to loop through elements in the list in first-to-last or last-to-first
-   * order.
-   *
-   * Note that the element indices always restart to `0` at the first position in each list.
-   *
-   * @tparam forward A boolean value indicating whether we want to iterate elements in the list by
-   *         forward or reverse order.
-   * @param size The number of elements in the list.
-   * @return A pair of {begin, end} iterators to iterate through the range `[0, size)`.
-   */
-  template <bool forward>
-  static __device__ auto element_index_pair_iter(size_type const size)
+/**
+ * @brief Functor to perform searching for index of a key element in a given list, specialized
+ * for nested types.
+ */
+template <typename KeyValidityIter, typename EqComparator>
+struct search_list_nested_types_fn {
+  duplicate_find_option const find_option;
+  KeyValidityIter const key_validity_iter;
+  EqComparator const d_comp;
+  bool const search_key_is_scalar;
+
+  search_list_nested_types_fn(duplicate_find_option const find_option,
+                              KeyValidityIter const key_validity_iter,
+                              EqComparator const& d_comp,
+                              bool search_key_is_scalar)
+    : find_option(find_option),
+      key_validity_iter(key_validity_iter),
+      d_comp(d_comp),
+      search_key_is_scalar(search_key_is_scalar)
   {
-    if constexpr (forward) {
-      return thrust::pair(thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-    } else {
-      return thrust::pair(thrust::make_reverse_iterator(thrust::make_counting_iterator(size)),
-                          thrust::make_reverse_iterator(thrust::make_counting_iterator(0)));
-    }
+  }
+
+  __device__ size_type operator()(list_device_view const list) const
+  {
+    // A null list or null key will result in a null output row.
+    if (list.is_null() || !key_validity_iter[list.row_index()]) { return NULL_SENTINEL; }
+
+    return find_option == duplicate_find_option::FIND_FIRST ? search_list<true>(list)
+                                                            : search_list<false>(list);
+  }
+
+ private:
+  template <bool forward>
+  __device__ inline size_type search_list(list_device_view const list) const
+  {
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
+
+    auto const [begin, end] = element_index_pair_iter<forward>(list.size());
+    auto const found_iter =
+      thrust::find_if(thrust::seq, begin, end, [=] __device__(auto const idx) {
+        return !list.is_null(idx) &&
+               d_comp(static_cast<lhs_index_type>(list.element_offset(idx)),
+                      static_cast<rhs_index_type>(search_key_is_scalar ? 0 : list.row_index()));
+      });
+    // If the key is found, return its found position in the list from `found_iter`.
+    return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
   }
 };
 
 /**
- * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
+ * @brief Function to search for key element(s) in the corresponding rows of a lists column,
+ * specialized for non-nested types.
+ */
+template <bool search_key_is_scalar,
+          typename Element,
+          typename InputIterator,
+          typename OutputIterator,
+          typename SearchKeyType>
+void index_of_non_nested_types(InputIterator input_it,
+                               size_type num_rows,
+                               OutputIterator output_it,
+                               SearchKeyType const& search_keys,
+                               bool search_keys_have_nulls,
+                               duplicate_find_option find_option,
+                               rmm::cuda_stream_view stream)
+{
+  auto const do_search = [=](auto const keys_iter) {
+    thrust::transform(rmm::exec_policy(stream),
+                      input_it,
+                      input_it + num_rows,
+                      keys_iter,
+                      output_it,
+                      search_list_non_nested_types_fn{find_option});
+  };
+
+  if constexpr (search_key_is_scalar) {
+    auto const keys_iter = cudf::detail::make_optional_iterator<Element>(
+      search_keys, nullate::DYNAMIC{search_keys_have_nulls});
+    do_search(keys_iter);
+  } else {
+    auto const keys_cdv_ptr = column_device_view::create(search_keys, stream);
+    auto const keys_iter    = cudf::detail::make_optional_iterator<Element>(
+      *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
+    do_search(keys_iter);
+  }
+}
+
+/**
+ * @brief Function to search for index of key element(s) in the corresponding rows of a lists
+ * column, specialized for nested types.
+ */
+template <bool search_key_is_scalar,
+          typename InputIterator,
+          typename OutputIterator,
+          typename SearchKeyType>
+void index_of_nested_types(InputIterator input_it,
+                           size_type num_rows,
+                           OutputIterator output_it,
+                           column_view const& child,
+                           SearchKeyType const& search_keys,
+                           duplicate_find_option find_option,
+                           rmm::cuda_stream_view stream)
+{
+  // Create a `table_view` from the search key(s).
+  // If the input search key is a (nested type) scalar, a new column is materialized from that
+  // scalar before a `table_view` is generated from it. As such, the new created column will also be
+  // returned to keep the result `table_view` valid.
+  [[maybe_unused]] auto const [keys_tview, unused_column] =
+    [&]() -> std::pair<table_view, std::unique_ptr<column>> {
+    if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
+      auto tmp_column       = make_column_from_scalar(search_keys, 1, stream);
+      auto const keys_tview = tmp_column->view();
+      return {table_view{{keys_tview}}, std::move(tmp_column)};
+    } else {
+      return {table_view{{search_keys}}, nullptr};
+    }
+  }();
+  auto const child_tview = table_view{{child}};
+  auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
+  auto const comparator =
+    cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
+  auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
+
+  auto const do_search = [=](auto const key_validity_iter) {
+    thrust::transform(
+      rmm::exec_policy(stream),
+      input_it,
+      input_it + num_rows,
+      output_it,
+      search_list_nested_types_fn{find_option, key_validity_iter, d_comp, search_key_is_scalar});
+  };
+
+  if constexpr (search_key_is_scalar) {
+    auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(search_keys);
+    do_search(key_validity_iter);
+  } else {
+    auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
+    auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
+    do_search(key_validity_iter);
+  }
+}
+
+/**
+ * @brief Dispatch functor to search for index of key element(s) in the corresponding rows of a
+ * lists column.
  */
 struct dispatch_index_of {
+  // SFINAE with conditional return type because we need to support device lambda in this function.
+  // This is required due to a limitation of nvcc.
   template <typename Element, typename SearchKeyType>
-  std::enable_if_t<is_supported_non_nested_type<Element>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_supported_type<Element>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
     SearchKeyType const& search_keys,
     duplicate_find_option find_option,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
-                 "Nested types not supported in list search operations.");
-    CUDF_EXPECTS(lists.child().type() == search_keys.type(),
+    // Access the child column through `child()` method, not `get_sliced_child()`.
+    // This is because slicing offset has already been taken into account during row
+    // comparisons.
+    auto const child = lists.child();
+
+    CUDF_EXPECTS(child.type() == search_keys.type(),
                  "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
@@ -159,12 +321,14 @@ struct dispatch_index_of {
       }
     }();
 
+    auto const num_rows = lists.size();
+
     if (search_key_is_scalar && search_keys_have_nulls) {
       // If the scalar key is invalid/null, the entire output column will be all nulls.
       return make_numeric_column(data_type{cudf::type_to_id<size_type>()},
-                                 lists.size(),
-                                 cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
-                                 lists.size(),
+                                 num_rows,
+                                 cudf::create_null_mask(num_rows, mask_state::ALL_NULL, mr),
+                                 num_rows,
                                  stream,
                                  mr);
     }
@@ -177,33 +341,21 @@ struct dispatch_index_of {
       });
 
     auto out_positions = make_numeric_column(
-      data_type{type_to_id<size_type>()}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto const out_begin = out_positions->mutable_view().template begin<size_type>();
+      data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
+    auto const output_it = out_positions->mutable_view().template begin<size_type>();
 
-    auto const do_search = [&](auto const keys_iter) {
-      thrust::transform(rmm::exec_policy(stream),
-                        input_it,
-                        input_it + lists.size(),
-                        keys_iter,
-                        out_begin,
-                        search_list_fn{find_option});
-    };
-
-    if constexpr (search_key_is_scalar) {
-      auto const keys_iter = cudf::detail::make_optional_iterator<Element>(
-        search_keys, nullate::DYNAMIC{search_keys_have_nulls});
-      do_search(keys_iter);
-    } else {
-      auto const keys_cdv_ptr = column_device_view::create(search_keys, stream);
-      auto const keys_iter    = cudf::detail::make_optional_iterator<Element>(
-        *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
-      do_search(keys_iter);
+    if constexpr (not cudf::is_nested<Element>()) {
+      index_of_non_nested_types<search_key_is_scalar, Element>(
+        input_it, num_rows, output_it, search_keys, search_keys_have_nulls, find_option, stream);
+    } else {  // list + struct
+      index_of_nested_types<search_key_is_scalar>(
+        input_it, num_rows, output_it, child, search_keys, find_option, stream);
     }
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        out_begin,
-        out_begin + lists.size(),
+        output_it,
+        output_it + num_rows,
         [] __device__(auto const idx) { return idx != NULL_SENTINEL; },
         stream,
         mr);
@@ -213,7 +365,7 @@ struct dispatch_index_of {
   }
 
   template <typename Element, typename SearchKeyType>
-  std::enable_if_t<!is_supported_non_nested_type<Element>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<!is_supported_type<Element>(), std::unique_ptr<column>> operator()(
     lists_column_view const&,
     SearchKeyType const&,
     duplicate_find_option,
@@ -226,7 +378,7 @@ struct dispatch_index_of {
 
 /**
  * @brief Converts key-positions vector (from `index_of()`) to a BOOL8 vector, indicating if
- *        the search key(s) were found.
+ * the search key(s) were found.
  */
 std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                                     rmm::cuda_stream_view stream,
@@ -282,8 +434,12 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return to_contains(
-    index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
+  auto key_indices = index_of(lists,
+                              search_key,
+                              duplicate_find_option::FIND_FIRST,
+                              stream,
+                              rmm::mr::get_current_device_resource());
+  return to_contains(std::move(key_indices), stream, mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
@@ -294,8 +450,12 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  return to_contains(
-    index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
+  auto key_indices = index_of(lists,
+                              search_keys,
+                              duplicate_find_option::FIND_FIRST,
+                              stream,
+                              rmm::mr::get_current_device_resource());
+  return to_contains(std::move(key_indices), stream, mr);
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
@@ -305,7 +465,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cv      = lists.parent();
   auto output              = make_numeric_column(data_type{type_to_id<bool>()},
                                     lists.size(),
-                                    copy_bitmask(lists_cv),
+                                    copy_bitmask(lists_cv, stream, mr),
                                     lists_cv.null_count(),
                                     stream,
                                     mr);
