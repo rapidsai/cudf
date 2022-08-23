@@ -137,6 +137,50 @@ class istream_data_chunk_reader : public data_chunk_reader {
 };
 
 /**
+ * @brief a reader which produces views of device memory which contain a copy of the data from a
+ * string
+ *
+ */
+class host_span_data_chunk_reader : public data_chunk_reader {
+ public:
+  host_span_data_chunk_reader(cudf::host_span<const char> data) : _data(data) {}
+
+  void skip_bytes(std::size_t read_size) override
+  {
+    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
+    _position += read_size;
+  }
+
+  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
+                                                    rmm::cuda_stream_view stream) override
+  {
+    CUDF_FUNC_RANGE();
+
+    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
+
+    // get a view over some device memory we can use to buffer the read data on to device.
+    auto chunk = rmm::device_uvector<char>(read_size, stream);
+
+    // copy the host-pinned data on to device
+    CUDF_CUDA_TRY(cudaMemcpyAsync(  //
+      chunk.data(),
+      _data.data() + _position,
+      read_size,
+      cudaMemcpyHostToDevice,
+      stream.value()));
+
+    _position += read_size;
+
+    // return the view over device memory so it can be processed.
+    return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
+  }
+
+ private:
+  std::size_t _position = 0;
+  cudf::host_span<const char> _data;
+};
+
+/**
  * @brief a reader which produces view of device memory which represent a subset of the input device
  * span
  *
@@ -149,7 +193,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
   {
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
     _position += read_size;
-  };
+  }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
@@ -197,7 +241,7 @@ class string_data_chunk_source : public data_chunk_source {
   string_data_chunk_source(std::string const& data) : _data(data) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
-    return std::make_unique<istream_data_chunk_reader>(std::make_unique<std::istringstream>(_data));
+    return std::make_unique<host_span_data_chunk_reader>(_data);
   }
 
  private:
