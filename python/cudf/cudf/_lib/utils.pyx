@@ -48,7 +48,9 @@ cdef table_view table_view_from_columns(
     return table_view(column_views)
 
 
-cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
+cdef table_view table_view_from_table(
+    tbl, ignore_index=False, SpillLock spill_lock=None
+) except*:
     """Create a cudf::table_view from a Table.
 
     Parameters
@@ -57,10 +59,15 @@ cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
         If True, don't include the index in the columns.
     """
     return table_view_from_columns(
-        tbl._index._data.columns + tbl._data.columns
-        if not ignore_index and tbl._index is not None
-        else tbl._data.columns
+        (
+            tbl._index._data.columns + tbl._data.columns
+            if not ignore_index and tbl._index is not None
+            else tbl._data.columns
+        ),
+        spill_lock=spill_lock
     )
+
+
 cdef vector[column_view] make_column_views(object columns):
     cdef vector[column_view] views
     views.reserve(len(columns))
