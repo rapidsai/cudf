@@ -553,12 +553,12 @@ add_library(
 # _FILE_OFFSET_BITS=64 due to a gcc limitation
 set_source_files_properties(
   src/binaryop/binaryop.cpp
-  src/transform/transform.cpp
-  src/rolling/detail/rolling_variable_window.cu
+  src/jit/cache.cpp
   src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/rolling.cu
-  src/jit/cache.cpp
+  src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
