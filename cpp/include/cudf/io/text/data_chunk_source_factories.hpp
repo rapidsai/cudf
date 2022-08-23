@@ -222,7 +222,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  */
 class file_data_chunk_source : public data_chunk_source {
  public:
-  file_data_chunk_source(std::string filename) : _filename(filename) {}
+  file_data_chunk_source(std::string filename) : _filename(std::move(filename)) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<istream_data_chunk_reader>(
@@ -234,18 +234,18 @@ class file_data_chunk_source : public data_chunk_source {
 };
 
 /**
- * @brief a host string data source which creates an istream_data_chunk_reader
+ * @brief a host string data source which creates an host_span_data_chunk_reader
  */
-class string_data_chunk_source : public data_chunk_source {
+class host_span_data_chunk_source : public data_chunk_source {
  public:
-  string_data_chunk_source(std::string const& data) : _data(data) {}
+  host_span_data_chunk_source(host_span<const char> data) : _data(data) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<host_span_data_chunk_reader>(_data);
   }
 
  private:
-  std::string const& _data;
+  host_span<const char> _data;
 };
 
 /**
@@ -268,9 +268,9 @@ class device_span_data_chunk_source : public data_chunk_source {
 /**
  * @brief Creates a data source capable of producing device-buffered views of the given string.
  */
-std::unique_ptr<data_chunk_source> make_source(std::string const& data)
+std::unique_ptr<data_chunk_source> make_source(host_span<const char> data)
 {
-  return std::make_unique<string_data_chunk_source>(data);
+  return std::make_unique<host_span_data_chunk_source>(data);
 }
 
 /**
