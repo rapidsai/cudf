@@ -1341,7 +1341,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def dtype(self):
-        """dtype of the Series"""
+        """The dtype of the Series."""
         return self._column.dtype
 
     @classmethod
@@ -2275,7 +2275,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Examples
         --------
-
         Apply a basic function to a series
         >>> sr = cudf.Series([1,2,3])
         >>> def f(x):
@@ -2837,7 +2836,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         result : Series containing counts of unique values.
 
-        See also
+        See Also
         --------
         Series.count
             Number of non-NA elements in a Series.
@@ -2952,7 +2951,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Parameters
         ----------
-
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
@@ -4372,7 +4370,6 @@ class DatetimeProperties:
 
         Notes
         -----
-
         The following date format identifiers are not yet
         supported: ``%c``, ``%x``,``%X``
 

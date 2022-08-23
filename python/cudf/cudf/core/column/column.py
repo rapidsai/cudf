@@ -793,6 +793,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
         of given label.
+
         Parameters
         ----------
         label : Scalar
