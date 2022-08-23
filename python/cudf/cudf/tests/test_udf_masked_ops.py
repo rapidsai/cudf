@@ -676,7 +676,7 @@ def test_masked_udf_caching():
 
 
 @pytest.mark.parametrize(
-    "data", [[1.0, 0.0, 1.5], [1, 1, 2], [True, False, True]]
+    "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
 )
 @pytest.mark.parametrize("operator", [float, int, bool])
 def test_masked_udf_casting(operator, data):
