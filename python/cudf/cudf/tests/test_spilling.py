@@ -360,10 +360,10 @@ def test_expose_statistics(manager: SpillManager):
 
     assert len(manager.get_expose_statistics()) == 2
 
-    # The stats of the first buffer should be unchanged
-    assert manager.get_expose_statistics()[0] == stat
+    # The stats of the first buffer should now be the last
+    assert manager.get_expose_statistics()[1] == stat
     # The rest should accumulate to a single stat
-    stat = manager.get_expose_statistics()[1]
+    stat = manager.get_expose_statistics()[0]
     assert stat.count == 9
     assert stat.total_nbytes == buffers[0].nbytes * 9
     assert stat.spilled_nbytes == 0
@@ -381,7 +381,7 @@ def test_expose_statistics(manager: SpillManager):
     for i in range(10):
         buffers[i].ptr
     assert len(manager.get_expose_statistics()) == 3
-    stat = manager.get_expose_statistics()[2]
+    stat = manager.get_expose_statistics()[0]
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
