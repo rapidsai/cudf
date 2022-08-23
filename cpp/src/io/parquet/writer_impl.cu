@@ -1031,7 +1031,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
       // of bits required to encode indices into the dictionary
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
-      auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
+      auto nbits          = std::max(CompactProtocolReader::NumRequiredBits(max_dict_index), 1);
 
       // We don't use dictionary if the indices are > MAX_DICT_BITS bits because that's the maximum
       // bitpacking bitsize we efficiently support
