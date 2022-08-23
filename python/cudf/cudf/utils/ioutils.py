@@ -442,7 +442,10 @@ stripe_size_rows: integer or None, default None
 row_index_stride: integer or None, default None
     Row index stride (maximum number of rows in each row group).
     If None, 10000 will be used.
-
+cols_as_map_type : list of column names or None, default None
+    A list of column names which should be written as map type in the ORC file.
+    Note that this option only affects columns of ListDtype. Names of other
+    column types will be ignored.
 
 Notes
 -----
