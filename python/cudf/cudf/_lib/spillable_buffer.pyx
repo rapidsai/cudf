@@ -229,6 +229,8 @@ cdef class SpillableBuffer:
             return self._view_desc["base"].ptr + self._view_desc["offset"]
         self._manager.spill_to_device_limit()
         with self._lock:
+            if not self._exposed:
+                self._manager.log_expose(self)
             self.move_inplace(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()

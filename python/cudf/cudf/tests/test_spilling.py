@@ -131,6 +131,10 @@ def test_environment_variables(monkeypatch):
     assert manager._spill_on_demand is False
     assert isinstance(manager._device_memory_limit, int)
     assert manager._device_memory_limit == 1000
+    global_manager.clear()
+    monkeypatch.setenv("CUDF_SPILL_STAT_EXPOSE", "on")
+    manager = global_manager.get()
+    assert isinstance(manager._expose_statistics, dict)
 
 
 def test_spill_device_memory(manager: SpillManager):
@@ -329,3 +333,55 @@ def test_ptr_restricted(manager: SpillManager):
     del token2
     assert buf.spillable
     assert buf.expose_counter == 1
+
+
+def test_expose_statistics(manager: SpillManager):
+    manager._expose_statistics = {}  # Enable expose statistics
+    assert len(manager.get_expose_statistics()) == 0
+
+    buffers = [
+        SpillableBuffer(
+            data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+        )
+        for _ in range(10)
+    ]
+
+    # Expose the first buffer
+    buffers[0].ptr
+    assert len(manager.get_expose_statistics()) == 1
+    stat = manager.get_expose_statistics()[0]
+    assert stat.count == 1
+    assert stat.total_nbytes == buffers[0].nbytes
+    assert stat.spilled_nbytes == 0
+
+    # Expose all 10 buffers
+    for i in range(10):
+        buffers[i].ptr
+
+    assert len(manager.get_expose_statistics()) == 2
+
+    # The stats of the first buffer should be unchanged
+    assert manager.get_expose_statistics()[0] == stat
+    # The rest should accumulate to a single stat
+    stat = manager.get_expose_statistics()[1]
+    assert stat.count == 9
+    assert stat.total_nbytes == buffers[0].nbytes * 9
+    assert stat.spilled_nbytes == 0
+
+    # Create and spill 10 new buffers
+    buffers = [
+        SpillableBuffer(
+            data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+        )
+        for _ in range(10)
+    ]
+    manager.spill_to_device_limit(0)
+
+    # Expose the new buffers and check that they are counted as spilled
+    for i in range(10):
+        buffers[i].ptr
+    assert len(manager.get_expose_statistics()) == 3
+    stat = manager.get_expose_statistics()[2]
+    assert stat.count == 10
+    assert stat.total_nbytes == buffers[0].nbytes * 10
+    assert stat.spilled_nbytes == buffers[0].nbytes * 10

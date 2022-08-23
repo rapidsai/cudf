@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 import gc
 import io
 import os
@@ -7,6 +9,7 @@ import threading
 import traceback
 import warnings
 import weakref
+from dataclasses import dataclass
 from functools import cached_property
 from typing import List, Mapping, MutableMapping, Optional, Set, Tuple
 
@@ -21,22 +24,42 @@ from cudf.core.indexed_frame import IndexedFrame
 from cudf.utils.string import format_bytes
 
 
+def get_traceback() -> str:
+    with io.StringIO() as f:
+        traceback.print_stack(file=f)
+        f.seek(0)
+        return f.read()
+
+
+@dataclass
+class ExposeStatistic:
+    traceback: str
+    count: int = 1
+    total_nbytes: int = 0
+    spilled_nbytes: int = 0
+
+
 class SpillManager:
+    _base_buffers: MutableMapping[int, SpillableBuffer]
+    _other_buffers: MutableMapping[int, DeviceBufferLike]
+    _expose_statistics: Optional[MutableMapping[str, ExposeStatistic]]
+
     def __init__(
-        self, *, spill_on_demand=False, device_memory_limit=None
+        self,
+        *,
+        spill_on_demand=False,
+        device_memory_limit=None,
+        expose_statistics=False,
     ) -> None:
         self._lock = threading.Lock()
-        self._base_buffers: MutableMapping[
-            int, SpillableBuffer
-        ] = weakref.WeakValueDictionary()
-        self._other_buffers: MutableMapping[
-            int, DeviceBufferLike
-        ] = weakref.WeakValueDictionary()
+        self._base_buffers = weakref.WeakValueDictionary()
+        self._other_buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
         if self._spill_on_demand:
             self.register_spill_on_demand()
+        self._expose_statistics = {} if expose_statistics else None
 
     def register_spill_on_demand(self):
         # TODO: check if a `FailureCallbackResourceAdaptor` has been
@@ -62,15 +85,11 @@ class SpillManager:
             if total_spilled > 0:
                 return True  # Ask RMM to retry the allocation
 
-            with io.StringIO() as f:
-                traceback.print_stack(file=f)
-                f.seek(0)
-                tb = f.read()
             # TODO: write to log instead of stdout
             print(
                 f"[WARNING] RMM allocation of {nbytes} bytes failed, "
                 "spill-on-demand couldn't find any device memory to "
-                f"spill:\n{repr(self)}\ntraceback:\n{tb}\n"
+                f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
             )
             return False  # Since we didn't find anything to spill, we give up
 
@@ -159,6 +178,39 @@ class SpillManager:
                 return buf
         return None
 
+    def log_expose(self, buf: SpillableBuffer) -> None:
+        if self._expose_statistics is None:
+            return
+        tb = get_traceback()
+        stat = self._expose_statistics.get(tb, None)
+        spilled_nbytes = buf.nbytes if buf.is_spilled else 0
+        if stat is None:
+            self._expose_statistics[tb] = ExposeStatistic(
+                traceback=tb,
+                total_nbytes=buf.nbytes,
+                spilled_nbytes=spilled_nbytes,
+            )
+        else:
+            stat.count += 1
+            stat.total_nbytes += buf.nbytes
+            stat.spilled_nbytes += spilled_nbytes
+
+    def get_expose_statistics(self) -> List[ExposeStatistic]:
+        if self._expose_statistics is None:
+            return []
+        return sorted(self._expose_statistics.values(), key=lambda x: x.count)
+
+    def pprint_expose_statistics(self) -> str:
+        ret = "Expose Statistics\n"
+        for s in self.get_expose_statistics():
+            ret += (
+                f" Count: {s.count}, total: {format_bytes(s.total_nbytes)}, "
+            )
+            ret += f"spilled: {format_bytes(s.spilled_nbytes)}\n"
+            ret += s.traceback
+            ret += "\n"
+        return ret
+
     def __repr__(self) -> str:
         spilled, unspilled = self.spilled_and_unspilled()
 
@@ -209,6 +261,7 @@ class GlobalSpillManager:
         return SpillManager(
             spill_on_demand=_env_get_bool("CUDF_SPILL_ON_DEMAND", True),
             device_memory_limit=_env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
+            expose_statistics=_env_get_bool("CUDF_SPILL_STAT_EXPOSE", False),
         )
 
     def clear(self) -> None:
