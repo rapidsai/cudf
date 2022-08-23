@@ -32,7 +32,7 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t
 {
   // build input table using the following data
   auto data      = cudf::test::strings_column_wrapper({
-    "123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
+    "123 abc 4567890 DEFGHI 0987 5W43",  // matches always;
     "012345 6789 01234 56789 0123 456",  // the rest do not match
     "abc 4567890 DEFGHI 0987 Wxyz 123",
     "abcdefghijklmnopqrstuvwxyz 01234",
