@@ -28,9 +28,9 @@ TEST_F(StringsLikeTests, Basic)
 {
   cudf::test::strings_column_wrapper input({"abc", "a bc", "ABC", "abcd", " abc", "", ""},
                                            {1, 1, 1, 1, 1, 1, 0});
-  auto sv      = cudf::strings_column_view(input);
-  auto pattern = std::string("abc");
-  auto results = cudf::strings::like(sv, pattern);
+  auto const sv      = cudf::strings_column_view(input);
+  auto const pattern = std::string("abc");
+  auto const results = cudf::strings::like(sv, pattern);
   cudf::test::fixed_width_column_wrapper<bool> expected(
     {true, false, false, false, false, false, false}, {1, 1, 1, 1, 1, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
@@ -39,15 +39,15 @@ TEST_F(StringsLikeTests, Basic)
 TEST_F(StringsLikeTests, Leading)
 {
   cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "b", "bb", "bba", ""});
-  auto sv = cudf::strings_column_view(input);
+  auto const sv = cudf::strings_column_view(input);
   {
-    auto results = cudf::strings::like(sv, std::string("a%"));
+    auto const results = cudf::strings::like(sv, std::string("a%"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {true, true, true, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("__a%"));
+    auto const results = cudf::strings::like(sv, std::string("__a%"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, true, false, false, true, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
@@ -57,7 +57,7 @@ TEST_F(StringsLikeTests, Leading)
 TEST_F(StringsLikeTests, Trailing)
 {
   cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "b", "bb", "bba", ""});
-  auto sv = cudf::strings_column_view(input);
+  auto const sv = cudf::strings_column_view(input);
   {
     auto results = cudf::strings::like(sv, std::string("%a"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
@@ -67,31 +67,40 @@ TEST_F(StringsLikeTests, Trailing)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("%_a"));
+    auto const results = cudf::strings::like(sv, std::string("%_a"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, true, true, false, false, true, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
 
+TEST_F(StringsLikeTests, Multiple)
+{
+  cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", ""});
+  auto const sv      = cudf::strings_column_view(input);
+  auto const results = cudf::strings::like(sv, std::string("a%b%c"));
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
 TEST_F(StringsLikeTests, Place)
 {
   cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "bab", "ab", "aba", ""});
-  auto sv = cudf::strings_column_view(input);
+  auto const sv = cudf::strings_column_view(input);
   {
-    auto results = cudf::strings::like(sv, std::string("a_"));
+    auto const results = cudf::strings::like(sv, std::string("a_"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, true, false, false, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("_a_"));
+    auto const results = cudf::strings::like(sv, std::string("_a_"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, true, true, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("__a"));
+    auto const results = cudf::strings::like(sv, std::string("__a"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, true, false, false, true, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
@@ -102,33 +111,43 @@ TEST_F(StringsLikeTests, Escape)
 {
   cudf::test::strings_column_wrapper input(
     {"10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "axb"});
-  auto sv = cudf::strings_column_view(input);
+  auto const sv = cudf::strings_column_view(input);
   {
-    auto results = cudf::strings::like(sv, std::string("10\\%-20\\%"), std::string("\\"));
+    auto const pattern = std::string("10\\%-20\\%");
+    auto const escape  = std::string("\\");
+    auto const results = cudf::strings::like(sv, pattern, escape);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {true, false, false, false, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("\\__\\_"), std::string("\\"));
+    auto const pattern = std::string("\\__\\_");
+    auto const escape  = std::string("\\");
+    auto const results = cudf::strings::like(sv, pattern, escape);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, false, false, false, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("10%%%%-20%%"), std::string("%"));
+    auto const pattern = std::string("10%%%%-20%%");
+    auto const escape  = std::string("%");
+    auto const results = cudf::strings::like(sv, pattern, escape);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, true, false, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("_%__"), std::string("%"));
+    auto const pattern = std::string("_%__");
+    auto const escape  = std::string("%");
+    auto const results = cudf::strings::like(sv, pattern, escape);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, false, true, true, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
-    auto results = cudf::strings::like(sv, std::string("a__b"), std::string("_"));
+    auto const pattern = std::string("a__b");
+    auto const escape  = std::string("_");
+    auto const results = cudf::strings::like(sv, pattern, escape);
     cudf::test::fixed_width_column_wrapper<bool> expected(
       {false, false, false, true, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
@@ -153,9 +172,9 @@ TEST_F(StringsLikeTests, Empty)
 TEST_F(StringsLikeTests, Errors)
 {
   cudf::test::strings_column_wrapper input({"3", "33"});
-  auto sv = cudf::strings_column_view(input);
+  auto const sv          = cudf::strings_column_view(input);
+  auto const invalid_str = cudf::string_scalar("", false);
 
-  EXPECT_THROW(cudf::strings::like(sv, cudf::string_scalar("", false)), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::like(sv, std::string("3"), cudf::string_scalar("", false)),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::like(sv, invalid_str), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::like(sv, std::string("3"), invalid_str), cudf::logic_error);
 }
