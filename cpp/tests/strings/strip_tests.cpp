@@ -41,7 +41,7 @@ TEST_F(StringsStripTest, StripLeft)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
-  auto results = cudf::strings::strip(strings_view, cudf::strings::strip_type::LEFT);
+  auto results = cudf::strings::strip(strings_view, cudf::strings::side_type::LEFT);
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -62,7 +62,7 @@ TEST_F(StringsStripTest, StripRight)
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results =
-    cudf::strings::strip(strings_view, cudf::strings::strip_type::RIGHT, cudf::string_scalar(" a"));
+    cudf::strings::strip(strings_view, cudf::strings::side_type::RIGHT, cudf::string_scalar(" a"));
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -83,7 +83,7 @@ TEST_F(StringsStripTest, StripBoth)
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results =
-    cudf::strings::strip(strings_view, cudf::strings::strip_type::BOTH, cudf::string_scalar(" é"));
+    cudf::strings::strip(strings_view, cudf::strings::side_type::BOTH, cudf::string_scalar(" é"));
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -108,6 +108,6 @@ TEST_F(StringsStripTest, InvalidParameter)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto strings_view = cudf::strings_column_view(strings);
   EXPECT_THROW(cudf::strings::strip(
-                 strings_view, cudf::strings::strip_type::BOTH, cudf::string_scalar("", false)),
+                 strings_view, cudf::strings::side_type::BOTH, cudf::string_scalar("", false)),
                cudf::logic_error);
 }

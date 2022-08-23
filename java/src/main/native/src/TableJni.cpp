@@ -1357,11 +1357,12 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getColumnNames(
   try {
     cudf::jni::auto_set_device(env);
     auto ptr = reinterpret_cast<cudf::io::table_with_metadata *>(handle);
-    auto length = ptr->metadata.column_names.size();
+    auto length = ptr->metadata.schema_info.size();
     auto ret = static_cast<jobjectArray>(
         env->NewObjectArray(length, env->FindClass("java/lang/String"), nullptr));
     for (size_t i = 0; i < length; i++) {
-      env->SetObjectArrayElement(ret, i, env->NewStringUTF(ptr->metadata.column_names[i].c_str()));
+      env->SetObjectArrayElement(ret, i,
+                                 env->NewStringUTF(ptr->metadata.schema_info[i].name.c_str()));
     }
 
     return ret;
@@ -1459,7 +1460,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
 
     // there is no need to re-order columns when inferring schema
-    if (result.metadata.column_names.empty() || n_col_names.size() <= 0) {
+    if (result.metadata.schema_info.empty() || n_col_names.size() <= 0) {
       return convert_table_for_return(env, result.tbl);
     } else {
       // json reader will not return the correct column order,
@@ -1467,10 +1468,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
       // turn name and its index in table into map<name, index>
       std::map<std::string, cudf::size_type> m;
-      std::transform(result.metadata.column_names.begin(), result.metadata.column_names.end(),
+      std::transform(result.metadata.schema_info.cbegin(), result.metadata.schema_info.cend(),
                      thrust::make_counting_iterator(0), std::inserter(m, m.end()),
-                     [](auto const &column_name, auto const &index) {
-                       return std::make_pair(column_name, index);
+                     [](auto const &column_info, auto const &index) {
+                       return std::make_pair(column_info.name, index);
                      });
 
       auto col_names_vec = n_col_names.as_cpp_vector();
@@ -1533,8 +1534,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 
     auto builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-      builder = builder.columns(n_filter_col_names.as_cpp_vector())
-                    .convert_binary_to_strings(n_col_binary_read.to_vector<bool>());
+      builder = builder.columns(n_filter_col_names.as_cpp_vector());
     }
 
     cudf::io::parquet_reader_options opts =
@@ -1588,8 +1588,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jbooleanArray j_is_map, jbooleanArray j_hasParquetFieldIds, jintArray j_parquetFieldIds,
-    jobject consumer) {
+    jbooleanArray j_is_map, jbooleanArray j_is_binary, jbooleanArray j_hasParquetFieldIds,
+    jintArray j_parquetFieldIds, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1598,9 +1598,6 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
   try {
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
-
-    // temp stub
-    jbooleanArray j_is_binary = NULL;
 
     using namespace cudf::io;
     using namespace cudf::jni;
@@ -1637,8 +1634,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jbooleanArray j_is_map, jbooleanArray j_hasParquetFieldIds, jintArray j_parquetFieldIds,
-    jstring j_output_path) {
+    jbooleanArray j_is_map, jbooleanArray j_is_binary, jbooleanArray j_hasParquetFieldIds,
+    jintArray j_parquetFieldIds, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1646,9 +1643,6 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
     cudf::jni::native_jstring output_path(env, j_output_path);
-
-    // temp stub
-    jbooleanArray j_is_binary = NULL;
 
     using namespace cudf::io;
     using namespace cudf::jni;
