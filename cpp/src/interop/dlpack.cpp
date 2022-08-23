@@ -293,11 +293,13 @@ DLManagedTensor* to_dlpack(table_view const& input,
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::from_dlpack(managed_tensor, cudf::default_stream_value, mr);
 }
 
 DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::to_dlpack(input, cudf::default_stream_value, mr);
 }
 

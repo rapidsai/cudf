@@ -41,6 +41,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          size_type months,
                                                          rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::calendrical_month_sequence(size, init, months, cudf::default_stream_value, mr);
 }
 

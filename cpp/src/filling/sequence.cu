@@ -152,6 +152,7 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& step,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::sequence(size, init, step, cudf::default_stream_value, mr);
 }
 
@@ -159,6 +160,7 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::sequence(size, init, cudf::default_stream_value, mr);
 }
 
