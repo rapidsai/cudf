@@ -1171,7 +1171,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _cov_or_corr(self, func, method_name):
         """
-        internal function that is called by either corr() or cov()
+        Internal function that is called by either corr() or cov()
         for sort groupby correlation and covariance computations,
         respectively.
         """

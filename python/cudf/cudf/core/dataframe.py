@@ -1799,7 +1799,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def _get_renderable_dataframe(self):
         """
-        takes rows and columns from pandas settings or estimation from size.
+        Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
         multiindex as well producing an efficient representative string
         for printing with the dataframe.

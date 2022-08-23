@@ -1341,7 +1341,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def dtype(self):
-        """dtype of the Series"""
+        """The dtype of the Series."""
         return self._column.dtype
 
     @classmethod

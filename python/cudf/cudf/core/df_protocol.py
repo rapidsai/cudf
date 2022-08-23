@@ -80,7 +80,7 @@ class _CuDFBuffer:
     @property
     def bufsize(self) -> int:
         """
-        DeviceBufferLike size in bytes.
+        The DeviceBufferLike size in bytes.
         """
         return self._buf.size
 
@@ -92,17 +92,12 @@ class _CuDFBuffer:
         return self._buf.ptr
 
     def __dlpack__(self):
-        """
-        DLPack not implemented in NumPy yet, so leave it out here.
-        """
+        # DLPack not implemented in NumPy yet, so leave it out here.
         try:
-            cudarray = as_cuda_array(self._buf).view(self._dtype)
-            res = cp.asarray(cudarray).toDlpack()
-
+            cuda_array = as_cuda_array(self._buf).view(self._dtype)
+            return cp.asarray(cuda_array).toDlpack()
         except ValueError:
             raise TypeError(f"dtype {self._dtype} unsupported by `dlpack`")
-
-        return res
 
     def __dlpack_device__(self) -> Tuple[_Device, int]:
         """
