@@ -225,7 +225,11 @@ void index_of_non_nested_types(InputIterator input_it,
     auto const keys_iter = cudf::detail::make_optional_iterator<Element>(
       search_keys, nullate::DYNAMIC{search_keys_have_nulls});
     do_search(keys_iter);
-  } else {
+  }
+
+  // Using `if constexpr` again instead of `else` branch to avoid incorrect compiler warning about
+  // unused variables.
+  if constexpr (!search_key_is_scalar) {
     auto const keys_cdv_ptr = column_device_view::create(search_keys, stream);
     auto const keys_iter    = cudf::detail::make_optional_iterator<Element>(
       *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
@@ -255,14 +259,17 @@ void index_of_nested_types(InputIterator input_it,
   // returned to keep the result `table_view` valid.
   [[maybe_unused]] auto const [keys_tview, unused_column] =
     [&]() -> std::pair<table_view, std::unique_ptr<column>> {
-    if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
+    if constexpr (search_key_is_scalar) {
       auto tmp_column       = make_column_from_scalar(search_keys, 1, stream);
       auto const keys_tview = tmp_column->view();
       return {table_view{{keys_tview}}, std::move(tmp_column)};
-    } else {
-      return {table_view{{search_keys}}, nullptr};
     }
+
+    // Using `if constexpr` again instead of `else` branch to avoid incorrect compiler warning about
+    // unused variables.
+    if constexpr (!search_key_is_scalar) { return {table_view{{search_keys}}, nullptr}; }
   }();
+
   auto const child_tview = table_view{{child}};
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
@@ -281,7 +288,11 @@ void index_of_nested_types(InputIterator input_it,
   if constexpr (search_key_is_scalar) {
     auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(search_keys);
     do_search(key_validity_iter);
-  } else {
+  }
+
+  // Using `if constexpr` again instead of `else` branch to avoid incorrect compiler warning about
+  // unused variables.
+  if constexpr (!search_key_is_scalar) {
     auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
     auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
     do_search(key_validity_iter);
@@ -344,7 +355,7 @@ struct dispatch_index_of {
       data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
     auto const output_it = out_positions->mutable_view().template begin<size_type>();
 
-    if constexpr (not cudf::is_nested<Element>()) {
+    if constexpr (!cudf::is_nested<Element>()) {
       index_of_non_nested_types<search_key_is_scalar, Element>(
         input_it, num_rows, output_it, search_keys, search_keys_have_nulls, find_option, stream);
     } else {  // list + struct
