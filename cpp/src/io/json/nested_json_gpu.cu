@@ -852,6 +852,58 @@ void get_token_stream(device_span<SymbolT const> json_in,
                                stream);
 }
 
+void print_tree(tree_meta_t const& cpu_tree, tree_meta_t const& gpu_tree)
+{
+  // DEBUG prints
+  auto to_cat = [](auto v) -> std::string {
+    switch (v) {
+      case NC_STRUCT: return " S";
+      case NC_LIST: return " L";
+      case NC_STR: return " \"";
+      case NC_VAL: return " V";
+      case NC_FN: return " F";
+      case NC_ERR: return "ER";
+      default: return "UN";
+    };
+  };
+  auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
+  bool mismatch  = false;
+  auto print_vec = [&](auto const& cpu, auto const& gpu, auto const name, auto converter) {
+    if (not cpu.empty()) {
+      for (auto const& v : cpu)
+        printf("%3s,", converter(v).c_str());
+      std::cout << name << "(CPU):" << std::endl;
+    }
+    if (not cpu.empty()) {
+      for (auto const& v : gpu)
+        printf("%3s,", converter(v).c_str());
+      std::cout << name << "(GPU):" << std::endl;
+    }
+    if (not cpu.empty() and not gpu.empty()) {
+      if (!std::equal(gpu.begin(), gpu.end(), cpu.begin())) {
+        for (auto i = 0lu; i < cpu.size(); i++) {
+          mismatch |= (gpu[i] != cpu[i]);
+          printf("%3s,", (gpu[i] == cpu[i] ? " " : "x"));
+        }
+        std::cout << std::endl;
+      }
+    }
+  };
+#define PRINT_VEC(vec) print_vec(cpu_tree.vec, gpu_tree.vec, #vec, to_int);
+  for (int i = 0; i < int(gpu_tree.node_categories.size()); i++)
+    printf("%3d,", i);
+  printf(" node_id\n");
+  print_vec(
+    cpu_tree.node_categories, gpu_tree.node_categories, "node_categories", to_cat);  // Works
+  PRINT_VEC(node_levels);                                                            // Works
+  // PRINT_VEC(node_range_begin);  // Works
+  // PRINT_VEC(node_range_end);    // Works
+  PRINT_VEC(parent_node_ids);  // Works
+  CUDF_EXPECTS(!mismatch, "Mismatch in GPU and CPU tree representation");
+  // std::cout << "Mismatch: " << mismatch << std::endl;
+#undef PRINT_VEC
+}
+
 tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream)
 {
   constexpr std::size_t single_item = 1;
@@ -879,7 +931,8 @@ tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_st
   // Make sure tokens have been copied to the host
   stream.synchronize();
 
-  auto to_token_str = [](PdaTokenT token) {
+  // DEBUG print
+  [[maybe_unused]] auto to_token_str = [](PdaTokenT token) {
     switch (token) {
       case token_t::StructBegin: return " {";
       case token_t::StructEnd: return " }";
@@ -897,6 +950,11 @@ tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_st
       default: return ".";
     }
   };
+  std::cout << "Tokens: \n";
+  for (auto i = 0u; i < num_tokens_out[0]; i++) {
+    std::cout << to_token_str(tokens_gpu[i]) << " ";
+  }
+  std::cout << std::endl;
 
   // Whether a token does represent a node in the tree representation
   auto is_node = [](PdaTokenT const token) {
@@ -1036,65 +1094,30 @@ tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_st
     if (is_node(token)) { node_id++; }
   }
 
+  // GPU generation.
+  auto d_value         = get_tree_representation_gpu(d_input, stream);
+  tree_meta_t gpu_tree = {cudf::detail::make_std_vector_async(d_value.node_categories, stream),
+                          cudf::detail::make_std_vector_async(d_value.parent_node_ids, stream),
+                          cudf::detail::make_std_vector_async(d_value.node_levels, stream),
+                          cudf::detail::make_std_vector_async(d_value.node_range_begin, stream),
+                          cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
+
+  tree_meta_t cpu_tree = {std::move(node_categories),
+                          std::move(parent_node_ids),
+                          std::move(node_levels),
+                          std::move(node_range_begin),
+                          std::move(node_range_end)};
   // DEBUG prints
-  auto print_cat = [](auto const& gpu, auto const& cpu, auto const name) {
-    auto to_cat = [](auto v) {
-      switch (v) {
-        case NC_STRUCT: return " S";
-        case NC_LIST: return " L";
-        case NC_STR: return " \"";
-        case NC_VAL: return " V";
-        case NC_FN: return " F";
-        case NC_ERR: return "ER";
-        default: return "UN";
-      };
-    };
-    for (auto const& v : cpu)
-      printf("%s,", to_cat(v));
-    std::cout << name << "(CPU):" << std::endl;
-    for (auto const& v : gpu)
-      printf("%s,", to_cat(v));
-    std::cout << name << "(GPU):" << std::endl;
-    if (!std::equal(gpu.begin(), gpu.end(), cpu.begin())) {
-      for (auto i = 0lu; i < cpu.size(); i++)
-        printf("%2s,", (gpu[i] == cpu[i] ? " " : "x"));
-      std::cout << std::endl;
-    }
-  };
-  bool mismatch  = false;
-  auto print_vec = [&](auto const& gpu, auto const& cpu, auto const name) {
-    for (auto const& v : cpu)
-      printf("%2d,", int(v));
-    std::cout << name << "(CPU):" << std::endl;
-    for (auto const& v : gpu)
-      printf("%2d,", int(v));
-    std::cout << name << "(GPU):" << std::endl;
-    if (!std::equal(gpu.begin(), gpu.end(), cpu.begin())) {
-      for (auto i = 0lu; i < cpu.size(); i++) {
-        mismatch |= (gpu[i] != cpu[i]);
-        printf("%2s,", (gpu[i] == cpu[i] ? " " : "x"));
-      }
-      std::cout << std::endl;
-    }
-  };
+  print_tree(cpu_tree, gpu_tree);
+  for (int i = 0; i < int(cpu_tree.node_range_begin.size()); i++) {
+    printf("%3s ",
+           std::string(input.data() + cpu_tree.node_range_begin[i],
+                       cpu_tree.node_range_end[i] - cpu_tree.node_range_begin[i])
+             .c_str());
+  }
+  printf(" (JSON)\n");
 
-#define PRINT_VEC(vec) print_vec(value.vec, vec, #vec);
-  auto value = get_tree_representation_gpu(d_input, stream);
-  // PRINT_VEC(node_categories); //Works
-  print_cat(value.node_categories, node_categories, "node_categories");
-  PRINT_VEC(node_levels);       // Works
-  PRINT_VEC(node_range_begin);  // Works
-  PRINT_VEC(node_range_end);    // Works
-  PRINT_VEC(parent_node_ids);   // Works
-  CUDF_EXPECTS(!mismatch, "Mismatch in GPU and CPU tree representation");
-  std::cout << "Mismatch: " << mismatch << std::endl;
-
-#undef PRINT_VEC
-  return {std::move(node_categories),
-          std::move(parent_node_ids),
-          std::move(node_levels),
-          std::move(node_range_begin),
-          std::move(node_range_end)};
+  return cpu_tree;
 }
 
 // The node that a token represents
@@ -1161,8 +1184,8 @@ struct node_ranges {
 };
 
 // GPU version of get_tree_representation
-tree_meta_t get_tree_representation_gpu(device_span<SymbolT const> d_input,
-                                        rmm::cuda_stream_view stream)
+tree_meta_t2 get_tree_representation_gpu(device_span<SymbolT const> d_input,
+                                         rmm::cuda_stream_view stream)
 {
   constexpr std::size_t single_item = 1;
   rmm::device_uvector<PdaTokenT> tokens_gpu{d_input.size(), stream};
@@ -1321,13 +1344,13 @@ tree_meta_t get_tree_representation_gpu(device_span<SymbolT const> d_input,
                                              is_node);
   CUDF_EXPECTS(parent_node_ids_end - parent_node_ids.begin() == num_nodes,
                "parent node id gather mismatch");
-
-  return {cudf::detail::make_std_vector_async(node_categories, stream),
-          cudf::detail::make_std_vector_async(parent_node_ids, stream),
-          cudf::detail::make_std_vector_async(node_levels, stream),
-          cudf::detail::make_std_vector_async(node_range_begin, stream),
-          cudf::detail::make_std_vector_async(node_range_end, stream)};
+  return {std::move(node_categories),
+          std::move(parent_node_ids),
+          std::move(node_levels),
+          std::move(node_range_begin),
+          std::move(node_range_end)};
 }
+
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *

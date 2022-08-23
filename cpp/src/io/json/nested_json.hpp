@@ -72,6 +72,13 @@ struct tree_meta_t {
   std::vector<SymbolOffsetT> node_range_begin;
   std::vector<SymbolOffsetT> node_range_end;
 };
+struct tree_meta_t2 {
+  rmm::device_uvector<NodeT> node_categories;
+  rmm::device_uvector<NodeIndexT> parent_node_ids;
+  rmm::device_uvector<TreeDepthT> node_levels;
+  rmm::device_uvector<SymbolOffsetT> node_range_begin;
+  rmm::device_uvector<SymbolOffsetT> node_range_end;
+};
 
 constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
 
@@ -308,8 +315,8 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
  */
 tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
 
-tree_meta_t get_tree_representation_gpu(device_span<SymbolT const> d_input,
-                                        rmm::cuda_stream_view stream);
+tree_meta_t2 get_tree_representation_gpu(device_span<SymbolT const> d_input,
+                                         rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
