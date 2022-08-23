@@ -1520,6 +1520,7 @@ def stringify_pathlike(pathlike):
 def buffer_write_lines(buf, lines):
     """
     Appends lines to a buffer.
+
     Parameters
     ----------
     buf
