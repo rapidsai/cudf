@@ -549,6 +549,8 @@ add_library(
   src/utilities/type_checks.cpp
 )
 
+# Anything that includes jitify needs to be compiled with
+# _FILE_OFFSET_BITS=64 due to a gcc limitation
 set_source_files_properties(
   src/binaryop/binaryop.cpp
   src/transform/transform.cpp
