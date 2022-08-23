@@ -30,6 +30,7 @@ import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
+import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
@@ -407,6 +408,30 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadJSONTableWithMeta() {
+    JSONOptions opts = JSONOptions.builder()
+            .build();
+    byte[] data = ("{ \"A\": 1, \"B\": 2, \"C\": \"X\"}\n" +
+            "{ \"A\": 2, \"B\": 4, \"C\": \"Y\"}\n" +
+            "{ \"A\": 3, \"B\": 6, \"C\": \"Z\"}\n" +
+            "{ \"A\": 4, \"B\": 8, \"C\": \"W\"}\n").getBytes(StandardCharsets.UTF_8);
+    final int numBytes = data.length;
+    try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(numBytes)) {
+      hostbuf.setBytes(0, data, 0, numBytes);
+      try (Table expected = new Table.TestBuilder()
+              .column(1L, 2L, 3L, 4L)
+              .column(2L, 4L, 6L, 8L)
+              .column("X", "Y", "Z", "W")
+              .build();
+         TableWithMeta tablemeta = Table.readJSON(opts, hostbuf, 0, numBytes);
+         Table table = tablemeta.releaseTable()) {
+        assertArrayEquals(new String[] { "A", "B", "C" }, tablemeta.getColumnNames());
+        assertTablesAreEqual(expected, table);
+      }
+    }
+  }
+
+  @Test
   void testReadCSVPrune() {
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
@@ -574,9 +599,55 @@ public class TableTest extends CudfTestBase {
         .includeColumn("value2", false)
         .build();
     try (Table table = Table.readParquet(opts, TEST_PARQUET_FILE_BINARY)) {
-      assertTableTypes(new DType[]{DType.LIST, DType.STRING}, table);
+      assertTableTypes(new DType[]{DType.STRING, DType.STRING}, table);
       ColumnView columnView = table.getColumn(0);
-      assertEquals(DType.INT8, columnView.getChildColumnView(0).getType());
+      assertEquals(DType.STRING, columnView.getType());
+    }
+  }
+
+  List<Byte> asList(String str) {
+    byte[] bytes = str.getBytes(Charsets.UTF_8);
+    List<Byte> ret = new ArrayList<>(bytes.length);
+    for(int i = 0; i < bytes.length; i++) {
+      ret.add(bytes[i]);
+    }
+    return ret;
+  }
+
+  @Test
+  void testParquetWriteToBufferChunkedBinary() {
+    // We create a String table and a Binary table with the same data in them to
+    // avoid trying to read the binary data back in the same way. At least until the
+    // API for that is stable
+    String string1 = "ABC";
+    String string2 = "DEF";
+    List<Byte> bin1 = asList(string1);
+    List<Byte> bin2 = asList(string2);
+
+    try (Table binTable = new Table.TestBuilder()
+        .column(new ListType(true, new BasicType(false, DType.INT8)),
+            bin1, bin2)
+        .build();
+         Table stringTable = new Table.TestBuilder()
+             .column(string1, string2)
+             .build();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withBinaryColumn("_c0", true)
+          .build();
+
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(binTable);
+        writer.write(binTable);
+        writer.write(binTable);
+      }
+      ParquetOptions opts = ParquetOptions.builder()
+          .includeColumn("_c0")
+          .build();
+      try (Table table1 = Table.readParquet(opts, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(stringTable, stringTable, stringTable)) {
+        assertTablesAreEqual(concat, table1);
+      }
     }
   }
 

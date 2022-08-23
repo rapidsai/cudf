@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ __global__ void conditional_join(table_device_view left_table,
 
   cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
 
-  unsigned int const activemask = __ballot_sync(0xffffffff, outer_row_index < outer_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
@@ -206,9 +206,12 @@ __global__ void conditional_join(table_device_view left_table,
       }
 
       __syncwarp(activemask);
+
       // flush output cache if next iteration does not fit
-      if (current_idx_shared[warp_id] + detail::warp_size >= output_cache_size) {
-        flush_output_cache<num_warps, output_cache_size>(activemask,
+      auto const do_flush   = current_idx_shared[warp_id] + detail::warp_size >= output_cache_size;
+      auto const flush_mask = __ballot_sync(activemask, do_flush);
+      if (do_flush) {
+        flush_output_cache<num_warps, output_cache_size>(flush_mask,
                                                          max_size,
                                                          warp_id,
                                                          lane_id,
@@ -218,10 +221,10 @@ __global__ void conditional_join(table_device_view left_table,
                                                          join_shared_r,
                                                          join_output_l,
                                                          join_output_r);
-        __syncwarp(activemask);
+        __syncwarp(flush_mask);
         if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-        __syncwarp(activemask);
       }
+      __syncwarp(activemask);
     }
 
     // Left, left anti, and full joins all require saving left columns that
@@ -242,9 +245,13 @@ __global__ void conditional_join(table_device_view left_table,
                         join_shared_r[warp_id]);
     }
 
+    __syncwarp(activemask);
+
     // final flush of output cache
-    if (current_idx_shared[warp_id] > 0) {
-      flush_output_cache<num_warps, output_cache_size>(activemask,
+    auto const do_flush   = current_idx_shared[warp_id] > 0;
+    auto const flush_mask = __ballot_sync(activemask, do_flush);
+    if (do_flush) {
+      flush_output_cache<num_warps, output_cache_size>(flush_mask,
                                                        max_size,
                                                        warp_id,
                                                        lane_id,

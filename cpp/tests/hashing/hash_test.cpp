@@ -540,12 +540,12 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   using long_limits   = std::numeric_limits<int64_t>;
   using float_limits  = std::numeric_limits<float>;
   using int_limits    = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> a_col{0, 100, -100, 0x12345678, -0x76543210};
+  fixed_width_column_wrapper<int32_t> a_col{0, 100, -100, 0x1234'5678, -0x7654'3210};
   strings_column_wrapper b_col{"a", "bc", "def", "ghij", "klmno"};
   fixed_width_column_wrapper<float> x_col{
     0.f, 100.f, -100.f, float_limits::infinity(), -float_limits::infinity()};
   fixed_width_column_wrapper<int64_t> y_col{
-    0L, 100L, -100L, 0x123456789abcdefL, -0x123456789abcdefL};
+    0L, 100L, -100L, 0x0123'4567'89ab'cdefL, -0x0123'4567'89ab'cdefL};
   structs_column_wrapper c_col{{x_col, y_col}};
   structs_column_wrapper const structs_col{{a_col, b_col, c_col}};
 
@@ -578,8 +578,8 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     {static_cast<__int128>(0),
      static_cast<__int128>(100),
      static_cast<__int128>(-1),
-     (static_cast<__int128>(0xFFFFFFFFFCC4D1C3u) << 64 | 0x602F7FC318000001u),
-     (static_cast<__int128>(0x0785EE10D5DA46D9u) << 64 | 0x00F4369FFFFFFFFFu)},
+     (static_cast<__int128>(0xFFFF'FFFF'FCC4'D1C3u) << 64 | 0x602F'7FC3'1800'0001u),
+     (static_cast<__int128>(0x0785'EE10'D5DA'46D9u) << 64 | 0x00F4'369F'FFFF'FFFFu)},
     numeric::scale_type{-11});
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;

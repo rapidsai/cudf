@@ -1318,8 +1318,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto [new_mask, null_count] = cudf::bitmask_and(cudf::table_view{{*lhs, *rhs}});
-      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count);
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), cudf::mask_state::UNALLOCATED);
+
+      if (op == cudf::binary_operator::NULL_EQUALS) {
+        out->set_null_mask(rmm::device_buffer{}, 0);
+      } else {
+        auto [new_mask, null_count] = cudf::bitmask_and(cudf::table_view{{*lhs, *rhs}});
+        out->set_null_mask(std::move(new_mask), null_count);
+      }
+
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, *rhs, false,
                                                                      false, op);
@@ -1357,9 +1364,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
-      auto out =
-          make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), new_null_count);
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), cudf::mask_state::UNALLOCATED);
+
+      if (op == cudf::binary_operator::NULL_EQUALS) {
+        out->set_null_mask(rmm::device_buffer{}, 0);
+      } else {
+        auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
+        out->set_null_mask(std::move(new_mask), new_null_count);
+      }
+
       auto rhsv = cudf::make_column_from_scalar(*rhs, 1);
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, rhsv->view(),
@@ -1579,7 +1592,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_pad(JNIEnv *env, jclass, 
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
     cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
-    cudf::strings::pad_side side = static_cast<cudf::strings::pad_side>(j_side);
+    cudf::strings::side_type side = static_cast<cudf::strings::side_type>(j_side);
     cudf::jni::native_jstring ss_fill(env, fill_char);
     return release_as_jlong(cudf::strings::pad(scv, width, side, ss_fill.get()));
   }
@@ -1596,7 +1609,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, 
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
-    cudf::strings::strip_type s_striptype = static_cast<cudf::strings::strip_type>(strip_type);
+    cudf::strings::side_type s_striptype = static_cast<cudf::strings::side_type>(strip_type);
     cudf::string_scalar *ss_tostrip = reinterpret_cast<cudf::string_scalar *>(to_strip);
     return release_as_jlong(cudf::strings::strip(scv, s_striptype, *ss_tostrip));
   }

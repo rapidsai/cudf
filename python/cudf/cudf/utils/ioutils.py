@@ -247,6 +247,12 @@ row_group_size_bytes: integer or None, default None
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
+max_page_size_bytes: integer or None, default None
+    Maximum uncompressed size of each page of the output.
+    If None, 524288 (512KB) will be used.
+max_page_size_rows: integer or None, default None
+    Maximum number of rows of each page of the output.
+    If None, 20000 will be used.
 **kwargs
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
@@ -378,8 +384,10 @@ stripes: list, default None
     concatenated with index ignored.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
+    This parameter is deprecated.
 num_rows : int, default None
     If not None, the total number of rows to read.
+    This parameter is deprecated.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
 use_python_file_object : boolean, default True
@@ -434,7 +442,10 @@ stripe_size_rows: integer or None, default None
 row_index_stride: integer or None, default None
     Row index stride (maximum number of rows in each row group).
     If None, 10000 will be used.
-
+cols_as_map_type : list of column names or None, default None
+    A list of column names which should be written as map type in the ORC file.
+    Note that this option only affects columns of ListDtype. Names of other
+    column types will be ignored.
 
 Notes
 -----
