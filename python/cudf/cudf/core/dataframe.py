@@ -4103,7 +4103,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         na_action: Union[str, None] = None,
         **kwargs,
     ) -> DataFrame:
-
         """
         Apply a function to a Dataframe elementwise.
 
