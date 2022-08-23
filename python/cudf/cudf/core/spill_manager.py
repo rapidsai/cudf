@@ -89,8 +89,13 @@ class SpillManager:
             print(
                 f"[WARNING] RMM allocation of {nbytes} bytes failed, "
                 "spill-on-demand couldn't find any device memory to "
-                f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+                f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
             )
+            if self._expose_statistics is None:
+                print("Set `CUDF_SPILL_STAT_EXPOSE=on` for expose statistics")
+            else:
+                print(self.pprint_expose_statistics())
+
             return False  # Since we didn't find anything to spill, we give up
 
         current_mr = rmm.mr.get_current_device_resource()
@@ -198,10 +203,10 @@ class SpillManager:
     def get_expose_statistics(self) -> List[ExposeStatistic]:
         if self._expose_statistics is None:
             return []
-        return sorted(self._expose_statistics.values(), key=lambda x: x.count)
+        return sorted(self._expose_statistics.values(), key=lambda x: -x.count)
 
     def pprint_expose_statistics(self) -> str:
-        ret = "Expose Statistics\n"
+        ret = "Expose Statistics:\n"
         for s in self.get_expose_statistics():
             ret += (
                 f" Count: {s.count}, total: {format_bytes(s.total_nbytes)}, "
