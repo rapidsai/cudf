@@ -200,7 +200,21 @@ struct json_column {
                   uint32_t child_count)
   {
     // If, thus far, the column's type couldn't be inferred, we infer it to the given type
-    if (type == json_col_t::Unknown) { type = row_type; }
+    if (type == json_col_t::Unknown) {
+      type = row_type;
+    }
+    // If, at some point within a column, we encounter a nested type (list or struct),
+    // we change that columns type to that respective nested type and invalidate all previous rows
+    else if (type == json_col_t::StringColumn &&
+             (row_type == json_col_t::ListColumn || row_type == json_col_t::StructColumn)) {
+      // Change the column type
+      type = row_type;
+
+      // Invalidate all previous entries, as they were _not_ of the nested type to which we just
+      // converted
+      std::fill_n(validity.begin(), validity.size(), 0);
+      valid_count = 0U;
+    }
 
     // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
     // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
@@ -217,13 +231,13 @@ struct json_column {
     // Struct   | List      => FAIL
     // Struct   | Struct    => valid
     // Struct   | String    => null
-    // String   | List      => null
-    // String   | Struct    => null
+    // String   | List      => valid (we switch col type to list, null'ing all previous rows)
+    // String   | Struct    => valid (we switch col type to list, null'ing all previous rows)
     // String   | String    => valid
     bool const is_valid = (type == row_type);
     if (static_cast<size_type>(validity.size()) < word_index(current_offset))
       validity.push_back({});
-    set_bit_unsafe(&validity.back(), intra_word_index(current_offset));
+    if (is_valid) { set_bit_unsafe(&validity.back(), intra_word_index(current_offset)); }
     valid_count += (is_valid) ? 1U : 0U;
     string_offsets.push_back(string_offset);
     string_lengths.push_back(string_end - string_offset);
