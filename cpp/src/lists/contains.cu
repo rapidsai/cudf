@@ -261,8 +261,7 @@ void index_of_nested_types(InputIterator input_it,
     [&]() -> std::pair<table_view, std::unique_ptr<column>> {
     if constexpr (search_key_is_scalar) {
       auto tmp_column       = make_column_from_scalar(search_keys, 1, stream);
-      auto const keys_tview = tmp_column->view();
-      return {table_view{{keys_tview}}, std::move(tmp_column)};
+      return {table_view{{tmp_column->view()}}, std::move(tmp_column)};
     }
 
     // Using `if constexpr` again instead of `else` branch to avoid incorrect compiler warning about
