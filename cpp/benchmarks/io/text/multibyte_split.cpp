@@ -102,31 +102,30 @@ static void bench_multibyte_split(nvbench::state& state)
 
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input       = create_random_input(file_size_approx, delim_factor, 0.05, delim);
-  auto host_input         = thrust::host_vector<char>(device_input.size());
-
-  cudaMemcpyAsync(host_input.data(),
-                  device_input.data(),
-                  device_input.size() * sizeof(char),
-                  cudaMemcpyDeviceToHost,
-                  cudf::default_stream_value);
-
-  cudaDeviceSynchronize();
-
-  auto const temp_file_name = random_file_in_dir(temp_dir.path());
-
-  {
-    auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
-    temp_fostream.write(host_input.data(), host_input.size());
-  }
-
-  auto const host_string = std::string(host_input.data(), host_input.size());
+  auto host_input         = thrust::host_vector<char>();
 
   auto source = [&] {
+    // copy data to host if necessary
+    if (source_type != data_chunk_source_type::device) {
+      host_input.resize(device_input.size());
+      cudaMemcpyAsync(host_input.data(),
+                      device_input.data(),
+                      device_input.size() * sizeof(char),
+                      cudaMemcpyDeviceToHost,
+                      cudf::default_stream_value);
+      cudf::default_stream_value.synchronize();
+    }
     switch (source_type) {
-      case data_chunk_source_type::file:  //
+      case data_chunk_source_type::file: {
+        auto const temp_file_name = random_file_in_dir(temp_dir.path());
+        {
+          auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
+          temp_fostream.write(host_input.data(), host_input.size());
+        }
         return cudf::io::text::make_source_from_file(temp_file_name);
+      }
       case data_chunk_source_type::host:  //
-        return cudf::io::text::make_source(host_string);
+        return cudf::io::text::make_source(host_input);
       case data_chunk_source_type::device:  //
         return cudf::io::text::make_source(device_input);
       default: CUDF_FAIL();
