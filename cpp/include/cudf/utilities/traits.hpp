@@ -374,6 +374,19 @@ constexpr inline bool is_floating_point(data_type type)
 }
 
 /**
+ * @brief Indicates whether `T` is a std::byte type.
+ *
+ * @tparam T The type to verify
+ * @return true `type` is std::byte
+ * @return false `type` is not std::byte
+ */
+template <typename T>
+constexpr inline bool is_byte()
+{
+  return std::is_same_v<std::remove_cv_t<T>, std::byte>;
+}
+
+/**
  * @brief Indicates whether `T` is a Boolean type.
  *
  * @param type The `data_type` to verify
@@ -561,7 +574,8 @@ constexpr inline bool is_chrono(data_type type)
 template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
-  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() or
+         cudf::is_byte<T>();
 }
 
 /**
@@ -720,37 +734,6 @@ struct is_nested_impl {
 constexpr inline bool is_nested(data_type type)
 {
   return cudf::type_dispatcher(type, is_nested_impl{});
-}
-
-/**
- * @brief Indicates whether `T` is a struct type.
- *
- * @param T The type to verify
- * @return A boolean indicating if T is a struct type
- */
-template <typename T>
-constexpr inline bool is_struct()
-{
-  return std::is_same_v<T, cudf::struct_view>;
-}
-
-struct is_struct_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_struct<T>();
-  }
-};
-
-/**
- * @brief Indicates whether `type` is a struct type.
- *
- * @param type The `data_type` to verify
- * @return A boolean indicating if `type` is a struct type
- */
-constexpr inline bool is_struct(data_type type)
-{
-  return cudf::type_dispatcher(type, is_struct_impl{});
 }
 
 template <typename FromType>

@@ -48,7 +48,7 @@ struct gz_file_header_s {
 
 struct zip_eocd_s  // end of central directory
 {
-  uint32_t sig;            // 0x06054b50
+  uint32_t sig;            // 0x0605'4b50
   uint16_t disk_id;        // number of this disk
   uint16_t start_disk;     // number of the disk with the start of the central directory
   uint16_t num_entries;    // number of entries in the central dir on this disk
@@ -60,7 +60,7 @@ struct zip_eocd_s  // end of central directory
 
 struct zip64_eocdl  // end of central dir locator
 {
-  uint32_t sig;         // 0x07064b50
+  uint32_t sig;         // 0x0706'4b50
   uint32_t disk_start;  // number of the disk with the start of the zip64 end of central directory
   uint64_t eocdr_ofs;   // relative offset of the zip64 end of central directory record
   uint32_t num_disks;   // total number of disks
@@ -68,7 +68,7 @@ struct zip64_eocdl  // end of central dir locator
 
 struct zip_cdfh_s  // central directory file header
 {
-  uint32_t sig;          // 0x02014b50
+  uint32_t sig;          // 0x0201'4b50
   uint16_t ver;          // version made by
   uint16_t min_ver;      // version needed to extract
   uint16_t gp_flags;     // general purpose bit flag
@@ -88,7 +88,7 @@ struct zip_cdfh_s  // central directory file header
 };
 
 struct zip_lfh_s {
-  uint32_t sig;          // 0x04034b50
+  uint32_t sig;          // 0x0403'4b50
   uint16_t ver;          // version needed to extract
   uint16_t gp_flags;     // general purpose bit flag
   uint16_t comp_method;  // compression method
@@ -200,7 +200,7 @@ bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
          i + sizeof(zip_eocd_s) + 2 + 0xffff >= len && i >= 0;
          i--) {
       const auto* eocd = reinterpret_cast<zip_eocd_s const*>(raw + i);
-      if (eocd->sig == 0x06054b50 &&
+      if (eocd->sig == 0x0605'4b50 &&
           eocd->disk_id == eocd->start_disk  // multi-file archives not supported
           && eocd->num_entries == eocd->total_entries &&
           eocd->cdir_size >= sizeof(zip_cdfh_s) * eocd->num_entries && eocd->cdir_offset < len &&
@@ -209,10 +209,10 @@ bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
         dst->eocd        = eocd;
         if (i >= static_cast<ptrdiff_t>(sizeof(zip64_eocdl))) {
           const auto* eocdl = reinterpret_cast<const zip64_eocdl*>(raw + i - sizeof(zip64_eocdl));
-          if (eocdl->sig == 0x07064b50) { dst->eocdl = eocdl; }
+          if (eocdl->sig == 0x0706'4b50) { dst->eocdl = eocdl; }
         }
         // Start of central directory
-        if (cdfh->sig == 0x02014b50) { dst->cdfh = cdfh; }
+        if (cdfh->sig == 0x0201'4b50) { dst->cdfh = cdfh; }
       }
     }
   }
@@ -308,7 +308,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
           const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(
             reinterpret_cast<const uint8_t*>(za.cdfh) + cdfh_ofs);
           int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
-          if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x02014b50) {
+          if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x0201'4b50) {
             // Bad cdir
             break;
           }
@@ -316,7 +316,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t lfh_ofs       = cdfh->hdr_ofs;
             const zip_lfh_s* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
-            if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x04034b50 &&
+            if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x0403'4b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
                 size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;

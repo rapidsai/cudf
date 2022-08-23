@@ -20,7 +20,7 @@ import cudf
 from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_GE_130
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 
 
 def dtype(arbitrary):
@@ -370,7 +370,7 @@ class StructDtype(_BaseDtype):
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[Buffer] = []
+        frames: List[DeviceBufferLike] = []
 
         fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
 

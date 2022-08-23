@@ -41,11 +41,10 @@ void BM_orc_write_varying_inout(benchmark::State& state)
     state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
   auto const sink_type = static_cast<io_type>(state.range(4));
 
-  data_profile table_data_profile;
-  table_data_profile.set_cardinality(cardinality);
-  table_data_profile.set_avg_run_length(run_length);
-  auto const tbl = create_random_table(
-    cycle_dtypes(data_types, num_cols), table_size_bytes{data_size}, table_data_profile);
+  auto const tbl =
+    create_random_table(cycle_dtypes(data_types, num_cols),
+                        table_size_bytes{data_size},
+                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);

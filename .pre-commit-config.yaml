@@ -60,6 +60,8 @@ repos:
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
                   - cmakelang==0.6.13
+                verbose: true
+                require_serial: true
               - id: cmake-lint
                 name: cmake-lint
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -69,6 +71,8 @@ repos:
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
                   - cmakelang==0.6.13
+                verbose: true
+                require_serial: true
               - id: copyright-check
                 name: copyright-check
                 # This hook's use of Git tools appears to conflict with

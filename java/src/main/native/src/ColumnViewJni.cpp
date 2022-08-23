@@ -33,6 +33,7 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 #include <cudf/null_mask.hpp>
@@ -591,6 +592,72 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_generateListOffsets(JNIEn
     cudf::jni::auto_set_device(env);
     auto const cv = reinterpret_cast<cudf::column_view const *>(handle);
     return release_as_jlong(cudf::jni::generate_list_offsets(*cv));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listsHaveOverlap(JNIEnv *env, jclass,
+                                                                        jlong lhs_handle,
+                                                                        jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    auto overlap_result =
+        cudf::lists::have_overlap(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs},
+                                  cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL);
+    cudf::jni::post_process_list_overlap(*lhs, *rhs, overlap_result);
+    return release_as_jlong(overlap_result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listsIntersectDistinct(JNIEnv *env, jclass,
+                                                                              jlong lhs_handle,
+                                                                              jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(cudf::lists::intersect_distinct(
+        cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}, cudf::null_equality::EQUAL,
+        cudf::nan_equality::ALL_EQUAL));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listsUnionDistinct(JNIEnv *env, jclass,
+                                                                          jlong lhs_handle,
+                                                                          jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(
+        cudf::lists::union_distinct(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs},
+                                    cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listsDifferenceDistinct(JNIEnv *env, jclass,
+                                                                               jlong lhs_handle,
+                                                                               jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(cudf::lists::difference_distinct(
+        cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}, cudf::null_equality::EQUAL,
+        cudf::nan_equality::ALL_EQUAL));
   }
   CATCH_STD(env, 0);
 }
@@ -1251,8 +1318,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto [new_mask, null_count] = cudf::bitmask_and(cudf::table_view{{*lhs, *rhs}});
-      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count);
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), cudf::mask_state::UNALLOCATED);
+
+      if (op == cudf::binary_operator::NULL_EQUALS) {
+        out->set_null_mask(rmm::device_buffer{}, 0);
+      } else {
+        auto [new_mask, null_count] = cudf::bitmask_and(cudf::table_view{{*lhs, *rhs}});
+        out->set_null_mask(std::move(new_mask), null_count);
+      }
+
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, *rhs, false,
                                                                      false, op);
@@ -1290,9 +1364,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
-      auto out =
-          make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), new_null_count);
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), cudf::mask_state::UNALLOCATED);
+
+      if (op == cudf::binary_operator::NULL_EQUALS) {
+        out->set_null_mask(rmm::device_buffer{}, 0);
+      } else {
+        auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
+        out->set_null_mask(std::move(new_mask), new_null_count);
+      }
+
       auto rhsv = cudf::make_column_from_scalar(*rhs, 1);
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, rhsv->view(),
@@ -1512,7 +1592,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_pad(JNIEnv *env, jclass, 
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
     cudf::size_type width = reinterpret_cast<cudf::size_type>(j_width);
-    cudf::strings::pad_side side = static_cast<cudf::strings::pad_side>(j_side);
+    cudf::strings::side_type side = static_cast<cudf::strings::side_type>(j_side);
     cudf::jni::native_jstring ss_fill(env, fill_char);
     return release_as_jlong(cudf::strings::pad(scv, width, side, ss_fill.get()));
   }
@@ -1529,7 +1609,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, 
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
-    cudf::strings::strip_type s_striptype = static_cast<cudf::strings::strip_type>(strip_type);
+    cudf::strings::side_type s_striptype = static_cast<cudf::strings::side_type>(strip_type);
     cudf::string_scalar *ss_tostrip = reinterpret_cast<cudf::string_scalar *>(to_strip);
     return release_as_jlong(cudf::strings::strip(scv, s_striptype, *ss_tostrip));
   }
@@ -2021,6 +2101,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_capitalize(JNIEnv *env, j
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(strs_handle);
     cudf::string_scalar *deli = reinterpret_cast<cudf::string_scalar *>(delimiters_handle);
     return release_as_jlong(cudf::strings::capitalize(*view, *deli));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_joinStrings(JNIEnv *env, jobject j_object,
+                                                                   jlong strs_handle,
+                                                                   jlong separator_handle,
+                                                                   jlong narep_handle) {
+
+  JNI_NULL_CHECK(env, strs_handle, "native view handle is null", 0)
+  JNI_NULL_CHECK(env, separator_handle, "separator scalar handle is null", 0)
+  JNI_NULL_CHECK(env, narep_handle, "narep scalar handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(strs_handle);
+    cudf::string_scalar *sep = reinterpret_cast<cudf::string_scalar *>(separator_handle);
+    cudf::string_scalar *narep = reinterpret_cast<cudf::string_scalar *>(narep_handle);
+    return release_as_jlong(cudf::strings::join_strings(*view, *sep, *narep));
   }
   CATCH_STD(env, 0);
 }
