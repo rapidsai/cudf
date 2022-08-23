@@ -1224,13 +1224,11 @@ void make_json_column(json_column& root_column,
   // Giving names to magic constants
   constexpr uint32_t zero_child_count = 0;
 
-  //--------------------------------------------------------------------------------
-  // INITIALIZE JSON ROOT NODE
-  //--------------------------------------------------------------------------------
-  // The JSON root may only be a struct, list, string, or value node
   CUDF_EXPECTS(tokens.size() == token_indices_gpu.size(),
                "Unexpected mismatch in number of token types and token indices");
   CUDF_EXPECTS(tokens.size() > 0, "Empty JSON input not supported");
+
+  // The JSON root may only be a struct, list, string, or value node
   CUDF_EXPECTS(is_valid_root_token(tokens[offset]), "Invalid beginning of JSON document");
 
   while (offset < tokens.size()) {
