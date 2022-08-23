@@ -68,7 +68,7 @@ namespace io {
 constexpr uint32_t huffman_lookup_table_width      = 8;
 constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
-constexpr uint32_t brotli_max_allowed_distance     = 0x7FFFFFFC;
+constexpr uint32_t brotli_max_allowed_distance     = 0x7FFF'FFFC;
 constexpr int block_size                           = 256;
 
 template <typename T0, typename T1>
@@ -1300,12 +1300,12 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s* s, uint8_t*
   uint32_t upper_bound = s->mtf_upper_bound;
   uint32_t* mtf        = &s->mtf[1];  // Make mtf[-1] addressable.
   auto* mtf_u8         = reinterpret_cast<uint8_t*>(mtf);
-  uint32_t pattern     = 0x03020100;  // Little-endian
+  uint32_t pattern     = 0x0302'0100;  // Little-endian
 
   // Initialize list using 4 consequent values pattern.
   mtf[0] = pattern;
   do {
-    pattern += 0x04040404;  // Advance all 4 values by 4.
+    pattern += 0x0404'0404;  // Advance all 4 values by 4.
     mtf[i] = pattern;
     i++;
   } while (i <= upper_bound);
@@ -1744,10 +1744,10 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
                 int dist = distance_code << 1;
                 // kDistanceShortCodeIndexOffset has 2-bit values from LSB: 3, 2, 1, 0, 3, 3, 3, 3,
                 // 3, 3, 2, 2, 2, 2, 2, 2
-                const uint32_t kDistanceShortCodeIndexOffset = 0xAAAFFF1B;
+                const uint32_t kDistanceShortCodeIndexOffset = 0xAAAF'FF1B;
                 // kDistanceShortCodeValueOffset has 2-bit values from LSB: -0, 0,-0, 0,-1, 1,-2,
                 // 2,-3, 3,-1, 1,-2, 2,-3, 3
-                const uint32_t kDistanceShortCodeValueOffset = 0xFA5FA500;
+                const uint32_t kDistanceShortCodeValueOffset = 0xFA5F'A500;
                 int v         = (dist_rb_idx + (int)(kDistanceShortCodeIndexOffset >> dist)) & 0x3;
                 distance_code = s->dist_rb[v];
                 v             = (int)(kDistanceShortCodeValueOffset >> dist) & 0x3;
@@ -1758,7 +1758,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
                   if (distance_code <= 0) {
                     // A huge distance will cause a failure later on. This is a little faster than
                     // failing here.
-                    distance_code = 0x7FFFFFFF;
+                    distance_code = 0x7FFF'FFFF;
                   }
                 }
               }
@@ -1796,7 +1796,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
           // Apply copy of LZ77 back-reference, or static dictionary reference if the distance is
           // larger than the max LZ77 distance
           if (distance_code > max_distance) {
-            // The maximum allowed distance is brotli_max_allowed_distance = 0x7FFFFFFC.
+            // The maximum allowed distance is brotli_max_allowed_distance = 0x7FFF'FFFC.
             // With this choice, no signed overflow can occur after decoding
             // a special distance code (e.g., after adding 3 to the last distance).
             if (distance_code > brotli_max_allowed_distance ||
@@ -2092,7 +2092,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
 
   CUDF_EXPECTS(scratch_size >= sizeof(brotli_dictionary_s),
                "Insufficient scratch space for debrotli");
-  scratch_size = min(scratch_size, (size_t)0xffffffffu);
+  scratch_size = min(scratch_size, static_cast<size_t>(0xffff'ffffu));
   fb_heap_size = (uint32_t)((scratch_size - sizeof(brotli_dictionary_s)) & ~0xf);
 
   CUDF_CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream.value()));
@@ -2114,7 +2114,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
       &dump[0], scratch_u8 + cur, 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost, stream.value()));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
-    cur = (dump[0] > cur) ? dump[0] : 0xffffffffu;
+    cur = (dump[0] > cur) ? dump[0] : 0xffff'ffffu;
   }
 #endif
 }

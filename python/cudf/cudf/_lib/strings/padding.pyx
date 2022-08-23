@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -14,24 +14,23 @@ from enum import IntEnum
 from libcpp.string cimport string
 
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.strings.padding cimport (
-    pad as cpp_pad,
-    pad_side as pad_side,
-    zfill as cpp_zfill,
+from cudf._lib.cpp.strings.padding cimport pad as cpp_pad, zfill as cpp_zfill
+from cudf._lib.cpp.strings.side_type cimport (
+    side_type,
+    underlying_type_t_side_type,
 )
-from cudf._lib.strings.padding cimport underlying_type_t_pad_side
 
 
-class PadSide(IntEnum):
-    LEFT = <underlying_type_t_pad_side> pad_side.LEFT
-    RIGHT = <underlying_type_t_pad_side> pad_side.RIGHT
-    BOTH = <underlying_type_t_pad_side> pad_side.BOTH
+class SideType(IntEnum):
+    LEFT = <underlying_type_t_side_type> side_type.LEFT
+    RIGHT = <underlying_type_t_side_type> side_type.RIGHT
+    BOTH = <underlying_type_t_side_type> side_type.BOTH
 
 
 def pad(Column source_strings,
         size_type width,
         fill_char,
-        side=PadSide.LEFT):
+        side=SideType.LEFT):
     """
     Returns a Column by padding strings in `source_strings`
     up to the given `width`. Direction of padding is to be specified by `side`.
@@ -43,8 +42,8 @@ def pad(Column source_strings,
 
     cdef string f_char = <string>str(fill_char).encode()
 
-    cdef pad_side pad_direction = <pad_side>(
-        <underlying_type_t_pad_side> side
+    cdef side_type pad_direction = <side_type>(
+        <underlying_type_t_side_type> side
     )
 
     with nogil:
@@ -87,14 +86,13 @@ def center(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
     with nogil:
         c_result = move(cpp_pad(
             source_view,
             width,
-            pad_side.BOTH,
+            side_type.BOTH,
             f_char
         ))
 
@@ -111,14 +109,13 @@ def ljust(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
     with nogil:
         c_result = move(cpp_pad(
             source_view,
             width,
-            pad_side.RIGHT,
+            side_type.RIGHT,
             f_char
         ))
 
@@ -135,14 +132,13 @@ def rjust(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
     with nogil:
         c_result = move(cpp_pad(
             source_view,
             width,
-            pad_side.LEFT,
+            side_type.LEFT,
             f_char
         ))
 
