@@ -355,13 +355,11 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-
         axis: {{index (0), columns(1)}}
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
-
 
         Returns
         -------
@@ -2404,16 +2402,12 @@ class IndexedFrame(Frame):
         --------
         cudf.DataFrame.isna
             Indicate null values.
-
         cudf.DataFrame.notna
             Indicate non-null values.
-
         cudf.DataFrame.fillna
             Replace null values.
-
         cudf.Series.dropna
             Drop null values.
-
         cudf.Index.dropna
             Drop null indices.
 

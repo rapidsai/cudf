@@ -358,7 +358,6 @@ class Rolling(GetAttrGetItemMixin, Reducible):
 
         Examples
         --------
-
         >>> import cudf
         >>> def count_if_gt_3(window):
         ...     count = 0

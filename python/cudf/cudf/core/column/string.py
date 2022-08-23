@@ -882,7 +882,6 @@ class StringMethods(ColumnMethods):
 
         Examples
         --------
-
         >>> import cudf
         >>> s = cudf.Series(['foo', 'fuz', None])
         >>> s
@@ -4475,7 +4474,6 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-
         delimiter : str or list of strs, Default is whitespace.
             The characters or strings used to locate the
             split points of each string.
