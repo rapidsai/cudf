@@ -112,7 +112,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     // adjust the read size to reflect how many bytes were actually read from the data stream
     read_size = _datastream->gcount();
 
-    // get a view over some device memory we can use to buffer the read data on to device.
+    // get a device buffer containing read data on the device.
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host-pinned data on to device
@@ -126,7 +126,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     // record the host-to-device copy.
     CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
 
-    // return the view over device memory so it can be processed.
+    // return the device buffer so it can be processed.
     return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
   }
 
@@ -158,10 +158,10 @@ class host_span_data_chunk_reader : public data_chunk_reader {
 
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
 
-    // get a view over some device memory we can use to buffer the read data on to device.
+    // get a device buffer containing read data on the device.
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
-    // copy the host-pinned data on to device
+    // copy the host data to device
     CUDF_CUDA_TRY(cudaMemcpyAsync(  //
       chunk.data(),
       _data.data() + _position,
@@ -171,7 +171,7 @@ class host_span_data_chunk_reader : public data_chunk_reader {
 
     _position += read_size;
 
-    // return the view over device memory so it can be processed.
+    // return the device buffer so it can be processed.
     return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
   }
 
