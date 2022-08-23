@@ -18,6 +18,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from numba import cuda
+from packaging import version
 
 import cudf
 from cudf.core._compat import (
@@ -2021,8 +2022,26 @@ def gdf(pdf):
             "y": [np.nan, np.nan, np.nan],
             "z": [np.nan, np.nan, np.nan],
         },
-        {"x": [], "y": [], "z": []},
-        {"x": []},
+        pytest.param(
+            {"x": [], "y": [], "z": []},
+            marks=pytest.mark.xfail(
+                condition=version.parse("11")
+                <= version.parse(cupy.__version__)
+                < version.parse("11.1"),
+                reason="Zero-sized array passed to cupy reduction, "
+                "https://github.com/cupy/cupy/issues/6937",
+            ),
+        ),
+        pytest.param(
+            {"x": []},
+            marks=pytest.mark.xfail(
+                condition=version.parse("11")
+                <= version.parse(cupy.__version__)
+                < version.parse("11.1"),
+                reason="Zero-sized array passed to cupy reduction, "
+                "https://github.com/cupy/cupy/issues/6937",
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
