@@ -408,6 +408,30 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadJSONTableWithMeta() {
+    JSONOptions opts = JSONOptions.builder()
+            .build();
+    byte[] data = ("{ \"A\": 1, \"B\": 2, \"C\": \"X\"}\n" +
+            "{ \"A\": 2, \"B\": 4, \"C\": \"Y\"}\n" +
+            "{ \"A\": 3, \"B\": 6, \"C\": \"Z\"}\n" +
+            "{ \"A\": 4, \"B\": 8, \"C\": \"W\"}\n").getBytes(StandardCharsets.UTF_8);
+    final int numBytes = data.length;
+    try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(numBytes)) {
+      hostbuf.setBytes(0, data, 0, numBytes);
+      try (Table expected = new Table.TestBuilder()
+              .column(1L, 2L, 3L, 4L)
+              .column(2L, 4L, 6L, 8L)
+              .column("X", "Y", "Z", "W")
+              .build();
+         TableWithMeta tablemeta = Table.readJSON(opts, hostbuf, 0, numBytes);
+         Table table = tablemeta.releaseTable()) {
+        assertArrayEquals(new String[] { "A", "B", "C" }, tablemeta.getColumnNames());
+        assertTablesAreEqual(expected, table);
+      }
+    }
+  }
+
+  @Test
   void testReadCSVPrune() {
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
