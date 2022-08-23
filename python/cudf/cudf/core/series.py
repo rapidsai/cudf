@@ -2837,7 +2837,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         result : Series containing counts of unique values.
 
-        See also
+        See Also
         --------
         Series.count
             Number of non-NA elements in a Series.

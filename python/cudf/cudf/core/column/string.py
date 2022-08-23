@@ -1013,7 +1013,7 @@ class StringMethods(ColumnMethods):
             Series or Index from sliced substring from
             original string object.
 
-        See also
+        See Also
         --------
         slice_replace
             Replace a slice with a string.
@@ -1076,7 +1076,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1138,7 +1138,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isdecimal
             Check whether all characters are decimal.
@@ -1205,7 +1205,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1274,7 +1274,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1338,7 +1338,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the
             same length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalpha
             Check whether all characters are alphabetic.
@@ -1407,7 +1407,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same length
             as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1466,7 +1466,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1529,7 +1529,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1600,7 +1600,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1659,7 +1659,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1739,7 +1739,7 @@ class StringMethods(ColumnMethods):
         Series or Index of object
             A copy of the object with all strings converted to lowercase.
 
-        See also
+        See Also
         --------
         upper
             Converts all characters to uppercase.
@@ -1780,7 +1780,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -1859,7 +1859,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -1907,7 +1907,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -2076,7 +2076,7 @@ class StringMethods(ColumnMethods):
             A new string with the specified section of the string
             replaced with `repl` string.
 
-        See also
+        See Also
         --------
         slice
             Just slicing without replacement.
@@ -2373,7 +2373,7 @@ class StringMethods(ColumnMethods):
         Series, Index, DataFrame or MultiIndex
             Type matches caller unless ``expand=True`` (see Notes).
 
-        See also
+        See Also
         --------
         rsplit
             Splits string around given separator/delimiter, starting from
@@ -2540,7 +2540,7 @@ class StringMethods(ColumnMethods):
         Series, Index, DataFrame or MultiIndex
             Type matches caller unless ``expand=True`` (see Notes).
 
-        See also
+        See Also
         --------
         split
             Split strings around given separator/delimiter.
@@ -2700,7 +2700,7 @@ class StringMethods(ColumnMethods):
         The parameter `expand` is not yet supported and will raise a
         `NotImplementedError` if anything other than the default value is set.
 
-        See also
+        See Also
         --------
         rpartition
             Split the string at the last occurrence of sep.
@@ -2845,7 +2845,7 @@ class StringMethods(ColumnMethods):
             Returns Series or Index with minimum number
             of char in object.
 
-        See also
+        See Also
         --------
         rjust
             Fills the left side of strings with an arbitrary character.
@@ -2928,7 +2928,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index with prepended ‘0’ characters.
 
-        See also
+        See Also
         --------
         rjust
             Fills the left side of strings with an arbitrary character.
@@ -3181,7 +3181,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index.
 
-        See also
+        See Also
         --------
         lstrip
             Remove leading characters in Series/Index.
@@ -3240,7 +3240,7 @@ class StringMethods(ColumnMethods):
         -------
             Series or Index of object
 
-        See also
+        See Also
         --------
         strip
             Remove leading and trailing characters in Series/Index.
@@ -3289,7 +3289,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index.
 
-        See also
+        See Also
         --------
         strip
             Remove leading and trailing characters in Series/Index.
@@ -3601,7 +3601,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same length as
             the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -3720,7 +3720,7 @@ class StringMethods(ColumnMethods):
             A Series of booleans indicating whether the given
             pattern matches the start of each string element.
 
-        See also
+        See Also
         --------
         endswith
             Same as startswith, but tests the end of string.
@@ -3839,7 +3839,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of int
 
-        See also
+        See Also
         --------
         find
             Return lowest indexes in each strings.

@@ -552,7 +552,7 @@ class IndexedFrame(Frame):
         inplace : bool, default False
             If True, in place.
 
-        See also
+        See Also
         --------
         Series.fillna
 
@@ -2400,7 +2400,7 @@ class IndexedFrame(Frame):
         -------
         Copy of the DataFrame with rows/columns containing nulls dropped.
 
-        See also
+        See Also
         --------
         cudf.DataFrame.isna
             Indicate null values.

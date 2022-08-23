@@ -607,7 +607,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         object : the return type of ``func``.
 
-        See also
+        See Also
         --------
         cudf.Series.pipe
             Apply a function with arguments to a series.
@@ -907,7 +907,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           3  5
           4  5
 
-        See also
+        See Also
         --------
         agg
         """
@@ -930,7 +930,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Returns a `RollingGroupby` object that enables rolling window
         calculations on the groups.
 
-        See also
+        See Also
         --------
         cudf.core.window.Rolling
         """

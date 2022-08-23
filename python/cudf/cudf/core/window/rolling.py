@@ -347,7 +347,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         kwargs
             unsupported
 
-        See also
+        See Also
         --------
         cudf.Series.applymap : Apply an elementwise function to
             transform the values in the Column.
@@ -470,7 +470,7 @@ class RollingGroupby(Rolling):
     """
     Grouped rolling window calculation.
 
-    See also
+    See Also
     --------
     cudf.core.window.Rolling
     """
