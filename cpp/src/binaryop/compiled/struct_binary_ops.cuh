@@ -28,6 +28,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/tabulate.h>
+
 namespace cudf::binops::compiled::detail {
 template <class T, class... Ts>
 inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
@@ -107,7 +109,8 @@ void apply_struct_equality_op(mutable_column_view& out,
                               PhysicalEqualityComparator comparator = {},
                               rmm::cuda_stream_view stream          = cudf::default_stream_value)
 {
-  CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
+  CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
+                 op == binary_operator::NULL_EQUALS,
                "Unsupported operator for these types");
 
   auto tlhs = table_view{{lhs}};

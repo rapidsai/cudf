@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/side_type.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -28,15 +29,6 @@ namespace strings {
  * @{
  * @file
  */
-
-/**
- * @brief Direction identifier for strip() function.
- */
-enum class strip_type {
-  LEFT,   ///< strip characters from the beginning of the string
-  RIGHT,  ///< strip characters from the end of the string
-  BOTH    ///< strip characters from the beginning and end of the string
-};
 
 /**
  * @brief Removes the specified characters from the beginning or end
@@ -60,17 +52,17 @@ enum class strip_type {
  *
  * @throw cudf::logic_error if `to_strip` is invalid.
  *
- * @param strings Strings column for this operation.
- * @param stype Indicates characters are to be stripped from the beginning, end, or both of each
- * string. Default is both.
- * @param to_strip UTF-8 encoded characters to strip from each string.
- *        Default is empty string which indicates strip whitespace characters.
+ * @param input Strings column for this operation
+ * @param side Indicates characters are to be stripped from the beginning, end, or both of each
+ *        string; Default is both
+ * @param to_strip UTF-8 encoded characters to strip from each string;
+ *        Default is empty string which indicates strip whitespace characters
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> strip(
-  strings_column_view const& strings,
-  strip_type stype                    = strip_type::BOTH,
+  strings_column_view const& input,
+  side_type side                      = side_type::BOTH,
   string_scalar const& to_strip       = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

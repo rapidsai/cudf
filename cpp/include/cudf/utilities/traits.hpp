@@ -736,37 +736,6 @@ constexpr inline bool is_nested(data_type type)
   return cudf::type_dispatcher(type, is_nested_impl{});
 }
 
-/**
- * @brief Indicates whether `T` is a struct type.
- *
- * @param T The type to verify
- * @return A boolean indicating if T is a struct type
- */
-template <typename T>
-constexpr inline bool is_struct()
-{
-  return std::is_same_v<T, cudf::struct_view>;
-}
-
-struct is_struct_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_struct<T>();
-  }
-};
-
-/**
- * @brief Indicates whether `type` is a struct type.
- *
- * @param type The `data_type` to verify
- * @return A boolean indicating if `type` is a struct type
- */
-constexpr inline bool is_struct(data_type type)
-{
-  return cudf::type_dispatcher(type, is_struct_impl{});
-}
-
 template <typename FromType>
 struct is_bit_castable_to_impl {
   template <typename ToType, std::enable_if_t<is_compound<ToType>()>* = nullptr>

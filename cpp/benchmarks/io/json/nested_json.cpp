@@ -78,7 +78,7 @@ void BM_NESTED_JSON(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
-    cudf::io::json::detail::parse_json_to_columns(input, stream_view);
+    cudf::io::json::detail::parse_nested_json(input, stream_view);
   });
 }
 

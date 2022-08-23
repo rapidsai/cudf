@@ -724,7 +724,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         Use ``.pipe`` when chaining together functions that expect
         Series, DataFrames or GroupBy objects. Instead of writing
 
@@ -1202,7 +1201,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         Show which entries in a DataFrame are NA.
 
         >>> import cudf
@@ -1282,7 +1280,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         Show which entries in a DataFrame are NA.
 
         >>> import cudf
@@ -1976,7 +1973,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2035,7 +2031,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2147,7 +2142,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2200,11 +2194,10 @@ class Frame(BinaryOperand, Scannable):
         Return unbiased variance of the DataFrame.
 
         Normalized by N-1 by default. This can be changed using the
-        ddof argument
+        ddof argument.
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2254,7 +2247,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2376,7 +2368,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be True, as for an
@@ -2416,7 +2407,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be False, as for an
@@ -2482,7 +2472,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         skipna : bool, default True
             Exclude NA/null values when computing the result.
 
@@ -2601,7 +2590,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         **Series**
 
         >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
@@ -2666,7 +2654,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         **DataFrame**
 
         >>> import cudf
@@ -2716,7 +2703,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         **Series**
 
         >>> import cudf, numpy as np

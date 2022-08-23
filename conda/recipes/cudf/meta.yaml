@@ -40,7 +40,7 @@ requirements:
     - setuptools
     - numba >=0.54
     - dlpack>=0.5,<0.6.0a0
-    - pyarrow =8
+    - pyarrow =9
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}

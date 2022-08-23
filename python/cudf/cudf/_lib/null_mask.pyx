@@ -17,7 +17,7 @@ from cudf._lib.cpp.null_mask cimport (
 )
 from cudf._lib.cpp.types cimport mask_state, size_type
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 
 
 class MaskState(Enum):
@@ -47,7 +47,7 @@ def copy_bitmask(Column col):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = Buffer(rmm_db)
+    buf = as_device_buffer_like(rmm_db)
     return buf
 
 
@@ -93,5 +93,5 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = Buffer(rmm_db)
+    buf = as_device_buffer_like(rmm_db)
     return buf
