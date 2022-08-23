@@ -81,7 +81,8 @@ def copy_column(Column input_column):
     Deep copied column
     """
 
-    cdef column_view input_column_view = input_column.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view input_column_view = input_column.view(slock)
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(make_unique[column](input_column_view))
@@ -95,7 +96,8 @@ def _copy_range_in_place(Column input_column,
                          size_type input_end,
                          size_type target_begin):
 
-    cdef column_view input_column_view = input_column.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view input_column_view = input_column.view(slock)
     cdef mutable_column_view target_column_view = target_column.mutable_view()
     cdef size_type c_input_begin = input_begin
     cdef size_type c_input_end = input_end
@@ -116,8 +118,9 @@ def _copy_range(Column input_column,
                 size_type input_end,
                 size_type target_begin):
 
-    cdef column_view input_column_view = input_column.view()
-    cdef column_view target_column_view = target_column.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view input_column_view = input_column.view(slock)
+    cdef column_view target_column_view = target_column.view(slock)
     cdef size_type c_input_begin = input_begin
     cdef size_type c_input_end = input_end
     cdef size_type c_target_begin = target_begin
@@ -168,13 +171,13 @@ def copy_range(Column input_column,
                            input_begin, input_end, target_begin)
 
 
-def gather(
-    list columns,
-    Column gather_map,
-    bool nullify=False
-):
+def gather(list columns, Column gather_map, bool nullify=False):
+    cdef SpillLock slock = SpillLock()
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
+    cdef table_view source_table_view = table_view_from_columns(
+        columns,
+        spill_lock=slock
+    )
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
         cpp_copying.out_of_bounds_policy.NULLIFY if nullify
@@ -224,7 +227,11 @@ cdef scatter_column(list source_columns,
                     column_view scatter_map,
                     table_view target_table,
                     bool bounds_check):
-    cdef table_view c_source = table_view_from_columns(source_columns)
+    cdef SpillLock slock = SpillLock()
+    cdef table_view c_source = table_view_from_columns(
+        source_columns,
+        spill_lock=slock
+    )
     cdef unique_ptr[table] c_result
 
     with nogil:
@@ -255,8 +262,12 @@ def scatter(list sources, Column scatter_map, list target_columns,
     if len(sources) == 0:
         return []
 
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = table_view_from_columns(target_columns)
+    cdef SpillLock slock = SpillLock()
+    cdef column_view scatter_map_view = scatter_map.view(slock)
+    cdef table_view target_table_view = table_view_from_columns(
+        target_columns,
+        spill_lock=slock
+    )
 
     if isinstance(sources[0], Column):
         return scatter_column(
@@ -271,7 +282,8 @@ def scatter(list sources, Column scatter_map, list target_columns,
 
 def column_empty_like(Column input_column):
 
-    cdef column_view input_column_view = input_column.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view input_column_view = input_column.view(slock)
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -282,30 +294,38 @@ def column_empty_like(Column input_column):
 
 def column_allocate_like(Column input_column, size=None):
 
+    cdef SpillLock slock = SpillLock()
     cdef size_type c_size = 0
-    cdef column_view input_column_view = input_column.view()
+    cdef column_view input_column_view = input_column.view(slock)
     cdef unique_ptr[column] c_result
 
     if size is None:
         with nogil:
-            c_result = move(cpp_copying.allocate_like(
-                input_column_view,
-                cpp_copying.mask_allocation_policy.RETAIN)
+            c_result = move(
+                cpp_copying.allocate_like(
+                    input_column_view,
+                    cpp_copying.mask_allocation_policy.RETAIN
+                )
             )
     else:
         c_size = size
         with nogil:
-            c_result = move(cpp_copying.allocate_like(
-                input_column_view,
-                c_size,
-                cpp_copying.mask_allocation_policy.RETAIN)
+            c_result = move(
+                cpp_copying.allocate_like(
+                    input_column_view,
+                    c_size,
+                    cpp_copying.mask_allocation_policy.RETAIN
+                )
             )
-
     return Column.from_unique_ptr(move(c_result))
 
 
 def columns_empty_like(list input_columns):
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef SpillLock slock = SpillLock()
+    cdef table_view input_table_view = table_view_from_columns(
+        input_columns,
+        spill_lock=slock
+    )
     cdef unique_ptr[table] c_result
 
     with nogil:
@@ -316,7 +336,8 @@ def columns_empty_like(list input_columns):
 
 def column_slice(Column input_column, object indices):
 
-    cdef column_view input_column_view = input_column.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view input_column_view = input_column.view(slock)
     cdef vector[size_type] c_indices
     c_indices.reserve(len(indices))
 
@@ -372,7 +393,8 @@ def columns_slice(list input_columns, list indices):
 
 def column_split(Column input_column, object splits):
 
-    cdef column_view input_column_view = input_column.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view input_column_view = input_column.view(slock)
     cdef vector[size_type] c_splits
     c_splits.reserve(len(splits))
 
@@ -403,15 +425,16 @@ def column_split(Column input_column, object splits):
 
 def columns_split(list input_columns, object splits):
 
-    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef SpillLock slock = SpillLock()
+    cdef table_view input_table_view = table_view_from_columns(
+        input_columns, spill_lock=slock
+    )
     cdef vector[size_type] c_splits = splits
     cdef vector[table_view] c_result
 
     with nogil:
         c_result = move(
-            cpp_copying.split(
-                input_table_view,
-                c_splits)
+            cpp_copying.split(input_table_view, c_splits)
         )
 
     return [

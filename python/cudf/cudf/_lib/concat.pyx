@@ -5,6 +5,8 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.concatenate cimport (
@@ -13,6 +15,7 @@ from cudf._lib.cpp.concatenate cimport (
     concatenate_tables as libcudf_concatenate_tables,
 )
 from cudf._lib.cpp.table.table cimport table, table_view
+from cudf._lib.spillable_buffer cimport SpillLock
 from cudf._lib.utils cimport (
     data_from_unique_ptr,
     make_column_views,
@@ -20,8 +23,6 @@ from cudf._lib.utils cimport (
 )
 
 from cudf.core.buffer import as_device_buffer_like
-
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 
 cpdef concat_masks(object columns):
@@ -49,8 +50,11 @@ cpdef concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
     c_views.reserve(len(tables))
+    cdef SpillLock slock = SpillLock()
     for tbl in tables:
-        c_views.push_back(table_view_from_table(tbl, ignore_index))
+        c_views.push_back(
+            table_view_from_table(tbl, ignore_index, spill_lock=slock)
+        )
     with nogil:
         c_result = move(libcudf_concatenate_tables(c_views))
 

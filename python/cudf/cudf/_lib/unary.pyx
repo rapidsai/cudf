@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -26,6 +26,7 @@ from cudf._lib.column import (
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.unary cimport unary_operator, underlying_type_t_unary_op
+from cudf._lib.spillable_buffer cimport SpillLock
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
 
@@ -55,24 +56,24 @@ class UnaryOp(IntEnum):
 
 
 def unary_operation(Column input, object op):
-    cdef column_view c_input = input.view()
-    cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op>
-                                                op)
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_input = input.view(slock)
+    cdef unary_operator c_op = <unary_operator>(
+        <underlying_type_t_unary_op> op
+    )
     cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(
-            libcudf_unary.unary_operation(
-                c_input,
-                c_op
-            )
+            libcudf_unary.unary_operation(c_input, c_op)
         )
 
     return Column.from_unique_ptr(move(c_result))
 
 
 def is_null(Column input):
-    cdef column_view c_input = input.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -82,7 +83,8 @@ def is_null(Column input):
 
 
 def is_valid(Column input):
-    cdef column_view c_input = input.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -92,7 +94,8 @@ def is_valid(Column input):
 
 
 def cast(Column input, object dtype=np.float64):
-    cdef column_view c_input = input.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_input = input.view(slock)
     cdef data_type c_dtype = dtype_to_data_type(dtype)
 
     cdef unique_ptr[column] c_result
@@ -107,7 +110,8 @@ def cast(Column input, object dtype=np.float64):
 
 
 def is_nan(Column input):
-    cdef column_view c_input = input.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -117,7 +121,8 @@ def is_nan(Column input):
 
 
 def is_non_nan(Column input):
-    cdef column_view c_input = input.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
     with nogil:
