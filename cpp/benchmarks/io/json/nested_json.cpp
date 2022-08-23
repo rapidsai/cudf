@@ -16,19 +16,16 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
+
 #include <nvbench/nvbench.cuh>
 
 #include <io/json/nested_json.hpp>
-#include <io/utilities/hostdevice_vector.hpp>  //TODO find better replacement
 
 #include <tests/io/fst/common.hpp>
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/cuda_stream.hpp>
-#include <rmm/cuda_stream_view.hpp>
 
 #include <cstdlib>
 
@@ -54,9 +51,10 @@ auto make_test_json_data(size_type string_size, rmm::cuda_stream_view stream)
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_input_scalar);
   auto d_scalar         = cudf::strings::repeat_string(d_string_scalar, repeat_times);
   auto& d_input         = static_cast<cudf::scalar_type_t<std::string>&>(*d_scalar);
-  auto generated_json   = std::string(d_input);
-  generated_json[0]     = '[';
-  generated_json[generated_json.size() - 1] = ']';
+
+  auto generated_json    = std::string(d_input);
+  generated_json.front() = '[';
+  generated_json.back()  = ']';
   return generated_json;
 }
 }  // namespace
@@ -67,18 +65,15 @@ void BM_NESTED_JSON(nvbench::state& state)
   cudf::rmm_pool_raii rmm_pool;
 
   auto const string_size{size_type(state.get_int64("string_size"))};
-  // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
 
-  auto input = make_test_json_data(string_size, stream_view);
+  auto input = make_test_json_data(string_size, cudf::default_stream_value);
   state.add_element_count(input.size());
 
   // Run algorithm
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
-    cudf::io::json::detail::parse_nested_json(input, stream_view);
+    cudf::io::json::detail::parse_nested_json(input, cudf::default_stream_value);
   });
 }
 
