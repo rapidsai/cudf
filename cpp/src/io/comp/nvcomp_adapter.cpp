@@ -351,6 +351,7 @@ void batched_compress(compression_type compression,
                       uint32_t max_uncomp_chunk_size,
                       rmm::cuda_stream_view stream)
 {
+  static int batch_idx  = 0;
   auto const num_chunks = inputs.size();
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
@@ -383,11 +384,12 @@ void batched_compress(compression_type compression,
       std::vector<uint8_t> h_input(input.size());
       cudaMemcpy(
         h_input.data(), input.data(), sizeof(uint8_t) * input.size(), cudaMemcpyDeviceToHost);
-      std::ofstream myFile("comp_in" + std::to_string(idx++), std::ios::out | std::ios::binary);
+      std::ofstream myFile("comp_in_" + std::to_string(batch_idx) + "_" + std::to_string(idx++),
+                           std::ios::out | std::ios::binary);
       myFile.write(reinterpret_cast<char*>(h_input.data()), h_input.size());
     }
   }
-
+  ++batch_idx;
   convert_status(std::nullopt, actual_compressed_data_sizes, statuses, stream);
 }
 
