@@ -979,8 +979,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                  page_sizes.end(),
                  comp_page_sizes.begin(),
                  [compression_codec](auto page_size) {
-                   return get_compress_max_output_chunk_size(compression_codec, page_size) +
-                          16;  // DO NOT MERGE
+                   return get_compress_max_output_chunk_size(compression_codec, page_size);
                  });
   comp_page_sizes.host_to_device(stream);
 
