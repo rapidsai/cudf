@@ -1145,7 +1145,7 @@ class Frame(BinaryOperand, Scannable):
         index: [[1,2,3]]
         """
         return pa.Table.from_pydict(
-            {name: col.to_arrow() for name, col in self._data.items()}
+            {str(name): col.to_arrow() for name, col in self._data.items()}
         )
 
     def _positions_from_column_names(self, column_names):
