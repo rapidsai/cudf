@@ -24,7 +24,7 @@ install_requires = [
     "pandas>=1.0,<1.6.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
-    "pyarrow==8.0.0",
+    "pyarrow==9.0.0",
 ]
 
 extras_require = {
