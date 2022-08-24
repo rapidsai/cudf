@@ -964,7 +964,8 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   json_lines_options.enable_experimental(true);
   cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
 
-  // Verify that the data read via parquet matches the data read via JSON
+  // Verify that the data read via non-nested JSON lines reader matches the data read via nested
+  // JSON reader
   CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
 }
 
