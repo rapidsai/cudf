@@ -32,6 +32,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/host_vector.h>
+#include <thrust/system/cuda/experimental/pinned_allocator.h>
 #include <thrust/transform.h>
 
 #include <nvbench/nvbench.cuh>
@@ -42,11 +43,7 @@
 
 temp_directory const temp_dir("cudf_nvbench");
 
-enum data_chunk_source_type {
-  device,
-  file,
-  host,
-};
+enum data_chunk_source_type { device, file, host, host_pinned };
 
 static cudf::string_scalar create_random_input(int32_t num_chars,
                                                double delim_factor,
@@ -104,11 +101,20 @@ static void bench_multibyte_split(nvbench::state& state)
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input       = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input         = std::vector<char>{};
+  auto host_pinned_input =
+    thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>>{};
 
-  if (source_type != data_chunk_source_type::device) {
+  if (source_type == data_chunk_source_type::host || source_type == data_chunk_source_type::file) {
     host_input = cudf::detail::make_std_vector_sync<char>(
       {device_input.data(), static_cast<std::size_t>(device_input.size())},
       cudf::default_stream_value);
+  }
+  if (source_type == data_chunk_source_type::host_pinned) {
+    host_pinned_input.resize(static_cast<std::size_t>(device_input.size()));
+    cudaMemcpy(host_pinned_input.data(),
+               device_input.data(),
+               host_pinned_input.size(),
+               cudaMemcpyDeviceToHost);
   }
 
   auto source = [&] {
@@ -123,6 +129,8 @@ static void bench_multibyte_split(nvbench::state& state)
       }
       case data_chunk_source_type::host:  //
         return cudf::io::text::make_source(host_input);
+      case data_chunk_source_type::host_pinned:
+        return cudf::io::text::make_source(host_pinned_input);
       case data_chunk_source_type::device:  //
         return cudf::io::text::make_source(device_input);
       default: CUDF_FAIL();
@@ -151,7 +159,8 @@ NVBENCH_BENCH(bench_multibyte_split)
   .add_int64_axis("source_type",
                   {data_chunk_source_type::device,
                    data_chunk_source_type::file,
-                   data_chunk_source_type::host})
+                   data_chunk_source_type::host,
+                   data_chunk_source_type::host_pinned})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
