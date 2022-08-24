@@ -1,7 +1,5 @@
 import os
 
-import pandas as pd
-
 import cudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
@@ -85,7 +83,7 @@ def tz_localize(data, zone):
 def from_gmt(data, zone):
     tz_zone = tz[tz._data["zone_name"] == zone]
     time_starts = tz_zone._data["time_start"].astype(data.dtype.base)
-    indices = search_sorted([time_starts], [data], "left")
+    indices = search_sorted([time_starts], [data], "right")
     gmt_offsets = (
         tz_zone["gmt_offset"]
         ._column.astype("timedelta64[s]")
@@ -102,7 +100,7 @@ def to_gmt(data, zone):
         tz_zone._data["time_start"]
         + tz_zone._data["gmt_offset"].astype("timedelta64[s]")
     ).astype(data.dtype.base)
-    indices = search_sorted([time_starts], [data], "left")
+    indices = search_sorted([time_starts], [data], "right")
     gmt_offsets = (
         tz_zone["gmt_offset"]
         ._column.astype("timedelta64[s]")

@@ -535,7 +535,7 @@ class DatetimeColumn(column.ColumnBase):
         ambiguous_or_nonexistent = tz_localize(self, tz)
         localized = self._scatter_by_column(
             self.isnull() and ambiguous_or_nonexistent,
-            cudf.Scalar(cudf.NA, dtype=self.dtype),
+            cudf.Scalar(cudf.NA, dtype=self.dtype.base),
         )
         gmt = to_gmt(localized, tz)
         result = TZDatetimeColumn(
@@ -554,7 +554,7 @@ class DatetimeColumn(column.ColumnBase):
                 data=self.base_data,
                 dtype=dtype,
                 mask=self.base_mask,
-                size=self.base_size,
+                size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
             )
@@ -564,9 +564,9 @@ class DatetimeColumn(column.ColumnBase):
 class TZDatetimeColumn(DatetimeColumn):
     def __init__(
         self,
-        data: Buffer,
+        data: DeviceBufferLike,
         dtype: DtypeObj,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
@@ -598,11 +598,9 @@ class TZDatetimeColumn(DatetimeColumn):
         # https://issues.apache.org/jira/browse/ARROW-9772
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
-        return (
-            super()
-            .to_pandas(index=index, nullable=nullable, **kwargs)
-            .dt.tz_localize(self.dtype.tz)
-        )
+        return self._local_time.to_pandas(
+            index=index, nullable=nullable, **kwargs
+        ).dt.tz_localize(self.dtype.tz)
 
     def to_arrow(self):
         return super().to_arrow().cast(self.dtype.to_arrow())

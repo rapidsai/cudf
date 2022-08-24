@@ -1185,7 +1185,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if isinstance(
             self._column, cudf.core.column.datetime.TZDatetimeColumn
         ):
-            return self._column._local_time.to_pandas().__repr__()
+            return self._column.to_pandas(
+                index=self.index.to_pandas()
+            ).__repr__()
         _, height = get_terminal_size()
         max_rows = (
             height

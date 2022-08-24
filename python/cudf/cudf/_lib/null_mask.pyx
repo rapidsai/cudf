@@ -103,13 +103,13 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
 
 def bitmask_or(columns):
     cdef table_view tv = table_view_from_columns(columns)
-    cdef unique_ptr[device_buffer] up_db    
+    cdef unique_ptr[device_buffer] up_db
     cdef pair[device_buffer, size_type] result
-    
+
     with nogil:
         result = move(cpp_bitmask_or(tv))
         up_db = make_unique[device_buffer](move(result.first))
-        
+
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = Buffer(rmm_db)
+    buf = as_device_buffer_like(rmm_db)
     return buf
