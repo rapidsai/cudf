@@ -174,22 +174,14 @@ class Buffer(Serializable):
     owner : object, optional
         Python object to which the lifetime of the memory allocation is tied.
         A reference to this object is kept in the returned Buffer.
-    readonly : bool, optional
-        Mark the buffer as read-only.
     """
 
     _ptr: int
     _size: int
     _owner: object
-    _readonly: bool
 
     def __init__(
-        self,
-        data: Union[int, Any],
-        *,
-        size: int = None,
-        owner: object = None,
-        readonly: bool = False,
+        self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
         from cudf.core.spill_manager import global_manager
 
@@ -230,7 +222,6 @@ class Buffer(Serializable):
                     self._size = buf.size
             self._owner = buf
 
-        self._readonly = readonly
         if global_manager.enabled:
             global_manager.get().add_other(self)
 
@@ -266,7 +257,7 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> dict:
         return {
-            "data": (self.ptr, self._readonly),
+            "data": (self.ptr, False),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",

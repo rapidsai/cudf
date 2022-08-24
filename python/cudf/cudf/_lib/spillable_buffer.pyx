@@ -374,8 +374,7 @@ cdef class SpillableBuffer:
                     Buffer(
                         data=ptr,
                         size=self.size,
-                        owner=(self._owner, spill_lock),
-                        readonly=True
+                        owner=(self._owner, spill_lock)
                     )
                 ]
             return header, frames
