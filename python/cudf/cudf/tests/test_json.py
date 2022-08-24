@@ -591,36 +591,29 @@ def test_json_nested_basic(tmpdir):
     assert_eq(pdf, df)
 
 
-def test_json_nested_lines(tmpdir):
-    fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_lines")
-    data = {
-        "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
-        "c2": [["l11", "l21"], ["l12", "l22"]],
-    }
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+            "c2": [["l11", "l21"], ["l12", "l22"]],
+        },
+        # Essential test case to handle omissions
+        {
+            "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
+            "c2": [["l11", "l21"], []],
+        },
+    ],
+)
+def test_json_nested_lines(data):
+    bytes = BytesIO()
     pdf = pd.DataFrame(data)
-    pdf.to_json(fname, orient="records", lines=True)
-
+    pdf.to_json(bytes, orient="records", lines=True)
+    bytes.seek(0)
     df = cudf.read_json(
-        fname, engine="cudf_experimental", orient="records", lines=True
+        bytes, engine="cudf_experimental", orient="records", lines=True
     )
-    pdf = pd.read_json(fname, orient="records", lines=True)
-
-    assert_eq(pdf, df)
-
-
-def test_json_nested_lines_with_omissions(tmpdir):
-    fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_lines_omissions")
-    data = {
-        "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
-        "c2": [["l11", "l21"], []],
-    }
-    pdf = pd.DataFrame(data)
-    pdf.to_json(fname, orient="records", lines=True)
-
-    df = cudf.read_json(
-        fname, engine="cudf_experimental", orient="records", lines=True
-    )
-    pdf = pd.read_json(fname, orient="records", lines=True)
-
+    pdf = pd.read_json(bytes, orient="records", lines=True)
+    # In the second test-case:
     # Pandas omits "f1" in first row, so we have to enforce a common schema
     assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
