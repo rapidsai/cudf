@@ -4400,15 +4400,15 @@ TEST_F(ParquetWriterTest, SingleValueDictionaryTest)
   // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .row_group_size_rows(nrows);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
-  auto const result = cudf_io::read_parquet(default_in_opts);
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
@@ -4449,7 +4449,7 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .row_group_size_rows(nrows)
@@ -4457,8 +4457,8 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
-  auto const result = cudf_io::read_parquet(default_in_opts);
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
