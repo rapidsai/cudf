@@ -130,6 +130,8 @@ std::unique_ptr<column> count_re(
  * @endcode
  *
  * Specify an escape character to include either `%` or `_` in the search.
+ * The `escape_character` is expected to be either 0 or 1 characters.
+ * If more than one character is specified only the first character is used.
  *
  * @code{.pseudo}
  * Example:
