@@ -147,8 +147,7 @@ class host_span_data_chunk_reader : public data_chunk_reader {
 
   void skip_bytes(std::size_t read_size) override
   {
-    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
-    _position += read_size;
+    _position += std::min(read_size, _data.size() - _position);
   }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
@@ -156,7 +155,7 @@ class host_span_data_chunk_reader : public data_chunk_reader {
   {
     CUDF_FUNC_RANGE();
 
-    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
+    read_size = std::min(read_size, _data.size() - _position);
 
     // get a device buffer containing read data on the device.
     auto chunk = rmm::device_uvector<char>(read_size, stream);
@@ -191,15 +190,14 @@ class device_span_data_chunk_reader : public data_chunk_reader {
 
   void skip_bytes(std::size_t read_size) override
   {
-    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
-    _position += read_size;
+    _position += std::min(read_size, _data.size() - _position);
   }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
   {
     // limit the read size to the number of bytes remaining in the device_span.
-    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
+    read_size = std::min(read_size, _data.size() - _position);
 
     // create a view over the device span
     auto chunk_span = _data.subspan(_position, read_size);
