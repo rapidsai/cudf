@@ -99,7 +99,7 @@ void BM_Simple_Segmented_Reduction(nvbench::state& state,
   state.add_element_count(column_size);
   state.add_global_memory_reads<DataType>(column_size);
   if (!is_boolean_output_agg(kind))
-    state.add_global_memory_writes<nvbench::int8_t>(1);  // single BOOL8
+    state.add_global_memory_writes<nvbench::int8_t>(column_size);  // BOOL8
   else
     state.add_global_memory_writes<DataType>(column_size);
 
