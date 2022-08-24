@@ -256,7 +256,7 @@ cdef class SpillableBuffer:
             spill_lock.add(base._expose_counter)
             return <void*><uintptr_t> (base._ptr+offset)
 
-    def ptr_restricted(self) -> Union[int, SpillLock]:
+    def ptr_restricted(self) -> Tuple[int, SpillLock]:
         # Get base buffer
         cdef SpillableBuffer base
         cdef size_t offset
