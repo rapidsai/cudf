@@ -569,7 +569,7 @@ auto get_translation_table()
      {token_t::ErrorBegin},
      {token_t::ErrorBegin},
      {token_t::ErrorBegin},
-     {token_t::ValueEnd},
+     {token_t::ValueEnd, token_t::StructMemberEnd},
      {token_t::ErrorBegin},
      {token_t::ValueEnd},
      {}}};

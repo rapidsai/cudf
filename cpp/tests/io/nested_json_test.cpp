@@ -285,7 +285,7 @@ TEST_F(JsonTest, StackContextUtf8)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
-TEST_F(JsonTest, TokenStream)
+auto get_token_stream_to_host(std::string& input, rmm::cuda_stream_view stream)
 {
   using cuio_json::PdaTokenT;
   using cuio_json::SymbolOffsetT;
@@ -293,10 +293,39 @@ TEST_F(JsonTest, TokenStream)
 
   constexpr std::size_t single_item = 1;
 
-  // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  // Prepare input & output buffers
+  rmm::device_uvector<SymbolT> d_input(input.size(), stream);
 
+  EXPECT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
+                                        input.data(),
+                                        input.size() * sizeof(SymbolT),
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
+
+  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
+  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
+  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
+
+  // Parse the JSON and get the token stream
+  cuio_json::detail::get_token_stream(d_input,
+                                      tokens_gpu.device_ptr(),
+                                      token_indices_gpu.device_ptr(),
+                                      num_tokens_out.device_ptr(),
+                                      stream);
+
+  // Copy back the number of tokens that were written
+  tokens_gpu.device_to_host(stream);
+  token_indices_gpu.device_to_host(stream);
+  num_tokens_out.device_to_host(stream);
+
+  // Make sure we copied back all relevant data
+  stream.synchronize();
+  return std::make_tuple(
+    std::move(tokens_gpu), std::move(token_indices_gpu), std::move(num_tokens_out));
+}
+
+TEST_F(JsonTest, TokenStream)
+{
   // Test input
   std::string input = R"(  [{)"
                       R"("category": "reference",)"
@@ -312,34 +341,9 @@ TEST_F(JsonTest, TokenStream)
                       R"("title": "{}[], <=semantic-symbols-string",)"
                       R"("price": 8.95)"
                       R"(}] )";
-
-  // Prepare input & output buffers
-  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
-
-  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
-                                        input.data(),
-                                        input.size() * sizeof(SymbolT),
-                                        cudaMemcpyHostToDevice,
-                                        stream.value()));
-
-  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream_view};
-  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream_view};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream_view};
-
   // Parse the JSON and get the token stream
-  cuio_json::detail::get_token_stream(d_input,
-                                      tokens_gpu.device_ptr(),
-                                      token_indices_gpu.device_ptr(),
-                                      num_tokens_out.device_ptr(),
-                                      stream_view);
-
-  // Copy back the number of tokens that were written
-  num_tokens_out.device_to_host(stream_view);
-  tokens_gpu.device_to_host(stream_view);
-  token_indices_gpu.device_to_host(stream_view);
-
-  // Make sure we copied back all relevant data
-  stream_view.synchronize();
+  auto [tokens_gpu, token_indices_gpu, num_tokens_out] =
+    get_token_stream_to_host(input, cudf::default_stream_value);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -434,6 +438,58 @@ TEST_F(JsonTest, TokenStream)
     {267, token_t::StructMemberEnd},
     {267, token_t::StructEnd},
     {268, token_t::ListEnd}};
+
+  // Verify the number of tokens matches
+  ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
+
+  for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
+    // Ensure the index the tokens are pointing to do match
+    EXPECT_EQ(golden_token_stream[i].first, token_indices_gpu[i]) << "Mismatch at #" << i;
+
+    // Ensure the token category is correct
+    EXPECT_EQ(golden_token_stream[i].second, tokens_gpu[i]) << "Mismatch at #" << i;
+  }
+}
+
+TEST_F(JsonTest, TokenStream2)
+{
+  // value end with comma, space, close-brace ", }"
+  std::string input =
+    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
+
+  // Golden token stream sample
+  using token_t = cuio_json::token_t;
+  // clang-format off
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream = {
+    {0, token_t::ListBegin},
+    {2, token_t::StructBegin}, {3, token_t::StructEnd}, //{}
+    {6, token_t::StructBegin},
+        {8, token_t::StructMemberBegin}, {8, token_t::FieldNameBegin}, {10, token_t::FieldNameEnd}, //a
+            {13, token_t::StructBegin},
+                {15, token_t::StructMemberBegin}, {15, token_t::FieldNameBegin}, {17, token_t::FieldNameEnd}, {21, token_t::ValueBegin}, {22, token_t::ValueEnd}, {22, token_t::StructMemberEnd}, //a.y
+                {24, token_t::StructMemberBegin}, {24, token_t::FieldNameBegin},  {26, token_t::FieldNameEnd},  {29, token_t::ListBegin}, {30, token_t::ListEnd}, {32, token_t::StructMemberEnd}, //a.z
+            {32, token_t::StructEnd},
+        {33, token_t::StructMemberEnd},
+    {33, token_t::StructEnd},
+    {36, token_t::StructBegin},
+        {38, token_t::StructMemberBegin}, {38, token_t::FieldNameBegin}, {40, token_t::FieldNameEnd}, //a
+            {44, token_t::StructBegin},
+                {46, token_t::StructMemberBegin}, {46, token_t::FieldNameBegin}, {48, token_t::FieldNameEnd}, {52, token_t::ValueBegin}, {53, token_t::ValueEnd}, {53, token_t::StructMemberEnd}, //a.x
+                {55, token_t::StructMemberBegin}, {55, token_t::FieldNameBegin}, {57, token_t::FieldNameEnd}, {60, token_t::ValueBegin}, {61, token_t::ValueEnd}, {61, token_t::StructMemberEnd}, //a.y
+            {61, token_t::StructEnd},
+        {62, token_t::StructMemberEnd},
+        {64, token_t::StructMemberBegin}, {64, token_t::FieldNameBegin}, {66, token_t::FieldNameEnd}, //b
+            {70, token_t::StructBegin},
+                {71, token_t::StructMemberBegin}, {71, token_t::FieldNameBegin}, {73, token_t::FieldNameEnd}, {76, token_t::ValueBegin}, {78, token_t::ValueEnd}, {79, token_t::StructMemberEnd}, //b.x
+                {81, token_t::StructMemberBegin}, {81, token_t::FieldNameBegin}, {83, token_t::FieldNameEnd}, {86, token_t::ValueBegin}, {88, token_t::ValueEnd}, {88, token_t::StructMemberEnd}, //b.z
+            {88, token_t::StructEnd},
+        {89, token_t::StructMemberEnd},
+    {89, token_t::StructEnd},
+    {90, token_t::ListEnd}};
+  // clang-format on
+
+  auto [tokens_gpu, token_indices_gpu, num_tokens_out] =
+    get_token_stream_to_host(input, cudf::default_stream_value);
 
   // Verify the number of tokens matches
   ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
