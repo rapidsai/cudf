@@ -100,10 +100,11 @@ void BM_Simple_Segmented_Reduction(nvbench::state& state,
 
   state.add_element_count(column_size);
   state.add_global_memory_reads<DataType>(column_size);
-  if (!is_boolean_output_agg(kind))
+  if (is_boolean_output_agg(kind)) {
     state.add_global_memory_writes<nvbench::int8_t>(num_segments);  // BOOL8
-  else
+  } else {
     state.add_global_memory_writes<DataType>(num_segments);
+  }
 
   auto const input_view  = input->view();
   auto const offset_span = cudf::device_span<cudf::size_type>{offsets};
