@@ -97,7 +97,7 @@ using cudf::io::text::detail::multistate;
 int32_t constexpr ITEMS_PER_THREAD = 64;
 int32_t constexpr THREADS_PER_TILE = 128;
 int32_t constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-int32_t constexpr TILES_PER_CHUNK  = 16384;
+int32_t constexpr TILES_PER_CHUNK  = 4096;
 int32_t constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
@@ -532,8 +532,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto chunk_offset         = std::max<int64_t>(0, byte_range.offset() - delimiter.size());
   auto const byte_range_end = byte_range.offset() + byte_range.size();
   reader->skip_bytes(chunk_offset);
-  // amortize output chunk allocations over 16 worst-case outputs. This limits the overallocation
-  constexpr auto max_growth = 16;
+  // amortize output chunk allocations over 8 worst-case outputs. This limits the overallocation
+  constexpr auto max_growth = 8;
   output_builder<int64_t> offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
   output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
 
