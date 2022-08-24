@@ -606,6 +606,65 @@ TEST_F(JsonTest, TreeRepresentation)
   }
 }
 
+TEST_F(JsonTest, TreeRepresentation2)
+{
+  // Test input: value end with comma, space, close-brace ", }"
+  std::string input =
+    //  0         1         2         3         4         5         6         7         8         9
+    //  0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
+
+  // Get the JSON's tree representation
+  auto tree_rep = cuio_json::detail::get_tree_representation(input, cudf::default_stream_value);
+
+  // Print tree representation
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
+  // TODO compare with CPU version
+
+  // Golden sample of node categories
+  // clang-format off
+  std::vector<cuio_json::node_t> golden_node_categories = {
+    cuio_json::NC_LIST, cuio_json::NC_STRUCT,
+    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_LIST,
+    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_VAL,
+                          cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_VAL};
+
+  // Golden sample of node ids
+  std::vector<cuio_json::NodeIndexT> golden_parent_node_ids = {cuio_json::parent_node_sentinel, 0,
+                                                               0, 2,  3,  4,  5,  4, 7,
+                                                               0, 9, 10, 11, 12, 11, 14,
+                                                                  9, 16, 17, 18, 17, 20};
+  // clang-format on
+
+  // Golden sample of node levels
+  std::vector<cuio_json::TreeDepthT> golden_node_levels = {
+    0, 1, 1, 2, 3, 4, 5, 4, 5, 1, 2, 3, 4, 5, 4, 5, 2, 3, 4, 5, 4, 5,
+  };
+
+  // Golden sample of the character-ranges from the original input that each node demarcates
+  std::vector<std::size_t> golden_node_range_begin = {0,  2,  6,  9,  13, 16, 21, 25, 29, 36, 39,
+                                                      44, 47, 52, 56, 60, 65, 70, 72, 76, 82, 86};
+
+  // Golden sample of the character-ranges from the original input that each node demarcates
+  std::vector<std::size_t> golden_node_range_end = {1,  3,  7,  10, 14, 17, 22, 26, 30, 37, 40,
+                                                    45, 48, 53, 57, 61, 66, 71, 73, 78, 83, 88};
+
+  // Check results against golden samples
+  ASSERT_EQ(golden_node_categories.size(), tree_rep.node_categories.size());
+  ASSERT_EQ(golden_parent_node_ids.size(), tree_rep.parent_node_ids.size());
+  ASSERT_EQ(golden_node_levels.size(), tree_rep.node_levels.size());
+  ASSERT_EQ(golden_node_range_begin.size(), tree_rep.node_range_begin.size());
+  ASSERT_EQ(golden_node_range_end.size(), tree_rep.node_range_end.size());
+
+  for (std::size_t i = 0; i < golden_node_categories.size(); i++) {
+    ASSERT_EQ(golden_node_categories[i], tree_rep.node_categories[i]);
+    ASSERT_EQ(golden_parent_node_ids[i], tree_rep.parent_node_ids[i]);
+    ASSERT_EQ(golden_node_levels[i], tree_rep.node_levels[i]);
+    ASSERT_EQ(golden_node_range_begin[i], tree_rep.node_range_begin[i]);
+    ASSERT_EQ(golden_node_range_end[i], tree_rep.node_range_end[i]);
+  }
+}
+
 TEST_F(JsonTest, ExtractColumn)
 {
   using cuio_json::SymbolT;
