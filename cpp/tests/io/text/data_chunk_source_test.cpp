@@ -24,6 +24,8 @@
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
+#include <fstream>
+
 using namespace cudf;
 using namespace test;
 
