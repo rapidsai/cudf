@@ -66,13 +66,6 @@ using TreeDepthT = StackLevelT;
  * @brief Struct that encapsulate all information of a columnar tree representation.
  */
 struct tree_meta_t {
-  std::vector<NodeT> node_categories;
-  std::vector<NodeIndexT> parent_node_ids;
-  std::vector<TreeDepthT> node_levels;
-  std::vector<SymbolOffsetT> node_range_begin;
-  std::vector<SymbolOffsetT> node_range_end;
-};
-struct tree_meta_t2 {
   rmm::device_uvector<NodeT> node_categories;
   rmm::device_uvector<NodeIndexT> parent_node_ids;
   rmm::device_uvector<TreeDepthT> node_levels;
@@ -313,10 +306,8 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
  * @param stream The CUDA stream to which kernels are dispatched
  * @return
  */
-tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
-
-tree_meta_t2 get_tree_representation_gpu(device_span<SymbolT const> d_input,
-                                         rmm::cuda_stream_view stream);
+tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
+                                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
