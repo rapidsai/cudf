@@ -249,12 +249,14 @@ __global__ void multibyte_split_kernel(
   // STEP 3: Flag matches
 
   cutoff_offset thread_offset;
+  uint32_t thread_match_mask[ITEMS_PER_THREAD / 32]{};
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     auto const is_match      = i < thread_input_size and trie.is_match(thread_states[i]);
     auto const match_end     = base_input_offset + thread_input_offset + i + 1;
     auto const is_past_range = match_end >= byte_range_end;
-    thread_offset            = thread_offset + cutoff_offset{is_match, is_past_range};
+    thread_match_mask[i / 32] |= uint32_t{is_match} << (i % 32);
+    thread_offset = thread_offset + cutoff_offset{is_match, is_past_range};
   }
 
   // STEP 4: Scan flags to determine absolute thread output offset
@@ -266,8 +268,9 @@ __global__ void multibyte_split_kernel(
 
   // Step 5: Assign outputs from each thread using match offsets.
 
-  for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
-    if (trie.is_match(thread_states[i]) and not thread_offset.is_past_end()) {
+  for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+    auto const is_match = (thread_match_mask[i / 32] >> (i % 32)) & 1u;
+    if (is_match && !thread_offset.is_past_end()) {
       auto const match_end     = base_input_offset + thread_input_offset + i + 1;
       auto const is_past_range = match_end >= byte_range_end;
       output_offsets[thread_offset.offset() - base_offset_offset] = match_end;
