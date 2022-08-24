@@ -62,13 +62,13 @@ struct like_fn {
       // walk through the pattern and check against the current character
       while (pattern_itr < pattern_end) {
         auto const escaped = *pattern_itr == esc_char;
-        auto const ptn_ch =
+        auto const pattern_char =
           escaped && (pattern_itr + 1 < pattern_end) ? *(++pattern_itr) : *pattern_itr;
 
-        if (escaped || (ptn_ch != multi_wildcard)) {
+        if (escaped || (pattern_char != multi_wildcard)) {
           // check match with the current character
-          result = ((target_itr != target_end) &&
-                    ((!escaped && ptn_ch == single_wildcard) || (ptn_ch == *target_itr)));
+          result = ((target_itr != target_end) && ((!escaped && pattern_char == single_wildcard) ||
+                                                   (pattern_char == *target_itr)));
           if (!result) { break; }
           ++target_itr;
           ++pattern_itr;
