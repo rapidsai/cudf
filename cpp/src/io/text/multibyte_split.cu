@@ -202,7 +202,7 @@ __global__ void multibyte_split_seed_kernel(
   }
 }
 
-__global__ void multibyte_split_kernel(
+__global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   int64_t base_input_offset,
   int64_t base_offset_offset,
