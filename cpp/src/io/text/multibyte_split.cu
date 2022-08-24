@@ -335,9 +335,10 @@ class output_builder {
    * @param mr optional, the memory resource to use for allocation.
    */
   output_builder(size_type max_write_size,
+                 size_type max_growth,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : _size{0}, _max_write_size{max_write_size}
+    : _size{0}, _max_write_size{max_write_size}, _max_growth{max_growth}
   {
     CUDF_EXPECTS(max_write_size > 0, "Internal error");
     _chunks.emplace_back(0, stream, mr);
@@ -365,7 +366,8 @@ class output_builder {
     if (head_span.size() >= _max_write_size) { return split_device_span<T>{head_span}; }
     if (head_it == _chunks.end() - 1) {
       // insert a new vector of double size
-      auto const next_chunk_size = 2 * _chunks.back().capacity();
+      auto const next_chunk_size =
+        std::min(_max_growth * _max_write_size, 2 * _chunks.back().capacity());
       _chunks.emplace_back(0, stream, _chunks.back().memory_resource());
       _chunks.back().reserve(next_chunk_size, stream);
     }
@@ -471,6 +473,7 @@ class output_builder {
 
   size_type _size;
   size_type _max_write_size;
+  size_type _max_growth;
   std::vector<rmm::device_uvector<T>> _chunks;
 };
 
@@ -529,8 +532,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto chunk_offset         = std::max<int64_t>(0, byte_range.offset() - delimiter.size());
   auto const byte_range_end = byte_range.offset() + byte_range.size();
   reader->skip_bytes(chunk_offset);
-  output_builder<int64_t> offset_storage(ITEMS_PER_CHUNK / delimiter.size() + 1, stream);
-  output_builder<char> char_storage(ITEMS_PER_CHUNK, stream);
+  // amortize output chunk allocations over 16 worst-case outputs. This limits the overallocation
+  constexpr auto max_growth = 16;
+  output_builder<int64_t> offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
+  output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
 
   fork_stream(streams, stream);
 
