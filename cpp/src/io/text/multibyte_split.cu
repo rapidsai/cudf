@@ -97,7 +97,7 @@ using cudf::io::text::detail::multistate;
 int32_t constexpr ITEMS_PER_THREAD = 64;
 int32_t constexpr THREADS_PER_TILE = 128;
 int32_t constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
-int32_t constexpr TILES_PER_CHUNK  = 1024;
+int32_t constexpr TILES_PER_CHUNK  = 16384;
 int32_t constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
 struct PatternScan {
