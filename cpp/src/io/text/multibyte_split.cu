@@ -118,9 +118,9 @@ struct PatternScan {
                               cudf::io::text::detail::scan_tile_state_view<multistate> tile_state,
                               cudf::io::text::detail::trie_device_view trie,
                               char (&thread_data)[ITEMS_PER_THREAD],
-                              uint32_t (&thread_state)[ITEMS_PER_THREAD])
+                              multistate& thread_multistate)
   {
-    auto thread_multistate = trie.transition_init(thread_data[0]);
+    thread_multistate = trie.transition_init(thread_data[0]);
 
     for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
       thread_multistate = trie.transition(thread_data[i], thread_multistate);
@@ -130,12 +130,6 @@ struct PatternScan {
 
     BlockScan(_temp_storage.scan)
       .ExclusiveSum(thread_multistate, thread_multistate, prefix_callback);
-
-    for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-      thread_multistate = trie.transition(thread_data[i], thread_multistate);
-
-      thread_state[i] = thread_multistate.max_tail();
-    }
   }
 };
 
@@ -240,11 +234,11 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
 
   // STEP 2: Scan inputs to determine absolute thread states
 
-  uint32_t thread_states[ITEMS_PER_THREAD];
+  multistate thread_multistate;
 
   __syncthreads();  // required before temp_memory re-use
   PatternScan(temp_storage.pattern_scan)
-    .Scan(tile_idx, tile_multistates, trie, thread_chars, thread_states);
+    .Scan(tile_idx, tile_multistates, trie, thread_chars, thread_multistate);
 
   // STEP 3: Flag matches
 
@@ -252,7 +246,9 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   uint32_t thread_match_mask[ITEMS_PER_THREAD / 32]{};
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-    auto const is_match      = i < thread_input_size and trie.is_match(thread_states[i]);
+    thread_multistate        = trie.transition(thread_chars[i], thread_multistate);
+    auto const thread_state  = thread_multistate.max_tail();
+    auto const is_match      = i < thread_input_size and trie.is_match(thread_state);
     auto const match_end     = base_input_offset + thread_input_offset + i + 1;
     auto const is_past_range = match_end >= byte_range_end;
     thread_match_mask[i / 32] |= uint32_t{is_match} << (i % 32);
