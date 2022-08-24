@@ -90,6 +90,8 @@ void BM_Simple_Segmented_Reduction(nvbench::state& state,
   cudf::rmm_pool_raii rmm_pool;
 
   auto const column_size{cudf::size_type(state.get_int64("column_size"))};
+  auto const num_segments{cudf::size_type(state.get_int64("num_segments"))};
+
   auto [input, offsets] = make_test_data<DataType>(state);
   auto agg              = make_simple_aggregation<kind>();
 
@@ -99,9 +101,9 @@ void BM_Simple_Segmented_Reduction(nvbench::state& state,
   state.add_element_count(column_size);
   state.add_global_memory_reads<DataType>(column_size);
   if (!is_boolean_output_agg(kind))
-    state.add_global_memory_writes<nvbench::int8_t>(column_size);  // BOOL8
+    state.add_global_memory_writes<nvbench::int8_t>(num_segments);  // BOOL8
   else
-    state.add_global_memory_writes<DataType>(column_size);
+    state.add_global_memory_writes<DataType>(num_segments);
 
   auto const input_view  = input->view();
   auto const offset_span = cudf::device_span<cudf::size_type>{offsets};
