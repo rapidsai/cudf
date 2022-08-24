@@ -613,6 +613,7 @@ def test_json_nested_lines(data):
     df = cudf.read_json(
         bytes, engine="cudf_experimental", orient="records", lines=True
     )
+    bytes.seek(0)
     pdf = pd.read_json(bytes, orient="records", lines=True)
     # In the second test-case:
     # Pandas omits "f1" in first row, so we have to enforce a common schema
