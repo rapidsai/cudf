@@ -1839,3 +1839,28 @@ def test_orc_writer_cols_as_map_type_error():
         TypeError, match="cols_as_map_type must be a list of column names."
     ):
         df.to_orc(buffer, cols_as_map_type=1)
+
+
+def test_negative_timestamp(tmpdir):
+    ref = cudf.DataFrame(
+        {
+            "a": [
+                pd.Timestamp("1969-12-31 23:59:58.000999"),
+                pd.Timestamp("1969-12-31 23:59:58.001001"),
+                pd.Timestamp("1839-12-24 03:58:56.000826"),
+            ]
+        }
+    )
+
+    cudf_fname = tmpdir.join("cudf_neg_ts.orc")
+    ref.to_orc(cudf_fname)
+    df = cudf.read_orc(cudf_fname)
+    pdf = pd.read_orc(cudf_fname)
+    assert_eq(df, pdf)
+
+    pyorc_fname = tmpdir.join("pyorc_neg_ts.orc")
+    pyorc_table = pa.Table.from_pandas(ref.to_pandas(), preserve_index=False)
+    pyarrow.orc.write_table(pyorc_table, pyorc_fname)
+    df = cudf.read_orc(pyorc_fname)
+    pdf = pd.read_orc(pyorc_fname)
+    assert_eq(df, pdf)

@@ -806,17 +806,10 @@ __global__ void __launch_bounds__(block_size)
           case BOOLEAN:
           case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
-            int64_t ts       = column.element<int64_t>(row);
-            int32_t ts_scale = powers_of_ten[9 - min(s->chunk.scale, 9)];
-            int64_t seconds  = ts / ts_scale;
-            int64_t nanos    = (ts - seconds * ts_scale);
-            // There is a bug in the ORC spec such that for negative timestamps, it is understood
-            // between the writer and reader that nanos will be adjusted to their positive component
-            // but the negative seconds will be left alone. This means that -2.6 is encoded as
-            // seconds = -2 and nanos = 1+(-0.6) = 0.4
-            // This leads to an error in decoding time where -1 < time (s) < 0
-            // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
-            if (nanos < 0) { nanos += ts_scale; }
+            int64_t ts          = column.element<int64_t>(row);
+            int32_t ts_scale    = powers_of_ten[9 - min(s->chunk.scale, 9)];
+            int64_t seconds     = ts / ts_scale;
+            int64_t nanos       = (ts - seconds * ts_scale);
             s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
