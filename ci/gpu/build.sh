@@ -35,7 +35,7 @@ unset GIT_DESCRIBE_TAG
 export INSTALL_DASK_MAIN=1
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2022.8.0"
+export DASK_STABLE_VERSION="2022.7.1"
 
 # ucx-py version
 export UCX_PY_VERSION='0.28.*'
