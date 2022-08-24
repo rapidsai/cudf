@@ -13,16 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/strings/string_view.cuh>
-
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
-using position_pair = thrust::pair<size_type, size_type>;
+// JIT has trouble including thrust/pair.h
+using position_pair = struct {
+  size_type first;
+  size_type second;
+};
 
 /**
  * @brief Instantiated for each string to manage navigating tokens from
