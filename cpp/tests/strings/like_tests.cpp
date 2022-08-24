@@ -21,47 +21,52 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-struct StringsLikeTests : public cudf::test::BaseFixture {
-};
+struct StringsLikeTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsLikeTests, Basic)
 {
-  cudf::test::strings_column_wrapper input({"abc", "a bc", "ABC", "abcd", " abc", "", ""},
-                                           {1, 1, 1, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper input({"abc", "a bc", "ABC", "abcd", " abc", "", "", "áéêú"},
+                                           {1, 1, 1, 1, 1, 1, 0, 1});
   auto const sv      = cudf::strings_column_view(input);
   auto const pattern = std::string("abc");
   auto const results = cudf::strings::like(sv, pattern);
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    {true, false, false, false, false, false, false}, {1, 1, 1, 1, 1, 1, 0});
+    {true, false, false, false, false, false, false, false}, {1, 1, 1, 1, 1, 1, 0, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsLikeTests, Leading)
 {
-  cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "b", "bb", "bba", ""});
+  cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "b", "bb", "bba", "", "áéêú"});
   auto const sv = cudf::strings_column_view(input);
   {
     auto const results = cudf::strings::like(sv, std::string("a%"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {true, true, true, false, false, false, false});
+      {true, true, true, false, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto const results = cudf::strings::like(sv, std::string("__a%"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, true, false, false, true, false});
+      {false, false, true, false, false, true, false, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
+  {
+    auto const results = cudf::strings::like(sv, std::string("á%"));
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      {false, false, false, false, false, false, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
 
 TEST_F(StringsLikeTests, Trailing)
 {
-  cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "b", "bb", "bba", ""});
+  cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "b", "bb", "bba", "", "áéêú"});
   auto const sv = cudf::strings_column_view(input);
   {
     auto results = cudf::strings::like(sv, std::string("%a"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {true, true, true, false, false, true, false});
+      {true, true, true, false, false, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
     results = cudf::strings::like(sv, std::string("%a%"));
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
@@ -69,40 +74,52 @@ TEST_F(StringsLikeTests, Trailing)
   {
     auto const results = cudf::strings::like(sv, std::string("%_a"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, true, true, false, false, true, false});
+      {false, true, true, false, false, true, false, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
+  {
+    auto const results = cudf::strings::like(sv, std::string("%_êú"));
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      {false, false, false, false, false, false, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
 
 TEST_F(StringsLikeTests, Multiple)
 {
-  cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", ""});
+  cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", "", "áéêú"});
   auto const sv      = cudf::strings_column_view(input);
   auto const results = cudf::strings::like(sv, std::string("a%b%c"));
-  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, false, false});
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsLikeTests, Place)
 {
-  cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "bab", "ab", "aba", ""});
+  cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "bab", "ab", "aba", "", "éaé"});
   auto const sv = cudf::strings_column_view(input);
   {
     auto const results = cudf::strings::like(sv, std::string("a_"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, true, false, false, true, false, false});
+      {false, true, false, false, true, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto const results = cudf::strings::like(sv, std::string("_a_"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, true, true, false, false, false});
+      {false, false, true, true, false, false, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
   {
     auto const results = cudf::strings::like(sv, std::string("__a"));
     cudf::test::fixed_width_column_wrapper<bool> expected(
-      {false, false, true, false, false, true, false});
+      {false, false, true, false, false, true, false, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
+  {
+    auto const results = cudf::strings::like(sv, std::string("é_é"));
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      {false, false, false, false, false, false, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
@@ -110,7 +127,7 @@ TEST_F(StringsLikeTests, Place)
 TEST_F(StringsLikeTests, Escape)
 {
   cudf::test::strings_column_wrapper input(
-    {"10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "axb"});
+    {"10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "aéb"});
   auto const sv = cudf::strings_column_view(input);
   {
     auto const pattern = std::string("10\\%-20\\%");
