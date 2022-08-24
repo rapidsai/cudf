@@ -11,7 +11,7 @@ from cudf._lib.cpp.types cimport size_type
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 
-cdef extern from "udf_apis.hpp":
+cdef extern from "cudf/strings/udf/udf_apis.hpp":
     cdef cppclass udf_module
     cdef unique_ptr[udf_module] create_udf_module(string, vector[string])
     cdef unique_ptr[column] call_udf(

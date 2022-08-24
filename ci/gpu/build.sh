@@ -121,11 +121,11 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     install_dask
 
     ################################################################################
-    # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
+    # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka strings_udf benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
