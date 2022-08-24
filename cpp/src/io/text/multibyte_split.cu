@@ -243,7 +243,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   // STEP 3: Flag matches
 
   cutoff_offset thread_offset;
-  uint32_t thread_match_mask[ITEMS_PER_THREAD / 32]{};
+  uint32_t thread_match_mask[(ITEMS_PER_THREAD + 31) / 32]{};
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     thread_multistate        = trie.transition(thread_chars[i], thread_multistate);
