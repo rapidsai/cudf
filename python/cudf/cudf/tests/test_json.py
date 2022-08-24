@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -575,12 +576,6 @@ def test_default_float_bitwidth(default_float_bitwidth):
     assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
 
 
-def test_json_experimental():
-    # should raise an exception, for now
-    with pytest.raises(RuntimeError):
-        cudf.read_json("", engine="cudf_experimental")
-
-
 def test_json_nested_basic(tmpdir):
     fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_basic")
     data = {
@@ -594,3 +589,38 @@ def test_json_nested_basic(tmpdir):
     pdf = pd.read_json(fname, orient="records")
 
     assert_eq(pdf, df)
+
+
+def test_json_nested_lines(tmpdir):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_lines")
+    data = {
+        "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+        "c2": [["l11", "l21"], ["l12", "l22"]],
+    }
+    pdf = pd.DataFrame(data)
+    pdf.to_json(fname, orient="records", lines=True)
+
+    df = cudf.read_json(
+        fname, engine="cudf_experimental", orient="records", lines=True
+    )
+    pdf = pd.read_json(fname, orient="records", lines=True)
+
+    assert_eq(pdf, df)
+
+
+def test_json_nested_lines_with_omissions(tmpdir):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_lines_omissions")
+    data = {
+        "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
+        "c2": [["l11", "l21"], []],
+    }
+    pdf = pd.DataFrame(data)
+    pdf.to_json(fname, orient="records", lines=True)
+
+    df = cudf.read_json(
+        fname, engine="cudf_experimental", orient="records", lines=True
+    )
+    pdf = pd.read_json(fname, orient="records", lines=True)
+
+    # Pandas just just omits "f1" in first row, so we have to enforce a common schema
+    assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
