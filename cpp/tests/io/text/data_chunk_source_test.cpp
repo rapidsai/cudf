@@ -68,6 +68,22 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
     ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, content.size() / 2));
     ASSERT_EQ(chunk_to_host(*chunk2), content.substr(content.size() / 2));
   }
+  {
+    // reading too many bytes
+    auto reader = source.create_reader();
+    auto chunk  = reader->get_next_chunk(content.size() + 10, rmm::cuda_stream_default);
+    ASSERT_EQ(chunk->size(), content.size());
+    ASSERT_EQ(chunk_to_host(*chunk), content);
+    auto next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
+    ASSERT_EQ(next_chunk->size(), 0);
+  }
+  {
+    // skipping past the end
+    auto reader = source.create_reader();
+    reader->skip_bytes(content.size() + 10);
+    auto next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
+    ASSERT_EQ(next_chunk->size(), 0);
+  }
 }
 
 TEST_F(DataChunkSourceTest, Device)
