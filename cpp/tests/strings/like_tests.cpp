@@ -21,7 +21,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-struct StringsLikeTests : public cudf::test::BaseFixture {};
+struct StringsLikeTests : public cudf::test::BaseFixture {
+};
 
 TEST_F(StringsLikeTests, Basic)
 {
