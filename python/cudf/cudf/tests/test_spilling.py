@@ -4,6 +4,7 @@
 import gc
 import warnings
 
+import numpy as np
 import pandas
 import pandas.testing
 import pytest
@@ -254,21 +255,6 @@ def test_modify_spilled_views(manager):
     assert_eq(df_view, df.iloc[1:])
 
 
-@pytest.mark.parametrize("target", ["gpu", "cpu"])
-@pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
-def test_host_serialize(manager, target, view):
-    # Unspilled df becomes spilled after host serialization
-    df1 = gen_df(target=target)
-    if view is not None:
-        df1 = df1.iloc[view]
-    header, frames = df1.host_serialize()
-    assert all(isinstance(f, memoryview) for f in frames)
-    assert gen_df.is_spilled(df1)
-    df2 = Serializable.host_deserialize(header, frames)
-    assert gen_df.is_spilled(df2)
-    assert_eq(df1, df2)
-
-
 def test_get_columns():
     df1 = cudf.DataFrame({"a": [1, 2, 3]})
     df2 = cudf.DataFrame({"b": [4, 5, 6], "c": [7, 8, 9]})
@@ -385,3 +371,72 @@ def test_expose_statistics(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+def test_serialize_device(manager, target):
+    df1 = gen_df(target=target)
+    header, frames = df1.device_serialize()
+    assert len(frames) == 1
+    if target == "gpu":
+        assert isinstance(frames[0], Buffer)
+        assert gen_df.buffer(df1).expose_counter == 2
+    else:
+        assert gen_df.buffer(df1).expose_counter == 1
+        assert isinstance(frames[0], memoryview)
+
+    df2 = Serializable.device_deserialize(header, frames)
+    assert_eq(df1, df2)
+
+
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+@pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
+def test_serialize_host(manager, target, view):
+    # Unspilled df becomes spilled after host serialization
+    df1 = gen_df(target=target)
+    if view is not None:
+        df1 = df1.iloc[view]
+    header, frames = df1.host_serialize()
+    assert all(isinstance(f, memoryview) for f in frames)
+    df2 = Serializable.host_deserialize(header, frames)
+    assert gen_df.is_spilled(df2)
+    assert_eq(df1, df2)
+
+
+def test_serialize_dask_dataframe(manager: SpillManager):
+    protocol = pytest.importorskip("distributed.protocol")
+
+    df1 = gen_df(target="gpu")
+    header, frames = protocol.serialize(
+        df1, serializers=("dask",), on_error="raise"
+    )
+    buf: SpillableBuffer = gen_df.buffer(df1)
+    assert len(frames) == 1
+    assert isinstance(frames[0], memoryview)
+    # Check that the memoryview and frames is the same memory
+    assert (
+        np.array(buf.memoryview()).__array_interface__["data"]
+        == np.array(frames[0]).__array_interface__["data"]
+    )
+
+    df2 = protocol.deserialize(header, frames)
+    assert gen_df.is_spilled(df2)
+    assert_eq(df1, df2)
+
+
+def test_serialize_cuda_dataframe(manager: SpillManager):
+    protocol = pytest.importorskip("distributed.protocol")
+
+    df1 = gen_df(target="gpu")
+    header, frames = protocol.serialize(
+        df1, serializers=("cuda",), on_error="raise"
+    )
+    buf: SpillableBuffer = gen_df.buffer(df1)
+    assert buf.expose_counter == 2
+    assert len(frames) == 1
+    assert isinstance(frames[0], Buffer)
+    assert frames[0].ptr == buf.ptr
+
+    df2 = protocol.deserialize(header, frames)
+    assert buf.ptr == gen_df.buffer(df2).ptr
+    assert_eq(df1, df2)

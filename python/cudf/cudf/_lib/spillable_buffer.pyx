@@ -11,6 +11,7 @@ import numpy
 import rmm
 
 from cudf.core.buffer import (
+    Buffer,
     DeviceBufferLike,
     get_ptr_and_size,
     is_c_contiguous,
@@ -368,7 +369,15 @@ cdef class SpillableBuffer:
             if self.is_spilled:
                 frames = [self.memoryview()]
             else:
-                frames = [self]
+                ptr, spill_lock = self.ptr_restricted()
+                frames = [
+                    Buffer(
+                        data=ptr,
+                        size=self.size,
+                        owner=(self._owner, spill_lock),
+                        readonly=True
+                    )
+                ]
             return header, frames
 
     @classmethod
