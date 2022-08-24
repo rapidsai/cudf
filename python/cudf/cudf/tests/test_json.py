@@ -622,5 +622,5 @@ def test_json_nested_lines_with_omissions(tmpdir):
     )
     pdf = pd.read_json(fname, orient="records", lines=True)
 
-    # Pandas just just omits "f1" in first row, so we have to enforce a common schema
+    # Pandas omits "f1" in first row, so we have to enforce a common schema
     assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
