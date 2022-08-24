@@ -214,7 +214,7 @@ __global__ void multibyte_split_kernel(
   cudf::split_device_span<int64_t> output_offsets)
 {
   using InputLoad =
-    cub::BlockLoad<char, THREADS_PER_TILE, ITEMS_PER_THREAD, cub::BLOCK_LOAD_VECTORIZE>;
+    cub::BlockLoad<char, THREADS_PER_TILE, ITEMS_PER_THREAD, cub::BLOCK_LOAD_WARP_TRANSPOSE>;
   using OffsetScan         = cub::BlockScan<cutoff_offset, THREADS_PER_TILE>;
   using OffsetScanCallback = cudf::io::text::detail::scan_tile_state_callback<cutoff_offset>;
 
