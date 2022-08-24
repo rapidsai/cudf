@@ -27,7 +27,7 @@
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/io/text/detail/tile_state.hpp>
-#include <cudf/io/text/detail/trie.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -100,6 +100,33 @@ int32_t constexpr ITEMS_PER_TILE   = ITEMS_PER_THREAD * THREADS_PER_TILE;
 int32_t constexpr TILES_PER_CHUNK  = 4096;
 int32_t constexpr ITEMS_PER_CHUNK  = ITEMS_PER_TILE * TILES_PER_CHUNK;
 
+constexpr multistate transition_init(char c, cudf::device_span<char const> delim)
+{
+  auto result = multistate();
+
+  result.enqueue(0, 0);
+
+  for (std::size_t i = 0; i < delim.size(); i++) {
+    if (delim[i] == c) { result.enqueue(i, i + 1); }
+  }
+
+  return result;
+}
+
+constexpr multistate transition(char c, multistate state, cudf::device_span<char const> delim)
+{
+  auto result = multistate();
+
+  result.enqueue(0, 0);
+
+  for (uint8_t i = 0; i < state.size(); i++) {
+    auto const tail = state.get_tail(i);
+    if (tail < delim.size() && delim[tail] == c) { result.enqueue(state.get_head(i), tail + 1); }
+  }
+
+  return result;
+}
+
 struct PatternScan {
   using BlockScan         = cub::BlockScan<multistate, THREADS_PER_TILE>;
   using BlockScanCallback = cudf::io::text::detail::scan_tile_state_callback<multistate>;
@@ -116,14 +143,14 @@ struct PatternScan {
 
   __device__ inline void Scan(cudf::size_type tile_idx,
                               cudf::io::text::detail::scan_tile_state_view<multistate> tile_state,
-                              cudf::io::text::detail::trie_device_view trie,
+                              cudf::device_span<char const> delim,
                               char (&thread_data)[ITEMS_PER_THREAD],
                               multistate& thread_multistate)
   {
-    thread_multistate = trie.transition_init(thread_data[0]);
+    thread_multistate = transition_init(thread_data[0], delim);
 
     for (uint32_t i = 1; i < ITEMS_PER_THREAD; i++) {
-      thread_multistate = trie.transition(thread_data[i], thread_multistate);
+      thread_multistate = transition(thread_data[i], thread_multistate, delim);
     }
 
     auto prefix_callback = BlockScanCallback(tile_state, tile_idx);
@@ -202,7 +229,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   int64_t base_offset_offset,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
   cudf::io::text::detail::scan_tile_state_view<cutoff_offset> tile_output_offsets,
-  cudf::io::text::detail::trie_device_view trie,
+  cudf::device_span<char const> delim,
   cudf::device_span<char const> chunk_input_chars,
   int64_t byte_range_end,
   cudf::split_device_span<int64_t> output_offsets)
@@ -238,7 +265,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
 
   __syncthreads();  // required before temp_memory re-use
   PatternScan(temp_storage.pattern_scan)
-    .Scan(tile_idx, tile_multistates, trie, thread_chars, thread_multistate);
+    .Scan(tile_idx, tile_multistates, delim, thread_chars, thread_multistate);
 
   // STEP 3: Flag matches
 
@@ -246,9 +273,9 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   uint32_t thread_match_mask[(ITEMS_PER_THREAD + 31) / 32]{};
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-    thread_multistate        = trie.transition(thread_chars[i], thread_multistate);
+    thread_multistate        = transition(thread_chars[i], thread_multistate, delim);
     auto const thread_state  = thread_multistate.max_tail();
-    auto const is_match      = i < thread_input_size and trie.is_match(thread_state);
+    auto const is_match      = i < thread_input_size and thread_state == delim.size();
     auto const match_end     = base_input_offset + thread_input_offset + i + 1;
     auto const is_past_range = match_end >= byte_range_end;
     thread_match_mask[i / 32] |= uint32_t{is_match} << (i % 32);
@@ -488,12 +515,25 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   if (byte_range.empty()) { return make_empty_column(type_id::STRING); }
 
-  auto const trie = cudf::io::text::detail::trie::create({delimiter}, stream);
+  auto device_delim = cudf::string_scalar(delimiter, true, stream, mr);
 
-  CUDF_EXPECTS(trie.max_duplicate_tokens() < multistate::max_segment_count,
+  auto sorted_delim = delimiter;
+  std::sort(sorted_delim.begin(), sorted_delim.end());
+  auto [_last_char, _last_char_count, max_duplicate_tokens] = std::accumulate(
+    sorted_delim.begin(), sorted_delim.end(), std::make_tuple('\0', 0, 0), [](auto acc, char c) {
+      if (std::get<0>(acc) != c) {
+        std::get<0>(acc) = c;
+        std::get<1>(acc) = 0;
+      }
+      std::get<1>(acc)++;
+      std::get<2>(acc) = std::max(std::get<1>(acc), std::get<2>(acc));
+      return acc;
+    });
+
+  CUDF_EXPECTS(max_duplicate_tokens < multistate::max_segment_count,
                "delimiter contains too many duplicate tokens to produce a deterministic result.");
 
-  CUDF_EXPECTS(trie.size() < multistate::max_segment_value,
+  CUDF_EXPECTS(delimiter.size() < multistate::max_segment_value,
                "delimiter contains too many total tokens to produce a deterministic result.");
 
   auto concurrency = 2;
@@ -584,7 +624,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       offset_storage.size(),
       tile_multistates,
       tile_offsets,
-      trie.view(),
+      {device_delim.data(), static_cast<std::size_t>(device_delim.size())},
       *chunk,
       byte_range_end,
       offset_output);
