@@ -840,6 +840,11 @@ class StringMethods(ColumnMethods):
                 f"expected a string object, not {type(esc).__name__}"
             )
 
+        if len(esc) > 1:
+            raise ValueError(
+                "expected esc to contain less than or equal to 1 characters"
+            )
+
         result_col = libstrings.like(
             self._column, cudf.Scalar(pat, "str"), cudf.Scalar(esc, "str")
         )
