@@ -23,6 +23,7 @@
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -102,19 +103,15 @@ static void bench_multibyte_split(nvbench::state& state)
 
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input       = create_random_input(file_size_approx, delim_factor, 0.05, delim);
-  auto host_input         = thrust::host_vector<char>();
+  auto host_input         = std::vector<char>{};
+
+  if (source_type != data_chunk_source_type::device) {
+    host_input = cudf::detail::make_std_vector_sync<char>(
+      {device_input.data(), static_cast<std::size_t>(device_input.size())},
+      cudf::default_stream_value);
+  }
 
   auto source = [&] {
-    // copy data to host if necessary
-    if (source_type != data_chunk_source_type::device) {
-      host_input.resize(device_input.size());
-      cudaMemcpyAsync(host_input.data(),
-                      device_input.data(),
-                      device_input.size() * sizeof(char),
-                      cudaMemcpyDeviceToHost,
-                      cudf::default_stream_value);
-      cudf::default_stream_value.synchronize();
-    }
     switch (source_type) {
       case data_chunk_source_type::file: {
         auto const temp_file_name = random_file_in_dir(temp_dir.path());
