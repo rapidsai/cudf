@@ -56,8 +56,8 @@ class device_uvector_data_chunk : public device_data_chunk {
 };
 
 /**
- * @brief A reader which produces views of device memory which contain a copy of the data from an
- * istream.
+ * @brief A reader which produces owning chunks of device memory which contain a copy of the data
+ * from an istream.
  */
 class istream_data_chunk_reader : public data_chunk_reader {
   struct host_ticket {
@@ -130,8 +130,8 @@ class istream_data_chunk_reader : public data_chunk_reader {
 };
 
 /**
- * @brief A reader which produces views of device memory which contain a copy of the data from a
- * string.
+ * @brief A reader which produces owning chunks of device memory which contain a copy of the data
+ * from a host span.
  */
 class host_span_data_chunk_reader : public data_chunk_reader {
  public:
