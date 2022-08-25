@@ -57,6 +57,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case cudf::io::io_type::FILEPATH: return "FILEPATH";
       case cudf::io::io_type::HOST_BUFFER: return "HOST_BUFFER";
+      case cudf::io::io_type::VOID: return "VOID";
       default: return "Unknown";
     }
   },
