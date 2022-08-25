@@ -372,13 +372,13 @@ void batched_compress(compression_type compression,
                          actual_compressed_data_sizes.data(),
                          stream.value());
 
+  stream.synchronize();
   if (detail::getenv_or("DUMP_NVCOMP_INPUT", 0)) {
     std::vector<device_span<uint8_t const>> h_inputs(num_chunks);
     cudaMemcpy(h_inputs.data(),
                inputs.data(),
                sizeof(device_span<uint8_t const>) * num_chunks,
                cudaMemcpyDeviceToHost);
-    stream.synchronize();
     int idx = 0;
     for (auto& input : h_inputs) {
       std::vector<uint8_t> h_input(input.size());
@@ -387,6 +387,32 @@ void batched_compress(compression_type compression,
       std::ofstream myFile("comp_in_" + std::to_string(batch_idx) + "_" + std::to_string(idx++),
                            std::ios::out | std::ios::binary);
       myFile.write(reinterpret_cast<char*>(h_input.data()), h_input.size());
+    }
+  }
+
+  if (detail::getenv_or("DUMP_NVCOMP_OUTPUT", 0)) {
+    std::vector<device_span<uint8_t const>> h_outputs(num_chunks);
+    cudaMemcpy(h_outputs.data(),
+               outputs.data(),
+               sizeof(device_span<uint8_t const>) * num_chunks,
+               cudaMemcpyDeviceToHost);
+
+    std::vector<size_t> actual_sizes(num_chunks);
+    cudaMemcpy(actual_sizes.data(),
+               actual_compressed_data_sizes.data(),
+               sizeof(size_t) * num_chunks,
+               cudaMemcpyDeviceToHost);
+
+    int idx = 0;
+    for (auto i = 0u; i < num_chunks; ++i) {
+      std::vector<uint8_t> h_output(actual_sizes[i]);
+      cudaMemcpy(h_output.data(),
+                 h_outputs[i].data(),
+                 sizeof(uint8_t) * actual_sizes[i],
+                 cudaMemcpyDeviceToHost);
+      std::ofstream myFile("comp_out_" + std::to_string(batch_idx) + "_" + std::to_string(idx++),
+                           std::ios::out | std::ios::binary);
+      myFile.write(reinterpret_cast<char*>(h_output.data()), actual_sizes[i]);
     }
   }
   ++batch_idx;
