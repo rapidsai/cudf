@@ -61,14 +61,14 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
 std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_null(input, stream, mr);
+  return detail::is_null(input, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_valid(cudf::column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_valid(input, stream, mr);
+  return detail::is_valid(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
