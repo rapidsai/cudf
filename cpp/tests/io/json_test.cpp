@@ -944,7 +944,7 @@ TEST_F(JsonReaderTest, JsonExperimentalBasic)
 
 TEST_F(JsonReaderTest, JsonExperimentalLines)
 {
-  std::string json_string =
+  std::string const json_string =
     R"({"a":"a0"}
     {"a":"a1"}
     {"a":"a2", "b":"b2"}
@@ -971,7 +971,7 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
 
 TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
 {
-  std::vector<std::string> json_inputs =
+  std::array<std::string const, 4> const json_inputs
     // single column
     {R"({"a":"a0"}
     {"a":"a1"}
