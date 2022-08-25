@@ -3,7 +3,7 @@
 import decimal
 import operator
 import pickle
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -125,9 +125,9 @@ class CategoricalDtype(_BaseDtype):
     stored on the GPU.
     """
 
-    ordered: Optional[bool]
+    ordered: bool
 
-    def __init__(self, categories=None, ordered: bool = None) -> None:
+    def __init__(self, categories=None, ordered: bool = False) -> None:
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 

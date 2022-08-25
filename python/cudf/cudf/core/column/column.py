@@ -1475,7 +1475,7 @@ def build_categorical_column(
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-    ordered: bool = None,
+    ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
