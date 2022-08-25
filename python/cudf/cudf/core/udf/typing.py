@@ -339,6 +339,36 @@ class MaskedScalarTruth(AbstractTemplate):
             return nb_signature(types.boolean, MaskedType(types.boolean))
 
 
+@cuda_decl_registry.register_global(float)
+class MaskedScalarFloatCast(AbstractTemplate):
+    """
+    Typing for float(Masked)
+    returns the result of calling "float" on the input
+    TODO: retains the validity of the input rather than
+    raising as in float(pd.NA)
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            # following numpy convention np.dtype(float) -> dtype('float64')
+            return nb_signature(MaskedType(types.float64), args[0])
+
+
+@cuda_decl_registry.register_global(int)
+class MaskedScalarIntCast(AbstractTemplate):
+    """
+    Typing for int(Masked)
+    returns the result of calling "int" on the input
+    TODO: retains the validity of the input rather than
+    raising as in int(pd.NA)
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            # following numpy convention np.dtype(int) -> dtype('int64')
+            return nb_signature(MaskedType(types.int64), args[0])
+
+
 @cuda_decl_registry.register_global(api.pack_return)
 class UnpackReturnToMasked(AbstractTemplate):
     """

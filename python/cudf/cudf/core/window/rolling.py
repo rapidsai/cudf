@@ -346,7 +346,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         kwargs
             unsupported
 
-        See also
+        See Also
         --------
         cudf.Series.apply: Apply an elementwise function to
             transform the values in the Column.
@@ -380,7 +380,6 @@ class Rolling(GetAttrGetItemMixin, Reducible):
 
         Examples
         --------
-
         >>> import cudf
         >>> def count_if_gt_3(window):
         ...     count = 0
@@ -492,7 +491,7 @@ class RollingGroupby(Rolling):
     """
     Grouped rolling window calculation.
 
-    See also
+    See Also
     --------
     cudf.core.window.Rolling
     """

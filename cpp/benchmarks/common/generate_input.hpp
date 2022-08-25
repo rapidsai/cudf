@@ -606,8 +606,8 @@ struct row_count {
  * @param dtype_ids Vector of requested column types
  * @param table_bytes Target size of the output table, in bytes. Some type may not produce columns
  * of exact size
- * @param data_params optional, set of data parameters describing the data profile for each type
- * @param seed optional, seed for the pseudo-random engine
+ * @param data_params Optional, set of data parameters describing the data profile for each type
+ * @param seed Optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  table_size_bytes table_bytes,
@@ -619,8 +619,8 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
  *
  * @param dtype_ids Vector of requested column types
  * @param num_rows Number of rows in the output table
- * @param data_params optional, set of data parameters describing the data profile for each type
- * @param seed optional, seed for the pseudo-random engine
+ * @param data_params Optional, set of data parameters describing the data profile for each type
+ * @param seed Optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  row_count num_rows,
@@ -628,14 +628,27 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  unsigned seed                   = 1);
 
 /**
+ * @brief Deterministically generates a column filled with data with the given parameters.
+ *
+ * @param dtype_id Requested column type
+ * @param num_rows Number of rows in the output column
+ * @param data_params Optional, set of data parameters describing the data profile
+ * @param seed Optional, seed for the pseudo-random engine
+ */
+std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
+                                                   row_count num_rows,
+                                                   data_profile const& data_params = data_profile{},
+                                                   unsigned seed                   = 1);
+
+/**
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
  * subsequent rows.
  *
  * @param dtype_ids Vector of requested column types
  * @param num_rows Number of rows in the output table
- * @param null_probability optional, probability of a null value
+ * @param null_probability Optional, probability of a null value
  *  no value implies no null mask, =0 implies all valids, >=1 implies all nulls
- * @param seed optional, seed for the pseudo-random engine
+ * @param seed Optional, seed for the pseudo-random engine
  * @return A table with the sequence columns.
  */
 std::unique_ptr<cudf::table> create_sequence_table(
@@ -660,7 +673,7 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
  * @param size number of rows
  * @param null_probability probability of a null value
  *  no value implies no null mask, =0 implies all valids, >=1 implies all nulls
- * @param seed optional, seed for the pseudo-random engine
+ * @param seed Optional, seed for the pseudo-random engine
  * @return null mask device buffer with random null mask data and null count
  */
 std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(

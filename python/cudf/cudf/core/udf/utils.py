@@ -208,7 +208,7 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
 
 
 def _get_kernel(kernel_string, globals_, sig, func):
-    """template kernel compilation helper function"""
+    """Template kernel compilation helper function."""
     f_ = cuda.jit(device=True)(func)
     globals_["f_"] = f_
     exec(kernel_string, globals_)

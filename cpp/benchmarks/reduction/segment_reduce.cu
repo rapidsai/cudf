@@ -71,7 +71,7 @@ std::pair<std::unique_ptr<column>, thrust::device_vector<size_type>> make_test_d
   auto const dtype     = cudf::type_to_id<InputType>();
   data_profile profile = data_profile_builder().cardinality(0).no_validity().distribution(
     dtype, distribution_id::UNIFORM, 0, 100);
-  auto input = create_random_table({dtype}, row_count{column_size}, profile);
+  auto input = create_random_column(dtype, row_count{column_size}, profile);
 
   auto offset_it =
     detail::make_counting_transform_iterator(0, [column_size, segment_length] __device__(auto i) {
@@ -80,7 +80,7 @@ std::pair<std::unique_ptr<column>, thrust::device_vector<size_type>> make_test_d
 
   thrust::device_vector<size_type> d_offsets(offset_it, offset_it + num_segments + 1);
 
-  return std::pair(std::move((input->release())[0]), d_offsets);
+  return std::pair(std::move(input), d_offsets);
 }
 
 template <typename InputType, typename OutputType, aggregation::Kind kind>

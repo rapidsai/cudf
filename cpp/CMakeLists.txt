@@ -449,8 +449,8 @@ add_library(
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
+  src/search/contains_scalar.cu
   src/search/contains_table.cu
-  src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -557,6 +557,19 @@ add_library(
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
   src/utilities/type_checks.cpp
+)
+
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
+set_source_files_properties(
+  src/binaryop/binaryop.cpp
+  src/jit/cache.cpp
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
+  src/rolling/grouped_rolling.cu
+  src/rolling/rolling.cu
+  src/transform/transform.cpp
+  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
 set_target_properties(
