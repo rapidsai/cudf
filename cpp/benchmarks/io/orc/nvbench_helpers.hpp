@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 
