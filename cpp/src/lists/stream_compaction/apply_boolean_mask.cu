@@ -19,6 +19,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/stream_compaction.hpp>

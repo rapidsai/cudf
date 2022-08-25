@@ -15,6 +15,7 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
