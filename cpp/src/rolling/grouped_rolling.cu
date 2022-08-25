@@ -1034,6 +1034,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           rolling_aggregation const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto preceding = to_range_bounds(preceding_window_in_days, timestamp_column.type());
   auto following = to_range_bounds(following_window_in_days, timestamp_column.type());
 
@@ -1045,6 +1046,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                               following,
                                               min_periods,
                                               aggr,
+                                              cudf::default_stream_value,
                                               mr);
 }
 
@@ -1070,6 +1072,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           rolling_aggregation const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   range_window_bounds preceding =
     to_range_bounds(preceding_window_in_days, timestamp_column.type());
   range_window_bounds following =
@@ -1109,6 +1112,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      rolling_aggregation const& aggr,
                                                      rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::grouped_range_rolling_window(group_keys,
                                               timestamp_column,
                                               timestamp_order,
