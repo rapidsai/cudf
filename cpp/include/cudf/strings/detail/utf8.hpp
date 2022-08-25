@@ -30,15 +30,44 @@ namespace strings {
 namespace detail {
 
 /**
- * @brief This will return true if passed the first byte of a UTF-8 character.
+ * @brief This will return true if passed a continuation byte of a UTF-8 character.
  *
- * @param byte Any byte from a valid UTF-8 character
- * @return true if this the first byte of the character
+ * @param chr Any single byte from a valid UTF-8 character
+ * @return true if this is not the first byte of the character
  */
-constexpr bool is_begin_utf8_char(uint8_t byte)
+constexpr bool is_utf8_continuation_char(unsigned char chr)
 {
   // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
-  return (byte & 0xC0) != 0x80;
+  return (chr & 0xC0) == 0x80;
+}
+
+/**
+ * @brief This will return true if passed the first byte of a UTF-8 character.
+ *
+ * @param chr Any single byte from a valid UTF-8 character
+ * @return true if this the first byte of the character
+ */
+constexpr bool is_begin_utf8_char(unsigned char chr) { return not is_utf8_continuation_char(chr); }
+
+/**
+ * @brief This will return true if the passed in byte could be the start of
+ * a valid UTF-8 character.
+ *
+ * This differs from is_begin_utf8_char(uint8_t) in that byte may not be valid
+ * UTF-8, so a more rigorous check is performed.
+ *
+ * @param byte The byte to be tested
+ * @return true if this can be the first byte of a character
+ */
+constexpr bool is_valid_begin_utf8_char(uint8_t byte)
+{
+  // to be the first byte of a valid (up to 4 byte) UTF-8 char, byte must be one of:
+  //  0b0vvvvvvv a 1 byte character
+  //  0b110vvvvv start of a 2 byte character
+  //  0b1110vvvv start of a 3 byte character
+  //  0b11110vvv start of a 4 byte character
+  return (byte & 0x80) == 0 || (byte & 0xE0) == 0xC0 || (byte & 0xF0) == 0xE0 ||
+         (byte & 0xF8) == 0xF0;
 }
 
 /**

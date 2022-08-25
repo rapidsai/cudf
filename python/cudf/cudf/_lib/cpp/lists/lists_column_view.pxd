@@ -1,6 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef extern from "cudf/lists/lists_column_view.hpp" namespace "cudf" nogil:
@@ -9,3 +10,7 @@ cdef extern from "cudf/lists/lists_column_view.hpp" namespace "cudf" nogil:
         column_view parent() except +
         column_view offsets() except +
         column_view child() except +
+
+    cdef enum:
+        offsets_column_index "cudf::lists_column_view::offsets_column_index"
+        child_column_index "cudf::lists_column_view::child_column_index"
