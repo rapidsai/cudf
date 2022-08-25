@@ -20,22 +20,24 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
+#include <cudf/strings/detail/convert/string_to_int.cuh>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/convert/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
 
@@ -81,6 +83,30 @@ struct string_to_integer_check_fn {
     return true;
   }
 };
+
+/**
+ * @brief Returns `true` if all characters in the string
+ * are valid for conversion to an integer.
+ *
+ * Valid characters are in [-+0-9]. The sign character (+/-)
+ * is optional but if present must be the first character.
+ * An empty string returns `false`.
+ * No bounds checking is performed to verify if the integer will fit
+ * within a specific integer type.
+ *
+ * @param d_str String to check.
+ * @return true if string has valid integer characters
+ */
+inline __device__ bool is_integer(string_view const& d_str)
+{
+  if (d_str.empty()) return false;
+  auto const end = d_str.end();
+  auto begin     = d_str.begin();
+  if (*begin == '+' || *begin == '-') ++begin;
+  return (begin < end) && thrust::all_of(thrust::seq, begin, end, [] __device__(auto chr) {
+           return chr >= '0' && chr <= '9';
+         });
+}
 
 /**
  * @brief The dispatch functions for checking if strings are valid integers.
@@ -151,13 +177,13 @@ std::unique_ptr<column> is_integer(
       d_column->pair_begin<string_view, true>(),
       d_column->pair_end<string_view, true>(),
       d_results,
-      [] __device__(auto const& p) { return p.second ? strings::is_integer(p.first) : false; });
+      [] __device__(auto const& p) { return p.second ? is_integer(p.first) : false; });
   } else {
     thrust::transform(rmm::exec_policy(stream),
                       d_column->pair_begin<string_view, false>(),
                       d_column->pair_end<string_view, false>(),
                       d_results,
-                      [] __device__(auto const& p) { return strings::is_integer(p.first); });
+                      [] __device__(auto const& p) { return is_integer(p.first); });
   }
 
   // Calling mutable_view() on a column invalidates it's null count so we need to set it back
