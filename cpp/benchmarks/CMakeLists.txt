@@ -240,7 +240,7 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark ---------------------------------------------------------------------------
-ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer_inout.cpp io/orc/orc_writer_chunks.cpp)
+ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
