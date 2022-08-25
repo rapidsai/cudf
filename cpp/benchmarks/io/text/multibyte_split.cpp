@@ -43,7 +43,7 @@
 
 temp_directory const temp_dir("cudf_nvbench");
 
-enum data_chunk_source_type { device, file, host, host_pinned };
+enum class data_chunk_source_type { device, file, host, host_pinned };
 
 static cudf::string_scalar create_random_input(int32_t num_chars,
                                                double delim_factor,
@@ -157,10 +157,10 @@ static void bench_multibyte_split(nvbench::state& state)
 NVBENCH_BENCH(bench_multibyte_split)
   .set_name("multibyte_split")
   .add_int64_axis("source_type",
-                  {data_chunk_source_type::device,
-                   data_chunk_source_type::file,
-                   data_chunk_source_type::host,
-                   data_chunk_source_type::host_pinned})
+                  {static_cast<int>(data_chunk_source_type::device),
+                   static_cast<int>(data_chunk_source_type::file),
+                   static_cast<int>(data_chunk_source_type::host),
+                   static_cast<int>(data_chunk_source_type::host_pinned)})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
