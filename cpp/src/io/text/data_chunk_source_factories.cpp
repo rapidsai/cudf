@@ -24,9 +24,7 @@
 
 #include <fstream>
 
-namespace cudf {
-namespace io {
-namespace text {
+namespace cudf::io::text {
 
 namespace {
 
@@ -268,6 +266,4 @@ std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data)
   return std::make_unique<device_span_data_chunk_source>(data_span);
 }
 
-}  // namespace text
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::text

@@ -23,9 +23,7 @@
 #include <memory>
 #include <string>
 
-namespace cudf {
-namespace io {
-namespace text {
+namespace cudf::io::text {
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the given string.
@@ -42,6 +40,4 @@ std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& file
  */
 std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data);
 
-}  // namespace text
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::text
