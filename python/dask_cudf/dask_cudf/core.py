@@ -458,7 +458,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
     x2 = 1.0 * (num**2).sum(skipna=skipna, split_every=split_every)
     n = num.count(split_every=split_every)
-    name = ddf._token_prefix + "var"
+    name = "cuda-" + ddf._token_prefix + "var"
     result = map_partitions(
         var_aggregate, x2, x, n, token=name, meta=meta, ddof=ddof
     )
@@ -500,7 +500,7 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
     nparts = ddf.npartitions
     if not split_every:
         split_every = nparts
-    name = "var-" + tokenize(skipna, split_every, out)
+    name = "cuda-var-" + tokenize(skipna, split_every, out)
     local_name = "local-" + name
     num = ddf._get_numeric_data()
     dsk = {
@@ -723,7 +723,9 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
             "dask_cudf does not support MultiIndex Dataframes."
         )
 
-    name = name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+    name = "cuda-" + name or (
+        "cuda-from_cudf-" + tokenize(data, npartitions or chunksize)
+    )
     return dd.from_pandas(
         data,
         npartitions=npartitions,

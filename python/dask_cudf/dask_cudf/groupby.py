@@ -548,9 +548,9 @@ def groupby_agg(
     # Begin graph construction
     dsk = {}
     token = tokenize(ddf, gb_cols, aggs)
-    partition_agg_name = "groupby_partition_agg-" + token
-    tree_reduce_name = "groupby_tree_reduce-" + token
-    gb_agg_name = "groupby_agg-" + token
+    partition_agg_name = "cuda-" + "groupby_partition_agg-" + token
+    tree_reduce_name = "cuda-" + "groupby_tree_reduce-" + token
+    gb_agg_name = "cuda-" + "groupby_agg-" + token
     for p in range(ddf.npartitions):
         # Perform groupby aggregation on each partition.
         # Split each result into `split_out` chunks (by hashing `gb_cols`)
