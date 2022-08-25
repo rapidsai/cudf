@@ -368,6 +368,12 @@ def _cudf_nvtx_annotate(func, domain="cudf_python"):
     )(func)
 
 
+def dedup_preserve_order(sr):
+    lhs = sr.reset_index(drop=True)
+    deduped = lhs.drop_duplicates()
+    return deduped.sort_index()
+
+
 _dask_cudf_nvtx_annotate = partial(
     _cudf_nvtx_annotate, domain="dask_cudf_python"
 )

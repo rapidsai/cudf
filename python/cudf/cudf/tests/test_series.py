@@ -21,6 +21,7 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     gen_rand,
 )
+from cudf.utils.utils import dedup_preserve_order
 
 
 def _series_na_data():
@@ -1928,3 +1929,12 @@ def test_default_integer_bitwidth_construction(default_integer_bitwidth, data):
 def test_default_float_bitwidth_construction(default_float_bitwidth, data):
     s = cudf.Series(data)
     assert s.dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_series_ordered_dedup():
+    # part of https://github.com/rapidsai/cudf/issues/11486
+    sr = cudf.Series(np.random.randint(0, 100, 1000))
+    # pandas unique() preserves order
+    expect = pd.Series(sr.to_pandas().unique())
+    got = dedup_preserve_order(sr)
+    assert_eq(expect.values, got.values)

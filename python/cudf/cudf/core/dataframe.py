@@ -102,6 +102,7 @@ from cudf.utils.utils import (
     GetAttrGetItemMixin,
     _cudf_nvtx_annotate,
     _external_only_api,
+    dedup_preserve_order,
 )
 
 T = TypeVar("T", bound="DataFrame")
@@ -7244,11 +7245,9 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
         ):
             # Combine and de-dupe the categories
-            categories[idx] = (
+            categories[idx] = dedup_preserve_order(
                 cudf.Series(concat_columns([col.categories for col in cols]))
-                .drop_duplicates(ignore_index=True)
-                ._column
-            )
+            )._column
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
