@@ -30,8 +30,8 @@ function(jit_preprocess_files)
     get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY)
     list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
 
-    # Note: need to pass _FILE_OFFSET_BITS=64 in COMMAND due to a limitation
-    # in how conda builds glibc
+    # Note: need to pass _FILE_OFFSET_BITS=64 in COMMAND due to a limitation in how conda builds
+    # glibc
     add_custom_command(
       OUTPUT ${ARG_OUTPUT}
       DEPENDS jitify_preprocess "${ARG_SOURCE_DIRECTORY}/${ARG_FILE}"

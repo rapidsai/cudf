@@ -549,8 +549,8 @@ add_library(
   src/utilities/type_checks.cpp
 )
 
-# Anything that includes jitify needs to be compiled with
-# _FILE_OFFSET_BITS=64 due to a limitation in how conda builds glibc
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
 set_source_files_properties(
   src/binaryop/binaryop.cpp
   src/jit/cache.cpp
