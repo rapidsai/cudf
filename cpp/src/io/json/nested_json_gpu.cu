@@ -470,153 +470,164 @@ auto get_transition_table(bool newline_delimited_json)
  */
 auto get_translation_table()
 {
-  std::array<std::array<std::vector<char>, NUM_PDA_SGIDS>, PD_NUM_STATES> pda_tlt;
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOV)] = {{                         /*ROOT*/
-                                                        {token_t::StructBegin},  // OPENING_BRACE
-                                                        {token_t::ListBegin},    // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},   // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},   // CLOSING_BRACKET
-                                                        {token_t::StringBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},   // ESCAPE
-                                                        {token_t::ErrorBegin},   // COMMA
-                                                        {token_t::ErrorBegin},   // COLON
-                                                        {},                      // WHITE_SPACE
-                                                        {},                      // LINE_BREAK
-                                                        {token_t::ValueBegin},   // OTHER
-                                                        /*LIST*/
-                                                        {token_t::StructBegin},  // OPENING_BRACE
-                                                        {token_t::ListBegin},    // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},   // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},   // CLOSING_BRACKET
-                                                        {token_t::StringBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},   // ESCAPE
-                                                        {token_t::ErrorBegin},   // COMMA
-                                                        {token_t::ErrorBegin},   // COLON
-                                                        {},                      // WHITE_SPACE
-                                                        {},                      // LINE_BREAK
-                                                        {token_t::ValueBegin},   // OTHER
-                                                        /*STRUCT*/
-                                                        {token_t::StructBegin},   // OPENING_BRACE
-                                                        {token_t::ListBegin},     // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACKET
-                                                        {token_t::StringBegin},   // QUOTE
-                                                        {token_t::ErrorBegin},    // ESCAPE
-                                                        {token_t::ErrorBegin},    // COMMA
-                                                        {token_t::ErrorBegin},    // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        {},                       // LINE_BREAK
-                                                        {token_t::ValueBegin}}};  // OTHER
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {{                          /*ROOT*/
-                                                        {token_t::ErrorBegin},    // OPENING_BRACE
-                                                        {token_t::ErrorBegin},    // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},    // QUOTE
-                                                        {token_t::ErrorBegin},    // ESCAPE
-                                                        {token_t::ErrorBegin},    // COMMA
-                                                        {token_t::ErrorBegin},    // COLON
-                                                        {token_t::ErrorBegin},    // WHITE_SPACE
-                                                        {token_t::ErrorBegin},    // LINE_BREAK
-                                                        {token_t::ErrorBegin},    // OTHER
-                                                        /*LIST*/
-                                                        {token_t::StructBegin},  // OPENING_BRACE
-                                                        {token_t::ListBegin},    // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},   // CLOSING_BRACE
-                                                        {token_t::ListEnd},      // CLOSING_BRACKET
-                                                        {token_t::StringBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},   // ESCAPE
-                                                        {token_t::ErrorBegin},   // COMMA
-                                                        {token_t::ErrorBegin},   // COLON
-                                                        {},                      // WHITE_SPACE
-                                                        {},                      // LINE_BREAK
-                                                        {token_t::ValueBegin},   // OTHER
-                                                        /*STRUCT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::StructEnd},   // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::FieldNameBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},      // ESCAPE
-                                                        {token_t::ErrorBegin},      // COMMA
-                                                        {token_t::ErrorBegin},      // COLON
-                                                        {},                         // WHITE_SPACE
-                                                        {},                         // LINE_BREAK
-                                                        {token_t::ErrorBegin}}};    // OTHER
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {
-    {                        /*ROOT*/
-     {token_t::ErrorBegin},  // OPENING_BRACE
-     {token_t::ErrorBegin},  // OPENING_BRACKET
-     {token_t::ErrorBegin},  // CLOSING_BRACE
-     {token_t::ErrorBegin},  // CLOSING_BRACKET
-     {token_t::ErrorBegin},  // QUOTE
-     {token_t::ErrorBegin},  // ESCAPE
-     {token_t::ErrorBegin},  // COMMA
-     {token_t::ErrorBegin},  // COLON
-     {token_t::ValueEnd},    // WHITE_SPACE
-     {token_t::ValueEnd},    // LINE_BREAK
-     {},                     // OTHER
-     /*LIST*/
-     {token_t::ErrorBegin},                  // OPENING_BRACE
-     {token_t::ErrorBegin},                  // OPENING_BRACKET
-     {token_t::ErrorBegin},                  // CLOSING_BRACE
-     {token_t::ValueEnd, token_t::ListEnd},  // CLOSING_BRACKET
-     {token_t::ErrorBegin},                  // QUOTE
-     {token_t::ErrorBegin},                  // ESCAPE
-     {token_t::ValueEnd},                    // COMMA
-     {token_t::ErrorBegin},                  // COLON
-     {token_t::ValueEnd},                    // WHITE_SPACE
-     {token_t::ValueEnd},                    // LINE_BREAK
-     {},                                     // OTHER
-     /*STRUCT*/
-     {token_t::ErrorBegin},                    // OPENING_BRACE
-     {token_t::ErrorBegin},                    // OPENING_BRACKET
-     {token_t::ValueEnd, token_t::StructEnd},  // CLOSING_BRACE
-     {token_t::ErrorBegin},                    // CLOSING_BRACKET
-     {token_t::ErrorBegin},                    // QUOTE
-     {token_t::ErrorBegin},                    // ESCAPE
-     {token_t::ValueEnd},                      // COMMA
-     {token_t::ErrorBegin},                    // COLON
-     {token_t::ValueEnd},                      // WHITE_SPACE
-     {token_t::ValueEnd},                      // LINE_BREAK
-     {}}};                                     // OTHER
+  constexpr auto StructBegin    = token_t::StructBegin;
+  constexpr auto StructEnd      = token_t::StructEnd;
+  constexpr auto ListBegin      = token_t::ListBegin;
+  constexpr auto ListEnd        = token_t::ListEnd;
+  constexpr auto FieldNameBegin = token_t::FieldNameBegin;
+  constexpr auto FieldNameEnd   = token_t::FieldNameEnd;
+  constexpr auto StringBegin    = token_t::StringBegin;
+  constexpr auto StringEnd      = token_t::StringEnd;
+  constexpr auto ValueBegin     = token_t::ValueBegin;
+  constexpr auto ValueEnd       = token_t::ValueEnd;
+  constexpr auto ErrorBegin     = token_t::ErrorBegin;
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{                       /*ROOT*/
-                                                        {},                    // OPENING_BRACE
-                                                        {},                    // OPENING_BRACKET
-                                                        {},                    // CLOSING_BRACE
-                                                        {},                    // CLOSING_BRACKET
-                                                        {token_t::StringEnd},  // QUOTE
-                                                        {},                    // ESCAPE
-                                                        {},                    // COMMA
-                                                        {},                    // COLON
-                                                        {},                    // WHITE_SPACE
-                                                        {},                    // LINE_BREAK
-                                                        {},                    // OTHER
+  std::array<std::array<std::vector<char>, NUM_PDA_SGIDS>, PD_NUM_STATES> pda_tlt;
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOV)] = {{                /*ROOT*/
+                                                        {StructBegin},  // OPENING_BRACE
+                                                        {ListBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},   // CLOSING_BRACE
+                                                        {ErrorBegin},   // CLOSING_BRACKET
+                                                        {StringBegin},  // QUOTE
+                                                        {ErrorBegin},   // ESCAPE
+                                                        {ErrorBegin},   // COMMA
+                                                        {ErrorBegin},   // COLON
+                                                        {},             // WHITE_SPACE
+                                                        {},             // LINE_BREAK
+                                                        {ValueBegin},   // OTHER
                                                         /*LIST*/
-                                                        {},                    // OPENING_BRACE
-                                                        {},                    // OPENING_BRACKET
-                                                        {},                    // CLOSING_BRACE
-                                                        {},                    // CLOSING_BRACKET
-                                                        {token_t::StringEnd},  // QUOTE
-                                                        {},                    // ESCAPE
-                                                        {},                    // COMMA
-                                                        {},                    // COLON
-                                                        {},                    // WHITE_SPACE
-                                                        {},                    // LINE_BREAK
-                                                        {},                    // OTHER
+                                                        {StructBegin},  // OPENING_BRACE
+                                                        {ListBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},   // CLOSING_BRACE
+                                                        {ErrorBegin},   // CLOSING_BRACKET
+                                                        {StringBegin},  // QUOTE
+                                                        {ErrorBegin},   // ESCAPE
+                                                        {ErrorBegin},   // COMMA
+                                                        {ErrorBegin},   // COLON
+                                                        {},             // WHITE_SPACE
+                                                        {},             // LINE_BREAK
+                                                        {ValueBegin},   // OTHER
                                                         /*STRUCT*/
-                                                        {},                    // OPENING_BRACE
-                                                        {},                    // OPENING_BRACKET
-                                                        {},                    // CLOSING_BRACE
-                                                        {},                    // CLOSING_BRACKET
-                                                        {token_t::StringEnd},  // QUOTE
-                                                        {},                    // ESCAPE
-                                                        {},                    // COMMA
-                                                        {},                    // COLON
-                                                        {},                    // WHITE_SPACE
-                                                        {},                    // LINE_BREAK
-                                                        {}}};                  // OTHER
+                                                        {StructBegin},   // OPENING_BRACE
+                                                        {ListBegin},     // OPENING_BRACKET
+                                                        {ErrorBegin},    // CLOSING_BRACE
+                                                        {ErrorBegin},    // CLOSING_BRACKET
+                                                        {StringBegin},   // QUOTE
+                                                        {ErrorBegin},    // ESCAPE
+                                                        {ErrorBegin},    // COMMA
+                                                        {ErrorBegin},    // COLON
+                                                        {},              // WHITE_SPACE
+                                                        {},              // LINE_BREAK
+                                                        {ValueBegin}}};  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BOA)] = {{                 /*ROOT*/
+                                                        {ErrorBegin},    // OPENING_BRACE
+                                                        {ErrorBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},    // CLOSING_BRACE
+                                                        {ErrorBegin},    // CLOSING_BRACKET
+                                                        {ErrorBegin},    // QUOTE
+                                                        {ErrorBegin},    // ESCAPE
+                                                        {ErrorBegin},    // COMMA
+                                                        {ErrorBegin},    // COLON
+                                                        {ErrorBegin},    // WHITE_SPACE
+                                                        {ErrorBegin},    // LINE_BREAK
+                                                        {ErrorBegin},    // OTHER
+                                                        /*LIST*/
+                                                        {StructBegin},  // OPENING_BRACE
+                                                        {ListBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},   // CLOSING_BRACE
+                                                        {ListEnd},      // CLOSING_BRACKET
+                                                        {StringBegin},  // QUOTE
+                                                        {ErrorBegin},   // ESCAPE
+                                                        {ErrorBegin},   // COMMA
+                                                        {ErrorBegin},   // COLON
+                                                        {},             // WHITE_SPACE
+                                                        {},             // LINE_BREAK
+                                                        {ValueBegin},   // OTHER
+                                                        /*STRUCT*/
+                                                        {ErrorBegin},      // OPENING_BRACE
+                                                        {ErrorBegin},      // OPENING_BRACKET
+                                                        {StructEnd},       // CLOSING_BRACE
+                                                        {ErrorBegin},      // CLOSING_BRACKET
+                                                        {FieldNameBegin},  // QUOTE
+                                                        {ErrorBegin},      // ESCAPE
+                                                        {ErrorBegin},      // COMMA
+                                                        {ErrorBegin},      // COLON
+                                                        {},                // WHITE_SPACE
+                                                        {},                // LINE_BREAK
+                                                        {ErrorBegin}}};    // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_LON)] = {{                   /*ROOT*/
+                                                        {ErrorBegin},      // OPENING_BRACE
+                                                        {ErrorBegin},      // OPENING_BRACKET
+                                                        {ErrorBegin},      // CLOSING_BRACE
+                                                        {ErrorBegin},      // CLOSING_BRACKET
+                                                        {ErrorBegin},      // QUOTE
+                                                        {ErrorBegin},      // ESCAPE
+                                                        {ErrorBegin},      // COMMA
+                                                        {ErrorBegin},      // COLON
+                                                        {ValueEnd},        // WHITE_SPACE
+                                                        {ValueEnd},        // LINE_BREAK
+                                                        {},                // OTHER
+                                                        /*LIST*/
+                                                        {ErrorBegin},         // OPENING_BRACE
+                                                        {ErrorBegin},         // OPENING_BRACKET
+                                                        {ErrorBegin},         // CLOSING_BRACE
+                                                        {ValueEnd, ListEnd},  // CLOSING_BRACKET
+                                                        {ErrorBegin},         // QUOTE
+                                                        {ErrorBegin},         // ESCAPE
+                                                        {ValueEnd},           // COMMA
+                                                        {ErrorBegin},         // COLON
+                                                        {ValueEnd},           // WHITE_SPACE
+                                                        {ValueEnd},           // LINE_BREAK
+                                                        {},                   // OTHER
+                                                        /*STRUCT*/
+                                                        {ErrorBegin},           // OPENING_BRACE
+                                                        {ErrorBegin},           // OPENING_BRACKET
+                                                        {ValueEnd, StructEnd},  // CLOSING_BRACE
+                                                        {ErrorBegin},           // CLOSING_BRACKET
+                                                        {ErrorBegin},           // QUOTE
+                                                        {ErrorBegin},           // ESCAPE
+                                                        {ValueEnd},             // COMMA
+                                                        {ErrorBegin},           // COLON
+                                                        {ValueEnd},             // WHITE_SPACE
+                                                        {ValueEnd},             // LINE_BREAK
+                                                        {}}};                   // OTHER
+
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{              /*ROOT*/
+                                                        {},           // OPENING_BRACE
+                                                        {},           // OPENING_BRACKET
+                                                        {},           // CLOSING_BRACE
+                                                        {},           // CLOSING_BRACKET
+                                                        {StringEnd},  // QUOTE
+                                                        {},           // ESCAPE
+                                                        {},           // COMMA
+                                                        {},           // COLON
+                                                        {},           // WHITE_SPACE
+                                                        {},           // LINE_BREAK
+                                                        {},           // OTHER
+                                                        /*LIST*/
+                                                        {},           // OPENING_BRACE
+                                                        {},           // OPENING_BRACKET
+                                                        {},           // CLOSING_BRACE
+                                                        {},           // CLOSING_BRACKET
+                                                        {StringEnd},  // QUOTE
+                                                        {},           // ESCAPE
+                                                        {},           // COMMA
+                                                        {},           // COLON
+                                                        {},           // WHITE_SPACE
+                                                        {},           // LINE_BREAK
+                                                        {},           // OTHER
+                                                        /*STRUCT*/
+                                                        {},           // OPENING_BRACE
+                                                        {},           // OPENING_BRACKET
+                                                        {},           // CLOSING_BRACE
+                                                        {},           // CLOSING_BRACKET
+                                                        {StringEnd},  // QUOTE
+                                                        {},           // ESCAPE
+                                                        {},           // COMMA
+                                                        {},           // COLON
+                                                        {},           // WHITE_SPACE
+                                                        {},           // LINE_BREAK
+                                                        {}}};         // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_SCE)] = {{     /*ROOT*/
                                                         {},  // OPENING_BRACE
@@ -655,141 +666,141 @@ auto get_translation_table()
                                                         {},    // LINE_BREAK
                                                         {}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_PVL)] = {{                        /*ROOT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {},                     // WHITE_SPACE
-                                                        {},                     // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_PVL)] = {{               /*ROOT*/
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {},            // WHITE_SPACE
+                                                        {},            // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*LIST*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ListEnd},     // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {},                     // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {},                     // WHITE_SPACE
-                                                        {},                     // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ListEnd},     // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {},            // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {},            // WHITE_SPACE
+                                                        {},            // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
-                                                        {token_t::ErrorBegin},    // OPENING_BRACE
-                                                        {token_t::ErrorBegin},    // OPENING_BRACKET
-                                                        {token_t::StructEnd},     // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},    // QUOTE
-                                                        {token_t::ErrorBegin},    // ESCAPE
-                                                        {},                       // COMMA
-                                                        {token_t::ErrorBegin},    // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        {},                       // LINE_BREAK
-                                                        {token_t::ErrorBegin}}};  // OTHER
+                                                        {ErrorBegin},    // OPENING_BRACE
+                                                        {ErrorBegin},    // OPENING_BRACKET
+                                                        {StructEnd},     // CLOSING_BRACE
+                                                        {ErrorBegin},    // CLOSING_BRACKET
+                                                        {ErrorBegin},    // QUOTE
+                                                        {ErrorBegin},    // ESCAPE
+                                                        {},              // COMMA
+                                                        {ErrorBegin},    // COLON
+                                                        {},              // WHITE_SPACE
+                                                        {},              // LINE_BREAK
+                                                        {ErrorBegin}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_BFN)] = {{                        /*ROOT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_BFN)] = {{               /*ROOT*/
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*LIST*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::FieldNameBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},      // ESCAPE
-                                                        {token_t::ErrorBegin},      // COMMA
-                                                        {token_t::ErrorBegin},      // COLON
-                                                        {},                         // WHITE_SPACE
-                                                        {},                         // LINE_BREAK
-                                                        {token_t::ErrorBegin}}};    // OTHER
+                                                        {ErrorBegin},      // OPENING_BRACE
+                                                        {ErrorBegin},      // OPENING_BRACKET
+                                                        {ErrorBegin},      // CLOSING_BRACE
+                                                        {ErrorBegin},      // CLOSING_BRACKET
+                                                        {FieldNameBegin},  // QUOTE
+                                                        {ErrorBegin},      // ESCAPE
+                                                        {ErrorBegin},      // COMMA
+                                                        {ErrorBegin},      // COLON
+                                                        {},                // WHITE_SPACE
+                                                        {},                // LINE_BREAK
+                                                        {ErrorBegin}}};    // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{                        /*ROOT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FLN)] = {{               /*ROOT*/
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*LIST*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
-                                                        {},                       // OPENING_BRACE
-                                                        {},                       // OPENING_BRACKET
-                                                        {},                       // CLOSING_BRACE
-                                                        {},                       // CLOSING_BRACKET
-                                                        {token_t::FieldNameEnd},  // QUOTE
-                                                        {},                       // ESCAPE
-                                                        {},                       // COMMA
-                                                        {},                       // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        {},                       // LINE_BREAK
-                                                        {}}};                     // OTHER
+                                                        {},              // OPENING_BRACE
+                                                        {},              // OPENING_BRACKET
+                                                        {},              // CLOSING_BRACE
+                                                        {},              // CLOSING_BRACKET
+                                                        {FieldNameEnd},  // QUOTE
+                                                        {},              // ESCAPE
+                                                        {},              // COMMA
+                                                        {},              // COLON
+                                                        {},              // WHITE_SPACE
+                                                        {},              // LINE_BREAK
+                                                        {}}};            // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{                        /*ROOT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_FNE)] = {{               /*ROOT*/
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*LIST*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
                                                         {},    // OPENING_BRACE
                                                         {},    // OPENING_BRACKET
@@ -803,42 +814,42 @@ auto get_translation_table()
                                                         {},    // LINE_BREAK
                                                         {}}};  // OTHER
 
-  pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{                        /*ROOT*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+  pda_tlt[static_cast<StateT>(pda_state_t::PD_PFN)] = {{               /*ROOT*/
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*LIST*/
-                                                        {token_t::ErrorBegin},  // OPENING_BRACE
-                                                        {token_t::ErrorBegin},  // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},  // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},  // QUOTE
-                                                        {token_t::ErrorBegin},  // ESCAPE
-                                                        {token_t::ErrorBegin},  // COMMA
-                                                        {token_t::ErrorBegin},  // COLON
-                                                        {token_t::ErrorBegin},  // WHITE_SPACE
-                                                        {token_t::ErrorBegin},  // LINE_BREAK
-                                                        {token_t::ErrorBegin},  // OTHER
+                                                        {ErrorBegin},  // OPENING_BRACE
+                                                        {ErrorBegin},  // OPENING_BRACKET
+                                                        {ErrorBegin},  // CLOSING_BRACE
+                                                        {ErrorBegin},  // CLOSING_BRACKET
+                                                        {ErrorBegin},  // QUOTE
+                                                        {ErrorBegin},  // ESCAPE
+                                                        {ErrorBegin},  // COMMA
+                                                        {ErrorBegin},  // COLON
+                                                        {ErrorBegin},  // WHITE_SPACE
+                                                        {ErrorBegin},  // LINE_BREAK
+                                                        {ErrorBegin},  // OTHER
                                                         /*STRUCT*/
-                                                        {token_t::ErrorBegin},    // OPENING_BRACE
-                                                        {token_t::ErrorBegin},    // OPENING_BRACKET
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACE
-                                                        {token_t::ErrorBegin},    // CLOSING_BRACKET
-                                                        {token_t::ErrorBegin},    // QUOTE
-                                                        {token_t::ErrorBegin},    // ESCAPE
-                                                        {token_t::ErrorBegin},    // COMMA
-                                                        {},                       // COLON
-                                                        {},                       // WHITE_SPACE
-                                                        {},                       // LINE_BREAK
-                                                        {token_t::ErrorBegin}}};  // OTHER
+                                                        {ErrorBegin},    // OPENING_BRACE
+                                                        {ErrorBegin},    // OPENING_BRACKET
+                                                        {ErrorBegin},    // CLOSING_BRACE
+                                                        {ErrorBegin},    // CLOSING_BRACKET
+                                                        {ErrorBegin},    // QUOTE
+                                                        {ErrorBegin},    // ESCAPE
+                                                        {ErrorBegin},    // COMMA
+                                                        {},              // COLON
+                                                        {},              // WHITE_SPACE
+                                                        {},              // LINE_BREAK
+                                                        {ErrorBegin}}};  // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_ERR)] = {{     /*ROOT*/
                                                         {},  // OPENING_BRACE
