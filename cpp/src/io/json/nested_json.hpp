@@ -262,6 +262,8 @@ enum token_t : PdaTokenT {
 };
 
 namespace detail {
+
+// TODO: return device_uvector instead of passing pre-allocated memory
 /**
  * @brief Identifies the stack context for each character from a JSON input. Specifically, we
  * identify brackets and braces outside of quoted fields (e.g., field names, strings).
