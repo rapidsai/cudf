@@ -121,10 +121,8 @@ static void bench_multibyte_split(nvbench::state& state)
     switch (source_type) {
       case data_chunk_source_type::file: {
         auto const temp_file_name = random_file_in_dir(temp_dir.path());
-        {
-          auto temp_fostream = std::ofstream(temp_file_name, std::ofstream::out);
-          temp_fostream.write(host_input.data(), host_input.size());
-        }
+        std::ofstream(temp_file_name, std::ofstream::out)
+          .write(host_input.data(), host_input.size());
         return cudf::io::text::make_source_from_file(temp_file_name);
       }
       case data_chunk_source_type::host:  //
