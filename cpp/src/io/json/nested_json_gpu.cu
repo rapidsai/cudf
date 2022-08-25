@@ -415,6 +415,8 @@ auto get_transition_table(bool newline_delimited_json)
   static_assert(static_cast<PdaStackSymbolGroupIdT>(stack_symbol_group_id::STACK_LIST) == 1);
   static_assert(static_cast<PdaStackSymbolGroupIdT>(stack_symbol_group_id::STACK_STRUCT) == 2);
 
+  // In case of newline-delimited JSON, multiple newlines are ignored, similar to whitespace.
+  // Thas is, empty lines are ignored
   auto const PD_ANL = newline_delimited_json ? PD_BOV : PD_PVL;
   std::array<std::array<pda_state_t, NUM_PDA_SGIDS>, PD_NUM_STATES> pda_tt;
   //  {       [       }       ]       "       \       ,       :     space   newline other
