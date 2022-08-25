@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "nvbench_helpers.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
@@ -26,67 +28,6 @@
 #include <nvbench/nvbench.cuh>
 
 constexpr int64_t data_size = 512 << 20;
-
-enum class uses_index : bool { YES, NO };
-
-enum class uses_numpy_dtype : bool { YES, NO };
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  uses_index,
-  [](auto value) {
-    switch (value) {
-      case uses_index::YES: return "YES";
-      case uses_index::NO: return "NO";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  uses_numpy_dtype,
-  [](auto value) {
-    switch (value) {
-      case uses_numpy_dtype::YES: return "YES";
-      case uses_numpy_dtype::NO: return "NO";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  column_selection,
-  [](auto value) {
-    switch (value) {
-      case column_selection::ALL: return "ALL";
-      case column_selection::ALTERNATE: return "ALTERNATE";
-      case column_selection::FIRST_HALF: return "FIRST_HALF";
-      case column_selection::SECOND_HALF: return "SECOND_HALF";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  row_selection,
-  [](auto value) {
-    switch (value) {
-      case row_selection::ALL: return "ALL";
-      case row_selection::NROWS: return "NROWS";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::type_id,
-  [](auto value) {
-    switch (value) {
-      case cudf::type_id::EMPTY: return "EMPTY";
-      case cudf::type_id::TIMESTAMP_NANOSECONDS: return "TIMESTAMP_NANOSECONDS";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
