@@ -525,21 +525,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ----------
     data : array-like, Iterable, dict, or DataFrame.
         Dict can contain Series, arrays, constants, or list-like objects.
-
     index : Index or array-like
         Index to use for resulting frame. Will default to
         RangeIndex if no indexing information part of input data and
         no index provided.
-
     columns : Index or array-like
         Column labels to use for resulting frame.
         Will default to RangeIndex (0, 1, 2, …, n) if no column
         labels are provided.
-
     dtype : dtype, default None
         Data type to force. Only a single dtype is allowed.
         If None, infer.
-
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -547,7 +543,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     Examples
     --------
-
     Build dataframe with ``__setitem__``:
 
     >>> import cudf
@@ -1799,7 +1794,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def _get_renderable_dataframe(self):
         """
-        takes rows and columns from pandas settings or estimation from size.
+        Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
         multiindex as well producing an efficient representative string
         for printing with the dataframe.
@@ -3866,7 +3861,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         expr : str
             A boolean expression. Names in expression refer to columns.
             `index` can be used instead of index name, but this is not
@@ -3882,8 +3876,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-
-        filtered :  DataFrame
+        filtered : DataFrame
 
         Examples
         --------
@@ -3979,7 +3972,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-
         Simple function of a single variable which could be NA:
 
         >>> def f(row):
@@ -4103,7 +4095,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         na_action: Union[str, None] = None,
         **kwargs,
     ) -> DataFrame:
-
         """
         Apply a function to a Dataframe elementwise.
 
@@ -5175,7 +5166,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         axis : int
@@ -5278,7 +5268,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {`lower`, `higher`, `nearest`}
@@ -5288,7 +5277,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-
         DataFrame
         """
         if isinstance(q, numbers.Number):
@@ -5318,7 +5306,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         values : iterable, Series, DataFrame or dict
             The result will only be true at a location if all
             the labels match. If values is a Series, that’s the index.
