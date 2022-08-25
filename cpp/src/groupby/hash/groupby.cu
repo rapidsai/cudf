@@ -47,7 +47,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
-#include <limits>
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/copy.h>
@@ -55,6 +54,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <limits>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -211,9 +211,6 @@ class groupby_simple_aggregations_collector final
     auto const n              = agg._n;
     CUDF_EXPECTS(n == 0 || n == -1,
                  "Only FIRST and LAST are supported in hash groupby aggregation.");
-    auto const simple_agg = [n] {
-      return n == 0 ? make_min_aggregation() : make_max_aggregation();
-    };
 
     auto source_index_column = [&] {
       auto col = make_numeric_column(cudf::data_type{type_to_id<offset_type>()},
@@ -230,7 +227,8 @@ class groupby_simple_aggregations_collector final
       return col;
     }();
 
-    aggs_and_column_views.push_back(std::pair(simple_agg(), source_index_column->view()));
+    aggs_and_column_views.push_back(std::pair(
+      n == 0 ? make_min_aggregation() : make_max_aggregation(), source_index_column->view()));
     additional_columns.push_back(std::move(source_index_column));
     return {};
   }
@@ -238,8 +236,6 @@ class groupby_simple_aggregations_collector final
   auto& get_aggs_and_column_views() { return aggs_and_column_views; }
 
   auto& get_additional_columns() { return additional_columns; }
-
-  auto get_original_agg_column() { return original_agg_column; }
 
  private:
   using agg_column_view_pair = std::pair<std::unique_ptr<aggregation>, column_view>;
@@ -472,9 +468,9 @@ class single_pass_aggs_flattener {
   {
     _agg_kinds_set.clear();
 
-    std::for_each(request.aggregations.begin(),
-                  request.aggregations.end(),
-                  [&](auto&& compound_agg) { simplify(compound_agg, request.values); });
+    std::for_each(request.aggregations.cbegin(),
+                  request.aggregations.cend(),
+                  [&](auto const& compound_agg) { simplify(compound_agg, request.values); });
   }
 
   result get_result() { return std::move(_result); }
@@ -494,7 +490,7 @@ class single_pass_aggs_flattener {
     compound_agg->get_simple_aggregations(values_type, collector);
 
     // Record all simple aggregations in _result.
-    for (auto&& [simple_agg, agg_column] : collector.get_aggs_and_column_views()) {
+    for (auto& [simple_agg, agg_column] : collector.get_aggs_and_column_views()) {
       record(simple_agg, agg_column, original_agg_column);
     }
 
