@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,42 +17,9 @@
 
 #include <cudf/strings/string_view.cuh>
 
-#include <thrust/distance.h>
-#include <thrust/execution_policy.h>
-#include <thrust/logical.h>
-
 namespace cudf {
 namespace strings {
-/**
- * @addtogroup strings_classes
- * @{
- * @file
- * @brief String functions
- */
-
-/**
- * @brief Returns `true` if all characters in the string
- * are valid for conversion to an integer.
- *
- * Valid characters are in [-+0-9]. The sign character (+/-)
- * is optional but if present must be the first character.
- * An empty string returns `false`.
- * No bounds checking is performed to verify if the integer will fit
- * within a specific integer type.
- *
- * @param d_str String to check.
- * @return true if string has valid integer characters
- */
-inline __device__ bool is_integer(string_view const& d_str)
-{
-  if (d_str.empty()) return false;
-  auto begin = d_str.begin();
-  auto end   = d_str.end();
-  if (*begin == '+' || *begin == '-') ++begin;
-  return (thrust::distance(begin, end) > 0) &&
-         thrust::all_of(
-           thrust::seq, begin, end, [] __device__(auto chr) { return chr >= '0' && chr <= '9'; });
-}
+namespace detail {
 
 /**
  * @brief Returns true if input contains the not-a-number string.
@@ -148,6 +115,6 @@ inline __device__ bool is_float(string_view const& d_str)
   return result;
 }
 
-/** @} */  // end of group
+}  // namespace detail
 }  // namespace strings
 }  // namespace cudf
