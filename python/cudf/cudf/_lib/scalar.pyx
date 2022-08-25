@@ -376,9 +376,13 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     column_names = [str(i) for i in range(struct_table_view.num_columns())]
-
+    cust_dtype = StructDtype({
+                str(i): dtype_from_column_view(struct_table_view.column(i))
+                for i in range(struct_table_view.num_columns())
+    })
     columns = columns_from_table_view(struct_table_view, None)
-    python_dict = to_arrow(columns, column_names).to_pydict()
+
+    python_dict = to_arrow(columns, column_names, cust_dtype).to_pydict()
 
     return {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
 

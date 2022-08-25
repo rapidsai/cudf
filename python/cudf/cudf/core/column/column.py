@@ -233,7 +233,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], [["None"]],)[
+        return libcudf.interop.to_arrow([self], [["None"]], self.dtype)[
             "None"
         ].chunk(0)
 
@@ -442,7 +442,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
 
-        return libcudf.copying.get_element(self, idx).value
+        x = libcudf.copying.get_element(self, idx)
+        # import pdb;pdb.set_trace()
+        return x.value
 
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:
         stride = 1 if stride is None else stride
