@@ -16,16 +16,48 @@
 
 #include "read_json.hpp"
 
+#include <io/comp/io_uncomp.hpp>
+#include <io/json/nested_json.hpp>
+
 #include <cudf/utilities/error.hpp>
 
+#include <numeric>
+
 namespace cudf::io::detail::json::experimental {
+
+std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
+                                      compression_type compression)
+{
+  auto const total_source_size =
+    std::accumulate(sources.begin(), sources.end(), 0ul, [](size_t sum, auto& source) {
+      return sum + source->size();
+    });
+  auto buffer = std::vector<uint8_t>(total_source_size);
+
+  size_t bytes_read = 0;
+  for (const auto& source : sources) {
+    bytes_read += source->host_read(0, source->size(), buffer.data() + bytes_read);
+  }
+
+  return (compression == compression_type::NONE) ? buffer : decompress(compression, buffer);
+}
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FAIL("Not implemented");
+  auto const dtypes_empty =
+    std::visit([](const auto& dtypes) { return dtypes.empty(); }, reader_opts.get_dtypes());
+  CUDF_EXPECTS(dtypes_empty, "user specified dtypes are not yet supported");
+  CUDF_EXPECTS(not reader_opts.is_enabled_lines(), "JSON Lines format is not yet supported");
+  CUDF_EXPECTS(reader_opts.get_byte_range_offset() == 0 and reader_opts.get_byte_range_size() == 0,
+               "specifying a byte range is not yet supported");
+
+  auto const buffer = ingest_raw_input(sources, reader_opts.get_compression());
+  auto data = host_span<char const>(reinterpret_cast<char const*>(buffer.data()), buffer.size());
+
+  return cudf::io::json::detail::parse_nested_json(data, stream, mr);
 }
 
 }  // namespace cudf::io::detail::json::experimental

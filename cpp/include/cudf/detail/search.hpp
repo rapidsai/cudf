@@ -97,20 +97,4 @@ rmm::device_uvector<bool> contains(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
- * @brief Check if the (unique) row of the `needle` column is contained in the `haystack` column.
- *
- * If the input `needle` column has more than one row, only the first row will be considered.
- *
- * This function is designed for nested types only. It can also work with non-nested types
- * but with lower performance due to the complexity of the implementation.
- *
- * @param haystack The column containing search space.
- * @param needle A scalar value to check for existence in the search space.
- * @return true if the given `needle` value exists in the `haystack` column.
- */
-bool contains_nested_element(column_view const& haystack,
-                             column_view const& needle,
-                             rmm::cuda_stream_view stream);
-
 }  // namespace cudf::detail

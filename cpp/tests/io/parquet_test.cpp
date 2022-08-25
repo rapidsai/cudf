@@ -229,6 +229,26 @@ void read_footer(const std::unique_ptr<cudf::io::datasource>& source,
   CUDF_EXPECTS(res, "Cannot parse file metadata");
 }
 
+// returns the number of bits used for dictionary encoding data at the given page location.
+// this assumes the data is uncompressed.
+// throws cudf::logic_error if the page_loc data is invalid.
+int read_dict_bits(const std::unique_ptr<cudf::io::datasource>& source,
+                   const cudf::io::parquet::PageLocation& page_loc)
+{
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+
+  cudf::io::parquet::PageHeader page_hdr;
+  const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+  cudf::io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
+  bool res = cp.read(&page_hdr);
+  CUDF_EXPECTS(res, "Cannot parse page header");
+
+  // cp should be pointing at the start of page data now. the first byte
+  // should be the encoding bit size
+  return cp.getb();
+}
+
 // read column index from datasource at location indicated by chunk,
 // parse and return as a ColumnIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
@@ -361,6 +381,18 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 
 // Declare typed test cases
 TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
+
+// Base test fixture for size-parameterized tests
+class ParquetSizedTest : public ::testing::TestWithParam<int> {
+};
+
+// test the allowed bit widths for dictionary encoding
+// values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
+INSTANTIATE_TEST_SUITE_P(
+  ParquetDictionaryTest,
+  ParquetSizedTest,
+  testing::Values(2, 4, 8, 16, 32, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
+  testing::PrintToStringParamName());
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -3967,6 +3999,157 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   }
 }
 
+TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
+{
+  const char* coldata[] = {
+    // in-range 7 bit.  should truncate to "yyyyyyyz"
+    "yyyyyyyyy",
+    // max 7 bit. should truncate to "x7fx7fx7fx7fx7fx7fx7fx80", since it's
+    // considered binary, not UTF-8.  If UTF-8 it should not truncate.
+    "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
+    // max binary.  this should not truncate
+    "\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+    // in-range 2-byte UTF8 (U+00E9). should truncate to "éééê"
+    "ééééé",
+    // max 2-byte UTF8 (U+07FF). should not truncate
+    "߿߿߿߿߿",
+    // in-range 3-byte UTF8 (U+0800). should truncate to "ࠀࠁ"
+    "ࠀࠀࠀ",
+    // max 3-byte UTF8 (U+FFFF). should not truncate
+    "\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf",
+    // in-range 4-byte UTF8 (U+10000). should truncate to "𐀀𐀁"
+    "𐀀𐀀𐀀",
+    // max unicode (U+10FFFF). should truncate to \xf4\x8f\xbf\xbf\xf4\x90\x80\x80,
+    // which is no longer valid unicode, but is still ok UTF-8???
+    "\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf",
+    // max 4-byte UTF8 (U+1FFFFF). should not truncate
+    "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
+
+  // NOTE: UTF8 min is initialized with 0xf7bfbfbf. Binary values larger
+  // than that will not become minimum value (when written as UTF-8).
+  const char* truncated_min[] = {"yyyyyyyy",
+                                 "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
+                                 "\xf7\xbf\xbf\xbf",
+                                 "éééé",
+                                 "߿߿߿߿",
+                                 "ࠀࠀ",
+                                 "\xef\xbf\xbf\xef\xbf\xbf",
+                                 "𐀀𐀀",
+                                 "\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf",
+                                 "\xf7\xbf\xbf\xbf"};
+
+  const char* truncated_max[] = {"yyyyyyyz",
+                                 "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x80",
+                                 "\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+                                 "éééê",
+                                 "߿߿߿߿߿",
+                                 "ࠀࠁ",
+                                 "\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf",
+                                 "𐀀𐀁",
+                                 "\xf4\x8f\xbf\xbf\xf4\x90\x80\x80",
+                                 "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
+
+  auto cols = [&]() {
+    using string_wrapper = column_wrapper<cudf::string_view>;
+    std::vector<std::unique_ptr<column>> cols;
+    for (auto const str : coldata) {
+      cols.push_back(string_wrapper{str}.release());
+    }
+    return cols;
+  }();
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto const filepath = temp_env->get_temp_filepath("CheckColumnIndexTruncation.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .column_index_truncate_length(8);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+
+      // check that truncated values == expected
+      EXPECT_EQ(memcmp(ci.min_values[0].data(), truncated_min[c], ci.min_values[0].size()), 0);
+      EXPECT_EQ(memcmp(ci.max_values[0].data(), truncated_max[c], ci.max_values[0].size()), 0);
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
+{
+  std::vector<uint8_t> truncated_min[] = {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe},
+                                          {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+                                          {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+
+  std::vector<uint8_t> truncated_max[] = {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xff},
+                                          {0xff},
+                                          {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+
+  cudf::test::lists_column_wrapper<uint8_t> col0{
+    {0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe}};
+  cudf::test::lists_column_wrapper<uint8_t> col1{
+    {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+  cudf::test::lists_column_wrapper<uint8_t> col2{
+    {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+
+  auto expected = table_view{{col0, col1, col2}};
+
+  cudf::io::table_input_metadata output_metadata(expected);
+  output_metadata.column_metadata[0].set_name("col_binary0").set_output_as_binary(true);
+  output_metadata.column_metadata[1].set_name("col_binary1").set_output_as_binary(true);
+  output_metadata.column_metadata[2].set_name("col_binary2").set_output_as_binary(true);
+
+  auto const filepath = temp_env->get_temp_filepath("BinaryColumnIndexTruncation.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(&output_metadata)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .column_index_truncate_length(8);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto const& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+
+      // check that truncated values == expected
+      EXPECT_EQ(ci.min_values[0], truncated_min[c]);
+      EXPECT_EQ(ci.max_values[0], truncated_max[c]);
+    }
+  }
+}
+
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
 {
   srand(31337);
@@ -4202,6 +4385,64 @@ TEST_F(ParquetReaderTest, StructByteArray)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_P(ParquetSizedTest, DictionaryTest)
+{
+  constexpr int nrows = 3'000'000;
+
+  auto elements       = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    return "a unique string value suffixed with " + std::to_string(i % GetParam());
+  });
+  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  // set row group size so that there will be only one row group
+  // no compression so we can easily read page data
+  cudf::io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::NONE)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .row_group_size_rows(nrows)
+      .row_group_size_bytes(256 * 1024 * 1024);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto const result = cudf_io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  // make sure dictionary was used
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  auto used_dict = [&fmd]() {
+    for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
+      if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+          enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
+        return true;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(used_dict());
+
+  // and check that the correct number of bits was used
+  auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
+  auto const nbits = read_dict_bits(source, oi.page_locations[0]);
+  auto const expected_bits =
+    cudf::io::parquet::CompactProtocolReader::NumRequiredBits(GetParam() - 1);
+
+  // copied from writer_impl.cu
+  constexpr auto allowed_bitsizes =
+    std::array<cudf::size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
+  auto const rle_bits =
+    *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), expected_bits);
+
+  EXPECT_EQ(nbits, rle_bits);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
