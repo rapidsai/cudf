@@ -11,12 +11,12 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-  include(FetchContent)
-  FetchContent_Declare(
-    rapids-cmake
-    GIT_REPOSITORY https://github.com/robertmaynard/rapids-cmake.git
-    GIT_TAG fea/move_to_libcudacxx_1.8
-  )
+include(FetchContent)
+FetchContent_Declare(
+  rapids-cmake
+  GIT_REPOSITORY https://github.com/robertmaynard/rapids-cmake.git
+  GIT_TAG fea/move_to_libcudacxx_1.8
+)
 
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.10/RAPIDS.cmake
