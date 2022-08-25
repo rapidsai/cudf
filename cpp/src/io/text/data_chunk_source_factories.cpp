@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/io/text/data_chunk_source_factories.hpp>
-
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/text/data_chunk_source_factories.hpp>
 
 #include <rmm/device_buffer.hpp>
 

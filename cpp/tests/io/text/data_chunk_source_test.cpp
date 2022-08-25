@@ -22,15 +22,15 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <fstream>
 
-using namespace cudf;
-using namespace test;
+using namespace cudf::test;
 
-auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
-  ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
+auto const temp_env = static_cast<TempDirTestEnvironment*>(
+  ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 struct DataChunkSourceTest : public BaseFixture {
 };
