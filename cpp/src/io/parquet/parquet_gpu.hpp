@@ -309,15 +309,6 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   return idx;
 }
 
-/**
- * @brief Return worst-case compressed size of compressed data given the uncompressed size
- */
-inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
-                                                          uint32_t num_pages = 1)
-{
-  return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
-}
-
 struct EncPage;
 
 /**

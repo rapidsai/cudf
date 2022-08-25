@@ -1217,14 +1217,12 @@ __global__ void __launch_bounds__(128, 8)
     }
   }
   if (t == 0) {
-    uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
-    auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
-    uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
-    s->page.max_data_size        = actual_data_size;
+    uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
+    auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
-      comp_in[blockIdx.x] = {base, actual_data_size};
-      // printf("%lX ", (long)base);
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, compressed_bfr_size};
+      comp_in[blockIdx.x]  = {base, actual_data_size};
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // unused
     }
     pages[blockIdx.x] = s->page;
     if (not comp_stats.empty()) {
