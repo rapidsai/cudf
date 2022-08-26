@@ -26,7 +26,7 @@ from cudf._lib.strings.attributes import (
     count_bytes,
     count_characters,
 )
-from cudf._lib.strings.capitalize import capitalize, title, is_title
+from cudf._lib.strings.capitalize import capitalize, is_title, title
 from cudf._lib.strings.case import swapcase, to_lower, to_upper
 from cudf._lib.strings.char_types import (
     filter_alphanum,
@@ -45,7 +45,7 @@ from cudf._lib.strings.combine import (
     join_lists_with_column,
     join_lists_with_scalar,
 )
-from cudf._lib.strings.contains import contains_re, count_re, match_re
+from cudf._lib.strings.contains import contains_re, count_re, like, match_re
 from cudf._lib.strings.convert.convert_fixed_point import to_decimal
 from cudf._lib.strings.convert.convert_floats import is_float
 from cudf._lib.strings.convert.convert_integers import is_integer
