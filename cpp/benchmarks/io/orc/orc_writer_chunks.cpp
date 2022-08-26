@@ -16,6 +16,7 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -34,6 +35,8 @@ namespace cudf_io = cudf::io;
 
 void nvbench_orc_write(nvbench::state& state)
 {
+  cudf::rmm_pool_raii rmm_pool;
+
   cudf::size_type num_cols = state.get_int64("num_columns");
 
   auto tbl =
@@ -75,6 +78,8 @@ void nvbench_orc_write(nvbench::state& state)
 
 void nvbench_orc_chunked_write(nvbench::state& state)
 {
+  cudf::rmm_pool_raii rmm_pool;
+
   cudf::size_type num_cols   = state.get_int64("num_columns");
   cudf::size_type num_tables = state.get_int64("num_chunks");
 
