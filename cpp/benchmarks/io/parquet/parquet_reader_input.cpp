@@ -21,6 +21,7 @@
 #include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/io/parquet.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
