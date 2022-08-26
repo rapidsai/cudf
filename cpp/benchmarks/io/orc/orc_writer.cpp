@@ -19,7 +19,6 @@
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/orc.hpp>
 #include <cudf/io/types.hpp>
