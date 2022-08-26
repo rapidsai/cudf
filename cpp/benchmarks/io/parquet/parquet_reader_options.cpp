@@ -19,7 +19,6 @@
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -50,14 +49,14 @@ void BM_parquet_read_options(nvbench::state& state,
   auto const ts_type = cudf::data_type{Timestamp};
 
   // No nested types here, because of https://github.com/rapidsai/cudf/issues/9970
-  auto const data_types = dtypes_for_column_selection(
-    get_type_or_group({static_cast<int32_t>(type_group_id::INTEGRAL),
-                       static_cast<int32_t>(type_group_id::FLOATING_POINT),
-                       static_cast<int32_t>(type_group_id::FIXED_POINT),
-                       static_cast<int32_t>(type_group_id::TIMESTAMP),
-                       static_cast<int32_t>(type_group_id::DURATION),
-                       static_cast<int32_t>(cudf::type_id::STRING)}),
-    ColSelection);
+  auto const data_types =
+    dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+                                                   static_cast<int32_t>(data_type::FLOAT),
+                                                   static_cast<int32_t>(data_type::DECIMAL),
+                                                   static_cast<int32_t>(data_type::TIMESTAMP),
+                                                   static_cast<int32_t>(data_type::DURATION),
+                                                   static_cast<int32_t>(data_type::STRING)}),
+                                ColSelection);
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 

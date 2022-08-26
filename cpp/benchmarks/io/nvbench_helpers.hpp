@@ -42,6 +42,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](data_type value) {
     switch (value) {
       case data_type::INTEGRAL: return "INTEGRAL";
+      case data_type::INTEGRAL_SIGNED: return "INTEGRAL_SIGNED";
       case data_type::FLOAT: return "FLOAT";
       case data_type::DECIMAL: return "DECIMAL";
       case data_type::TIMESTAMP: return "TIMESTAMP";
