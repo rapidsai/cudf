@@ -22,7 +22,7 @@ namespace strings {
 namespace detail {
 
 // JIT has trouble including thrust/pair.h
-using position_pair = struct {
+struct position_pair {
   size_type first;
   size_type second;
 };
