@@ -239,7 +239,7 @@ ConfigureBench(CSV_READER_BENCH io/csv/csv_reader.cpp)
 ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 
 # ##################################################################################################
-# * orc writer benchmark ---------------------------------------------------------------------------
+# * orc writer benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
