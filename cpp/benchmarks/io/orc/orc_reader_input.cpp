@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-#include "nvbench_helpers.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
+#include <benchmarks/io/nvbench_helpers.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/orc.hpp>
