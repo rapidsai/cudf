@@ -51,8 +51,8 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @param max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
  */
-size_t batched_compress_get_max_output_chunk_size(compression_type compression,
-                                                  uint32_t max_uncomp_chunk_size);
+size_t batched_compress_max_output_chunk_size(compression_type compression,
+                                              uint32_t max_uncomp_chunk_size);
 
 /**
  * @brief Device batch compression of given type.

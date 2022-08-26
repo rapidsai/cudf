@@ -2016,13 +2016,12 @@ auto to_nvcomp_compression_type(CompressionKind compression_kind)
   CUDF_FAIL("Unsupported compression type");
 }
 
-size_t get_compress_max_output_chunk_size(CompressionKind compression_kind,
-                                          uint32_t compression_blocksize)
+size_t max_compression_output_size(CompressionKind compression_kind, uint32_t compression_blocksize)
 {
   if (compression_kind == NONE) return 0;
 
-  return batched_compress_get_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
-                                                    compression_blocksize);
+  return batched_compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
+                                                compression_blocksize);
 }
 
 void writer::impl::persisted_statistics::persist(int num_table_rows,
@@ -2143,7 +2142,7 @@ void writer::impl::write(table_view const& table)
     size_t compressed_bfr_size   = 0;
     size_t num_compressed_blocks = 0;
     auto const max_compressed_block_size =
-      get_compress_max_output_chunk_size(compression_kind_, compression_blocksize_);
+      max_compression_output_size(compression_kind_, compression_blocksize_);
 
     auto stream_output = [&]() {
       size_t max_stream_size = 0;

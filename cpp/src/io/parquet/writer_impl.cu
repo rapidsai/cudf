@@ -917,12 +917,12 @@ auto to_nvcomp_compression_type(Compression codec)
   CUDF_FAIL("Unsupported compression type");
 }
 
-size_t get_compress_max_output_chunk_size(Compression codec, uint32_t compression_blocksize)
+size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
 {
   if (codec == Compression::UNCOMPRESSED) return 0;
 
-  return batched_compress_get_max_output_chunk_size(to_nvcomp_compression_type(codec),
-                                                    compression_blocksize);
+  return batched_compress_max_output_chunk_size(to_nvcomp_compression_type(codec),
+                                                compression_blocksize);
 }
 
 auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -979,7 +979,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                  page_sizes.end(),
                  comp_page_sizes.begin(),
                  [compression_codec](auto page_size) {
-                   return get_compress_max_output_chunk_size(compression_codec, page_size);
+                   return max_compression_output_size(compression_codec, page_size);
                  });
   comp_page_sizes.host_to_device(stream);
 

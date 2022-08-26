@@ -240,7 +240,7 @@ auto batched_compress_temp_size(compression_type compression,
   return temp_size;
 }
 
-std::optional<size_t> max_allowed_compression_chunk_size(compression_type compression)
+std::optional<size_t> max_allowed_chunk_size(compression_type compression)
 {
   switch (compression) {
     case compression_type::ZSTD:
@@ -255,25 +255,24 @@ std::optional<size_t> max_allowed_compression_chunk_size(compression_type compre
   }
 }
 
-// Dispatcher for nvcompBatched<format>CompressGetMaxOutputChunkSize
-size_t batched_compress_get_max_output_chunk_size(compression_type compression,
-                                                  uint32_t max_uncompressed_chunk_bytes)
+size_t batched_compress_max_output_chunk_size(compression_type compression,
+                                              uint32_t max_uncompressed_chunk_bytes)
 {
-  max_uncompressed_chunk_bytes = std::min<size_t>(
-    max_allowed_compression_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
-    max_uncompressed_chunk_bytes);
+  auto const capped_uncomp_bytes =
+    std::min<size_t>(max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
+                     max_uncompressed_chunk_bytes);
 
   size_t max_comp_chunk_size = 0;
   nvcompStatus_t status      = nvcompStatus_t::nvcompSuccess;
   switch (compression) {
     case compression_type::SNAPPY:
       status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-        max_uncompressed_chunk_bytes, nvcompBatchedSnappyDefaultOpts, &max_comp_chunk_size);
+        capped_uncomp_bytes, nvcompBatchedSnappyDefaultOpts, &max_comp_chunk_size);
       break;
     case compression_type::DEFLATE:
 #if NVCOMP_HAS_DEFLATE
       status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
-        max_uncompressed_chunk_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
+        capped_uncomp_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
       break;
 #else
       CUDF_FAIL("Unsupported compression type");
@@ -281,7 +280,7 @@ size_t batched_compress_get_max_output_chunk_size(compression_type compression,
     case compression_type::ZSTD:
 #if NVCOMP_HAS_ZSTD_COMP
       status = nvcompBatchedZstdCompressGetMaxOutputChunkSize(
-        max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &max_comp_chunk_size);
+        capped_uncomp_bytes, nvcompBatchedZstdDefaultOpts, &max_comp_chunk_size);
       break;
 #else
       CUDF_FAIL("Unsupported compression type");
@@ -374,10 +373,8 @@ void batched_compress(compression_type compression,
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
-  auto const max_uncomp_chunk_size = filter_inputs(nvcomp_args.input_data_sizes,
-                                                   statuses,
-                                                   max_allowed_compression_chunk_size(compression),
-                                                   stream);
+  auto const max_uncomp_chunk_size = filter_inputs(
+    nvcomp_args.input_data_sizes, statuses, max_allowed_chunk_size(compression), stream);
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);
