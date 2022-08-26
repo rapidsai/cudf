@@ -240,10 +240,29 @@ auto batched_compress_temp_size(compression_type compression,
   return temp_size;
 }
 
+constexpr std::optional<size_t> max_allowed_compression_chunk_size(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::ZSTD:
+#if NVCOMP_HAS_ZSTD_COMP
+      return nvcompZstdMaxAllowedChunkSize;
+#else
+      CUDF_FAIL("Unsupported compression type");
+#endif
+    case compression_type::SNAPPY: return std::nullopt;
+    case compression_type::DEFLATE: return std::nullopt;
+    default: return std::nullopt;
+  }
+}
+
 // Dispatcher for nvcompBatched<format>CompressGetMaxOutputChunkSize
 size_t batched_compress_get_max_output_chunk_size(compression_type compression,
                                                   uint32_t max_uncompressed_chunk_bytes)
 {
+  max_uncompressed_chunk_bytes = std::min<size_t>(
+    max_allowed_compression_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
+    max_uncompressed_chunk_bytes);
+
   size_t max_comp_chunk_size = 0;
   nvcompStatus_t status      = nvcompStatus_t::nvcompSuccess;
   switch (compression) {
@@ -342,21 +361,6 @@ inline bool is_aligned(const void* ptr, std::uintptr_t alignment) noexcept
 {
   auto iptr = reinterpret_cast<std::uintptr_t>(ptr);
   return !(iptr % alignment);
-}
-
-std::optional<size_t> max_allowed_compression_chunk_size(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      return nvcompZstdMaxAllowedChunkSize;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
-    case compression_type::SNAPPY: return std::nullopt;
-    case compression_type::DEFLATE: return std::nullopt;
-    default: return std::nullopt;
-  }
 }
 
 void batched_compress(compression_type compression,

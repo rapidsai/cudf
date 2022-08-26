@@ -1134,7 +1134,7 @@ void compress_check(device_span<decompress_status const> stats, rmm::cuda_stream
                               stats.begin(),
                               stats.end(),
                               [] __device__(auto const& stat) { return stat.status != 1; }),
-               "Error during decompression");
+               "Error during compression");
 }
 
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
