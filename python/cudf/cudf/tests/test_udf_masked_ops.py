@@ -673,3 +673,16 @@ def test_masked_udf_caching():
     data.apply(f)
 
     assert precompiled.currsize == 1
+
+
+@pytest.mark.parametrize(
+    "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
+)
+@pytest.mark.parametrize("operator", [float, int, bool])
+def test_masked_udf_casting(operator, data):
+    data = cudf.Series(data)
+
+    def func(x):
+        return operator(x)
+
+    run_masked_udf_series(func, data, check_dtype=False)
