@@ -618,3 +618,14 @@ def test_json_nested_lines(data):
     # In the second test-case:
     # Pandas omits "f1" in first row, so we have to enforce a common schema
     assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
+
+
+def test_json_nested_data():
+    json_str = R'[{"0":{},"1":[],"2":{}},{"1":[[""],[]],"2":{"2":""}},{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
+    bytes = BytesIO()
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
+    pdf = pd.read_json(StringIO(json_str), orient="records")
+
+    assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
