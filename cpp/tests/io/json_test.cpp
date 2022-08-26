@@ -18,7 +18,6 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -945,7 +944,7 @@ TEST_F(JsonReaderTest, JsonExperimentalBasic)
 
 TEST_F(JsonReaderTest, JsonExperimentalLines)
 {
-  std::string json_string =
+  std::string const json_string =
     R"({"a":"a0"}
     {"a":"a1"}
     {"a":"a2", "b":"b2"}
@@ -958,15 +957,53 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
       cudf::io::source_info{json_string.c_str(), json_string.size()})
       .lines(true);
 
-  // Read test data via existing, non-nested json lines reader
+  // Read test data via existing, non-nested JSON lines reader
   cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
 
-  // Read test data via new, nested json reader
+  // Read test data via new, nested JSON reader
   json_lines_options.enable_experimental(true);
   cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
 
-  // Verify that the data read via parquet matches the data read via JSON
+  // Verify that the data read via non-nested JSON lines reader matches the data read via nested
+  // JSON reader
   CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
+}
+
+TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
+{
+  std::array<std::string const, 4> const json_inputs
+    // single column
+    {R"({"a":"a0"}
+    {"a":"a1"}
+    {"a":"a2"}
+    {"a":"a3"}
+    {"a":"a4"})",
+     // single column, single row
+     R"({"a":"a0"})",
+     // single row
+     R"({"a":"a0", "b":"b0"})",
+     // two column, two rows
+     R"({"a":"a0", "b":"b0"}
+    {"a":"a1", "b":"b1"})"};
+
+  for (auto const& json_string : json_inputs) {
+    // Initialize parsing options (reading json lines)
+    cudf::io::json_reader_options json_lines_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        .lines(true);
+
+    // Read test data via existing, non-nested JSON lines reader
+    cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
+
+    // Read test data via new, nested JSON reader
+    json_lines_options.enable_experimental(true);
+    cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
+
+    // Verify that the data read via non-nested JSON lines reader matches the data read via nested
+    // JSON reader
+    CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

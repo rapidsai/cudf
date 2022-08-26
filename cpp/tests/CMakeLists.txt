@@ -226,6 +226,7 @@ ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
@@ -411,6 +412,7 @@ ConfigureTest(
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp
+  strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
   strings/replace_regex_tests.cpp
