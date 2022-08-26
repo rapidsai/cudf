@@ -25,13 +25,14 @@
 #include <nvbench/nvbench.cuh>
 
 enum class data_type : int32_t {
-  INTEGRAL  = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
-  FLOAT     = static_cast<int32_t>(type_group_id::FLOATING_POINT),
-  DECIMAL   = static_cast<int32_t>(type_group_id::FIXED_POINT),
-  TIMESTAMP = static_cast<int32_t>(type_group_id::TIMESTAMP),
-  STRING    = static_cast<int32_t>(cudf::type_id::STRING),
-  LIST      = static_cast<int32_t>(cudf::type_id::LIST),
-  STRUCT    = static_cast<int32_t>(cudf::type_id::STRUCT)
+  INTEGRAL        = static_cast<int32_t>(type_group_id::INTEGRAL),
+  INTEGRAL_SIGNED = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
+  FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
+  DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
+  TIMESTAMP       = static_cast<int32_t>(type_group_id::TIMESTAMP),
+  STRING          = static_cast<int32_t>(cudf::type_id::STRING),
+  LIST            = static_cast<int32_t>(cudf::type_id::LIST),
+  STRUCT          = static_cast<int32_t>(cudf::type_id::STRUCT)
 };
 
 // NVBENCH_DECLARE_ENUM_TYPE_STRINGS macro must be used from global namespace scope
@@ -40,6 +41,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](data_type value) {
     switch (value) {
       case data_type::INTEGRAL: return "INTEGRAL";
+      case data_type::INTEGRAL_SIGNED: return "INTEGRAL_SIGNED";
       case data_type::FLOAT: return "FLOAT";
       case data_type::DECIMAL: return "DECIMAL";
       case data_type::TIMESTAMP: return "TIMESTAMP";
