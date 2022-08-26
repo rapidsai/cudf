@@ -344,6 +344,21 @@ inline bool is_aligned(const void* ptr, std::uintptr_t alignment) noexcept
   return !(iptr % alignment);
 }
 
+std::optional<size_t> max_allowed_compression_chunk_size(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::ZSTD:
+#if NVCOMP_HAS_ZSTD_COMP
+      return nvcompZstdMaxAllowedChunkSize;
+#else
+      CUDF_FAIL("Unsupported compression type");
+#endif
+    case compression_type::SNAPPY: return std::nullopt;
+    case compression_type::DEFLATE: return std::nullopt;
+    default: return std::nullopt;
+  }
+}
+
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
@@ -355,7 +370,10 @@ void batched_compress(compression_type compression,
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
-  auto const max_uncomp_chunk_size = filter_inputs(nvcomp_args.input_data_sizes, statuses, stream);
+  auto const max_uncomp_chunk_size = filter_inputs(nvcomp_args.input_data_sizes,
+                                                   statuses,
+                                                   max_allowed_compression_chunk_size(compression),
+                                                   stream);
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);

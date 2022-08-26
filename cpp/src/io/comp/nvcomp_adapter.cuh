@@ -69,6 +69,7 @@ void convert_status(device_span<size_t const> actual_uncompressed_sizes,
  */
 size_t filter_inputs(device_span<size_t> input_sizes,
                      device_span<decompress_status> statuses,
+                     std::optional<size_t> max_valid_input_size,
                      rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::nvcomp

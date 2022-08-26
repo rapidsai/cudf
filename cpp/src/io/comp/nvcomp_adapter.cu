@@ -91,19 +91,24 @@ void convert_status(device_span<size_t const> actual_uncompressed_sizes,
 
 size_t filter_inputs(device_span<size_t> input_sizes,
                      device_span<decompress_status> statuses,
+                     std::optional<size_t> max_valid_input_size,
                      rmm::cuda_stream_view stream)
 {
-  auto status_size_it = thrust::make_zip_iterator(input_sizes.begin(), statuses.begin());
-  thrust::transform_if(
-    rmm::exec_policy(stream),
-    statuses.begin(),
-    statuses.end(),
-    input_sizes.begin(),
-    status_size_it,
-    [] __device__(auto const& status) {
-      return thrust::pair{0, decompress_status{0, 2}};
-    },
-    [] __device__(auto const& input_size) { return input_size > 64 * 1024; });
+  if (max_valid_input_size.has_value()) {
+    auto status_size_it = thrust::make_zip_iterator(input_sizes.begin(), statuses.begin());
+    thrust::transform_if(
+      rmm::exec_policy(stream),
+      statuses.begin(),
+      statuses.end(),
+      input_sizes.begin(),
+      status_size_it,
+      [] __device__(auto const& status) {
+        return thrust::pair{0, decompress_status{0, 2}};
+      },
+      [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
+        return input_size > max_size;
+      });
+  }
 
   return thrust::reduce(rmm::exec_policy(stream),
                         input_sizes.begin(),
