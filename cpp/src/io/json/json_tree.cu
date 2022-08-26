@@ -29,8 +29,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-// JSON tree generation from tokens
-// TODO JSON tree traversal
 namespace cudf::io::json {
 namespace detail {
 
@@ -58,7 +56,7 @@ struct token_to_node {
   }
 };
 
-// convert token indices to node range for each valid node.
+// Convert token indices to node range for each valid node.
 template <typename T1, typename T2, typename T3>
 struct node_ranges {
   T1 tokens;
@@ -106,7 +104,7 @@ struct node_ranges {
   }
 };
 
-// Parses the given JSON string and generates a tree representation of the given input.
+// Generates a tree representation of the given tokens, token_indices.
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
                                     rmm::cuda_stream_view stream,
@@ -138,8 +136,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Whether the token pushes onto the parent node stack
   auto does_push = [] __device__(PdaTokenT const token) {
     switch (token) {
-      // case token_t::StructMemberBegin: //TODO: Either use FieldNameBegin here or change the
-      // token_to_node function
       case token_t::FieldNameBegin:
       case token_t::StructBegin:
       case token_t::ListBegin: return true;
@@ -203,8 +199,9 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
   // Node parent ids: previous push token_id transform, stable sort, segmented scan with Max,
-  // copy_if. This one is sort of logical stack. But more generalized. TODO: make it own function.
-  rmm::device_uvector<size_type> parent_token_ids(num_tokens, stream);  // XXX: fill with 0?
+  // reorder, copy_if. This one is sort of logical stack. But more generalized.
+  // TODO: make it own function.
+  rmm::device_uvector<size_type> parent_token_ids(num_tokens, stream);
   rmm::device_uvector<size_type> initial_order(num_tokens, stream);
   thrust::sequence(rmm::exec_policy(stream), initial_order.begin(), initial_order.end());
   thrust::tabulate(rmm::exec_policy(stream),
@@ -214,7 +211,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                      if (i == 0)
                        return -1;
                      else
-                       return does_push(tokens_gpu[i - 1]) ? i - 1 : -1;  // XXX: -1 or 0?
+                       return does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
                    });
   auto out_pid = thrust::make_zip_iterator(parent_token_ids.data(), initial_order.data());
   // TODO: use radix sort.
@@ -230,7 +227,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                 parent_token_ids.data(),  // size_type{-1},
                                 thrust::equal_to<size_type>{},
                                 thrust::maximum<size_type>{});
-  // TODO: Avoid sorting again by  gather_if on a transform iterator. or scatter.
+  // FIXME: Avoid sorting again by scatter + extra memory. Tradeoff?
   thrust::sort_by_key(rmm::exec_policy(stream),
                       initial_order.data(),
                       initial_order.data() + initial_order.size(),

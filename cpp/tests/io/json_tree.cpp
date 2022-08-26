@@ -91,7 +91,6 @@ void print_tree_representation(std::string const& json_input,
 }
 }  // namespace
 
-// cudf::io::json::
 namespace cudf::io::json {
 namespace test {
 
@@ -104,8 +103,14 @@ tree_meta_t2 to_cpu_tree(tree_meta_t const& d_value, rmm::cuda_stream_view strea
           cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
 }
 
-void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree)
+void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, bool print = false)
 {
+  auto cpu_num_nodes = cpu_tree.node_categories.size();
+  EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_categories.size());
+  EXPECT_EQ(cpu_num_nodes, d_gpu_tree.parent_node_ids.size());
+  EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_levels.size());
+  EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_begin.size());
+  EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_end.size());
   auto gpu_tree = to_cpu_tree(d_gpu_tree, cudf::default_stream_value);
   // DEBUG prints
   auto to_cat = [](auto v) -> std::string {
@@ -121,40 +126,47 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree)
   };
   auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
   bool mismatch  = false;
-  auto print_vec = [&](auto const& cpu, auto const& gpu, auto const name, auto converter) {
-    if (not cpu.empty()) {
-      for (auto const& v : cpu)
-        printf("%3s,", converter(v).c_str());
-      std::cout << name << "(CPU):" << std::endl;
-    }
-    if (not cpu.empty()) {
-      for (auto const& v : gpu)
-        printf("%3s,", converter(v).c_str());
-      std::cout << name << "(GPU):" << std::endl;
-    }
-    if (not cpu.empty() and not gpu.empty()) {
-      if (!std::equal(gpu.begin(), gpu.end(), cpu.begin())) {
-        for (auto i = 0lu; i < cpu.size(); i++) {
-          mismatch |= (gpu[i] != cpu[i]);
-          printf("%3s,", (gpu[i] == cpu[i] ? " " : "x"));
-        }
-        std::cout << std::endl;
-      }
-    }
+  auto print_vec = [&](auto const& cpu, auto const name, auto converter) {
+    for (auto const& v : cpu)
+      printf("%3s,", converter(v).c_str());
+    std::cout << name << std::endl;
   };
-#define PRINT_VEC(vec) print_vec(cpu_tree.vec, gpu_tree.vec, #vec, to_int);
-  for (int i = 0; i < int(gpu_tree.node_categories.size()); i++)
-    printf("%3d,", i);
-  printf(" node_id\n");
-  print_vec(
-    cpu_tree.node_categories, gpu_tree.node_categories, "node_categories", to_cat);  // Works
-  PRINT_VEC(node_levels);                                                            // Works
-  // PRINT_VEC(node_range_begin);  // Works
-  // PRINT_VEC(node_range_end);    // Works
-  PRINT_VEC(parent_node_ids);  // Works
-  CUDF_EXPECTS(!mismatch, "Mismatch in GPU and CPU tree representation");
-  // std::cout << "Mismatch: " << mismatch << std::endl;
+
+#define COMPARE_MEMBER(member)                                    \
+  for (std::size_t i = 0; i < cpu_num_nodes; i++) {               \
+    EXPECT_EQ(cpu_tree.member[i], gpu_tree.member[i]) << #member; \
+  }
+  COMPARE_MEMBER(node_categories);
+  COMPARE_MEMBER(parent_node_ids);
+  COMPARE_MEMBER(node_levels);
+  COMPARE_MEMBER(node_range_begin);
+  COMPARE_MEMBER(node_range_end);
+#undef COMPARE_MEMBER
+
+#define PRINT_VEC(vec, conv) print_vec(vec, #vec, conv);
+#define PRINT_COMPARISON(vec, conv)                                                  \
+  PRINT_VEC(cpu_tree.vec, conv);                                                     \
+  PRINT_VEC(gpu_tree.vec, conv);                                                     \
+  if (!std::equal(cpu_tree.vec.begin(), cpu_tree.vec.end(), gpu_tree.vec.begin())) { \
+    for (auto i = 0lu; i < cpu_tree.vec.size(); i++) {                               \
+      mismatch |= (gpu_tree.vec[i] != cpu_tree.vec[i]);                              \
+      printf("%3s,", (gpu_tree.vec[i] == cpu_tree.vec[i] ? " " : "x"));              \
+    }                                                                                \
+    printf("\n");                                                                    \
+  }
+  if (print) {
+    for (int i = 0; i < int(cpu_num_nodes); i++)
+      printf("%3d,", i);
+    printf(" node_id\n");
+    PRINT_COMPARISON(node_categories, to_cat);   // Works
+    PRINT_COMPARISON(node_levels, to_int);       // Works
+    PRINT_COMPARISON(node_range_begin, to_int);  // Works
+    PRINT_COMPARISON(node_range_end, to_int);    // Works
+    PRINT_COMPARISON(parent_node_ids, to_int);   // Works
+    EXPECT_FALSE(mismatch);
+  }
 #undef PRINT_VEC
+#undef PRINT_COMPARISON
 }
 
 tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu,
@@ -189,11 +201,13 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
       default: return ".";
     }
   };
-  std::cout << "Tokens: \n";
-  for (auto i = 0u; i < tokens.size(); i++) {
-    std::cout << to_token_str(tokens[i]) << " ";
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    std::cout << "Tokens: \n";
+    for (auto i = 0u; i < tokens.size(); i++) {
+      std::cout << to_token_str(tokens[i]) << " ";
+    }
+    std::cout << std::endl;
   }
-  std::cout << std::endl;
 
   // Whether a token does represent a node in the tree representation
   auto is_node = [](PdaTokenT const token) {
