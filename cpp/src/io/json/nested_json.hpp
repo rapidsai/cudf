@@ -305,7 +305,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
- * @param tokens device span of token types in the json string
+ * @param tokens Vector of token types in the json string
  * @param token_indices The indices within the input string corresponding to each token
  * @param stream The CUDA stream to which kernels are dispatched
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
