@@ -3606,14 +3606,16 @@ class StringMethods(ColumnMethods):
         0    [on]
         1      []
         2      []
+        dtype: list
 
         If the pattern is found more than once in the same
-        string, then multiple strings are returned as columns:
+        string, then multiple strings are returned:
 
         >>> s.str.findall('b')
         0        []
         1        []
         2    [b, b]
+        dtype: list
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
