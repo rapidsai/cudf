@@ -195,13 +195,11 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.STRUCT:
-            print("==198")
             struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
             s._dtype = StructDtype({
                 str(i): dtype_from_column_view(struct_table_view.column(i))
                 for i in range(struct_table_view.num_columns())
             })
-            print(dtype.fields, s._dtype.fields)
         elif cdtype.id() == libcudf_types.LIST:
             if (
                 <list_scalar*>s.get_raw_ptr()
@@ -219,14 +217,12 @@ cdef class DeviceScalar:
                     ]
                 )
         else:
-            print("==221")
             if dtype is not None:
                 s._dtype = dtype
             else:
                 s._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                     <underlying_type_t_type_id>(cdtype.id())
                 ]
-            print(s._dtype, dtype)
         return s
 
 
@@ -385,13 +381,10 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
                 for i in range(struct_table_view.num_columns())
     })
     columns = columns_from_table_view(struct_table_view, None)
-
+    print(columns)
     table = to_arrow(columns, column_names, cust_dtype)
-    print("390", table)
     python_dict = table.to_pydict()
-    print("392", python_dict)
     res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
-    print("394", res)
     return res
 
 cdef _set_list_from_pylist(unique_ptr[scalar]& s,
@@ -421,10 +414,22 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column list_col = Column.from_column_view(list_col_view, None)
-
-    arrow_table = to_arrow([list_col], [["col", []]])
-    result = arrow_table['col'].to_pylist()
-    return _nested_na_replace(result)
+    cdef table_view struct_table_view
+    if cudf.api.types.is_struct_dtype(list_col):
+        struct_table_view = table_view_from_columns([list_col])
+        print(struct_table_view.num_columns())
+        columns = columns_from_table_view(struct_table_view, None)
+        print(columns)
+        print(list_col.dtype.to_arrow())
+        arrow_table = to_arrow(list(list_col.children), [["col", []]], list_col.dtype)
+        python_dict = arrow_table.to_pydict()
+        result = arrow_table.to_pylist()
+        return _nested_na_replace(result)
+        #res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
+    else:
+        arrow_table = to_arrow([list_col], [["col", []]], list_col.dtype)
+        result = arrow_table['None'].to_pylist()
+        return _nested_na_replace(result)
 
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):

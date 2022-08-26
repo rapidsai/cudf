@@ -95,37 +95,28 @@ cdef vector[column_metadata] gather_metadata(object metadata, object dtype=None)
     and adjacent list will signify child column.
     """
     cdef vector[column_metadata] cpp_metadata
-    print("inside 95", dtype)
     if dtype is not None:
         if is_struct_dtype(dtype):
-            print("100", dtype.fields)
-            print("10011", dtype.fields)
             cpp_metadata.reserve(len(dtype.fields))
             for i, name in enumerate(dtype.fields):
-                print("102")
                 value = dtype.fields[name]
                 cpp_metadata.push_back(column_metadata(name.encode()))
                 if is_struct_dtype(value):
-                    print("104", name)
                     _set_col_children_metadata(value, cpp_metadata[i])
-                else:
-                    print("else", name)
+        else:
+            cpp_metadata.reserve(1)
+            cpp_metadata.push_back(column_metadata("None".encode()))
     else:
-        print("110")
+        raise TypeError("need dtype")
     return cpp_metadata
 
 cdef _set_col_children_metadata(dtype,
                                 column_metadata& col_meta):
-    print("118")
     if is_struct_dtype(dtype):
-        print("120")
         col_meta.children_meta.reserve(len(dtype.fields))
-        print("122")
         for i, name in enumerate(dtype.fields):
-            print("123")
             value = dtype.fields[name]
             col_meta.children_meta.push_back(column_metadata(name.encode()))
-            print("127")
             _set_col_children_metadata(
                 value, col_meta.children_meta[i]
             )
@@ -148,11 +139,12 @@ def to_arrow(list source_columns, object metadata, object dtype=None):
     -------
     pyarrow table
     """
-
+    if dtype is None:
+        raise TypeError("Hey")
+    #print(dtype, dtype.to_arrow())
     cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata, dtype)
     cdef table_view input_table_view = table_view_from_columns(source_columns)
-    print("148")
-    print("148", cpp_metadata.size())
+
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:
         cpp_arrow_table = cpp_to_arrow(

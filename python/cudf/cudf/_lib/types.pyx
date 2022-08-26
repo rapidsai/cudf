@@ -67,6 +67,7 @@ class TypeId(IntEnum):
     DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
     DECIMAL128 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL128
+    STRUCT = <underlying_type_t_type_id> libcudf_types.type_id.STRUCT
 
 
 SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
@@ -117,6 +118,7 @@ LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     TypeId.DURATION_MILLISECONDS: np.dtype("timedelta64[ms]"),
     TypeId.DURATION_MICROSECONDS: np.dtype("timedelta64[us]"),
     TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
+    TypeId.STRUCT: np.dtype("object"),
 }
 
 duration_unit_map = {
