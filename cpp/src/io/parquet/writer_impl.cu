@@ -1133,7 +1133,7 @@ void compress_check(device_span<decompress_status const> stats, rmm::cuda_stream
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               stats.begin(),
                               stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
+                              [] __device__(auto const& stat) { return stat.status != 1; }),
                "Error during decompression");
 }
 
@@ -1166,24 +1166,16 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       if (nvcomp_integration::is_stable_enabled()) {
-        nvcomp::batched_compress(nvcomp::compression_type::SNAPPY,
-                                 comp_in,
-                                 comp_out,
-                                 comp_stats,
-                                 max_page_uncomp_data_size,
-                                 stream);
+        nvcomp::batched_compress(
+          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_stats, stream);
       } else {
         gpu_snap(comp_in, comp_out, comp_stats, stream);
       }
       break;
     case parquet::Compression::ZSTD:
       if (nvcomp_integration::is_all_enabled()) {
-        nvcomp::batched_compress(nvcomp::compression_type::ZSTD,
-                                 comp_in,
-                                 comp_out,
-                                 comp_stats,
-                                 max_page_uncomp_data_size,
-                                 stream);
+        nvcomp::batched_compress(
+          nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_stats, stream);
       }
       break;
     case parquet::Compression::UNCOMPRESSED: break;

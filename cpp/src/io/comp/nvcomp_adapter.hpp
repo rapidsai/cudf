@@ -61,14 +61,12 @@ size_t batched_compress_get_max_output_chunk_size(compression_type compression,
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] statuses List of output status structures
- * @param[in] max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
  * @param[in] stream CUDA stream to use
  */
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
                       device_span<decompress_status> statuses,
-                      uint32_t max_uncomp_chunk_size,
                       rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::nvcomp

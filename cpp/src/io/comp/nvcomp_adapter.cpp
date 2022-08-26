@@ -348,18 +348,20 @@ void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
                       device_span<decompress_status> statuses,
-                      uint32_t max_uncomp_chunk_size,
                       rmm::cuda_stream_view stream)
 {
   static int batch_idx  = 0;
   auto const num_chunks = inputs.size();
+
+  auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
+
+  auto const max_uncomp_chunk_size = filter_inputs(nvcomp_args.input_data_sizes, statuses, stream);
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "misaligned scratch");
 
   rmm::device_uvector<size_t> actual_compressed_data_sizes(num_chunks, stream);
-  auto const nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
   batched_compress_async(compression,
                          nvcomp_args.input_data_ptrs.data(),
@@ -372,8 +374,8 @@ void batched_compress(compression_type compression,
                          actual_compressed_data_sizes.data(),
                          stream.value());
 
-  stream.synchronize();
   if (detail::getenv_or("DUMP_NVCOMP_INPUT", 0)) {
+    stream.synchronize();
     std::vector<device_span<uint8_t const>> h_inputs(num_chunks);
     cudaMemcpy(h_inputs.data(),
                inputs.data(),
@@ -391,6 +393,7 @@ void batched_compress(compression_type compression,
   }
 
   if (detail::getenv_or("DUMP_NVCOMP_OUTPUT", 0)) {
+    stream.synchronize();
     std::vector<device_span<uint8_t const>> h_outputs(num_chunks);
     cudaMemcpy(h_outputs.data(),
                outputs.data(),
@@ -416,7 +419,7 @@ void batched_compress(compression_type compression,
     }
   }
   ++batch_idx;
-  convert_status(std::nullopt, actual_compressed_data_sizes, statuses, stream);
+  convert_status(actual_compressed_data_sizes, statuses, stream);
 }
 
 }  // namespace cudf::io::nvcomp

@@ -57,31 +57,59 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
           std::move(output_data_sizes)};
 }
 
-void convert_status(std::optional<device_span<nvcompStatus_t const>> nvcomp_stats,
+void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
                     device_span<size_t const> actual_uncompressed_sizes,
                     device_span<decompress_status> cudf_stats,
                     rmm::cuda_stream_view stream)
 {
-  if (nvcomp_stats.has_value()) {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      nvcomp_stats->begin(),
-      nvcomp_stats->end(),
-      actual_uncompressed_sizes.begin(),
-      cudf_stats.begin(),
-      [] __device__(auto const& status, auto const& size) {
-        return decompress_status{size, status == nvcompStatus_t::nvcompSuccess ? 0u : 1u};
-      });
-  } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      actual_uncompressed_sizes.begin(),
-                      actual_uncompressed_sizes.end(),
-                      cudf_stats.begin(),
-                      [] __device__(size_t size) {
-                        decompress_status status{};
-                        status.bytes_written = size;
-                        return status;
-                      });
-  }
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    nvcomp_stats.begin(),
+    nvcomp_stats.end(),
+    actual_uncompressed_sizes.begin(),
+    cudf_stats.begin(),
+    cudf_stats.begin(),
+    [] __device__(auto const& nvcomp_status, auto const& size) {
+      return decompress_status{size, nvcomp_status == nvcompStatus_t::nvcompSuccess ? 0u : 1u};
+    },
+    [] __device__(auto const& cudf_status) { return cudf_status.status != 2; });
 }
+
+void convert_status(device_span<size_t const> actual_uncompressed_sizes,
+                    device_span<decompress_status> cudf_stats,
+                    rmm::cuda_stream_view stream)
+{
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    actual_uncompressed_sizes.begin(),
+    actual_uncompressed_sizes.end(),
+    cudf_stats.begin(),
+    cudf_stats.begin(),
+    [] __device__(auto const& size) { return decompress_status{size}; },
+    [] __device__(auto const& cudf_status) { return cudf_status.status != 2; });
+}
+
+size_t filter_inputs(device_span<size_t> input_sizes,
+                     device_span<decompress_status> statuses,
+                     rmm::cuda_stream_view stream)
+{
+  auto status_size_it = thrust::make_zip_iterator(input_sizes.begin(), statuses.begin());
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    statuses.begin(),
+    statuses.end(),
+    input_sizes.begin(),
+    status_size_it,
+    [] __device__(auto const& status) {
+      return thrust::pair{0, decompress_status{0, 2}};
+    },
+    [] __device__(auto const& input_size) { return input_size > 64 * 1024; });
+
+  return thrust::reduce(rmm::exec_policy(stream),
+                        input_sizes.begin(),
+                        input_sizes.end(),
+                        0ul,
+                        thrust::maximum<size_t>());
+}
+
 }  // namespace cudf::io::nvcomp
