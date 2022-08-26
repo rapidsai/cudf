@@ -1444,7 +1444,7 @@ auto default_inference_options()
   auto const stream     = rmm::cuda_stream_default;
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"null"}, stream);
   return parse_opts;
 }
 
@@ -1506,6 +1506,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                                           default_json_options().view(),
                                                           stream,
                                                           mr);
+
+      // Reset nullable if we do not have nulls
+      if (col->null_count() == 0) { col->set_null_mask({}); }
 
       return {std::move(col), {{"offsets"}, {"chars"}}};
       break;
