@@ -1426,18 +1426,19 @@ void make_json_column(json_column& root_column,
   root_column.level_child_cols_recursively(root_column.current_offset);
 }
 
-auto default_json_options()
+auto casting_options(cudf::io::json_reader_options const& options)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
   auto const stream     = rmm::cuda_stream_default;
+  parse_opts.keepquotes = options.is_keeping_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
   return parse_opts;
 }
 
-auto default_inference_options()
+auto inference_options(cudf::io::json_reader_options const& options)
 {
   cudf::io::detail::inference_options parse_opts{};
 
@@ -1496,14 +1497,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // Infer column type
       auto target_type = cudf::io::detail::detect_data_type(
-        default_inference_options().view(), d_input, string_ranges_it, col_size, stream);
+        inference_options(options).view(), d_input, string_ranges_it, col_size, stream);
 
       // Convert strings to the inferred data type
       auto col = cudf::io::json::experimental::parse_data(string_spans_it,
                                                           col_size,
                                                           target_type,
                                                           make_validity(json_col).first,
-                                                          default_json_options().view(),
+                                                          casting_options(options).view(),
                                                           stream,
                                                           mr);
 

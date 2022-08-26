@@ -86,110 +86,117 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 {
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     rmm::device_uvector<size_type> offsets(col_size + 1, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       col_size,
-                       [str_tuples,
-                        sizes     = device_span<size_type>{offsets},
-                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
-                        options] __device__(size_type row) {
-                         if (not bit_is_set(null_mask, row)) {
-                           sizes[row] = 0;
-                           return;
-                         }
-                         auto const in = str_tuples[row];
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      col_size,
+      [str_tuples,
+       sizes     = device_span<size_type>{offsets},
+       null_mask = static_cast<bitmask_type*>(null_mask.data()),
+       options] __device__(size_type row) {
+        if (not bit_is_set(null_mask, row)) {
+          sizes[row] = 0;
+          return;
+        }
+        auto const in = str_tuples[row];
 
-                         auto const is_null_literal = serialized_trie_contains(
-                           options.trie_na, {in.first, static_cast<size_t>(in.second)});
-                         if (is_null_literal) {
-                           sizes[row] = 0;
-                           clear_bit(null_mask, row);
-                           return;
-                         }
+        auto const is_null_literal =
+          serialized_trie_contains(options.trie_na, {in.first, static_cast<size_t>(in.second)});
+        if (is_null_literal) {
+          sizes[row] = 0;
+          clear_bit(null_mask, row);
+          return;
+        }
 
-                         // Whether in the original JSON this was a string value enclosed in quotes
-                         // ({"a":"foo"} vs. {"a":1.23})
-                         bool const is_string_value =
-                           in.second >= 2 && (*in.first == '"') && (in.first[in.second - 1] == '"');
+        // Whether in the original JSON this was a string value enclosed in quotes
+        // ({"a":"foo"} vs. {"a":1.23})
+        char const quote_char = options.quotechar;
+        bool const is_string_value =
+          in.second >= 2 && (*in.first == quote_char) && (in.first[in.second - 1] == quote_char);
 
-                         decltype(in.second) out_size = in.second;
+        // Handling non-string values
+        if (not is_string_value) { sizes[row] = in.second; }
 
-                         if (is_string_value) {
-                           // Strip off quote chars
-                           out_size = 0;
+        // Strip off quote chars
+        decltype(in.second) out_size = 0;
 
-                           // Check
-                           bool escape = false;
+        // Escape-flag, set after encountering an escape character
+        bool escape = false;
 
-                           // Exclude beginning and ending quote chars from string range
-                           auto end_index = in.second - 1;
-                           for (decltype(in.second) i = 1; i < end_index; ++i) {
-                             // Previous char was escape char
-                             if (escape) {
-                               // Reset escape flag for next loop iteration
-                               escape = false;
+        // Exclude beginning and ending quote chars from string range
+        auto start_index = options.keepquotes ? 0 : 1;
+        auto end_index   = in.second - (options.keepquotes ? 0 : 1);
+        for (decltype(in.second) i = start_index; i < end_index; ++i) {
+          // Previous char was an escape char
+          if (escape) {
+            // A unicode code point escape sequence is \uXXXX
+            auto constexpr NUM_UNICODE_ESC_SEQ_CHARS = 6;
+            // The escape sequence comprises four hex digits
+            auto constexpr NUM_UNICODE_ESC_HEX_DIGITS = 4;
+            // A name for the char following the current one
+            auto constexpr NEXT_CHAR = 1;
+            // A name for the char after the next char
+            auto constexpr NEXT_NEXT_CHAR = 2;
+            // Reset escape flag for next loop iteration
+            escape = false;
 
-                               // Check the character that is supposed to be escaped
-                               auto escaped_char = get_escape_char(in.first[i]);
+            // Check the character that is supposed to be escaped
+            auto escaped_char = get_escape_char(in.first[i]);
 
-                               // This is an escape sequence of a unicode code point: \uXXXX,
-                               // where each X in XXXX represents a hex digit
-                               if (escaped_char == UNICODE_SEQ) {
-                                 // Make sure that there's at least 4 characters left from the
-                                 // input, which are expected to be hex digits
-                                 if (i + 4 < end_index) {
-                                   auto hex_val = string_to_hex(&in.first[i + 1]);
-                                   if (hex_val < 0) {
-                                     // TODO signal parsing error: not all 4 hex digits
-                                     continue;
-                                   }
-                                   // Skip over the four hex digits
-                                   i += 4;
+            // This is an escape sequence of a unicode code point: \uXXXX,
+            // where each X in XXXX represents a hex digit
+            if (escaped_char == UNICODE_SEQ) {
+              // Make sure that there's at least 4 characters left from the
+              // input, which are expected to be hex digits
+              if (i + NUM_UNICODE_ESC_HEX_DIGITS < end_index) {
+                auto hex_val = string_to_hex(&in.first[i + NEXT_CHAR]);
+                if (hex_val < 0) {
+                  // TODO signal parsing error: not all 4 hex digits
+                  continue;
+                }
+                // Skip over the four hex digits
+                i += NUM_UNICODE_ESC_HEX_DIGITS;
 
-                                   // If this may be a UTF-16 encoded surrogate pair:
-                                   // we expect another \uXXXX sequence
-                                   if (i + 6 < end_index && in.first[i + 1] == '\\' &&
-                                       in.first[i + 2] == 'u' && hex_val >= 0xD800) {
-                                     auto hex_low_val = string_to_hex(&in.first[i + 3]);
-                                     if (hex_val < 0xD800 || hex_low_val < 0xDC00) {
-                                       // TODO signal parsing error: not all 4 hex digits
-                                       continue;
-                                     }
-                                     // Skip over the second \uXXXX sequence
-                                     i += 6;
-                                     uint32_t unicode_code_point =
-                                       0x10000 + (hex_val - 0xD800) + (hex_low_val - 0xDC00);
-                                     auto utf8_chars =
-                                       strings::detail::codepoint_to_utf8(unicode_code_point);
-                                     out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
-                                   }
-                                   // Just a single \uXXXX sequence
-                                   else {
-                                     auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
-                                     out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
-                                   }
-                                 } else {
-                                   // TODO signal parsing error: expected 4 hex digits
-                                 }
-                               } else if (escaped_char == NON_ESCAPE_CHAR) {
-                                 // TODO signal parsing error: this char does not need to be escape
-                               } else {
-                                 out_size++;
-                               }
-                             } else {
-                               escape = in.first[i] == '\\';
-                               out_size += escape ? 0 : 1;
-                             }
-                           }
-                           if (escape) {
-                             // TODO signal parsing error: last char was escape, not followed by
-                             // anything to escape
-                           }
-                         }
-
-                         // Strip quotes if asked to do so
-                         sizes[row] = out_size;
-                       });
+                // If this may be a UTF-16 encoded surrogate pair:
+                // we expect another \uXXXX sequence
+                if (hex_val >= 0xD800 && i + NUM_UNICODE_ESC_SEQ_CHARS < end_index &&
+                    in.first[i + NEXT_CHAR] == '\\' && in.first[i + NEXT_NEXT_CHAR] == 'u') {
+                  auto hex_low_val = string_to_hex(&in.first[i + 3]);
+                  if (hex_val < 0xD800 || hex_low_val < 0xDC00) {
+                    // TODO signal parsing error: not all 4 hex digits
+                    continue;
+                  }
+                  // Skip over the second \uXXXX sequence
+                  i += NUM_UNICODE_ESC_SEQ_CHARS;
+                  uint32_t unicode_code_point =
+                    0x10000 + (hex_val - 0xD800) + (hex_low_val - 0xDC00);
+                  auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
+                  out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
+                }
+                // Just a single \uXXXX sequence
+                else {
+                  auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
+                  out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
+                }
+              } else {
+                // TODO signal parsing error: expected 4 hex digits
+              }
+            } else if (escaped_char == NON_ESCAPE_CHAR) {
+              // TODO signal parsing error: this char does not need to be escape
+            } else {
+              out_size++;
+            }
+          } else {
+            escape = in.first[i] == '\\';
+            out_size += escape ? 0 : 1;
+          }
+        }
+        if (escape) {
+          // TODO signal parsing error: last char was escape, not followed by
+          // anything to escape
+        }
+        sizes[row] = out_size;
+      });
 
     thrust::exclusive_scan(
       rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
@@ -206,89 +213,100 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
        options] __device__(size_type row) {
         if (not bit_is_set(null_mask, row)) { return; }
         auto const in = str_tuples[row];
+
         // Whether in the original JSON this was a string value enclosed in quotes
         // ({"a":"foo"} vs. {"a":1.23})
+        char const quote_char = options.quotechar;
         bool const is_string_value =
-          in.second >= 2 && (*in.first == '"') && (in.first[in.second - 1] == '"');
+          in.second >= 2 && (*in.first == quote_char) && (in.first[in.second - 1] == quote_char);
 
-        // Copy string value with quote char and escape sequence handling
-        if (is_string_value) {
-          decltype(in.second) start_index = (is_string_value ? 1 : 0);
-          decltype(in.second) end_index   = (is_string_value ? in.second - 1 : in.second);
-          // Check
-          bool escape = false;
-          for (int i = start_index, j = 0; i < end_index; ++i) {
-            // Previous char was escape char
-            if (escape) {
-              // Reset escape flag for next loop iteration
-              escape = false;
-
-              // Check the character that is supposed to be escaped
-              auto escaped_char = get_escape_char(in.first[i]);
-
-              // This is an escape sequence of a unicode code point: \uXXXX,
-              // where each X in XXXX represents a hex digit
-              if (escaped_char == UNICODE_SEQ) {
-                //  Make sure that there's at least 4 characters left from the
-                //  input, which are expected to be hex digits
-                if (i + 4 < end_index) {
-                  auto hex_val = string_to_hex(&in.first[i + 1]);
-                  if (hex_val < 0) {
-                    // TODO signal parsing error: not all 4 hex digits
-                    continue;
-                  }
-                  // Skip over the four hex digits
-                  i += 4;
-
-                  // If this may be a UTF-16 encoded surrogate pair:
-                  // we expect another \uXXXX sequence
-                  if (i + 6 < end_index && in.first[i + 1] == '\\' && in.first[i + 2] == 'u' &&
-                      hex_val >= 0xD800) {
-                    auto hex_low_val = string_to_hex(&in.first[i + 3]);
-                    if (hex_val < 0xD800 || hex_low_val < 0xDC00) {
-                      // TODO signal parsing error: not all 4 hex digits
-                      continue;
-                    }
-                    // Skip over the second \uXXXX sequence
-                    i += 6;
-                    uint32_t unicode_code_point =
-                      0x10000 + ((hex_val - 0xD800) << 10) + (hex_low_val - 0xDC00);
-                    auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
-                    j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
-                  }
-                  // Just a single \uXXXX sequence
-                  else {
-                    auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
-                    j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
-                  }
-                } else {
-                  // TODO signal parsing error: expected 4 hex digits
-                }
-              } else if (escaped_char == NON_ESCAPE_CHAR) {
-                // TODO signal parsing error: this char does not need to be escape
-              } else {
-                chars[offsets[row] + j] = escaped_char;
-                j++;
-              }
-            } else {
-              escape = in.first[i] == '\\';
-              if (!escape) {
-                chars[offsets[row] + j] = *(in.first + i);
-                j++;
-              }
-            }
-          }
-          if (escape) {
-            // TODO signal parsing error: last char was escape, not followed by
-            // anything to escape
-          }
-        }
         // Copy literal/numeric value
-        else {
+        if (!is_string_value) {
           for (int i = 0, j = 0; i < in.second; ++i) {
             chars[offsets[row] + j] = *(in.first + i);
             j++;
           }
+        }
+
+        // Escape-flag, set after encountering an escape character
+        bool escape = false;
+
+        // Exclude beginning and ending quote chars from string range
+        auto start_index = options.keepquotes ? 0 : 1;
+        auto end_index   = in.second - (options.keepquotes ? 0 : 1);
+
+        for (int i = start_index, j = 0; i < end_index; ++i) {
+          // Previous char was escape char
+          if (escape) {
+            // A unicode code point escape sequence is \uXXXX
+            auto constexpr NUM_UNICODE_ESC_SEQ_CHARS = 6;
+            // The escape sequence comprises four hex digits
+            auto constexpr NUM_UNICODE_ESC_HEX_DIGITS = 4;
+            // A name for the char following the current one
+            auto constexpr NEXT_CHAR = 1;
+            // A name for the char after the next char
+            auto constexpr NEXT_NEXT_CHAR = 2;
+            // Reset escape flag for next loop iteration
+            escape = false;
+
+            // Check the character that is supposed to be escaped
+            auto escaped_char = get_escape_char(in.first[i]);
+
+            // This is an escape sequence of a unicode code point: \uXXXX,
+            // where each X in XXXX represents a hex digit
+            if (escaped_char == UNICODE_SEQ) {
+              //  Make sure that there's at least 4 characters left from the
+              //  input, which are expected to be hex digits
+              if (i + NUM_UNICODE_ESC_HEX_DIGITS < end_index) {
+                auto hex_val = string_to_hex(&in.first[i + NEXT_CHAR]);
+                if (hex_val < 0) {
+                  // TODO signal parsing error: not all 4 hex digits
+                  continue;
+                }
+                // Skip over the four hex digits
+                i += NUM_UNICODE_ESC_HEX_DIGITS;
+
+                // If this may be a UTF-16 encoded surrogate pair:
+                // we expect another \uXXXX sequence
+                if (hex_val >= 0xD800 && i + NUM_UNICODE_ESC_SEQ_CHARS < end_index &&
+                    in.first[i + NEXT_CHAR] == '\\' && in.first[i + NEXT_NEXT_CHAR] == 'u') {
+                  auto hex_low_val = string_to_hex(&in.first[i + 3]);
+                  if (hex_val < 0xD800 || hex_low_val < 0xDC00) {
+                    // TODO signal parsing error: not all 4 hex digits
+                    continue;
+                  }
+                  // Skip over the second \uXXXX sequence
+                  i += NUM_UNICODE_ESC_SEQ_CHARS;
+                  uint32_t unicode_code_point =
+                    0x10000 + ((hex_val - 0xD800) << 10) + (hex_low_val - 0xDC00);
+                  auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
+                  j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
+                }
+                // Just a single \uXXXX sequence
+                else {
+                  auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
+                  j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
+                }
+              } else {
+                // TODO signal parsing error: expected 4 hex digits
+              }
+            } else if (escaped_char == NON_ESCAPE_CHAR) {
+              // TODO signal parsing error: this char does not need to be escape
+            } else {
+              chars[offsets[row] + j] = escaped_char;
+              j++;
+            }
+          } else {
+            escape = in.first[i] == '\\';
+            if (!escape) {
+              chars[offsets[row] + j] = *(in.first + i);
+              j++;
+            }
+          }
+        }
+        if (escape) {
+          // TODO signal parsing error: last char was escape, not followed by
+          // anything to escape
         }
       });
 
