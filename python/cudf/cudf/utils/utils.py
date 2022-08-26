@@ -397,7 +397,7 @@ class CachedInstanceMeta(type):
         # types can compare equal
         arg_tuple = (
             args
-            + tuple(kwargs.values())
+            + tuple(kwargs.items())
             + tuple(map(type, args))
             + tuple(map(type, kwargs.values()))
         )
