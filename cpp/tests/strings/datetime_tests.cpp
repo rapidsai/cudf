@@ -291,7 +291,7 @@ TEST_F(StringsDatetimeTest, IsTimestamp)
   auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S %I%p %z");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *results,
-    cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1});
 }
 
 TEST_F(StringsDatetimeTest, FromTimestamp)
