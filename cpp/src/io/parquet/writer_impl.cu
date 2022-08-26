@@ -1372,13 +1372,15 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
-  using cudf::io::parquet::gpu::max_page_fragment_size;
+  auto max_page_fragment_size =
+    (cudf::io::parquet::gpu::max_page_fragment_size * max_page_size_bytes) /
+    default_max_page_size_bytes;
 
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
-                 [](auto const& part) {
+                 [max_page_fragment_size](auto const& part) {
                    return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
                  });
 
