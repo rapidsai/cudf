@@ -240,7 +240,7 @@ auto batched_compress_temp_size(compression_type compression,
   return temp_size;
 }
 
-constexpr std::optional<size_t> max_allowed_compression_chunk_size(compression_type compression)
+std::optional<size_t> max_allowed_compression_chunk_size(compression_type compression)
 {
   switch (compression) {
     case compression_type::ZSTD:
