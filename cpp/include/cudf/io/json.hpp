@@ -272,7 +272,7 @@ class json_reader_options {
   /**
    * @brief Set whether the experimental reader should keep quotes of string values.
    *
-   * @param val Boolean value whether to indicate whether the experimental reader should keep quotes
+   * @param val Boolean value to indicate whether the experimental reader should keep quotes
    * of string values
    */
   void keep_quotes(bool val) { _keep_quotes = val; }
@@ -398,8 +398,9 @@ class json_reader_options_builder {
   /**
    * @brief Set whether the experimental reader should keep quotes of string values.
    *
-   * @param val Boolean value whether to indicate whether the experimental reader should keep quotes
+   * @param val Boolean value to indicate whether the experimental reader should keep quotes
    * of string values
+   * @return this for chaining
    */
   json_reader_options_builder& keep_quotes(bool val)
   {
