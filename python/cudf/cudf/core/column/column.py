@@ -443,7 +443,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise IndexError("single positional indexer is out-of-bounds")
 
         x = libcudf.copying.get_element(self, idx)
-        # import pdb;pdb.set_trace()
         return x.value
 
     def slice(self, start: int, stop: int, stride: int = None) -> ColumnBase:

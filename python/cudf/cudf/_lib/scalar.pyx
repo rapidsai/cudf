@@ -195,11 +195,13 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.STRUCT:
+            print("==198")
             struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
             s._dtype = StructDtype({
                 str(i): dtype_from_column_view(struct_table_view.column(i))
                 for i in range(struct_table_view.num_columns())
             })
+            print(dtype.fields, s._dtype.fields)
         elif cdtype.id() == libcudf_types.LIST:
             if (
                 <list_scalar*>s.get_raw_ptr()
@@ -217,12 +219,14 @@ cdef class DeviceScalar:
                     ]
                 )
         else:
+            print("==221")
             if dtype is not None:
                 s._dtype = dtype
             else:
                 s._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                     <underlying_type_t_type_id>(cdtype.id())
                 ]
+            print(s._dtype, dtype)
         return s
 
 
@@ -382,9 +386,13 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
     })
     columns = columns_from_table_view(struct_table_view, None)
 
-    python_dict = to_arrow(columns, column_names, cust_dtype).to_pydict()
-
-    return {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
+    table = to_arrow(columns, column_names, cust_dtype)
+    print("390", table)
+    python_dict = table.to_pydict()
+    print("392", python_dict)
+    res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
+    print("394", res)
+    return res
 
 cdef _set_list_from_pylist(unique_ptr[scalar]& s,
                            object value,

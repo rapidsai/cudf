@@ -67,10 +67,7 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        return {
-            field: value
-            for field, value in zip(self.dtype.fields, result.values())
-        }
+        return _rename_nested_struct(result, dtype=self.dtype)
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):
@@ -224,3 +221,15 @@ class StructMethods(ColumnMethods):
                 }
             )
         )
+
+
+def _rename_nested_struct(result, dtype):
+    result_dict = {}
+    for (field, field_dtype), value in zip(
+        dtype.fields.items(), result.values()
+    ):
+        if isinstance(field_dtype, cudf.StructDtype):
+            result_dict[field] = _rename_nested_struct(value, field_dtype)
+        else:
+            result_dict[field] = value
+    return result_dict
