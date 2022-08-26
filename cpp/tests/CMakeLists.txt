@@ -410,6 +410,7 @@ ConfigureTest(
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp
+  strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
   strings/replace_regex_tests.cpp
