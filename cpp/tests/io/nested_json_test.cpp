@@ -248,9 +248,6 @@ TEST_F(JsonTest, TokenStream)
   // Default parsing options
   cudf::io::json_reader_options default_options{};
 
-  // Default parsing options
-  cudf::io::json_reader_options default_options{};
-
   // Test input
   std::string const input = R"(  [{)"
                             R"("category": "reference",)"
@@ -365,9 +362,6 @@ TEST_F(JsonTest, UTF_JSON)
   // Default parsing options
   cudf::io::json_reader_options default_options{};
 
-  // Default parsing options
-  cudf::io::json_reader_options default_options{};
-
   // Only ASCII string
   std::string const ascii_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
@@ -410,9 +404,6 @@ TEST_F(JsonTest, FromParquet)
 
   // Prepare cuda stream for data transfers & kernels
   constexpr auto stream = cudf::default_stream_value;
-
-  // Default parsing options
-  cudf::io::json_reader_options default_options{};
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
