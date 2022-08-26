@@ -782,6 +782,75 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
+    def like(self, pat: str, esc: str = None) -> SeriesOrIndex:
+        """
+        Test if a like pattern matches a string of a Series or Index.
+
+        Return boolean Series or Index based on whether a given pattern
+        matches strings in a Series or Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern for matching. Use '%' for any number of any character
+            including no characters. Use '_' for any single character.
+
+        esc : str
+            Character to use if escape is necessary to match '%' or '_'
+            literals.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+            A Series/Index of boolean dtype indicating whether the given
+            pattern matches the string of each element of the Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'a', 'b' ,'ddbc', '%bb'])
+        >>> s.str.like('%b_')
+        0   False
+        1   False
+        2   False
+        3   True
+        4   True
+        dtype: boolean
+
+        Parameter `esc` can be used to match a wildcard literal.
+
+        >>> s.str.like('/%b_', esc='/' )
+        0   False
+        1   False
+        2   False
+        3   False
+        4   True
+        dtype: boolean
+        """
+        if not isinstance(pat, str):
+            raise TypeError(
+                f"expected a string object, not {type(pat).__name__}"
+            )
+
+        if esc is None:
+            esc = ""
+
+        if not isinstance(esc, str):
+            raise TypeError(
+                f"expected a string object, not {type(esc).__name__}"
+            )
+
+        if len(esc) > 1:
+            raise ValueError(
+                "expected esc to contain less than or equal to 1 characters"
+            )
+
+        result_col = libstrings.like(
+            self._column, cudf.Scalar(pat, "str"), cudf.Scalar(esc, "str")
+        )
+
+        return self._return_or_inplace(result_col)
+
     def repeat(
         self,
         repeats: Union[int, Sequence],
