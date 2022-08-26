@@ -279,7 +279,7 @@ def concat_cudf(
     (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
 )
 @_dask_cudf_nvtx_annotate
-def categorical_dtype_cudf(categories=None, ordered=None):
+def categorical_dtype_cudf(categories=None, ordered=False):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
