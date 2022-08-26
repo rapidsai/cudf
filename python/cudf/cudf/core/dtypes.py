@@ -139,7 +139,7 @@ class CategoricalDtype(_BaseDtype):
     --------
     >>> import cudf
     >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
-    >>> cudf.Series(['a', 'b', 'a', 'c'], dtype=t)
+    >>> cudf.Series(['a', 'b', 'a', 'c'], dtype=dtype)
     0       a
     1       b
     2       a
