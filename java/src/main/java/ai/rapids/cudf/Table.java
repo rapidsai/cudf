@@ -280,6 +280,7 @@ public final class Table implements AutoCloseable {
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
+   * @param isBinaryValues  true if a column is a binary
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -294,6 +295,7 @@ public final class Table implements AutoCloseable {
                                                    boolean[] isInt96,
                                                    int[] precisions,
                                                    boolean[] isMapValues,
+                                                   boolean[] isBinaryValues,
                                                    boolean[] hasParquetFieldIds,
                                                    int[] parquetFieldIds,
                                                    String filename) throws CudfException;
@@ -312,6 +314,7 @@ public final class Table implements AutoCloseable {
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
+   * @param isBinaryValues  true if a column is a binary
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -326,6 +329,7 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isInt96,
                                                      int[] precisions,
                                                      boolean[] isMapValues,
+                                                     boolean[] isBinaryValues,
                                                      boolean[] hasParquetFieldIds,
                                                      int[] parquetFieldIds,
                                                      HostBufferConsumer consumer) throws CudfException;
@@ -1213,6 +1217,7 @@ public final class Table implements AutoCloseable {
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
+      boolean[] isBinaryValues = options.getFlatIsBinary();
       int[] precisions = options.getFlatPrecision();
       boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
       int[] parquetFieldIds = options.getFlatParquetFieldId();
@@ -1230,6 +1235,7 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          isBinaryValues,
           hasParquetFieldIds,
           parquetFieldIds,
           outputFile.getAbsolutePath());
@@ -1240,6 +1246,7 @@ public final class Table implements AutoCloseable {
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
+      boolean[] isBinaryValues = options.getFlatIsBinary();
       int[] precisions = options.getFlatPrecision();
       boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
       int[] parquetFieldIds = options.getFlatParquetFieldId();
@@ -1257,6 +1264,7 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          isBinaryValues,
           hasParquetFieldIds,
           parquetFieldIds,
           consumer);

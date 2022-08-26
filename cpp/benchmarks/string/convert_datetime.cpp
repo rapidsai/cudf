@@ -34,8 +34,8 @@ void BM_convert_datetime(benchmark::State& state, direction dir)
   auto const n_rows    = static_cast<cudf::size_type>(state.range(0));
   auto const data_type = cudf::data_type(cudf::type_to_id<TypeParam>());
 
-  auto const table = create_random_table({data_type.id()}, row_count{n_rows});
-  cudf::column_view input(table->view().column(0));
+  auto const column = create_random_column(data_type.id(), row_count{n_rows});
+  cudf::column_view input(column->view());
 
   auto source = dir == direction::to ? cudf::strings::from_timestamps(input, "%Y-%m-%d %H:%M:%S")
                                      : make_empty_column(cudf::data_type{cudf::type_id::STRING});

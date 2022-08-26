@@ -48,7 +48,7 @@ namespace {
  */
 struct strip_fn {
   column_device_view const d_strings;
-  strip_type const stype;  // right, left, or both
+  side_type const side;  // right, left, or both
   string_view const d_to_strip;
   int32_t* d_offsets{};
   char* d_chars{};
@@ -70,14 +70,14 @@ struct strip_fn {
     };
 
     size_type const left_offset = [&] {
-      if (stype != strip_type::LEFT && stype != strip_type::BOTH) return 0;
+      if (side != side_type::LEFT && side != side_type::BOTH) return 0;
       auto const itr =
         thrust::find_if_not(thrust::seq, d_str.begin(), d_str.end(), is_strip_character);
       return itr != d_str.end() ? itr.byte_offset() : d_str.size_bytes();
     }();
 
     size_type right_offset = d_str.size_bytes();
-    if (stype == strip_type::RIGHT || stype == strip_type::BOTH) {
+    if (side == side_type::RIGHT || side == side_type::BOTH) {
       auto const length = d_str.length();
       auto itr          = d_str.end();
       for (size_type n = 0; n < length; ++n) {
@@ -97,41 +97,41 @@ struct strip_fn {
 }  // namespace
 
 std::unique_ptr<column> strip(
-  strings_column_view const& strings,
-  strip_type stype                    = strip_type::BOTH,
+  strings_column_view const& input,
+  side_type side                      = side_type::BOTH,
   string_scalar const& to_strip       = string_scalar(""),
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(to_strip.is_valid(stream), "Parameter to_strip must be valid");
   string_view const d_to_strip(to_strip.data(), to_strip.size());
 
-  auto const d_column = column_device_view::create(strings.parent(), stream);
+  auto const d_column = column_device_view::create(input.parent(), stream);
 
   // this utility calls the strip_fn to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(
-    strip_fn{*d_column, stype, d_to_strip}, strings.size(), stream, mr);
+    strip_fn{*d_column, side, d_to_strip}, input.size(), stream, mr);
 
-  return make_strings_column(strings.size(),
+  return make_strings_column(input.size(),
                              std::move(children.first),
                              std::move(children.second),
-                             strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail
 
 // external APIs
 
-std::unique_ptr<column> strip(strings_column_view const& strings,
-                              strip_type stype,
+std::unique_ptr<column> strip(strings_column_view const& input,
+                              side_type side,
                               string_scalar const& to_strip,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::strip(strings, stype, to_strip, cudf::default_stream_value, mr);
+  return detail::strip(input, side, to_strip, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

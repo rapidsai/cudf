@@ -225,6 +225,7 @@ ConfigureTest(JSON_TEST io/json_test.cpp)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
@@ -358,8 +359,8 @@ ConfigureTest(
 # ##################################################################################################
 # * search test -----------------------------------------------------------------------------------
 ConfigureTest(
-  SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
-  search/search_test.cpp
+  SEARCH_TEST search/search_dictionary_test.cpp search/search_list_test.cpp
+  search/search_struct_test.cpp search/search_test.cpp
 )
 
 # ##################################################################################################
@@ -409,6 +410,7 @@ ConfigureTest(
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp
+  strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
   strings/replace_regex_tests.cpp

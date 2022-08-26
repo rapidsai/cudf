@@ -34,13 +34,12 @@ static void BM_rank(benchmark::State& state, bool nulls)
   data_profile profile = data_profile_builder().cardinality(0).distribution(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
   profile.set_null_probability(nulls ? std::optional{0.01} : std::nullopt);
-  auto keys_table = create_random_table({cudf::type_to_id<Type>()}, row_count{n_rows}, profile);
-  cudf::column_view input{keys_table->get_column(0)};
+  auto keys = create_random_column(cudf::type_to_id<Type>(), row_count{n_rows}, profile);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, cudf::default_stream_value);
 
-    auto result = cudf::rank(input,
+    auto result = cudf::rank(keys->view(),
                              cudf::rank_method::FIRST,
                              cudf::order::ASCENDING,
                              nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,

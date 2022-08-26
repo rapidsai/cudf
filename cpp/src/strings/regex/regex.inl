@@ -148,7 +148,7 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
 
   if (!builtins) return false;
   uint32_t codept = utf8_to_codepoint(ch);
-  if (codept > 0x00FFFF) return false;
+  if (codept > 0x00'FFFF) return false;
   int8_t fl = codepoint_flags[codept];
   if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
     return true;

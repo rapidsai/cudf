@@ -157,30 +157,15 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree)
 #undef PRINT_VEC
 }
 
-tree_meta_t2 get_tree_representation_cpu(host_span<SymbolT const> input,
+tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu,
+                                         device_span<SymbolOffsetT const> token_indices_gpu1,
+                                         cudf::io::json_reader_options const& options,
                                          rmm::cuda_stream_view stream)
 {
-  constexpr std::size_t single_item = 1;
-  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
-
-  rmm::device_uvector<SymbolT> d_input{input.size(), stream};
-  cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
-
-  // Parse the JSON and get the token stream
-  cudf::io::json::detail::get_token_stream(
-    cudf::device_span<SymbolT>{d_input.data(), d_input.size()},
-    tokens_gpu.device_ptr(),
-    token_indices_gpu.device_ptr(),
-    num_tokens_out.device_ptr(),
-    stream);
-
   // Copy the JSON tokens to the host
-  token_indices_gpu.device_to_host(stream);
-  tokens_gpu.device_to_host(stream);
-  num_tokens_out.device_to_host(stream);
+  thrust::host_vector<PdaTokenT> tokens = cudf::detail::make_host_vector_async(tokens_gpu, stream);
+  thrust::host_vector<SymbolOffsetT> token_indices =
+    cudf::detail::make_host_vector_async(token_indices_gpu1, stream);
 
   // Make sure tokens have been copied to the host
   stream.synchronize();
@@ -205,8 +190,8 @@ tree_meta_t2 get_tree_representation_cpu(host_span<SymbolT const> input,
     }
   };
   std::cout << "Tokens: \n";
-  for (auto i = 0u; i < num_tokens_out[0]; i++) {
-    std::cout << to_token_str(tokens_gpu[i]) << " ";
+  for (auto i = 0u; i < tokens.size(); i++) {
+    std::cout << to_token_str(tokens[i]) << " ";
   }
   std::cout << std::endl;
 
@@ -296,11 +281,11 @@ tree_meta_t2 get_tree_representation_cpu(host_span<SymbolT const> input,
   std::vector<SymbolOffsetT> node_range_end;
 
   std::size_t node_id = 0;
-  for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
-    auto token = tokens_gpu[i];
+  for (std::size_t i = 0; i < tokens.size(); i++) {
+    auto token = tokens[i];
 
     // The section from the original JSON input that this token demarcates
-    std::size_t range_begin = get_token_index(token, token_indices_gpu[i]);
+    std::size_t range_begin = get_token_index(token, token_indices[i]);
     std::size_t range_end   = range_begin + 1;
 
     // Identify this node's parent node id
@@ -310,9 +295,9 @@ tree_meta_t2 get_tree_representation_cpu(host_span<SymbolT const> input,
     // If this token is the beginning-of-{value, string, field name}, also consume the next end-of-*
     // token
     if (is_begin_of_section(token)) {
-      if ((i + 1) < num_tokens_out[0] && end_of_partner(token) == tokens_gpu[i + 1]) {
+      if ((i + 1) < tokens.size() && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
-        range_end = token_indices_gpu[i + 1];
+        range_end = token_indices[i + 1];
         // We can skip the subsequent end-of-* token
         i++;
       }
@@ -381,13 +366,22 @@ TEST_F(JsonTest, TreeRepresentation)
                       R"("title": "{}[], <=semantic-symbols-string",)"
                       R"("price": 8.95)"
                       R"(}] )";
-  cudf::string_scalar d_input(input, true, stream);
+  // Prepare input & output buffers
+  cudf::string_scalar d_scalar(input, true, stream);
+  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                             static_cast<size_t>(d_scalar.size())};
+
+  cudf::io::json_reader_options const options{};
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
 
   // Get the JSON's tree representation
-  auto gpu_tree = cuio_json::detail::get_tree_representation(
-    {d_input.data(), static_cast<size_t>(d_input.size())}, stream);
+  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
-  auto tree_rep = cuio_json::test::get_tree_representation_cpu(input, stream);
+  auto tree_rep =
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   cudf::io::json::test::compare_trees(tree_rep, gpu_tree);
 
   // Print tree representation
@@ -458,13 +452,22 @@ TEST_F(JsonTest, TreeRepresentation2)
     //  0         1         2         3         4         5         6         7         8         9
     //  0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
-  cudf::string_scalar d_input(input, true, stream);
+  // Prepare input & output buffers
+  cudf::string_scalar d_scalar(input, true, stream);
+  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                             static_cast<size_t>(d_scalar.size())};
+
+  cudf::io::json_reader_options const options{};
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
 
   // Get the JSON's tree representation
-  auto gpu_tree = cuio_json::detail::get_tree_representation(
-    {d_input.data(), static_cast<size_t>(d_input.size())}, stream);
+  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
-  auto tree_rep = cuio_json::test::get_tree_representation_cpu(input, stream);
+  auto tree_rep =
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   cudf::io::json::test::compare_trees(tree_rep, gpu_tree);
 
   // Print tree representation

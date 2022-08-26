@@ -38,8 +38,8 @@ void BM_reduction_dictionary(benchmark::State& state,
     distribution_id::UNIFORM,
     (agg->kind == cudf::aggregation::ALL ? 1 : 0),
     (agg->kind == cudf::aggregation::ANY ? 0 : 100));
-  auto int_table = create_random_table({cudf::type_to_id<long>()}, row_count{column_size}, profile);
-  auto number_col = cudf::cast(int_table->get_column(0), cudf::data_type{cudf::type_to_id<T>()});
+  auto int_column = create_random_column(cudf::type_to_id<long>(), row_count{column_size}, profile);
+  auto number_col = cudf::cast(*int_column, cudf::data_type{cudf::type_to_id<T>()});
   auto values     = cudf::dictionary::encode(*number_col);
 
   cudf::data_type output_dtype = [&] {

@@ -61,8 +61,8 @@ struct token_to_node {
 // convert token indices to node range for each valid node.
 template <typename T1, typename T2, typename T3>
 struct node_ranges {
-  T1 tokens_gpu;
-  T2 token_indices_gpu;
+  T1 tokens;
+  T2 token_indices;
   T3 num_tokens;
   __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
   {
@@ -92,14 +92,14 @@ struct node_ranges {
         default: return token_index;
       };
     };
-    PdaTokenT const token = tokens_gpu[i];
+    PdaTokenT const token = tokens[i];
     // The section from the original JSON input that this token demarcates
-    SymbolOffsetT range_begin = get_token_index(token, token_indices_gpu[i]);
+    SymbolOffsetT range_begin = get_token_index(token, token_indices[i]);
     SymbolOffsetT range_end   = range_begin + 1;
     if (is_begin_of_section(token)) {
-      if ((i + 1) < num_tokens && end_of_partner(token) == tokens_gpu[i + 1]) {
+      if ((i + 1) < num_tokens && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
-        range_end = token_indices_gpu[i + 1];
+        range_end = token_indices[i + 1];
       }
     }
     return thrust::make_tuple(range_begin, range_end);
@@ -107,24 +107,11 @@ struct node_ranges {
 };
 
 // Parses the given JSON string and generates a tree representation of the given input.
-tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
-                                    rmm::cuda_stream_view stream)
+tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
+                                    device_span<SymbolOffsetT const> token_indices,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
-  constexpr std::size_t single_item = 1;
-  rmm::device_uvector<PdaTokenT> tokens_gpu{d_input.size(), stream};
-  rmm::device_uvector<SymbolOffsetT> token_indices_gpu{d_input.size(), stream};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
-
-  // Parse the JSON and get the token stream
-  cudf::io::json::detail::get_token_stream(
-    d_input, tokens_gpu.data(), token_indices_gpu.data(), num_tokens_out.device_ptr(), stream);
-
-  // Copy the JSON token count to the host
-  num_tokens_out.device_to_host(stream);
-
-  // Make sure tokens have been copied to the host
-  stream.synchronize();
-
   // Whether a token does represent a node in the tree representation
   auto is_node = [] __device__(PdaTokenT const token) -> size_type {
     switch (token) {
@@ -160,17 +147,17 @@ tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
     };
   };
 
-  auto num_tokens = num_tokens_out[0];
-  auto is_node_it = thrust::make_transform_iterator(tokens_gpu.begin(), is_node);
+  auto num_tokens = tokens.size();
+  auto is_node_it = thrust::make_transform_iterator(tokens.begin(), is_node);
   auto num_nodes  = thrust::reduce(rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens);
 
   // Node categories: copy_if with transform.
-  rmm::device_uvector<NodeT> node_categories(num_nodes, stream);
+  rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
   auto node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
   auto node_categories_end = thrust::copy_if(rmm::exec_policy(stream),
-                                             tokens_gpu.begin(),
-                                             tokens_gpu.begin() + num_tokens,
+                                             tokens.begin(),
+                                             tokens.begin() + num_tokens,
                                              node_categories_it,
                                              is_node);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
@@ -179,38 +166,37 @@ tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
   // Node levels: transform_exclusive_scan, copy_if.
   rmm::device_uvector<size_type> token_levels(num_tokens, stream);
   auto push_pop_it = thrust::make_transform_iterator(
-    tokens_gpu.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
+    tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
       return does_push(token) ? 1 : (does_pop(token) ? -1 : 0);
     });
   thrust::exclusive_scan(
     rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-  rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream);
+  rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
   auto node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
                                          token_levels.begin(),
                                          token_levels.begin() + num_tokens,
-                                         tokens_gpu.begin(),
+                                         tokens.begin(),
                                          node_levels.begin(),
                                          is_node);
   CUDF_EXPECTS(node_levels_end - node_levels.begin() == num_nodes, "node level count mismatch");
 
   // Node ranges: copy_if with transform.
-  rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream);
-  rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream);
+  rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream, mr);
+  rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
   auto node_range_tuple_it =
     thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  using node_ranges_t    = node_ranges<decltype(tokens_gpu.begin()),
-                                    decltype(token_indices_gpu.begin()),
-                                    decltype(num_tokens)>;
+  using node_ranges_t =
+    node_ranges<decltype(tokens.begin()), decltype(token_indices.begin()), decltype(num_tokens)>;
   auto node_range_out_it = thrust::make_transform_output_iterator(
-    node_range_tuple_it, node_ranges_t{tokens_gpu.begin(), token_indices_gpu.begin(), num_tokens});
+    node_range_tuple_it, node_ranges_t{tokens.begin(), token_indices.begin(), num_tokens});
 
   auto node_range_out_end =
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(0) + num_tokens,
                     node_range_out_it,
-                    [is_node, tokens_gpu = tokens_gpu.begin()] __device__(size_type i) -> bool {
+                    [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
                       PdaTokenT const token = tokens_gpu[i];
                       return is_node(token);
                     });
@@ -224,7 +210,7 @@ tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
   thrust::tabulate(rmm::exec_policy(stream),
                    parent_token_ids.begin(),
                    parent_token_ids.end(),
-                   [does_push, tokens_gpu = tokens_gpu.begin()] __device__(auto i) -> size_type {
+                   [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
                      if (i == 0)
                        return -1;
                      else
@@ -257,7 +243,7 @@ tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
   rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
   thrust::exclusive_scan(
     rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
-  rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream);
+  rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream, mr);
   auto parent_node_ids_it = thrust::make_transform_iterator(
     parent_token_ids.begin(),
     [node_ids_gpu = node_ids_gpu.begin()] __device__(size_type const pid) -> NodeIndexT {
@@ -266,7 +252,7 @@ tree_meta_t get_tree_representation(device_span<SymbolT const> d_input,
   auto parent_node_ids_end = thrust::copy_if(rmm::exec_policy(stream),
                                              parent_node_ids_it,
                                              parent_node_ids_it + parent_token_ids.size(),
-                                             tokens_gpu.begin(),
+                                             tokens.begin(),
                                              parent_node_ids.begin(),
                                              is_node);
   CUDF_EXPECTS(parent_node_ids_end - parent_node_ids.begin() == num_nodes,

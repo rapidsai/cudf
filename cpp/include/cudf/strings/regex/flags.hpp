@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +33,10 @@ namespace strings {
  * and to match the Python flag values.
  */
 enum regex_flags : uint32_t {
-  DEFAULT   = 0,  ///< default
-  MULTILINE = 8,  ///< the '^' and '$' honor new-line characters
-  DOTALL    = 16  ///< the '.' matching includes new-line characters
+  DEFAULT   = 0,   ///< default
+  MULTILINE = 8,   ///< the '^' and '$' honor new-line characters
+  DOTALL    = 16,  ///< the '.' matching includes new-line characters
+  ASCII     = 256  ///< use only ASCII when matching built-in character classes
 };
 
 /**
@@ -58,6 +59,17 @@ constexpr bool is_multiline(regex_flags const f)
 constexpr bool is_dotall(regex_flags const f)
 {
   return (f & regex_flags::DOTALL) == regex_flags::DOTALL;
+}
+
+/**
+ * @brief Returns true if the given flags contain ASCII.
+ *
+ * @param f Regex flags to check
+ * @return true if `f` includes ASCII
+ */
+constexpr bool is_ascii(regex_flags const f)
+{
+  return (f & regex_flags::ASCII) == regex_flags::ASCII;
 }
 
 /** @} */  // end of doxygen group
