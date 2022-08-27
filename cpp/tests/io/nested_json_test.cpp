@@ -424,3 +424,36 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
 }
+
+TEST_F(JsonTest, EscapeSequenceTests)
+{
+  using cuio_json::SymbolT;
+
+  // Prepare cuda stream for data transfers & kernels
+  constexpr auto stream = cudf::default_stream_value;
+
+  // Default parsing options
+  cudf::io::json_reader_options options{};
+  options.keep_quotes(true);
+
+  std::string const input =
+    R"( [{"a":"🚀", "b":"\uD83D\uDE80"},)"
+    R"(  {"a":null, "b":"invalid char being escaped escape char\-"},)"
+    R"(  {"a":null, "b":"too few hex digits \u12"},)"
+    R"(  {"a":null, "b":"too few hex digits for surrogate pair \uD83D\uDE"},)"
+    R"(  {"a":"\\", "b":"\u005C"},)"
+    R"(  {"a":"➩",  "b":"\u27A9"}] )";
+
+  // Get the JSON's tree representation
+  auto const cudf_table = cuio_json::detail::parse_nested_json(
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream);
+
+  auto constexpr expected_col_count  = 2;
+  auto constexpr first_column_index  = 0;
+  auto constexpr second_column_index = 1;
+  EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
+
+  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
+  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(parsed_col1, parsed_col2);
+}
