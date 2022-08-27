@@ -1475,7 +1475,7 @@ def build_categorical_column(
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-    ordered: bool = None,
+    ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
@@ -1491,7 +1491,7 @@ def build_categorical_column(
         Null mask
     size : int, optional
     offset : int, optional
-    ordered : bool
+    ordered : bool, default False
         Indicates whether the categories are ordered
     """
     codes_dtype = min_unsigned_type(len(categories))

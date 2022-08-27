@@ -841,3 +841,19 @@ def test_correct_meta():
 
     assert isinstance(emb, dd.DataFrame)
     assert isinstance(emb._meta, pd.DataFrame)
+
+
+def test_categorical_dtype_round_trip():
+    s = cudf.Series(4 * ["foo"], dtype="category")
+    assert s.dtype.ordered is False
+
+    ds = dgd.from_cudf(s, npartitions=2)
+    pds = dd.from_pandas(s.to_pandas(), npartitions=2)
+    dd.assert_eq(ds, pds)
+    assert ds.dtype.ordered is False
+
+    # Below validations are required, see:
+    # https://github.com/rapidsai/cudf/issues/11487#issuecomment-1208912383
+    actual = ds.compute()
+    expected = pds.compute()
+    assert actual.dtype.ordered == expected.dtype.ordered
