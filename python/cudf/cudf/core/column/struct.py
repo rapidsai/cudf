@@ -224,6 +224,7 @@ class StructMethods(ColumnMethods):
 
 
 def _rename_nested_struct(result, dtype):
+    import pdb;pdb.set_trace()
     result_dict = {}
     for (field, field_dtype), value in zip(
         dtype.fields.items(), result.values()

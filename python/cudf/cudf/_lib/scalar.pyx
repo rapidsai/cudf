@@ -129,7 +129,7 @@ cdef class DeviceScalar:
         if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
             result = _get_py_decimal_from_fixed_point(self.c_value)
         elif cudf.api.types.is_struct_dtype(self.dtype):
-            result = _get_py_dict_from_struct(self.c_value)
+            result = _get_py_dict_from_struct(self.c_value, self.dtype)
         elif cudf.api.types.is_list_dtype(self.dtype):
             result = _get_py_list_from_list(self.c_value)
         elif pd.api.types.is_string_dtype(self.dtype):
@@ -195,11 +195,14 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.STRUCT:
-            struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
-            s._dtype = StructDtype({
-                str(i): dtype_from_column_view(struct_table_view.column(i))
-                for i in range(struct_table_view.num_columns())
-            })
+            if dtype is None:
+                struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
+                s._dtype = StructDtype({
+                    str(i): dtype_from_column_view(struct_table_view.column(i))
+                    for i in range(struct_table_view.num_columns())
+                })
+            else:
+                s._dtype = dtype
         elif cdtype.id() == libcudf_types.LIST:
             if (
                 <list_scalar*>s.get_raw_ptr()
@@ -370,19 +373,15 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
         new struct_scalar(struct_view, valid)
     )
 
-cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
+cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
     if not s.get()[0].is_valid():
         return NA
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     column_names = [str(i) for i in range(struct_table_view.num_columns())]
-    cust_dtype = StructDtype({
-                str(i): dtype_from_column_view(struct_table_view.column(i))
-                for i in range(struct_table_view.num_columns())
-    })
     columns = columns_from_table_view(struct_table_view, None)
-    print(columns)
-    table = to_arrow(columns, column_names, cust_dtype)
+    print(columns, dtype.to_arrow())
+    table = to_arrow(columns, column_names, dtype)
     python_dict = table.to_pydict()
     res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
     return res

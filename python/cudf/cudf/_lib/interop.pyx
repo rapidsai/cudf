@@ -97,10 +97,11 @@ cdef vector[column_metadata] gather_metadata(object metadata, object dtype=None)
     cdef vector[column_metadata] cpp_metadata
     if dtype is not None:
         if is_struct_dtype(dtype):
+            print(dtype.to_arrow())
             cpp_metadata.reserve(len(dtype.fields))
             for i, name in enumerate(dtype.fields):
                 value = dtype.fields[name]
-                cpp_metadata.push_back(column_metadata(name.encode()))
+                cpp_metadata.push_back(column_metadata((name).encode()))
                 if is_struct_dtype(value):
                     _set_col_children_metadata(value, cpp_metadata[i])
         else:
