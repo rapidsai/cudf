@@ -785,11 +785,19 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   columns_vector output_columns;
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) mutable {
-      auto engine = deterministic_engine(seed_dist(seed_engine));
-      return cudf::type_dispatcher(
-        cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows.count);
+      return create_random_column(tid, num_rows, profile, seed_dist(seed_engine));
     });
   return std::make_unique<cudf::table>(std::move(output_columns));
+}
+
+std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
+                                                   row_count num_rows,
+                                                   data_profile const& profile,
+                                                   unsigned seed)
+{
+  auto engine = deterministic_engine(seed);
+  return cudf::type_dispatcher(
+    cudf::data_type(dtype_id), create_rand_col_fn{}, profile, engine, num_rows.count);
 }
 
 std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,

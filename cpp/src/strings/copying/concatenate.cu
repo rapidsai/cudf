@@ -124,7 +124,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
-  if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFF, output_index < output_size); }
+  if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
     // thrust::prev isn't in CUDA 10.0, so subtracting 1 here instead

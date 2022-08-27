@@ -902,19 +902,21 @@ def list_row_gen(
     """
     Generate a single row for a List<List<>> column based on input parameters.
 
-    Args:
-        gen: A callable which generates an individual leaf element based on an
-            absolute index.
-        first_val : Generate the column as if it had started at 'first_val'
-            instead of 0.
-        list_size : Size of each generated list.
-        lists_per_row : Number of lists to generate per row.
-        include_validity : Whether or not to include nulls as part of the
-            column. If true, it will add a selection of nulls at both the
-            topmost row level and at the leaf level.
+    Parameters
+    ----------
+    gen : A callable which generates an individual leaf element based on an
+        absolute index.
+    first_val : Generate the column as if it had started at 'first_val'
+        instead of 0.
+    list_size : Size of each generated list.
+    lists_per_row : Number of lists to generate per row.
+    include_validity : Whether or not to include nulls as part of the
+        column. If true, it will add a selection of nulls at both the
+        topmost row level and at the leaf level.
 
-    Returns:
-        The generated list column.
+    Returns
+    -------
+    The generated list column.
     """
 
     def L(list_size, first_val):
@@ -937,18 +939,20 @@ def list_gen(gen, num_rows, lists_per_row, list_size, include_validity=False):
     """
     Generate a list column based on input parameters.
 
-    Args:
-        gen: A callable which generates an individual leaf element based on an
-            absolute index.
-        num_rows : Number of rows to generate.
-        lists_per_row : Number of lists to generate per row.
-        list_size : Size of each generated list.
-        include_validity : Whether or not to include nulls as part of the
-            column. If true, it will add a selection of nulls at both the
-            topmost row level and at the leaf level.
+    Parameters
+    ----------
+    gen : A callable which generates an individual leaf element based on an
+        absolute index.
+    num_rows : Number of rows to generate.
+    lists_per_row : Number of lists to generate per row.
+    list_size : Size of each generated list.
+    include_validity : Whether or not to include nulls as part of the
+        column. If true, it will add a selection of nulls at both the
+        topmost row level and at the leaf level.
 
-    Returns:
-        The generated list column.
+    Returns
+    -------
+    The generated list column.
     """
 
     def L(list_size, first_val):
@@ -1076,19 +1080,21 @@ def struct_gen(gen, skip_rows, num_rows, include_validity=False):
     """
     Generate a struct column based on input parameters.
 
-    Args:
-        gen: A array of callables which generate an individual row based on an
-            absolute index.
-        skip_rows : Generate the column as if it had started at 'skip_rows'
-            instead of 0. The intent here is to emulate the skip_rows
-            parameter of the parquet reader.
-        num_fields : Number of fields in the struct.
-        include_validity : Whether or not to include nulls as part of the
-            column. If true, it will add a selection of nulls at both the
-            field level and at the value level.
+    Parameters
+    ----------
+    gen : A array of callables which generate an individual row based on an
+        absolute index.
+    skip_rows : Generate the column as if it had started at 'skip_rows'
+        instead of 0. The intent here is to emulate the skip_rows
+        parameter of the parquet reader.
+    num_fields : Number of fields in the struct.
+    include_validity : Whether or not to include nulls as part of the
+        column. If true, it will add a selection of nulls at both the
+        field level and at the value level.
 
-    Returns:
-        The generated struct column.
+    Returns
+    -------
+    The generated struct column.
     """
 
     def R(first_val, num_fields):
@@ -1556,6 +1562,37 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
         )
 
     assert_eq(cudf.read_parquet(fname), gdf)
+
+
+@pytest.mark.parametrize(
+    "max_page_size_kwargs",
+    [
+        {"max_page_size_bytes": 4 * 1024},
+        {"max_page_size_rows": 5000},
+    ],
+)
+def test_parquet_writer_max_page_size(tmpdir, max_page_size_kwargs):
+    # Check that max_page_size options are exposed in Python
+    # Since we don't have access to page metadata, instead check that
+    # file written with more pages will be slightly larger
+
+    size = 20000
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
+
+    fname = tmpdir.join("gdf.parquet")
+    with ParquetWriter(fname, **max_page_size_kwargs) as writer:
+        writer.write_table(gdf)
+    s1 = os.path.getsize(fname)
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+
+    fname = tmpdir.join("gdf0.parquet")
+    with ParquetWriter(fname) as writer:
+        writer.write_table(gdf)
+    s2 = os.path.getsize(fname)
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+    assert s1 > s2
 
 
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])

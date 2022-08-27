@@ -135,7 +135,6 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         inplace : bool, default False
             Whether or not to add the categories inplace
             or return a copy of this categorical with
@@ -192,7 +191,6 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         inplace : bool, default False
             Whether or not to set the ordered attribute
             in-place or return a copy of this
@@ -266,10 +264,8 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         new_categories : category or list-like of category
             The new categories to be included.
-
         inplace : bool, default False
             Whether or not to add the categories inplace
             or return a copy of this categorical with
@@ -353,10 +349,8 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         removals : category or list-like of category
             The categories which should be removed.
-
         inplace : bool, default False
             Whether or not to remove the categories
             inplace or return a copy of this categorical
@@ -461,20 +455,16 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         new_categories : list-like
             The categories in new order.
-
         ordered : bool, default None
             Whether or not the categorical is treated as
             a ordered categorical. If not given, do
             not change the ordered information.
-
         rename : bool, default False
             Whether or not the `new_categories` should be
             considered as a rename of the old categories
             or as reordered categories.
-
         inplace : bool, default False
             Whether or not to reorder the categories in-place
             or return a copy of this categorical with
@@ -540,21 +530,16 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         new_categories : Index-like
             The categories in new order.
-
         ordered : bool, optional
             Whether or not the categorical is treated
             as a ordered categorical. If not given, do
             not change the ordered information.
-
-
         inplace : bool, default False
             Whether or not to reorder the categories
             inplace or return a copy of this categorical
             with reordered categories.
-
 
         Returns
         -------
@@ -1585,7 +1570,6 @@ def _create_empty_categorical_column(
 def pandas_categorical_as_column(
     categorical: ColumnLike, codes: ColumnLike = None
 ) -> CategoricalColumn:
-
     """Creates a CategoricalColumn from a pandas.Categorical
 
     If ``codes`` is defined, use it instead of ``categorical.codes``
