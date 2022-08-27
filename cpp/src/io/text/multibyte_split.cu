@@ -141,7 +141,7 @@ struct PatternScan {
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-// This struct provides output offsets that are only incremented past a cutoff point.
+// This struct provides output offsets that are only incremented until a cutoff point.
 struct cutoff_offset {
   // magnitude stores the offset, sign bit stores whether we are past the cutoff
   int64_t value;
