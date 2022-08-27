@@ -110,12 +110,15 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 
         // Whether in the original JSON this was a string value enclosed in quotes
         // ({"a":"foo"} vs. {"a":1.23})
-        char const quote_char = options.quotechar;
+        char const quote_char = '"';
         bool const is_string_value =
           in.second >= 2 && (*in.first == quote_char) && (in.first[in.second - 1] == quote_char);
 
         // Handling non-string values
-        if (not is_string_value) { sizes[row] = in.second; }
+        if (not is_string_value) {
+          sizes[row] = in.second;
+          return;
+        }
 
         // Strip off quote chars
         decltype(in.second) out_size = 0;
@@ -151,21 +154,22 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
               if (i + NUM_UNICODE_ESC_HEX_DIGITS < end_index) {
                 auto hex_val = string_to_hex(&in.first[i + NEXT_CHAR]);
                 if (hex_val < 0) {
-                  // TODO signal parsing error: not all 4 hex digits
-                  continue;
+                  sizes[row] = 0;
+                  clear_bit(null_mask, row);
+                  return;
                 }
                 // Skip over the four hex digits
                 i += NUM_UNICODE_ESC_HEX_DIGITS;
 
                 // If this may be a UTF-16 encoded surrogate pair:
                 // we expect another \uXXXX sequence
-                if (hex_val >= 0xD800 && i + NUM_UNICODE_ESC_SEQ_CHARS < end_index &&
-                    in.first[i + NEXT_CHAR] == '\\' && in.first[i + NEXT_NEXT_CHAR] == 'u') {
-                  auto hex_low_val = string_to_hex(&in.first[i + 3]);
-                  if (hex_val < 0xD800 || hex_low_val < 0xDC00) {
-                    // TODO signal parsing error: not all 4 hex digits
-                    continue;
-                  }
+                int64_t hex_low_val = 0;
+                if (i + NUM_UNICODE_ESC_SEQ_CHARS < end_index && in.first[i + NEXT_CHAR] == '\\' &&
+                    in.first[i + NEXT_NEXT_CHAR] == 'u') {
+                  hex_low_val = string_to_hex(&in.first[i + 3]);
+                }
+                // This is indeed a surrogate pair
+                if (hex_val >= 0xD800 && hex_low_val >= 0xDC00) {
                   // Skip over the second \uXXXX sequence
                   i += NUM_UNICODE_ESC_SEQ_CHARS;
                   uint32_t unicode_code_point =
@@ -179,10 +183,14 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                   out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
                 }
               } else {
-                // TODO signal parsing error: expected 4 hex digits
+                sizes[row] = 0;
+                clear_bit(null_mask, row);
+                return;
               }
             } else if (escaped_char == NON_ESCAPE_CHAR) {
-              // TODO signal parsing error: this char does not need to be escape
+              sizes[row] = 0;
+              clear_bit(null_mask, row);
+              return;
             } else {
               out_size++;
             }
@@ -192,8 +200,9 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
           }
         }
         if (escape) {
-          // TODO signal parsing error: last char was escape, not followed by
-          // anything to escape
+          sizes[row] = 0;
+          clear_bit(null_mask, row);
+          return;
         }
         sizes[row] = out_size;
       });
@@ -216,16 +225,17 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 
         // Whether in the original JSON this was a string value enclosed in quotes
         // ({"a":"foo"} vs. {"a":1.23})
-        char const quote_char = options.quotechar;
+        char const quote_char = '"';
         bool const is_string_value =
           in.second >= 2 && (*in.first == quote_char) && (in.first[in.second - 1] == quote_char);
 
         // Copy literal/numeric value
-        if (!is_string_value) {
+        if (not is_string_value) {
           for (int i = 0, j = 0; i < in.second; ++i) {
             chars[offsets[row] + j] = *(in.first + i);
             j++;
           }
+          return;
         }
 
         // Escape-flag, set after encountering an escape character
@@ -259,22 +269,19 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
               //  input, which are expected to be hex digits
               if (i + NUM_UNICODE_ESC_HEX_DIGITS < end_index) {
                 auto hex_val = string_to_hex(&in.first[i + NEXT_CHAR]);
-                if (hex_val < 0) {
-                  // TODO signal parsing error: not all 4 hex digits
-                  continue;
-                }
+                if (hex_val < 0) { return; }
                 // Skip over the four hex digits
                 i += NUM_UNICODE_ESC_HEX_DIGITS;
 
                 // If this may be a UTF-16 encoded surrogate pair:
                 // we expect another \uXXXX sequence
-                if (hex_val >= 0xD800 && i + NUM_UNICODE_ESC_SEQ_CHARS < end_index &&
-                    in.first[i + NEXT_CHAR] == '\\' && in.first[i + NEXT_NEXT_CHAR] == 'u') {
-                  auto hex_low_val = string_to_hex(&in.first[i + 3]);
-                  if (hex_val < 0xD800 || hex_low_val < 0xDC00) {
-                    // TODO signal parsing error: not all 4 hex digits
-                    continue;
-                  }
+                int64_t hex_low_val = 0;
+                if (i + NUM_UNICODE_ESC_SEQ_CHARS < end_index && in.first[i + NEXT_CHAR] == '\\' &&
+                    in.first[i + NEXT_NEXT_CHAR] == 'u') {
+                  hex_low_val = string_to_hex(&in.first[i + 3]);
+                }
+                // This is indeed a surrogate pair
+                if (hex_val >= 0xD800 && hex_low_val >= 0xDC00) {
                   // Skip over the second \uXXXX sequence
                   i += NUM_UNICODE_ESC_SEQ_CHARS;
                   uint32_t unicode_code_point =
@@ -288,10 +295,10 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                   j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
                 }
               } else {
-                // TODO signal parsing error: expected 4 hex digits
+                return;
               }
             } else if (escaped_char == NON_ESCAPE_CHAR) {
-              // TODO signal parsing error: this char does not need to be escape
+              return;
             } else {
               chars[offsets[row] + j] = escaped_char;
               j++;
@@ -304,10 +311,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
             }
           }
         }
-        if (escape) {
-          // TODO signal parsing error: last char was escape, not followed by
-          // anything to escape
-        }
+        if (escape) { return; }
       });
 
     return make_strings_column(
