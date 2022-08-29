@@ -415,13 +415,12 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
     if isinstance(element_col, cudf.core.column.StructColumn):
         struct_table_view = table_view_from_columns([element_col])
         columns = columns_from_table_view(struct_table_view, None)
-        arrow_table = to_arrow(list(element_col.children), dtype.element_type)
-        result = arrow_table.to_pylist()
-        return _nested_na_replace(result)
+        arrow_obj = to_arrow(list(element_col.children), dtype.element_type)
     else:
-        arrow_table = to_arrow([element_col], element_col.dtype)
-        result = arrow_table['None'].to_pylist()
-        return _nested_na_replace(result)
+        arrow_obj = to_arrow([element_col], element_col.dtype)['None']
+
+    result = arrow_obj.to_pylist()
+    return _nested_na_replace(result)
 
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
