@@ -345,9 +345,9 @@ class output_builder {
     _chunks.back().reserve(max_write_size * 2, stream);
   }
 
-  output_builder(output_builder&&)                 = delete;
-  output_builder(const output_builder&)            = delete;
-  output_builder& operator=(output_builder&&)      = delete;
+  output_builder(output_builder&&)      = delete;
+  output_builder(const output_builder&) = delete;
+  output_builder& operator=(output_builder&&) = delete;
   output_builder& operator=(const output_builder&) = delete;
 
   /**
