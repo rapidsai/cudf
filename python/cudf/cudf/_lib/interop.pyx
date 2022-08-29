@@ -109,7 +109,8 @@ cdef vector[column_metadata] gather_metadata(object dtype) except *:
     else:
         raise TypeError(
             "Requires dtype to be passed to "
-            "construct column_metadata")
+            "construct column_metadata"
+        )
     return cpp_metadata
 
 cdef _set_col_children_metadata(dtype,
