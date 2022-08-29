@@ -551,7 +551,7 @@ struct check_datetime_format {
           break;
         }
         case 'S': {
-          auto const cv = check_value(ptr, item.length, 0, 60);
+          auto const cv = check_value(ptr, item.length, 0, 59);  // leap seconds not supported
           result        = cv.first;
           bytes_read -= cv.second;
           break;
