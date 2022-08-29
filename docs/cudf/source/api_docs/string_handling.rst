@@ -55,6 +55,7 @@ strings and apply several methods to it. These can be accessed like
    istitle
    join
    len
+   like
    ljust
    lower
    lstrip

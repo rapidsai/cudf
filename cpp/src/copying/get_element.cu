@@ -19,6 +19,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/is_element_valid.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/copying.hpp>
@@ -208,6 +209,7 @@ std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::get_element(input, index, cudf::default_stream_value, mr);
 }
 

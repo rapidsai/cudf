@@ -218,7 +218,7 @@ def compile_udf(udf, type_signature):
     compiled at runtime and launched.
 
     Parameters
-    --------
+    ----------
     udf:
       a python callable function
 

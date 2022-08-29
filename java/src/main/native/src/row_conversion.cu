@@ -1272,7 +1272,7 @@ static std::unique_ptr<column> fixed_width_convert_to_rows(
       input_data.data(), input_nm.data(), data->mutable_view().data<int8_t>());
 
   return make_lists_column(num_rows, std::move(offsets), std::move(data), 0,
-                           rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
+                           rmm::device_buffer{0, stream, mr}, stream, mr);
 }
 
 static inline bool are_all_fixed_width(std::vector<data_type> const &schema) {
