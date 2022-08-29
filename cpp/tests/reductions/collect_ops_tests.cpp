@@ -196,15 +196,19 @@ TEST_F(CollectTest, CollectSetWithNaN)
   // nan unequal with null equal
   fp_wrapper expected1{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f},
                        {1, 1, 1, 1, 1, 1, 1, 0}};
-  auto const ret1 = collect_set(col, make_collect_set_aggregation<reduce_aggregation>());
+  auto const ret1 =
+    collect_set(col,
+                make_collect_set_aggregation<reduce_aggregation>(
+                  null_policy::INCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, dynamic_cast<list_scalar*>(ret1.get())->view());
 
   // nan unequal with null unequal
   fp_wrapper expected2{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
                        {1, 1, 1, 1, 1, 1, 1, 0, 0}};
-  auto const ret2 = collect_set(
-    col,
-    make_collect_set_aggregation<reduce_aggregation>(null_policy::INCLUDE, null_equality::UNEQUAL));
+  auto const ret2 =
+    collect_set(col,
+                make_collect_set_aggregation<reduce_aggregation>(
+                  null_policy::INCLUDE, null_equality::UNEQUAL, nan_equality::UNEQUAL));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, dynamic_cast<list_scalar*>(ret2.get())->view());
 
   // nan equal with null equal
