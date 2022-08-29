@@ -842,6 +842,12 @@ def test_memory_usage():
                 {"f1": "sf12", "f2": None},
             ],
         ),
+        (
+            [[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]],
+            0,
+            [[[1, 2]], [[2], [3]]],
+        ),
+        ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2, [[[3]]]),
     ],
 )
 def test_nested_list_extract_host_scalars(data, idx, expected):
