@@ -46,22 +46,29 @@ void BM_orc_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(sink_type);
+  std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::io::orc_writer_options options =
-      cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
-    cudf::io::write_orc(options);
-  });
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               cuio_source_sink_pair source_sink(sink_type);
+
+               timer.start();
+               cudf::io::orc_writer_options options =
+                 cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
+                   .compression(compression);
+               cudf::io::write_orc(options);
+               timer.stop();
+
+               encoded_file_size = source_sink.size();
+             });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
-  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
 template <cudf::io::io_type IO, cudf::io::compression_type Compression>
@@ -71,7 +78,7 @@ void BM_orc_write_io_compression(
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
                                          static_cast<int32_t>(data_type::TIMESTAMP),
@@ -90,22 +97,29 @@ void BM_orc_write_io_compression(
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(sink_type);
+  std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::io::orc_writer_options options =
-      cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
-    cudf::io::write_orc(options);
-  });
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               cuio_source_sink_pair source_sink(sink_type);
+
+               timer.start();
+               cudf::io::orc_writer_options options =
+                 cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
+                   .compression(compression);
+               cudf::io::write_orc(options);
+               timer.stop();
+
+               encoded_file_size = source_sink.size();
+             });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
-  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
 template <cudf::io::statistics_freq Statistics, cudf::io::compression_type Compression>
@@ -115,7 +129,7 @@ void BM_orc_write_statistics(
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
                                          static_cast<int32_t>(data_type::TIMESTAMP),
@@ -128,26 +142,33 @@ void BM_orc_write_statistics(
   auto const tbl  = create_random_table(d_type, table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(io_type::FILEPATH);
+  std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    cudf::io::orc_writer_options const options =
-      cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression)
-        .enable_statistics(stats_freq);
-    cudf::io::write_orc(options);
-  });
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               cuio_source_sink_pair source_sink(io_type::FILEPATH);
+
+               timer.start();
+               cudf::io::orc_writer_options const options =
+                 cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
+                   .compression(compression)
+                   .enable_statistics(stats_freq);
+               cudf::io::write_orc(options);
+               timer.stop();
+
+               encoded_file_size = source_sink.size();
+             });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
-  state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
+using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
                                             data_type::FLOAT,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,

@@ -84,7 +84,7 @@ void BM_orc_read_io_compression(
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
                                          static_cast<int32_t>(data_type::TIMESTAMP),
@@ -109,7 +109,7 @@ void BM_orc_read_io_compression(
   orc_read_common(opts, source_sink, state);
 }
 
-using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
+using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
                                             data_type::FLOAT,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,
