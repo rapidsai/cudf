@@ -978,7 +978,7 @@ __device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
 
   if (src_size >= 18) {
     uint32_t sig = (src[0] << 16) | (src[1] << 8) | src[2];
-    if (sig == 0x1f8b08)  // 24-bit GZIP inflate signature {0x1f, 0x8b, 0x08}
+    if (sig == 0x1f'8b08)  // 24-bit GZIP inflate signature {0x1f, 0x8b, 0x08}
     {
       uint8_t flags = src[3];
       hdr_len       = 10;

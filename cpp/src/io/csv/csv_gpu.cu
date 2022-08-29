@@ -895,7 +895,7 @@ __global__ void __launch_bounds__(rowofs_block_dim)
   // Eliminate rows that start before byte_range_start
   if (start_offset + block_pos < byte_range_start) {
     uint32_t dist_minus1 = min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
-    uint32_t mask        = 0xfffffffe << dist_minus1;
+    uint32_t mask        = 0xffff'fffe << dist_minus1;
     ctx_map.x &= mask;
     ctx_map.y &= mask;
     ctx_map.z &= mask;

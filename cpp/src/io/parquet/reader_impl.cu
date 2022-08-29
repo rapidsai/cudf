@@ -39,6 +39,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
@@ -57,10 +58,6 @@ namespace parquet {
 // Import functionality that's independent of legacy code
 using namespace cudf::io::parquet;
 using namespace cudf::io;
-
-// bit space we are reserving in column_buffer::user_data
-constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
-constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 
 namespace {
 
@@ -543,15 +540,14 @@ class aggregate_reader_metadata {
    * @brief Filters and reduces down to a selection of row groups
    *
    * @param row_groups Lists of row groups to read, one per source
-   * @param row_start Starting row of the selection
-   * @param row_count Total number of rows selected
    *
-   * @return List of row group indexes and its starting row
+   * @return List of row group info structs and the total number of rows
    */
-  [[nodiscard]] auto select_row_groups(std::vector<std::vector<size_type>> const& row_groups,
-                                       size_type& row_start,
-                                       size_type& row_count) const
+  [[nodiscard]] std::pair<std::vector<row_group_info>, size_type> select_row_groups(
+    std::vector<std::vector<size_type>> const& row_groups) const
   {
+    size_type row_count = 0;
+
     if (!row_groups.empty()) {
       std::vector<row_group_info> selection;
       CUDF_EXPECTS(row_groups.size() == per_file_metadata.size(),
@@ -568,17 +564,12 @@ class aggregate_reader_metadata {
           row_count += get_row_group(rowgroup_idx, src_idx).num_rows;
         }
       }
-      return selection;
+      return {selection, row_count};
     }
 
-    row_start = std::max(row_start, 0);
-    if (row_count < 0) {
-      row_count = static_cast<size_type>(
-        std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
-    }
-    row_count = min(row_count, get_num_rows() - row_start);
+    row_count = static_cast<size_type>(
+      std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
     CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-    CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
     std::vector<row_group_info> selection;
     size_type count = 0;
@@ -586,14 +577,12 @@ class aggregate_reader_metadata {
       for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
         auto const chunk_start_row = count;
         count += get_row_group(rg_idx, src_idx).num_rows;
-        if (count > row_start || count == 0) {
-          selection.emplace_back(rg_idx, chunk_start_row, src_idx);
-        }
-        if (count >= row_start + row_count) { break; }
+        selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+        if (count >= row_count) { break; }
       }
     }
 
-    return selection;
+    return {selection, row_count};
   }
 
   /**
@@ -630,10 +619,11 @@ class aggregate_reader_metadata {
     // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
     // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
     // not a child of "struct1" then the function will return false for "struct1"
-    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&)> build_column =
-      [&](column_name_info const* col_name_info,
-          int schema_idx,
-          std::vector<column_buffer>& out_col_array) {
+    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&, bool)>
+      build_column = [&](column_name_info const* col_name_info,
+                         int schema_idx,
+                         std::vector<column_buffer>& out_col_array,
+                         bool has_list_parent) {
         if (schema_idx < 0) { return false; }
         auto const& schema_elem = get_schema(schema_idx);
 
@@ -643,7 +633,8 @@ class aggregate_reader_metadata {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-          return build_column(child_col_name_info, schema_elem.children_idx[0], out_col_array);
+          return build_column(
+            child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
         }
 
         // if we're at the root, this is a new output column
@@ -654,6 +645,7 @@ class aggregate_reader_metadata {
         auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+        if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
         // store the index of this element if inserted in out_col_array
         nesting.push_back(static_cast<int>(out_col_array.size()));
         output_col.name = schema_elem.name;
@@ -664,15 +656,18 @@ class aggregate_reader_metadata {
           // add all children of schema_elem.
           // At this point, we can no longer pass a col_name_info to build_column
           for (int idx = 0; idx < schema_elem.num_children; idx++) {
-            path_is_valid |=
-              build_column(nullptr, schema_elem.children_idx[idx], output_col.children);
+            path_is_valid |= build_column(nullptr,
+                                          schema_elem.children_idx[idx],
+                                          output_col.children,
+                                          has_list_parent || col_type == type_id::LIST);
           }
         } else {
           for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
             path_is_valid |=
               build_column(&col_name_info->children[idx],
                            find_schema_child(schema_elem, col_name_info->children[idx].name),
-                           output_col.children);
+                           output_col.children,
+                           has_list_parent || col_type == type_id::LIST);
           }
         }
 
@@ -690,6 +685,9 @@ class aggregate_reader_metadata {
             auto const element_dtype = to_data_type(element_type, schema_elem);
 
             column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            if (has_list_parent || col_type == type_id::LIST) {
+              element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
+            }
             // store the index of this element
             nesting.push_back(static_cast<int>(output_col.children.size()));
             // TODO: not sure if we should assign a name or leave it blank
@@ -736,7 +734,7 @@ class aggregate_reader_metadata {
     auto const& root = get_schema(0);
     if (not use_names.has_value()) {
       for (auto const& schema_idx : root.children_idx) {
-        build_column(nullptr, schema_idx, output_columns);
+        build_column(nullptr, schema_idx, output_columns, false);
         output_column_schemas.push_back(schema_idx);
       }
     } else {
@@ -840,7 +838,7 @@ class aggregate_reader_metadata {
       }
       for (auto& col : selected_columns) {
         auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
-        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns);
+        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
         if (valid_column) output_column_schemas.push_back(top_level_col_schema_idx);
       }
     }
@@ -1344,9 +1342,7 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
  */
 void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                       hostdevice_vector<gpu::PageInfo>& pages,
-                                      size_t min_row,
-                                      size_t total_rows,
-                                      bool uses_custom_row_bounds,
+                                      size_t num_rows,
                                       bool has_lists)
 {
   // TODO : we should be selectively preprocessing only columns that have
@@ -1359,22 +1355,15 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
       [&](std::vector<column_buffer>& cols) {
         for (size_t idx = 0; idx < cols.size(); idx++) {
           auto& col = cols[idx];
-          col.create(total_rows, _stream, _mr);
+          col.create(num_rows, _stream, _mr);
           create_columns(col.children);
         }
       };
     create_columns(_output_columns);
   } else {
     // preprocess per-nesting level sizes by page
-    gpu::PreprocessColumnData(pages,
-                              chunks,
-                              _input_columns,
-                              _output_columns,
-                              total_rows,
-                              min_row,
-                              uses_custom_row_bounds,
-                              _stream,
-                              _mr);
+    gpu::PreprocessColumnData(
+      pages, chunks, _input_columns, _output_columns, num_rows, _stream, _mr);
     _stream.synchronize();
   }
 }
@@ -1385,7 +1374,6 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                                    size_t min_row,
                                     size_t total_rows)
 {
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
@@ -1507,7 +1495,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
     gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), _stream);
   }
 
-  gpu::DecodePageData(pages, chunks, total_rows, min_row, _stream);
+  gpu::DecodePageData(pages, chunks, total_rows, _stream);
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
   _stream.synchronize();
@@ -1588,6 +1576,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
+  // Binary columns can be read as binary or strings
+  _reader_column_schema = options.get_column_schema();
+
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),
@@ -1596,14 +1587,10 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
-table_with_metadata reader::impl::read(size_type skip_rows,
-                                       size_type num_rows,
-                                       bool uses_custom_row_bounds,
-                                       std::vector<std::vector<size_type>> const& row_group_list)
+table_with_metadata reader::impl::read(std::vector<std::vector<size_type>> const& row_group_list)
 {
   // Select only row groups required
-  const auto selected_row_groups =
-    _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
+  const auto [selected_row_groups, num_rows] = _metadata->select_row_groups(row_group_list);
 
   table_metadata out_metadata;
 
@@ -1752,15 +1739,20 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, has_lists);
+      preprocess_columns(chunks, pages, num_rows, has_lists);
 
       // decoding of column data itself
-      decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
+      decode_page_data(chunks, pages, page_nesting_info, num_rows);
 
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        out_columns.emplace_back(make_column(_output_columns[i], &col_name, _stream, _mr));
+        auto const metadata =
+          _reader_column_schema.has_value()
+            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+            : std::nullopt;
+        out_columns.emplace_back(
+          make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
       }
     }
   }
@@ -1801,12 +1793,7 @@ reader::~reader() = default;
 // Forward to implementation
 table_with_metadata reader::read(parquet_reader_options const& options)
 {
-  // if the user has specified custom row bounds
-  bool const uses_custom_row_bounds = options.get_num_rows() >= 0 || options.get_skip_rows() != 0;
-  return _impl->read(options.get_skip_rows(),
-                     options.get_num_rows(),
-                     uses_custom_row_bounds,
-                     options.get_row_groups());
+  return _impl->read(options.get_row_groups());
 }
 
 }  // namespace parquet

@@ -153,6 +153,13 @@ These pages do not conform to any specific style or set of use cases.
 However, if you develop any sufficiently complex new features,
 consider whether users would benefit from a more complete demonstration of them.
 
+```{note}
+We encourage using links between pages.
+We enable [Myst auto-generated anchors](https://myst-parser.readthedocs.io/en/latest/syntax/optional.html#auto-generated-header-anchors),
+so links should make use of the appropriately namespaced anchors for links rather than adding manual links.
+
+```
+
 ## Building documentation
 
 ### Requirements

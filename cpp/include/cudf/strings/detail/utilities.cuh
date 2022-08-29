@@ -203,7 +203,7 @@ class per_context_cache {
     CUDF_EXPECTS(cuda_lib != nullptr, "Failed to load cuda library");
     context_get_current =
       reinterpret_cast<decltype(context_get_current)>(dlsym(cuda_lib, "cuCtxGetCurrent"));
-    CUDF_EXPECTS(context_get_current != nullptr, "could not find cuFile cuFileDriverOpen symbol");
+    CUDF_EXPECTS(context_get_current != nullptr, "could not find cuCtxGetCurrent symbol");
 
     CUcontext c;
     context_get_current(&c);

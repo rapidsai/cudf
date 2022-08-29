@@ -31,15 +31,14 @@ template <typename type>
 static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const dtype = cudf::type_to_id<type>();
-  auto const table = create_random_table({dtype}, row_count{n_rows});
-  if (!include_nulls) table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
-  cudf::column_view input(table->view().column(0));
+  auto const dtype  = cudf::type_to_id<type>();
+  auto const column = create_random_column(dtype, row_count{n_rows});
+  if (!include_nulls) column->set_null_mask(rmm::device_buffer{}, 0);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto result = cudf::scan(
-      input, cudf::make_min_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+      *column, cudf::make_min_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
   }
 }
 

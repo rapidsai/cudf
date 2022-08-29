@@ -22,7 +22,6 @@ target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
 function(jit_preprocess_files)
   cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
 
-  get_target_property(libcudacxx_raw_includes libcudacxx::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
   foreach(inc IN LISTS libcudacxx_raw_includes)
     list(APPEND libcudacxx_includes "-I${inc}")
   endforeach()
@@ -30,6 +29,9 @@ function(jit_preprocess_files)
     set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
     get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY)
     list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
+
+    # Note: need to pass _FILE_OFFSET_BITS=64 in COMMAND due to a limitation in how conda builds
+    # glibc
     add_custom_command(
       OUTPUT ${ARG_OUTPUT}
       DEPENDS jitify_preprocess "${ARG_SOURCE_DIRECTORY}/${ARG_FILE}"
