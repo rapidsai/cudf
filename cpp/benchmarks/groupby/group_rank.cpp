@@ -29,7 +29,6 @@ static void nvbench_groupby_rank(nvbench::state& state,
                                  nvbench::type_list<nvbench::enum_type<method>>)
 {
   using namespace cudf;
-  using type           = int64_t;
   constexpr auto dtype = type_to_id<int64_t>();
   cudf::rmm_pool_raii pool_raii;
 
@@ -37,10 +36,8 @@ static void nvbench_groupby_rank(nvbench::state& state,
   cudf::size_type const column_size = state.get_int64("data_size");
   constexpr int num_groups          = 100;
 
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<type>(dtype, distribution_id::UNIFORM, 0, num_groups);
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    dtype, distribution_id::UNIFORM, 0, num_groups);
 
   auto source_table = create_random_table({dtype, dtype}, row_count{column_size}, profile);
 

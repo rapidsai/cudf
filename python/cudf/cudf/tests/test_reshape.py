@@ -409,6 +409,33 @@ def test_pivot_multi_values():
 
 
 @pytest.mark.parametrize(
+    "values", ["z", "z123", ["z123"], ["z", "z123", "123z"]]
+)
+def test_pivot_values(values):
+    data = [
+        ["A", "a", 0, 0, 0],
+        ["A", "b", 1, 1, 1],
+        ["A", "c", 2, 2, 2],
+        ["B", "a", 0, 0, 0],
+        ["B", "b", 1, 1, 1],
+        ["B", "c", 2, 2, 2],
+        ["C", "a", 0, 0, 0],
+        ["C", "b", 1, 1, 1],
+        ["C", "c", 2, 2, 2],
+    ]
+    columns = ["x", "y", "z", "z123", "123z"]
+    pdf = pd.DataFrame(data, columns=columns)
+    cdf = cudf.DataFrame(data, columns=columns)
+    expected = pd.pivot(pdf, index="x", columns="y", values=values)
+    actual = cudf.pivot(cdf, index="x", columns="y", values=values)
+    assert_eq(
+        expected,
+        actual,
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
     "level",
     [
         0,
@@ -529,3 +556,95 @@ def test_pivot_duplicate_error():
         gdf.pivot(index="a", columns="b")
     with pytest.raises(ValueError):
         gdf.pivot(index="b", columns="a")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "A": ["one", "one", "two", "three"] * 6,
+            "B": ["A", "B", "C"] * 8,
+            "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+            "D": np.random.randn(24),
+            "E": np.random.randn(24),
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
+@pytest.mark.parametrize("fill_value", [0])
+def test_pivot_table_simple(data, aggfunc, fill_value):
+    pdf = pd.DataFrame(data)
+    expected = pd.pivot_table(
+        pdf,
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    cdf = cudf.DataFrame(data)
+    actual = cudf.pivot_table(
+        cdf,
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    assert_eq(expected, actual, check_dtype=False)
+
+
+def test_crosstab_simple():
+    a = np.array(
+        [
+            "foo",
+            "foo",
+            "foo",
+            "foo",
+            "bar",
+            "bar",
+            "bar",
+            "bar",
+            "foo",
+            "foo",
+            "foo",
+        ],
+        dtype=object,
+    )
+    b = np.array(
+        [
+            "one",
+            "one",
+            "one",
+            "two",
+            "one",
+            "one",
+            "one",
+            "two",
+            "two",
+            "two",
+            "one",
+        ],
+        dtype=object,
+    )
+    c = np.array(
+        [
+            "dull",
+            "dull",
+            "shiny",
+            "dull",
+            "dull",
+            "shiny",
+            "shiny",
+            "dull",
+            "shiny",
+            "shiny",
+            "shiny",
+        ],
+        dtype=object,
+    )
+    expected = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
+    actual = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
+    assert_eq(expected, actual, check_dtype=False)
