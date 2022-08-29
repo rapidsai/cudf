@@ -177,7 +177,7 @@ and produce `unique_ptr`s to owning objects as output. For example,
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## `rmm::device_memory_resource`
+## rmm::device_memory_resource
 
 libcudf allocates all device memory via RMM memory resources (MR). See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
@@ -189,7 +189,7 @@ RMM provides a "default" memory resource for each device that can be accessed an
 respectively. All memory resource parameters should be defaulted to use the return value of
 `rmm::mr::get_current_device_resource()`.
 
-## `cudf::column`
+## cudf::column
 
 `cudf::column` is a core owning data structure in libcudf. Most libcudf public APIs produce either
 a `cudf::column` or a `cudf::table` as output. A `column` contains `device_buffer`s which own the
@@ -214,7 +214,7 @@ column_view v = moved_to; // Implicit conversion to non-owning column_view
 A `column` may have nested (child) columns, depending on the data type of the column. For example,
 `LIST`, `STRUCT`, and `STRING` type columns.
 
-### `cudf::column_view`
+### cudf::column_view
 
 `cudf::column_view` is a core non-owning data structure in libcudf. It is an immutable,
 non-owning view of device memory as a column. Most libcudf public APIs take views as inputs.
@@ -225,24 +225,24 @@ the view would return the element at index `75` of the owning `column`. Internal
 implemented by storing in the view a pointer, an offset, and a size. `column_view::data<T>()`
 returns a pointer iterator to `column_view::head<T>() + offset`.
 
-### `cudf::mutable_column_view`
+### cudf::mutable_column_view
 
 A *mutable*, non-owning view of device memory as a column. Used for detail APIs and (rare) public
 APIs that modify columns in place.
 
-### `cudf::column_device_view`
+### cudf::column_device_view
 
 An immutable, non-owning view of device data as a column of elements that is trivially copyable and
 usable in CUDA device code. Used to pass `column_view` data as input to CUDA kernels and device
 functions (including Thrust algorithms)
 
-### `cudf::mutable_column_device_view`
+### cudf::mutable_column_device_view
 
 A mutable, non-owning view of device data as a column of elements that is trivially copyable and
 usable in CUDA device code. Used to pass `column_view` data to be modified on the device by CUDA
 kernels and device functions (including Thrust algorithms).
 
-## `cudf::table`
+## cudf::table
 
 Owning class for a set of `cudf::column`s all with equal number of elements. This is the C++
 equivalent to a data frame.
@@ -252,11 +252,11 @@ Implicitly convertible to `cudf::table_view` and `cudf::mutable_table_view`
 Movable and copyable. A copy performs a deep copy of all columns, whereas a move moves all columns
 from one table to another.
 
-### `cudf::table_view`
+### cudf::table_view
 
 An *immutable*, non-owning view of a table.
 
-### `cudf::mutable_table_view`
+### cudf::mutable_table_view
 
 A *mutable*, non-owning view of a table.
 
@@ -284,7 +284,7 @@ template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 ```
 
-## `cudf::scalar`
+## cudf::scalar
 
 A `cudf::scalar` is an object that can represent a singular, nullable value of any of the types
 currently supported by cudf. Each type of value is represented by a separate type of scalar class
@@ -456,7 +456,7 @@ rmm::device_buffer some_function(
 libcudf code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
 use `device_memory_resource`(*)s for device memory allocation with automated lifetime management.
 
-#### `rmm::device_buffer`
+#### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
 `device_memory_resource`. If no resource is explicitly provided, uses
 `rmm::mr::get_current_device_resource()`.
@@ -482,7 +482,7 @@ custom_memory_resource *mr...;
 rmm::device_buffer custom_buff(100, mr, stream);
 ```
 
-#### `rmm::device_scalar<T>`
+#### rmm::device_scalar<T>
 Allocates a single element of the specified type initialized to the specified value. Use this for
 scalar input/outputs into device kernels, e.g., reduction results, null count, etc. This is
 effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
@@ -500,7 +500,7 @@ kernel<<<...>>>(int_scalar.data(),...);
 int host_value = int_scalar.value();
 ```
 
-#### `rmm::device_vector<T>`
+#### rmm::device_vector<T>
 
 Allocates a specified number of elements of the specified type. If no initialization value is
 provided, all elements are default initialized (this incurs a kernel launch).
@@ -512,7 +512,7 @@ utilities enable creation of `uvector`s from host-side vectors, or creating zero
 `uvector`s, so that they are as convenient to use as `device_vector`. Avoiding `device_vector` has
 a number of benefits, as described in the following section on `rmm::device_uvector`.
 
-#### `rmm::device_uvector<T>`
+#### rmm::device_uvector<T>
 
 Similar to a `device_vector`, allocates a contiguous set of elements in device memory but with key
 differences:
@@ -717,7 +717,7 @@ namespace.
 Many functions are not meant for public use, so place them in either the `detail` or an *anonymous*
 namespace, depending on the situation.
 
-#### `detail` namespace
+#### detail namespace
 
 Functions or objects that will be used across *multiple* translation units (i.e., source files),
 should be exposed in an internal header file and placed in the `detail` namespace. Example:
@@ -1143,7 +1143,7 @@ with the corresponding strings from either `destination` or `scatter_values`.
 
 libcudf provides view types for nested column types as well as for the data elements within them.
 
-### `cudf::strings_column_view` and `cudf::string_view`
+### cudf::strings_column_view and cudf::string_view
 
 `cudf::strings_column_view` is a view of a strings column, like `cudf::column_view` is a view of
 any `cudf::column`. `cudf::string_view` is a view of a single string, and therefore
@@ -1187,14 +1187,14 @@ most operations.
 The `string_view.cuh` header also includes some utility methods for reading and writing
 (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
 
-### `cudf::lists_column_view` and `cudf::lists_view`
+### cudf::lists_column_view and cudf::lists_view
 
 `cudf::lists_column_view` is a view of a lists column. `cudf::list_view` is a view of a single list,
 and therefore `cudf::list_view` is the data type of a `cudf::column` of type `LIST`.
 
 `cudf::type_dispatcher` dispatches to the `list_view` data type when invoked on a `LIST` column.
 
-### `cudf::structs_column_view` and `cudf::struct_view`
+### cudf::structs_column_view and cudf::struct_view
 
 `cudf::structs_column_view` is a view of a structs column. `cudf::struct_view` is a view of a single
 struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` of type `STRUCT`.
