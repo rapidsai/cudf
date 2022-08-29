@@ -296,7 +296,7 @@ Do not include the type of the object returned with the `@return` comment.
 ### Inline Examples
 
 It is usually helpful to include a source code example inside your comment block when documenting a function or other declaration.
-Use the [@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and [@endcode](http://www.doxygen.nl/manual/commands.html#cmdendcode) pair to include inline examples.
+Use the [\@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and [\@endcode](http://www.doxygen.nl/manual/commands.html#cmdendcode) pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
 By default, the \@code tag uses syntax highlighting based on the source code in which it is found.

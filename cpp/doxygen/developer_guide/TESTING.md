@@ -62,7 +62,7 @@ files, and are therefore preferred in test code over `thrust::device_vector`.
 All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
 Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture`
 found in `include/cudf_test/base_fixture.hpp`. This ensures that RMM is properly initialized and
-finalized. `cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is
+finalized. `cudf::test::BaseFixture` already inherits from `testing::Test` and therefore it is
 not necessary for your test fixtures to inherit from it.
 
 Example:
@@ -89,7 +89,7 @@ For example:
         using T = TypeParam;
     }
 
-To specify the list of types to use, instead of GTest's `::testing::Types<...>`, libcudf provides `cudf::test::Types<...>` which is a custom, drop-in replacement for `::testing::Types`.
+To specify the list of types to use, instead of GTest's `testing::Types<...>`, libcudf provides `cudf::test::Types<...>` which is a custom, drop-in replacement for `testing::Types`.
 In this example, all tests using the `TypedTestFixture` fixture will run once for each type in the
 list defined in `TestTypes` (`int, float, double`).
 
