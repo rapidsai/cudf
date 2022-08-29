@@ -19,6 +19,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <limits>
 #include <type_traits>
