@@ -224,16 +224,3 @@ class StructMethods(ColumnMethods):
                 }
             )
         )
-
-
-def _rename_nested_struct(result, dtype):
-    import pdb;pdb.set_trace()
-    result_dict = {}
-    for (field, field_dtype), value in zip(
-        dtype.fields.items(), result.values()
-    ):
-        if isinstance(field_dtype, cudf.StructDtype):
-            result_dict[field] = _rename_nested_struct(value, field_dtype)
-        else:
-            result_dict[field] = value
-    return result_dict
