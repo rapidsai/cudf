@@ -1025,7 +1025,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   // Make decision about which chunks have dictionary
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
-    std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() {
+    std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() -> std::pair<bool, uint8_t> {
       // calculate size of chunk if dictionary is used
 
       // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
@@ -1035,13 +1035,13 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       // We don't use dictionary if the indices are > MAX_DICT_BITS bits because that's the maximum
       // bitpacking bitsize we efficiently support
-      if (nbits > MAX_DICT_BITS) { return std::pair(false, 0); }
+      if (nbits > MAX_DICT_BITS) { return {false, 0}; }
 
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
-      if (ck.plain_data_size <= dict_enc_size) { return std::pair(false, 0); }
+      if (ck.plain_data_size <= dict_enc_size) { return {false, 0}; }
 
-      return std::pair(true, nbits);
+      return {true, nbits};
     }();
   }
 
