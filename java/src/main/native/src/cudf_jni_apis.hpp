@@ -58,6 +58,14 @@ jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
+bool cache_group_by_result_jni(JNIEnv *env);
+
+void release_group_by_result_jni(JNIEnv *env);
+
+jobject group_by_result_from(JNIEnv *env, jobjectArray& groups);
+
+jobject group_by_result_from(JNIEnv *env, jobjectArray& groups, jlongArray& uniq_key_columns);
+
 //
 // HostMemoryBuffer APIs
 //

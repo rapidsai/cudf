@@ -740,12 +740,13 @@ public final class Table implements AutoCloseable {
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
-  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+  private static native GroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
-                                                                boolean[] keysNullSmallest);
+                                                                boolean[] keysNullSmallest,
+                                                                boolean genUniqKeys);
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
@@ -4118,13 +4119,38 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      return Table.contiguousSplitGroups(
+      GroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
-          groupByOptions.getKeysNullSmallest());
+          groupByOptions.getKeysNullSmallest(),
+          false); // not generate uniq keys table
+      return ret.getGroups();
+    }
+
+    /**
+     * Similar to {@link #contiguousSplitGroups}, also return an extra uniq keys table in which
+     * each row is corresponding to a group split.
+     *
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     *
+     * @return The split groups and uniq keys table.
+     */
+    public GroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      GroupByResult result = Table.contiguousSplitGroups(
+              operation.table.nativeHandle,
+              operation.indices,
+              groupByOptions.getIgnoreNullKeys(),
+              groupByOptions.getKeySorted(),
+              groupByOptions.getKeysDescending(),
+              groupByOptions.getKeysNullSmallest(),
+              true); // generate uniq keys table
+      result.genUniqKeysTable();
+      return result;
     }
   }
 

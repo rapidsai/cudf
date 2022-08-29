@@ -42,12 +42,7 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -6447,6 +6442,8 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByContiguousSplitGroups() {
     ContiguousTable[] splits = null;
+    ContiguousTable[] splits2 = null;
+    Table uniqKeys = null;
     try (Table table = new Table.TestBuilder()
         .column(   1,    1,    1,    1,    1,    1)
         .column(   1,    3,    3,    5,    5,    5)
@@ -6468,24 +6465,44 @@ public class TableTest extends CudfTestBase {
               .column(   1,    1,    1)
               .column(   5,    5,    5)
               .column(  17,   16,   18)
-              .column("s4", "s5", "s6").build()) {
+              .column("s4", "s5", "s6").build();
+           Table expected4 = new Table.TestBuilder()
+              .column(   1,    1,    1)
+              .column(   1,    3,    5).build()) {
         try {
           splits = table.groupBy(0, 1).contiguousSplitGroups();
-          assertEquals(3, splits.length);
-          for (ContiguousTable ct : splits) {
-            if (ct.getRowCount() == 1) {
-              assertTablesAreEqual(expected1, ct.getTable());
-            } else if (ct.getRowCount() == 2) {
-              assertTablesAreEqual(expected2, ct.getTable());
-            } else {
-              assertTablesAreEqual(expected3, ct.getTable());
+          GroupByResult r = table.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys();
+          splits2 = r.getGroups();
+          uniqKeys = r.getUniqKeyTable();
+
+          for (ContiguousTable[] currSplits : Arrays.asList(splits, splits2)) {
+            assertEquals(3, currSplits.length);
+            for (ContiguousTable ct : currSplits) {
+              if (ct.getRowCount() == 1) {
+                assertTablesAreEqual(expected1, ct.getTable());
+              } else if (ct.getRowCount() == 2) {
+                assertTablesAreEqual(expected2, ct.getTable());
+              } else if (ct.getRowCount() == 3) {
+                assertTablesAreEqual(expected3, ct.getTable());
+              } else {
+                throw new RuntimeException("unexpected behavior: contiguousSplitGroups");
+              }
             }
           }
+
+          // verify uniq keys table
+          assertTablesAreEqual(expected4, uniqKeys);
+
         } finally {
           if (splits != null) {
             for (ContiguousTable t : splits) { t.close(); }
           }
-          splits = null;
+          if(splits2 != null) {
+            for (ContiguousTable t : splits2) { t.close(); }
+          }
+          if(uniqKeys != null) {
+            uniqKeys.close();
+          }
         }
       }
 
@@ -6494,12 +6511,66 @@ public class TableTest extends CudfTestBase {
         splits = table.groupBy().contiguousSplitGroups();
         assertEquals(1, splits.length);
         assertTablesAreEqual(table, splits[0].getTable());
+
+        GroupByResult r = table.groupBy().contiguousSplitGroupsAndGenUniqKeys();
+        splits2 = r.getGroups();
+        assertEquals(1, splits2.length);
+        assertTablesAreEqual(table, splits2[0].getTable());
+        uniqKeys = r.getUniqKeyTable();
+
+        // Table should contain 1 or more columns,
+        // If group by empty, keys table should be null;
+        assertNull(uniqKeys);
       } finally {
         if (splits != null) {
           for (ContiguousTable t : splits) { t.close(); }
         }
+        if(splits2 != null) {
+          for (ContiguousTable t : splits2) { t.close(); }
+        }
+        if(uniqKeys != null) {
+          uniqKeys.close();
+        }
       }
 
+      // Row count is 0
+      ContiguousTable[] tmpSplits = null;
+      try {
+        // the first of tmpSplits is empty split
+        tmpSplits = table.contiguousSplit(0);
+        Table emptyTable = tmpSplits[0].getTable();
+        assertEquals(0, emptyTable.getRowCount());
+
+        splits = emptyTable.groupBy(0, 1).contiguousSplitGroups();
+        assertEquals(1, splits.length);
+        assertEquals(0, splits[0].getTable().getRowCount());
+
+        GroupByResult r = emptyTable.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys();
+        splits2 = r.getGroups();
+        assertEquals(1, splits2.length);
+        assertEquals(0, splits2[0].getTable().getRowCount());
+        uniqKeys = r.getUniqKeyTable();
+        assertEquals(0, uniqKeys.getRowCount());
+      } finally {
+        if (tmpSplits != null) {
+          for (ContiguousTable t : tmpSplits) {
+            t.close();
+          }
+        }
+        if (splits != null) {
+          for (ContiguousTable t : splits) {
+            t.close();
+          }
+        }
+        if (splits2 != null) {
+          for (ContiguousTable t : splits2) {
+            t.close();
+          }
+        }
+        if (uniqKeys != null) {
+          uniqKeys.close();
+        }
+      }
     }
   }
 

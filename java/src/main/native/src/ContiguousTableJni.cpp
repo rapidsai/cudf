@@ -24,6 +24,11 @@ namespace {
 jclass Contiguous_table_jclass;
 jmethodID From_packed_table_method;
 
+#define GROUP_BY_RESULT_CLASS "ai/rapids/cudf/GroupByResult"
+jclass Group_by_result_jclass;
+jfieldID Group_by_result_groups_field;
+jfieldID Group_by_result_uniq_key_columns_field;
+
 } // anonymous namespace
 
 namespace cudf {
@@ -54,6 +59,51 @@ void release_contiguous_table_jni(JNIEnv *env) {
     env->DeleteGlobalRef(Contiguous_table_jclass);
     Contiguous_table_jclass = nullptr;
   }
+}
+
+bool cache_group_by_result_jni(JNIEnv *env) {
+  jclass cls = env->FindClass(GROUP_BY_RESULT_CLASS);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  Group_by_result_groups_field = env->GetFieldID(cls, "groups",
+      "[Lai/rapids/cudf/ContiguousTable;");
+  if (Group_by_result_groups_field == nullptr) {
+    return false;
+  }
+  Group_by_result_uniq_key_columns_field = env->GetFieldID(cls, "uniqKeyColumns",
+      "[J");
+  if (Group_by_result_uniq_key_columns_field == nullptr) {
+    return false;
+  }
+
+  // Convert local reference to global so it cannot be garbage collected.
+  Group_by_result_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (Group_by_result_jclass == nullptr) {
+    return false;
+  }
+  return true;
+}
+
+void release_group_by_result_jni(JNIEnv *env) {
+  if (Group_by_result_jclass != nullptr) {
+    env->DeleteGlobalRef(Group_by_result_jclass);
+    Group_by_result_jclass = nullptr;
+  }
+}
+
+jobject group_by_result_from(JNIEnv *env, jobjectArray& groups) {
+  jobject gbr = env->AllocObject(Group_by_result_jclass);
+  env->SetObjectField(gbr, Group_by_result_groups_field, groups);
+  return gbr;
+}
+
+jobject group_by_result_from(JNIEnv *env, jobjectArray& groups, jlongArray& uniq_key_columns) {
+  jobject gbr = env->AllocObject(Group_by_result_jclass);
+  env->SetObjectField(gbr, Group_by_result_groups_field, groups);
+  env->SetObjectField(gbr, Group_by_result_uniq_key_columns_field, uniq_key_columns);
+  return gbr;
 }
 
 jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count) {
