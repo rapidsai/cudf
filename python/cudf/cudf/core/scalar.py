@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import decimal
+from collections import OrderedDict
 
 import numpy as np
 import pyarrow as pa
@@ -14,10 +15,52 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import CachedInstanceMeta
 
 
-class Scalar(BinaryOperand, metaclass=CachedInstanceMeta):
+# Note that the metaclass below can easily be generalized for use with
+# other classes, if needed in the future. Simply replace the arguments
+# of the `__call__` method with `*args` and `**kwargs`. This will
+# result in additional overhead when constructing the cache key, as
+# unpacking *args and **kwargs is not cheap. See the discussion in GH
+# #11246 for more details.
+class CachedScalarInstanceMeta(type):
+    """
+    Metaclass for Scalar that caches `maxsize` instances.
+    """
+
+    def __new__(self, names, bases, attrs, maxsize=128):
+        self.__maxsize = maxsize
+        return type.__new__(self, names, bases, attrs)
+
+    def __init__(self, naes, bases, attrs, **kwargs):
+        self.__instances = OrderedDict()
+
+    def __call__(self, value, dtype=None):
+        # the cache key is constructed from the arguments, and also
+        # the _types_ of the arguments, since objects of different
+        # types can compare equal
+        arg_tuple = (value, type(value), dtype, type(dtype))
+        try:
+            # try retrieving an instance from the cache:
+            self.__instances.move_to_end(arg_tuple)
+            return self.__instances[arg_tuple]
+        except KeyError:
+            # if an instance couldn't be found in the cache,
+            # construct it and add to cache:
+            obj = super().__call__(value, dtype=dtype)
+            self.__instances[arg_tuple] = obj
+            if len(self.__instances) > self.__maxsize:
+                self.__instances.popitem(last=False)
+            return obj
+        except TypeError:
+            # couldn't hash the arguments, don't cache:
+            return super().__call__(value, dtypee=dtype)
+
+    def clear(self):
+        self.__instances.clear()
+
+
+class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     """
     A GPU-backed scalar object with NumPy scalar like properties
     May be used in binary operations against other scalars, cuDF

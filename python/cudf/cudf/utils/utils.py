@@ -4,7 +4,6 @@ import functools
 import hashlib
 import os
 import traceback
-from collections import OrderedDict
 from functools import partial
 from typing import FrozenSet, Set, Union
 
@@ -377,45 +376,3 @@ def _cudf_nvtx_annotate(func, domain="cudf_python"):
 _dask_cudf_nvtx_annotate = partial(
     _cudf_nvtx_annotate, domain="dask_cudf_python"
 )
-
-
-class CachedInstanceMeta(type):
-    """
-    Metaclass that caches `maxsize` instances.
-    """
-
-    def __new__(self, names, bases, attrs, maxsize=128):
-        self.__maxsize = maxsize
-        return type.__new__(self, names, bases, attrs)
-
-    def __init__(self, names, bases, attrs, **kwargs):
-        self.__instances = OrderedDict()
-
-    def __call__(self, *args, **kwargs):
-        # the cache key is constructed from args and kwargs, and also
-        # the _types_ of args and kwargs, since objects of different
-        # types can compare equal
-        arg_tuple = (
-            args
-            + tuple(kwargs.values())
-            + tuple(map(type, args))
-            + tuple(map(type, kwargs.values()))
-        )
-        try:
-            # try retrieving an instance from the cache:
-            self.__instances.move_to_end(arg_tuple)
-            return self.__instances[arg_tuple]
-        except KeyError:
-            # if an instance couldn't be found in the cache,
-            # construct it and add to cache:
-            obj = super().__call__(*args, **kwargs)
-            self.__instances[arg_tuple] = obj
-            if len(self.__instances) > self.__maxsize:
-                self.__instances.popitem(last=False)
-            return obj
-        except TypeError:
-            # couldn't hash args/kwargs, don't cache:
-            return super().__call__(*args, **kwargs)
-
-    def clear(self):
-        self.__instances.clear()
