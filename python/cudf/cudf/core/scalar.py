@@ -54,7 +54,7 @@ class CachedScalarInstanceMeta(type):
             return obj
         except TypeError:
             # couldn't hash the arguments, don't cache:
-            return super().__call__(value, dtypee=dtype)
+            return super().__call__(value, dtype=dtype)
 
     def clear(self):
         self.__instances.clear()
