@@ -196,28 +196,20 @@ class per_context_cache {
   template <typename Initializer>
   TableType* find_or_initialize(const Initializer& init)
   {
-    void* cuda_lib                                 = nullptr;
-    decltype(cuCtxGetCurrent)* context_get_current = nullptr;
+    int device_id;
+    CUDF_CUDA_TRY(cudaGetDevice(&device_id));
 
-    cuda_lib = dlopen("libcuda.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
-    CUDF_EXPECTS(cuda_lib != nullptr, "Failed to load cuda library");
-    context_get_current =
-      reinterpret_cast<decltype(context_get_current)>(dlsym(cuda_lib, "cuCtxGetCurrent"));
-    CUDF_EXPECTS(context_get_current != nullptr, "could not find cuCtxGetCurrent symbol");
-
-    CUcontext c;
-    context_get_current(&c);
-    auto finder = cache_.find(c);
+    auto finder = cache_.find(device_id);
     if (finder == cache_.end()) {
       TableType* result = init();
-      cache_[c]         = result;
+      cache_[device_id] = result;
       return result;
     } else
       return finder->second;
   }
 
  private:
-  std::unordered_map<CUcontext, TableType*> cache_;
+  std::unordered_map<int, TableType*> cache_;
 };
 
 // This template is a thread-safe version of per_context_cache.
