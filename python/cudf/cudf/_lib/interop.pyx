@@ -97,7 +97,6 @@ cdef vector[column_metadata] gather_metadata(object dtype) except *:
     cdef vector[column_metadata] cpp_metadata
     if dtype is not None:
         if is_struct_dtype(dtype):
-            print(dtype.to_arrow())
             cpp_metadata.reserve(len(dtype.fields))
             for i, name in enumerate(dtype.fields):
                 value = dtype.fields[name]
@@ -108,7 +107,9 @@ cdef vector[column_metadata] gather_metadata(object dtype) except *:
             cpp_metadata.reserve(1)
             cpp_metadata.push_back(column_metadata("None".encode()))
     else:
-        raise TypeError("Requires dtype to be passed to construct column_metadata")
+        raise TypeError(
+            "Requires dtype to be passed to "
+            "construct column_metadata")
     return cpp_metadata
 
 cdef _set_col_children_metadata(dtype,

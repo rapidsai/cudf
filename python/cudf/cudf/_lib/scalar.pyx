@@ -379,11 +379,9 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     columns = columns_from_table_view(struct_table_view, None)
-    print(columns, dtype.to_arrow())
     table = to_arrow(columns, dtype)
     python_dict = table.to_pydict()
-    res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
-    return res
+    return {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
 
 cdef _set_list_from_pylist(unique_ptr[scalar]& s,
                            object value,
@@ -413,7 +411,7 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column element_col = Column.from_column_view(list_col_view, None)
     cdef table_view struct_table_view
-    print("417", type(element_col))
+
     if isinstance(element_col, cudf.core.column.StructColumn):
         struct_table_view = table_view_from_columns([element_col])
         columns = columns_from_table_view(struct_table_view, None)
