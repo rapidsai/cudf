@@ -67,13 +67,12 @@ bool cache_group_by_result_jni(JNIEnv *env) {
     return false;
   }
 
-  Group_by_result_groups_field = env->GetFieldID(cls, "groups",
-      "[Lai/rapids/cudf/ContiguousTable;");
+  Group_by_result_groups_field =
+      env->GetFieldID(cls, "groups", "[Lai/rapids/cudf/ContiguousTable;");
   if (Group_by_result_groups_field == nullptr) {
     return false;
   }
-  Group_by_result_uniq_key_columns_field = env->GetFieldID(cls, "uniqKeyColumns",
-      "[J");
+  Group_by_result_uniq_key_columns_field = env->GetFieldID(cls, "uniqKeyColumns", "[J");
   if (Group_by_result_uniq_key_columns_field == nullptr) {
     return false;
   }
@@ -93,13 +92,13 @@ void release_group_by_result_jni(JNIEnv *env) {
   }
 }
 
-jobject group_by_result_from(JNIEnv *env, jobjectArray& groups) {
+jobject group_by_result_from(JNIEnv *env, jobjectArray &groups) {
   jobject gbr = env->AllocObject(Group_by_result_jclass);
   env->SetObjectField(gbr, Group_by_result_groups_field, groups);
   return gbr;
 }
 
-jobject group_by_result_from(JNIEnv *env, jobjectArray& groups, jlongArray& uniq_key_columns) {
+jobject group_by_result_from(JNIEnv *env, jobjectArray &groups, jlongArray &uniq_key_columns) {
   jobject gbr = env->AllocObject(Group_by_result_jclass);
   env->SetObjectField(gbr, Group_by_result_groups_field, groups);
   env->SetObjectField(gbr, Group_by_result_uniq_key_columns_field, uniq_key_columns);

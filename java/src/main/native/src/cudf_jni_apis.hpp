@@ -62,9 +62,9 @@ bool cache_group_by_result_jni(JNIEnv *env);
 
 void release_group_by_result_jni(JNIEnv *env);
 
-jobject group_by_result_from(JNIEnv *env, jobjectArray& groups);
+jobject group_by_result_from(JNIEnv *env, jobjectArray &groups);
 
-jobject group_by_result_from(JNIEnv *env, jobjectArray& groups, jlongArray& uniq_key_columns);
+jobject group_by_result_from(JNIEnv *env, jobjectArray &groups, jlongArray &uniq_key_columns);
 
 //
 // HostMemoryBuffer APIs
