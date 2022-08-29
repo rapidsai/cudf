@@ -103,31 +103,33 @@ struct calculate_group_statistics_functor {
   {
     // Temporarily disable stats writing for int96 timestamps
     // TODO: https://github.com/rapidsai/cudf/issues/10438
-    if constexpr (!cudf::is_timestamp<T>() or IO != detail::io_file_format::PARQUET or
-                  INT96 != detail::is_int96_timestamp::YES) {
-      detail::storage_wrapper<block_size> storage(temp_storage);
+    if constexpr (cudf::is_timestamp<T>() and IO == detail::io_file_format::PARQUET and
+                  INT96 == detail::is_int96_timestamp::YES) {
+      return;
+    }
 
-      using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
-      using CT           = typename type_convert::template type<T>;
-      typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
+    detail::storage_wrapper<block_size> storage(temp_storage);
 
-      for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
-        uint32_t r   = i + t;
-        uint32_t row = r + s.group.start_row;
-        if (r < s.group.num_rows) {
-          if (s.col.leaf_column->is_valid(row)) {
-            auto converted_value = type_convert::convert(get_element<T>(s, row));
-            chunk.reduce(converted_value);
-          } else {
-            chunk.null_count++;
-          }
+    using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
+    using CT           = typename type_convert::template type<T>;
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
+
+    for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
+      uint32_t r   = i + t;
+      uint32_t row = r + s.group.start_row;
+      if (r < s.group.num_rows) {
+        if (s.col.leaf_column->is_valid(row)) {
+          auto converted_value = type_convert::convert(get_element<T>(s, row));
+          chunk.reduce(converted_value);
+        } else {
+          chunk.null_count++;
         }
       }
-
-      chunk = block_reduce(chunk, storage);
-
-      if (t == 0) { s.ck = get_untyped_chunk(chunk); }
     }
+
+    chunk = block_reduce(chunk, storage);
+
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
 
   template <typename T,
