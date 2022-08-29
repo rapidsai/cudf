@@ -194,19 +194,28 @@ class writer::impl {
                     const statistics_chunk* chunk_stats,
                     const statistics_chunk* column_stats);
 
+  /**
+   * @brief Function to calculate the memory needed to encode the column index of the given
+   * column chunk
+   *
+   * @param chunk pointer to column chunk
+   */
+  size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
+
  private:
   // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
   rmm::cuda_stream_view stream;
 
-  size_t max_row_group_size          = default_row_group_size_bytes;
-  size_type max_row_group_rows       = default_row_group_size_rows;
-  size_t max_page_size_bytes         = default_max_page_size_bytes;
-  size_type max_page_size_rows       = default_max_page_size_rows;
-  Compression compression_           = Compression::UNCOMPRESSED;
-  statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
-  bool int96_timestamps              = false;
+  size_t max_row_group_size              = default_row_group_size_bytes;
+  size_type max_row_group_rows           = default_row_group_size_rows;
+  size_t max_page_size_bytes             = default_max_page_size_bytes;
+  size_type max_page_size_rows           = default_max_page_size_rows;
+  Compression compression_               = Compression::UNCOMPRESSED;
+  statistics_freq stats_granularity_     = statistics_freq::STATISTICS_NONE;
+  bool int96_timestamps                  = false;
+  size_type column_index_truncate_length = default_column_index_truncate_length;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   std::unique_ptr<aggregate_writer_metadata> md;
   // File footer key-value metadata. Written during write_chunked_end()

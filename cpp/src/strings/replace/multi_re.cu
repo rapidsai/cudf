@@ -32,6 +32,7 @@
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
+#include <thrust/find.h>
 #include <thrust/pair.h>
 
 #include <algorithm>

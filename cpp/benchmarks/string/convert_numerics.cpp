@@ -27,9 +27,7 @@ namespace {
 template <typename NumericType>
 std::unique_ptr<cudf::column> get_numerics_column(cudf::size_type rows)
 {
-  std::unique_ptr<cudf::table> result =
-    create_random_table({cudf::type_to_id<NumericType>()}, row_count{rows});
-  return std::move(result->release().front());
+  return create_random_column(cudf::type_to_id<NumericType>(), row_count{rows});
 }
 
 template <typename NumericType>

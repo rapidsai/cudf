@@ -11,7 +11,9 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.10/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
-)
-include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
+  file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.10/RAPIDS.cmake
+       ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
+  )
+endif()
+include(${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
