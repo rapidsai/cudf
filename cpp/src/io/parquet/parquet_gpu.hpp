@@ -135,19 +135,6 @@ struct PageInfo {
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
-  // for nested types, we run a preprocess step in order to determine output
-  // column sizes. Because of this, we can jump directly to the position in the
-  // input data to start decoding instead of reading all of the data and discarding
-  // rows we don't care about.
-  //
-  // NOTE: for flat hierarchies we do not do the preprocess step, so skipped_values and
-  // skipped_leaf_values will always be 0.
-  //
-  // # of values skipped in the repetition/definition level stream
-  int skipped_values;
-  // # of values skipped in the actual data stream.
-  int skipped_leaf_values;
-
   // nesting information (input/output) for each page
   int num_nesting_levels;
   PageNestingInfo* nesting;
@@ -429,9 +416,6 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @param input_columns Input column information
  * @param output_columns Output column information
  * @param num_rows Maximum number of rows to read
- * @param min_rows crop all rows below min_row
- * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
- * bounds
  * @param stream Cuda stream
  */
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
@@ -439,8 +423,6 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<input_column_info>& input_columns,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
-                          size_t min_row,
-                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
@@ -453,52 +435,12 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     hostdevice_vector<ColumnChunkDesc> const& chunks,
                     size_t num_rows,
-                    size_t min_row,
                     rmm::cuda_stream_view stream);
-
-/**
- * @brief Dremel data that describes one nested type column
- *
- * @see get_dremel_data()
- */
-struct dremel_data {
-  rmm::device_uvector<size_type> dremel_offsets;
-  rmm::device_uvector<uint8_t> rep_level;
-  rmm::device_uvector<uint8_t> def_level;
-
-  size_type leaf_data_size;
-};
-
-/**
- * @brief Get the dremel offsets and repetition and definition levels for a LIST column
- *
- * Dremel offsets are the per row offsets into the repetition and definition level arrays for a
- * column.
- * Example:
- * ```
- * col            = {{1, 2, 3}, { }, {5, 6}}
- * dremel_offsets = { 0,         3,   4,  6}
- * rep_level      = { 0, 1, 1,   0,   0, 1}
- * def_level      = { 1, 1, 1,   0,   1, 1}
- * ```
- * @param col Column of LIST type
- * @param level_nullability Pre-determined nullability at each list level. Empty means infer from
- * `col`
- * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- * @return A struct containing dremel data
- */
-dremel_data get_dremel_data(column_view h_col,
-                            rmm::device_uvector<uint8_t> const& d_nullability,
-                            std::vector<uint8_t> const& nullability,
-                            bool output_as_byte_array,
-                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments
@@ -652,10 +594,12 @@ void GatherPages(device_span<EncColumnChunk> chunks,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] column_stats Page-level statistics to be encoded
+ * @param[in] column_index_truncate_length Max length of min/max values
  * @param[in] stream CUDA stream to use
  */
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
+                         size_type column_index_truncate_length,
                          rmm::cuda_stream_view stream);
 
 }  // namespace gpu

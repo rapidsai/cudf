@@ -29,8 +29,8 @@ requirements:
     - python
     - streamz
     - cudf ={{ version }}
-    - dask==2022.7.1
-    - distributed==2022.7.1
+    - dask>=2022.7.1
+    - distributed>=2022.7.1
     - python-confluent-kafka >=1.7.0,<1.8.0a0
     - cudf_kafka ={{ version }}
 

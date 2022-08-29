@@ -67,6 +67,11 @@ public class CompressionMetadataWriterOptions extends ColumnWriterOptions.Struct
   }
 
   @Override
+  boolean[] getFlatIsBinary() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsBinary());
+  }
+
+  @Override
   String[] getFlatColumnNames() {
     return super.getFlatColumnNames(new String[]{});
   }

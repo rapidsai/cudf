@@ -424,6 +424,25 @@ TEST_F(StringsContainsTests, FixedQuantifier)
   }
 }
 
+TEST_F(StringsContainsTests, QuantifierErrors)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"});
+  auto sv    = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::contains_re(sv, "^+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "$+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "(^)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(sv, "($)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "\\A+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(sv, "\\Z+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(\\A)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(\\Z)+"), cudf::logic_error);
+
+  EXPECT_THROW(cudf::strings::contains_re(sv, "(^($))+"), cudf::logic_error);
+  EXPECT_NO_THROW(cudf::strings::contains_re(sv, "(^a($))+"));
+  EXPECT_NO_THROW(cudf::strings::count_re(sv, "(^(a$))+"));
+}
+
 TEST_F(StringsContainsTests, OverlappedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "defghí", "", "éééééé", "ghijkl"});
@@ -437,6 +456,38 @@ TEST_F(StringsContainsTests, OverlappedClasses)
   {
     auto results = cudf::strings::count_re(sv, "[á-éê-ú]");
     cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 0, 6, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, IncompleteClassesRange)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc-def", "---", "", "ghijkl", "-wxyz-"});
+  auto sv    = cudf::strings_column_view(input);
+
+  {
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 0, 1, 1});
+    auto results = cudf::strings::contains_re(sv, "[a-z]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[a-m-z]");  // same as [a-z]
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 0, 1, 1});
+    auto results = cudf::strings::contains_re(sv, "[g-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[-k]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 0, 0, 1});
+    auto results = cudf::strings::contains_re(sv, "[-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[+--]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[a-c-]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::contains_re(sv, "[-d-f]");
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
@@ -500,6 +551,27 @@ TEST_F(StringsContainsTests, DotAll)
     cudf::strings::count_re(view, "a.*?f", static_cast<cudf::strings::regex_flags>(both_flags));
   expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({2, 1, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+}
+
+TEST_F(StringsContainsTests, ASCII)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
+  auto view = cudf::strings_column_view(input);
+
+  std::string patterns[] = {"\\w+[\\s]+\\d+",
+                            "[^\\W]+\\s+[^\\D]+",
+                            "[\\w]+[^\\S]+[\\d]+",
+                            "[\\w]+\\s+[\\d]+",
+                            "\\w+\\s+\\d+"};
+
+  for (auto ptn : patterns) {
+    auto results = cudf::strings::contains_re(view, ptn, cudf::strings::regex_flags::ASCII);
+    auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
+    results           = cudf::strings::contains_re(view, ptn);
+    expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
+  }
 }
 
 TEST_F(StringsContainsTests, MediumRegex)

@@ -30,8 +30,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/column.hpp>
+#include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -46,6 +47,7 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -80,35 +82,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
-}
-
-/**
- * @brief Function to calculate the memory needed to encode the column index of the given
- * column chunk
- */
-size_t column_index_buffer_size(gpu::EncColumnChunk* ck)
-{
-  // encoding the column index for a given chunk requires:
-  //   each list (4 of them) requires 6 bytes of overhead
-  //     (1 byte field header, 1 byte type, 4 bytes length)
-  //   1 byte overhead for boundary_order
-  //   1 byte overhead for termination
-  //   sizeof(char) for boundary_order
-  //   sizeof(bool) * num_pages for null_pages
-  //   (ck_max_stats_len + 4) * num_pages * 2 for min/max values
-  //     (each binary requires 4 bytes length + ck_max_stats_len)
-  //   sizeof(int64_t) * num_pages for null_counts
-  //
-  // so 26 bytes overhead + sizeof(char) +
-  //    (sizeof(bool) + sizeof(int64_t) + 2 * (4 + ck_max_stats_len)) * num_pages
-  //
-  // we already have ck->ck_stat_size = 48 + 2 * ck_max_stats_len
-  // all of the overhead and non-stats data can fit in under 48 bytes
-  //
-  // so we can simply use ck_stat_size * num_pages
-  //
-  // calculating this per-chunk because the sizes can be wildly different
-  return ck->ck_stat_size * ck->num_pages;
 }
 
 }  // namespace
@@ -848,8 +821,8 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // size of the leaf column
     // Calculate row offset into dremel data (repetition/definition values) and the respective
     // definition and repetition levels
-    gpu::dremel_data dremel = gpu::get_dremel_data(
-      cudf_col, _d_nullability, _nullability, schema_node.output_as_byte_array, stream);
+    cudf::detail::dremel_data dremel =
+      get_dremel_data(cudf_col, _nullability, schema_node.output_as_byte_array, stream);
     _dremel_offsets = std::move(dremel.dremel_offsets);
     _rep_level      = std::move(dremel.rep_level);
     _def_level      = std::move(dremel.def_level);
@@ -1065,9 +1038,10 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       if (nbits > 24) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-      constexpr auto allowed_bitsizes = std::array<size_type, 7>{1, 2, 4, 8, 12, 16, 24};
+      constexpr auto allowed_bitsizes =
+        std::array<size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
 
-      // ceil to (1/2/4/8/12/16/24)
+      // ceil to (1/2/3/4/5/6/8/10/12/16/20/24)
       auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 
@@ -1260,7 +1234,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   if (column_stats != nullptr) {
     auto batch_column_stats =
       device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch);
-    EncodeColumnIndexes(d_chunks_in_batch.flat_view(), batch_column_stats, stream);
+    EncodeColumnIndexes(
+      d_chunks_in_batch.flat_view(), batch_column_stats, column_index_truncate_length, stream);
   }
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -1270,6 +1245,35 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
                                 cudaMemcpyDeviceToHost,
                                 stream.value()));
   stream.synchronize();
+}
+
+size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
+{
+  // encoding the column index for a given chunk requires:
+  //   each list (4 of them) requires 6 bytes of overhead
+  //     (1 byte field header, 1 byte type, 4 bytes length)
+  //   1 byte overhead for boundary_order
+  //   1 byte overhead for termination
+  //   sizeof(char) for boundary_order
+  //   sizeof(bool) * num_pages for null_pages
+  //   (ck_max_stats_len + 4) * num_pages * 2 for min/max values
+  //     (each binary requires 4 bytes length + ck_max_stats_len)
+  //   sizeof(int64_t) * num_pages for null_counts
+  //
+  // so 26 bytes overhead + sizeof(char) +
+  //    (sizeof(bool) + sizeof(int64_t) + 2 * (4 + ck_max_stats_len)) * num_pages
+  //
+  // we already have ck->ck_stat_size = 48 + 2 * ck_max_stats_len
+  // all of the overhead and non-stats data can fit in under 48 bytes
+  //
+  // so we can simply use ck_stat_size * num_pages
+  //
+  // add on some extra padding at the end (plus extra 7 bytes of alignment padding)
+  // for scratch space to do stats truncation.
+  //
+  // calculating this per-chunk because the sizes can be wildly different.
+  constexpr size_t padding = 7;
+  return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
@@ -1286,6 +1290,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
@@ -1310,6 +1315,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
@@ -1649,7 +1655,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
         if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
-          bfr_i += column_index_buffer_size(&ck);
+          ck.column_index_size = column_index_buffer_size(&ck);
+          bfr_i += ck.column_index_size;
         }
       }
     }

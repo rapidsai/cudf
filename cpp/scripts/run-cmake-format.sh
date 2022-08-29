@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 # This script is a wrapper for cmakelang that may be used with pre-commit. The
 # wrapping is necessary because RAPIDS libraries split configuration for
 # cmakelang linters between a local config file and a second config file that's
@@ -69,5 +71,14 @@ fi
 if [[ $1 == "cmake-format" ]]; then
   cmake-format -i --config-files cpp/cmake/config.json ${RAPIDS_CMAKE_FORMAT_FILE} -- ${@:2}
 elif [[ $1 == "cmake-lint" ]]; then
-  cmake-lint --config-files cpp/cmake/config.json ${RAPIDS_CMAKE_FORMAT_FILE} -- ${@:2}
+  # Since the pre-commit hook is verbose, we have to be careful to only
+  # present cmake-lint's output (which is quite verbose) if we actually
+  # observe a failure.
+  OUTPUT=$(cmake-lint --config-files cpp/cmake/config.json ${RAPIDS_CMAKE_FORMAT_FILE} -- ${@:2})
+  status=$?
+
+  if ! [ ${status} -eq 0 ]; then
+    echo "${OUTPUT}"
+  fi
+  exit ${status}
 fi
