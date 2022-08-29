@@ -187,8 +187,9 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
-using stats_list = nvbench::enum_type_list < cudf::io::STATISTICS_NONE,
-      cudf::io::STATISTICS_ROWGROUP, cudf::io::STATISTICS_PAGE;
+using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
+                                           cudf::io::STATISTICS_ROWGROUP,
+                                           cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_write_encode")
@@ -207,4 +208,5 @@ NVBENCH_BENCH_TYPES(BM_parq_write_io_compression, NVBENCH_TYPE_AXES(io_list, com
 NVBENCH_BENCH_TYPES(BM_parq_write_varying_options, NVBENCH_TYPE_AXES(stats_list, compression_list))
   .set_name("parquet_write_options")
   .set_type_axes_names({"statistics", "compression"})
-  .set_min_samples(4) add_string_axis("file_path", {"unused_path.parquet", ""});
+  .set_min_samples(4)
+  .add_string_axis("file_path", {"unused_path.parquet", ""});

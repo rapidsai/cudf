@@ -30,6 +30,7 @@ enum class data_type : int32_t {
   FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
   DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
   TIMESTAMP       = static_cast<int32_t>(type_group_id::TIMESTAMP),
+  DURATION        = static_cast<int32_t>(type_group_id::DURATION),
   STRING          = static_cast<int32_t>(cudf::type_id::STRING),
   LIST            = static_cast<int32_t>(cudf::type_id::LIST),
   STRUCT          = static_cast<int32_t>(cudf::type_id::STRUCT)
@@ -45,6 +46,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case data_type::FLOAT: return "FLOAT";
       case data_type::DECIMAL: return "DECIMAL";
       case data_type::TIMESTAMP: return "TIMESTAMP";
+      case data_type::DURATION: return "DURATION";
       case data_type::STRING: return "STRING";
       case data_type::LIST: return "LIST";
       case data_type::STRUCT: return "STRUCT";
