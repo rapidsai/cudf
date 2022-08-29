@@ -36,6 +36,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/transform.h>
@@ -51,6 +52,13 @@
 
 namespace cudf {
 
+/**
+ * @brief A device span consisting of two separate device_spans acting as if they were part of a
+ * single span. The first head.size() entries are served from the first span, the remaining
+ * tail.size() entries are served from the second span.
+ *
+ * @tparam T The type of elements in the span.
+ */
 template <typename T>
 class split_device_span {
  public:
@@ -144,14 +152,12 @@ struct PatternScan {
 // This struct provides output offsets that are only incremented until a cutoff point.
 struct cutoff_offset {
   // magnitude stores the offset, sign bit stores whether we are past the cutoff
-  int64_t value;
+  int64_t value = 0;
 
-  constexpr cutoff_offset() : cutoff_offset{0} {}
+  constexpr cutoff_offset() = default;
 
-  explicit constexpr cutoff_offset(int64_t value) : value{value} {}
-
-  constexpr cutoff_offset(bool is_delim, bool is_past_cutoff)
-    : value{is_past_cutoff ? -is_delim : is_delim}
+  constexpr cutoff_offset(int64_t offset, bool is_past_cutoff)
+    : value{is_past_cutoff ? -offset : offset}
   {
   }
 
@@ -163,7 +169,7 @@ struct cutoff_offset {
   {
     auto const past_end = lhs.is_past_end() || rhs.is_past_end();
     auto const offset   = lhs.offset() + (lhs.is_past_end() ? 0 : rhs.offset());
-    return cutoff_offset{past_end ? -offset : offset};
+    return cutoff_offset{offset, past_end};
   }
 };
 
@@ -242,12 +248,12 @@ __global__ void multibyte_split_kernel(
 
   // STEP 3: Flag matches
 
-  cutoff_offset thread_offset{0};
+  cutoff_offset thread_offset;
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-    bool const is_match      = i < thread_input_size and trie.is_match(thread_states[i]);
+    auto const is_match      = i < thread_input_size and trie.is_match(thread_states[i]);
     auto const match_end     = base_input_offset + thread_input_offset + i + 1;
-    bool const is_past_range = match_end >= byte_range_end;
+    auto const is_past_range = match_end >= byte_range_end;
     thread_offset            = thread_offset + cutoff_offset{is_match, is_past_range};
   }
 
@@ -263,7 +269,7 @@ __global__ void multibyte_split_kernel(
   for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
     if (trie.is_match(thread_states[i]) && !thread_offset.is_past_end()) {
       auto const match_end     = base_input_offset + thread_input_offset + i + 1;
-      bool const is_past_range = match_end >= byte_range_end;
+      auto const is_past_range = match_end >= byte_range_end;
       output_offsets[thread_offset.offset() - base_offset_offset] = match_end;
       thread_offset = thread_offset + cutoff_offset{true, is_past_range};
     }
@@ -308,14 +314,30 @@ std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_p
   return streams;
 }
 
+/**
+ * @brief A chunked storage class that provides preallocated memory for algorithms with known
+ * worst-case output size. It provides functionality to retrieve the next chunk to write to, for
+ * reporting how much memory was actually written and for gathering all previously written outputs
+ * into a single contiguous vector.
+ *
+ * @tparam T The output element type.
+ */
 template <typename T>
 class output_builder {
  public:
   using size_type = typename rmm::device_uvector<T>::size_type;
 
+  /**
+   * @brief Initializes an output builder with given worst-case output size and stream.
+   *
+   * @param max_write_size the maximum number of elements that will be written into a
+   *                       split_device_span returned from `next_output`.
+   * @param stream the stream used to allocate the first chunk of memory.
+   * @param mr optional, the memory resource to use for allocation.
+   */
   output_builder(size_type max_write_size,
                  rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr)
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : _size{0}, _max_write_size{max_write_size}
   {
     assert(max_write_size > 0);
@@ -323,11 +345,20 @@ class output_builder {
     _chunks.back().reserve(max_write_size * 2, stream);
   }
 
-  output_builder(output_builder&&)      = delete;
-  output_builder(const output_builder&) = delete;
-  output_builder& operator=(output_builder&&) = delete;
+  output_builder(output_builder&&)                 = delete;
+  output_builder(const output_builder&)            = delete;
+  output_builder& operator=(output_builder&&)      = delete;
   output_builder& operator=(const output_builder&) = delete;
 
+  /**
+   * @brief Returns the next free chunk of `max_write_size` elements from the underlying storage.
+   * Must be followed by a call to `advance_output` after the memory has been written to.
+   *
+   * @param stream The stream to allocate a new chunk of memory with, if necessary.
+   *               This should be the stream that will write to the `split_device_span`.
+   * @return A `split_device_span` starting directly after the last output and providing at least
+   *         `max_write_size` entries of storage.
+   */
   [[nodiscard]] split_device_span<T> next_output(rmm::cuda_stream_view stream)
   {
     auto head_it   = _chunks.end() - (_chunks.size() > 1 && _chunks.back().is_empty() ? 2 : 1);
@@ -344,6 +375,13 @@ class output_builder {
     return split_device_span<T>{head_span, tail_span};
   }
 
+  /**
+   * @brief Advances the output sizes after a `split_device_span` returned from `next_output` was
+   *        written to.
+   *
+   * @param actual_size The number of elements that were written to the result of the previous
+   *                    `next_output` call.
+   */
   void advance_output(size_type actual_size)
   {
     assert(actual_size <= _max_write_size);
@@ -366,11 +404,23 @@ class output_builder {
     _size += actual_size;
   }
 
+  /**
+   * @brief Returns the first element that was written to the output.
+   *        Requires a previous call to `next_output` and `advance_output` and `size() > 0`.
+   * @param stream The stream used to access the element.
+   * @return The first element that was written to the output.
+   */
   [[nodiscard]] T front_element(rmm::cuda_stream_view stream) const
   {
     return _chunks.front().front_element(stream);
   }
 
+  /**
+   * @brief Returns the last element that was written to the output.
+   *        Requires a previous call to `next_output` and `advance_output` and `size() > 0`.
+   * @param stream The stream used to access the element.
+   * @return The last element that was written to the output.
+   */
   [[nodiscard]] T back_element(rmm::cuda_stream_view stream) const
   {
     auto const& last_nonempty_chunk =
@@ -380,6 +430,14 @@ class output_builder {
 
   [[nodiscard]] size_type size() const { return _size; }
 
+  /**
+   * @brief Gathers all previously written outputs into a single contiguous vector.
+   *
+   * @param stream The stream used to allocate and gather the output vector. All previous write
+   *               operations to the output buffer must have finished or happened on this stream.
+   * @param mr The memory resource used to allocate the output vector.
+   * @return The output vector.
+   */
   rmm::device_uvector<T> gather(rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr) const
   {
@@ -393,6 +451,13 @@ class output_builder {
   }
 
  private:
+  /**
+   * @brief Returns the span consisting of all currently unused elements in the vector
+   * (`i >= size() && i < capacity()`).
+   *
+   * @param vector The vector.
+   * @return The span of unused elements.
+   */
   static device_span<T> get_free_span(rmm::device_uvector<T>& vector)
   {
     return device_span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
@@ -412,7 +477,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 {
   CUDF_FUNC_RANGE();
 
-  if (byte_range.size() == 0) { return make_empty_column(type_id::STRING); }
+  if (byte_range.empty()) { return make_empty_column(type_id::STRING); }
 
   auto const trie = cudf::io::text::detail::trie::create({delimiter}, stream);
 
@@ -458,8 +523,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto chunk_offset         = std::max<int64_t>(0, byte_range.offset() - delimiter.size());
   auto const byte_range_end = byte_range.offset() + byte_range.size();
   reader->skip_bytes(chunk_offset);
-  output_builder<int64_t> offset_storage(ITEMS_PER_CHUNK / delimiter.size() + 1, stream, mr);
-  output_builder<char> char_storage(ITEMS_PER_CHUNK, stream, mr);
+  output_builder<int64_t> offset_storage(ITEMS_PER_CHUNK / delimiter.size() + 1, stream);
+  output_builder<char> char_storage(ITEMS_PER_CHUNK, stream);
 
   fork_stream(streams, stream);
 
