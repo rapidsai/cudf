@@ -414,7 +414,6 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-
   return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
 }
 

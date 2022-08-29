@@ -565,7 +565,8 @@ def align_partitions(args):
     """Align partitions between dask_cudf objects.
 
     Note that if all divisions are unknown, but have equal npartitions, then
-    they will be passed through unchanged."""
+    they will be passed through unchanged.
+    """
     dfs = [df for df in args if isinstance(df, _Frame)]
     if not dfs:
         return args

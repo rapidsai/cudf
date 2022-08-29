@@ -32,7 +32,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
@@ -782,6 +782,75 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
+    def like(self, pat: str, esc: str = None) -> SeriesOrIndex:
+        """
+        Test if a like pattern matches a string of a Series or Index.
+
+        Return boolean Series or Index based on whether a given pattern
+        matches strings in a Series or Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern for matching. Use '%' for any number of any character
+            including no characters. Use '_' for any single character.
+
+        esc : str
+            Character to use if escape is necessary to match '%' or '_'
+            literals.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+            A Series/Index of boolean dtype indicating whether the given
+            pattern matches the string of each element of the Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'a', 'b' ,'ddbc', '%bb'])
+        >>> s.str.like('%b_')
+        0   False
+        1   False
+        2   False
+        3   True
+        4   True
+        dtype: boolean
+
+        Parameter `esc` can be used to match a wildcard literal.
+
+        >>> s.str.like('/%b_', esc='/' )
+        0   False
+        1   False
+        2   False
+        3   False
+        4   True
+        dtype: boolean
+        """
+        if not isinstance(pat, str):
+            raise TypeError(
+                f"expected a string object, not {type(pat).__name__}"
+            )
+
+        if esc is None:
+            esc = ""
+
+        if not isinstance(esc, str):
+            raise TypeError(
+                f"expected a string object, not {type(esc).__name__}"
+            )
+
+        if len(esc) > 1:
+            raise ValueError(
+                "expected esc to contain less than or equal to 1 characters"
+            )
+
+        result_col = libstrings.like(
+            self._column, cudf.Scalar(pat, "str"), cudf.Scalar(esc, "str")
+        )
+
+        return self._return_or_inplace(result_col)
+
     def repeat(
         self,
         repeats: Union[int, Sequence],
@@ -882,7 +951,6 @@ class StringMethods(ColumnMethods):
 
         Examples
         --------
-
         >>> import cudf
         >>> s = cudf.Series(['foo', 'fuz', None])
         >>> s
@@ -1013,7 +1081,7 @@ class StringMethods(ColumnMethods):
             Series or Index from sliced substring from
             original string object.
 
-        See also
+        See Also
         --------
         slice_replace
             Replace a slice with a string.
@@ -1076,7 +1144,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1138,7 +1206,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isdecimal
             Check whether all characters are decimal.
@@ -1205,7 +1273,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1274,7 +1342,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1338,7 +1406,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the
             same length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalpha
             Check whether all characters are alphabetic.
@@ -1407,7 +1475,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same length
             as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1466,7 +1534,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1529,7 +1597,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1600,7 +1668,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1659,7 +1727,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1739,7 +1807,7 @@ class StringMethods(ColumnMethods):
         Series or Index of object
             A copy of the object with all strings converted to lowercase.
 
-        See also
+        See Also
         --------
         upper
             Converts all characters to uppercase.
@@ -1780,7 +1848,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -1859,7 +1927,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -1907,7 +1975,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -2076,7 +2144,7 @@ class StringMethods(ColumnMethods):
             A new string with the specified section of the string
             replaced with `repl` string.
 
-        See also
+        See Also
         --------
         slice
             Just slicing without replacement.
@@ -2373,7 +2441,7 @@ class StringMethods(ColumnMethods):
         Series, Index, DataFrame or MultiIndex
             Type matches caller unless ``expand=True`` (see Notes).
 
-        See also
+        See Also
         --------
         rsplit
             Splits string around given separator/delimiter, starting from
@@ -2540,7 +2608,7 @@ class StringMethods(ColumnMethods):
         Series, Index, DataFrame or MultiIndex
             Type matches caller unless ``expand=True`` (see Notes).
 
-        See also
+        See Also
         --------
         split
             Split strings around given separator/delimiter.
@@ -2700,7 +2768,7 @@ class StringMethods(ColumnMethods):
         The parameter `expand` is not yet supported and will raise a
         `NotImplementedError` if anything other than the default value is set.
 
-        See also
+        See Also
         --------
         rpartition
             Split the string at the last occurrence of sep.
@@ -2845,7 +2913,7 @@ class StringMethods(ColumnMethods):
             Returns Series or Index with minimum number
             of char in object.
 
-        See also
+        See Also
         --------
         rjust
             Fills the left side of strings with an arbitrary character.
@@ -2897,7 +2965,7 @@ class StringMethods(ColumnMethods):
             raise TypeError(msg)
 
         try:
-            side = libstrings.PadSide[side.upper()]
+            side = libstrings.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {‘left’, ‘right’, ‘both’}"
@@ -2928,7 +2996,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index with prepended ‘0’ characters.
 
-        See also
+        See Also
         --------
         rjust
             Fills the left side of strings with an arbitrary character.
@@ -3181,7 +3249,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index.
 
-        See also
+        See Also
         --------
         lstrip
             Remove leading characters in Series/Index.
@@ -3240,7 +3308,7 @@ class StringMethods(ColumnMethods):
         -------
             Series or Index of object
 
-        See also
+        See Also
         --------
         strip
             Remove leading and trailing characters in Series/Index.
@@ -3289,7 +3357,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index.
 
-        See also
+        See Also
         --------
         strip
             Remove leading and trailing characters in Series/Index.
@@ -3485,9 +3553,7 @@ class StringMethods(ColumnMethods):
             libstrings.count_re(self._column, pat, flags)
         )
 
-    def findall(
-        self, pat: str, flags: int = 0, expand: bool = True
-    ) -> SeriesOrIndex:
+    def findall(self, pat: str, flags: int = 0) -> SeriesOrIndex:
         """
         Find all occurrences of pattern or regular expression in the
         Series/Index.
@@ -3518,38 +3584,38 @@ class StringMethods(ColumnMethods):
         The search for the pattern ‘Monkey’ returns one match:
 
         >>> s.str.findall('Monkey')
-                0
-        0    <NA>
-        1  Monkey
-        2    <NA>
+        0          []
+        1    [Monkey]
+        2          []
+        dtype: list
 
         When the pattern matches more than one string
         in the Series, all matches are returned:
 
         >>> s.str.findall('on')
-              0
-        0    on
-        1    on
-        2  <NA>
+        0    [on]
+        1    [on]
+        2      []
+        dtype: list
 
         Regular expressions are supported too. For instance,
         the search for all the strings ending with
         the word ‘on’ is shown next:
 
         >>> s.str.findall('on$')
-              0
-        0    on
-        1  <NA>
-        2  <NA>
+        0    [on]
+        1      []
+        2      []
+        dtype: list
 
         If the pattern is found more than once in the same
-        string, then multiple strings are returned as columns:
+        string, then multiple strings are returned:
 
         >>> s.str.findall('b')
-              0     1
-        0  <NA>  <NA>
-        1  <NA>  <NA>
-        2     b     b
+        0        []
+        1        []
+        2    [b, b]
+        dtype: list
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -3559,17 +3625,8 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        if expand:
-            warnings.warn(
-                "The expand parameter is deprecated and will be removed in a "
-                "future version. Set expand=False to match future behavior.",
-                FutureWarning,
-            )
-            data, _ = libstrings.findall(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
-        else:
-            data = libstrings.findall_record(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
+        data = libstrings.findall(self._column, pat, flags)
+        return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -3612,7 +3669,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same length as
             the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -3731,7 +3788,7 @@ class StringMethods(ColumnMethods):
             A Series of booleans indicating whether the given
             pattern matches the start of each string element.
 
-        See also
+        See Also
         --------
         endswith
             Same as startswith, but tests the end of string.
@@ -3850,7 +3907,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of int
 
-        See also
+        See Also
         --------
         find
             Return lowest indexes in each strings.
@@ -4486,7 +4543,6 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-
         delimiter : str or list of strs, Default is whitespace.
             The characters or strings used to locate the
             split points of each string.
@@ -5051,7 +5107,7 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
-    mask : Buffer
+    mask : DeviceBufferLike
         The validity mask
     offset : int
         Data offset
@@ -5085,7 +5141,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,

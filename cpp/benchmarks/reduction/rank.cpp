@@ -30,14 +30,14 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
 
   auto const dtype = cudf::type_to_id<type>();
 
-  double const null_frequency = state.get_float64("null_frequency");
-  size_t const size           = state.get_int64("data_size");
+  double const null_probability = state.get_float64("null_probability");
+  size_t const size             = state.get_int64("data_size");
 
-  data_profile table_data_profile;
-  table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 5);
-  table_data_profile.set_null_frequency(null_frequency);
+  data_profile const profile = data_profile_builder()
+                                 .null_probability(null_probability)
+                                 .distribution(dtype, distribution_id::UNIFORM, 0, 5);
 
-  auto const table = create_random_table({dtype}, table_size_bytes{size / 2}, table_data_profile);
+  auto const table = create_random_table({dtype}, table_size_bytes{size / 2}, profile);
 
   auto const new_tbl = cudf::repeat(table->view(), 2);
   cudf::column_view input(new_tbl->view().column(0));
@@ -53,7 +53,7 @@ using data_type = nvbench::type_list<int32_t, cudf::list_view>;
 
 NVBENCH_BENCH_TYPES(nvbench_reduction_scan, NVBENCH_TYPE_AXES(data_type))
   .set_name("rank_scan")
-  .add_float64_axis("null_frequency", {0, 0.1, 0.5, 0.9})
+  .add_float64_axis("null_probability", {0, 0.1, 0.5, 0.9})
   .add_int64_axis("data_size",
                   {
                     10000,      // 10k
