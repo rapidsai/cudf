@@ -79,7 +79,7 @@ gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
 conda list --show-channel-urls
-
+conda config --env --add channels conda-forge/label/pandas_rc
 gpuci_logger "Check compiler versions"
 python --version
 

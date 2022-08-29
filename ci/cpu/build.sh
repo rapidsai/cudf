@@ -51,6 +51,7 @@ if [ "$SOURCE_BRANCH" = "main" ]; then
   conda config --system --remove channels dask/label/dev
 fi
 
+conda config --env --add channels conda-forge/label/pandas_rc
 gpuci_logger "Check compiler versions"
 python --version
 
