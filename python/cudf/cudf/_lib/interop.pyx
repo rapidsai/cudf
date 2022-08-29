@@ -87,7 +87,7 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object metadata, object dtype=None) except *:
+cdef vector[column_metadata] gather_metadata(object dtype) except *:
     """
     Metadata is stored as lists, and expected format is as follows,
     [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
@@ -108,7 +108,7 @@ cdef vector[column_metadata] gather_metadata(object metadata, object dtype=None)
             cpp_metadata.reserve(1)
             cpp_metadata.push_back(column_metadata("None".encode()))
     else:
-        raise TypeError("need dtype")
+        raise TypeError("Requires dtype to be passed to construct column_metadata")
     return cpp_metadata
 
 cdef _set_col_children_metadata(dtype,
@@ -127,7 +127,7 @@ cdef _set_col_children_metadata(dtype,
         return
 
 
-def to_arrow(list source_columns, object metadata, object dtype=None):
+def to_arrow(list source_columns, object dtype):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
@@ -140,10 +140,7 @@ def to_arrow(list source_columns, object metadata, object dtype=None):
     -------
     pyarrow table
     """
-    if dtype is None:
-        raise TypeError("Hey")
-    #print(dtype, dtype.to_arrow())
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata, dtype)
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(dtype)
     cdef table_view input_table_view = table_view_from_columns(source_columns)
 
     cdef shared_ptr[CTable] cpp_arrow_table

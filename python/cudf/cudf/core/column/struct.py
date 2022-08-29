@@ -67,7 +67,10 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        return _rename_nested_struct(result, dtype=self.dtype)
+        return {
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
+        }
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

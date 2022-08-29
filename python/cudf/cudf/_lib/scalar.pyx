@@ -378,10 +378,9 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
         return NA
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
-    column_names = [str(i) for i in range(struct_table_view.num_columns())]
     columns = columns_from_table_view(struct_table_view, None)
     print(columns, dtype.to_arrow())
-    table = to_arrow(columns, column_names, dtype)
+    table = to_arrow(columns, dtype)
     python_dict = table.to_pydict()
     res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
     return res
@@ -412,21 +411,17 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
         return NA
 
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
-    cdef Column list_col = Column.from_column_view(list_col_view, None)
+    cdef Column element_col = Column.from_column_view(list_col_view, None)
     cdef table_view struct_table_view
-    if cudf.api.types.is_struct_dtype(list_col):
-        struct_table_view = table_view_from_columns([list_col])
-        print(struct_table_view.num_columns())
+    print("417", type(element_col))
+    if isinstance(element_col, cudf.core.column.StructColumn):
+        struct_table_view = table_view_from_columns([element_col])
         columns = columns_from_table_view(struct_table_view, None)
-        print(columns)
-        print(list_col.dtype.to_arrow())
-        arrow_table = to_arrow(list(list_col.children), [["col", []]], list_col.dtype)
-        python_dict = arrow_table.to_pydict()
+        arrow_table = to_arrow(list(element_col.children), element_col.dtype)
         result = arrow_table.to_pylist()
         return _nested_na_replace(result)
-        #res = {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
     else:
-        arrow_table = to_arrow([list_col], [["col", []]], list_col.dtype)
+        arrow_table = to_arrow([element_col], element_col.dtype)
         result = arrow_table['None'].to_pylist()
         return _nested_na_replace(result)
 
