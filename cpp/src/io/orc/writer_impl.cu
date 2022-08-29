@@ -568,7 +568,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
         const auto base        = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type] = streams.size();
-        streams.push_back(orc::Stream{kind, column.id(), size});
+        streams.push_back(orc::Stream{kind, column.id(), (size == 0) ? 0 : size + 3 * segmentation.num_rowgroups()});
         types.push_back(type_kind);
       };
 
@@ -875,7 +875,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
   auto const stream_offsets =
     streams.compute_offsets(orc_table.columns, segmentation.num_rowgroups());
-  rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
+  rmm::device_uvector<uint8_t> encoded_data(
+    stream_offsets.data_size() + 3 * streams.size() * segmentation.num_rowgroups(), stream);
 
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
@@ -1021,10 +1022,30 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             strm.lengths[strm_type]   = 0;
             strm.data_ptrs[strm_type] = nullptr;
           }
+          if (long(strm.data_ptrs[strm_type]) % 4) {
+            strm.data_ptrs[strm_type] += (4 - long(strm.data_ptrs[strm_type]) % 4);
+          }
         }
       }
     }
   }
+
+  /*for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+    auto col_streams = chunk_streams[col_idx];
+    for (auto const& stripe : segmentation.stripes) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+        auto const rg_idx = *rg_idx_it;
+        auto& strm        = col_streams[rg_idx];
+        for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
+          if (long(strm.data_ptrs[strm_type]) % 4)
+            std::cout << strm_type << ' ' << std::hex << long(strm.data_ptrs[strm_type])
+                      << std::endl;
+          if (strm.lengths[strm_type] % 4)
+            std::cout << strm_type << ' ' << std::hex << strm.lengths[strm_type] << std::endl;
+        }
+      }
+    }
+  }*/
   chunk_streams.host_to_device(stream);
 
   if (orc_table.num_rows() > 0) {
