@@ -4131,12 +4131,17 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Similar to {@link #contiguousSplitGroups}, also return an extra uniq keys table in which
+     * Similar to {@link #contiguousSplitGroups}, return an extra uniq keys table in which
      * each row is corresponding to a group split.
      *
      * Splits the groups in a single table into separate tables according to the grouping keys.
      * Each split table represents a single group.
      *
+     * Example, see the example in {@link #contiguousSplitGroups}
+     * The `uniqKeysTable` in GroupByResult is:
+     *    a
+     *    b
+     *  Note: only 2 rows because of only has 2 split groups
      *
      * @return The split groups and uniq keys table.
      */
