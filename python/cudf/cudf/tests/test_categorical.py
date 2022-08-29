@@ -685,6 +685,10 @@ def test_categorical_dtype(categories, ordered):
     got = cudf.CategoricalDtype(categories=categories, ordered=ordered)
     assert_eq(expected, got)
 
+    expected = pd.CategoricalDtype(categories=categories)
+    got = cudf.CategoricalDtype(categories=categories)
+    assert_eq(expected, got)
+
 
 @pytest.mark.parametrize(
     ("data", "expected"),

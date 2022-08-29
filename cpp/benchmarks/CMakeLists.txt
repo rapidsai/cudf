@@ -277,6 +277,7 @@ ConfigureBench(
   string/factory.cu
   string/filter.cpp
   string/find.cpp
+  string/like.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
@@ -285,6 +286,8 @@ ConfigureBench(
   string/translate.cpp
   string/url_decode.cu
 )
+
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
