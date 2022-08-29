@@ -36,12 +36,19 @@ function(ConfigureTest CMAKE_TEST_NAME)
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-  install(
-    TARGETS ${CMAKE_TEST_NAME}
-    COMPONENT testing
-    DESTINATION bin/gtests/libcudf
-    EXCLUDE_FROM_ALL
-  )
+  if(SKBUILD)
+    install(
+      TARGETS ${CMAKE_TEST_NAME}
+      COMPONENT testing
+      DESTINATION bin/gtests/libcudf)
+  else()
+    install(
+      TARGETS ${CMAKE_TEST_NAME}
+      COMPONENT testing
+      DESTINATION bin/gtests/libcudf
+      EXCLUDE_FROM_ALL
+    )
+  endif()
 endfunction()
 
 # ##################################################################################################
