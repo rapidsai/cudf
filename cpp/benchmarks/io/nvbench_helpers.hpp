@@ -142,8 +142,8 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto value) {
     switch (value) {
       case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
-      case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "ORC_STATISTICS_STRIPE";
-      case cudf::io::statistics_freq::STATISTICS_PAGE: return "ORC_STATISTICS_ROW_GROUP";
+      case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "STATISTICS_ROWGROUP";
+      case cudf::io::statistics_freq::STATISTICS_PAGE: return "STATISTICS_PAGE";
       default: return "Unknown";
     }
   },

@@ -38,7 +38,7 @@ void BM_orc_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   auto const compression            = cudf::io::compression_type::SNAPPY;
-  auto const sink_type              = io_type::HOST_BUFFER;
+  auto const sink_type              = io_type::FILEPATH;
 
   auto const tbl =
     create_random_table(cycle_dtypes(d_type, num_cols),

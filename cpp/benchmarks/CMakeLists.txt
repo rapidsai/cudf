@@ -236,7 +236,7 @@ ConfigureBench(CSV_READER_BENCH io/csv/csv_reader.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
+ConfigureNVBench(PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
