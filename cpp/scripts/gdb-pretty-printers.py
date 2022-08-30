@@ -15,12 +15,11 @@
 
 import gdb
 
-
-if "HostIterator" not in locals():
-    raise Exception("This file expects the RMM pretty-printers to be loaded already. "
+global_locals = locals()
+if not all(name in global_locals for name in ["HostIterator", "DeviceIterator", "is_template_type_not_alias", "template_match"]):
+    raise NameError("This file expects the RMM pretty-printers to be loaded already. "
                     "Either load them manually, or use the generated load-pretty-printers "
                     "script in the build directory")
-
 
 
 class CudfHostSpanPrinter(gdb.printing.PrettyPrinter):
@@ -35,8 +34,7 @@ class CudfHostSpanPrinter(gdb.printing.PrettyPrinter):
         return HostIterator(self.pointer, self.size)
 
     def to_string(self):
-        typename = str(self.val.type)
-        return ("{typename} of length {self.size} at {hex(self.pointer)}")
+        return ("{self.val.type} of length {self.size} at {hex(self.pointer)}")
 
     def display_hint(self):
         return "array"
@@ -54,8 +52,7 @@ class CudfDeviceSpanPrinter(gdb.printing.PrettyPrinter):
         return DeviceIterator(self.pointer, self.size)
 
     def to_string(self):
-        typename = str(self.val.type)
-        return ("{typename} of length {self.size} at {hex(self.pointer)}")
+        return ("{self.val.type} of length {self.size} at {hex(self.pointer)}")
 
     def display_hint(self):
         return "array"
