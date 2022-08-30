@@ -469,12 +469,19 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     to_numpy_ops = {
         "__add__": _ADD_TYPES,
+        "__radd__": _ADD_TYPES,
         "__sub__": _SUB_TYPES,
+        "__rsub__": _SUB_TYPES,
         "__mul__": _MUL_TYPES,
+        "__rmul__": _MUL_TYPES,
         "__floordiv__": _FLOORDIV_TYPES,
+        "__rfloordiv__": _FLOORDIV_TYPES,
         "__truediv__": _TRUEDIV_TYPES,
+        "__rtruediv__": _TRUEDIV_TYPES,
         "__mod__": _MOD_TYPES,
+        "__rmod__": _MOD_TYPES,
         "__pow__": _POW_TYPES,
+        "__rpow__": _POW_TYPES,
     }
     allowed = to_numpy_ops.get(op, op)
 

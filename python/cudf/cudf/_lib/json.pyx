@@ -113,7 +113,7 @@ cpdef read_json(object filepaths_or_buffers,
     with nogil:
         c_result = move(libcudf_read_json(opts))
 
-    meta_names = [name.decode() for name in c_result.metadata.column_names]
+    meta_names = [info.name.decode() for info in c_result.metadata.schema_info]
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_result.tbl),
         column_names=meta_names

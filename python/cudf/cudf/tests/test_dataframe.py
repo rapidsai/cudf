@@ -9506,3 +9506,27 @@ def test_multiindex_wildcard_selection_three_level_all():
     expect = df.to_pandas().loc[:, (slice("a", "c"), slice("a", "b"), "b")]
     got = df.loc[:, (slice(None), "b")]
     assert_eq(expect, got)
+
+
+def test_dataframe_assign_scalar_to_empty_series():
+    expected = pd.DataFrame({"a": []})
+    actual = cudf.DataFrame({"a": []})
+    expected.a = 0
+    actual.a = 0
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {0: [1, 2, 3], 2: [10, 11, 23]},
+        {("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},
+    ],
+)
+def test_non_string_column_name_to_arrow(data):
+    df = cudf.DataFrame(data)
+
+    expected = df.to_arrow()
+    actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)

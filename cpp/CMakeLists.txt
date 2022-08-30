@@ -53,7 +53,7 @@ option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
 option(
   CUDF_USE_PER_THREAD_DEFAULT_STREAM
   "Build cuDF with per-thread default stream, including passing the per-thread default
@@ -328,6 +328,7 @@ add_library(
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
   src/io/json/json_gpu.cu
+  src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
   src/io/json/experimental/read_json.cpp
   src/io/orc/aggregate_orc_metadata.cpp
@@ -351,6 +352,7 @@ add_library(
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
+  src/io/text/data_chunk_source_factories.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -448,8 +450,8 @@ add_library(
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
+  src/search/contains_scalar.cu
   src/search/contains_table.cu
-  src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -494,6 +496,7 @@ add_library(
   src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
+  src/strings/like.cu
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
@@ -504,7 +507,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
@@ -556,6 +558,19 @@ add_library(
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
   src/utilities/type_checks.cpp
+)
+
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
+set_source_files_properties(
+  src/binaryop/binaryop.cpp
+  src/jit/cache.cpp
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
+  src/rolling/grouped_rolling.cu
+  src/rolling/rolling.cu
+  src/transform/transform.cpp
+  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
 set_target_properties(
@@ -644,16 +659,6 @@ else()
   # Make sure to export to consumers what runtime we used
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
-
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"

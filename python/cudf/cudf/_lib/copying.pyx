@@ -718,7 +718,11 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        gpu_data = Buffer(
+            data=self.gpu_data_ptr,
+            size=self.gpu_data_size,
+            owner=self
+        )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header
         frames.extend(data_frames)
