@@ -51,7 +51,7 @@ auto default_json_options()
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  auto const stream     = rmm::cuda_stream_default;
+  auto const stream     = cudf::default_stream_value;
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -60,7 +60,7 @@ auto default_json_options()
 
 TEST_F(JSONTypeCastTest, String)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
   auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
@@ -93,7 +93,7 @@ TEST_F(JSONTypeCastTest, String)
 
 TEST_F(JSONTypeCastTest, Int)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
   auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::INT64};
 
@@ -115,6 +115,40 @@ TEST_F(JSONTypeCastTest, Int)
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<int64_t>{{1, 2, 3, 1, 5, 0}, {1, 0, 1, 1, 1, 1}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col->view(), expected);
+}
+
+TEST_F(JSONTypeCastTest, StringEscapes)
+{
+  auto const stream = cudf::default_stream_value;
+  auto mr           = rmm::mr::get_current_device_resource();
+  auto const type   = cudf::data_type{cudf::type_id::STRING};
+
+  cudf::test::strings_column_wrapper data({
+    R"("\uD83D\uDE80")",
+    R"("invalid char being escaped escape char\-")",
+    R"("too few hex digits \u12")",
+    R"("too few hex digits for surrogate pair \uD83D\uDE")",
+    R"("\u005C")",
+    R"("\u27A9")",
+  });
+  auto d_column = cudf::column_device_view::create(data);
+  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
+  thrust::transform(thrust::device,
+                    d_column->pair_begin<cudf::string_view, false>(),
+                    d_column->pair_end<cudf::string_view, false>(),
+                    svs.begin(),
+                    to_thrust_pair_fn{});
+
+  auto null_mask_it = no_nulls();
+  auto null_mask =
+    cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
+
+  auto col = cudf::io::json::experimental::parse_data(
+    svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
+
+  auto expected = cudf::test::strings_column_wrapper{{"🚀", "", "", "", "\\", "➩"},
+                                                     {true, false, false, false, true, true}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col->view(), expected);
 }
 
