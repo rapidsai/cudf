@@ -132,14 +132,14 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
       continue;
     }
 
-    int digit_count    = 0;
-    int decimal_count  = 0;
-    int slash_count    = 0;
-    int dash_count     = 0;
-    int plus_count     = 0;
-    int colon_count    = 0;
-    int exponent_count = 0;
-    int other_count    = 0;
+    uint32_t digit_count    = 0;
+    uint32_t decimal_count  = 0;
+    uint32_t slash_count    = 0;
+    uint32_t dash_count     = 0;
+    uint32_t plus_count     = 0;
+    uint32_t colon_count    = 0;
+    uint32_t exponent_count = 0;
+    uint32_t other_count    = 0;
 
     auto const maybe_hex = (field_len > 2 && *field_begin == '0' && *(field_begin + 1) == 'x') ||
                            (field_len > 3 && *field_begin == '-' && *(field_begin + 1) == '0' &&
