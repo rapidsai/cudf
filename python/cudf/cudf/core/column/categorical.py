@@ -25,7 +25,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import dedup_preserve_order
 
 if TYPE_CHECKING:
     from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
@@ -1457,7 +1456,7 @@ class CategoricalColumn(column.ColumnBase):
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
             # drop_duplicates() instead of unique() to preserve order
-            new_cats = dedup_preserve_order(cudf.Series(new_cats))._column
+            new_cats = cudf.Series(new_cats)._column._dedup_preserve_order()
 
         cur_codes = self.codes
         max_cat_size = (

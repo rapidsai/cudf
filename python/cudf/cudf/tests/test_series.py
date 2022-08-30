@@ -21,7 +21,6 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     gen_rand,
 )
-from cudf.utils.utils import dedup_preserve_order
 
 
 def _series_na_data():
@@ -1936,5 +1935,5 @@ def test_series_ordered_dedup():
     sr = cudf.Series(np.random.randint(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())
-    got = dedup_preserve_order(sr)
+    got = cudf.Series(sr._column._dedup_preserve_order())
     assert_eq(expect.values, got.values)
