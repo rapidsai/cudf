@@ -60,7 +60,7 @@ struct inference_options {
 };
 
 /**
- * @brief Returns true is the input character is a valid digit.
+ * @brief Returns true if the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
  * @param c Character to check
