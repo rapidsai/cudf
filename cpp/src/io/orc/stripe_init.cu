@@ -178,10 +178,6 @@ __global__ void __launch_bounds__(128, 8)
         uncompressed_size_actual = block_len;
       } else {
         if (num_compressed_blocks > max_compressed_blocks) { break; }
-        if (shuffle((lane_id == 0) ? dec_status[num_compressed_blocks].status : 0) != 0) {
-          // Decompression failed, not much point in doing anything else
-          break;
-        }
         uint32_t const dst_size      = dec_out[num_compressed_blocks].size();
         uncompressed_size_est        = shuffle((lane_id == 0) ? dst_size : 0);
         uint32_t const bytes_written = dec_status[num_compressed_blocks].bytes_written;

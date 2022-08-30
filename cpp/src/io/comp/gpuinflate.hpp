@@ -25,12 +25,19 @@
 namespace cudf {
 namespace io {
 
+enum class compression_status : uint8_t {
+  SUCCESS,
+  FAILURE,
+  SKIPPED,
+  OUTPUT_OVERFLOW,
+};
+
 /**
  * @brief Output parameters for the decompression interface
  */
-struct decompress_status {
+struct compression_result {
   uint64_t bytes_written;
-  uint32_t status;
+  compression_status status;
   uint32_t reserved;
 };
 
@@ -50,7 +57,7 @@ enum class gzip_header_included { NO, YES };
  */
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> statuses,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream);
 
@@ -78,7 +85,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
  */
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> statuses,
                 rmm::cuda_stream_view stream);
 
 /**
@@ -105,7 +112,7 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  */
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<decompress_status> statuses,
+                  device_span<compression_result> statuses,
                   void* scratch,
                   size_t scratch_size,
                   rmm::cuda_stream_view stream);
@@ -123,7 +130,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
  */
 void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<decompress_status> statuses,
+              device_span<compression_result> statuses,
               rmm::cuda_stream_view stream);
 
 }  // namespace io

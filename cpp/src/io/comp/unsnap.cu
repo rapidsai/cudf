@@ -627,7 +627,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses)
+                device_span<compression_result> statuses)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -699,7 +699,8 @@ __global__ void __launch_bounds__(block_size)
   }
   if (!t) {
     statuses[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
-    statuses[strm_id].status        = s->error;
+    statuses[strm_id].status =
+      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     if (log_cyclecount) {
       statuses[strm_id].reserved = clock() - s->tstart;
     } else {
@@ -710,7 +711,7 @@ __global__ void __launch_bounds__(block_size)
 
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> statuses,
                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block

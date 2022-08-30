@@ -870,7 +870,7 @@ __global__ void __launch_bounds__(128, 8)
   gpuEncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats)
+                 device_span<compression_result> comp_stats)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1226,7 +1226,7 @@ __global__ void __launch_bounds__(128, 8)
     }
     pages[blockIdx.x] = s->page;
     if (not comp_stats.empty()) {
-      comp_stats[blockIdx.x]      = {0, ~0u};
+      comp_stats[blockIdx.x]      = {0, compression_status::FAILURE};
       pages[blockIdx.x].comp_stat = &comp_stats[blockIdx.x];
     }
   }
@@ -1263,7 +1263,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
       if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
         has_compression = true;
         compressed_data_size += comp_status->bytes_written;
-        if (comp_status->status != 0) { atomicAdd(&error_count, 1); }
+        if (comp_status->status != compression_status::SUCCESS) { atomicAdd(&error_count, 1); }
       }
     }
     uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
@@ -1680,7 +1680,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stat,
+                       device_span<compression_result const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats)
 {
@@ -2065,7 +2065,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
 void EncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats,
+                 device_span<compression_result> comp_stats,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
@@ -2080,7 +2080,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stats,
+                       device_span<compression_result const> comp_stats,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)

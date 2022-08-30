@@ -1154,7 +1154,7 @@ __global__ void __launch_bounds__(256)
                            device_2dspan<encoder_chunk_streams> streams,  // const?
                            device_span<device_span<uint8_t const>> inputs,
                            device_span<device_span<uint8_t>> outputs,
-                           device_span<decompress_status> statuses,
+                           device_span<compression_result> statuses,
                            uint8_t* compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size)
@@ -1181,7 +1181,7 @@ __global__ void __launch_bounds__(256)
     inputs[ss.first_block + b] = {src + b * comp_blk_size, blk_size};
     auto const dst_offset = b * compressed_block_size(max_comp_blk_size) + padded_block_header_size;
     outputs[ss.first_block + b]  = {dst + dst_offset, max_comp_blk_size};
-    statuses[ss.first_block + b] = {blk_size, 1, 0};
+    statuses[ss.first_block + b] = {0, compression_status::FAILURE};
   }
 }
 
@@ -1203,7 +1203,7 @@ __global__ void __launch_bounds__(1024)
   gpuCompactCompressedBlocks(device_2dspan<StripeStream> strm_desc,
                              device_span<device_span<uint8_t const> const> inputs,
                              device_span<device_span<uint8_t> const> outputs,
-                             device_span<decompress_status> statuses,
+                             device_span<compression_result> statuses,
                              uint8_t* compressed_bfr,
                              uint32_t comp_blk_size,
                              uint32_t max_comp_blk_size)
@@ -1229,11 +1229,11 @@ __global__ void __launch_bounds__(1024)
     if (t == 0) {
       auto const src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-      auto dst_len = (statuses[ss.first_block + b].status == 0)
+      auto dst_len = (statuses[ss.first_block + b].status == compression_status::SUCCESS)
                        ? statuses[ss.first_block + b].bytes_written
                        : src_len;
       uint32_t blk_size24{};
-      if (statuses[ss.first_block + b].status == 0) {
+      if (statuses[ss.first_block + b].status == compression_status::SUCCESS) {
         // Copy from uncompressed source
         src                                        = inputs[ss.first_block + b].data();
         statuses[ss.first_block + b].bytes_written = src_len;
@@ -1310,7 +1310,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<decompress_status> comp_stat,
+                            device_span<compression_result> comp_stat,
                             rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
@@ -1337,10 +1337,11 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       }
     } catch (...) {
       // There was an error in compressing so set an error status for each block
-      thrust::for_each(rmm::exec_policy(stream),
-                       comp_stat.begin(),
-                       comp_stat.end(),
-                       [] __device__(decompress_status & stat) { stat.status = 1; });
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        comp_stat.begin(),
+        comp_stat.end(),
+        [] __device__(compression_result & stat) { stat.status = compression_status::FAILURE; });
       // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
       // writing without compression
     }
@@ -1352,12 +1353,6 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
   }
-
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              comp_stat.begin(),
-                              comp_stat.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
-               "Error during compression");
 
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(

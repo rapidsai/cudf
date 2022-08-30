@@ -59,7 +59,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
 
 void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
                     device_span<size_t const> actual_uncompressed_sizes,
-                    device_span<decompress_status> cudf_stats,
+                    device_span<compression_result> cudf_stats,
                     rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
@@ -70,13 +70,18 @@ void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
     cudf_stats.begin(),
     cudf_stats.begin(),
     [] __device__(auto const& nvcomp_status, auto const& size) {
-      return decompress_status{size, nvcomp_status == nvcompStatus_t::nvcompSuccess ? 0u : 1u};
+      return compression_result{size,
+                                nvcomp_status == nvcompStatus_t::nvcompSuccess
+                                  ? compression_status::SUCCESS
+                                  : compression_status::FAILURE};
     },
-    [] __device__(auto const& cudf_status) { return cudf_status.status != 2; });
+    [] __device__(auto const& cudf_status) {
+      return cudf_status.status != compression_status::SKIPPED;
+    });
 }
 
 void convert_status(device_span<size_t const> actual_uncompressed_sizes,
-                    device_span<decompress_status> cudf_stats,
+                    device_span<compression_result> cudf_stats,
                     rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
@@ -85,12 +90,14 @@ void convert_status(device_span<size_t const> actual_uncompressed_sizes,
     actual_uncompressed_sizes.end(),
     cudf_stats.begin(),
     cudf_stats.begin(),
-    [] __device__(auto const& size) { return decompress_status{size}; },
-    [] __device__(auto const& cudf_status) { return cudf_status.status != 2; });
+    [] __device__(auto const& size) { return compression_result{size}; },
+    [] __device__(auto const& cudf_status) {
+      return cudf_status.status != compression_status::SKIPPED;
+    });
 }
 
 size_t filter_inputs(device_span<size_t> input_sizes,
-                     device_span<decompress_status> statuses,
+                     device_span<compression_result> statuses,
                      std::optional<size_t> max_valid_input_size,
                      rmm::cuda_stream_view stream)
 {
@@ -103,7 +110,7 @@ size_t filter_inputs(device_span<size_t> input_sizes,
       input_sizes.begin(),
       status_size_it,
       [] __device__(auto const& status) {
-        return thrust::pair{0, decompress_status{0, 2}};
+        return thrust::pair{0, compression_result{0, compression_status::SKIPPED}};
       },
       [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
         return input_size > max_size;

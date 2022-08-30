@@ -262,18 +262,18 @@ auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
+__global__ void decompress_check_kernel(device_span<compression_result const> stats,
                                         bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
-    if (stats[tid].status != 0) {
+    if (stats[tid].status != compression_status::SUCCESS) {
       *any_block_failure = true;  // Doesn't need to be atomic
     }
   }
 }
 
-void decompress_check(device_span<decompress_status> stats,
+void decompress_check(device_span<compression_result> stats,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
@@ -337,9 +337,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<decompress_status> inflate_stats(num_compressed_blocks, stream);
-  thrust::fill(
-    rmm::exec_policy(stream), inflate_stats.begin(), inflate_stats.end(), decompress_status{0, 1});
+  rmm::device_uvector<compression_result> inflate_stats(num_compressed_blocks, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               inflate_stats.begin(),
+               inflate_stats.end(),
+               compression_result{0, compression_status::FAILURE});
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;

@@ -247,13 +247,15 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
 
-inline void decompress_check(device_span<decompress_status const> stats,
+inline void decompress_check(device_span<compression_result const> stats,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               stats.begin(),
                               stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
+                              [] __device__(auto const& stat) {
+                                return stat.status == compression_status::SUCCESS;
+                              }),
                "Error during decompression");
 }
 }  // namespace
@@ -1141,9 +1143,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
-  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
-  thrust::fill(
-    rmm::exec_policy(_stream), comp_stats.begin(), comp_stats.end(), decompress_status{0, 1});
+  rmm::device_uvector<compression_result> comp_stats(num_comp_pages, _stream);
+  thrust::fill(rmm::exec_policy(_stream),
+               comp_stats.begin(),
+               comp_stats.end(),
+               compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
@@ -1167,8 +1171,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
     auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, _stream);
-    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
-                                                     codec.num_pages);
+    device_span<compression_result> d_comp_stats_view(comp_stats.data() + start_pos,
+                                                      codec.num_pages);
 
     switch (codec.compression_type) {
       case parquet::GZIP:

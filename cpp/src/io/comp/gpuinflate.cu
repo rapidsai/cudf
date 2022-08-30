@@ -1027,7 +1027,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
                  device_span<device_span<uint8_t> const> outputs,
-                 device_span<decompress_status> statuses,
+                 device_span<compression_result> statuses,
                  gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
@@ -1134,8 +1134,12 @@ __global__ void __launch_bounds__(block_size)
       state->err = 1;
     }
     statuses[z].bytes_written = state->out - state->outbase;
-    statuses[z].status        = state->err;
-    statuses[z].reserved      = (int)(state->end - state->cur);  // Here mainly for debug purposes
+    if (state->err == 1) {
+      statuses[z].status = compression_status::OUTPUT_OVERFLOW;
+    } else {
+      statuses[z].status = (state->err) ? compression_status::SUCCESS : compression_status::FAILURE;
+    }
+    statuses[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 
@@ -1200,7 +1204,7 @@ __global__ void __launch_bounds__(1024)
 
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> statuses,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream)
 {

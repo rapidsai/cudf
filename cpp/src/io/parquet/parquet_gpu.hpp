@@ -367,7 +367,7 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  decompress_status* comp_stat;  //!< Ptr to compression status
+  compression_result* comp_stat;  //!< Ptr to compression status
 };
 
 /**
@@ -543,7 +543,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
 void EncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats,
+                 device_span<compression_result> comp_stats,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -564,7 +564,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stats,
+                       device_span<compression_result const> comp_stats,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream);

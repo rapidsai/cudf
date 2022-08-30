@@ -1128,15 +1128,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
-void compress_check(device_span<decompress_status const> stats, rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status != 1; }),
-               "Error during compression");
-}
-
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::EncPage> pages,
                                 size_t max_page_uncomp_data_size,
@@ -1160,9 +1151,11 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<decompress_status> comp_stats(max_comp_pages, stream);
-  thrust::fill(
-    rmm::exec_policy(stream), comp_stats.begin(), comp_stats.end(), decompress_status{0, 1});
+  rmm::device_uvector<compression_result> comp_stats(max_comp_pages, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               comp_stats.begin(),
+               comp_stats.end(),
+               compression_result{0, compression_status::FAILURE});
 
   gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
   switch (compression_) {
@@ -1183,7 +1176,6 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
     case parquet::Compression::UNCOMPRESSED: break;
     default: CUDF_FAIL("invalid compression type");
   }
-  compress_check(comp_stats, stream);
 
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level

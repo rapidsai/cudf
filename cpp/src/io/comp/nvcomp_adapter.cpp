@@ -160,7 +160,7 @@ size_t batched_decompress_temp_size(compression_type compression,
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
-                        device_span<decompress_status> statuses,
+                        device_span<compression_result> statuses,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
@@ -365,7 +365,7 @@ inline bool is_aligned(const void* ptr, std::uintptr_t alignment) noexcept
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<decompress_status> statuses,
+                      device_span<compression_result> statuses,
                       rmm::cuda_stream_view stream)
 {
   static int batch_idx  = 0;
