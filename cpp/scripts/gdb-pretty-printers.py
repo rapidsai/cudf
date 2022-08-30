@@ -16,13 +16,7 @@
 import gdb
 
 
-if not "ThrustVectorPrinter" in locals():
-    raise Exception("This file expects the Thrust pretty-printers to be loaded already. "
-                    "Either load them manually, or use the generated load-pretty-printers "
-                    "script in the build directory")
-
-
-if not "HostIterator" in locals():
+if "HostIterator" not in locals():
     raise Exception("This file expects the RMM pretty-printers to be loaded already. "
                     "Either load them manually, or use the generated load-pretty-printers "
                     "script in the build directory")
