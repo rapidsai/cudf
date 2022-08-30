@@ -32,7 +32,7 @@ void nvbench_sort_lists(nvbench::state& state)
   data_profile table_profile;
   table_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
   table_profile.set_list_depth(depth);
-  table_profile.set_null_frequency(null_frequency);
+  table_profile.set_null_probability(null_frequency);
   auto const table =
     create_random_table({cudf::type_id::LIST}, table_size_bytes{size_bytes}, table_profile);
 
