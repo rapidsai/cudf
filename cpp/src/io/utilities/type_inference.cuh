@@ -35,7 +35,7 @@ namespace cudf {
 namespace io {
 namespace detail {
 /**
- * @brief Structure for type inference options
+ * @brief Non-owning view for type inference options
  */
 struct inference_options_view {
   cudf::detail::trie_view trie_true;
@@ -43,7 +43,9 @@ struct inference_options_view {
   cudf::detail::trie_view trie_na;
   char quote_char;
 };
-
+/**
+ * @brief Structure for type inference options
+ */
 struct inference_options {
   cudf::detail::optional_trie trie_true;
   cudf::detail::optional_trie trie_false;
@@ -60,7 +62,7 @@ struct inference_options {
 };
 
 /**
- * @brief Returns true is the input character is a valid digit.
+ * @brief Returns true if the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
  * @param c Character to check
@@ -168,7 +170,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
     }
 
     // Integers have to have the length of the string
-    int int_req_number_cnt = field_len;
+    auto int_req_number_cnt = field_len;
     // Off by one if they start with a minus sign
     if ((*field_begin == '-' || *field_begin == '+') && field_len > 1) { --int_req_number_cnt; }
     // Off by one if they are a hexadecimal number
