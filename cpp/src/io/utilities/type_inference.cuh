@@ -108,6 +108,18 @@ __device__ __inline__ bool is_like_float(
   return true;
 }
 
+/**
+ * @brief Constructs column type histogram for a given column string input `data`.
+ *
+ * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
+ * `thrust::tuple<device_span, string_view>`
+ *
+ * @param[in] options View of inference options
+ * @param[in] data JSON string input
+ * @param[in] column_strings_begin The begining of an offset-length tuple sequence
+ * @param[in] size Size of the string input
+ * @param[out] column_info Histogram of column type counters
+ */
 template <typename ColumnStringIter>
 __global__ void detect_column_type_kernel(inference_options_view const options,
                                           device_span<char const> const data,
@@ -169,7 +181,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
     }
 
     // Integers have to have the length of the string
-    auto int_req_number_cnt = field_len;
+    auto int_req_number_cnt = static_cast<uint32_t>(field_len);
     // Off by one if they start with a minus sign
     if ((*field_begin == '-' || *field_begin == '+') && field_len > 1) { --int_req_number_cnt; }
     // Off by one if they are a hexadecimal number
@@ -200,6 +212,19 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
   }  // for
 }
 
+/**
+ * @brief Constructs column type histogram for a given column string input `data`.
+ *
+ * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
+ * `thrust::tuple<device_span, string_view>`
+ *
+ * @param options View of inference options
+ * @param data JSON string input
+ * @param column_strings_begin The begining of an offset-length tuple sequence
+ * @param size Size of the string input
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A histogram containing column-specific type counters
+ */
 template <typename ColumnStringIter>
 cudf::io::column_type_histogram detect_column_type(inference_options_view const& options,
                                                    cudf::device_span<char const> data,
@@ -220,6 +245,22 @@ cudf::io::column_type_histogram detect_column_type(inference_options_view const&
   return d_column_info.value(stream);
 }
 
+/**
+ * @brief Detects data type for a given JSON string input `data`.
+ *
+ * @throw cudf::logic_error if input size is 0
+ * @throw cudf::logic_error if data type detection failed
+ *
+ * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
+ * `thrust::tuple<device_span, string_view>`
+ *
+ * @param options View of inference options
+ * @param data JSON string input
+ * @param column_strings_begin The begining of an offset-length tuple sequence
+ * @param size Size of the string input
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return The detected data type
+ */
 template <typename ColumnStringIter>
 cudf::data_type detect_data_type(inference_options_view const& options,
                                  device_span<char const> data,
