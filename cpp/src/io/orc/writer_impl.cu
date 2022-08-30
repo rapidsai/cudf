@@ -877,8 +877,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
   auto const stream_offsets =
     streams.compute_offsets(orc_table.columns, segmentation.num_rowgroups());
-  rmm::device_uvector<uint8_t> encoded_data(
-    stream_offsets.data_size() + 3 * streams.size() * segmentation.num_rowgroups(), stream);
+  rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
 
