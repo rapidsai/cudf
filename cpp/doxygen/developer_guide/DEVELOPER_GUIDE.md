@@ -82,26 +82,28 @@ few cases: template parameters, unit tests and test case names may use Pascal ca
 device data variables and their corresponding host copies. Private member variables are typically
 prefixed with an underscore.
 
-    template <typename IteratorType>
-    void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_memory_resource* mr)
-    {
-      ...
-    }
+~~~c++
+template <typename IteratorType>
+void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_memory_resource* mr)
+{
+  ...
+}
 
-    class utility_class
-    {
-      ...
-    private:
-      int _rating{};
-      std::unique_ptr<cudf::column> _column{};
-    }
+class utility_class
+{
+  ...
+private:
+  int _rating{};
+  std::unique_ptr<cudf::column> _column{};
+}
 
-    TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 
-    TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
-    {
-      ...
-    }
+TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
+{
+  ...
+}
+~~~
 
 C++ formatting is enforced using `clang-format`. You should configure `clang-format` on your
 machine to use the `cudf/cpp/.clang-format` configuration file, and run `clang-format` on all
@@ -179,7 +181,9 @@ detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/
 libcudf functions typically take views as input (`column_view` or `table_view`)
 and produce `unique_ptr`s to owning objects as output. For example,
 
-    std::unique_ptr<table> sort(table_view const& input);
+~~~c++
+std::unique_ptr<table> sort(table_view const& input);
+~~~
 
 ## rmm::device_memory_resource
 
@@ -206,13 +210,15 @@ the contents from one column to another.
 
 Example:
 
-    cudf::column col{...};
+~~~c++
+cudf::column col{...};
 
-    cudf::column copy{col}; // Copies the contents of `col`
-    cudf::column const moved_to{std::move(col)}; // Moves contents from `col`
+cudf::column copy{col}; // Copies the contents of `col`
+cudf::column const moved_to{std::move(col)}; // Moves contents from `col`
 
-    column_view v = moved_to; // Implicit conversion to non-owning column_view
-    // mutable_column_view m = moved_to; // Cannot create mutable view to const column
+column_view v = moved_to; // Implicit conversion to non-owning column_view
+// mutable_column_view m = moved_to; // Cannot create mutable view to const column
+~~~
 
 A `column` may have nested (child) columns, depending on the data type of the column. For example,
 `LIST`, `STRUCT`, and `STRING` type columns.
@@ -282,8 +288,10 @@ the template type parameter, not to the `span` itself. Also, `span` should be pa
 because it is a lightweight view. APIS in libcudf that take spans as input will look like the
 following function that copies device data to a host `std::vector`.
 
-    template <typename T>
-    std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+~~~c++
+template <typename T>
+std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+~~~
 
 ## cudf::scalar
 
@@ -319,11 +327,13 @@ of the value type e.g. a functor that is dispatched from `type_dispatcher`. To c
 requisite scalar class type given the value type, use the mapping utility `scalar_type_t` provided
 in `type_dispatcher.hpp` :
 
-    //unique_ptr<scalar> s = make_numeric_scalar(...);
+~~~c++
+//unique_ptr<scalar> s = make_numeric_scalar(...);
 
-    using ScalarType = cudf::scalar_type_t<T>;
-    // ScalarType is now numeric_scalar<T>
-    auto s1 = static_cast<ScalarType *>(s.get());
+using ScalarType = cudf::scalar_type_t<T>;
+// ScalarType is now numeric_scalar<T>
+auto s1 = static_cast<ScalarType *>(s.get());
+~~~
 
 ### Passing to device
 Each scalar type, except `list_scalar`, has a corresponding non-owning device view class which allows
@@ -357,30 +367,32 @@ header placed in the `cudf/cpp/include/detail/` directory.
 
 For example:
 
-    // cpp/include/cudf/header.hpp
-    void external_function(...);
+~~~c++
+// cpp/include/cudf/header.hpp
+void external_function(...);
 
-    // cpp/include/cudf/detail/header.hpp
-    namespace detail{
-    void external_function(..., rmm::cuda_stream_view stream)
-    } // namespace detail
+// cpp/include/cudf/detail/header.hpp
+namespace detail{
+void external_function(..., rmm::cuda_stream_view stream)
+} // namespace detail
 
-    // cudf/src/implementation.cpp
-    namespace detail{
-        // Use the stream parameter in the detail implementation.
-        void external_function(..., rmm::cuda_stream_view stream){
-            // Implementation uses the stream with async APIs.
-            rmm::device_buffer buff(...,stream);
-            CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
-            kernel<<<..., stream>>>(...);
-            thrust::algorithm(rmm::exec_policy(stream), ...);
-        }
-    } // namespace detail
-
-    void external_function(...){
-        CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-        detail::external_function(..., cudf::default_stream_value);
+// cudf/src/implementation.cpp
+namespace detail{
+    // Use the stream parameter in the detail implementation.
+    void external_function(..., rmm::cuda_stream_view stream){
+        // Implementation uses the stream with async APIs.
+        rmm::device_buffer buff(...,stream);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+        kernel<<<..., stream>>>(...);
+        thrust::algorithm(rmm::exec_policy(stream), ...);
     }
+} // namespace detail
+
+void external_function(...){
+    CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
+    detail::external_function(..., cudf::default_stream_value);
+}
+~~~
 
 **Note:** It is important to synchronize the stream if *and only if* it is necessary. For example,
 when a non-pointer value is returned from the API that is the result of an asynchronous
@@ -420,31 +432,33 @@ Any libcudf API that allocates memory that is *returned* to a user must accept a
 to allocate any memory for returned objects. It should therefore be passed into functions whose
 outputs will be returned. Example:
 
-    // Returned `column` contains newly allocated memory,
-    // therefore the API must accept a memory resource pointer
-    std::unique_ptr<column> returns_output_memory(
-      ..., rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
+~~~c++
+// Returned `column` contains newly allocated memory,
+// therefore the API must accept a memory resource pointer
+std::unique_ptr<column> returns_output_memory(
+  ..., rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
 
-    // This API does not allocate any new *output* memory, therefore
-    // a memory resource is unnecessary
-    void does_not_allocate_output_memory(...);
-    ```
+// This API does not allocate any new *output* memory, therefore
+// a memory resource is unnecessary
+void does_not_allocate_output_memory(...);
+```
 
-    ### Temporary Memory
+### Temporary Memory
 
-    Not all memory allocated within a libcudf API is returned to the caller. Often algorithms must
-    allocate temporary, scratch memory for intermediate results. Always use the default resource
-    obtained from `rmm::mr::get_current_device_resource()` for temporary memory allocations. Example:
+Not all memory allocated within a libcudf API is returned to the caller. Often algorithms must
+allocate temporary, scratch memory for intermediate results. Always use the default resource
+obtained from `rmm::mr::get_current_device_resource()` for temporary memory allocations. Example:
 
-    ```c++
-    rmm::device_buffer some_function(
-      ..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()) {
-        rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
-        ...
-        rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
-        ...
-        return returned_buffer;
-    }
+```c++
+rmm::device_buffer some_function(
+  ..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()) {
+    rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
+    ...
+    rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
+    ...
+    return returned_buffer;
+}
+~~~
 
 ### Memory Management
 
@@ -460,36 +474,40 @@ Allocates a specified number of bytes of untyped, uninitialized device memory us
 `device_buffer`'s device memory on the specified stream, whereas a move moves ownership of the
 device memory from one `device_buffer` to another.
 
-    // Allocates at least 100 bytes of uninitialized device memory
-    // using the specified resource and stream
-    rmm::device_buffer buff(100, stream, mr);
-    void * raw_data = buff.data(); // Raw pointer to underlying device memory
+~~~c++
+// Allocates at least 100 bytes of uninitialized device memory
+// using the specified resource and stream
+rmm::device_buffer buff(100, stream, mr);
+void * raw_data = buff.data(); // Raw pointer to underlying device memory
 
-    // Deep copies `buff` into `copy` on `stream`
-    rmm::device_buffer copy(buff, stream);
+// Deep copies `buff` into `copy` on `stream`
+rmm::device_buffer copy(buff, stream);
 
-    // Moves contents of `buff` into `moved_to`
-    rmm::device_buffer moved_to(std::move(buff));
+// Moves contents of `buff` into `moved_to`
+rmm::device_buffer moved_to(std::move(buff));
 
-    custom_memory_resource *mr...;
-    // Allocates 100 bytes from the custom_memory_resource
-    rmm::device_buffer custom_buff(100, mr, stream);
+custom_memory_resource *mr...;
+// Allocates 100 bytes from the custom_memory_resource
+rmm::device_buffer custom_buff(100, mr, stream);
+~~~
 
 #### rmm::device_scalar<T>
 Allocates a single element of the specified type initialized to the specified value. Use this for
 scalar input/outputs into device kernels, e.g., reduction results, null count, etc. This is
 effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
 
-    // Allocates device memory for a single int using the specified resource and stream
-    // and initializes the value to 42
-    rmm::device_scalar<int> int_scalar{42, stream, mr};
+~~~c++
+// Allocates device memory for a single int using the specified resource and stream
+// and initializes the value to 42
+rmm::device_scalar<int> int_scalar{42, stream, mr};
 
-    // scalar.data() returns pointer to value in device memory
-    kernel<<<...>>>(int_scalar.data(),...);
+// scalar.data() returns pointer to value in device memory
+kernel<<<...>>>(int_scalar.data(),...);
 
-    // scalar.value() synchronizes the scalar's stream and copies the
-    // value from device to host and returns the value
-    int host_value = int_scalar.value();
+// scalar.value() synchronizes the scalar's stream and copies the
+// value from device to host and returns the value
+int host_value = int_scalar.value();
+~~~
 
 #### rmm::device_vector<T>
 
@@ -514,16 +532,18 @@ on which the operation is performed). This improves safety when using non-defaul
 - `device_uvector.hpp` does not include any `__device__` code, unlike `thrust/device_vector.hpp`,
   which means `device_uvector`s can be used in `.cpp` files, rather than just in `.cu` files.
 
-    cuda_stream s;
-    // Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the
-    // default resource
-    rmm::device_uvector<int32_t> v(100, s);
-    // Initializes the elements to 0
-    thrust::uninitialized_fill(thrust::cuda::par.on(s.value()), v.begin(), v.end(), int32_t{0});
+~~~c++
+cuda_stream s;
+// Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the
+// default resource
+rmm::device_uvector<int32_t> v(100, s);
+// Initializes the elements to 0
+thrust::uninitialized_fill(thrust::cuda::par.on(s.value()), v.begin(), v.end(), int32_t{0});
 
-    rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
-    // Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
-    rmm::device_uvector<int32_t> v2{100, s, mr};
+rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
+// Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
+rmm::device_uvector<int32_t> v2{100, s, mr};
+~~~
 
 ## Input/Output Style
 
@@ -566,19 +586,21 @@ either the copy constructor or the move constructor of the object, and it may be
 non-trivially copyable objects (and required for types with deleted copy constructors, like
 `std::unique_ptr`).
 
-    std::pair<table, table> return_two_tables(void){
-      cudf::table out0;
-      cudf::table out1;
-      ...
-      // Do stuff with out0, out1
+~~~c++
+std::pair<table, table> return_two_tables(void){
+  cudf::table out0;
+  cudf::table out1;
+  ...
+  // Do stuff with out0, out1
 
-      // Return a std::pair of the two outputs
-      return std::pair(std::move(out0), std::move(out1));
-    }
+  // Return a std::pair of the two outputs
+  return std::pair(std::move(out0), std::move(out1));
+}
 
-    cudf::table out0;
-    cudf::table out1;
-    std::tie(out0, out1) = cudf::return_two_outputs();
+cudf::table out0;
+cudf::table out1;
+std::tie(out0, out1) = cudf::return_two_outputs();
+~~~
 
 Note: `std::tuple` _could_ be used if not for the fact that Cython does not support
 `std::tuple`. Therefore, libcudf APIs must use `std::pair`, and are therefore limited to return
@@ -589,22 +611,26 @@ Alternatively, with C++17 (supported from cudf v0.20),
 [structured binding](https://en.cppreference.com/w/cpp/language/structured_binding)
 may be used to disaggregate multiple return values:
 
-    auto [out0, out1] = cudf::return_two_outputs();
+~~~c++
+auto [out0, out1] = cudf::return_two_outputs();
+~~~
 
 Note that the compiler might not support capturing aliases defined in a structured binding
 in a lambda. One may work around this by using a capture with an initializer instead:
 
-    auto [out0, out1] = cudf::return_two_outputs();
+~~~c++
+auto [out0, out1] = cudf::return_two_outputs();
 
-    // Direct capture of alias from structured binding might fail with:
-    // "error: structured binding cannot be captured"
-    // auto foo = [out0]() {...};
+// Direct capture of alias from structured binding might fail with:
+// "error: structured binding cannot be captured"
+// auto foo = [out0]() {...};
 
-    // Use an initializing capture:
-    auto foo = [&out0 = out0] {
-      // Use out0 to compute something.
-      // ...
-    };
+// Use an initializing capture:
+auto foo = [&out0 = out0] {
+  // Use out0 to compute something.
+  // ...
+};
+~~~
 
 ## Iterator-based interfaces
 
@@ -616,14 +642,16 @@ first or second input depending on whether the mask at that index is `true` or `
 `copy_if_else` for all combinations of `column` and `scalar` parameters is simplified by using
 iterators in the `detail` API.
 
-    template <typename FilterFn, typename LeftIter, typename RightIter>
-    std::unique_ptr<column> copy_if_else(
-      bool nullable,
-      LeftIter lhs_begin,
-      LeftIter lhs_end,
-      RightIter rhs,
-      FilterFn filter,
-      ...);
+~~~c++
+template <typename FilterFn, typename LeftIter, typename RightIter>
+std::unique_ptr<column> copy_if_else(
+  bool nullable,
+  LeftIter lhs_begin,
+  LeftIter lhs_end,
+  RightIter rhs,
+  FilterFn filter,
+  ...);
+~~~
 
 `LeftIter` and `RightIter` need only implement the necessary interface for an iterator. libcudf
 provides a number of iterator types and utilities that are useful with iterator-based APIs from
@@ -659,29 +687,35 @@ iterator interface for reading an array of integer values of type `int8`, `int16
 Use the `indexalator_factory` to create an appropriate input iterator from a column_view. Example
 input iterator usage:
 
-    auto begin = indexalator_factory::create_input_iterator(gather_map);
-    auto end   = begin + gather_map.size();
-    auto result = detail::gather( source, begin, end, IGNORE, stream, mr );
+~~~c++
+auto begin = indexalator_factory::create_input_iterator(gather_map);
+auto end   = begin + gather_map.size();
+auto result = detail::gather( source, begin, end, IGNORE, stream, mr );
+~~~
 
 Example output iterator usage:
 
-    auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
-    thrust::lower_bound(rmm::exec_policy(stream),
-                        input->begin<Element>(),
-                        input->end<Element>(),
-                        values->begin<Element>(),
-                        values->end<Element>(),
-                        result_itr,
-                        thrust::less<Element>());
+~~~c++
+auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
+thrust::lower_bound(rmm::exec_policy(stream),
+                    input->begin<Element>(),
+                    input->end<Element>(),
+                    values->begin<Element>(),
+                    values->end<Element>(),
+                    result_itr,
+                    thrust::less<Element>());
+~~~
 
 ## Namespaces
 
 ### External
 All public libcudf APIs should be placed in the `cudf` namespace. Example:
 
-    namespace cudf{
-       void public_function(...);
-    } // namespace cudf
+~~~c++
+namespace cudf{
+   void public_function(...);
+} // namespace cudf
+~~~
 
 The top-level `cudf` namespace is sufficient for most of the public API. However, to logically
 group a broad set of functions, further namespaces may be used. For example, there are numerous
@@ -699,22 +733,26 @@ namespace, depending on the situation.
 Functions or objects that will be used across *multiple* translation units (i.e., source files),
 should be exposed in an internal header file and placed in the `detail` namespace. Example:
 
-    // some_utilities.hpp
-    namespace cudf{
-    namespace detail{
-    void reusable_helper_function(...);
-    } // namespace detail
-    } // namespace cudf
+~~~c++
+// some_utilities.hpp
+namespace cudf{
+namespace detail{
+void reusable_helper_function(...);
+} // namespace detail
+} // namespace cudf
+~~~
 
 #### Anonymous namespace
 
 Functions or objects that will only be used in a *single* translation unit should be defined in an
 *anonymous* namespace in the source file where it is used. Example:
 
-    // some_file.cpp
-    namespace{
-    void isolated_helper_function(...);
-    } // anonymous namespace
+~~~c++
+// some_file.cpp
+namespace{
+void isolated_helper_function(...);
+} // anonymous namespace
+~~~
 
 [**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file)
 
@@ -754,7 +792,9 @@ Use the `CUDF_EXPECTS` macro to enforce runtime conditions necessary for correct
 
 Example usage:
 
-    CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
+~~~c++
+CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
+~~~
 
 The first argument is the conditional expression expected to resolve to `true` under normal
 conditions. If the conditional evaluates to `false`, then an error has occurred and an instance of
@@ -768,7 +808,9 @@ Use the `CUDF_FAIL` macro for such errors. This is effectively the same as calli
 
 Example:
 
-    CUDF_FAIL("This code path should not be reached.");
+~~~c++
+CUDF_FAIL("This code path should not be reached.");
+~~~
 
 ### CUDA Error Checking
 
@@ -778,17 +820,21 @@ thrown exception includes a description of the CUDA error code in its `what()` m
 
 Example:
 
-    CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
+~~~c++
+CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
+~~~
 
 ## Compile-Time Conditions
 
 Use `static_assert` to enforce compile-time conditions. For example,
 
-    template <typename T>
-    void trivial_types_only(T t){
-      static_assert(std::is_trivial<T>::value, "This function requires a trivial type.");
-    ...
-    }
+~~~c++
+template <typename T>
+void trivial_types_only(T t){
+  static_assert(std::is_trivial<T>::value, "This function requires a trivial type.");
+...
+}
+~~~
 
 # Data Types
 
@@ -831,36 +877,42 @@ type dispatcher invokes the corresponding instantiation of the `operator()` temp
 This simplified example shows how the value of `data_type::id()` determines which instantiation of
 the `F::operator()` template is invoked.
 
-    template <typename F>
-    void type_dispatcher(data_type t, F f){
-        switch(t.id())
-           case type_id::INT32: f.template operator()<int32_t>()
-           case type_id::INT64: f.template operator()<int64_t>()
-           case type_id::FLOAT: f.template operator()<float>()
-           ...
-    }
+~~~c++
+template <typename F>
+void type_dispatcher(data_type t, F f){
+    switch(t.id())
+       case type_id::INT32: f.template operator()<int32_t>()
+       case type_id::INT64: f.template operator()<int64_t>()
+       case type_id::FLOAT: f.template operator()<float>()
+       ...
+}
+~~~
 
 The following example shows a function object called `size_of_functor` that returns the size of the
 dispatched type.
 
-    struct size_of_functor{
-      template <typename T>
-      int operator()(){ return sizeof(T); }
-    };
+~~~c++
+struct size_of_functor{
+  template <typename T>
+  int operator()(){ return sizeof(T); }
+};
 
-    cudf::type_dispatcher(data_type{type_id::INT8}, size_of_functor{});  // returns 1
-    cudf::type_dispatcher(data_type{type_id::INT32}, size_of_functor{});  // returns 4
-    cudf::type_dispatcher(data_type{type_id::FLOAT64}, size_of_functor{});  // returns 8
+cudf::type_dispatcher(data_type{type_id::INT8}, size_of_functor{});  // returns 1
+cudf::type_dispatcher(data_type{type_id::INT32}, size_of_functor{});  // returns 4
+cudf::type_dispatcher(data_type{type_id::FLOAT64}, size_of_functor{});  // returns 8
+~~~
 
 By default, `type_dispatcher` uses `cudf::type_to_id<t>` to provide the mapping of `cudf::type_id`
 to dispatched C++ types. However, this mapping may be customized by explicitly specifying a
 user-defined trait for the `IdTypeMap`. For example, to always dispatch `int32_t` for all values of
 `cudf::type_id`:
 
-    template<cudf::type_id t> struct always_int{ using type = int32_t; }
+~~~c++
+template<cudf::type_id t> struct always_int{ using type = int32_t; }
 
-    // This will always invoke `operator()<int32_t>`
-    cudf::type_dispatcher<always_int>(data_type, f);
+// This will always invoke `operator()<int32_t>`
+cudf::type_dispatcher<always_int>(data_type, f);
+~~~
 
 ## Avoid Multiple Type Dispatch
 
@@ -878,38 +930,42 @@ The first method is to use explicit, full template specialization. This is usefu
 behavior for single types. The following example function object prints `"int32_t"` or `"double"`
 when invoked with either of those types, or `"unhandled type"` otherwise.
 
-    struct type_printer {
-    template <typename ColumnType>
-    void operator()() { std::cout << "unhandled type\n"; }
-    };
+~~~c++
+struct type_printer {
+template <typename ColumnType>
+void operator()() { std::cout << "unhandled type\n"; }
+};
 
-    // Due to a bug in g++, explicit member function specializations need to be
-    // defined outside of the class definition
-    template <>
-    void type_printer::operator()<int32_t>() { std::cout << "int32_t\n"; }
+// Due to a bug in g++, explicit member function specializations need to be
+// defined outside of the class definition
+template <>
+void type_printer::operator()<int32_t>() { std::cout << "int32_t\n"; }
 
-    template <>
-    void type_printer::operator()<double>() { std::cout << "double\n"; }
+template <>
+void type_printer::operator()<double>() { std::cout << "double\n"; }
+~~~
 
 The second method is to use [SFINAE](https://en.cppreference.com/w/cpp/language/sfinae) with
 `std::enable_if_t`. This is useful to partially specialize for a set of types with a common trait.
 The following example functor prints `integral` or `floating point` for integral or floating point
 types, respectively.
 
-    struct integral_or_floating_point {
-    template <typename ColumnType,
-              std::enable_if_t<not std::is_integral<ColumnType>::value and
-                               not std::is_floating_point<ColumnType>::value>* = nullptr>
-    void operator()() { std::cout << "neither integral nor floating point\n"; }
+~~~c++
+struct integral_or_floating_point {
+template <typename ColumnType,
+          std::enable_if_t<not std::is_integral<ColumnType>::value and
+                           not std::is_floating_point<ColumnType>::value>* = nullptr>
+void operator()() { std::cout << "neither integral nor floating point\n"; }
 
-    template <typename ColumnType,
-              std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
-    void operator()() { std::cout << "integral\n"; }
+template <typename ColumnType,
+          std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
+void operator()() { std::cout << "integral\n"; }
 
-    template < typename ColumnType,
-               std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
-    void operator()() { std::cout << "floating point\n"; }
-    };
+template < typename ColumnType,
+           std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
+void operator()() { std::cout << "floating point\n"; }
+};
+~~~
 
 For more info on SFINAE with `std::enable_if`, [see this post](https://eli.thegreenplace.net/2014/sfinae-and-enable_if).
 
@@ -961,24 +1017,26 @@ bottom of the hierarchy (ignoring structs, which conceptually "reset" the root o
 regardless of the level of nesting. So a `List<List<List<List<int>>>>` column has a single `int`
 column at the very bottom. The following is a visual representation of this.
 
-    lists_column = { {{{1, 2}, {3, 4}}, NULL}, {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}} }
+~~~
+lists_column = { {{{1, 2}, {3, 4}}, NULL}, {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}} }
 
-       List<List<List<int>>>  (2 rows):
-       Length : 2
-       Offsets : 0, 2, 4
-       Children :
-          List<List<int>>:
-          Length : 4
-          Offsets : 0, 2, 2, 4, 6
-          Null count: 1
-            1101
-          Children :
-            List<int>:
-            Length : 6
-            Offsets : 0, 2, 4, 6, 8, 11, 12
-            Children :
-              Column of ints
-              1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0
+   List<List<List<int>>>  (2 rows):
+   Length : 2
+   Offsets : 0, 2, 4
+   Children :
+      List<List<int>>:
+      Length : 4
+      Offsets : 0, 2, 2, 4, 6
+      Null count: 1
+        1101
+      Children :
+        List<int>:
+        Length : 6
+        Offsets : 0, 2, 4, 6, 8, 11, 12
+        Children :
+          Column of ints
+          1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0
+~~~
 
 This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.apache.org/docs/format/Columnar.html?highlight=nested%20types#physical-memory-layout).
 
@@ -1020,25 +1078,27 @@ struct row are deemed to be null as well. For example, consider a struct column 
 `STRUCT<FLOAT32, INT32>`. If the contents are `[ {1.0, 2}, {4.0, 5}, null, {8.0, null} ]`, the
 struct column's layout is as follows. (Note that null masks should be read from right to left.)
 
+~~~
+{
+  type = STRUCT
+  null_mask = [1, 1, 0, 1]
+  null_count = 1
+  children = {
     {
-      type = STRUCT
-      null_mask = [1, 1, 0, 1]
+      type = FLOAT32
+      data =       [1.0, 4.0, X, 8.0]
+      null_mask  = [  1,   1, 0,   1]
       null_count = 1
-      children = {
-        {
-          type = FLOAT32
-          data =       [1.0, 4.0, X, 8.0]
-          null_mask  = [  1,   1, 0,   1]
-          null_count = 1
-        },
-        {
-          type = INT32
-          data =       [2, 5, X, X]
-          null_mask  = [1, 1, 0, 0]
-          null_count = 2
-        }
-      }
+    },
+    {
+      type = INT32
+      data =       [2, 5, X, X]
+      null_mask  = [1, 1, 0, 0]
+      null_count = 2
     }
+  }
+}
+~~~
 
 The last struct row (index 3) is not null, but has a null value in the INT32 field. Also, row 2 of
 the struct column is null, making its corresponding fields also null. Therefore, bit 2 is unset in
@@ -1106,12 +1166,14 @@ as the column it views.
 Use the `column_device_view::element` method to access an individual row element. Like any other
 column, do not call `element()` on a row that is null.
 
-       cudf::column_device_view d_strings;
-       ...
-       if( d_strings.is_valid(row_index) ) {
-          string_view d_str = d_strings.element<string_view>(row_index);
-          ...
-       }
+~~~c++
+   cudf::column_device_view d_strings;
+   ...
+   if( d_strings.is_valid(row_index) ) {
+      string_view d_str = d_strings.element<string_view>(row_index);
+      ...
+   }
+~~~
 
 A null string is not the same as an empty string. Use the `string_scalar` class if you need an
 instance of a class object to represent a null string.
