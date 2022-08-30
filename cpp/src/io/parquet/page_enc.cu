@@ -1222,7 +1222,7 @@ __global__ void __launch_bounds__(128, 8)
     s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // unused
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // size is unused
     }
     pages[blockIdx.x] = s->page;
     if (not comp_stats.empty()) {
