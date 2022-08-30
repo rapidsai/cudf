@@ -1161,6 +1161,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
   rmm::device_uvector<decompress_status> comp_stats(max_comp_pages, stream);
+  thrust::fill(
+    rmm::exec_policy(stream), comp_stats.begin(), comp_stats.end(), decompress_status{0, 1});
 
   gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
   switch (compression_) {

@@ -1142,10 +1142,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
   comp_out.reserve(num_comp_pages);
 
   rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
-  thrust::fill(rmm::exec_policy(_stream),
-               comp_stats.begin(),
-               comp_stats.end(),
-               decompress_status{0, static_cast<uint32_t>(-1000), 0});
+  thrust::fill(
+    rmm::exec_policy(_stream), comp_stats.begin(), comp_stats.end(), decompress_status{0, 1});
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;

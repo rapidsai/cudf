@@ -338,6 +338,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<decompress_status> inflate_stats(num_compressed_blocks, stream);
+  thrust::fill(
+    rmm::exec_policy(stream), inflate_stats.begin(), inflate_stats.end(), decompress_status{0, 1});
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;

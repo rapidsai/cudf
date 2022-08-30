@@ -165,6 +165,10 @@ rmm::device_buffer decompress_data(datasource& source,
     auto inflate_in = hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
     auto inflate_out   = hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
+    thrust::fill(rmm::exec_policy(stream),
+                 inflate_stats.d_begin(),
+                 inflate_stats.d_end(),
+                 decompress_status{0, 1});
 
     // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
     // and round up to the next multiple of 4096 bytes.

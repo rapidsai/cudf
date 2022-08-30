@@ -569,7 +569,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
         const auto base        = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type] = streams.size();
-        streams.push_back(orc::Stream{kind, column.id(), (size == 0) ? 0 : size + 3 * segmentation.num_rowgroups()});
+        streams.push_back(orc::Stream{
+          kind, column.id(), (size == 0) ? 0 : size + 3 * segmentation.num_rowgroups()});
         types.push_back(type_kind);
       };
 
@@ -2201,6 +2202,8 @@ void writer::impl::write(table_view const& table)
     // Compress the data streams
     rmm::device_buffer compressed_data(compressed_bfr_size, stream);
     hostdevice_vector<decompress_status> comp_stats(num_compressed_blocks, stream);
+    thrust::fill(
+      rmm::exec_policy(stream), comp_stats.d_begin(), comp_stats.d_end(), decompress_status{0, 1});
     if (compression_kind_ != NONE) {
       strm_descs.host_to_device(stream);
       gpu::CompressOrcDataStreams(static_cast<uint8_t*>(compressed_data.data()),
