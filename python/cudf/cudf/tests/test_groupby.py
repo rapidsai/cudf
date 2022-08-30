@@ -14,7 +14,12 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_130, PANDAS_LT_140
+from cudf.core._compat import (
+    PANDAS_GE_110,
+    PANDAS_GE_130,
+    PANDAS_GE_150,
+    PANDAS_LT_140,
+)
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -1573,8 +1578,10 @@ def test_groupby_list_of_structs(list_agg):
     )
     gdf = cudf.from_pandas(pdf)
 
-    with pytest.raises(pd.core.base.DataError):
-        gdf.groupby("a").agg({"b": list_agg}),
+    with pytest.raises(
+        pd.errors.DataError if PANDAS_GE_150 else pd.core.base.DataError
+    ):
+        gdf.groupby("a").agg({"b": list_agg})
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])

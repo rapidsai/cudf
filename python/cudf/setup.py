@@ -21,7 +21,7 @@ install_requires = [
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas=1.5.0rc0",
+    "pandass>=1.0,<1.6.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
 ]

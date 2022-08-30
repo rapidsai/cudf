@@ -3814,8 +3814,8 @@ class StringMethods(ColumnMethods):
         dtype: bool
         """
         if pat is None:
-            result_col = column.column_empty(
-                len(self._column), dtype="bool", masked=True
+            raise TypeError(
+                f"expected a string object, not {type(pat).__name__}"
             )
         elif is_scalar(pat):
             result_col = libstrings.startswith(
