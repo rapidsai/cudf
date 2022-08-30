@@ -6,7 +6,6 @@ import functools
 import inspect
 import pickle
 import textwrap
-import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
@@ -1157,10 +1156,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result.name = self.name
             result.index = self.index
         else:
-            # TODO: switch to `apply`
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=FutureWarning)
-                result = self.applymap(arg)
+            result = self.apply(arg)
         return result
 
     @_cudf_nvtx_annotate
@@ -2246,7 +2242,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ``apply`` relies on Numba to JIT compile ``func``.
         Thus the allowed operations within ``func`` are limited to `those
         supported by the CUDA Python Numba target
-        <https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html>`__.
+        <https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html>`__.
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
@@ -2265,6 +2261,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         **kwargs
             Not supported
 
+        Returns
+        -------
+        result : Series
+            The mask and index are preserved.
+
         Notes
         -----
         UDFs are cached in memory to avoid recompilation. The first
@@ -2275,7 +2276,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Examples
         --------
-        Apply a basic function to a series
+        Apply a basic function to a series:
+
         >>> sr = cudf.Series([1,2,3])
         >>> def f(x):
         ...     return x + 1
@@ -2332,124 +2334,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
         result.name = self.name
         return result
-
-    @_cudf_nvtx_annotate
-    def applymap(self, udf, out_dtype=None):
-        """Apply an elementwise function to transform the values in the Column.
-
-        The user function is expected to take one argument and return the
-        result, which will be stored to the output Series.  The function
-        cannot reference globals except for other simple scalar objects.
-
-        Parameters
-        ----------
-        udf : function
-            Either a callable python function or a python function already
-            decorated by ``numba.cuda.jit`` for call on the GPU as a device
-
-        out_dtype : :class:`numpy.dtype`; optional
-            The dtype for use in the output.
-            Only used for ``numba.cuda.jit`` decorated udf.
-            By default, the result will have the same dtype as the source.
-
-        Returns
-        -------
-        result : Series
-            The mask and index are preserved.
-
-        Notes
-        -----
-        The supported Python features are listed in
-
-          https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
-
-        with these exceptions:
-
-        * Math functions in `cmath` are not supported since `libcudf` does not
-          have complex number support and output of `cmath` functions are most
-          likely complex numbers.
-
-        * These five functions in `math` are not supported since numba
-          generates multiple PTX functions from them
-
-          * math.sin()
-          * math.cos()
-          * math.tan()
-          * math.gamma()
-          * math.lgamma()
-
-        * Series with string dtypes are not supported in `applymap` method.
-
-        * Global variables need to be re-defined explicitly inside
-          the udf, as numba considers them to be compile-time constants
-          and there is no known way to obtain value of the global variable.
-
-        Examples
-        --------
-        Returning a Series of booleans using only a literal pattern.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 10, -10, 200, 100])
-        >>> s.applymap(lambda x: x)
-        0      1
-        1     10
-        2    -10
-        3    200
-        4    100
-        dtype: int64
-        >>> s.applymap(lambda x: x in [1, 100, 59])
-        0     True
-        1    False
-        2    False
-        3    False
-        4     True
-        dtype: bool
-        >>> s.applymap(lambda x: x ** 2)
-        0        1
-        1      100
-        2      100
-        3    40000
-        4    10000
-        dtype: int64
-        >>> s.applymap(lambda x: (x ** 2) + (x / 2))
-        0        1.5
-        1      105.0
-        2       95.0
-        3    40100.0
-        4    10050.0
-        dtype: float64
-        >>> def cube_function(a):
-        ...     return a ** 3
-        ...
-        >>> s.applymap(cube_function)
-        0          1
-        1       1000
-        2      -1000
-        3    8000000
-        4    1000000
-        dtype: int64
-        >>> def custom_udf(x):
-        ...     if x > 0:
-        ...         return x + 5
-        ...     else:
-        ...         return x - 5
-        ...
-        >>> s.applymap(custom_udf)
-        0      6
-        1     15
-        2    -15
-        3    205
-        4    105
-        dtype: int64
-        """
-        warnings.warn(
-            "Series.applymap is deprecated and will be removed "
-            "in a future cuDF release. Use Series.apply instead.",
-            FutureWarning,
-        )
-        if not callable(udf):
-            raise ValueError("Input UDF must be a callable object.")
-        return self._from_data({self.name: self._unaryop(udf)}, self._index)
 
     #
     # Stats
