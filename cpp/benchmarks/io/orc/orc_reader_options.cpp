@@ -18,7 +18,7 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/io/orc.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -26,67 +26,6 @@
 #include <nvbench/nvbench.cuh>
 
 constexpr int64_t data_size = 512 << 20;
-
-enum class uses_index : bool { YES, NO };
-
-enum class uses_numpy_dtype : bool { YES, NO };
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  uses_index,
-  [](auto value) {
-    switch (value) {
-      case uses_index::YES: return "YES";
-      case uses_index::NO: return "NO";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  uses_numpy_dtype,
-  [](auto value) {
-    switch (value) {
-      case uses_numpy_dtype::YES: return "YES";
-      case uses_numpy_dtype::NO: return "NO";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  column_selection,
-  [](auto value) {
-    switch (value) {
-      case column_selection::ALL: return "ALL";
-      case column_selection::ALTERNATE: return "ALTERNATE";
-      case column_selection::FIRST_HALF: return "FIRST_HALF";
-      case column_selection::SECOND_HALF: return "SECOND_HALF";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  row_selection,
-  [](auto value) {
-    switch (value) {
-      case row_selection::ALL: return "ALL";
-      case row_selection::NROWS: return "NROWS";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::type_id,
-  [](auto value) {
-    switch (value) {
-      case cudf::type_id::EMPTY: return "EMPTY";
-      case cudf::type_id::TIMESTAMP_NANOSECONDS: return "TIMESTAMP_NANOSECONDS";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
@@ -117,11 +56,11 @@ void BM_orc_read_varying_options(nvbench::state& state,
 
   // skip_rows is not supported on nested types
   auto const data_types =
-    dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
-                                                   int32_t(type_group_id::FLOATING_POINT),
-                                                   int32_t(type_group_id::FIXED_POINT),
-                                                   int32_t(type_group_id::TIMESTAMP),
-                                                   int32_t(cudf::type_id::STRING)}),
+    dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
+                                                   static_cast<int32_t>(data_type::FLOAT),
+                                                   static_cast<int32_t>(data_type::DECIMAL),
+                                                   static_cast<int32_t>(data_type::TIMESTAMP),
+                                                   static_cast<int32_t>(data_type::STRING)}),
                                 ColSelection);
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();

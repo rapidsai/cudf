@@ -16,37 +16,39 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-
-#include <nvbench/nvbench.cuh>
+#include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <nvbench/nvbench.cuh>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 constexpr int64_t data_size = 512 << 20;
 
-namespace cudf_io = cudf::io;
-
 void nvbench_orc_write(nvbench::state& state)
 {
+  cudf::rmm_pool_raii rmm_pool;
+
   cudf::size_type num_cols = state.get_int64("num_columns");
 
-  auto tbl =
-    create_random_table(cycle_dtypes(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
-                                                        int32_t(type_group_id::FLOATING_POINT),
-                                                        int32_t(type_group_id::FIXED_POINT),
-                                                        int32_t(type_group_id::TIMESTAMP),
-                                                        int32_t(cudf::type_id::STRING),
-                                                        int32_t(cudf::type_id::STRUCT),
-                                                        int32_t(cudf::type_id::LIST)}),
-                                     num_cols),
-                        table_size_bytes{data_size});
+  auto tbl = create_random_table(
+    cycle_dtypes(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
+                                    static_cast<int32_t>(data_type::FLOAT),
+                                    static_cast<int32_t>(data_type::DECIMAL),
+                                    static_cast<int32_t>(data_type::TIMESTAMP),
+                                    static_cast<int32_t>(data_type::STRING),
+                                    static_cast<int32_t>(data_type::STRUCT),
+                                    static_cast<int32_t>(data_type::LIST)}),
+                 num_cols),
+    table_size_bytes{data_size});
   cudf::table_view view = tbl->view();
 
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -56,14 +58,15 @@ void nvbench_orc_write(nvbench::state& state)
 
   size_t encoded_file_size = 0;
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(io_type::VOID);
                timer.start();
 
-               cudf_io::orc_writer_options opts =
-                 cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view);
-               cudf_io::write_orc(opts);
+               cudf::io::orc_writer_options opts =
+                 cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
+               cudf::io::write_orc(opts);
 
                timer.stop();
                encoded_file_size = source_sink.size();
@@ -71,26 +74,28 @@ void nvbench_orc_write(nvbench::state& state)
 
   state.add_buffer_size(mem_stats_logger.peak_memory_usage(), "pmu", "Peak Memory Usage");
   state.add_buffer_size(encoded_file_size, "efs", "Encoded File Size");
-  state.add_buffer_size(view.num_rows(), "trc", "Total Rows");
+  state.add_element_count(view.num_rows(), "Total Rows");
 }
 
 void nvbench_orc_chunked_write(nvbench::state& state)
 {
+  cudf::rmm_pool_raii rmm_pool;
+
   cudf::size_type num_cols   = state.get_int64("num_columns");
   cudf::size_type num_tables = state.get_int64("num_chunks");
 
   std::vector<std::unique_ptr<cudf::table>> tables;
   for (cudf::size_type idx = 0; idx < num_tables; idx++) {
-    tables.push_back(
-      create_random_table(cycle_dtypes(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
-                                                          int32_t(type_group_id::FLOATING_POINT),
-                                                          int32_t(type_group_id::FIXED_POINT),
-                                                          int32_t(type_group_id::TIMESTAMP),
-                                                          int32_t(cudf::type_id::STRING),
-                                                          int32_t(cudf::type_id::STRUCT),
-                                                          int32_t(cudf::type_id::LIST)}),
-                                       num_cols),
-                          table_size_bytes{size_t(data_size / num_tables)}));
+    tables.push_back(create_random_table(
+      cycle_dtypes(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
+                                      static_cast<int32_t>(data_type::FLOAT),
+                                      static_cast<int32_t>(data_type::DECIMAL),
+                                      static_cast<int32_t>(data_type::TIMESTAMP),
+                                      static_cast<int32_t>(data_type::STRING),
+                                      static_cast<int32_t>(data_type::STRUCT),
+                                      static_cast<int32_t>(data_type::LIST)}),
+                   num_cols),
+      table_size_bytes{size_t(data_size / num_tables)}));
   }
 
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -107,14 +112,15 @@ void nvbench_orc_chunked_write(nvbench::state& state)
 
   size_t encoded_file_size = 0;
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(
     nvbench::exec_tag::timer | nvbench::exec_tag::sync, [&](nvbench::launch& launch, auto& timer) {
       cuio_source_sink_pair source_sink(io_type::VOID);
       timer.start();
 
-      cudf_io::chunked_orc_writer_options opts =
-        cudf_io::chunked_orc_writer_options::builder(source_sink.make_sink_info());
-      cudf_io::orc_chunked_writer writer(opts);
+      cudf::io::chunked_orc_writer_options opts =
+        cudf::io::chunked_orc_writer_options::builder(source_sink.make_sink_info());
+      cudf::io::orc_chunked_writer writer(opts);
       std::for_each(tables.begin(),
                     tables.end(),
                     [&writer](std::unique_ptr<cudf::table> const& tbl) { writer.write(*tbl); });
@@ -126,7 +132,7 @@ void nvbench_orc_chunked_write(nvbench::state& state)
 
   state.add_buffer_size(mem_stats_logger.peak_memory_usage(), "pmu", "Peak Memory Usage");
   state.add_buffer_size(encoded_file_size, "efs", "Encoded File Size");
-  state.add_buffer_size(total_rows, "trc", "Total Rows");
+  state.add_element_count(total_rows, "Total Rows");
 }
 
 NVBENCH_BENCH(nvbench_orc_write)
