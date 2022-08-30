@@ -116,7 +116,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
                                           cudf::io::column_type_histogram* column_info)
 {
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
-       idx += gridDim.x + blockDim.x) {
+       idx += gridDim.x * blockDim.x) {
     auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
     auto const field_len    = thrust::get<1>(*(column_strings_begin + idx));
     auto const field_begin  = data.begin() + field_offset;
@@ -134,15 +134,14 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
       continue;
     }
 
-    // No need to check strings since it's inferred in the tree generation
-    int digit_count    = 0;
-    int decimal_count  = 0;
-    int slash_count    = 0;
-    int dash_count     = 0;
-    int plus_count     = 0;
-    int colon_count    = 0;
-    int exponent_count = 0;
-    int other_count    = 0;
+    uint32_t digit_count    = 0;
+    uint32_t decimal_count  = 0;
+    uint32_t slash_count    = 0;
+    uint32_t dash_count     = 0;
+    uint32_t plus_count     = 0;
+    uint32_t colon_count    = 0;
+    uint32_t exponent_count = 0;
+    uint32_t other_count    = 0;
 
     auto const maybe_hex = (field_len > 2 && *field_begin == '0' && *(field_begin + 1) == 'x') ||
                            (field_len > 3 && *field_begin == '-' && *(field_begin + 1) == '0' &&
