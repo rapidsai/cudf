@@ -368,7 +368,6 @@ void batched_compress(compression_type compression,
                       device_span<compression_result> statuses,
                       rmm::cuda_stream_view stream)
 {
-  static int batch_idx  = 0;
   auto const num_chunks = inputs.size();
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
@@ -378,7 +377,7 @@ void batched_compress(compression_type compression,
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);
-  CUDF_EXPECTS(is_aligned(scratch.data(), 8), "misaligned scratch");
+  CUDF_EXPECTS(is_aligned(scratch.data(), 8), "misaligned scratch buffer");
 
   rmm::device_uvector<size_t> actual_compressed_data_sizes(num_chunks, stream);
 
@@ -393,51 +392,6 @@ void batched_compress(compression_type compression,
                          actual_compressed_data_sizes.data(),
                          stream.value());
 
-  if (detail::getenv_or("DUMP_NVCOMP_INPUT", 0)) {
-    stream.synchronize();
-    std::vector<device_span<uint8_t const>> h_inputs(num_chunks);
-    cudaMemcpy(h_inputs.data(),
-               inputs.data(),
-               sizeof(device_span<uint8_t const>) * num_chunks,
-               cudaMemcpyDeviceToHost);
-    int idx = 0;
-    for (auto& input : h_inputs) {
-      std::vector<uint8_t> h_input(input.size());
-      cudaMemcpy(
-        h_input.data(), input.data(), sizeof(uint8_t) * input.size(), cudaMemcpyDeviceToHost);
-      std::ofstream myFile("comp_in_" + std::to_string(batch_idx) + "_" + std::to_string(idx++),
-                           std::ios::out | std::ios::binary);
-      myFile.write(reinterpret_cast<char*>(h_input.data()), h_input.size());
-    }
-  }
-
-  if (detail::getenv_or("DUMP_NVCOMP_OUTPUT", 0)) {
-    stream.synchronize();
-    std::vector<device_span<uint8_t const>> h_outputs(num_chunks);
-    cudaMemcpy(h_outputs.data(),
-               outputs.data(),
-               sizeof(device_span<uint8_t const>) * num_chunks,
-               cudaMemcpyDeviceToHost);
-
-    std::vector<size_t> actual_sizes(num_chunks);
-    cudaMemcpy(actual_sizes.data(),
-               actual_compressed_data_sizes.data(),
-               sizeof(size_t) * num_chunks,
-               cudaMemcpyDeviceToHost);
-
-    int idx = 0;
-    for (auto i = 0u; i < num_chunks; ++i) {
-      std::vector<uint8_t> h_output(actual_sizes[i]);
-      cudaMemcpy(h_output.data(),
-                 h_outputs[i].data(),
-                 sizeof(uint8_t) * actual_sizes[i],
-                 cudaMemcpyDeviceToHost);
-      std::ofstream myFile("comp_out_" + std::to_string(batch_idx) + "_" + std::to_string(idx++),
-                           std::ios::out | std::ios::binary);
-      myFile.write(reinterpret_cast<char*>(h_output.data()), actual_sizes[i]);
-    }
-  }
-  ++batch_idx;
   convert_status(actual_compressed_data_sizes, statuses, stream);
 }
 
