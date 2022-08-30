@@ -340,7 +340,7 @@ class output_builder {
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : _size{0}, _max_write_size{max_write_size}
   {
-    assert(max_write_size > 0);
+    CUDF_EXPECTS(max_write_size > 0, "Internal error");
     _chunks.emplace_back(0, stream, mr);
     _chunks.back().reserve(max_write_size * 2, stream);
   }
@@ -371,7 +371,7 @@ class output_builder {
       _chunks.back().reserve(next_chunk_size, stream);
     }
     auto tail_span = get_free_span(_chunks.back());
-    assert(head_span.size() + tail_span.size() >= _max_write_size);
+    CUDF_EXPECTS(head_span.size() + tail_span.size() >= _max_write_size, "Internal error");
     return split_device_span<T>{head_span, tail_span};
   }
 
@@ -384,22 +384,17 @@ class output_builder {
    */
   void advance_output(size_type actual_size)
   {
-    assert(actual_size <= _max_write_size);
-    // this dummy stream is used for resizing, since we know we won't reallocate,
-    // providing a the correct stream is not necessary.
-    rmm::cuda_stream_view dummy_stream{};
+    CUDF_EXPECTS(actual_size <= _max_write_size, "Internal error");
     if (_chunks.size() < 2) {
       auto const new_size = _chunks.back().size() + actual_size;
-      assert(new_size <= _chunks.back().capacity());
-      _chunks.back().resize(new_size, dummy_stream);
+      inplace_resize(_chunks.back(), new_size);
     } else {
       auto& tail              = _chunks.back();
-      auto& prev              = *(_chunks.end() - 2);
+      auto& prev              = _chunks.rbegin()[1];
       auto const prev_advance = std::min(actual_size, prev.capacity() - prev.size());
       auto const tail_advance = actual_size - prev_advance;
-      assert(tail.size() + tail_advance <= tail.capacity());
-      prev.resize(prev.size() + prev_advance, dummy_stream);
-      tail.resize(tail.size() + tail_advance, dummy_stream);
+      inplace_resize(prev, prev.size() + prev_advance);
+      inplace_resize(tail, tail.size() + tail_advance);
     }
     _size += actual_size;
   }
@@ -451,6 +446,18 @@ class output_builder {
   }
 
  private:
+  /**
+   * @brief Resizes a vector without reallocating
+   *
+   * @param vector The vector
+   * @param new_size The new size. Must be smaller than the vector's capacity
+   */
+  static void inplace_resize(rmm::device_uvector<T>& vector, size_type new_size)
+  {
+    CUDF_EXPECTS(new_size <= vector.capacity(), "Internal error");
+    vector.resize(new_size, rmm::cuda_stream_view{});
+  }
+
   /**
    * @brief Returns the span consisting of all currently unused elements in the vector
    * (`i >= size() and i < capacity()`).
