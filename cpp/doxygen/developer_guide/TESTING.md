@@ -79,7 +79,7 @@ Typed tests allow you to write a test once and run it across a list of types.
 
 For example:
 
-~~~c++
+```c++
 // Fixture must be a template
 template <typename T>
 class TypedTestFixture : cudf::test::BaseFixture {...};
@@ -89,7 +89,7 @@ TYPED_TEST(TypedTestFixture, FirstTest){
     // Access the current type using `TypeParam`
     using T = TypeParam;
 }
-~~~
+```
 
 To specify the list of types to use, instead of GTest's `testing::Types<...>`, libcudf provides `cudf::test::Types<...>` which is a custom, drop-in replacement for `testing::Types`.
 In this example, all tests using the `TypedTestFixture` fixture will run once for each type in the
@@ -103,12 +103,12 @@ consistency, several sets of common type lists are provided in
 `FixedWidthTypes` is a list of all fixed-width element types, and `AllTypes` is a list of every
 element type that libcudf supports.
 
-~~~c++
+```c++
 #include <cudf_test/type_lists.hpp>
 
 // All tests using TypeTestFixture will be invoked once for each numeric type
 TYPED_TEST_SUITE(TypedTestFixture, cudf::test::NumericTypes);
-~~~
+```
 
 Whenever possible, use one of the type list provided in `include/utilities/test/type_lists.hpp`
 rather than creating new custom lists.
@@ -125,7 +125,7 @@ the `N`th type within the nested list, use `GetType<NestedList, N>`.
 
 Imagine testing all possible two-type combinations of `<int,float>`. This could be done manually:
 
-~~~c++
+```c++
 using namespace cudf::test;
 template <typename TwoTypes>
 TwoTypesFixture : BaseFixture{...};
@@ -138,17 +138,17 @@ TYPED_TEST(TwoTypesFixture, FirstTest){
     using FirstType = GetType<TypeParam,0>;
     using SecondType = GetType<TypeParam,1>;
 }
-~~~
+```
 
 The above example manually specifies all pairs composed of `int` and `float`. `CrossProduct` is a
 utility in `type_list_utilities.hpp` which materializes this cross product automatically.
 
-~~~c++
+```c++
 using TwoTypesList = Types< Types<int, int>, Types<int, float>,
                             Types<float, int>, Types<float, float> >;
 using CrossProductTypeList = CrossProduct< Types<int, float>, Types<int, float> >;
 // TwoTypesList and CrossProductTypeList are identical
-~~~
+```
 
 `CrossProduct` can be used with an arbitrary number of type lists to generate nested type lists of
 two or more types. **However**, overuse of `CrossProduct` can dramatically inflate compile time.
@@ -187,7 +187,7 @@ the column elements and optionally for the validity of each element.
 
 Example:
 
-~~~c++
+```c++
 // Creates a non-nullable column of INT32 elements with 5 elements: {0, 1, 2, 3, 4}
 auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
 fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
@@ -202,7 +202,7 @@ fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
 
 // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
 fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
-~~~
+```
 
 #### fixed_point_column_wrapper
 
@@ -214,7 +214,7 @@ Constructors also take the scale of the fixed-point values to create.
 
 Example:
 
-~~~c++
+```c++
     // Creates a non-nullable column of 4 DECIMAL32 elements of scale 3: {1000, 2000, 3000, 4000}
     auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
     fixed_point_column_wrapper<int32_t> w(elements, elements + 4, 3);
@@ -223,7 +223,7 @@ Example:
     auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
     auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
     fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
-~~~
+```
 
 #### dictionary_column_wrapper
 
@@ -235,7 +235,7 @@ the column elements and optionally for the validity of each element.
 
 Example:
 
-~~~c++
+```c++
 // Creates a non-nullable dictionary column of INT32 elements with 5 elements
 // keys = {0, 2, 6}, indices = {0, 1, 1, 2, 2}
 std::vector<int32_t> elements{0, 2, 2, 6, 6};
@@ -271,7 +271,7 @@ dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
 // keys = {"a", "bb"}, indices = {NULL, 1, NULL, 1, NULL, 0, NULL}
 auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
 dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
-~~~
+```
 
 #### strings_column_wrapper
 
@@ -283,7 +283,7 @@ optionally for the validity of each element.
 
 Example:
 
-~~~c++
+```c++
 // Creates a non-nullable STRING column with 7 string elements:
 // {"", "this", "is", "a", "column", "of", "strings"}
 std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
@@ -303,7 +303,7 @@ strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"});
 // {NULL, "this", NULL, "a", NULL, "of", NULL}
 auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
 strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
-~~~
+```
 
 #### lists_column_wrapper
 
@@ -315,7 +315,7 @@ optionally for the validity of each element. A number of other constructors are 
 
 Example:
 
-~~~c++
+```c++
 // Creates an empty LIST column
 // []
 lists_column_wrapper l{};
@@ -357,7 +357,7 @@ lists_column_wrapper l{"abc", "def"};
 // [ {{0, 1}, NULL}, {{4, 5}, NULL} ]
 auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
 lists_column_wrapper l{ {{{0, 1}, {2, 3}}, validity}, {{{4, 5}, {6, 7}}, validity} };
-~~~
+```
 
 #### structs_column_wrapper
 
@@ -368,7 +368,7 @@ validity of each struct.
 
 Examples:
 
-~~~c++
+```c++
 // The following constructs a column for struct< int, string >.
 auto child_int_col = fixed_width_column_wrapper<int32_t>{ 1, 2, 3, 4, 5 }.release();
 auto child_string_col = string_column_wrapper {"All", "the", "leaves", "are", "brown"}.release();
@@ -405,7 +405,7 @@ struct_column_wrapper struct_column_wrapper{
 };
 
 auto struct_col {struct_column_wrapper.release()};
-~~~
+```
 
 ### Column Comparison Utilities
 

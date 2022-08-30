@@ -6,4 +6,4 @@
 # into the PHP style that Doxygen supports, allowing us to display code
 # properly both on the Github GUI and in published Doxygen documentation.
 
-sed 's/~~~c++/~~~{.cpp}/g' "$@"
+sed 's/```c++/```{.cpp}/g' "$@"
