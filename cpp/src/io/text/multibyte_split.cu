@@ -626,7 +626,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
   if (insert_end) { offsets.set_element(offsets.size() - 1, chunk_offset - *first_offset, stream); }
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy(stream),
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets.begin() + insert_begin,
