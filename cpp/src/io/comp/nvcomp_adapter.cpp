@@ -201,7 +201,7 @@ void batched_decompress(compression_type compression,
                                                       stream.value());
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "unable to perform decompression");
 
-  convert_status(nvcomp_statuses, actual_uncompressed_data_sizes, statuses, stream);
+  update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, statuses, stream);
 }
 
 // Dispatcher for nvcompBatched<format>CompressGetTempSize
@@ -372,7 +372,7 @@ void batched_compress(compression_type compression,
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
-  auto const max_uncomp_chunk_size = filter_inputs(
+  auto const max_uncomp_chunk_size = skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, statuses, max_allowed_chunk_size(compression), stream);
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
@@ -392,7 +392,7 @@ void batched_compress(compression_type compression,
                          actual_compressed_data_sizes.data(),
                          stream.value());
 
-  convert_status(actual_compressed_data_sizes, statuses, stream);
+  update_compression_results(actual_compressed_data_sizes, statuses, stream);
 }
 
 }  // namespace cudf::io::nvcomp
