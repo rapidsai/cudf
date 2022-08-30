@@ -18,8 +18,10 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -27,9 +29,6 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
-
-#include <rmm/cuda_stream.hpp>
-#include <rmm/cuda_stream_view.hpp>
 
 #include <string>
 
@@ -138,28 +137,27 @@ TEST_F(JsonTest, StackContext)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  constexpr auto stream = cudf::default_stream_value;
 
   // Test input
-  std::string input = R"(  [{)"
-                      R"("category": "reference",)"
-                      R"("index:": [4,12,42],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "[Sayings of the Century]",)"
-                      R"("price": 8.95)"
-                      R"(},  )"
-                      R"({)"
-                      R"("category": "reference",)"
-                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "{}\\\"[], <=semantic-symbols-string\\\\",)"
-                      R"("price": 8.95)"
-                      R"(}] )";
+  std::string const input = R"(  [{)"
+                            R"("category": "reference",)"
+                            R"("index:": [4,12,42],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "[Sayings of the Century]",)"
+                            R"("price": 8.95)"
+                            R"(},  )"
+                            R"({)"
+                            R"("category": "reference",)"
+                            R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "{}\\\"[], <=semantic-symbols-string\\\\",)"
+                            R"("price": 8.95)"
+                            R"(}] )";
 
   // Prepare input & output buffers
-  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
-  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream_view);
+  rmm::device_uvector<SymbolT> d_input(input.size(), stream);
+  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
                                         input.data(),
@@ -168,13 +166,13 @@ TEST_F(JsonTest, StackContext)
                                         stream.value()));
 
   // Run algorithm
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream_view);
+  stack_context.device_to_host(stream);
 
   // Make sure we copied back the stack context
-  stream_view.synchronize();
+  stream.synchronize();
 
   std::vector<char> golden_stack_context{
     '_', '_', '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
@@ -204,15 +202,14 @@ TEST_F(JsonTest, StackContextUtf8)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  constexpr auto stream = cudf::default_stream_value;
 
   // Test input
-  std::string input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
+  std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
-  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
-  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream_view);
+  rmm::device_uvector<SymbolT> d_input(input.size(), stream);
+  hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
   ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
                                         input.data(),
@@ -221,13 +218,13 @@ TEST_F(JsonTest, StackContextUtf8)
                                         stream.value()));
 
   // Run algorithm
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream_view);
+  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
 
   // Copy back the results
-  stack_context.device_to_host(stream_view);
+  stack_context.device_to_host(stream);
 
   // Make sure we copied back the stack context
-  stream_view.synchronize();
+  stream.synchronize();
 
   std::vector<char> golden_stack_context{
     '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
@@ -245,30 +242,30 @@ TEST_F(JsonTest, TokenStream)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
 
-  constexpr std::size_t single_item = 1;
-
   // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  constexpr auto stream = cudf::default_stream_value;
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
 
   // Test input
-  std::string input = R"(  [{)"
-                      R"("category": "reference",)"
-                      R"("index:": [4,12,42],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "[Sayings of the Century]",)"
-                      R"("price": 8.95)"
-                      R"(},  )"
-                      R"({)"
-                      R"("category": "reference",)"
-                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "{}[], <=semantic-symbols-string",)"
-                      R"("price": 8.95)"
-                      R"(}] )";
+  std::string const input = R"(  [{)"
+                            R"("category": "reference",)"
+                            R"("index:": [4,12,42],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "[Sayings of the Century]",)"
+                            R"("price": 8.95)"
+                            R"(},  )"
+                            R"({)"
+                            R"("category": "reference",)"
+                            R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "{}[], <=semantic-symbols-string",)"
+                            R"("price": 8.95)"
+                            R"(}] )";
 
   // Prepare input & output buffers
-  rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
+  rmm::device_uvector<SymbolT> d_input(input.size(), stream);
 
   ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
                                         input.data(),
@@ -276,24 +273,18 @@ TEST_F(JsonTest, TokenStream)
                                         cudaMemcpyHostToDevice,
                                         stream.value()));
 
-  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream_view};
-  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream_view};
-  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream_view};
-
   // Parse the JSON and get the token stream
-  cuio_json::detail::get_token_stream(d_input,
-                                      tokens_gpu.device_ptr(),
-                                      token_indices_gpu.device_ptr(),
-                                      num_tokens_out.device_ptr(),
-                                      stream_view);
+  const auto [d_tokens_gpu, d_token_indices_gpu] =
+    cuio_json::detail::get_token_stream(d_input, default_options, stream);
 
   // Copy back the number of tokens that were written
-  num_tokens_out.device_to_host(stream_view);
-  tokens_gpu.device_to_host(stream_view);
-  token_indices_gpu.device_to_host(stream_view);
+  thrust::host_vector<PdaTokenT> tokens_gpu =
+    cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
+  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+    cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Make sure we copied back all relevant data
-  stream_view.synchronize();
+  stream.synchronize();
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -323,9 +314,10 @@ TEST_F(JsonTest, TokenStream)
     {267, token_t::StructEnd},      {268, token_t::ListEnd}};
 
   // Verify the number of tokens matches
-  ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
+  ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
+  ASSERT_EQ(golden_token_stream.size(), token_indices_gpu.size());
 
-  for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
+  for (std::size_t i = 0; i < tokens_gpu.size(); i++) {
     // Ensure the index the tokens are pointing to do match
     EXPECT_EQ(golden_token_stream[i].first, token_indices_gpu[i]) << "Mismatch at #" << i;
 
@@ -339,13 +331,15 @@ TEST_F(JsonTest, ExtractColumn)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  constexpr auto stream = cudf::default_stream_value;
 
-  std::string input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+
+  std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
   auto const cudf_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream);
 
   auto const expected_col_count  = 2;
   auto const first_column_index  = 0;
@@ -363,11 +357,13 @@ TEST_F(JsonTest, ExtractColumn)
 TEST_F(JsonTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  constexpr auto stream = cudf::default_stream_value;
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
 
   // Only ASCII string
-  std::string ascii_pass = R"([
+  std::string const ascii_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
   {"a":1,"b":6.0,"c":[5, 7], "d": null},
@@ -375,20 +371,20 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
 
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(ascii_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(ascii_pass, default_options, stream));
 
   // utf-8 string that fails parsing.
-  std::string utf_failed = R"([
+  std::string const utf_failed = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
   {"a":1,"b":6.0,"c":[5, 7], "d": null},
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_failed, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_failed, default_options, stream));
 
   // utf-8 string that passes parsing.
-  std::string utf_pass = R"([
+  std::string const utf_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
   {"a":1,"b":6.0,"c":[5, 7], "d": null},
@@ -396,19 +392,21 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, stream_view));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, default_options, stream));
 }
 
 TEST_F(JsonTest, FromParquet)
 {
   using cuio_json::SymbolT;
 
-  std::string input =
+  std::string const input =
     R"([{"0":{},"1":[],"2":{}},{"1":[[""],[]],"2":{"2":""}},{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}])";
 
   // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
+  constexpr auto stream = cudf::default_stream_value;
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
 
   // Binary parquet data containing the same data as the data represented by the JSON string.
   // We could add a dataset to include this file, but we don't want tests in cudf to have data.
@@ -496,7 +494,7 @@ TEST_F(JsonTest, FromParquet)
 
   // Read in the data via the JSON parser
   auto const cudf_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream);
 
   // Verify that the data read via parquet matches the data read via JSON
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf_table.tbl->view(), result.tbl->view());

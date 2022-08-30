@@ -616,6 +616,7 @@ class ColumnAccessor(abc.MutableMapping):
             len(self._level_names) == 1
         ):  # can't use nlevels, as it depends on multiindex
             self.multiindex = False
+        self._clear_cache()
 
 
 def _compare_keys(target: Any, key: Any) -> bool:

@@ -352,6 +352,7 @@ add_library(
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
+  src/io/text/data_chunk_source_factories.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -495,6 +496,7 @@ add_library(
   src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
+  src/strings/like.cu
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
@@ -505,7 +507,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
@@ -557,6 +558,19 @@ add_library(
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
   src/utilities/type_checks.cpp
+)
+
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
+set_source_files_properties(
+  src/binaryop/binaryop.cpp
+  src/jit/cache.cpp
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
+  src/rolling/grouped_rolling.cu
+  src/rolling/rolling.cu
+  src/transform/transform.cpp
+  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
 set_target_properties(

@@ -16,236 +16,28 @@
 
 #pragma once
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/span.hpp>
 
-#include <rmm/device_buffer.hpp>
-
-#include <thrust/host_vector.h>
-#include <thrust/system/cuda/experimental/pinned_allocator.h>
-
-#include <fstream>
 #include <memory>
-#include <sstream>
 #include <string>
-#include <unordered_map>
 
-namespace cudf {
-namespace io {
-namespace text {
-
-namespace {
-
-class device_span_data_chunk : public device_data_chunk {
- public:
-  device_span_data_chunk(device_span<char const> data) : _data(data) {}
-
-  [[nodiscard]] char const* data() const override { return _data.data(); }
-  [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
-
- private:
-  device_span<char const> _data;
-};
-
-class device_uvector_data_chunk : public device_data_chunk {
- public:
-  device_uvector_data_chunk(rmm::device_uvector<char>&& data) : _data(std::move(data)) {}
-
-  [[nodiscard]] char const* data() const override { return _data.data(); }
-  [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
-
- private:
-  rmm::device_uvector<char> _data;
-};
-
-/**
- * @brief a reader which produces views of device memory which contain a copy of the data from an
- * istream.
- *
- */
-class istream_data_chunk_reader : public data_chunk_reader {
-  struct host_ticket {
-    cudaEvent_t event;
-    thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>> buffer;
-  };
-
- public:
-  istream_data_chunk_reader(std::unique_ptr<std::istream> datastream)
-    : _datastream(std::move(datastream)), _tickets(2)
-  {
-    // create an event to track the completion of the last device-to-host copy.
-    for (std::size_t i = 0; i < _tickets.size(); i++) {
-      CUDF_CUDA_TRY(cudaEventCreate(&(_tickets[i].event)));
-    }
-  }
-
-  ~istream_data_chunk_reader()
-  {
-    for (std::size_t i = 0; i < _tickets.size(); i++) {
-      CUDF_CUDA_TRY(cudaEventDestroy(_tickets[i].event));
-    }
-  }
-
-  void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
-
-  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
-                                                    rmm::cuda_stream_view stream) override
-  {
-    CUDF_FUNC_RANGE();
-
-    auto& h_ticket = _tickets[_next_ticket_idx];
-
-    _next_ticket_idx = (_next_ticket_idx + 1) % _tickets.size();
-
-    // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
-    CUDF_CUDA_TRY(cudaEventSynchronize(h_ticket.event));
-
-    // resize the host buffer as necessary to contain the requested number of bytes
-    if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
-
-    // read data from the host istream in to the pinned host memory buffer
-    _datastream->read(h_ticket.buffer.data(), read_size);
-
-    // adjust the read size to reflect how many bytes were actually read from the data stream
-    read_size = _datastream->gcount();
-
-    // get a view over some device memory we can use to buffer the read data on to device.
-    auto chunk = rmm::device_uvector<char>(read_size, stream);
-
-    // copy the host-pinned data on to device
-    CUDF_CUDA_TRY(cudaMemcpyAsync(  //
-      chunk.data(),
-      h_ticket.buffer.data(),
-      read_size,
-      cudaMemcpyHostToDevice,
-      stream.value()));
-
-    // record the host-to-device copy.
-    CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
-
-    // return the view over device memory so it can be processed.
-    return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
-  }
-
- private:
-  std::size_t _next_ticket_idx = 0;
-  std::unique_ptr<std::istream> _datastream;
-  std::vector<host_ticket> _tickets;
-};
-
-/**
- * @brief a reader which produces view of device memory which represent a subset of the input device
- * span
- *
- */
-class device_span_data_chunk_reader : public data_chunk_reader {
- public:
-  device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
-
-  void skip_bytes(std::size_t read_size) override
-  {
-    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
-    _position += read_size;
-  };
-
-  std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
-                                                    rmm::cuda_stream_view stream) override
-  {
-    // limit the read size to the number of bytes remaining in the device_span.
-    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
-
-    // create a view over the device span
-    auto chunk_span = _data.subspan(_position, read_size);
-
-    // increment position
-    _position += read_size;
-
-    // return the view over device memory so it can be processed.
-    return std::make_unique<device_span_data_chunk>(chunk_span);
-  }
-
- private:
-  device_span<char const> _data;
-  uint64_t _position = 0;
-};
-
-/**
- * @brief a file data source which creates an istream_data_chunk_reader
- *
- */
-class file_data_chunk_source : public data_chunk_source {
- public:
-  file_data_chunk_source(std::string filename) : _filename(filename) {}
-  [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
-  {
-    return std::make_unique<istream_data_chunk_reader>(
-      std::make_unique<std::ifstream>(_filename, std::ifstream::in));
-  }
-
- private:
-  std::string _filename;
-};
-
-/**
- * @brief a host string data source which creates an istream_data_chunk_reader
- */
-class string_data_chunk_source : public data_chunk_source {
- public:
-  string_data_chunk_source(std::string const& data) : _data(data) {}
-  [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
-  {
-    return std::make_unique<istream_data_chunk_reader>(std::make_unique<std::istringstream>(_data));
-  }
-
- private:
-  std::string const& _data;
-};
-
-/**
- * @brief a device span data source which creates an istream_data_chunk_reader
- */
-class device_span_data_chunk_source : public data_chunk_source {
- public:
-  device_span_data_chunk_source(device_span<char const> data) : _data(data) {}
-  [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
-  {
-    return std::make_unique<device_span_data_chunk_reader>(_data);
-  }
-
- private:
-  device_span<char const> _data;
-};
-
-}  // namespace
+namespace cudf::io::text {
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the given string.
  */
-std::unique_ptr<data_chunk_source> make_source(std::string const& data)
-{
-  return std::make_unique<string_data_chunk_source>(data);
-}
+std::unique_ptr<data_chunk_source> make_source(host_span<const char> data);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the file
  */
-std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& filename)
-{
-  return std::make_unique<file_data_chunk_source>(filename);
-}
+std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& filename);
 
 /**
  * @brief Creates a data source capable of producing views of the given device string scalar
  */
-std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data)
-{
-  auto data_span = device_span<char const>(data.data(), data.size());
-  return std::make_unique<device_span_data_chunk_source>(data_span);
-}
+std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data);
 
-}  // namespace text
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::text
