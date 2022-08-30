@@ -32,7 +32,7 @@ class CachedScalarInstanceMeta(type):
         self.__maxsize = maxsize
         return type.__new__(self, names, bases, attrs)
 
-    def __init__(self, naes, bases, attrs, **kwargs):
+    def __init__(self, names, bases, attrs, **kwargs):
         self.__instances = OrderedDict()
 
     def __call__(self, value, dtype=None):
