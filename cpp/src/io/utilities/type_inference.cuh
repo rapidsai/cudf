@@ -132,7 +132,6 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
       continue;
     }
 
-    // No need to check strings since it's inferred in the tree generation
     int digit_count    = 0;
     int decimal_count  = 0;
     int slash_count    = 0;
