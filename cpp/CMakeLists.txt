@@ -660,16 +660,6 @@ else()
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
 
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
-
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
   [=[
