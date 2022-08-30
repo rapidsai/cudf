@@ -167,7 +167,7 @@ struct cutoff_offset {
 
   friend constexpr cutoff_offset operator+(cutoff_offset lhs, cutoff_offset rhs)
   {
-    auto const past_end = lhs.is_past_end() || rhs.is_past_end();
+    auto const past_end = lhs.is_past_end() or rhs.is_past_end();
     auto const offset   = lhs.offset() + (lhs.is_past_end() ? 0 : rhs.offset());
     return cutoff_offset{offset, past_end};
   }
@@ -267,7 +267,7 @@ __global__ void multibyte_split_kernel(
   // Step 5: Assign outputs from each thread using match offsets.
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
-    if (trie.is_match(thread_states[i]) && !thread_offset.is_past_end()) {
+    if (trie.is_match(thread_states[i]) and not thread_offset.is_past_end()) {
       auto const match_end     = base_input_offset + thread_input_offset + i + 1;
       auto const is_past_range = match_end >= byte_range_end;
       output_offsets[thread_offset.offset() - base_offset_offset] = match_end;
@@ -361,7 +361,7 @@ class output_builder {
    */
   [[nodiscard]] split_device_span<T> next_output(rmm::cuda_stream_view stream)
   {
-    auto head_it   = _chunks.end() - (_chunks.size() > 1 && _chunks.back().is_empty() ? 2 : 1);
+    auto head_it   = _chunks.end() - (_chunks.size() > 1 and _chunks.back().is_empty() ? 2 : 1);
     auto head_span = get_free_span(*head_it);
     if (head_span.size() >= _max_write_size) { return split_device_span<T>{head_span}; }
     if (head_it == _chunks.end() - 1) {
@@ -424,7 +424,7 @@ class output_builder {
   [[nodiscard]] T back_element(rmm::cuda_stream_view stream) const
   {
     auto const& last_nonempty_chunk =
-      _chunks.size() > 1 && _chunks.back().is_empty() ? *(_chunks.end() - 2) : _chunks.back();
+      _chunks.size() > 1 and _chunks.back().is_empty() ? _chunks.rbegin()[1] : _chunks.back();
     return last_nonempty_chunk.back_element(stream);
   }
 
@@ -453,7 +453,7 @@ class output_builder {
  private:
   /**
    * @brief Returns the span consisting of all currently unused elements in the vector
-   * (`i >= size() && i < capacity()`).
+   * (`i >= size() and i < capacity()`).
    *
    * @param vector The vector.
    * @return The span of unused elements.
@@ -542,7 +542,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   while (chunk->size() > 0) {
     // if we found the last delimiter, or didn't find delimiters inside the byte range at all: abort
-    if (last_offset || (!first_offset && chunk_offset >= byte_range_end)) { break; }
+    if (last_offset.has_value() or
+        (not first_offset.has_value() and chunk_offset >= byte_range_end)) {
+      break;
+    }
 
     auto tiles_in_launch =
       cudf::util::div_rounding_up_safe(chunk->size(), static_cast<std::size_t>(ITEMS_PER_TILE));
@@ -582,12 +585,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       tile_offsets.get_inclusive_prefix(base_tile_idx + tiles_in_launch - 1, scan_stream);
     offset_storage.advance_output(next_tile_offset.offset() - offset_storage.size());
     // determine if we found the first or last field offset for the byte range
-    if (next_tile_offset.offset() > 0 && !first_offset) {
+    if (next_tile_offset.offset() > 0 and not first_offset) {
       first_offset = offset_storage.front_element(scan_stream);
     }
     if (next_tile_offset.is_past_end()) { last_offset = offset_storage.back_element(scan_stream); }
     // copy over the characters we need, if we already encountered the first field delimiter
-    if (first_offset) {
+    if (first_offset.has_value()) {
       auto const begin    = chunk->data() + std::max<int64_t>(0, *first_offset - chunk_offset);
       auto const sentinel = last_offset.value_or(std::numeric_limits<int64_t>::max());
       auto const end = chunk->data() + std::min<int64_t>(sentinel - chunk_offset, chunk->size());
@@ -613,7 +616,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   // if the input was empty, we didn't find a delimiter at all,
   // or the first delimiter was also the last: empty output
-  if (chunk_offset == 0 || !first_offset.has_value() || first_offset == last_offset) {
+  if (chunk_offset == 0 or not first_offset.has_value() or first_offset == last_offset) {
     return make_empty_column(type_id::STRING);
   }
 
@@ -621,7 +624,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto global_offsets = offset_storage.gather(stream, mr);
 
   bool const insert_begin = *first_offset == 0;
-  bool const insert_end   = !last_offset.has_value() || last_offset == chunk_offset;
+  bool const insert_end   = not last_offset.has_value() or last_offset == chunk_offset;
   rmm::device_uvector<int32_t> offsets{
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
