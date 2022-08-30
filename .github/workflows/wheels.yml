@@ -14,7 +14,7 @@ jobs:
       python-version: "3.8"
       cibw-before-all: "apt-get install -y libzstd-dev liblz4-dev libboost-regex-dev libboost-system-dev libboost-filesystem-dev libsnappy-dev libprotobuf-dev libprotoc-dev protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-before-build: "pip install rmm-cuda11 --index-url https://pypi.k8s.rapids.ai/simple"
-      skbuild-configure-options: '-DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DDISABLE_DEPRECATION_WARNING=ON -DCUDF_ENABLE_ARROW_S3=OFF -DCUDF_ENABLE_ARROW_ORC=ON -DCUDF_ENABLE_ARROW_PYTHON=ON -DCUDF_ENABLE_ARROW_PARQUET=ON'
+      skbuild-configure-options: '-DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DCUDF_ENABLE_ARROW_S3=OFF -DCUDF_ENABLE_ARROW_ORC=ON -DCUDF_ENABLE_ARROW_PYTHON=ON -DCUDF_ENABLE_ARROW_PARQUET=ON'
       auditwheel-skip-repair: "true"
       gpu-smoketest-before-amd64: "apt-get install -y libprotobuf-dev"
       gpu-smoketest-before-arm64: "apt-get install -y libprotobuf-dev"
