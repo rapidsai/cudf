@@ -412,6 +412,7 @@ def to_orc(
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,
+    cols_as_map_type=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -434,6 +435,9 @@ def to_orc(
             "Categorical columns."
         )
 
+    if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):
+        raise TypeError("cols_as_map_type must be a list of column names.")
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
     )
@@ -448,6 +452,7 @@ def to_orc(
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
+                cols_as_map_type,
             )
     else:
         liborc.write_orc(
@@ -458,6 +463,7 @@ def to_orc(
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,
+            cols_as_map_type,
         )
 
 

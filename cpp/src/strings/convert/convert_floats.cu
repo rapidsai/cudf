@@ -19,10 +19,10 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
+#include <cudf/strings/detail/convert/string_to_float.cuh>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -45,109 +45,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-/**
- * @brief This function converts the given string into a
- * floating point double value.
- *
- * This will also map strings containing "NaN", "Inf", etc.
- * to the appropriate float values.
- *
- * This function will also handle scientific notation format.
- */
-__device__ inline double stod(string_view const& d_str)
-{
-  const char* in_ptr = d_str.data();
-  const char* end    = in_ptr + d_str.size_bytes();
-  if (end == in_ptr) return 0.0;
-  double sign{1.0};
-  if (*in_ptr == '-' || *in_ptr == '+') {
-    sign = (*in_ptr == '-' ? -1 : 1);
-    ++in_ptr;
-  }
-
-  // special strings: NaN, Inf
-  if ((in_ptr < end) && *in_ptr > '9') {
-    auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
-    if (is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
-    if (is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
-  }
-
-  // Parse and store the mantissa as much as we can,
-  // until we are about to exceed the limit of uint64_t
-  constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
-  uint64_t digits                = 0;
-  int exp_off                    = 0;
-  bool decimal                   = false;
-  while (in_ptr < end) {
-    char ch = *in_ptr;
-    if (ch == '.') {
-      decimal = true;
-      ++in_ptr;
-      continue;
-    }
-    if (ch < '0' || ch > '9') break;
-    if (digits > max_holding)
-      exp_off += (int)!decimal;
-    else {
-      digits = (digits * 10L) + static_cast<uint64_t>(ch - '0');
-      if (digits > max_holding) {
-        digits = digits / 10L;
-        exp_off += (int)!decimal;
-      } else
-        exp_off -= (int)decimal;
-    }
-    ++in_ptr;
-  }
-  if (digits == 0) return sign * static_cast<double>(0);
-
-  // check for exponent char
-  int exp_ten  = 0;
-  int exp_sign = 1;
-  if (in_ptr < end) {
-    char ch = *in_ptr++;
-    if (ch == 'e' || ch == 'E') {
-      if (in_ptr < end) {
-        ch = *in_ptr;
-        if (ch == '-' || ch == '+') {
-          exp_sign = (ch == '-' ? -1 : 1);
-          ++in_ptr;
-        }
-        while (in_ptr < end) {
-          ch = *in_ptr++;
-          if (ch < '0' || ch > '9') break;
-          exp_ten = (exp_ten * 10) + (int)(ch - '0');
-        }
-      }
-    }
-  }
-
-  int const num_digits = static_cast<int>(log10(digits)) + 1;
-  exp_ten *= exp_sign;
-  exp_ten += exp_off;
-  exp_ten += num_digits - 1;
-  if (exp_ten > std::numeric_limits<double>::max_exponent10) {
-    return sign > 0 ? std::numeric_limits<double>::infinity()
-                    : -std::numeric_limits<double>::infinity();
-  }
-
-  double base = sign * static_cast<double>(digits);
-
-  exp_ten += 1 - num_digits;
-  // If 10^exp_ten would result in a subnormal value, the base and
-  // exponent should be adjusted so that 10^exp_ten is a normal value
-  auto const subnormal_shift = std::numeric_limits<double>::min_exponent10 - exp_ten;
-  if (subnormal_shift > 0) {
-    // Handle subnormal values. Ensure that both base and exponent are
-    // normal values before computing their product.
-    base = base / exp10(static_cast<double>(num_digits - 1 + subnormal_shift));
-    exp_ten += num_digits - 1;  // adjust exponent
-    auto const exponent = exp10(static_cast<double>(exp_ten + subnormal_shift));
-    return base * exponent;
-  }
-
-  double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
-  return exp_ten < 0 ? base / exponent : base * exponent;
-}
 
 /**
  * @brief Converts strings column entries into floats.
@@ -579,7 +476,7 @@ std::unique_ptr<column> is_float(
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
-                      return strings::is_float(d_column.element<string_view>(idx));
+                      return is_float(d_column.element<string_view>(idx));
                     });
   results->set_null_count(strings.null_count());
   return results;

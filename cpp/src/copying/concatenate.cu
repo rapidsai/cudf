@@ -524,9 +524,8 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
   return std::make_unique<table>(std::move(concat_columns));
 }
 
-}  // namespace detail
-
 rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   bool const has_nulls =
@@ -540,13 +539,21 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
     rmm::device_buffer null_mask =
       create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
-    detail::concatenate_masks(
-      views, static_cast<bitmask_type*>(null_mask.data()), cudf::default_stream_value);
+    detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), stream);
 
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{0, cudf::default_stream_value, mr};
+  return rmm::device_buffer{0, stream, mr};
+}
+
+}  // namespace detail
+
+rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::concatenate_masks(views, cudf::default_stream_value, mr);
 }
 
 // Concatenates the elements from a vector of column_views

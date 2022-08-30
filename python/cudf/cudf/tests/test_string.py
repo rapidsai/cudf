@@ -875,6 +875,34 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
 
 @pytest.mark.parametrize(
+    "pat,esc,expect",
+    [
+        ("abc", "", [True, False, False, False, False, False]),
+        ("b%", "/", [False, True, False, False, False, False]),
+        ("%b", ":", [False, True, False, False, False, False]),
+        ("%b%", "*", [True, True, False, False, False, False]),
+        ("___", "", [True, True, True, False, False, False]),
+        ("__/%", "/", [False, False, True, False, False, False]),
+        ("55/____", "/", [False, False, False, True, False, False]),
+        ("%:%%", ":", [False, False, True, False, False, False]),
+        ("55*_100", "*", [False, False, False, True, False, False]),
+        ("abc", "abc", [True, False, False, False, False, False]),
+    ],
+)
+def test_string_like(pat, esc, expect):
+
+    expectation = does_not_raise()
+    if len(esc) > 1:
+        expectation = pytest.raises(ValueError)
+
+    with expectation:
+        gs = cudf.Series(["abc", "bab", "99%", "55_100", "", "556100"])
+        got = gs.str.like(pat, esc)
+        expect = cudf.Series(expect)
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [["hello", "world", None, "", "!"]],
 )

@@ -453,7 +453,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
+  return detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
@@ -461,7 +461,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
+  return detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
@@ -469,7 +469,7 @@ std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, replace_policy, cudf::default_stream_value, mr);
+  return detail::replace_nulls(input, replace_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
