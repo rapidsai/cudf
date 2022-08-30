@@ -336,6 +336,8 @@ if buildAll || hasArg cudf; then
 fi
 
 if buildAll || hasArg strings_udf; then
+    # do not separately expose strings_udf c++ library
+    # always build python and c++ at the same time and include into the same conda package
     cd ${REPODIR}/python/strings_udf/cpp
     ls
     cmake -S ./ -B build -DCONDA_PREFIX=${INSTALL_PREFIX} -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}/
