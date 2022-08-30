@@ -745,7 +745,7 @@ if(CUDF_BUILD_BENCHMARKS)
 endif()
 
 # build pretty-printer load script
-if (Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
   configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
 endif()
 
