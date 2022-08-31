@@ -23,7 +23,7 @@ from cudf.testing._utils import (
 
 @pytest.fixture(autouse=True)
 def clear_scalar_cache():
-    cudf.Scalar._clear_cache()
+    cudf.Scalar._clear_instance_cache()
     yield
 
 
