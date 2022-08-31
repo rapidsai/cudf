@@ -768,7 +768,7 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
-@pytest.mark.parametrize("fill_value", [None, True, False, 1.0])
+@pytest.mark.parametrize("fill_value", [None, 1.0])
 @pytest.mark.parametrize("use_cudf_scalar", [False, True])
 def test_operator_func_series_and_scalar_logical(
     dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
@@ -781,7 +781,6 @@ def test_operator_func_series_and_scalar_logical(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
         fill_value=fill_value,
     )
-    import pdb;pdb.set_trace()
     pdf_series_result = getattr(pdf_series, func)(
         scalar, fill_value=fill_value
     )
