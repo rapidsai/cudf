@@ -385,7 +385,7 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
         size=1,
     )
     table = to_arrow([struct_col], {"None": dtype})
-    python_dict = table.to_pydict()['None'][0]
+    python_dict = table.to_pydict()["None"][0]
     return {k: _nested_na_replace([python_dict[k]])[0] for k in python_dict}
 
 cdef _set_list_from_pylist(unique_ptr[scalar]& s,
