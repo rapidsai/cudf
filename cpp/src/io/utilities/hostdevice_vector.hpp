@@ -78,14 +78,14 @@ class hostdevice_vector {
   [[nodiscard]] T* end() { return host_ptr(size()); }
   [[nodiscard]] T const* end() const { return host_ptr(size()); }
 
-  [[nodiscard]] auto device_ptr(size_t offset = 0) { return d_data.data() + offset; }
-  [[nodiscard]] auto device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
+  [[nodiscard]] T* device_ptr(size_t offset = 0) { return d_data.data() + offset; }
+  [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
 
-  [[nodiscard]] auto d_begin() { return device_ptr(); }
-  [[nodiscard]] auto d_begin() const { return device_ptr(); }
+  [[nodiscard]] T* d_begin() { return device_ptr(); }
+  [[nodiscard]] T const* d_begin() const { return device_ptr(); }
 
-  [[nodiscard]] auto d_end() { return device_ptr(size()); }
-  [[nodiscard]] auto d_end() const { return device_ptr(size()); }
+  [[nodiscard]] T* d_end() { return device_ptr(size()); }
+  [[nodiscard]] T const* d_end() const { return device_ptr(size()); }
 
   /**
    * @brief Returns the specified element from device memory
