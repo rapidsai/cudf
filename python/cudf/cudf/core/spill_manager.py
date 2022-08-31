@@ -152,7 +152,7 @@ class SpillManager:
             if buf.lock.acquire(blocking=False):
                 try:
                     if not buf.is_spilled and buf.spillable:
-                        buf.move_inplace(target="cpu")
+                        buf.__spill__(target="cpu")
                         return buf.size
                 finally:
                     buf.lock.release()

@@ -68,7 +68,7 @@ cdef class SpillableBuffer:
     """A spillable buffer that represents device memory.
 
     This buffer supports spilling the represented data to host memory.
-    Spilling can be done manually by calling `.move_inplace(target="cpu")`
+    Spilling can be done manually by calling `.__spill__(target="cpu")`
     but usually the associated spilling manager triggers spilling based on
     current device memory usage see `cudf.core.spill_manager.SpillManager`.
     Unspill is triggered automatically when accessing the data of the buffer.
@@ -182,7 +182,15 @@ cdef class SpillableBuffer:
             return self._view_desc["base"].is_spilled
         return self._ptr_desc["type"] != "gpu"
 
-    def move_inplace(self, target: str = "cpu") -> None:
+    def __spill__(self, target: str = "cpu") -> None:
+        """Spill or un-spill this buffer in-place
+
+        Parameters
+        ----------
+        target : str
+            The target of the spilling.
+        """
+
         assert self._view_desc is None
         with self._lock:
             ptr_type = self._ptr_desc["type"]
@@ -203,7 +211,7 @@ cdef class SpillableBuffer:
             elif (ptr_type, target) == ("cpu", "gpu"):
                 # Notice, this operation is prone to deadlock because the RMM
                 # allocation might trigger spilling-on-demand which in turn
-                # trigger a new call to this buffer's `move_inplace()`.
+                # trigger a new call to this buffer's `__spill__()`.
                 # Therefore, it is important that spilling-on-demand doesn't
                 # tries to unspill an already locked buffer!
                 dev_mem = rmm.DeviceBuffer.to_device(
@@ -232,7 +240,7 @@ cdef class SpillableBuffer:
         with self._lock:
             if not self._exposed:
                 self._manager.log_expose(self)
-            self.move_inplace(target="gpu")
+            self.__spill__(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()
             return self._ptr
@@ -252,7 +260,7 @@ cdef class SpillableBuffer:
             offset = self._view_desc["offset"]
 
         with base._lock:
-            base.move_inplace(target="gpu")
+            base.__spill__(target="gpu")
             base._last_accessed = time.monotonic()
             spill_lock.add(base._expose_counter)
             return <void*><uintptr_t> (base._ptr+offset)
@@ -269,7 +277,7 @@ cdef class SpillableBuffer:
             offset = self._view_desc["offset"]
 
         with base._lock:
-            base.move_inplace(target="gpu")
+            base.__spill__(target="gpu")
             base._last_accessed = time.monotonic()
             spill_lock = SpillLock()
             spill_lock.add(base._expose_counter)
@@ -334,7 +342,7 @@ cdef class SpillableBuffer:
 
         with base._lock:
             if base.spillable:
-                base.move_inplace(target="cpu")
+                base.__spill__(target="cpu")
                 return base._ptr_desc["memoryview"][
                     offset : offset + self.size
                 ]

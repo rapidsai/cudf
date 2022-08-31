@@ -27,7 +27,7 @@ from cudf.testing._utils import assert_eq
 def gen_df(target="gpu") -> cudf.DataFrame:
     ret = cudf.DataFrame({"a": [1, 2, 3]})
     if target != "gpu":
-        gen_df.buffer(ret).move_inplace(target=target)
+        gen_df.buffer(ret).__spill__(target=target)
     return ret
 
 
@@ -105,12 +105,12 @@ def test_spillable_df_groupby(manager: SpillManager):
 
 def test_spilling_buffer(manager: SpillManager):
     buf = as_device_buffer_like(rmm.DeviceBuffer(size=10), exposed=False)
-    buf.move_inplace(target="cpu")
+    buf.__spill__(target="cpu")
     assert buf.is_spilled
     buf.ptr  # Expose pointer and trigger unspill
     assert not buf.is_spilled
     with pytest.raises(ValueError, match="unspillable buffer"):
-        buf.move_inplace(target="cpu")
+        buf.__spill__(target="cpu")
 
 
 def test_environment_variables(monkeypatch):
@@ -231,7 +231,7 @@ def test_external_memory_never_spills(manager):
 def test_spilling_df_views(manager):
     df = gen_df()
     assert gen_df.is_spillable(df)
-    gen_df.buffer(df).move_inplace(target="cpu")
+    gen_df.buffer(df).__spill__(target="cpu")
     assert gen_df.is_spilled(df)
     df_view = df.loc[1:]
     assert gen_df.is_spillable(df_view)
@@ -242,7 +242,7 @@ def test_modify_spilled_views(manager):
     df = gen_df()
     df_view = df.iloc[1:]
     buf = gen_df.buffer(df)
-    buf.move_inplace(target="cpu")
+    buf.__spill__(target="cpu")
 
     # modify the spilled df and check that the changes are reflected
     # in the view
