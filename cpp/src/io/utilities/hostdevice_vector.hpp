@@ -58,7 +58,8 @@ class hostdevice_vector {
 
   void insert(const T& data)
   {
-    CUDF_EXPECTS(size() < capacity(), "hostdevice_vector overflow");
+    CUDF_EXPECTS(size() < capacity(),
+                 "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
     h_data.push_back(data);
   }
 
