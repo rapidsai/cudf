@@ -79,9 +79,6 @@ class SpillManager:
                     break  # No more to spill!
                 total_spilled += spilled
 
-            # cuDF has a lot of circular references
-            gc.collect()
-
             if total_spilled > 0:
                 return True  # Ask RMM to retry the allocation
 
