@@ -95,9 +95,6 @@ cdef vector[column_metadata] gather_metadata(dict cols_dtypes) except *:
     ----------
     cols_dtypes : dict
         A dict mapping of column names & their dtypes.
-
-    First value signifies name of the main parent column,
-    and adjacent list will signify child column.
     """
     cdef vector[column_metadata] cpp_metadata
     cpp_metadata.reserve(len(cols_dtypes))
