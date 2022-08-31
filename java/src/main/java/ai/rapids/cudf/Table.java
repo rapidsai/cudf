@@ -1633,6 +1633,34 @@ public final class Table implements AutoCloseable {
     return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, provider);
   }
 
+  native private static byte[] exportIPC(long tableHandle, String[] columnNames, byte[][] out_bytes);
+
+  public class IPCMessage {
+    private byte[] message;
+
+    public IPCMessage(byte[] msg) {
+      this.message = msg;
+    }
+
+    public byte[] getMessage() {
+      return message;
+    }
+  }
+
+  public IPCMessage exportIPC(IPCWriterOptions options) {
+    byte[][] result = new byte[1][];
+    exportIPC(this.nativeHandle, options.getColumnNames(), result);
+    return new IPCMessage(result[0]);
+  }
+
+  native private static long[] importIPC(byte [] message, String[][] out);
+
+  public static Table importIPC(IPCMessage message) {
+    String[][] columns_name = new String[1][]; // column name is discarded in java binding?
+    return new Table(importIPC(message.getMessage(), columns_name));
+  }
+
+
   /**
    * Concatenate multiple tables together to form a single table.
    * The schema of each table (i.e.: number of columns and types of each column) must be equal

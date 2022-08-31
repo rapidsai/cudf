@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <arrow/buffer.h>      // arrow::Buffer
+#include <arrow/ipc/writer.h>  // arrow::ipc::SerializeSchema
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -22,6 +24,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/ipc.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -37,6 +40,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include "detail/arrow_allocator.hpp"
+#include "ipc.hpp"
 
 namespace cudf {
 namespace detail {
@@ -417,4 +421,170 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
   return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
 }
 
+namespace {
+
+struct dispatch_to_ipc_column {
+  static ipc::exported_ptr fetch_mask_data(column_view const& column)
+  {
+    auto mask_ptr                    = reinterpret_cast<uint8_t const*>(column.null_mask());
+    const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(column.size());
+    auto mask_dptr                   = ipc::exported_ptr::from_data(mask_ptr, mask_size_in_bytes);
+    return mask_dptr;
+  }
+
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  arrow::Result<ipc::exported_column> operator()(column_view) const
+  {
+    return arrow::Status::Invalid("Unsupported type for export_ipc.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  arrow::Result<ipc::exported_column> operator()(column_view input_view) const
+  {
+    const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
+    auto data_ptr                    = reinterpret_cast<uint8_t const*>(input_view.data<T>());
+    auto data_dptr                   = ipc::exported_ptr::from_data(data_ptr, data_size_in_bytes);
+
+    ipc::exported_column column;
+    column.data = data_dptr;
+    column.size = input_view.size();
+
+    if (input_view.has_nulls()) { column.mask = fetch_mask_data(input_view); }
+
+    return column;
+  }
+};
+
+template <>
+arrow::Result<ipc::exported_column> dispatch_to_ipc_column::operator()<cudf::list_view>(
+  column_view input_view) const
+{
+  std::vector<ipc::exported_column> child_columns;
+  std::transform(
+    input_view.child_begin(),
+    input_view.child_end(),
+    std::back_inserter(child_columns),
+    [](column_view const& child) {
+      auto column =
+        type_dispatcher(child.type(), dispatch_to_ipc_column{}, child).ValueOrElse([]() {
+          CUDF_FAIL("Failed to export column.");
+          return ipc::exported_column{};
+        });
+      return column;
+    });
+
+  ipc::exported_column column{};
+  column.children = std::move(child_columns);
+  column.size     = input_view.size();
+  if (input_view.has_nulls()) { column.mask = fetch_mask_data(input_view); }
+  return column;
+}
+
+std::shared_ptr<arrow::DataType> cudf_to_arrow_type(data_type dtype)
+{
+  switch (dtype.id()) {
+    case type_id::BOOL8: return std::shared_ptr<arrow::DataType>{new arrow::BooleanType{}};
+    case type_id::INT8: return std::shared_ptr<arrow::DataType>{new arrow::Int8Type{}};
+    case type_id::INT16: return std::shared_ptr<arrow::DataType>{new arrow::Int16Type{}};
+    case type_id::INT32: return std::shared_ptr<arrow::DataType>{new arrow::Int32Type{}};
+    case type_id::INT64: return std::shared_ptr<arrow::DataType>{new arrow::Int64Type{}};
+    case type_id::UINT8: return std::shared_ptr<arrow::DataType>{new arrow::UInt8Type{}};
+    case type_id::UINT16: return std::shared_ptr<arrow::DataType>{new arrow::UInt16Type{}};
+    case type_id::UINT32: return std::shared_ptr<arrow::DataType>{new arrow::UInt32Type{}};
+    case type_id::UINT64: return std::shared_ptr<arrow::DataType>{new arrow::UInt64Type{}};
+    case type_id::FLOAT32: return std::shared_ptr<arrow::DataType>{new arrow::FloatType{}};
+    case type_id::FLOAT64: return std::shared_ptr<arrow::DataType>{new arrow::DoubleType{}};
+    case type_id::TIMESTAMP_DAYS:
+      return std::shared_ptr<arrow::DataType>{new arrow::Date32Type{}};  // correct?
+    case type_id::TIMESTAMP_SECONDS: return arrow::timestamp(arrow::TimeUnit::SECOND);
+    case type_id::TIMESTAMP_MILLISECONDS: return arrow::timestamp(arrow::TimeUnit::MILLI);
+    case type_id::TIMESTAMP_MICROSECONDS: return arrow::timestamp(arrow::TimeUnit::MICRO);
+    case type_id::TIMESTAMP_NANOSECONDS: return arrow::timestamp(arrow::TimeUnit::NANO);
+    case type_id::DURATION_SECONDS: return arrow::duration(arrow::TimeUnit::SECOND);
+    case type_id::DURATION_MILLISECONDS: return arrow::duration(arrow::TimeUnit::MILLI);
+    case type_id::DURATION_MICROSECONDS: return arrow::duration(arrow::TimeUnit::MICRO);
+    case type_id::DURATION_NANOSECONDS: return arrow::duration(arrow::TimeUnit::NANO);
+    default: CUDF_FAIL("Unsupported type_id conversion to arrow");
+  };
+}
+
+std::shared_ptr<arrow::DataType> get_arrow_dtype(column_view const& column)
+{
+  auto dtype = column.type();
+  switch (dtype.id()) {
+    case type_id::LIST: {
+      // the first child is offset, the second one is data.
+      auto dtype = arrow::list(cudf_to_arrow_type(column.child(1).type()));
+      return dtype;
+    }
+    default: return cudf_to_arrow_type(dtype);
+  }
+  CUDF_FAIL("unreachable.");
+  return {};
+}
+
+ipc::exported_column to_ipc_column(column_view column)
+{
+  if (column.type().id() != type_id::EMPTY) {
+    auto handle =
+      type_dispatcher(column.type(), dispatch_to_ipc_column{}, column).ValueOrElse([]() {
+        CUDF_FAIL("Failed to obtain IPC handle.");
+        return ipc::exported_column{};
+      });
+    return handle;
+  } else {
+    CUDF_FAIL("Empty column.");
+    return {};
+  }
+
+  CUDF_FAIL("unreachable");
+  return {};
+}
+}  // namespace
+
+std::shared_ptr<arrow::Buffer> export_ipc(table_view input,
+                                          std::vector<column_metadata> const& metadata)
+{
+  std::vector<std::shared_ptr<arrow::Field>> fields;
+  std::transform(metadata.cbegin(),
+                 metadata.cend(),
+                 input.begin(),
+                 std::back_inserter(fields),
+                 [](auto const& meta, auto const& column) {
+                   auto field = arrow::field(meta.name, get_arrow_dtype(column));
+                   return field;
+                 });
+
+  std::string bytes;
+  auto magic = ipc::magic_number();
+  bytes.resize(sizeof(magic));
+  auto ptr = bytes.data();
+  std::memcpy(ptr, &magic, sizeof(magic));
+
+  std::shared_ptr<arrow::Schema> schema = arrow::schema(fields);
+  auto p_schema_buf                     = arrow::ipc::SerializeSchema(*schema).ValueOrElse([]() {
+    CUDF_FAIL("Failed to serialize schema.");
+    return std::shared_ptr<arrow::Buffer>{nullptr};
+  });
+  int64_t schema_size                   = p_schema_buf->size();
+  size_t orig                           = bytes.size();
+  bytes.resize(orig + schema_size + sizeof(int64_t));
+  {
+    auto ptr = bytes.data() + orig;
+    std::memcpy(ptr, &schema_size, sizeof(schema_size));
+    ptr += sizeof(schema_size);
+    std::copy(p_schema_buf->data(), p_schema_buf->data() + p_schema_buf->size(), ptr);
+  }
+
+  CUDF_EXPECTS(static_cast<size_t>(input.num_columns()) == metadata.size(), "Invalid input.");
+  for (size_t i = 0; i < metadata.size(); ++i) {
+    ipc::exported_column p_handle = to_ipc_column(input.column(i));
+    // serialize to message
+    p_handle.serialize(&bytes);
+    auto size = bytes.size();
+  }
+  // an owning buffer
+  auto p_buf = arrow::Buffer::FromString(bytes);
+  return p_buf;
+}
 }  // namespace cudf

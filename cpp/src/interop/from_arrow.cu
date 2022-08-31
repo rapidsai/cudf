@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <arrow/buffer.h>      // arrow::Buffer
+#include <arrow/io/memory.h>   // arrow::io::BufferReader
+#include <arrow/ipc/reader.h>  // arrow::ipc::ReadSchema
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -25,6 +29,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/ipc.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -34,6 +39,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include "ipc.hpp"
 #include <thrust/gather.h>
 
 namespace cudf {
@@ -442,7 +448,6 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 
   return std::make_unique<table>(std::move(columns));
 }
-
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
@@ -453,4 +458,148 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   return detail::from_arrow(input_table, cudf::default_stream_value, mr);
 }
 
+namespace {
+struct dispatch_to_column_view {
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  arrow::Result<std::pair<column_view, std::shared_ptr<imported_column>>> operator()(
+    arrow::Field const&, ipc::exported_column const&) const
+  {
+    return arrow::Status::Invalid("Unsupported type for from_ipc.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  arrow::Result<std::pair<column_view, std::shared_ptr<imported_column>>> operator()(
+    arrow::Field const& field, ipc::exported_column const& ipc_column) const
+  {
+    data_type dtype = detail::arrow_to_cudf_type(*field.type());
+    ipc::imported_ptr data_base_ptr{ipc_column.data};
+    auto data_ptr = data_base_ptr.get<uint8_t>();
+
+    size_type size = ipc_column.data.size() / size_of(dtype);
+    CUDF_EXPECTS(size == ipc_column.size, "Invalid IPC message");
+
+    if (ipc_column.has_nulls()) {
+      ipc::imported_ptr mask_base_ptr{ipc_column.mask};
+      auto mask_ptr = mask_base_ptr.get<bitmask_type>();
+      auto cview    = column_view{dtype, size, data_ptr, mask_ptr};
+      return std::make_pair(cview,
+                            std::make_shared<imported_column>(
+                              field.name(), std::move(data_base_ptr), std::move(mask_base_ptr)));
+    }
+
+    auto cview = column_view{dtype, size, data_ptr};
+    return std::make_pair(
+      cview, std::make_shared<imported_column>(field.name(), std::move(data_base_ptr)));
+  }
+};
+
+template <>
+arrow::Result<std::pair<column_view, std::shared_ptr<imported_column>>>
+dispatch_to_column_view::operator()<cudf::list_view>(arrow::Field const& field,
+                                                     ipc::exported_column const& ipc_column) const
+{
+  data_type dtype = detail::arrow_to_cudf_type(*field.type());
+  CUDF_EXPECTS(dtype == data_type(type_id::LIST), "Failed to dispatch column type.");
+
+  std::vector<column_view> children;
+  std::vector<std::shared_ptr<imported_column>> imported_children;
+  CUDF_EXPECTS(ipc_column.children.size() == 2, "Invalid list.");
+
+  for (size_t i = 0; i < ipc_column.children.size(); ++i) {
+    std::shared_ptr<arrow::DataType> child_dtype;
+    if (i == 0) {
+      // size_type is int32
+      child_dtype = std::make_shared<arrow::Int32Type>();
+    } else {
+      child_dtype = field.type()->field(0)->type();
+    }
+    auto child_field = arrow::field("", child_dtype);
+    auto child       = type_dispatcher(detail::arrow_to_cudf_type(*child_dtype),
+                                 dispatch_to_column_view{},
+                                 *child_field,
+                                 ipc_column.children.at(i));
+    if (!child.ok()) { return child; }
+
+    children.push_back(child.ValueUnsafe().first);
+    imported_children.push_back(child.ValueUnsafe().second);
+  }
+
+  ipc::imported_ptr data_ptr;
+  ipc::imported_ptr mask_base{ipc_column.mask};
+
+  if (ipc_column.has_nulls()) {
+    auto mask_ptr = mask_base.get<bitmask_type>();
+    auto cview =
+      column_view{dtype, ipc_column.size, nullptr, mask_ptr, UNKNOWN_NULL_COUNT, 0, children};
+
+    auto imported = std::make_shared<imported_column>(
+      field.name(), std::move(data_ptr), std::move(mask_base), std::move(imported_children));
+
+    return std::make_pair(cview, imported);
+  }
+
+  auto cview =
+    column_view{dtype, ipc_column.size, nullptr, nullptr, UNKNOWN_NULL_COUNT, 0, children};
+  return std::make_pair(
+    cview,
+    std::make_shared<imported_column>(
+      field.name(), std::move(data_ptr), std::move(mask_base), std::move(imported_children)));
+}
+
+std::pair<column_view, std::shared_ptr<imported_column>> from_ipc_column(
+  arrow::Field const& field, ipc::exported_column ipc_column)
+{
+  data_type dtype = detail::arrow_to_cudf_type(*field.type());
+  if (dtype.id() == type_id::EMPTY) { CUDF_FAIL("Empty column"); }
+  return type_dispatcher(dtype, dispatch_to_column_view{}, field, ipc_column)
+    .ValueOrElse([]() -> std::pair<column_view, std::shared_ptr<imported_column>> {
+      CUDF_FAIL("Failed to restore cuDF column from IPC message.");
+      return {};
+    });
+}
+}  // namespace
+
+std::pair<table_view, std::vector<std::shared_ptr<imported_column>>> import_ipc(
+  std::shared_ptr<arrow::Buffer> ipc_handles)
+{
+  auto const end = ipc_handles->data() + ipc_handles->size();
+
+  int64_t magic{0};
+  auto ptr = ipc_handles->data();
+  CUDF_EXPECTS(static_cast<size_t>(ipc_handles->size()) > sizeof(magic), "Invalid IPC message.");
+  std::memcpy(&magic, ptr, sizeof(magic));
+  CUDF_EXPECTS(magic == ipc::magic_number(), "Invalid IPC message");
+
+  ptr += sizeof(magic);
+  CUDF_EXPECTS(ptr < end, "Invalid IPC message");
+
+  int64_t schema_size{0};
+  std::memcpy(&schema_size, ptr, sizeof(schema_size));
+  ptr += sizeof(schema_size);
+  CUDF_EXPECTS(ptr < end, "Invalid IPC message");
+
+  arrow::io::BufferReader stream(reinterpret_cast<uint8_t const*>(ptr), schema_size);
+  auto p_schema = arrow::ipc::ReadSchema(&stream, nullptr).ValueOrElse([]() {
+    CUDF_FAIL("Failed to read schema from IPC message");
+    return std::shared_ptr<arrow::Schema>{nullptr};
+  });
+  ptr += schema_size;
+  CUDF_EXPECTS(ptr < end, "Invalid IPC message");
+
+  size_t n_columns = 0;
+  std::vector<column_view> columns;
+  std::vector<std::shared_ptr<imported_column>> imported_columns;
+  while (ptr != end) {
+    CUDF_EXPECTS(ptr < end, "Invalid IPC message");
+    ipc::exported_column ipc_column;
+    ptr    = ipc::exported_column::from_buffer(ptr, &ipc_column);
+    auto c = from_ipc_column(*p_schema->field(n_columns), ipc_column);
+    columns.push_back(std::move(c.first));
+    imported_columns.push_back(std::move(c.second));
+    ++n_columns;
+  }
+
+  table_view t{std::move(columns)};
+  return std::make_pair(t, imported_columns);
+}
 }  // namespace cudf

@@ -16,6 +16,7 @@ DartConfiguration.tcl
 *.spec
 .nfs*
 .clangd
+.gdb_history
 
 ## Python build directories & artifacts
 dask-worker-space/
@@ -79,6 +80,7 @@ build/
 cpp/build/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
+compile_commands.json
 
 ## Eclipse IDE
 .project
@@ -97,6 +99,7 @@ cpp/doxygen/html
 
 #Java
 target
+.classpath
 
 # Translations
 *.mo
