@@ -231,7 +231,8 @@ struct sorting_physical_element_comparator {
  * rather than logical elements, defaults to `NaN` aware relational comparator that evaluates `NaN`
  * as greater than all other values.
  */
-template <typename Nullate,
+template <bool has_nested_columns,
+          typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
 class device_row_comparator {
   friend class self_comparator;       ///< Allow self_comparator to access private members
@@ -804,36 +805,42 @@ class self_comparator {
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{device_row_comparator{nullate,
-                                                 *d_t,
-                                                 *d_t,
-                                                 d_t->dremel_device_views(),
-                                                 d_t->dremel_device_views(),
-                                                 d_t->depths(),
-                                                 d_t->column_order(),
-                                                 d_t->null_precedence(),
-                                                 comparator}};
+    return less_comparator{
+      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
+        nullate,
+        *d_t,
+        *d_t,
+        d_t->dremel_device_views(),
+        d_t->dremel_device_views(),
+        d_t->depths(),
+        d_t->column_order(),
+        d_t->null_precedence(),
+        comparator}};
   }
 
   /// @copydoc less()
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{device_row_comparator{nullate,
-                                                            *d_t,
-                                                            *d_t,
-                                                            d_t->dremel_device_views(),
-                                                            d_t->dremel_device_views(),
-                                                            d_t->depths(),
-                                                            d_t->column_order(),
-                                                            d_t->null_precedence(),
-                                                            comparator}};
+    return less_equivalent_comparator{
+      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
+        nullate,
+        *d_t,
+        *d_t,
+        d_t->dremel_device_views(),
+        d_t->dremel_device_views(),
+        d_t->depths(),
+        d_t->column_order(),
+        d_t->null_precedence(),
+        comparator}};
   }
 
  private:
@@ -950,38 +957,42 @@ class two_table_comparator {
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{
-      strong_index_comparator_adapter{device_row_comparator{nullate,
-                                                            *d_left_table,
-                                                            *d_right_table,
-                                                            d_left_table->dremel_device_views(),
-                                                            d_right_table->dremel_device_views(),
-                                                            d_left_table->depths(),
-                                                            d_left_table->column_order(),
-                                                            d_left_table->null_precedence(),
-                                                            comparator}}};
+    return less_comparator{strong_index_comparator_adapter{
+      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
+        nullate,
+        *d_left_table,
+        *d_right_table,
+        d_left_table->dremel_device_views(),
+        d_right_table->dremel_device_views(),
+        d_left_table->depths(),
+        d_left_table->column_order(),
+        d_left_table->null_precedence(),
+        comparator}}};
   }
 
   /// @copydoc less()
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{
-      strong_index_comparator_adapter{device_row_comparator{nullate,
-                                                            *d_left_table,
-                                                            *d_right_table,
-                                                            d_left_table->dremel_device_views(),
-                                                            d_right_table->dremel_device_views(),
-                                                            d_left_table->depths(),
-                                                            d_left_table->column_order(),
-                                                            d_left_table->null_precedence(),
-                                                            comparator}}};
+    return less_equivalent_comparator{strong_index_comparator_adapter{
+      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
+        nullate,
+        *d_left_table,
+        *d_right_table,
+        d_left_table->dremel_device_views(),
+        d_right_table->dremel_device_views(),
+        d_left_table->depths(),
+        d_left_table->column_order(),
+        d_left_table->null_precedence(),
+        comparator}}};
   }
 
  private:
