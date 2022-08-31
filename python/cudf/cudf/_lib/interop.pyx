@@ -95,17 +95,14 @@ cdef vector[column_metadata] gather_metadata(object dtype) except *:
     and adjacent list will signify child column.
     """
     cdef vector[column_metadata] cpp_metadata
+    cpp_metadata.reserve(len(dtype.values()))
+    i = 0
     if dtype is not None:
-        if is_struct_dtype(dtype):
-            cpp_metadata.reserve(len(dtype.fields))
-            for i, name in enumerate(dtype.fields):
-                value = dtype.fields[name]
-                cpp_metadata.push_back(column_metadata((name).encode()))
-                if is_struct_dtype(value):
-                    _set_col_children_metadata(value, cpp_metadata[i])
-        else:
-            cpp_metadata.reserve(1)
-            cpp_metadata.push_back(column_metadata("None".encode()))
+        for key, value in dtype.items():
+            cpp_metadata.push_back(column_metadata(key.encode()))
+            if is_struct_dtype(value):
+                _set_col_children_metadata(value, cpp_metadata[i])
+            i += 1
     else:
         raise TypeError(
             "Requires dtype to be passed to "
