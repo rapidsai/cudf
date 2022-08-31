@@ -740,7 +740,7 @@ public final class Table implements AutoCloseable {
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
-  private static native GroupByResult contiguousSplitGroups(long inputTable,
+  private static native ContigSplitGroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
@@ -4119,7 +4119,7 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      GroupByResult ret = Table.contiguousSplitGroups(
+      ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
           groupByOptions.getIgnoreNullKeys(),
@@ -4138,15 +4138,15 @@ public final class Table implements AutoCloseable {
      * Each split table represents a single group.
      *
      * Example, see the example in {@link #contiguousSplitGroups}
-     * The `uniqKeysTable` in GroupByResult is:
+     * The `uniqKeysTable` in ContigSplitGroupByResult is:
      *    a
      *    b
      *  Note: only 2 rows because of only has 2 split groups
      *
      * @return The split groups and uniq keys table.
      */
-    public GroupByResult contiguousSplitGroupsAndGenUniqKeys() {
-      GroupByResult result = Table.contiguousSplitGroups(
+    public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      ContigSplitGroupByResult result = Table.contiguousSplitGroups(
               operation.table.nativeHandle,
               operation.indices,
               groupByOptions.getIgnoreNullKeys(),
@@ -4154,7 +4154,7 @@ public final class Table implements AutoCloseable {
               groupByOptions.getKeysDescending(),
               groupByOptions.getKeysNullSmallest(),
               true); // generate uniq keys table
-      result.genUniqKeysTable();
+      result.getUniqKeyTable();
       return result;
     }
   }

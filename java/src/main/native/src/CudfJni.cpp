@@ -164,7 +164,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
-  if (!cudf::jni::cache_group_by_result_jni(env)) {
+  if (!cudf::jni::cache_contig_split_group_by_result_jni(env)) {
     if (!env->ExceptionCheck()) {
       env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
                     "Unable to locate group by table result methods needed by JNI");
@@ -191,7 +191,7 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
 
   // release cached class objects here.
   cudf::jni::release_contiguous_table_jni(env);
-  cudf::jni::release_group_by_result_jni(env);
+  cudf::jni::release_contig_split_group_by_result_jni(env);
   cudf::jni::release_host_memory_buffer_jni(env);
 }
 

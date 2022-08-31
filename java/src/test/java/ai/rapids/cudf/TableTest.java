@@ -6440,7 +6440,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupByContiguousSplitGroups() {
+  void testGroupByContiguousSplitGroups() throws Exception {
     ContiguousTable[] splits = null;
     ContiguousTable[] splits2 = null;
     Table uniqKeys = null;
@@ -6468,10 +6468,11 @@ public class TableTest extends CudfTestBase {
               .column("s4", "s5", "s6").build();
            Table expected4 = new Table.TestBuilder()
               .column(   1,    1,    1)
-              .column(   1,    3,    5).build()) {
+              .column(   1,    3,    5).build();
+           ContigSplitGroupByResult r =
+               table.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys()) {
         try {
           splits = table.groupBy(0, 1).contiguousSplitGroups();
-          GroupByResult r = table.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys();
           splits2 = r.getGroups();
           uniqKeys = r.getUniqKeyTable();
 
@@ -6497,22 +6498,15 @@ public class TableTest extends CudfTestBase {
           if (splits != null) {
             for (ContiguousTable t : splits) { t.close(); }
           }
-          if(splits2 != null) {
-            for (ContiguousTable t : splits2) { t.close(); }
-          }
-          if(uniqKeys != null) {
-            uniqKeys.close();
-          }
         }
       }
 
       // Empty key columns, the whole table is a group.
-      try {
+      try(ContigSplitGroupByResult r = table.groupBy().contiguousSplitGroupsAndGenUniqKeys()) {
         splits = table.groupBy().contiguousSplitGroups();
         assertEquals(1, splits.length);
         assertTablesAreEqual(table, splits[0].getTable());
 
-        GroupByResult r = table.groupBy().contiguousSplitGroupsAndGenUniqKeys();
         splits2 = r.getGroups();
         assertEquals(1, splits2.length);
         assertTablesAreEqual(table, splits2[0].getTable());
@@ -6525,50 +6519,34 @@ public class TableTest extends CudfTestBase {
         if (splits != null) {
           for (ContiguousTable t : splits) { t.close(); }
         }
-        if(splits2 != null) {
-          for (ContiguousTable t : splits2) { t.close(); }
-        }
-        if(uniqKeys != null) {
-          uniqKeys.close();
-        }
       }
 
       // Row count is 0
-      ContiguousTable[] tmpSplits = null;
-      try {
+      try(
+          Table emptyTable = new Table.TestBuilder()
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new String[0]).build();
+          ContigSplitGroupByResult r =
+              emptyTable.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys()) {
         // the first of tmpSplits is empty split
-        tmpSplits = table.contiguousSplit(0);
-        Table emptyTable = tmpSplits[0].getTable();
         assertEquals(0, emptyTable.getRowCount());
 
         splits = emptyTable.groupBy(0, 1).contiguousSplitGroups();
         assertEquals(1, splits.length);
         assertEquals(0, splits[0].getTable().getRowCount());
 
-        GroupByResult r = emptyTable.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys();
         splits2 = r.getGroups();
         assertEquals(1, splits2.length);
         assertEquals(0, splits2[0].getTable().getRowCount());
         uniqKeys = r.getUniqKeyTable();
         assertEquals(0, uniqKeys.getRowCount());
       } finally {
-        if (tmpSplits != null) {
-          for (ContiguousTable t : tmpSplits) {
-            t.close();
-          }
-        }
         if (splits != null) {
           for (ContiguousTable t : splits) {
             t.close();
           }
-        }
-        if (splits2 != null) {
-          for (ContiguousTable t : splits2) {
-            t.close();
-          }
-        }
-        if (uniqKeys != null) {
-          uniqKeys.close();
         }
       }
     }

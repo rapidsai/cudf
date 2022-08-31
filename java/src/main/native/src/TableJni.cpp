@@ -3493,9 +3493,9 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
 
     if (genUniqKeys) {
       jlongArray keys_array = convert_table_for_return(env, group_by_result_table);
-      return cudf::jni::group_by_result_from(env, groups_array, keys_array);
+      return cudf::jni::contig_split_group_by_result_from(env, groups_array, keys_array);
     } else {
-      return cudf::jni::group_by_result_from(env, groups_array);
+      return cudf::jni::contig_split_group_by_result_from(env, groups_array);
     }
   }
   CATCH_STD(env, NULL);

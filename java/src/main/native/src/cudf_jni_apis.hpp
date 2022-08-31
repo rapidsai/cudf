@@ -58,13 +58,40 @@ jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
-bool cache_group_by_result_jni(JNIEnv *env);
+/**
+ * @brief Cache the JNI jclass and JNI jfield of Java `ContigSplitGroupByResult`
+ *
+ * @param env the JNI Env pointer
+ * @return if success
+ */
+bool cache_contig_split_group_by_result_jni(JNIEnv *env);
 
-void release_group_by_result_jni(JNIEnv *env);
+/**
+ * @brief Release the JNI jclass and JNI jfield of Java `ContigSplitGroupByResult`
+ *
+ * @param env the JNI Env pointer
+ */
+void release_contig_split_group_by_result_jni(JNIEnv *env);
 
-jobject group_by_result_from(JNIEnv *env, jobjectArray &groups);
+/**
+ * @brief Construct a Java `ContigSplitGroupByResult` from contiguous tables.
+ *
+ * @param env the JNI Env pointer
+ * @param groups the contiguous tables
+ * @return a Java `ContigSplitGroupByResult`
+ */
+jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups);
 
-jobject group_by_result_from(JNIEnv *env, jobjectArray &groups, jlongArray &uniq_key_columns);
+/**
+ * @brief Construct a Java `ContigSplitGroupByResult` from contiguous tables.
+ *
+ * @param env the JNI Env pointer
+ * @param groups the contiguous tables
+ * @param groups the contiguous tables
+ * @return a Java `ContigSplitGroupByResult`
+ */
+jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
+                                          jlongArray &uniq_key_columns);
 
 //
 // HostMemoryBuffer APIs
