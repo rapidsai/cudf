@@ -1137,7 +1137,8 @@ __global__ void __launch_bounds__(block_size)
     if (state->err == 1) {
       statuses[z].status = compression_status::OUTPUT_OVERFLOW;
     } else {
-      statuses[z].status = (state->err) ? compression_status::SUCCESS : compression_status::FAILURE;
+      statuses[z].status =
+        (state->err == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     }
     statuses[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
