@@ -114,6 +114,15 @@ std::vector<column_view> get_nullable_columns(table_view const& table)
   return result;
 }
 
+std::vector<column_view> get_nested_columns(table_view const& table)
+{
+  std::vector<column_view> result;
+  for (auto const& col : table) {
+    if (is_nested(col.type())) { result.push_back(col); }
+  }
+  return result;
+}
+
 namespace detail {
 
 template <typename TableView>
