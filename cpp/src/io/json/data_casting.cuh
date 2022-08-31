@@ -159,7 +159,7 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
   // Check if the value corresponds to the null literal
   auto const is_null_literal =
     serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
-    if (is_null_literal) { return {in_begin, out_it, NULL_FLAG, NO_ERROR_FLAG}; }
+  if (is_null_literal) { return {in_begin, out_it, NULL_FLAG, NO_ERROR_FLAG}; }
 
   // Whether in the original JSON this was a string value enclosed in quotes
   // ({"a":"foo"} vs. {"a":1.23})
@@ -238,18 +238,19 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     int32_t hex_low_val = 0;
     if (thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
         *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
-      // Skip over '\' and 'u' chars
-      thrust::advance(in_begin, UNICODE_ESC_PREFIX);
+      // Iterator that skips over '\' and 'u' chars (not yet advancing in_begin, as it may turn out
+      // to not be a surrogate pair)
+      auto low_surrogate_digit_it = thrust::next(thrust::next(in_begin));
 
       // Try to parse hex value from what may be a UTF16 low surrogate
-      hex_low_val = parse_unicode_hex(in_begin);
+      hex_low_val = parse_unicode_hex(low_surrogate_digit_it);
     }
 
     // This is indeed a UTF16 surrogate pair
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
         hex_low_val >= UTF16_LOW_SURROGATE_BEGIN && hex_low_val < UTF16_LOW_SURROGATE_END) {
       // Skip over the second \uXXXX sequence
-      thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
+      thrust::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
 
       // Compute UTF16-encoded code point
       uint32_t unicode_code_point = 0x10000 + ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +

@@ -126,6 +126,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
 
   cudf::test::strings_column_wrapper data({
     R"("\uD83D\uDE80")",
+    R"("\uff21\ud83d\ude80\uff21\uff21")",
     R"("invalid char being escaped escape char\-")",
     R"("too few hex digits \u12")",
     R"("too few hex digits for surrogate pair \uD83D\uDE")",
@@ -147,8 +148,8 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   auto col = cudf::io::json::experimental::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
 
-  auto expected = cudf::test::strings_column_wrapper{{"🚀", "", "", "", "\\", "➩"},
-                                                     {true, false, false, false, true, true}};
+  auto expected = cudf::test::strings_column_wrapper{{"🚀", "Ａ🚀ＡＡ", "", "", "", "\\", "➩"},
+                                                     {true, true, false, false, false, true, true}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col->view(), expected);
 }
 
