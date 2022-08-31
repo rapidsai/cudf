@@ -16,7 +16,6 @@
 package ai.rapids.cudf;
 
 /**
- * Used by JNI
  * Used to save groups and keys for `contiguousSplitGroupsAndGenUniqKeys`
  * Each row in uniq keys table is corresponding to a group
  */
