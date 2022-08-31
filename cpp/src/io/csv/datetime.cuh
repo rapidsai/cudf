@@ -310,6 +310,7 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
  *
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
+ * @return Pointer to the first character excluding any leading spaces
  */
 __inline__ __device__ auto skip_spaces(char const* begin, char const* end)
 {
@@ -319,10 +320,11 @@ __inline__ __device__ auto skip_spaces(char const* begin, char const* end)
 /**
  * @brief Excludes the prefix from the input range if the string starts with the prefix.
  *
- * @tparam N length on the prefix, plus one
- * @param[in, out] begin Pointer to the first element of the string
+ * @tparam N length of the prefix, plus one
+ * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
+ * @return Pointer to the start of the string excluding the prefix
  */
 template <int N>
 __inline__ __device__ auto skip_if_starts_with(char const* begin,

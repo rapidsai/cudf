@@ -37,7 +37,7 @@ static constexpr char UNICODE_SEQ = 0x7F;
 // Invalid escape sequence
 static constexpr char NON_ESCAPE_CHAR = 0x7E;
 
-// Unicode code point escape sequence prefix comprises '\' and 'u' cahrs
+// Unicode code point escape sequence prefix comprises '\' and 'u' characters
 static constexpr size_type UNICODE_ESC_PREFIX = 2;
 
 // Unicode code point escape sequence comprises four hex characters
@@ -61,14 +61,14 @@ static constexpr auto UTF16_LOW_SURROGATE_END    = 0xE000;
 __device__ __forceinline__ char get_escape_char(char escaped_char)
 {
   switch (escaped_char) {
-    case '"': return 0x22;
-    case '\\': return 0x5C;
-    case '/': return 0x2F;
-    case 'b': return 0x08;
-    case 'f': return 0x0C;
-    case 'n': return 0x0A;
-    case 'r': return 0x0D;
-    case 't': return 0x09;
+    case '"': return '"';
+    case '\\': return '\\';
+    case '/': return '/';
+    case 'b': return '\b';
+    case 'f': return '\f';
+    case 'n': return '\n';
+    case 'r': return '\r';
+    case 't': return '\t';
     case 'u': return UNICODE_SEQ;
     default: return NON_ESCAPE_CHAR;
   }
