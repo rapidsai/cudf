@@ -17,6 +17,7 @@
 #include "detail/rolling.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
@@ -33,6 +34,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_aggregation const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::rolling_window(input,
                                 default_outputs,
                                 preceding_window,
@@ -51,10 +53,17 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_aggregation const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto defaults =
     cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
-  return rolling_window(
-    input, empty_like(defaults)->view(), preceding_window, following_window, min_periods, agg, mr);
+  return detail::rolling_window(input,
+                                empty_like(defaults)->view(),
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                cudf::default_stream_value,
+                                mr);
 }
 
 // Applies a variable-size rolling window function to the values in a column.
@@ -65,6 +74,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_aggregation const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::rolling_window(
     input, preceding_window, following_window, min_periods, agg, cudf::default_stream_value, mr);
 }

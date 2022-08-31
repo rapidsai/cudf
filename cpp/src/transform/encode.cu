@@ -19,6 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -71,6 +72,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::encode(input, cudf::default_stream_value, mr);
 }
 
