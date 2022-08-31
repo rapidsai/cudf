@@ -605,7 +605,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         object : the return type of ``func``.
 
-        See also
+        See Also
         --------
         cudf.Series.pipe
             Apply a function with arguments to a series.
@@ -905,7 +905,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           3  5
           4  5
 
-        See also
+        See Also
         --------
         agg
         """
@@ -928,7 +928,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Returns a `RollingGroupby` object that enables rolling window
         calculations on the groups.
 
-        See also
+        See Also
         --------
         cudf.core.window.Rolling
         """
@@ -1169,7 +1169,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _cov_or_corr(self, func, method_name):
         """
-        internal function that is called by either corr() or cov()
+        Internal function that is called by either corr() or cov()
         for sort groupby correlation and covariance computations,
         respectively.
         """

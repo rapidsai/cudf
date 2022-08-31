@@ -954,11 +954,15 @@ def pivot(data, index=None, columns=None, values=None):
 
     """
     df = data
+    values_is_list = True
     if values is None:
         values = df._columns_view(
             col for col in df._column_names if col not in (index, columns)
         )
     else:
+        if not isinstance(values, (list, tuple)):
+            values = [values]
+            values_is_list = False
         values = df._columns_view(values)
     if index is None:
         index = df.index
@@ -981,7 +985,13 @@ def pivot(data, index=None, columns=None, values=None):
     if len(columns_index) != len(columns_index.drop_duplicates()):
         raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
-    return _pivot(values, index, columns)
+    result = _pivot(values, index, columns)
+
+    # MultiIndex to Index
+    if not values_is_list:
+        result._data.droplevel(0)
+
+    return result
 
 
 def unstack(df, level, fill_value=None):

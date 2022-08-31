@@ -1780,3 +1780,62 @@ def test_orc_columns_and_index_param(index, columns):
         )
     else:
         assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "df_data,cols_as_map_type,expected_data",
+    [
+        (
+            {"a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]},
+            ["a"],
+            {"a": [[(10, 20)], [(1, 21)]]},
+        ),
+        (
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+            },
+            ["b"],
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[(10, 20)], [(1, 21)]],
+            },
+        ),
+        (
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "c": [
+                    [{"a": {"a": 10}, "b": 20}],
+                    [{"a": {"a": 12}, "b": 21}],
+                ],
+            },
+            ["b", "c"],
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[(10, 20)], [(1, 21)]],
+                "c": [[({"a": 10}, 20)], [({"a": 12}, 21)]],
+            },
+        ),
+    ],
+)
+def test_orc_writer_cols_as_map_type(df_data, cols_as_map_type, expected_data):
+    df = cudf.DataFrame(df_data)
+    buffer = BytesIO()
+    df.to_orc(buffer, cols_as_map_type=cols_as_map_type)
+
+    got = pd.read_orc(buffer)
+    expected = pd.DataFrame(expected_data)
+
+    assert_eq(got, expected)
+
+
+def test_orc_writer_cols_as_map_type_error():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])}
+    )
+    buffer = BytesIO()
+    with pytest.raises(
+        TypeError, match="cols_as_map_type must be a list of column names."
+    ):
+        df.to_orc(buffer, cols_as_map_type=1)
