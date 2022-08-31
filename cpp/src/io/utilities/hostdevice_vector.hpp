@@ -50,7 +50,7 @@ class hostdevice_vector {
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
     : d_data(0, stream)
   {
-    CUDF_EXPECTS(initial_size <= max_size, "initial_size can't be larger than max_size");
+    CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
     h_data.reserve(max_size);
     h_data.resize(initial_size);
     d_data.resize(max_size, stream);
