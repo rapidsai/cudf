@@ -395,7 +395,9 @@ def test_series_describe_numeric(dtype):
     actual = gs.describe()
     expected = ps.describe()
 
-    assert_eq(expected, actual)
+    # Have to set check_dtype=False because:
+    # https://github.com/pandas-dev/pandas/issues/48340
+    assert_eq(expected, actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", ["datetime64[ns]"])
