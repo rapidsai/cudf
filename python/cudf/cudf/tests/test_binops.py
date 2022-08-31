@@ -781,6 +781,7 @@ def test_operator_func_series_and_scalar_logical(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
         fill_value=fill_value,
     )
+    import pdb;pdb.set_trace()
     pdf_series_result = getattr(pdf_series, func)(
         scalar, fill_value=fill_value
     )
