@@ -822,12 +822,11 @@ def test_memory_usage():
 
 
 @pytest.mark.parametrize(
-    "data, idx, expected",
+    "data, idx",
     [
         (
             [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": None}]],
             0,
-            [{"f1": "a", "f2": {"a": 100}}, {"f1": "sf12", "f2": None}],
         ),
         (
             [
@@ -837,20 +836,15 @@ def test_memory_usage():
                 ]
             ],
             0,
-            [
-                {"f1": "a", "f2": {"a": 100, "c": 90, "f2": 10}},
-                {"f1": "sf12", "f2": None},
-            ],
         ),
         (
             [[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]],
             0,
-            [[[1, 2]], [[2], [3]]],
         ),
-        ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2, [[[3]]]),
+        ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2),
     ],
 )
-def test_nested_list_extract_host_scalars(data, idx, expected):
+def test_nested_list_extract_host_scalars(data, idx):
     series = cudf.Series(data)
 
-    assert series[idx] == expected
+    assert series[idx] == data[idx]

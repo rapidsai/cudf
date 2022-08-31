@@ -121,10 +121,6 @@ cdef _set_col_children_metadata(dtype,
             _set_col_children_metadata(
                 value, col_meta.children_meta[i]
             )
-    elif is_list_dtype(dtype):
-        pass
-    else:
-        return
 
 
 def to_arrow(list source_columns, dict cols_dtypes):
