@@ -185,9 +185,15 @@ std::unique_ptr<column> zfill(
                      strings_count,
                      [d_strings, width, d_offsets, d_chars] __device__(size_type idx) {
                        if (d_strings.is_null(idx)) return;
-                       string_view d_str = d_strings.element<string_view>(idx);
-                       auto length       = d_str.length();
-                       char* out_ptr     = d_chars + d_offsets[idx];
+                       auto d_str   = d_strings.element<string_view>(idx);
+                       auto length  = d_str.length();
+                       auto in_ptr  = d_str.data();
+                       auto out_ptr = d_chars + d_offsets[idx];
+                       // if the string starts with a sign, output the sign first
+                       if (!d_str.empty() && (*in_ptr == '-' || *in_ptr == '+')) {
+                         *out_ptr++ = *in_ptr++;
+                         d_str      = string_view{in_ptr, d_str.size_bytes() - 1};
+                       }
                        while (length++ < width)
                          *out_ptr++ = '0';  // prepend zero char
                        copy_string(out_ptr, d_str);
