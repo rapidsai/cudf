@@ -56,7 +56,7 @@ class CachedScalarInstanceMeta(type):
             # couldn't hash the arguments, don't cache:
             return super().__call__(value, dtype=dtype)
 
-    def clear(self):
+    def _clear_instance_cache(self):
         self.__instances.clear()
 
 
@@ -376,7 +376,3 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
     def astype(self, dtype):
         return Scalar(self.value, dtype)
-
-    @classmethod
-    def _clear_cache(cls):
-        type(cls).clear(cls)

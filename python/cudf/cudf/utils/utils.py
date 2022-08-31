@@ -224,7 +224,7 @@ def set_allocator(
 
 def clear_cache():
     """Clear all internal caches"""
-    cudf.Scalar._clear_cache()
+    cudf.Scalar._clear_instance_cache()
 
 
 class GetAttrGetItemMixin:
