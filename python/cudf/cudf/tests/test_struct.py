@@ -367,7 +367,7 @@ def _nested_na_replace(struct_scalar):
     """
     Replace `cudf.NA` with `None` in the dict
     """
-    for (key, value) in struct_scalar.items():
+    for key, value in struct_scalar.items():
         if value is cudf.NA:
             struct_scalar[key] = None
     return struct_scalar

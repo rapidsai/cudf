@@ -106,7 +106,7 @@ cdef vector[column_metadata] gather_metadata(dict cols_dtypes) except *:
                 _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
         raise TypeError(
-            "Requires dtype to be passed to "
+            "A dictionary of column names and dtypes is required to "
             "construct column_metadata"
         )
     return cpp_metadata
