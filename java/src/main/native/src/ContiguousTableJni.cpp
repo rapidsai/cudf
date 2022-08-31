@@ -69,41 +69,41 @@ bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
 
   Contig_split_group_by_result_groups_field =
       env->GetFieldID(cls, "groups", "[Lai/rapids/cudf/ContiguousTable;");
-  if (Group_by_result_groups_field == nullptr) {
+  if (Contig_split_group_by_result_groups_field == nullptr) {
     return false;
   }
   Contig_split_group_by_result_uniq_key_columns_field =
       env->GetFieldID(cls, "uniqKeyColumns", "[J");
-  if (Group_by_result_uniq_key_columns_field == nullptr) {
+  if (Contig_split_group_by_result_uniq_key_columns_field == nullptr) {
     return false;
   }
 
   // Convert local reference to global so it cannot be garbage collected.
   Contig_split_group_by_result_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
-  if (Group_by_result_jclass == nullptr) {
+  if (Contig_split_group_by_result_jclass == nullptr) {
     return false;
   }
   return true;
 }
 
 void release_contig_split_group_by_result_jni(JNIEnv *env) {
-  if (Group_by_result_jclass != nullptr) {
-    env->DeleteGlobalRef(Group_by_result_jclass);
-    Group_by_result_jclass = nullptr;
+  if (Contig_split_group_by_result_jclass != nullptr) {
+    env->DeleteGlobalRef(Contig_split_group_by_result_jclass);
+    Contig_split_group_by_result_jclass = nullptr;
   }
 }
 
 jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups) {
-  jobject gbr = env->AllocObject(Group_by_result_jclass);
-  env->SetObjectField(gbr, Group_by_result_groups_field, groups);
+  jobject gbr = env->AllocObject(Contig_split_group_by_result_jclass);
+  env->SetObjectField(gbr, Contig_split_group_by_result_groups_field, groups);
   return gbr;
 }
 
 jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
                                           jlongArray &uniq_key_columns) {
-  jobject gbr = env->AllocObject(Group_by_result_jclass);
-  env->SetObjectField(gbr, Group_by_result_groups_field, groups);
-  env->SetObjectField(gbr, Group_by_result_uniq_key_columns_field, uniq_key_columns);
+  jobject gbr = env->AllocObject(Contig_split_group_by_result_jclass);
+  env->SetObjectField(gbr, Contig_split_group_by_result_groups_field, groups);
+  env->SetObjectField(gbr, Contig_split_group_by_result_uniq_key_columns_field, uniq_key_columns);
   return gbr;
 }
 
