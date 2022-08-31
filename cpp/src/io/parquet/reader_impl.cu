@@ -1637,13 +1637,6 @@ table_with_metadata reader::impl::read(std::vector<std::vector<size_type>> const
         // this column contains repetition levels and will require a preprocess
         if (schema.max_repetition_level > 0) { has_lists = true; }
 
-        // Spec requires each row group to contain exactly one chunk for every
-        // column. If there are too many or too few, continue with best effort
-        if (chunks.size() >= chunks.max_size()) {
-          std::cerr << "Detected too many column chunks" << std::endl;
-          continue;
-        }
-
         auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
