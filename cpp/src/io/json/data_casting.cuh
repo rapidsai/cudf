@@ -25,12 +25,39 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
+
 #include <memory>
 
 namespace cudf::io::json::experimental {
 
-constexpr char UNICODE_SEQ     = 0x7F;
-constexpr char NON_ESCAPE_CHAR = 0x7E;
+// Unicode code point escape sequence
+static constexpr char UNICODE_SEQ = 0x7F;
+
+// Invalid escape sequence
+static constexpr char NON_ESCAPE_CHAR = 0x7E;
+
+// Unicode code point escape sequence prefix comprises '\' and 'u' cahrs
+static constexpr size_type UNICODE_ESC_PREFIX = 2;
+
+// Unicode code point escape sequence comprises four hex characters
+static constexpr size_type UNICODE_HEX_DIGIT_COUNT = 4;
+
+// A unicode code point escape sequence is \uXXXX
+static auto constexpr NUM_UNICODE_ESC_SEQ_CHARS = UNICODE_ESC_PREFIX + UNICODE_HEX_DIGIT_COUNT;
+
+static constexpr auto UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
+static constexpr auto UTF16_HIGH_SURROGATE_END   = 0xDC00;
+static constexpr auto UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
+static constexpr auto UTF16_LOW_SURROGATE_END    = 0xE000;
+
+/**
+ * @brief Returns the character to output for a given escaped character that's following a
+ * backslash.
+ *
+ * @param escaped_char The character following the backslash.
+ * @return The character to output for a given character that's following a backslash
+ */
 __device__ __forceinline__ char get_escape_char(char escaped_char)
 {
   switch (escaped_char) {
@@ -47,32 +74,200 @@ __device__ __forceinline__ char get_escape_char(char escaped_char)
   }
 }
 
-__device__ __forceinline__ int64_t string_to_hex(char const* str)
+/**
+ * @brief Parses the hex value from the four hex digits of a unicode code point escape sequence
+ * \uXXXX.
+ *
+ * @param str Pointer to the first (most-significant) hex digit
+ * @return The parsed hex value if successful, -1 otherwise.
+ */
+__device__ __forceinline__ int32_t parse_unicode_hex(char const* str)
 {
-  // Unicode code point escape sequence comprises four hex characters
-  constexpr size_type unicode_hex_digits = 4;
-
   // Prepare result
-  int64_t result = 0, base = 1;
+  int32_t result = 0, base = 1;
+  constexpr int32_t hex_radix = 16;
 
   // Iterate over hex digits right-to-left
-  size_type index = unicode_hex_digits;
+  size_type index = UNICODE_HEX_DIGIT_COUNT;
   while (index-- > 0) {
     char const ch = str[index];
     if (ch >= '0' && ch <= '9') {
-      result += static_cast<int64_t>((ch - '0') + 0) * base;
-      base *= 16;
+      result += static_cast<int32_t>((ch - '0') + 0) * base;
+      base *= hex_radix;
     } else if (ch >= 'A' && ch <= 'F') {
-      result += static_cast<int64_t>((ch - 'A') + 10) * base;
-      base *= 16;
+      result += static_cast<int32_t>((ch - 'A') + 10) * base;
+      base *= hex_radix;
     } else if (ch >= 'a' && ch <= 'f') {
-      result += static_cast<int64_t>((ch - 'a') + 10) * base;
-      base *= 16;
+      result += static_cast<int32_t>((ch - 'a') + 10) * base;
+      base *= hex_radix;
     } else {
       return -1;
     }
   }
   return result;
+}
+
+/**
+ * @brief Writes the UTF-8 byte sequence to \p out_it and returns the iterator to one past the
+ * last item that was written to \p out_it
+ */
+template <typename utf8_char_t, typename out_it_t>
+__device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_it_t out_it)
+{
+  constexpr size_type MAX_UTF8_BYTES_PER_CODE_POINT = 4;
+  char char_bytes[MAX_UTF8_BYTES_PER_CODE_POINT];
+  auto const num_chars_written =
+    strings::detail::from_char_utf8(utf8_chars, reinterpret_cast<char*>(char_bytes));
+
+  for (size_type i = 0; i < MAX_UTF8_BYTES_PER_CODE_POINT; i++) {
+    if (i < num_chars_written) { *out_it++ = char_bytes[i]; }
+  }
+  return out_it;
+}
+
+/**
+ * @brief Processes a string, replaces escape sequences and optionally strips off the quote
+ * characters.
+ *
+ * @tparam in_iterator_t A bidirectional input iterator type whose value_type is convertible to
+ * char
+ * @tparam out_iterator_t A forward output iterator type
+ * @param in_begin Iterator to the first item to process
+ * @param in_end Iterator to one past the last item to process
+ * @param out_it Iterator to the first item to write
+ * @param options Settings for controlling string processing behavior
+ * @return A four-tuple of (in_it_end, out_it_end, set_null, is_invalid), where in_it_end is an
+ * iterator to one past the last character from the input that was processed, out_it_end is an
+ * iterator to one past the last character that was written, set_null being true if a null literal
+ * was read or a parsing error occured, and is_invalid being true if a parsing error was
+ * encountered
+ */
+template <typename in_iterator_t, typename out_iterator_t>
+__device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bool> process_string(
+  in_iterator_t in_begin,
+  in_iterator_t in_end,
+  out_iterator_t out_it,
+  cudf::io::parse_options_view const& options)
+{
+  constexpr bool NULL_FLAG     = true;
+  constexpr bool NOT_NULL_FLAG = false;
+  constexpr bool INVALID_FLAG  = true;
+  constexpr bool NO_ERROR_FLAG = false;
+
+  auto const num_in_chars = thrust::distance(in_begin, in_end);
+
+  // Check if the value corresponds to the null literal
+  auto const is_null_literal =
+    serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
+    if (is_null_literal) { return {in_begin, out_it, NULL_FLAG, NO_ERROR_FLAG}; }
+
+  // Whether in the original JSON this was a string value enclosed in quotes
+  // ({"a":"foo"} vs. {"a":1.23})
+  char const quote_char     = '"';
+  char const backslash_char = '\\';
+
+  // String values are indicated by keeping the quote character
+  bool const is_string_value =
+    num_in_chars >= 2LL && (*in_begin == quote_char) && (*thrust::prev(in_end) == quote_char);
+
+  // Copy literal/numeric value
+  if (not is_string_value) {
+    while (in_begin != in_end) {
+      *out_it++ = *in_begin++;
+    }
+    return {in_begin, out_it, NOT_NULL_FLAG, NO_ERROR_FLAG};
+  }
+
+  // Escape-flag, set after encountering a backslash character
+  bool escape = false;
+
+  // Exclude beginning and ending quote chars from string range
+  if (!options.keepquotes) {
+    ++in_begin;
+    --in_end;
+  }
+
+  // Iterate over the input
+  while (in_begin != in_end) {
+    // Copy single character to output
+    if (!escape) {
+      escape = (*in_begin == backslash_char);
+      if (!escape) { *out_it++ = *in_begin; }
+      in_begin++;
+      continue;
+    }
+
+    // Previous char indicated beginning of escape sequence
+    // Reset escape flag for next loop iteration
+    escape = false;
+
+    // Check the character that is supposed to be escaped
+    auto escaped_char = get_escape_char(*in_begin);
+
+    // We escaped an invalid escape character -> "fail"/null for this item
+    if (escaped_char == NON_ESCAPE_CHAR) { return {in_begin, out_it, NULL_FLAG, INVALID_FLAG}; }
+
+    // Regular, single-character escape
+    if (escaped_char != UNICODE_SEQ) {
+      *out_it++ = escaped_char;
+      ++in_begin;
+      continue;
+    }
+
+    // This is an escape sequence of a unicode code point: \uXXXX,
+    // where each X in XXXX represents a hex digit
+    // Skip over the 'u' char from \uXXXX to the first hex digit
+    ++in_begin;
+
+    //  Make sure that there's at least 4 characters left from the
+    //  input, which are expected to be hex digits
+    if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
+      return {in_begin, out_it, NULL_FLAG, INVALID_FLAG};
+    }
+
+    auto hex_val = parse_unicode_hex(in_begin);
+
+    // Couldn't parse hex values from the four-character sequence -> "fail"/null for this item
+    if (hex_val < 0) { return {in_begin, out_it, NULL_FLAG, INVALID_FLAG}; }
+
+    // Skip over the four hex digits
+    thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
+
+    // If this may be a UTF-16 encoded surrogate pair:
+    // we expect another \uXXXX sequence
+    int32_t hex_low_val = 0;
+    if (thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
+        *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
+      // Skip over '\' and 'u' chars
+      thrust::advance(in_begin, UNICODE_ESC_PREFIX);
+
+      // Try to parse hex value from what may be a UTF16 low surrogate
+      hex_low_val = parse_unicode_hex(in_begin);
+    }
+
+    // This is indeed a UTF16 surrogate pair
+    if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
+        hex_low_val >= UTF16_LOW_SURROGATE_BEGIN && hex_low_val < UTF16_LOW_SURROGATE_END) {
+      // Skip over the second \uXXXX sequence
+      thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
+
+      // Compute UTF16-encoded code point
+      uint32_t unicode_code_point = 0x10000 + ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +
+                                    (hex_low_val - UTF16_LOW_SURROGATE_BEGIN);
+      auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
+      out_it          = write_utf8_char(utf8_chars, out_it);
+    }
+
+    // Just a single \uXXXX sequence
+    else {
+      auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
+      out_it          = write_utf8_char(utf8_chars, out_it);
+    }
+  }
+
+  // The last character of the input is a backslash -> "fail"/null for this item
+  if (escape) { return {in_begin, out_it, NULL_FLAG, INVALID_FLAG}; }
+  return {in_begin, out_it, NOT_NULL_FLAG, NO_ERROR_FLAG};
 }
 
 template <typename str_tuple_it, typename B>
@@ -86,233 +281,70 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 {
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     rmm::device_uvector<size_type> offsets(col_size + 1, stream);
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      col_size,
-      [str_tuples,
-       sizes     = device_span<size_type>{offsets},
-       null_mask = static_cast<bitmask_type*>(null_mask.data()),
-       options] __device__(size_type row) {
-        if (not bit_is_set(null_mask, row)) {
-          sizes[row] = 0;
-          return;
-        }
-        auto const in = str_tuples[row];
 
-        auto const is_null_literal =
-          serialized_trie_contains(options.trie_na, {in.first, static_cast<size_t>(in.second)});
-        if (is_null_literal) {
-          sizes[row] = 0;
-          clear_bit(null_mask, row);
-          return;
-        }
+    // Compute string sizes of the post-processed strings
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       col_size,
+                       [str_tuples,
+                        sizes     = device_span<size_type>{offsets},
+                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
+                        options] __device__(size_type row) {
+                         // String at current offset is null, e.g., due to omissions
+                         // ([{"b":"foo"},{"a":"foo"}])
+                         if (not bit_is_set(null_mask, row)) {
+                           sizes[row] = 0;
+                           return;
+                         }
 
-        // Whether in the original JSON this was a string value enclosed in quotes
-        // ({"a":"foo"} vs. {"a":1.23})
-        char const quote_char = '"';
-        bool const is_string_value =
-          in.second >= 2 && (*in.first == quote_char) && (in.first[in.second - 1] == quote_char);
+                         auto const in_begin = str_tuples[row].first;
+                         auto const in_end   = in_begin + str_tuples[row].second;
+                         auto out_it         = cub::DiscardOutputIterator<>{};
+                         auto const str_process_info =
+                           process_string(in_begin, in_end, out_it, options);
 
-        // Handling non-string values
-        if (not is_string_value) {
-          sizes[row] = in.second;
-          return;
-        }
+                         // The total number of characters that we're supposed to copy out
+                         auto const num_chars_copied_out =
+                           thrust::distance(out_it, thrust::get<1>(str_process_info));
 
-        // Strip off quote chars
-        decltype(in.second) out_size = 0;
+                         // Whether to set this row to null (e.g., when the string corresponds to
+                         // the null literal)
+                         auto const set_null = thrust::get<2>(str_process_info);
 
-        // Escape-flag, set after encountering an escape character
-        bool escape = false;
+                         // Whether parsing of this value failed due to invalid input
+                         auto const is_invalid = thrust::get<3>(str_process_info);
 
-        // Exclude beginning and ending quote chars from string range
-        auto start_index = options.keepquotes ? 0 : 1;
-        auto end_index   = in.second - (options.keepquotes ? 0 : 1);
-        for (decltype(in.second) i = start_index; i < end_index; ++i) {
-          // Previous char was an escape char
-          if (escape) {
-            // A unicode code point escape sequence is \uXXXX
-            auto constexpr NUM_UNICODE_ESC_SEQ_CHARS = 6;
-            // The escape sequence comprises four hex digits
-            auto constexpr NUM_UNICODE_ESC_HEX_DIGITS = 4;
-            // A name for the char following the current one
-            auto constexpr NEXT_CHAR = 1;
-            // A name for the char after the next char
-            auto constexpr NEXT_NEXT_CHAR = 2;
-            // Reset escape flag for next loop iteration
-            escape = false;
+                         if (set_null || is_invalid) {
+                           sizes[row] = 0;
+                           clear_bit(null_mask, row);
+                           return;
+                         } else {
+                           sizes[row] = num_chars_copied_out;
+                         }
+                       });
 
-            // Check the character that is supposed to be escaped
-            auto escaped_char = get_escape_char(in.first[i]);
-
-            // This is an escape sequence of a unicode code point: \uXXXX,
-            // where each X in XXXX represents a hex digit
-            if (escaped_char == UNICODE_SEQ) {
-              // Make sure that there's at least 4 characters left from the
-              // input, which are expected to be hex digits
-              if (i + NUM_UNICODE_ESC_HEX_DIGITS < end_index) {
-                auto hex_val = string_to_hex(&in.first[i + NEXT_CHAR]);
-                if (hex_val < 0) {
-                  sizes[row] = 0;
-                  clear_bit(null_mask, row);
-                  return;
-                }
-                // Skip over the four hex digits
-                i += NUM_UNICODE_ESC_HEX_DIGITS;
-
-                // If this may be a UTF-16 encoded surrogate pair:
-                // we expect another \uXXXX sequence
-                int64_t hex_low_val = 0;
-                if (i + NUM_UNICODE_ESC_SEQ_CHARS < end_index && in.first[i + NEXT_CHAR] == '\\' &&
-                    in.first[i + NEXT_NEXT_CHAR] == 'u') {
-                  hex_low_val = string_to_hex(&in.first[i + 3]);
-                }
-                // This is indeed a surrogate pair
-                if (hex_val >= 0xD800 && hex_low_val >= 0xDC00) {
-                  // Skip over the second \uXXXX sequence
-                  i += NUM_UNICODE_ESC_SEQ_CHARS;
-                  uint32_t unicode_code_point =
-                    0x10000 + (hex_val - 0xD800) + (hex_low_val - 0xDC00);
-                  auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
-                  out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
-                }
-                // Just a single \uXXXX sequence
-                else {
-                  auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
-                  out_size += strings::detail::bytes_in_char_utf8(utf8_chars);
-                }
-              } else {
-                sizes[row] = 0;
-                clear_bit(null_mask, row);
-                return;
-              }
-            } else if (escaped_char == NON_ESCAPE_CHAR) {
-              sizes[row] = 0;
-              clear_bit(null_mask, row);
-              return;
-            } else {
-              out_size++;
-            }
-          } else {
-            escape = in.first[i] == '\\';
-            out_size += escape ? 0 : 1;
-          }
-        }
-        if (escape) {
-          sizes[row] = 0;
-          clear_bit(null_mask, row);
-          return;
-        }
-        sizes[row] = out_size;
-      });
-
+    // Compute offsets for the post-processed strings
     thrust::exclusive_scan(
       rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
 
+    // Write out post-processed strings (stripping off quotes, replacing escape sequences)
     rmm::device_uvector<char> chars(offsets.back_element(stream), stream);
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      col_size,
-      [str_tuples,
-       chars     = device_span<char>{chars},
-       offsets   = device_span<size_type>{offsets},
-       null_mask = static_cast<bitmask_type*>(null_mask.data()),
-       options] __device__(size_type row) {
-        if (not bit_is_set(null_mask, row)) { return; }
-        auto const in = str_tuples[row];
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       col_size,
+                       [str_tuples,
+                        chars     = device_span<char>{chars},
+                        offsets   = device_span<size_type>{offsets},
+                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
+                        options] __device__(size_type row) {
+                         if (not bit_is_set(null_mask, row)) { return; }
 
-        // Whether in the original JSON this was a string value enclosed in quotes
-        // ({"a":"foo"} vs. {"a":1.23})
-        char const quote_char = '"';
-        bool const is_string_value =
-          in.second >= 2 && (*in.first == quote_char) && (in.first[in.second - 1] == quote_char);
-
-        // Copy literal/numeric value
-        if (not is_string_value) {
-          for (int i = 0, j = 0; i < in.second; ++i) {
-            chars[offsets[row] + j] = *(in.first + i);
-            j++;
-          }
-          return;
-        }
-
-        // Escape-flag, set after encountering an escape character
-        bool escape = false;
-
-        // Exclude beginning and ending quote chars from string range
-        auto start_index = options.keepquotes ? 0 : 1;
-        auto end_index   = in.second - (options.keepquotes ? 0 : 1);
-
-        for (int i = start_index, j = 0; i < end_index; ++i) {
-          // Previous char was escape char
-          if (escape) {
-            // A unicode code point escape sequence is \uXXXX
-            auto constexpr NUM_UNICODE_ESC_SEQ_CHARS = 6;
-            // The escape sequence comprises four hex digits
-            auto constexpr NUM_UNICODE_ESC_HEX_DIGITS = 4;
-            // A name for the char following the current one
-            auto constexpr NEXT_CHAR = 1;
-            // A name for the char after the next char
-            auto constexpr NEXT_NEXT_CHAR = 2;
-            // Reset escape flag for next loop iteration
-            escape = false;
-
-            // Check the character that is supposed to be escaped
-            auto escaped_char = get_escape_char(in.first[i]);
-
-            // This is an escape sequence of a unicode code point: \uXXXX,
-            // where each X in XXXX represents a hex digit
-            if (escaped_char == UNICODE_SEQ) {
-              //  Make sure that there's at least 4 characters left from the
-              //  input, which are expected to be hex digits
-              if (i + NUM_UNICODE_ESC_HEX_DIGITS < end_index) {
-                auto hex_val = string_to_hex(&in.first[i + NEXT_CHAR]);
-                if (hex_val < 0) { return; }
-                // Skip over the four hex digits
-                i += NUM_UNICODE_ESC_HEX_DIGITS;
-
-                // If this may be a UTF-16 encoded surrogate pair:
-                // we expect another \uXXXX sequence
-                int64_t hex_low_val = 0;
-                if (i + NUM_UNICODE_ESC_SEQ_CHARS < end_index && in.first[i + NEXT_CHAR] == '\\' &&
-                    in.first[i + NEXT_NEXT_CHAR] == 'u') {
-                  hex_low_val = string_to_hex(&in.first[i + 3]);
-                }
-                // This is indeed a surrogate pair
-                if (hex_val >= 0xD800 && hex_low_val >= 0xDC00) {
-                  // Skip over the second \uXXXX sequence
-                  i += NUM_UNICODE_ESC_SEQ_CHARS;
-                  uint32_t unicode_code_point =
-                    0x10000 + ((hex_val - 0xD800) << 10) + (hex_low_val - 0xDC00);
-                  auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
-                  j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
-                }
-                // Just a single \uXXXX sequence
-                else {
-                  auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
-                  j += strings::detail::from_char_utf8(utf8_chars, &chars[offsets[row] + j]);
-                }
-              } else {
-                return;
-              }
-            } else if (escaped_char == NON_ESCAPE_CHAR) {
-              return;
-            } else {
-              chars[offsets[row] + j] = escaped_char;
-              j++;
-            }
-          } else {
-            escape = in.first[i] == '\\';
-            if (!escape) {
-              chars[offsets[row] + j] = *(in.first + i);
-              j++;
-            }
-          }
-        }
-        if (escape) { return; }
-      });
+                         auto const in_begin = str_tuples[row].first;
+                         auto const in_end   = in_begin + str_tuples[row].second;
+                         auto out_it         = &chars[offsets[row]];
+                         auto const str_process_info =
+                           process_string(in_begin, in_end, out_it, options);
+                       });
 
     return make_strings_column(
       col_size, std::move(offsets), std::move(chars), std::move(null_mask));
