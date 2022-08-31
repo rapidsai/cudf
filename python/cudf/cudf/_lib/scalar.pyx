@@ -415,7 +415,6 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
 
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column element_col = Column.from_column_view(list_col_view, None)
-    cdef table_view struct_table_view
 
     arrow_obj = to_arrow(
         [element_col],
