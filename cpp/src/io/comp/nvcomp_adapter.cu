@@ -19,6 +19,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -116,6 +117,12 @@ size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
         return input_size > max_size;
       });
   }
+
+  auto const skipped_num = thrust::count_if(
+    rmm::exec_policy(stream), statuses.begin(), statuses.end(), [] __device__(auto const& x) {
+      return x.status == compression_status::SKIPPED;
+    });
+  std::cout << "Skipped " << skipped_num << " out of " << statuses.size() << std::endl;
 
   return thrust::reduce(rmm::exec_policy(stream),
                         input_sizes.begin(),
