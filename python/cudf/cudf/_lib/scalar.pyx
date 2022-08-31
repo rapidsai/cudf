@@ -193,9 +193,9 @@ cdef class DeviceScalar:
         if dtype is not None:
             s._dtype = dtype
         elif cdtype.id() in {
-                libcudf_types.DECIMAL32,
-                libcudf_types.DECIMAL64,
-                libcudf_types.DECIMAL128
+            libcudf_types.DECIMAL32,
+            libcudf_types.DECIMAL64,
+            libcudf_types.DECIMAL128,
         }:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
