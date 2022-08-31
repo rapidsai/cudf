@@ -40,7 +40,7 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  hostdevice_vector() : hostdevice_vector(0, rmm::cuda_stream_default) {}
+  hostdevice_vector() : hostdevice_vector(0, cudf::default_stream_value) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
     : hostdevice_vector(size, size, stream)
@@ -66,26 +66,26 @@ class hostdevice_vector {
   [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
   [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * size(); }
 
-  T& operator[](size_t i) { return h_data[i]; }
-  T const& operator[](size_t i) const { return h_data[i]; }
+  [[nodiscard]] T& operator[](size_t i) { return h_data[i]; }
+  [[nodiscard]] T const& operator[](size_t i) const { return h_data[i]; }
 
-  T* host_ptr(size_t offset = 0) { return h_data.data() + offset; }
-  T const* host_ptr(size_t offset = 0) const { return h_data.data() + offset; }
+  [[nodiscard]] T* host_ptr(size_t offset = 0) { return h_data.data() + offset; }
+  [[nodiscard]] T const* host_ptr(size_t offset = 0) const { return h_data.data() + offset; }
 
-  T* begin() { return host_ptr(); }
-  T const* begin() const { return host_ptr(); }
+  [[nodiscard]] T* begin() { return host_ptr(); }
+  [[nodiscard]] T const* begin() const { return host_ptr(); }
 
-  T* end() { return host_ptr(size()); }
-  T const* end() const { return host_ptr(size()); }
+  [[nodiscard]] T* end() { return host_ptr(size()); }
+  [[nodiscard]] T const* end() const { return host_ptr(size()); }
 
-  auto d_begin() { return device_ptr(); }
-  auto d_begin() const { return device_ptr(); }
+  [[nodiscard]] auto device_ptr(size_t offset = 0) { return d_data.data() + offset; }
+  [[nodiscard]] auto device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
 
-  auto d_end() { return device_ptr(size()); }
-  auto d_end() const { return device_ptr(size()); }
+  [[nodiscard]] auto d_begin() { return device_ptr(); }
+  [[nodiscard]] auto d_begin() const { return device_ptr(); }
 
-  auto device_ptr(size_t offset = 0) { return d_data.data() + offset; }
-  auto device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
+  [[nodiscard]] auto d_end() { return device_ptr(size()); }
+  [[nodiscard]] auto d_end() const { return device_ptr(size()); }
 
   /**
    * @brief Returns the specified element from device memory
@@ -104,11 +104,11 @@ class hostdevice_vector {
     return d_data.element(element_index, stream);
   }
 
-  operator cudf::device_span<T>() { return {device_ptr(), size()}; }
-  operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
-
   operator cudf::host_span<T>() { return {host_ptr(), size()}; }
   operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
+
+  operator cudf::device_span<T>() { return {device_ptr(), size()}; }
+  operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
