@@ -238,6 +238,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    inclusive right_inclusive,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::label_bins(input,
                             left_edges,
                             left_inclusive,
