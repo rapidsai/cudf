@@ -423,7 +423,7 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
             if isinstance(element_col, cudf.core.column.StructColumn)
             else dtype
         }
-    )['None']
+    )["None"]
 
     result = arrow_obj.to_pylist()
     return _nested_na_replace(result)
