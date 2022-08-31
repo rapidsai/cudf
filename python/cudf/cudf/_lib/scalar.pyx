@@ -417,12 +417,14 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
     cdef Column element_col = Column.from_column_view(list_col_view, None)
     cdef table_view struct_table_view
 
-    if isinstance(element_col, cudf.core.column.StructColumn):
-        struct_table_view = table_view_from_columns([element_col])
-        columns = columns_from_table_view(struct_table_view, None)
-        arrow_obj = to_arrow(list(element_col.children), dtype.element_type)
-    else:
-        arrow_obj = to_arrow([element_col], element_col.dtype)['None']
+    arrow_obj = to_arrow(
+        [element_col],
+        {
+            "None": dtype.element_type
+            if isinstance(element_col, cudf.core.column.StructColumn)
+            else dtype
+        }
+    )['None']
 
     result = arrow_obj.to_pylist()
     return _nested_na_replace(result)

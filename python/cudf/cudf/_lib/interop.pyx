@@ -87,22 +87,26 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object dtype) except *:
+cdef vector[column_metadata] gather_metadata(dict cols_dtypes) except *:
     """
-    Metadata is stored as lists, and expected format is as follows,
-    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
+    Generates a column_metadata vector for each column.
+
+    Parameters
+    ----------
+    cols_dtypes : dict
+        A dict mapping of column names & their dtypes.
+
     First value signifies name of the main parent column,
     and adjacent list will signify child column.
     """
     cdef vector[column_metadata] cpp_metadata
-    cpp_metadata.reserve(len(dtype.values()))
-    i = 0
-    if dtype is not None:
-        for key, value in dtype.items():
-            cpp_metadata.push_back(column_metadata(key.encode()))
-            if is_struct_dtype(value):
-                _set_col_children_metadata(value, cpp_metadata[i])
-            i += 1
+    cpp_metadata.reserve(len(cols_dtypes))
+
+    if cols_dtypes is not None:
+        for idx, (col_name, col_dtype) in enumerate(cols_dtypes.items()):
+            cpp_metadata.push_back(column_metadata(col_name.encode()))
+            if is_struct_dtype(col_dtype):
+                _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
         raise TypeError(
             "Requires dtype to be passed to "
@@ -126,20 +130,20 @@ cdef _set_col_children_metadata(dtype,
         return
 
 
-def to_arrow(list source_columns, object dtype):
+def to_arrow(list source_columns, dict cols_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
     source_columns : a list of columns to convert
-    metadata : a list of metadata, see `gather_metadata` for layout
+    cols_dtype : A dict mapping of column names & their dtypes.
 
     Returns
     -------
     pyarrow table
     """
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(dtype)
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(cols_dtypes)
     cdef table_view input_table_view = table_view_from_columns(source_columns)
 
     cdef shared_ptr[CTable] cpp_arrow_table
