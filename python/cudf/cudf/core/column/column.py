@@ -233,7 +233,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], {"None": self.dtype})["None"].chunk(0)
+        return libcudf.interop.to_arrow([self], {"None": self.dtype})[
+            "None"
+        ].chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
