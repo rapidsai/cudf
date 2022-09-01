@@ -36,6 +36,98 @@
 
 namespace cuio_json = cudf::io::json;
 
+namespace {
+// Forward declaration
+void print_column(std::string const& input,
+                  cuio_json::json_column const& column,
+                  uint32_t indent = 0);
+
+/**
+ * @brief Helper to generate indentation
+ */
+std::string pad(uint32_t indent = 0)
+{
+  std::string pad{};
+  if (indent > 0) pad.insert(pad.begin(), indent, ' ');
+  return pad;
+}
+
+/**
+ * @brief Prints a string column.
+ */
+void print_json_string_col(std::string const& input,
+                           cuio_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
+    std::cout << pad(indent) << i << ": [" << (column.validity[i] ? "1" : "0") << "] '"
+              << input.substr(column.string_offsets[i], column.string_lengths[i]) << "'\n";
+  }
+}
+
+/**
+ * @brief Prints a list column.
+ */
+void print_json_list_col(std::string const& input,
+                         cuio_json::json_column const& column,
+                         uint32_t indent = 0)
+{
+  std::cout << pad(indent) << " [LIST]\n";
+  std::cout << pad(indent) << " -> num. child-columns: " << column.child_columns.size() << "\n";
+  std::cout << pad(indent) << " -> num. rows: " << column.current_offset << "\n";
+  std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
+  std::cout << pad(indent) << " offsets[]: "
+            << "\n";
+  for (std::size_t i = 0; i < column.child_offsets.size() - 1; i++) {
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "] ["
+              << column.child_offsets[i] << ", " << column.child_offsets[i + 1] << ")\n";
+  }
+  if (column.child_columns.size() > 0) {
+    std::cout << pad(indent) << column.child_columns.begin()->first << "[]: "
+              << "\n";
+    print_column(input, column.child_columns.begin()->second, indent + 2);
+  }
+}
+
+/**
+ * @brief Prints a struct column.
+ */
+void print_json_struct_col(std::string const& input,
+                           cuio_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  std::cout << pad(indent) << " [STRUCT]\n";
+  std::cout << pad(indent) << " -> num. child-columns: " << column.child_columns.size() << "\n";
+  std::cout << pad(indent) << " -> num. rows: " << column.current_offset << "\n";
+  std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
+  std::cout << pad(indent) << " -> validity[]: "
+            << "\n";
+  for (decltype(column.current_offset) i = 0; i < column.current_offset; i++) {
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "]\n";
+  }
+  auto it = std::begin(column.child_columns);
+  for (std::size_t i = 0; i < column.child_columns.size(); i++) {
+    std::cout << pad(indent + 2) << "child #" << i << " '" << it->first << "'[] \n";
+    print_column(input, it->second, indent + 2);
+    it++;
+  }
+}
+
+/**
+ * @brief Prints the column's data and recurses through and prints all the child columns.
+ */
+void print_column(std::string const& input, cuio_json::json_column const& column, uint32_t indent)
+{
+  switch (column.type) {
+    case cuio_json::json_col_t::StringColumn: print_json_string_col(input, column, indent); break;
+    case cuio_json::json_col_t::ListColumn: print_json_list_col(input, column, indent); break;
+    case cuio_json::json_col_t::StructColumn: print_json_struct_col(input, column, indent); break;
+    case cuio_json::json_col_t::Unknown: std::cout << pad(indent) << "[UNKNOWN]\n"; break;
+    default: break;
+  }
+}
+}  // namespace
+
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {
 };

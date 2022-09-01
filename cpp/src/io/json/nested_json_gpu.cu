@@ -1122,6 +1122,8 @@ void make_json_column(json_column& root_column,
       case token_t::StructEnd: return "StructEnd";
       case token_t::ListBegin: return "ListBegin";
       case token_t::ListEnd: return "ListEnd";
+      case token_t::StructMemberBegin: return "StructMemberBegin";
+      case token_t::StructMemberEnd: return "StructMemberEnd";
       case token_t::FieldNameBegin: return "FieldNameBegin";
       case token_t::FieldNameEnd: return "FieldNameEnd";
       case token_t::StringBegin: return "StringBegin";
