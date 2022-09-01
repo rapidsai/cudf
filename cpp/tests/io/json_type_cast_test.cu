@@ -24,11 +24,11 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <src/io/json/data_casting.cuh>
 
 #include <type_traits>
 
@@ -80,7 +80,7 @@ TEST_F(JSONTypeCastTest, String)
   auto null_mask =
     cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
 
-  auto str_col = cudf::io::json::experimental::parse_data(
+  auto str_col = cudf::io::json::experimental::detail::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
 
   auto out_valids =
@@ -110,7 +110,7 @@ TEST_F(JSONTypeCastTest, Int)
   auto null_mask =
     cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
 
-  auto col = cudf::io::json::experimental::parse_data(
+  auto col = cudf::io::json::experimental::detail::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
 
   auto expected =
@@ -146,7 +146,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   auto null_mask =
     cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + d_column->size());
 
-  auto col = cudf::io::json::experimental::parse_data(
+  auto col = cudf::io::json::experimental::detail::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
 
   auto expected =
