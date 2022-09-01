@@ -132,6 +132,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
     R"("too few hex digits for surrogate pair \uD83D\uDE")",
     R"("\u005C")",
     R"("\u27A9")",
+    R"("\"\\\/\b\f\n\r\t")",
   });
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
@@ -148,8 +149,9 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   auto col = cudf::io::json::experimental::parse_data(
     svs.data(), svs.size(), type, std::move(null_mask), default_json_options().view(), stream, mr);
 
-  auto expected = cudf::test::strings_column_wrapper{{"🚀", "Ａ🚀ＡＡ", "", "", "", "\\", "➩"},
-                                                     {true, true, false, false, false, true, true}};
+  auto expected =
+    cudf::test::strings_column_wrapper{{"🚀", "Ａ🚀ＡＡ", "", "", "", "\\", "➩", "\"\\/\b\f\n\r\t"},
+                                       {true, true, false, false, false, true, true, true}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col->view(), expected);
 }
 
