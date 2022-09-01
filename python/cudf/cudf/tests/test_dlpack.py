@@ -6,6 +6,7 @@ from contextlib import ExitStack as does_not_raise
 import cupy
 import numpy as np
 import pytest
+from packaging import version
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -17,6 +18,13 @@ params_1d = itertools.product(nelems, dtype, nulls)
 
 ncols = [0, 1, 2]
 params_2d = itertools.product(ncols, nelems, dtype, nulls)
+
+
+if version.parse(cupy.__version__) < version.parse("10"):
+    # fromDlpack deprecated in cupy version 10, replaced by from_dlpack
+    from_dlpack = cupy.fromDlpack
+else:
+    from_dlpack = cupy.from_dlpack
 
 
 def data_size_expectation_builder(data, nan_null_param=False):
@@ -107,7 +115,7 @@ def test_to_dlpack_cupy_1d(data_1d):
         cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs.to_dlpack()
 
-        cupy_array = cupy.from_dlpack(dlt)
+        cupy_array = from_dlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -121,7 +129,7 @@ def test_to_dlpack_cupy_2d(data_2d):
         cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
-        cupy_array = cupy.from_dlpack(dlt)
+        cupy_array = from_dlpack(dlt)
         cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -157,7 +165,7 @@ def test_to_dlpack_cupy_2d_null(data_2d):
         cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
-        cupy_array = cupy.from_dlpack(dlt)
+        cupy_array = from_dlpack(dlt)
         cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -171,7 +179,7 @@ def test_to_dlpack_cupy_1d_null(data_1d):
         cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs.to_dlpack()
 
-        cupy_array = cupy.from_dlpack(dlt)
+        cupy_array = from_dlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -183,7 +191,7 @@ def test_to_dlpack_mixed_dtypes():
     cudf_host_array = df.to_numpy()
     dlt = df.to_dlpack()
 
-    cupy_array = cupy.from_dlpack(dlt)
+    cupy_array = from_dlpack(dlt)
     cupy_host_array = cupy_array.get()
 
     assert_eq(cudf_host_array, cupy_host_array)
