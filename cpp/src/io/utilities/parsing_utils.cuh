@@ -109,7 +109,7 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>)>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -130,7 +130,7 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(!std::is_integral_v<T>)>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -176,8 +176,8 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-constexpr T parse_numeric(const char* begin,
-                          const char* end,
+constexpr T parse_numeric(char const* begin,
+                          char const* end,
                           parse_options_view const& opts,
                           T error_result = std::numeric_limits<T>::quiet_NaN())
 {
@@ -226,7 +226,7 @@ constexpr T parse_numeric(const char* begin,
 
     // Handle exponential part of the number if necessary
     if (begin < end) {
-      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
+      int32_t const exponent_sign = *begin == '-' ? -1 : 1;
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
       while (begin < end) {
@@ -311,7 +311,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
  * than or equal to golden data
  */
 template <int N>
-__device__ __inline__ bool less_equal_than(const char* data, const char (&golden)[N])
+__device__ __inline__ bool less_equal_than(char const* data, char const (&golden)[N])
 {
   auto mismatch_pair = thrust::mismatch(thrust::seq, data, data + N - 1, golden);
   if (mismatch_pair.first != data + N - 1) {
@@ -427,7 +427,7 @@ cudf::size_type find_all_from_set(device_span<char const> data,
  */
 template <class T>
 cudf::size_type find_all_from_set(host_span<char const> data,
-                                  const std::vector<char>& keys,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream);
@@ -461,7 +461,7 @@ cudf::size_type count_all_from_set(device_span<char const> data,
  * @return cudf::size_type total number of occurrences
  */
 cudf::size_type count_all_from_set(host_span<char const> data,
-                                   const std::vector<char>& keys,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -516,8 +516,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @return The parsed numeric value
  */
 template <typename T, int base>
-__inline__ __device__ T decode_value(const char* begin,
-                                     const char* end,
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
                                      parse_options_view const& opts)
 {
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
@@ -532,16 +532,15 @@ __inline__ __device__ T decode_value(const char* begin,
  *
  * @return The parsed numeric value
  */
-template <typename T,
-          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(const char* begin,
-                                     const char* end,
+template <typename T, CUDF_ENABLE_IF(!cudf::is_timestamp<T>() and !cudf::is_duration<T>())>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
                                      parse_options_view const& opts)
 {
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
 __inline__ __device__ T decode_value(char const* begin,
                                      char const* end,
                                      parse_options_view const& opts)
@@ -549,66 +548,10 @@ __inline__ __device__ T decode_value(char const* begin,
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
 __inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
 {
   return to_duration<T>(begin, end);
-}
-
-// The purpose of these is merely to allow compilation ONLY
-template <>
-__inline__ __device__ cudf::string_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::string_view{};
-}
-
-template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return cudf::dictionary32{};
-}
-
-template <>
-__inline__ __device__ cudf::list_view decode_value(const char*,
-                                                   const char*,
-                                                   parse_options_view const&)
-{
-  return cudf::list_view{};
-}
-template <>
-__inline__ __device__ cudf::struct_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::struct_view{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal32{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal64{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal128 decode_value(const char*,
-                                                       const char*,
-                                                       parse_options_view const&)
-{
-  return numeric::decimal128{};
 }
 
 struct ConvertFunctor {
@@ -626,7 +569,7 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex = false)
   {
@@ -646,12 +589,12 @@ struct ConvertFunctor {
    *
    * @return bool Whether the parsed value is valid.
    */
-  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
@@ -667,12 +610,12 @@ struct ConvertFunctor {
   /**
    * @brief Dispatch for boolean type types.
    */
-  template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, bool>)>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
@@ -691,12 +634,12 @@ struct ConvertFunctor {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>)>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
@@ -707,7 +650,7 @@ struct ConvertFunctor {
   }
 
   /**
-   * @brief Dispatch for all other types.
+   * @brief Dispatch for remaining supported types, i.e., timestamp and duration types.
    */
   template <typename T,
             std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
@@ -716,13 +659,16 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
-
-    return true;
+    if constexpr (cudf::is_timestamp<T>() or cudf::is_duration<T>()) {
+      static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
+      return true;
+    } else {
+      return false;
+    }
   }
 };
 
