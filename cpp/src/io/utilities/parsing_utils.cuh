@@ -109,7 +109,7 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>)>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -130,7 +130,7 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(!std::is_integral_v<T>)>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -532,8 +532,7 @@ __inline__ __device__ T decode_value(const char* begin,
  *
  * @return The parsed numeric value
  */
-template <typename T,
-          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(!cudf::is_timestamp<T>() and !cudf::is_duration<T>())>
 __inline__ __device__ T decode_value(const char* begin,
                                      const char* end,
                                      parse_options_view const& opts)
@@ -541,7 +540,7 @@ __inline__ __device__ T decode_value(const char* begin,
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
 __inline__ __device__ T decode_value(char const* begin,
                                      char const* end,
                                      parse_options_view const& opts)
@@ -549,7 +548,7 @@ __inline__ __device__ T decode_value(char const* begin,
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
 __inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
 {
   return to_duration<T>(begin, end);
@@ -590,7 +589,7 @@ struct ConvertFunctor {
    *
    * @return bool Whether the parsed value is valid.
    */
-  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
@@ -611,7 +610,7 @@ struct ConvertFunctor {
   /**
    * @brief Dispatch for boolean type types.
    */
-  template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, bool>)>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
@@ -635,7 +634,7 @@ struct ConvertFunctor {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>)>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
