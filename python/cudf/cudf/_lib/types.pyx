@@ -31,6 +31,7 @@ class TypeId(IntEnum):
     UINT64 = <underlying_type_t_type_id> libcudf_types.type_id.UINT64
     FLOAT32 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT32
     FLOAT64 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT64
+    BOOL8 = <underlying_type_t_type_id> libcudf_types.type_id.BOOL8
     TIMESTAMP_DAYS = (
         <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_DAYS
     )
@@ -50,8 +51,6 @@ class TypeId(IntEnum):
     TIMESTAMP_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_NANOSECONDS
     )
-    STRING = <underlying_type_t_type_id> libcudf_types.type_id.STRING
-    BOOL8 = <underlying_type_t_type_id> libcudf_types.type_id.BOOL8
     DURATION_SECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_SECONDS
     )
@@ -64,9 +63,11 @@ class TypeId(IntEnum):
     DURATION_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_NANOSECONDS
     )
+    STRING = <underlying_type_t_type_id> libcudf_types.type_id.STRING
     DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
     DECIMAL128 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL128
+    STRUCT = <underlying_type_t_type_id> libcudf_types.type_id.STRUCT
 
 
 SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
@@ -107,16 +108,17 @@ LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     TypeId.UINT64: np.dtype("uint64"),
     TypeId.FLOAT32: np.dtype("float32"),
     TypeId.FLOAT64: np.dtype("float64"),
+    TypeId.BOOL8: np.dtype("bool"),
     TypeId.TIMESTAMP_SECONDS: np.dtype("datetime64[s]"),
     TypeId.TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
     TypeId.TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
     TypeId.TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
-    TypeId.STRING: np.dtype("object"),
-    TypeId.BOOL8: np.dtype("bool"),
     TypeId.DURATION_SECONDS: np.dtype("timedelta64[s]"),
     TypeId.DURATION_MILLISECONDS: np.dtype("timedelta64[ms]"),
     TypeId.DURATION_MICROSECONDS: np.dtype("timedelta64[us]"),
     TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
+    TypeId.STRING: np.dtype("object"),
+    TypeId.STRUCT: np.dtype("object"),
 }
 
 duration_unit_map = {
