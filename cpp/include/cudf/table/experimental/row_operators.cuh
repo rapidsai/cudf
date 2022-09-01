@@ -231,10 +231,9 @@ struct sorting_physical_element_comparator {
  * rather than logical elements, defaults to `NaN` aware relational comparator that evaluates `NaN`
  * as greater than all other values.
  */
-template <bool has_nested_columns,
-          typename Nullate,
+template <typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
-class device_row_comparator {
+class device_row_comparator_primitive {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
@@ -255,15 +254,203 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  device_row_comparator(Nullate check_nulls,
-                        table_device_view lhs,
-                        table_device_view rhs,
-                        device_span<detail::dremel_device_view const> l_dremel_device_views,
-                        device_span<detail::dremel_device_view const> r_dremel_device_views,
-                        std::optional<device_span<int const>> depth                  = std::nullopt,
-                        std::optional<device_span<order const>> column_order         = std::nullopt,
-                        std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-                        PhysicalElementComparator comparator                         = {}) noexcept
+  device_row_comparator_primitive(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    device_span<detail::dremel_device_view const> l_dremel_device_views,
+    device_span<detail::dremel_device_view const> r_dremel_device_views,
+    std::optional<device_span<int const>> depth                  = std::nullopt,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    PhysicalElementComparator comparator                         = {}) noexcept
+    : _lhs{lhs},
+      _rhs{rhs},
+      _l_dremel(l_dremel_device_views),
+      _r_dremel(r_dremel_device_views),
+      _check_nulls{check_nulls},
+      _depth{depth},
+      _column_order{column_order},
+      _null_precedence{null_precedence},
+      _comparator{comparator}
+  {
+  }
+
+  /**
+   * @brief Performs a relational comparison between two elements in two columns.
+   */
+  class element_comparator {
+   public:
+    /**
+     * @brief Construct type-dispatched function object for performing a
+     * relational comparison between two elements.
+     *
+     * @note `lhs` and `rhs` may be the same.
+     *
+     * @param check_nulls Indicates if either input column contains nulls.
+     * @param lhs The column containing the first element
+     * @param rhs The column containing the second element (may be the same as lhs)
+     * @param null_precedence Indicates how null values are ordered with other values
+     * @param depth The depth of the column if part of a nested column @see
+     * preprocessed_table::depths
+     * @param comparator Physical element relational comparison functor.
+     */
+    __device__ element_comparator(Nullate check_nulls,
+                                  column_device_view lhs,
+                                  column_device_view rhs,
+                                  null_order null_precedence           = null_order::BEFORE,
+                                  int depth                            = 0,
+                                  PhysicalElementComparator comparator = {},
+                                  detail::dremel_device_view l_dremel_device_view = {},
+                                  detail::dremel_device_view r_dremel_device_view = {})
+      : _lhs{lhs},
+        _rhs{rhs},
+        _check_nulls{check_nulls},
+        _null_precedence{null_precedence},
+        _depth{depth},
+        _l_dremel_device_view{l_dremel_device_view},
+        _r_dremel_device_view{r_dremel_device_view},
+        _comparator{comparator}
+    {
+    }
+
+    /**
+     * @brief Performs a relational comparison between the specified elements
+     *
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
+     */
+    template <typename Element,
+              CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(
+      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+    {
+      if (_check_nulls) {
+        bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
+        bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
+
+        if (lhs_is_null or rhs_is_null) {  // at least one is null
+          return cuda::std::pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
+        }
+      }
+
+      return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
+                                         _rhs.element<Element>(rhs_element_index)),
+                             std::numeric_limits<int>::max());
+    }
+
+    template <typename Element,
+              CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>())>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
+                                                              size_type const) const noexcept
+    {
+      CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+    }
+
+   private:
+    column_device_view const _lhs;
+    column_device_view const _rhs;
+    Nullate const _check_nulls;
+    null_order const _null_precedence;
+    int const _depth;
+    detail::dremel_device_view const _l_dremel_device_view;
+    detail::dremel_device_view const _r_dremel_device_view;
+    PhysicalElementComparator const _comparator;
+  };
+
+ public:
+  /**
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
+   * lexicographically less, greater, or equivalent to the row at `rhs_index` in the `rhs` table.
+   *
+   * @param lhs_index The index of the row in the `lhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
+   * table
+   */
+  __device__ constexpr weak_ordering operator()(size_type const lhs_index,
+                                                size_type const rhs_index) const noexcept
+  {
+    int last_null_depth = std::numeric_limits<int>::max();
+    for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      int const depth = _depth.has_value() ? (*_depth)[i] : 0;
+      if (depth > last_null_depth) { continue; }
+
+      bool const ascending =
+        _column_order.has_value() ? (*_column_order)[i] == order::ASCENDING : true;
+
+      null_order const null_precedence =
+        _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
+
+      auto element_comp = element_comparator{_check_nulls,
+                                             _lhs.column(i),
+                                             _rhs.column(i),
+                                             null_precedence,
+                                             depth,
+                                             _comparator,
+                                             _l_dremel[i],
+                                             _r_dremel[i]};
+
+      weak_ordering state;
+      cuda::std::tie(state, last_null_depth) =
+        cudf::type_dispatcher(_lhs.column(i).type(), element_comp, lhs_index, rhs_index);
+
+      if (state == weak_ordering::EQUIVALENT) { continue; }
+
+      return ascending
+               ? state
+               : (state == weak_ordering::GREATER ? weak_ordering::LESS : weak_ordering::GREATER);
+    }
+    return weak_ordering::EQUIVALENT;
+  }
+
+ private:
+  table_device_view const _lhs;
+  table_device_view const _rhs;
+  device_span<detail::dremel_device_view const> const _l_dremel;
+  device_span<detail::dremel_device_view const> const _r_dremel;
+  Nullate const _check_nulls;
+  std::optional<device_span<int const>> const _depth;
+  std::optional<device_span<order const>> const _column_order;
+  std::optional<device_span<null_order const>> const _null_precedence;
+  PhysicalElementComparator const _comparator;
+};  // class device_row_comparator
+
+template <typename Nullate,
+          typename PhysicalElementComparator = sorting_physical_element_comparator>
+class device_row_comparator_nested {
+  friend class self_comparator;       ///< Allow self_comparator to access private members
+  friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
+
+  /**
+   * @brief Construct a function object for performing a lexicographic
+   * comparison between the rows of two tables.
+   *
+   * @param check_nulls Indicates if any input column contains nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param depth Optional, device array the same length as a row that contains starting depths of
+   * columns if they're nested, and 0 otherwise.
+   * @param column_order Optional, device array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If `nullopt`, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param comparator Physical element relational comparison functor.
+   */
+  device_row_comparator_nested(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    device_span<detail::dremel_device_view const> l_dremel_device_views,
+    device_span<detail::dremel_device_view const> r_dremel_device_views,
+    std::optional<device_span<int const>> depth                  = std::nullopt,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel(l_dremel_device_views),
@@ -343,15 +530,14 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             (not has_nested_nulls or not cudf::is_nested<Element>()))>
+                             not cudf::is_nested<Element>())>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
                                                               size_type const) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
-    template <typename Element,
-              CUDF_ENABLE_IF(has_nested_nulls and std::is_same_v<Element, cudf::struct_view>)>
+    template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
@@ -384,8 +570,7 @@ class device_row_comparator {
         rhs_element_index);
     }
 
-    template <typename Element,
-              CUDF_ENABLE_IF(has_nested_nulls and std::is_same_v<Element, cudf::list_view>)>
+    template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::list_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                               size_type rhs_element_index)
     {
@@ -808,8 +993,20 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{
-      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
+    if constexpr (has_nested_columns) {
+      return less_comparator{
+        device_row_comparator_nested<Nullate, PhysicalElementComparator>{nullate,
+                                                                         *d_t,
+                                                                         *d_t,
+                                                                         d_t->dremel_device_views(),
+                                                                         d_t->dremel_device_views(),
+                                                                         d_t->depths(),
+                                                                         d_t->column_order(),
+                                                                         d_t->null_precedence(),
+                                                                         comparator}};
+    }
+    if constexpr (!has_nested_columns) {
+      return less_comparator{device_row_comparator_primitive<Nullate, PhysicalElementComparator>{
         nullate,
         *d_t,
         *d_t,
@@ -819,6 +1016,7 @@ class self_comparator {
         d_t->column_order(),
         d_t->null_precedence(),
         comparator}};
+    }
   }
 
   /// @copydoc less()
@@ -828,17 +1026,31 @@ class self_comparator {
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{
-      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
-        nullate,
-        *d_t,
-        *d_t,
-        d_t->dremel_device_views(),
-        d_t->dremel_device_views(),
-        d_t->depths(),
-        d_t->column_order(),
-        d_t->null_precedence(),
-        comparator}};
+    if constexpr (has_nested_columns) {
+      return less_equivalent_comparator{
+        device_row_comparator_nested<Nullate, PhysicalElementComparator>{nullate,
+                                                                         *d_t,
+                                                                         *d_t,
+                                                                         d_t->dremel_device_views(),
+                                                                         d_t->dremel_device_views(),
+                                                                         d_t->depths(),
+                                                                         d_t->column_order(),
+                                                                         d_t->null_precedence(),
+                                                                         comparator}};
+    }
+    if constexpr (!has_nested_columns) {
+      return less_equivalent_comparator{
+        device_row_comparator_primitive<Nullate, PhysicalElementComparator>{
+          nullate,
+          *d_t,
+          *d_t,
+          d_t->dremel_device_views(),
+          d_t->dremel_device_views(),
+          d_t->depths(),
+          d_t->column_order(),
+          d_t->null_precedence(),
+          comparator}};
+    }
   }
 
  private:
@@ -960,17 +1172,32 @@ class two_table_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{strong_index_comparator_adapter{
-      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
-        nullate,
-        *d_left_table,
-        *d_right_table,
-        d_left_table->dremel_device_views(),
-        d_right_table->dremel_device_views(),
-        d_left_table->depths(),
-        d_left_table->column_order(),
-        d_left_table->null_precedence(),
-        comparator}}};
+    if constexpr (has_nested_columns) {
+      return less_comparator{strong_index_comparator_adapter{
+        device_row_comparator_nested<Nullate, PhysicalElementComparator>{
+          nullate,
+          *d_left_table,
+          *d_right_table,
+          d_left_table->dremel_device_views(),
+          d_right_table->dremel_device_views(),
+          d_left_table->depths(),
+          d_left_table->column_order(),
+          d_left_table->null_precedence(),
+          comparator}}};
+    }
+    if constexpr (!has_nested_columns) {
+      return less_comparator{strong_index_comparator_adapter{
+        device_row_comparator_primitive<Nullate, PhysicalElementComparator>{
+          nullate,
+          *d_left_table,
+          *d_right_table,
+          d_left_table->dremel_device_views(),
+          d_right_table->dremel_device_views(),
+          d_left_table->depths(),
+          d_left_table->column_order(),
+          d_left_table->null_precedence(),
+          comparator}}};
+    }
   }
 
   /// @copydoc less()
@@ -980,17 +1207,32 @@ class two_table_comparator {
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{strong_index_comparator_adapter{
-      device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
-        nullate,
-        *d_left_table,
-        *d_right_table,
-        d_left_table->dremel_device_views(),
-        d_right_table->dremel_device_views(),
-        d_left_table->depths(),
-        d_left_table->column_order(),
-        d_left_table->null_precedence(),
-        comparator}}};
+    if constexpr (has_nested_columns) {
+      return less_equivalent_comparator{strong_index_comparator_adapter{
+        device_row_comparator_nested<Nullate, PhysicalElementComparator>{
+          nullate,
+          *d_left_table,
+          *d_right_table,
+          d_left_table->dremel_device_views(),
+          d_right_table->dremel_device_views(),
+          d_left_table->depths(),
+          d_left_table->column_order(),
+          d_left_table->null_precedence(),
+          comparator}}};
+    }
+    if constexpr (!has_nested_columns) {
+      return less_equivalent_comparator{strong_index_comparator_adapter{
+        device_row_comparator_primitive<Nullate, PhysicalElementComparator>{
+          nullate,
+          *d_left_table,
+          *d_right_table,
+          d_left_table->dremel_device_views(),
+          d_right_table->dremel_device_views(),
+          d_left_table->depths(),
+          d_left_table->column_order(),
+          d_left_table->null_precedence(),
+          comparator}}};
+    }
   }
 
  private:
