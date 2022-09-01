@@ -4119,19 +4119,21 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
+      try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
           groupByOptions.getKeysNullSmallest(),
-          false); // not generate uniq keys table
-      return ret.takeOverGroups();
+          false) // not generate uniq key table
+      ) {
+        return ret.takeOverGroups();
+      }
     }
 
     /**
-     * Similar to {@link #contiguousSplitGroups}, return an extra uniq keys table in which
+     * Similar to {@link #contiguousSplitGroups}, return an extra uniq key table in which
      * each row is corresponding to a group split.
      *
      * Splits the groups in a single table into separate tables according to the grouping keys.
@@ -4143,7 +4145,7 @@ public final class Table implements AutoCloseable {
      *    b
      *  Note: only 2 rows because of only has 2 split groups
      *
-     * @return The split groups and uniq keys table.
+     * @return The split groups and uniq key table.
      */
     public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
       ContigSplitGroupByResult result = Table.contiguousSplitGroups(
@@ -4153,7 +4155,7 @@ public final class Table implements AutoCloseable {
               groupByOptions.getKeySorted(),
               groupByOptions.getKeysDescending(),
               groupByOptions.getKeysNullSmallest(),
-              true); // generate uniq keys table
+              true); // generate uniq key table
       return result;
     }
   }

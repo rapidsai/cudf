@@ -103,7 +103,7 @@ public class ContigSplitGroupByResult implements AutoCloseable {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     try {
       releaseUniqKeyTable();
     } finally {
