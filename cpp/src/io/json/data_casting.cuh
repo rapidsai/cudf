@@ -218,8 +218,8 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     // Skip over the 'u' char from \uXXXX to the first hex digit
     ++in_begin;
 
-    //  Make sure that there's at least 4 characters left from the
-    //  input, which are expected to be hex digits
+    // Make sure that there's at least 4 characters left from the
+    // input, which are expected to be hex digits
     if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
       return {in_begin, out_it, NULL_FLAG, INVALID_FLAG};
     }
@@ -270,6 +270,18 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
   return {in_begin, out_it, NOT_NULL_FLAG, NO_ERROR_FLAG};
 }
 
+/**
+ * @brief Parses the data from an iterator of string views, casting it to the given target data type
+ *
+ * @param str_tuples Iterator returning a string view, i.e., a (ptr, length) pair
+ * @param col_size The total number of items of this column
+ * @param col_type The column's target data type
+ * @param null_mask A null mask that renders certain items from the input invalid
+ * @param options Settings for controlling the processing behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr The resource to be used for device memory allocation
+ * @return The column that contains the parsed data
+ */
 template <typename str_tuple_it, typename B>
 std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                    size_type col_size,
