@@ -555,62 +555,6 @@ __inline__ __device__ T decode_value(char const* begin, char const* end, parse_o
   return to_duration<T>(begin, end);
 }
 
-// The purpose of these is merely to allow compilation ONLY
-template <>
-__inline__ __device__ cudf::string_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::string_view{};
-}
-
-template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return cudf::dictionary32{};
-}
-
-template <>
-__inline__ __device__ cudf::list_view decode_value(const char*,
-                                                   const char*,
-                                                   parse_options_view const&)
-{
-  return cudf::list_view{};
-}
-template <>
-__inline__ __device__ cudf::struct_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::struct_view{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal32{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal64{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal128 decode_value(const char*,
-                                                       const char*,
-                                                       parse_options_view const&)
-{
-  return numeric::decimal128{};
-}
-
 struct ConvertFunctor {
   /**
    * @brief Dispatch for numeric types whose values can be convertible to
@@ -707,7 +651,7 @@ struct ConvertFunctor {
   }
 
   /**
-   * @brief Dispatch for all other types.
+   * @brief Dispatch for remaining supported types, i.e., timestamp and duration types.
    */
   template <typename T,
             std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
@@ -720,9 +664,12 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
-
-    return true;
+    if constexpr (cudf::is_timestamp<T>() or cudf::is_duration<T>()) {
+      static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
+      return true;
+    } else {
+      return false;
+    }
   }
 };
 
