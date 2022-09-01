@@ -85,7 +85,7 @@ def bench_ufunc_series_binary(benchmark, frame_or_index, ufunc):
 )
 @benchmark_with_object(cls="frame_or_index", dtype="int")
 def bench_binops(benchmark, op, frame_or_index):
-    benchmark(lambda: op(frame_or_index, frame_or_index))
+    benchmark(op, frame_or_index, frame_or_index)
 
 
 @pytest.mark.parametrize(
@@ -94,4 +94,4 @@ def bench_binops(benchmark, op, frame_or_index):
 )
 @benchmark_with_object(cls="frame_or_index", dtype="int")
 def bench_scalar_binops(benchmark, op, frame_or_index):
-    benchmark(lambda: op(frame_or_index, 1))
+    benchmark(op, frame_or_index, 1)
