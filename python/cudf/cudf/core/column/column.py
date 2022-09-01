@@ -217,16 +217,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # The drop_nan argument is only used for numerical columns.
         return drop_nulls([self])[0]
 
-    def _dedup_preserve_order(self):
-        ind = as_column(cupy.arange(0, len(self)))
-
-        # dedup based on the column of data only
-        ind, col = drop_duplicates([ind, self], keys=[1])
-
-        # sort sort col based on ind
-        map = ind.argsort()
-        return col.take(map)
-
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
 
@@ -1038,7 +1028,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self) -> ColumnBase:
+    def unique(self, preserve_order=False) -> ColumnBase:
         """
         Get unique values in the data
         """
@@ -1047,6 +1037,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # Few things to note before we can do this optimization is
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
+        if preserve_order:
+            ind = as_column(cupy.arange(0, len(self)))
+
+            # dedup based on the column of data only
+            ind, col = drop_duplicates([ind, self], keys=[1])
+
+            # sort sort col based on ind
+            map = ind.argsort()
+            return col.take(map)
 
         return drop_duplicates([self], keep="first")[0]
 
