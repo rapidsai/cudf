@@ -70,25 +70,15 @@ struct contains_scalar_dispatch {
     auto const d_needle   = get_scalar_device_view(
       static_cast<cudf::scalar_type_t<Element>&>(const_cast<scalar&>(needle)));
 
-    if (haystack.has_nulls()) {
-      auto const begin = d_haystack->pair_begin<DType, true>();
-      auto const end   = d_haystack->pair_end<DType, true>();
+    auto const begin =
+      d_haystack->optional_begin<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
+    auto const end = d_haystack->optional_end<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
 
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
-                 auto const needle_pair =
-                   thrust::make_pair(get_scalar_value<Element>(d_needle), true);
-                 return val_pair == needle_pair;
-               }) > 0;
-    } else {
-      auto const begin = d_haystack->begin<DType>();
-      auto const end   = d_haystack->end<DType>();
-
-      return thrust::count_if(
-               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val) {
-                 return val == get_scalar_value<Element>(d_needle);
-               }) > 0;
-    }
+    return thrust::count_if(
+             rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
+               auto needle = get_scalar_value<Element>(d_needle);
+               return val_pair.has_value() && (needle == *val_pair);
+             }) > 0;
   }
 
   template <typename Element>
@@ -115,24 +105,17 @@ struct contains_scalar_dispatch {
     auto const end   = begin + haystack.size();
     using cudf::experimental::row::rhs_index_type;
 
-    if (haystack.has_nulls()) {
-      auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
-      auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
-
-      return thrust::count_if(rmm::exec_policy(stream),
-                              begin,
-                              end,
-                              [d_comp, haystack_valid_it] __device__(auto const idx) {
-                                if (!haystack_valid_it[static_cast<size_type>(idx)]) {
-                                  return false;
-                                }
-                                return d_comp(
-                                  idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
-                              }) > 0;
-    }
+    auto const check_nulls      = haystack.has_nulls();
+    auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
 
     return thrust::count_if(
-             rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
+             rmm::exec_policy(stream),
+             begin,
+             end,
+             [d_comp, check_nulls, d_haystack = *haystack_cdv_ptr] __device__(auto const idx) {
+               if (check_nulls && d_haystack.is_null_nocheck(static_cast<size_type>(idx))) {
+                 return false;
+               }
                return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
              }) > 0;
   }
