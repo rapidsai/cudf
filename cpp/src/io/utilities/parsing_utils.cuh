@@ -498,9 +498,9 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
-                                        not_whitespace);
+                                          thrust::make_reverse_iterator(end),
+                                          thrust::make_reverse_iterator(trim_begin),
+                                          not_whitespace);
 
   return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
 }

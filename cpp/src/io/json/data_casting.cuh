@@ -116,8 +116,7 @@ __device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_
 {
   constexpr size_type MAX_UTF8_BYTES_PER_CODE_POINT = 4;
   char char_bytes[MAX_UTF8_BYTES_PER_CODE_POINT];
-  auto const num_chars_written =
-    strings::detail::from_char_utf8(utf8_chars, reinterpret_cast<char*>(char_bytes));
+  auto const num_chars_written = strings::detail::from_char_utf8(utf8_chars, char_bytes);
 
   for (size_type i = 0; i < MAX_UTF8_BYTES_PER_CODE_POINT; i++) {
     if (i < num_chars_written) { *out_it++ = char_bytes[i]; }
@@ -138,8 +137,8 @@ __device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_
  * @param options Settings for controlling string processing behavior
  * @return A four-tuple of (in_it_end, out_it_end, set_null, is_invalid), where in_it_end is an
  * iterator to one past the last character from the input that was processed, out_it_end is an
- * iterator to one past the last character that was written, set_null being true if a null literal
- * was read or a parsing error occured, and is_invalid being true if a parsing error was
+ * iterator to one past the last character that was written, set_null is true if a null literal
+ * was read or a parsing error occured, and is_invalid is true if a parsing error was
  * encountered
  */
 template <typename in_iterator_t, typename out_iterator_t>
