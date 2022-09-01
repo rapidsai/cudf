@@ -755,7 +755,7 @@ class CategoricalColumn(column.ColumnBase):
             )
 
         if to_add_categories > 0:
-            raise ValueError(
+            raise TypeError(
                 "Cannot setitem on a Categorical with a new "
                 "category, set the categories first"
             )
