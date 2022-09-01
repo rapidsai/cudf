@@ -6,17 +6,11 @@ from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.contains cimport regex_flags
-from cudf._lib.cpp.table.table cimport table
 
 
 cdef extern from "cudf/strings/findall.hpp" namespace "cudf::strings" nogil:
 
-    cdef unique_ptr[table] findall(
-        const column_view& source_strings,
-        const string& pattern,
-        regex_flags flags) except +
-
-    cdef unique_ptr[column] findall_record(
+    cdef unique_ptr[column] findall(
         const column_view& source_strings,
         const string& pattern,
         regex_flags flags) except +
