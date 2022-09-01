@@ -677,6 +677,17 @@ struct preprocessed_table {
       _dremel_data(std::move(dremel_data)),
       _dremel_device_views(std::move(dremel_device_views)){};
 
+  preprocessed_table(table_device_view_owner&& table,
+                     rmm::device_uvector<order>&& column_order,
+                     rmm::device_uvector<null_order>&& null_precedence,
+                     rmm::device_uvector<size_type>&& depths)
+    : _t(std::move(table)),
+      _column_order(std::move(column_order)),
+      _null_precedence(std::move(null_precedence)),
+      _depths(std::move(depths)),
+      _dremel_data{},
+      _dremel_device_views{} {};
+
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
    *
@@ -726,7 +737,11 @@ struct preprocessed_table {
 
   [[nodiscard]] device_span<detail::dremel_device_view const> dremel_device_views() const
   {
-    return device_span<detail::dremel_device_view const>(_dremel_device_views);
+    if (_dremel_device_views.has_value()) {
+      return device_span<detail::dremel_device_view const>(*_dremel_device_views);
+    } else {
+      return {};
+    }
   }
 
  private:
@@ -736,8 +751,8 @@ struct preprocessed_table {
   rmm::device_uvector<size_type> const _depths;
 
   // Dremel encoding of list columns used for the comparison algorithm
-  std::vector<detail::dremel_data> _dremel_data;
-  rmm::device_uvector<detail::dremel_device_view> _dremel_device_views;
+  std::optional<std::vector<detail::dremel_data>> _dremel_data;
+  std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
 };
 
 /**

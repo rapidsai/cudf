@@ -361,20 +361,26 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
     decompose_structs(t, column_order, null_precedence);
 
-  auto [dremel_data, d_dremel_device_views] = list_lex_preprocess(verticalized_lhs, stream);
-
   auto d_t               = table_device_view::create(verticalized_lhs, stream);
   auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
   auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
   auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  return std::shared_ptr<preprocessed_table>(
-    new preprocessed_table(std::move(d_t),
-                           std::move(d_column_order),
-                           std::move(d_null_precedence),
-                           std::move(d_depths),
-                           std::move(dremel_data),
-                           std::move(d_dremel_device_views)));
+  if (cudf::get_nested_columns(t).size() > 0) {
+    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
+    return std::shared_ptr<preprocessed_table>(
+      new preprocessed_table(std::move(d_t),
+                             std::move(d_column_order),
+                             std::move(d_null_precedence),
+                             std::move(d_depths),
+                             std::move(dremel_data),
+                             std::move(d_dremel_device_view)));
+  } else {
+    return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t),
+                                                                      std::move(d_column_order),
+                                                                      std::move(d_null_precedence),
+                                                                      std::move(d_depths)));
+  }
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,
