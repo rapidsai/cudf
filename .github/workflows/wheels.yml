@@ -19,7 +19,7 @@ jobs:
       gpu-smoketest-before-amd64: "apt-get install -y libprotobuf-dev"
       gpu-smoketest-before-arm64: "apt-get install -y libprotobuf-dev"
       wheel-pattern-override: "py3-none-linux"
-      cibw-test-command: "_venv_placeholder/bin/gtests/libcudf/*"
+      cibw-test-command: "for gt in _venv_placeholder/bin/gtests/libcudf*/*; do ${gt}; done"
     secrets: inherit
   cudf-wheel:
     needs: libcudf-wheel
