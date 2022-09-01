@@ -951,12 +951,8 @@ __launch_bounds__(block_size) __global__
   if (out_valid_count) {
     size_type block_valid_count =
       cudf::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-    if (threadIdx.x == 0) {
-      if (out_valid_count.has_value()) { *(out_valid_count.value()) = 0; }
-      atomicAdd(out_valid_count.value(), block_valid_count);
-    }
+    if (threadIdx.x == 0) { atomicAdd(out_valid_count.value(), block_valid_count); }
   }
-
 }
 
 /**
