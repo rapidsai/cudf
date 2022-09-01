@@ -335,8 +335,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
 
     def apply(self, func, *args, **kwargs):
         """
-        Counterpart of `pandas.core.window.Rolling.apply
-        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.window.rolling.Rolling.apply.html>`_.
+        Calculate the rolling custom aggregation function.
 
         Parameters
         ----------
@@ -349,12 +348,35 @@ class Rolling(GetAttrGetItemMixin, Reducible):
 
         See Also
         --------
-        cudf.Series.applymap : Apply an elementwise function to
+        cudf.Series.apply: Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.Series.applymap`
+        The supported Python features are listed in
+
+        https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html
+
+        with these exceptions:
+
+        * Math functions in `cmath` are not supported since `libcudf` does not
+          have complex number support and output of `cmath` functions are most
+          likely complex numbers.
+
+        * These five functions in `math` are not supported since numba
+          generates multiple PTX functions from them:
+
+          * math.sin()
+          * math.cos()
+          * math.tan()
+          * math.gamma()
+          * math.lgamma()
+
+        * Series with string dtypes are not supported.
+
+        * Global variables need to be re-defined explicitly inside
+          the udf, as numba considers them to be compile-time constants
+          and there is no known way to obtain value of the global variable.
 
         Examples
         --------

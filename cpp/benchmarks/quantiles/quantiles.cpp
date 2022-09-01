@@ -37,7 +37,7 @@ static void BM_quantiles(benchmark::State& state, bool nulls)
 
   // Create columns with values in the range [0,100)
   data_profile profile = data_profile_builder().cardinality(0).distribution(
-    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
   profile.set_null_probability(nulls ? std::optional{0.01}
                                      : std::nullopt);  // 1% nulls or no null mask (<0)
 
