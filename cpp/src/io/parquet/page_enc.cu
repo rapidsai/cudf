@@ -362,7 +362,6 @@ __global__ void __launch_bounds__(128)
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          // pad max_hdr_size
           page_g.max_hdr_size = util::round_up_unsafe(page_g.max_hdr_size, page_align);
           page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {

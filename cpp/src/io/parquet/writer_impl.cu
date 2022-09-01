@@ -48,7 +48,6 @@
 #include <thrust/for_each.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
