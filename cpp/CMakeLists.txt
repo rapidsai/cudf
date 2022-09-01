@@ -117,6 +117,17 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
+set(_ctk_static_suffix "")
+if(CUDA_STATIC_RUNTIME)
+  set(_ctk_static_suffix "_static")
+  # Control legacy FindCUDA.cmake behavior too
+  # Remove this after we push it into rapids-cmake:
+  # https://github.com/rapidsai/rapids-cmake/pull/259
+  set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
+endif()
+
+rapids_cuda_init_runtime(USE_STATIC ${CUDA_STATIC_RUNTIME})
+
 rapids_find_package(
   CUDAToolkit REQUIRED
   BUILD_EXPORT_SET cudf-exports
@@ -647,18 +658,6 @@ target_link_libraries(
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
-endif()
-
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart_static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
 
 file(
