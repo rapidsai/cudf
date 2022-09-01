@@ -4127,7 +4127,7 @@ public final class Table implements AutoCloseable {
           groupByOptions.getKeysDescending(),
           groupByOptions.getKeysNullSmallest(),
           false); // not generate uniq keys table
-      return ret.getGroups();
+      return ret.takeOverGroups();
     }
 
     /**
@@ -4154,7 +4154,6 @@ public final class Table implements AutoCloseable {
               groupByOptions.getKeysDescending(),
               groupByOptions.getKeysNullSmallest(),
               true); // generate uniq keys table
-      result.getUniqKeyTable();
       return result;
     }
   }

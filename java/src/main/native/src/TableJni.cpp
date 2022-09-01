@@ -3454,7 +3454,7 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
     split_indices.pop_back();
 
     // generate uniq keys by using `gather` method, this means remove the duplicated keys
-    std::unique_ptr<cudf::table> group_by_result_table = nullptr;
+    std::unique_ptr<cudf::table> group_by_result_table;
     if (genUniqKeys) {
       // generate gather map column from `split_indices`
       auto begin = std::cbegin(split_indices);
