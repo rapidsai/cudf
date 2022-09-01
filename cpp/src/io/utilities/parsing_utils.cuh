@@ -176,8 +176,8 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-constexpr T parse_numeric(const char* begin,
-                          const char* end,
+constexpr T parse_numeric(char const* begin,
+                          char const* end,
                           parse_options_view const& opts,
                           T error_result = std::numeric_limits<T>::quiet_NaN())
 {
@@ -226,7 +226,7 @@ constexpr T parse_numeric(const char* begin,
 
     // Handle exponential part of the number if necessary
     if (begin < end) {
-      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
+      int32_t const exponent_sign = *begin == '-' ? -1 : 1;
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
       while (begin < end) {
@@ -311,7 +311,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
  * than or equal to golden data
  */
 template <int N>
-__device__ __inline__ bool less_equal_than(const char* data, const char (&golden)[N])
+__device__ __inline__ bool less_equal_than(char const* data, char const (&golden)[N])
 {
   auto mismatch_pair = thrust::mismatch(thrust::seq, data, data + N - 1, golden);
   if (mismatch_pair.first != data + N - 1) {
@@ -427,7 +427,7 @@ cudf::size_type find_all_from_set(device_span<char const> data,
  */
 template <class T>
 cudf::size_type find_all_from_set(host_span<char const> data,
-                                  const std::vector<char>& keys,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream);
@@ -461,7 +461,7 @@ cudf::size_type count_all_from_set(device_span<char const> data,
  * @return cudf::size_type total number of occurrences
  */
 cudf::size_type count_all_from_set(host_span<char const> data,
-                                   const std::vector<char>& keys,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -516,8 +516,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @return The parsed numeric value
  */
 template <typename T, int base>
-__inline__ __device__ T decode_value(const char* begin,
-                                     const char* end,
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
                                      parse_options_view const& opts)
 {
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
@@ -533,8 +533,8 @@ __inline__ __device__ T decode_value(const char* begin,
  * @return The parsed numeric value
  */
 template <typename T, CUDF_ENABLE_IF(!cudf::is_timestamp<T>() and !cudf::is_duration<T>())>
-__inline__ __device__ T decode_value(const char* begin,
-                                     const char* end,
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
                                      parse_options_view const& opts)
 {
   return cudf::io::parse_numeric<T>(begin, end, opts);
@@ -569,7 +569,7 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex = false)
   {
@@ -594,7 +594,7 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
@@ -615,7 +615,7 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
@@ -639,7 +639,7 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
@@ -659,7 +659,7 @@ struct ConvertFunctor {
                                                       char const* end,
                                                       void* out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      data_type const output_type,
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
