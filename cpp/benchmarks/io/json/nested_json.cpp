@@ -65,6 +65,7 @@ void BM_NESTED_JSON(nvbench::state& state)
   cudf::rmm_pool_raii rmm_pool;
 
   auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const default_options = cudf::io::json_reader_options{};
 
   auto input = make_test_json_data(string_size, cudf::default_stream_value);
   state.add_element_count(input.size());
@@ -73,7 +74,7 @@ void BM_NESTED_JSON(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
-    cudf::io::json::detail::parse_nested_json(input, cudf::default_stream_value);
+    cudf::io::json::detail::parse_nested_json(input, default_options, cudf::default_stream_value);
   });
 }
 
