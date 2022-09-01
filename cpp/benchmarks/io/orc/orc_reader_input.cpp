@@ -18,7 +18,7 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/io/orc.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -27,55 +27,6 @@
 
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
-
-enum class data_type : int32_t {
-  INTEGRAL  = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
-  FLOAT     = static_cast<int32_t>(type_group_id::FLOATING_POINT),
-  DECIMAL   = static_cast<int32_t>(type_group_id::FIXED_POINT),
-  TIMESTAMP = static_cast<int32_t>(type_group_id::TIMESTAMP),
-  STRING    = static_cast<int32_t>(cudf::type_id::STRING),
-  LIST      = static_cast<int32_t>(cudf::type_id::LIST),
-  STRUCT    = static_cast<int32_t>(cudf::type_id::STRUCT)
-};
-
-// NVBENCH_DECLARE_ENUM_TYPE_STRINGS macro must be used from global namespace scope
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  data_type,
-  [](data_type value) {
-    switch (value) {
-      case data_type::INTEGRAL: return "INTEGRAL";
-      case data_type::FLOAT: return "FLOAT";
-      case data_type::DECIMAL: return "DECIMAL";
-      case data_type::TIMESTAMP: return "TIMESTAMP";
-      case data_type::STRING: return "STRING";
-      case data_type::LIST: return "LIST";
-      case data_type::STRUCT: return "STRUCT";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::io::io_type,
-  [](auto value) {
-    switch (value) {
-      case cudf::io::io_type::FILEPATH: return "FILEPATH";
-      case cudf::io::io_type::HOST_BUFFER: return "HOST_BUFFER";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::io::compression_type,
-  [](auto value) {
-    switch (value) {
-      case cudf::io::compression_type::SNAPPY: return "SNAPPY";
-      case cudf::io::compression_type::NONE: return "NONE";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
 
 void orc_read_common(cudf::io::orc_writer_options const& opts,
                      cuio_source_sink_pair& source_sink,
@@ -133,7 +84,7 @@ void BM_orc_read_io_compression(
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
                                          static_cast<int32_t>(data_type::TIMESTAMP),
@@ -158,7 +109,7 @@ void BM_orc_read_io_compression(
   orc_read_common(opts, source_sink, state);
 }
 
-using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
+using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
                                             data_type::FLOAT,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,
