@@ -343,7 +343,7 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             (not has_nested_nulls or not cudf::is_nested<Element>()))>
+                             (not has_nested_columns or not cudf::is_nested<Element>()))>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
                                                               size_type const) const noexcept
     {
@@ -351,7 +351,7 @@ class device_row_comparator {
     }
 
     template <typename Element,
-              CUDF_ENABLE_IF(has_nested_nulls and std::is_same_v<Element, cudf::struct_view>)>
+              CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
@@ -385,7 +385,7 @@ class device_row_comparator {
     }
 
     template <typename Element,
-              CUDF_ENABLE_IF(has_nested_nulls and std::is_same_v<Element, cudf::list_view>)>
+              CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                               size_type rhs_element_index)
     {
