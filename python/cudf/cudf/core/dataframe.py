@@ -12,7 +12,6 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from types import NotImplementedType
 from typing import (
     Any,
     Callable,
@@ -103,6 +102,11 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
+
+if sys.version_info < (3, 10):
+    NotImplementedType = Any
+else:
+    from types import NotImplementedType
 
 T = TypeVar("T", bound="DataFrame")
 

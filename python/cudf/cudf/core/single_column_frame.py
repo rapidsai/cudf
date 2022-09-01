@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+import sys
 import warnings
-from types import NotImplementedType
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -21,6 +21,12 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+
+if sys.version_info < (3, 10):
+    NotImplementedType = Any
+else:
+    from types import NotImplementedType
+
 
 T = TypeVar("T", bound="Frame")
 
