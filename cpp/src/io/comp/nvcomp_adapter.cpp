@@ -21,8 +21,6 @@
 
 #include <nvcomp/snappy.h>
 
-#include <fstream>
-
 #define NVCOMP_DEFLATE_HEADER <nvcomp/deflate.h>
 #if __has_include(NVCOMP_DEFLATE_HEADER)
 #include NVCOMP_DEFLATE_HEADER
