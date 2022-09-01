@@ -819,3 +819,32 @@ def test_memory_usage():
     assert s1.memory_usage() == 44
     s2 = cudf.Series([[[[1, 2]]], [[[3, 4]]]])
     assert s2.memory_usage() == 68
+
+
+@pytest.mark.parametrize(
+    "data, idx",
+    [
+        (
+            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": None}]],
+            0,
+        ),
+        (
+            [
+                [
+                    {"f2": {"a": 100, "c": 90, "f2": 10}, "f1": "a"},
+                    {"f1": "sf12", "f2": None},
+                ]
+            ],
+            0,
+        ),
+        (
+            [[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]],
+            0,
+        ),
+        ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2),
+    ],
+)
+def test_nested_list_extract_host_scalars(data, idx):
+    series = cudf.Series(data)
+
+    assert series[idx] == data[idx]
