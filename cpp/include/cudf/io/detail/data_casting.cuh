@@ -237,12 +237,9 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     int32_t hex_low_val = 0;
     if (thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
         *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
-      // Iterator that skips over '\' and 'u' chars (not yet advancing in_begin, as it may turn out
-      // to not be a surrogate pair)
-      auto low_surrogate_digit_it = thrust::next(thrust::next(in_begin));
-
-      // Try to parse hex value from what may be a UTF16 low surrogate
-      hex_low_val = parse_unicode_hex(low_surrogate_digit_it);
+      // Try to parse hex value following the '\' and 'u' characters from what may be a UTF16 low
+      // surrogate
+      hex_low_val = parse_unicode_hex(thrust::next(in_begin, 2));
     }
 
     // This is indeed a UTF16 surrogate pair

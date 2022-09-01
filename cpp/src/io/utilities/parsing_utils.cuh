@@ -563,8 +563,8 @@ struct ConvertFunctor {
    * @return bool Whether the parsed value is valid.
    */
   template <typename T,
-            std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
-                             !cudf::is_fixed_point<T>()>* = nullptr>
+            CUDF_ENABLE_IF(std::is_integral_v<T> and !std::is_same_v<T, bool> and
+                           !cudf::is_fixed_point<T>())>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
@@ -653,8 +653,8 @@ struct ConvertFunctor {
    * @brief Dispatch for remaining supported types, i.e., timestamp and duration types.
    */
   template <typename T,
-            std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
-                             !cudf::is_fixed_point<T>()>* = nullptr>
+            CUDF_ENABLE_IF(!std::is_integral_v<T> and !std::is_floating_point_v<T> and
+                           !cudf::is_fixed_point<T>())>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
