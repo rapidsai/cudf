@@ -9,11 +9,11 @@ jobs:
   libcudf-wheel:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
     with:
-      package-name: libcudf_cuda11
+      package-name: libcudf_cu11
       package-dir: cpp
       python-version: "3.8"
       cibw-before-all: "apt-get install -y libzstd-dev liblz4-dev libboost-regex-dev libboost-system-dev libboost-filesystem-dev libsnappy-dev libprotobuf-dev libprotoc-dev protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-before-build: "pip install rmm-cuda11 --index-url https://pypi.k8s.rapids.ai/simple"
+      cibw-before-build: "pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       skbuild-configure-options: '-DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DCUDF_ENABLE_ARROW_S3=OFF -DCUDF_ENABLE_ARROW_ORC=ON -DCUDF_ENABLE_ARROW_PYTHON=ON -DCUDF_ENABLE_ARROW_PARQUET=ON'
       auditwheel-skip-repair: "true"
       gpu-smoketest-before-amd64: "apt-get install -y libprotobuf-dev"
@@ -29,11 +29,11 @@ jobs:
       package-dir: python/cudf
       python-version: "3.8 3.9"
       cibw-before-all: "apt-get install -y protobuf-compiler && git clone https://github.com/dmlc/dlpack -b v0.5 /opt/dlpack && cp -r /opt/dlpack/include/dlpack /usr/include/dlpack && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-before-build: "protoc --proto_path={package}/cudf/utils/metadata --python_out={package}/cudf/utils/metadata {package}/cudf/utils/metadata/orc_column_statistics.proto && pip install rmm-cuda11 libcudf-cuda11 --index-url https://pypi.k8s.rapids.ai/simple"
+      cibw-before-build: "protoc --proto_path={package}/cudf/utils/metadata --python_out={package}/cudf/utils/metadata {package}/cudf/utils/metadata/orc_column_statistics.proto && pip install rmm-cu11 libcudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       skbuild-configure-options: "-DFIND_CUDF_CPP=ON"
       cibw-test-extras:  "test"
-      gpu-smoketest-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cuda11 --index-url https://pypi.k8s.rapids.ai/simple"
-      gpu-smoketest-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cuda11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      gpu-smoketest-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+      gpu-smoketest-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
       cibw-test-command: "pytest -v ./python/cudf/cudf/tests"
       gpu-smoketest: "import cudf, requests, numpy; from io import StringIO; url = 'https://github.com/plotly/datasets/raw/master/tips.csv'; content = requests.get(url).content.decode('utf-8'); tips_df = cudf.read_csv(StringIO(content)); tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100; mean_tips = tips_df.groupby('size').tip_percentage.mean(); print(mean_tips); print(mean_tips.iloc[0]); assert numpy.isclose(mean_tips.iloc[0], 15.622920); import pyarrow as pa; n_legs = pa.array([2, 4, 5, 100]); animals = pa.array(['Flamingo', 'Horse', 'Brittle stars', 'Centipede']); names = ['n_legs', 'animals']; print(animals); foo = pa.table([n_legs, animals], names=names); print(foo); import cudf; df = cudf.DataFrame.from_arrow(foo); print(df); print(df.loc[df['animals'] == 'Centipede']['n_legs']); assert df.loc[df['animals'] == 'Centipede']['n_legs'].iloc[0] == 100"
     secrets: inherit
@@ -43,7 +43,7 @@ jobs:
     with:
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      gpu-smoketest-before: "pip install rmm-cuda11 cudf-cuda11 --index-url https://pypi.k8s.rapids.ai/simple"
+      gpu-smoketest-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       cibw-test-extras:  "test"
       cibw-test-command: "pytest -v ./python/dask_cudf/dask_cudf/tests"
       gpu-smoketest: "import dask_cudf; print(dask_cudf)"
