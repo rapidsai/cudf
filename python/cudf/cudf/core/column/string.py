@@ -3650,7 +3650,12 @@ class StringMethods(ColumnMethods):
         4    False
         dtype: bool
         """
-        return self._return_or_inplace((self._column == "").fillna(False))
+        return self._return_or_inplace(
+            # mypy can't deduce that the return value of
+            # StringColumn.__eq__ is ColumnBase because the binops are
+            # dynamically added by a mixin class
+            (self._column == "").fillna(False)  # type: ignore
+        )
 
     def isspace(self) -> SeriesOrIndex:
         r"""

@@ -9,6 +9,7 @@ import textwrap
 import warnings
 from collections import Counter, abc
 from functools import cached_property
+from types import NotImplementedType
 from typing import (
     Any,
     Callable,
@@ -2991,7 +2992,7 @@ class IndexedFrame(Frame):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[cudf.BaseIndex],
     ]:

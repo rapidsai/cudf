@@ -8,7 +8,8 @@ import pickle
 import textwrap
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
+from types import NotImplementedType
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
 import numpy as np
@@ -1289,7 +1290,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:

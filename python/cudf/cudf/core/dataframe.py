@@ -12,6 +12,7 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
+from types import NotImplementedType
 from typing import (
     Any,
     Callable,
@@ -21,7 +22,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -1934,7 +1934,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:

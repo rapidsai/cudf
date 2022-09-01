@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
+from types import NotImplementedType
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -302,7 +303,7 @@ class SingleColumnFrame(Frame, NotIterable):
         **kwargs,
     ) -> Union[
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-        Type[NotImplemented],
+        NotImplementedType,
     ]:
         """Generate the dictionary of operands used for a binary operation.
 
