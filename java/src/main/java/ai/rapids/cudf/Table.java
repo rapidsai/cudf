@@ -4128,7 +4128,8 @@ public final class Table implements AutoCloseable {
           groupByOptions.getKeysNullSmallest(),
           false) // not generate uniq key table
       ) {
-        return ret.takeOverGroups();
+        // take the ownership of the `groups` in ContigSplitGroupByResult
+        return ret.releaseGroups();
       }
     }
 
