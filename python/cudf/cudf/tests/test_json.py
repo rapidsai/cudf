@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -575,12 +576,6 @@ def test_default_float_bitwidth(default_float_bitwidth):
     assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
 
 
-def test_json_experimental():
-    # should raise an exception, for now
-    with pytest.raises(RuntimeError):
-        cudf.read_json("", engine="cudf_experimental")
-
-
 def test_json_nested_basic(tmpdir):
     fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_basic")
     data = {
@@ -594,3 +589,32 @@ def test_json_nested_basic(tmpdir):
     pdf = pd.read_json(fname, orient="records")
 
     assert_eq(pdf, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+            "c2": [["l11", "l21"], ["l12", "l22"]],
+        },
+        # Essential test case to handle omissions
+        {
+            "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
+            "c2": [["l11", "l21"], []],
+        },
+    ],
+)
+def test_json_nested_lines(data):
+    bytes = BytesIO()
+    pdf = pd.DataFrame(data)
+    pdf.to_json(bytes, orient="records", lines=True)
+    bytes.seek(0)
+    df = cudf.read_json(
+        bytes, engine="cudf_experimental", orient="records", lines=True
+    )
+    bytes.seek(0)
+    pdf = pd.read_json(bytes, orient="records", lines=True)
+    # In the second test-case:
+    # Pandas omits "f1" in first row, so we have to enforce a common schema
+    assert df.to_arrow().equals(pa.Table.from_pandas(pdf))

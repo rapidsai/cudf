@@ -123,7 +123,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool:
         """
         Whether the categories have an ordered relationship.
         """
@@ -729,7 +729,7 @@ class CategoricalColumn(column.ColumnBase):
         return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool:
         return self.dtype.ordered
 
     @ordered.setter
