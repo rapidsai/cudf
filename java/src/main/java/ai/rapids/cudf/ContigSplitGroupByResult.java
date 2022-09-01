@@ -24,7 +24,7 @@ package ai.rapids.cudf;
  * 1: Use `closeGroups` and `closeUniqKeyTable` to close the resources separately
  * if you want to close eagerly.
  * 2: Or auto close them by `AutoCloseable`
- * Use `releaseGroups` to take over the ownership of the `groups`,
+ * Use `releaseGroups` to release the ownership of the `groups` to the caller
  * then the caller is responsible to close the `groups`
  */
 public class ContigSplitGroupByResult implements AutoCloseable {
@@ -79,7 +79,7 @@ public class ContigSplitGroupByResult implements AutoCloseable {
   }
 
   /**
-   * Take over the ownership of the `groups`
+   * Release the ownership of the `groups`
    * The caller is responsible to close the returned groups.
    *
    * @return split group tables
