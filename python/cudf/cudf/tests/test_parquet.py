@@ -1564,6 +1564,27 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
     assert_eq(cudf.read_parquet(fname), gdf)
 
 
+def test_parquet_writer_column_index(tmpdir):
+    # Simple test for presence of indices. validity is checked
+    # in libcudf tests.
+    # Write 2 files, one with column index set, one without.
+    # Make sure the former is larger in size.
+
+    size = 20000
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
+
+    fname = tmpdir.join("gdf.parquet")
+    with ParquetWriter(fname, statistics="ROWGROUP") as writer:
+        writer.write_table(gdf)
+    s1 = os.path.getsize(fname)
+
+    fname = tmpdir.join("gdfi.parquet")
+    with ParquetWriter(fname, statistics="COLUMN") as writer:
+        writer.write_table(gdf)
+    s2 = os.path.getsize(fname)
+    assert s2 > s1
+
+
 @pytest.mark.parametrize(
     "max_page_size_kwargs",
     [
