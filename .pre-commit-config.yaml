@@ -30,7 +30,17 @@ repos:
         hooks:
               - id: mypy
                 additional_dependencies: [types-cachetools==5.2.1]
-                args: ["--config-file=setup.cfg", "--explicit-package-bases", "--namespace-packages", "python/cudf/cudf", "python/dask_cudf/dask_cudf", "python/custreamz/custreamz", "python/cudf_kafka/cudf_kafka"]
+                args: ["--config-file=setup.cfg",
+                       "--exclude", "python/cudf/benchmarks",
+                       "--exclude", "python/cudf/cudf/tests",
+                       "--exclude", "python/dask_cudf/dask_cudf/tests",
+                       "--exclude", "python/custreamz/custreamz/tests",
+                       "--exclude", "python/cudf_kafka/cudf_kafka/tests",
+                       "--exclude", "python/cudf/cudf/_lib",
+                       "python/cudf/cudf",
+                       "python/dask_cudf/dask_cudf",
+                       "python/custreamz/custreamz",
+                       "python/cudf_kafka/cudf_kafka"]
                 pass_filenames: false
       - repo: https://github.com/PyCQA/pydocstyle
         rev: 6.1.1
