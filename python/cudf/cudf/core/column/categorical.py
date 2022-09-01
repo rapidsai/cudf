@@ -1152,7 +1152,6 @@ class CategoricalColumn(column.ColumnBase):
                 fill_value = column.as_column(fill_value, nan_as_null=False)
                 if isinstance(fill_value, CategoricalColumn):
                     if self.dtype != fill_value.dtype:
-                        breakpoint()
                         raise TypeError(
                             "Cannot set a Categorical with another, "
                             "without identical categories"
