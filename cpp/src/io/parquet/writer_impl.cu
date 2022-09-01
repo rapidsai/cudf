@@ -1242,6 +1242,18 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
+size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
+{
+  if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
+
+  auto const ncomp_type   = to_nvcomp_compression_type(compression);
+  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
+                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
+                              : std::nullopt;
+
+  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+}
+
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
@@ -1249,11 +1261,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    compression_(to_parquet_compression(options.get_compression())),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    max_page_size_bytes(options.get_max_page_size_bytes()),
+    max_page_size_bytes(max_page_bytes(compression_, options.get_max_page_size_bytes())),
     max_page_size_rows(options.get_max_page_size_rows()),
-    compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -1261,9 +1273,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
-  if (options.get_compression() == compression_type::ZSTD) {
-    max_page_size_bytes = std::min(max_page_size_bytes, 64 * 1024ul);
-  }
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -1277,11 +1286,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    compression_(to_parquet_compression(options.get_compression())),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    max_page_size_bytes(options.get_max_page_size_bytes()),
+    max_page_size_bytes(max_page_bytes(compression_, options.get_max_page_size_bytes())),
     max_page_size_rows(options.get_max_page_size_rows()),
-    compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -1289,9 +1298,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
-  if (options.get_compression() == compression_type::ZSTD) {
-    max_page_size_bytes = std::min(max_page_size_bytes, 64 * 1024ul);
-  }
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
