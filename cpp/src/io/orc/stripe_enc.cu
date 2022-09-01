@@ -17,13 +17,15 @@
 #include "orc_common.hpp"
 #include "orc_gpu.hpp"
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
+
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
@@ -1147,6 +1149,7 @@ __global__ void __launch_bounds__(1024)
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
+ * @param[in] block_align Required alignment for uncompressed blocks
  */
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256)
@@ -1157,10 +1160,14 @@ __global__ void __launch_bounds__(256)
                            device_span<compression_result> statuses,
                            uint8_t* compressed_bfr,
                            uint32_t comp_blk_size,
-                           uint32_t max_comp_blk_size)
+                           uint32_t max_comp_blk_size,
+                           uint32_t block_align)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ uint8_t* volatile uncomp_base_g;
+
+  auto const padded_block_header_size = util::round_up_unsafe(block_header_size, block_align);
+  auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, block_align);
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
@@ -1178,8 +1185,8 @@ __global__ void __launch_bounds__(256)
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    inputs[ss.first_block + b] = {src + b * comp_blk_size, blk_size};
-    auto const dst_offset = b * compressed_block_size(max_comp_blk_size) + padded_block_header_size;
+    inputs[ss.first_block + b]   = {src + b * comp_blk_size, blk_size};
+    auto const dst_offset        = b * padded_comp_block_size + padded_block_header_size;
     outputs[ss.first_block + b]  = {dst + dst_offset, max_comp_blk_size};
     statuses[ss.first_block + b] = {0, compression_status::FAILURE};
   }
@@ -1308,6 +1315,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
                             uint32_t max_comp_blk_size,
+                            uint32_t block_align,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
                             device_span<compression_result> comp_stat,
@@ -1325,11 +1333,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                                                                             comp_stat,
                                                                             compressed_data,
                                                                             comp_blk_size,
-                                                                            max_comp_blk_size);
+                                                                            max_comp_blk_size,
+                                                                            block_align);
 
   if (compression == SNAPPY) {
     try {
-      if (detail::nvcomp_integration::is_stable_enabled()) {
+      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_stat, stream);
       } else {
@@ -1345,10 +1354,12 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
       // writing without compression
     }
-  } else if (compression == ZLIB and detail::nvcomp_integration::is_all_enabled()) {
+  } else if (compression == ZLIB and
+             nvcomp::is_compression_enabled(nvcomp::compression_type::DEFLATE)) {
     nvcomp::batched_compress(
       nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_stat, stream);
-  } else if (compression == ZSTD and detail::nvcomp_integration::is_all_enabled()) {
+  } else if (compression == ZSTD and
+             nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
     nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_stat, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");

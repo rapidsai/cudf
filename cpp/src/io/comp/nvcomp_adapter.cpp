@@ -293,6 +293,16 @@ size_t batched_compress_max_output_chunk_size(compression_type compression,
   return max_comp_chunk_size;
 }
 
+size_t compress_input_alignment_bits(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return 8;
+    case compression_type::SNAPPY: return 0;
+    case compression_type::ZSTD: return 2;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
 // Dispatcher for nvcompBatched<format>CompressAsync
 static void batched_compress_async(compression_type compression,
                                    const void* const* device_uncompressed_ptrs,
@@ -393,6 +403,16 @@ void batched_compress(compression_type compression,
                          stream.value());
 
   update_compression_results(actual_compressed_data_sizes, statuses, stream);
+}
+
+bool is_compression_enabled(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return detail::nvcomp_integration::is_all_enabled();
+    case compression_type::SNAPPY: return detail::nvcomp_integration::is_stable_enabled();
+    case compression_type::ZSTD: return detail::nvcomp_integration::is_all_enabled();
+    default: return false;
+  }
 }
 
 }  // namespace cudf::io::nvcomp

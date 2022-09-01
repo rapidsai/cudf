@@ -348,6 +348,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
+ * @param[in] block_align Required alignment for uncompressed blocks
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_stat Per-block compression status
@@ -358,6 +359,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
                             uint32_t max_comp_blk_size,
+                            uint32_t block_align,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
                             device_span<compression_result> comp_stat,

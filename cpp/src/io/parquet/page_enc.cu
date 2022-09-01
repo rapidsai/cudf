@@ -217,8 +217,6 @@ __global__ void __launch_bounds__(128)
   if (frag_id < num_fragments_per_column and lane_id == 0) groups[column_id][frag_id] = *g;
 }
 
-constexpr size_t nvcomp_pad(size_t size) { return (size + 3) & ~3; }
-
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
@@ -230,7 +228,8 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group* chunk_grstats,
                int32_t num_columns,
                size_t max_page_size_bytes,
-               size_type max_page_size_rows)
+               size_type max_page_size_rows,
+               uint32_t page_align)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -286,7 +285,8 @@ __global__ void __launch_bounds__(128)
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
-        page_offset += nvcomp_pad(page_g.max_hdr_size + page_g.max_data_size);
+        page_offset +=
+          util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
         if (not comp_page_sizes.empty()) {
           comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
         }
@@ -363,7 +363,7 @@ __global__ void __launch_bounds__(128)
             page_g.max_hdr_size += stats_hdr_len;
           }
           // pad max_hdr_size
-          page_g.max_hdr_size = nvcomp_pad(page_g.max_hdr_size);
+          page_g.max_hdr_size = util::round_up_unsafe(page_g.max_hdr_size, page_align);
           page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
@@ -388,7 +388,8 @@ __global__ void __launch_bounds__(128)
 
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
-          page_offset += nvcomp_pad(page_g.max_hdr_size + page_g.max_data_size);
+          page_offset +=
+            util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
           if (not comp_page_sizes.empty()) {
             comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page + num_pages];
           }
@@ -426,7 +427,7 @@ __global__ void __launch_bounds__(128)
     __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
-        uint32_t ck_stat_size = nvcomp_pad(48 + 2 * ck_max_stats_len);
+        uint32_t ck_stat_size = util::round_up_unsafe(48 + 2 * ck_max_stats_len, page_align);
         page_offset += ck_stat_size;
         comp_page_offset += ck_stat_size;
         ck_g.ck_stat_size = ck_stat_size;
@@ -2044,6 +2045,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
+                      uint32_t page_align,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
@@ -2059,7 +2061,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      chunk_grstats,
                                                      num_columns,
                                                      max_page_size_bytes,
-                                                     max_page_size_rows);
+                                                     max_page_size_rows,
+                                                     page_align);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,

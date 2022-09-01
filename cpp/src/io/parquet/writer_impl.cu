@@ -917,6 +917,16 @@ auto to_nvcomp_compression_type(Compression codec)
   CUDF_FAIL("Unsupported compression type");
 }
 
+auto page_alignment(Compression codec)
+{
+  if (codec == Compression::UNCOMPRESSED or
+      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(codec))) {
+    return 1u;
+  }
+
+  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(codec));
+}
+
 size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
 {
   if (codec == Compression::UNCOMPRESSED) return 0;
@@ -945,6 +955,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         num_columns,
                         max_page_size_bytes,
                         max_page_size_rows,
+                        page_alignment(compression_codec),
                         nullptr,
                         nullptr,
                         stream);
@@ -968,6 +979,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         num_columns,
                         max_page_size_bytes,
                         max_page_size_rows,
+                        page_alignment(compression_codec),
                         nullptr,
                         nullptr,
                         stream);
@@ -992,6 +1004,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         num_columns,
                         max_page_size_bytes,
                         max_page_size_rows,
+                        page_alignment(compression_codec),
                         nullptr,
                         nullptr,
                         stream);
@@ -1110,6 +1123,7 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
+                   page_alignment(compression_),
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    stream);
@@ -1160,7 +1174,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      if (nvcomp_integration::is_stable_enabled()) {
+      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_stats, stream);
       } else {
@@ -1168,7 +1182,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
       }
       break;
     case parquet::Compression::ZSTD:
-      if (nvcomp_integration::is_all_enabled()) {
+      if (nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
         nvcomp::batched_compress(
           nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_stats, stream);
       }

@@ -27,6 +27,16 @@ namespace cudf::io::nvcomp {
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 
 /**
+ * @brief Whether the given compression type is enabled through nvCOMP.
+ *
+ * Result depends on nvCOMP version and environment variables.
+ *
+ * @param compression Compression type
+ * @returns true if nvCOMP use is enabled; false otherwise
+ */
+[[nodiscard]] bool is_compression_enabled(compression_type compression);
+
+/**
  * @brief Device batch decompression of given type.
  *
  * @param[in] compression Compression type
@@ -51,8 +61,16 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @param max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
  */
-size_t batched_compress_max_output_chunk_size(compression_type compression,
-                                              uint32_t max_uncomp_chunk_size);
+[[nodiscard]] size_t batched_compress_max_output_chunk_size(compression_type compression,
+                                                            uint32_t max_uncomp_chunk_size);
+
+/**
+ * @brief Gets input alignment requirements for the given compression type.
+ *
+ * @param compression Compression type
+ * @returns required alignment, in bits
+ */
+[[nodiscard]] size_t compress_input_alignment_bits(compression_type compression);
 
 /**
  * @brief Device batch compression of given type.
