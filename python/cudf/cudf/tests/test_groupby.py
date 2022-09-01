@@ -699,7 +699,8 @@ def test_advanced_groupby_levels():
         pytest.param(
             lambda df: df.groupby(["x", "y", "z"]).sum(),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/32464"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/32464",
             ),
         ),
         lambda df: df.groupby(["x", "y"]).sum(),

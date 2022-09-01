@@ -13,6 +13,7 @@ import pytest
 
 import cudf
 from cudf import Series
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
@@ -1561,7 +1562,8 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
         pytest.param(
             "nanoseconds",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36589"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/36589",
             ),
         ),
     ],
@@ -1668,7 +1670,8 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
         pytest.param(
             "nanoseconds",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36589"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/36589",
             ),
         ),
     ],
