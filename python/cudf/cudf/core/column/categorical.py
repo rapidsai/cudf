@@ -1152,6 +1152,7 @@ class CategoricalColumn(column.ColumnBase):
                 fill_value = column.as_column(fill_value, nan_as_null=False)
                 if isinstance(fill_value, CategoricalColumn):
                     if self.dtype != fill_value.dtype:
+                        breakpoint()
                         raise TypeError(
                             "Cannot set a Categorical with another, "
                             "without identical categories"
@@ -1316,7 +1317,9 @@ class CategoricalColumn(column.ColumnBase):
         head = next((obj for obj in objs if obj.valid_count), objs[0])
 
         # Combine and de-dupe the categories
-        cats = column.concat_columns([o.categories for o in objs]).unique()
+        cats = column.concat_columns(
+            [o.categories for o in objs]
+        )._dedup_preserve_order()
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
         codes = [o.codes for o in objs]
 
