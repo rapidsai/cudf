@@ -931,8 +931,7 @@ size_t max_compression_output_size(Compression codec, uint32_t compression_block
 {
   if (codec == Compression::UNCOMPRESSED) return 0;
 
-  return batched_compress_max_output_chunk_size(to_nvcomp_compression_type(codec),
-                                                compression_blocksize);
+  return compress_max_output_chunk_size(to_nvcomp_compression_type(codec), compression_blocksize);
 }
 
 auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,

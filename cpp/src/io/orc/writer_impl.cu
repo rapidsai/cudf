@@ -85,7 +85,18 @@ template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 /**
- * @brief Function that translates GDF compression to ORC compression
+ * @brief Translates ORC compression to nvCOMP compression
+ */
+auto to_nvcomp_compression_type(CompressionKind compression_kind)
+{
+  if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
+  if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
+  if (compression_kind == ZSTD) return nvcomp::compression_type::ZSTD;
+  CUDF_FAIL("Unsupported compression type");
+}
+
+/**
+ * @brief Translates cuDF compression to ORC compression
  */
 orc::CompressionKind to_orc_compression(compression_type compression)
 {
@@ -95,27 +106,28 @@ orc::CompressionKind to_orc_compression(compression_type compression)
     case compression_type::ZLIB: return orc::CompressionKind::ZLIB;
     case compression_type::ZSTD: return orc::CompressionKind::ZSTD;
     case compression_type::NONE: return orc::CompressionKind::NONE;
-    default: CUDF_FAIL("Unsupported compression type"); return orc::CompressionKind::NONE;
+    default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
 /**
  * @brief Returns the block size for a given compression kind.
- *
- * The nvCOMP ZLIB compression is limited to blocks up to 64KiB.
  */
 constexpr size_t compression_block_size(orc::CompressionKind compression)
 {
-  switch (compression) {
-    case orc::CompressionKind::NONE: return 0;
-    case orc::CompressionKind::ZLIB: return 64 * 1024;
-    case orc::CompressionKind::ZSTD: return 64 * 1024;
-    default: return 256 * 1024;
-  }
+  if (compression == orc::CompressionKind::NONE) { return 0; }
+
+  auto const ncomp_type   = to_nvcomp_compression_type(compression);
+  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
+                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
+                              : std::nullopt;
+
+  constexpr size_t max_block_size = 256 * 1024;
+  return std::min(nvcomp_limit.value_or(max_block_size), max_block_size);
 }
 
 /**
- * @brief Function that translates GDF dtype to ORC datatype
+ * @brief Translates cuDF dtype to ORC datatype
  */
 constexpr orc::TypeKind to_orc_type(cudf::type_id id, bool list_column_as_map)
 {
@@ -520,14 +532,6 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
              (gpu::encode_block_size * max_varint_size<int64_t>() + 2);
     default: CUDF_FAIL("Unsupported ORC type for RLE stream size");
   }
-}
-
-auto to_nvcomp_compression_type(CompressionKind compression_kind)
-{
-  if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
-  if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
-  if (compression_kind == ZSTD) return nvcomp::compression_type::ZSTD;
-  CUDF_FAIL("Unsupported compression type");
 }
 
 auto block_alignment(CompressionKind compression_kind)
@@ -2041,8 +2045,8 @@ size_t max_compression_output_size(CompressionKind compression_kind, uint32_t co
 {
   if (compression_kind == NONE) return 0;
 
-  return batched_compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
-                                                compression_blocksize);
+  return compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
+                                        compression_blocksize);
 }
 
 void writer::impl::persisted_statistics::persist(int num_table_rows,

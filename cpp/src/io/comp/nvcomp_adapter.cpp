@@ -240,27 +240,12 @@ auto batched_compress_temp_size(compression_type compression,
   return temp_size;
 }
 
-std::optional<size_t> max_allowed_chunk_size(compression_type compression)
+size_t compress_max_output_chunk_size(compression_type compression,
+                                      uint32_t max_uncompressed_chunk_bytes)
 {
-  switch (compression) {
-    case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      return nvcompZstdMaxAllowedChunkSize;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
-    case compression_type::SNAPPY: return std::nullopt;
-    case compression_type::DEFLATE: return std::nullopt;
-    default: return std::nullopt;
-  }
-}
-
-size_t batched_compress_max_output_chunk_size(compression_type compression,
-                                              uint32_t max_uncompressed_chunk_bytes)
-{
-  auto const capped_uncomp_bytes =
-    std::min<size_t>(max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
-                     max_uncompressed_chunk_bytes);
+  auto const capped_uncomp_bytes = std::min<size_t>(
+    compress_max_allowed_chunk_size(compression).value_or(max_uncompressed_chunk_bytes),
+    max_uncompressed_chunk_bytes);
 
   size_t max_comp_chunk_size = 0;
   nvcompStatus_t status      = nvcompStatus_t::nvcompSuccess;
@@ -291,16 +276,6 @@ size_t batched_compress_max_output_chunk_size(compression_type compression,
   CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
                "failed to get max uncompressed chunk size");
   return max_comp_chunk_size;
-}
-
-size_t compress_input_alignment_bits(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::DEFLATE: return 8;
-    case compression_type::SNAPPY: return 0;
-    case compression_type::ZSTD: return 2;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
 }
 
 // Dispatcher for nvcompBatched<format>CompressAsync
@@ -368,8 +343,7 @@ static void batched_compress_async(compression_type compression,
 
 inline bool is_aligned(const void* ptr, std::uintptr_t alignment) noexcept
 {
-  auto iptr = reinterpret_cast<std::uintptr_t>(ptr);
-  return !(iptr % alignment);
+  return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
 
 void batched_compress(compression_type compression,
@@ -383,7 +357,7 @@ void batched_compress(compression_type compression,
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
   auto const max_uncomp_chunk_size = skip_unsupported_inputs(
-    nvcomp_args.input_data_sizes, statuses, max_allowed_chunk_size(compression), stream);
+    nvcomp_args.input_data_sizes, statuses, compress_max_allowed_chunk_size(compression), stream);
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);

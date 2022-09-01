@@ -18,6 +18,7 @@
 
 #include "gpuinflate.hpp"
 
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -61,8 +62,8 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @param max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
  */
-[[nodiscard]] size_t batched_compress_max_output_chunk_size(compression_type compression,
-                                                            uint32_t max_uncomp_chunk_size);
+[[nodiscard]] size_t compress_max_output_chunk_size(compression_type compression,
+                                                    uint32_t max_uncomp_chunk_size);
 
 /**
  * @brief Gets input alignment requirements for the given compression type.
@@ -70,7 +71,37 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @returns required alignment, in bits
  */
-[[nodiscard]] size_t compress_input_alignment_bits(compression_type compression);
+[[nodiscard]] constexpr size_t compress_input_alignment_bits(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return 8;
+    case compression_type::SNAPPY: return 0;
+    case compression_type::ZSTD: return 2;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+/**
+ * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP.
+ *
+ * @param compression Compression type
+ * @returns maximum chunk size
+ */
+[[nodiscard]] constexpr std::optional<size_t> compress_max_allowed_chunk_size(
+  compression_type compression)
+{
+  switch (compression) {
+    case compression_type::ZSTD:
+#if NVCOMP_HAS_ZSTD_COMP
+      return nvcompZstdMaxAllowedChunkSize;
+#else
+      CUDF_FAIL("Unsupported compression type");
+#endif
+    case compression_type::SNAPPY: return std::nullopt;
+    case compression_type::DEFLATE: return 64 * 1024;
+    default: return std::nullopt;
+  }
+}
 
 /**
  * @brief Device batch compression of given type.
