@@ -71,15 +71,7 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @returns required alignment, in bits
  */
-[[nodiscard]] constexpr size_t compress_input_alignment_bits(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::DEFLATE: return 8;
-    case compression_type::SNAPPY: return 0;
-    case compression_type::ZSTD: return 2;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
+[[nodiscard]] size_t compress_input_alignment_bits(compression_type compression);
 
 /**
  * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP.
@@ -87,21 +79,7 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @returns maximum chunk size
  */
-[[nodiscard]] constexpr std::optional<size_t> compress_max_allowed_chunk_size(
-  compression_type compression)
-{
-  switch (compression) {
-    case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      return nvcompZstdMaxAllowedChunkSize;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
-    case compression_type::SNAPPY: return std::nullopt;
-    case compression_type::DEFLATE: return 64 * 1024;
-    default: return std::nullopt;
-  }
-}
+[[nodiscard]] std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression);
 
 /**
  * @brief Device batch compression of given type.
