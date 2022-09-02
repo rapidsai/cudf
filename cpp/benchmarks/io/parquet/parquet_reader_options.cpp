@@ -25,7 +25,8 @@
 
 #include <nvbench/nvbench.cuh>
 
-constexpr size_t data_size = 512 << 20;
+constexpr std::size_t data_size      = 512 << 20;
+constexpr std::size_t row_group_size = 128 << 20;
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
@@ -42,20 +43,20 @@ void BM_parquet_read_options(nvbench::state& state,
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto constexpr num_chunks          = 1;
   auto constexpr str_to_categories   = true;
   auto constexpr use_pandas_metadata = true;
 
   auto const ts_type = cudf::data_type{Timestamp};
 
-  // No nested types here, because of https://github.com/rapidsai/cudf/issues/9970
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),
                                                    static_cast<int32_t>(data_type::DECIMAL),
                                                    static_cast<int32_t>(data_type::TIMESTAMP),
                                                    static_cast<int32_t>(data_type::DURATION),
-                                                   static_cast<int32_t>(data_type::STRING)}),
+                                                   static_cast<int32_t>(data_type::STRING),
+                                                   static_cast<int32_t>(data_type::LIST),
+                                                   static_cast<int32_t>(data_type::STRUCT)}),
                                 ColSelection);
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -74,7 +75,9 @@ void BM_parquet_read_options(nvbench::state& state,
       .use_pandas_metadata(use_pandas_metadata)
       .timestamp_type(ts_type);
 
-  auto const num_row_groups = data_size / (128 << 20);
+  // TODO: add read_parquet_metadata to properly calculate #row_groups
+  auto constexpr num_row_groups = data_size / row_group_size;
+  auto constexpr num_chunks     = 1;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
@@ -125,7 +128,8 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                                       nvbench::enum_type_list<row_selection::ALL>,
                                       nvbench::enum_type_list<cudf::type_id::EMPTY>))
   .set_name("parquet_read_column_selection")
-  .set_type_axes_names({"column_selection", "row_selection", "timestamp_type"});
+  .set_type_axes_names({"column_selection", "row_selection", "timestamp_type"})
+  .set_min_samples(4);
 
 // row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file and
 // determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
