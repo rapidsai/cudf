@@ -2924,7 +2924,7 @@ class StringMethods(ColumnMethods):
             Equivalent to ``Series.str.pad(side='right')``.
 
         center
-            Fills boths sides of strings with an arbitrary character.
+            Fills both sides of strings with an arbitrary character.
             Equivalent to ``Series.str.pad(side='both')``.
 
         zfill
@@ -2984,6 +2984,9 @@ class StringMethods(ColumnMethods):
         width. Strings in the Series/Index with length greater
         or equal to width are unchanged.
 
+        The sign character is preserved if it appears in the first
+        position of the string.
+
         Parameters
         ----------
         width : int
@@ -3008,13 +3011,7 @@ class StringMethods(ColumnMethods):
             Fills the specified sides of strings with an arbitrary character.
 
         center
-            Fills boths sides of strings with an arbitrary character.
-
-        Notes
-        -----
-        Differs from `str.zfill()
-        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
-        which has special handling for ‘+’/’-‘ in the string.
+            Fills both sides of strings with an arbitrary character.
 
         Examples
         --------
@@ -3028,15 +3025,11 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         Note that ``None`` is not string, therefore it is converted
-        to ``None``. The minus sign in ``'-1'`` is treated as a
-        regular character and the zero is added to the left
-        of it (`str.zfill()
-        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
-        would have moved it to the left). ``1000`` remains unchanged as
+        to ``None``. ``1000`` remains unchanged as
         it is longer than width.
 
         >>> s.str.zfill(3)
-        0     0-1
+        0     -01
         1     001
         2    1000
         3    <NA>
@@ -3584,38 +3577,38 @@ class StringMethods(ColumnMethods):
         The search for the pattern ‘Monkey’ returns one match:
 
         >>> s.str.findall('Monkey')
-                0
-        0    <NA>
-        1  Monkey
-        2    <NA>
+        0          []
+        1    [Monkey]
+        2          []
+        dtype: list
 
         When the pattern matches more than one string
         in the Series, all matches are returned:
 
         >>> s.str.findall('on')
-              0
-        0    on
-        1    on
-        2  <NA>
+        0    [on]
+        1    [on]
+        2      []
+        dtype: list
 
         Regular expressions are supported too. For instance,
         the search for all the strings ending with
         the word ‘on’ is shown next:
 
         >>> s.str.findall('on$')
-              0
-        0    on
-        1  <NA>
-        2  <NA>
+        0    [on]
+        1      []
+        2      []
+        dtype: list
 
         If the pattern is found more than once in the same
-        string, then multiple strings are returned as columns:
+        string, then multiple strings are returned:
 
         >>> s.str.findall('b')
-              0     1
-        0  <NA>  <NA>
-        1  <NA>  <NA>
-        2     b     b
+        0        []
+        1        []
+        2    [b, b]
+        dtype: list
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -3625,7 +3618,7 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data = libstrings.findall_record(self._column, pat, flags)
+        data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:

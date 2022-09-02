@@ -228,7 +228,7 @@ partition_file_name : str, optional, default None
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``
-statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
     Level at which column statistics should be included in file.
 metadata_file_path : str, optional, default None
     If specified, this function will return a binary blob containing the footer

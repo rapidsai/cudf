@@ -454,7 +454,7 @@ cdef class ParquetWriter:
         index(es) other than RangeIndex will be saved as columns.
     compression : {'snappy', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
-    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
     row_group_size_bytes: int, default 134217728
         Maximum size of each stripe of the output.
@@ -659,6 +659,8 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
         return cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
     elif statistics == "PAGE":
         return cudf_io_types.statistics_freq.STATISTICS_PAGE
+    elif statistics == "COLUMN":
+        return cudf_io_types.statistics_freq.STATISTICS_COLUMN
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 

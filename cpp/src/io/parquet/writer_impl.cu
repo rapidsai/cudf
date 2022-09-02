@@ -248,17 +248,15 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::INT_32;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+    col_schema.type        = Type::INT32;
+    col_schema.stats_dtype = statistics_dtype::dtype_int32;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::INT_64;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>

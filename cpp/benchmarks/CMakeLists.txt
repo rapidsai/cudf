@@ -240,11 +240,7 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
-
-# ##################################################################################################
-# * orc writer chunks benchmark ---------------------------------------------------------------
-ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
+ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
@@ -297,6 +293,7 @@ ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
+ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
