@@ -228,7 +228,7 @@ partition_file_name : str, optional, default None
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``
-statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
     Level at which column statistics should be included in file.
 metadata_file_path : str, optional, default None
     If specified, this function will return a binary blob containing the footer
@@ -442,7 +442,10 @@ stripe_size_rows: integer or None, default None
 row_index_stride: integer or None, default None
     Row index stride (maximum number of rows in each row group).
     If None, 10000 will be used.
-
+cols_as_map_type : list of column names or None, default None
+    A list of column names which should be written as map type in the ORC file.
+    Note that this option only affects columns of ListDtype. Names of other
+    column types will be ignored.
 
 Notes
 -----
@@ -1517,6 +1520,7 @@ def stringify_pathlike(pathlike):
 def buffer_write_lines(buf, lines):
     """
     Appends lines to a buffer.
+
     Parameters
     ----------
     buf
