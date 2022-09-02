@@ -224,7 +224,9 @@ ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks.cpp)
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_READER_BENCH io/parquet/parquet_reader.cpp)
+ConfigureNVBench(
+  PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
