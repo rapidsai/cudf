@@ -404,7 +404,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     case compression_type::SNAPPY: return std::nullopt;
     case compression_type::ZSTD:
 #if NVCOMP_HAS_ZSTD_COMP
-      return nvcompZstdMaxAllowedChunkSize;
+      return nvcompZstdCompressionMaxAllowedChunkSize;
 #else
       CUDF_FAIL("Unsupported compression type");
 #endif
