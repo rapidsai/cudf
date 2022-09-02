@@ -100,6 +100,7 @@ template <typename RangeT,
           typename RepT,
           CUDF_ENABLE_IF(std::is_integral_v<RangeT> && !cudf::is_boolean<RangeT>())>
 RepT range_comparable_value_impl(scalar const& range_scalar,
+                                 bool,
                                  data_type const&,
                                  rmm::cuda_stream_view stream)
 {
@@ -112,6 +113,7 @@ template <typename RangeT,
           typename RepT,
           std::enable_if_t<cudf::is_duration<RangeT>(), void>* = nullptr>
 RepT range_comparable_value_impl(scalar const& range_scalar,
+                                 bool,
                                  data_type const&,
                                  rmm::cuda_stream_view stream)
 {
@@ -122,10 +124,11 @@ RepT range_comparable_value_impl(scalar const& range_scalar,
 
 template <typename RangeT, typename RepT, CUDF_ENABLE_IF(cudf::is_fixed_point<RangeT>())>
 RepT range_comparable_value_impl(scalar const& range_scalar,
+                                 bool is_unbounded,
                                  data_type const& order_by_data_type,
                                  rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(range_scalar.type().scale() >= order_by_data_type.scale(),
+  CUDF_EXPECTS(is_unbounded || range_scalar.type().scale() >= order_by_data_type.scale(),
                "Range bounds scalar must match/exceed the scale of the orderby column.");
   auto const fixed_point_value =
     static_cast<fixed_point_scalar<RangeT> const&>(range_scalar).fixed_point_value(stream);
@@ -160,7 +163,7 @@ range_rep_type<OrderByType> range_comparable_value(
 
   using rep_type = cudf::detail::range_rep_type<OrderByType>;
   return range_comparable_value_impl<range_type, rep_type>(
-    range_scalar, order_by_data_type, stream);
+    range_scalar, range_bounds.is_unbounded(), order_by_data_type, stream);
 }
 
 }  // namespace detail
