@@ -1185,7 +1185,7 @@ __global__ void __launch_bounds__(256)
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
     inputs[ss.first_block + b]   = {src + b * comp_blk_size, blk_size};
-    auto const dst_offset        = b * padded_comp_block_size + padded_block_header_size;
+    auto const dst_offset        = b * (padded_block_header_size + padded_comp_block_size);
     outputs[ss.first_block + b]  = {dst + dst_offset, max_comp_blk_size};
     statuses[ss.first_block + b] = {0, compression_status::FAILURE};
   }
@@ -1197,7 +1197,7 @@ __global__ void __launch_bounds__(256)
  *
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[out] inputs Per-block compression input buffers
+ * @param[in] inputs Per-block compression input buffers
  * @param[out] outputs Per-block compression output buffers
  * @param[out] statuses Per-block compression status
  * @param[in] compressed_bfr Compression output buffer

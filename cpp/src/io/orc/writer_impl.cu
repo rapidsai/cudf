@@ -1049,9 +1049,9 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             strm.lengths[strm_type]   = 0;
             strm.data_ptrs[strm_type] = nullptr;
           }
-          if (long(strm.data_ptrs[strm_type]) % block_align) {
+          if (reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % block_align) {
             strm.data_ptrs[strm_type] +=
-              (block_align - long(strm.data_ptrs[strm_type]) % block_align);
+              (block_align - reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % block_align);
           }
         }
       }
@@ -2177,6 +2177,8 @@ void writer::impl::write(table_view const& table)
       max_compression_output_size(compression_kind_, compression_blocksize_);
     auto const padded_max_compressed_block_size =
       util::round_up_unsafe<size_t>(max_compressed_block_size, block_align);
+    auto const padded_block_header_size =
+      util::round_up_unsafe<size_t>(block_header_size, block_align);
 
     auto stream_output = [&]() {
       size_t max_stream_size = 0;
@@ -2193,7 +2195,8 @@ void writer::impl::write(table_view const& table)
             (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
           stream_size += num_blocks * block_header_size;
           num_compressed_blocks += num_blocks;
-          compressed_bfr_size += padded_max_compressed_block_size * num_blocks;
+          compressed_bfr_size +=
+            (padded_block_header_size + padded_max_compressed_block_size) * num_blocks;
         }
         max_stream_size = std::max(max_stream_size, stream_size);
       }
