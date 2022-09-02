@@ -74,6 +74,14 @@ void batched_decompress(compression_type compression,
 [[nodiscard]] size_t compress_input_alignment_bits(compression_type compression);
 
 /**
+ * @brief Gets output alignment requirements for the given compression type.
+ *
+ * @param compression Compression type
+ * @returns required alignment, in bits
+ */
+[[nodiscard]] size_t compress_output_alignment_bits(compression_type compression);
+
+/**
  * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP.
  *
  * @param compression Compression type

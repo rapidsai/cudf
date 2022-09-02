@@ -390,9 +390,19 @@ bool is_compression_enabled(compression_type compression)
 size_t compress_input_alignment_bits(compression_type compression)
 {
   switch (compression) {
-    case compression_type::DEFLATE: return 3;
+    case compression_type::DEFLATE: return 0;
     case compression_type::SNAPPY: return 0;
     case compression_type::ZSTD: return 2;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+size_t compress_output_alignment_bits(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: return 3;
+    case compression_type::SNAPPY: return 0;
+    case compression_type::ZSTD: return 0;
     default: CUDF_FAIL("Unsupported compression type");
   }
 }

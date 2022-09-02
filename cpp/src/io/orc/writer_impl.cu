@@ -534,7 +534,7 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
   }
 }
 
-auto block_alignment(CompressionKind compression_kind)
+auto uncomp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
       not nvcomp::is_compression_enabled(to_nvcomp_compression_type(compression_kind))) {
@@ -542,6 +542,16 @@ auto block_alignment(CompressionKind compression_kind)
   }
 
   return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(compression_kind));
+}
+
+auto comp_block_alignment(CompressionKind compression_kind)
+{
+  if (compression_kind == NONE or
+      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(compression_kind))) {
+    return 1u;
+  }
+
+  return 1u << nvcomp::compress_output_alignment_bits(to_nvcomp_compression_type(compression_kind));
 }
 
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
@@ -589,7 +599,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
 
     auto add_stream =
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
-        auto const max_alignment_padding = block_alignment(compression_kind_) - 1;
+        auto const max_alignment_padding = uncomp_block_alignment(compression_kind_) - 1;
         const auto base                  = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type]           = streams.size();
         streams.push_back(orc::Stream{
@@ -896,7 +906,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                             encoder_decimal_info&& dec_chunk_sizes,
                             file_segmentation const& segmentation,
                             orc_streams const& streams,
-                            uint32_t block_align,
+                            uint32_t uncomp_block_align,
                             rmm::cuda_stream_view stream)
 {
   auto const num_columns = orc_table.num_columns();
@@ -1049,9 +1059,10 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             strm.lengths[strm_type]   = 0;
             strm.data_ptrs[strm_type] = nullptr;
           }
-          if (reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % block_align) {
-            strm.data_ptrs[strm_type] +=
-              (block_align - reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % block_align);
+          auto const misalignment =
+            reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % uncomp_block_align;
+          if (misalignment != 0) {
+            strm.data_ptrs[strm_type] += (uncomp_block_align - misalignment);
           }
         }
       }
@@ -2150,8 +2161,7 @@ void writer::impl::write(table_view const& table)
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
-  auto const block_align = block_alignment(compression_kind_);
-
+  auto const uncomp_block_align = uncomp_block_alignment(compression_kind_);
   auto streams =
     create_streams(orc_table.columns, segmentation, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
   auto enc_data = encode_columns(orc_table,
@@ -2159,7 +2169,7 @@ void writer::impl::write(table_view const& table)
                                  std::move(dec_chunk_sizes),
                                  segmentation,
                                  streams,
-                                 block_align,
+                                 uncomp_block_align,
                                  stream);
 
   // Assemble individual disparate column chunks into contiguous data streams
@@ -2173,12 +2183,13 @@ void writer::impl::write(table_view const& table)
     // Allocate intermediate output stream buffer
     size_t compressed_bfr_size   = 0;
     size_t num_compressed_blocks = 0;
+
     auto const max_compressed_block_size =
       max_compression_output_size(compression_kind_, compression_blocksize_);
     auto const padded_max_compressed_block_size =
-      util::round_up_unsafe<size_t>(max_compressed_block_size, block_align);
+      util::round_up_unsafe<size_t>(max_compressed_block_size, uncomp_block_align);
     auto const padded_block_header_size =
-      util::round_up_unsafe<size_t>(block_header_size, block_align);
+      util::round_up_unsafe<size_t>(block_header_size, uncomp_block_align);
 
     auto stream_output = [&]() {
       size_t max_stream_size = 0;
@@ -2227,7 +2238,7 @@ void writer::impl::write(table_view const& table)
                                   compression_kind_,
                                   compression_blocksize_,
                                   max_compressed_block_size,
-                                  block_align,
+                                  comp_block_alignment(compression_kind_),
                                   strm_descs,
                                   enc_data.streams,
                                   comp_stats,

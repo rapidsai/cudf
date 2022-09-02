@@ -1148,7 +1148,7 @@ __global__ void __launch_bounds__(1024)
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
- * @param[in] block_align Required alignment for uncompressed blocks
+ * @param[in] comp_block_align Required alignment for compressed blocks
  */
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256)
@@ -1160,13 +1160,13 @@ __global__ void __launch_bounds__(256)
                            uint8_t* compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size,
-                           uint32_t block_align)
+                           uint32_t comp_block_align)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ uint8_t* volatile uncomp_base_g;
 
-  auto const padded_block_header_size = util::round_up_unsafe(block_header_size, block_align);
-  auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, block_align);
+  auto const padded_block_header_size = util::round_up_unsafe(block_header_size, comp_block_align);
+  auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, comp_block_align);
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
@@ -1314,7 +1314,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
                             uint32_t max_comp_blk_size,
-                            uint32_t block_align,
+                            uint32_t comp_block_align,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
                             device_span<compression_result> comp_stat,
@@ -1333,7 +1333,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                                                                             compressed_data,
                                                                             comp_blk_size,
                                                                             max_comp_blk_size,
-                                                                            block_align);
+                                                                            comp_block_align);
 
   if (compression == SNAPPY) {
     try {

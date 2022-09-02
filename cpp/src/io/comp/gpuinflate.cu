@@ -1134,13 +1134,13 @@ __global__ void __launch_bounds__(block_size)
       state->err = 1;
     }
     statuses[z].bytes_written = state->out - state->outbase;
-    statuses[z].status = [&]() {
+    statuses[z].status        = [&]() {
       switch (state->err) {
         case 0: return compression_status::SUCCESS;
         case 1: return compression_status::OUTPUT_OVERFLOW;
         default: return compression_status::FAILURE;
       }
-    })();
+    }();
     statuses[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
