@@ -86,6 +86,9 @@ struct contains_column_dispatch {
                       out_begin,
                       contains_fn<Element, decltype(haystack_set_dv)>{
                         haystack_set_dv, *needles_cdv_ptr, needles.has_nulls()});
+
+    result->set_null_count(needles.null_count());
+
     return result;
   }
 

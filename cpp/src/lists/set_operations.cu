@@ -119,6 +119,8 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                   list_indices.begin(),
                   result_begin);
 
+  result->set_null_count(null_count);
+
   return result;
 }
 
