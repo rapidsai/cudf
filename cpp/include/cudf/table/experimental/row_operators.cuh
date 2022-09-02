@@ -211,6 +211,23 @@ struct sorting_physical_element_comparator {
   }
 };
 
+// The has_nested_columns template parameter of the device_row_comparator is
+// necessary to help the compiler optimize our code. Without it, the list and
+// struct view specializations are present in the code paths used for primitive
+// types, and the compiler fails to inline this nearly as well resulting in a
+// significant performance drop.  As a result, there is some minor tension in
+// the current design between the presence of this parameter and the way that
+// the Dremel data is passed around, first as a
+// std::optional<device_span<dremel_device_view>> in the
+// preprocessed_table/device_row_comparator (which is always valid when
+// has_nested_columns and is otherwise invalid) that is then unpacked to a
+// thrust::optional<dremel_device_view> at the element_comparator level (which
+// is always valid for a list column and otherwise invalid).  We cannot use an
+// additional template parameter for the element_comparator on a per-column
+// basis because we cannot conditionally define dremel_device_view member
+// variables without jumping through extra hoops with inheritance, so the
+// thrust::optional<dremel_device_view> member must be an optional rather than
+// a raw dremel_device_view.
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -295,14 +312,15 @@ class device_row_comparator {
      * preprocessed_table::depths
      * @param comparator Physical element relational comparison functor.
      */
-    __device__ element_comparator(Nullate check_nulls,
-                                  column_device_view lhs,
-                                  column_device_view rhs,
-                                  null_order null_precedence           = null_order::BEFORE,
-                                  int depth                            = 0,
-                                  PhysicalElementComparator comparator = {},
-                                  detail::dremel_device_view l_dremel_device_view = {},
-                                  detail::dremel_device_view r_dremel_device_view = {})
+    __device__ element_comparator(
+      Nullate check_nulls,
+      column_device_view lhs,
+      column_device_view rhs,
+      null_order null_precedence                                              = null_order::BEFORE,
+      int depth                                                               = 0,
+      PhysicalElementComparator comparator                                    = {},
+      thrust::optional<detail::dremel_device_view const> l_dremel_device_view = {},
+      thrust::optional<detail::dremel_device_view const> r_dremel_device_view = {})
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
@@ -390,11 +408,11 @@ class device_row_comparator {
                                                               size_type rhs_element_index)
     {
       // These are all the values from the Dremel encoding.
-      auto const l_max_def_level = _l_dremel_device_view.max_def_level;
-      auto const l_def_levels    = _l_dremel_device_view.def_levels;
-      auto const r_def_levels    = _r_dremel_device_view.def_levels;
-      auto const l_rep_levels    = _l_dremel_device_view.rep_levels;
-      auto const r_rep_levels    = _r_dremel_device_view.rep_levels;
+      auto const l_max_def_level = _l_dremel_device_view->max_def_level;
+      auto const l_def_levels    = _l_dremel_device_view->def_levels;
+      auto const r_def_levels    = _r_dremel_device_view->def_levels;
+      auto const l_rep_levels    = _l_dremel_device_view->rep_levels;
+      auto const r_rep_levels    = _r_dremel_device_view->rep_levels;
 
       // Traverse the nested list hierarchy to get a column device view
       // pointing to the underlying child data.
@@ -408,8 +426,8 @@ class device_row_comparator {
       // These start and end values indicate the start and end points of all
       // the elements of the lists in the current list element
       // (`[lhs|rhs]_element_index`) that we are comparing.
-      auto const l_offsets = _l_dremel_device_view.offsets;
-      auto const r_offsets = _r_dremel_device_view.offsets;
+      auto const l_offsets = _l_dremel_device_view->offsets;
+      auto const r_offsets = _r_dremel_device_view->offsets;
       auto l_start         = l_offsets[lhs_element_index];
       auto l_end           = l_offsets[lhs_element_index + 1];
       auto r_start         = r_offsets[rhs_element_index];
@@ -478,8 +496,8 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    detail::dremel_device_view const _l_dremel_device_view;
-    detail::dremel_device_view const _r_dremel_device_view;
+    thrust::optional<detail::dremel_device_view const> _l_dremel_device_view;
+    thrust::optional<detail::dremel_device_view const> _r_dremel_device_view;
     PhysicalElementComparator const _comparator;
   };
 
@@ -497,6 +515,7 @@ class device_row_comparator {
                                                 size_type const rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
+    size_type list_column_index{0};
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       int const depth = _depth.has_value() ? (*_depth)[i] : 0;
       if (depth > last_null_depth) { continue; }
@@ -507,14 +526,28 @@ class device_row_comparator {
       null_order const null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
+      // TODO: At what point do we verify that the columns of lhs and rhs are
+      // all of the same types? I assume that it's already happened before
+      // here, otherwise the current code would be failing.
+      auto [l_dremel_i, r_dremel_i] = [&]() {
+        if (_lhs.column(i).type().id() == type_id::LIST) {
+          auto idx = list_column_index++;
+          return std::make_tuple(
+            thrust::optional<detail::dremel_device_view const>(_l_dremel[idx]),
+            thrust::optional<detail::dremel_device_view const>(_r_dremel[idx]));
+        } else {
+          return std::make_tuple(thrust::optional<detail::dremel_device_view const>{},
+                                 thrust::optional<detail::dremel_device_view const>{});
+        }
+      }();
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
                                              _rhs.column(i),
                                              null_precedence,
                                              depth,
                                              _comparator,
-                                             _l_dremel[i],
-                                             _r_dremel[i]};
+                                             l_dremel_i,
+                                             r_dremel_i};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
