@@ -1043,7 +1043,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # dedup based on the column of data only
             ind, col = drop_duplicates([ind, self], keys=[1])
 
-            # sort sort col based on ind
+            # sort col based on ind
             map = ind.argsort()
             return col.take(map)
 
