@@ -233,7 +233,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], [["None"]],)[
+        return libcudf.interop.to_arrow([self], {"None": self.dtype})[
             "None"
         ].chunk(0)
 
@@ -793,6 +793,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
         of given label.
+
         Parameters
         ----------
         label : Scalar
@@ -1474,7 +1475,7 @@ def build_categorical_column(
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-    ordered: bool = None,
+    ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
@@ -1490,7 +1491,7 @@ def build_categorical_column(
         Null mask
     size : int, optional
     offset : int, optional
-    ordered : bool
+    ordered : bool, default False
         Indicates whether the categories are ordered
     """
     codes_dtype = min_unsigned_type(len(categories))
