@@ -52,6 +52,25 @@ static constexpr auto UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
 static constexpr auto UTF16_LOW_SURROGATE_END    = 0xE000;
 
 /**
+ * @brief Describing whether data casting of a certain item succeed, the item was parsed to null, or
+ * whether type casting failed.
+ */
+enum class data_casting_result { PARSING_SUCCESS, PARSED_TO_NULL, PARSING_FAILURE };
+
+/**
+ * @brief Providing additional information about the type casting result.
+ */
+template <typename in_iterator_t, typename out_iterator_t>
+struct data_casting_result_info {
+  // One past the last input element that was parsed
+  in_iterator_t input_parsed_end;
+  // One past the last output element that was written
+  out_iterator_t output_processed_end;
+  // Whether parsing succeeded, item was parsed to null, or failed
+  data_casting_result result;
+};
+
+/**
  * @brief Returns the character to output for a given escaped character that's following a
  * backslash.
  *
@@ -142,23 +161,18 @@ __device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_
  * encountered
  */
 template <typename in_iterator_t, typename out_iterator_t>
-__device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bool> process_string(
+__device__ __forceinline__ data_casting_result_info<in_iterator_t, out_iterator_t> process_string(
   in_iterator_t in_begin,
   in_iterator_t in_end,
   out_iterator_t out_it,
   cudf::io::parse_options_view const& options)
 {
-  constexpr bool NULL_FLAG     = true;
-  constexpr bool NOT_NULL_FLAG = false;
-  constexpr bool INVALID_FLAG  = true;
-  constexpr bool NO_ERROR_FLAG = false;
-
   auto const num_in_chars = thrust::distance(in_begin, in_end);
 
   // Check if the value corresponds to the null literal
   auto const is_null_literal =
     serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
-  if (is_null_literal) { return {in_begin, out_it, NULL_FLAG, NO_ERROR_FLAG}; }
+  if (is_null_literal) { return {in_begin, out_it, data_casting_result::PARSED_TO_NULL}; }
 
   // Whether in the original JSON this was a string value enclosed in quotes
   // ({"a":"foo"} vs. {"a":1.23})
@@ -174,7 +188,7 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     while (in_begin != in_end) {
       *out_it++ = *in_begin++;
     }
-    return {in_begin, out_it, NOT_NULL_FLAG, NO_ERROR_FLAG};
+    return {in_begin, out_it, data_casting_result::PARSING_SUCCESS};
   }
 
   // Escape-flag, set after encountering a backslash character
@@ -192,7 +206,7 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     if (!escape) {
       escape = (*in_begin == backslash_char);
       if (!escape) { *out_it++ = *in_begin; }
-      in_begin++;
+      ++in_begin;
       continue;
     }
 
@@ -204,7 +218,9 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     auto escaped_char = get_escape_char(*in_begin);
 
     // We escaped an invalid escape character -> "fail"/null for this item
-    if (escaped_char == NON_ESCAPE_CHAR) { return {in_begin, out_it, NULL_FLAG, INVALID_FLAG}; }
+    if (escaped_char == NON_ESCAPE_CHAR) {
+      return {in_begin, out_it, data_casting_result::PARSING_FAILURE};
+    }
 
     // Regular, single-character escape
     if (escaped_char != UNICODE_SEQ) {
@@ -221,13 +237,13 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     // Make sure that there's at least 4 characters left from the
     // input, which are expected to be hex digits
     if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
-      return {in_begin, out_it, NULL_FLAG, INVALID_FLAG};
+      return {in_begin, out_it, data_casting_result::PARSING_FAILURE};
     }
 
     auto hex_val = parse_unicode_hex(in_begin);
 
     // Couldn't parse hex values from the four-character sequence -> "fail"/null for this item
-    if (hex_val < 0) { return {in_begin, out_it, NULL_FLAG, INVALID_FLAG}; }
+    if (hex_val < 0) { return {in_begin, out_it, data_casting_result::PARSING_FAILURE}; }
 
     // Skip over the four hex digits
     thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
@@ -237,12 +253,9 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
     int32_t hex_low_val = 0;
     if (thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
         *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
-      // Iterator that skips over '\' and 'u' chars (not yet advancing in_begin, as it may turn out
-      // to not be a surrogate pair)
-      auto low_surrogate_digit_it = thrust::next(thrust::next(in_begin));
-
-      // Try to parse hex value from what may be a UTF16 low surrogate
-      hex_low_val = parse_unicode_hex(low_surrogate_digit_it);
+      // Try to parse hex value following the '\' and 'u' characters from what may be a UTF16 low
+      // surrogate
+      hex_low_val = parse_unicode_hex(thrust::next(in_begin, 2));
     }
 
     // This is indeed a UTF16 surrogate pair
@@ -266,8 +279,8 @@ __device__ __forceinline__ thrust::tuple<in_iterator_t, out_iterator_t, bool, bo
   }
 
   // The last character of the input is a backslash -> "fail"/null for this item
-  if (escape) { return {in_begin, out_it, NULL_FLAG, INVALID_FLAG}; }
-  return {in_begin, out_it, NOT_NULL_FLAG, NO_ERROR_FLAG};
+  if (escape) { return {in_begin, out_it, data_casting_result::PARSING_FAILURE}; }
+  return {in_begin, out_it, data_casting_result::PARSING_SUCCESS};
 }
 
 /**
@@ -317,19 +330,13 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 
                          // The total number of characters that we're supposed to copy out
                          auto const num_chars_copied_out =
-                           thrust::distance(out_it, thrust::get<1>(str_process_info));
+                           thrust::distance(out_it, str_process_info.output_processed_end);
 
-                         // Whether to set this row to null (e.g., when the string corresponds to
-                         // the null literal)
-                         auto const set_null = thrust::get<2>(str_process_info);
-
-                         // Whether parsing of this value failed due to invalid input
-                         auto const is_invalid = thrust::get<3>(str_process_info);
-
-                         if (set_null || is_invalid) {
+                         // If, during parsing, an error occured or we parsed the null literal ->
+                         // set to null
+                         if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
                            sizes[row] = 0;
                            clear_bit(null_mask, row);
-                           return;
                          } else {
                            sizes[row] = num_chars_copied_out;
                          }
@@ -354,8 +361,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                          auto const in_begin = str_tuples[row].first;
                          auto const in_end   = in_begin + str_tuples[row].second;
                          auto out_it         = &chars[offsets[row]];
-                         auto const str_process_info =
-                           process_string(in_begin, in_end, out_it, options);
+                         process_string(in_begin, in_end, out_it, options);
                        });
 
     return make_strings_column(
