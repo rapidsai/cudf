@@ -46,7 +46,20 @@ SUPPORTED_NUMPY_TYPES = (
 )
 supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
 
-MASKED_INIT_MAP: Dict[Any, Any] = {}
+redstart = "\033[91m"
+redend = "\033[0m"
+
+
+MASKED_INIT_MAP: Dict[Any, Any] = {
+    types.pyobject: types.Poison(
+        "\n"
+        + redstart
+        + "strings_udf library required for usage of string dtypes "
+        "inside user defined functions. try conda install strings_udf"
+        + redend
+        + "\n"
+    )
+}
 
 
 def _type_to_masked_type(t):
@@ -55,14 +68,17 @@ def _type_to_masked_type(t):
         if isinstance(t, SUPPORTED_NUMBA_TYPES):
             return t
         else:
+            breakpoint()
             return types.Poison(
                 # Unsupported Dtype. Numba tends to print out the type info
                 # for whatever operands and operation failed to type and then
                 # output its own error message. Putting the message in the repr
                 # then is one way of getting the true cause to the user
-                "\nUnsupported MaskedType. This is usually caused by "
+                "\n"
+                + redstart
+                + "Unsupported MaskedType. This is usually caused by "
                 "attempting to use a column of unsupported dtype in a UDF. "
-                f"Supported dtypes are:\n{supported_type_str}"
+                f"Supported dtypes are:\n{supported_type_str}" + redend
             )
     else:
         return result

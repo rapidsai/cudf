@@ -108,10 +108,7 @@ class StringLength(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and len(args) == 1
-        ):
+        if isinstance(args[0], any_string_ty) and len(args) == 1:
             # length:
             # string_view -> int32
             # dstring -> int32
@@ -126,9 +123,9 @@ class StringViewContains(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        if isinstance(
-            args[0], (StringView, DString, types.StringLiteral)
-        ) and isinstance(args[1], (StringView, DString, types.StringLiteral)):
+        if isinstance(args[0], any_string_ty) and isinstance(
+            args[1], any_string_ty
+        ):
             return nb_signature(types.boolean, string_view, string_view)
 
 
@@ -140,8 +137,8 @@ class StringViewEq(AbstractTemplate):
 
     def generic(self, args, kws):
         if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and isinstance(args[1], (StringView, DString, types.StringLiteral))
+            isinstance(args[0], any_string_ty)
+            and isinstance(args[1], any_string_ty)
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
@@ -155,8 +152,8 @@ class StringViewNe(AbstractTemplate):
 
     def generic(self, args, kws):
         if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and isinstance(args[1], (StringView, DString, types.StringLiteral))
+            isinstance(args[0], any_string_ty)
+            and isinstance(args[1], any_string_ty)
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
@@ -170,8 +167,8 @@ class StringViewGe(AbstractTemplate):
 
     def generic(self, args, kws):
         if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and isinstance(args[1], (StringView, DString, types.StringLiteral))
+            isinstance(args[0], any_string_ty)
+            and isinstance(args[1], any_string_ty)
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
@@ -185,8 +182,8 @@ class StringViewLe(AbstractTemplate):
 
     def generic(self, args, kws):
         if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and isinstance(args[1], (StringView, DString, types.StringLiteral))
+            isinstance(args[0], any_string_ty)
+            and isinstance(args[1], any_string_ty)
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
@@ -200,8 +197,8 @@ class StringViewGt(AbstractTemplate):
 
     def generic(self, args, kws):
         if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and isinstance(args[1], (StringView, DString, types.StringLiteral))
+            isinstance(args[0], any_string_ty)
+            and isinstance(args[1], any_string_ty)
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)
@@ -215,8 +212,8 @@ class StringViewLt(AbstractTemplate):
 
     def generic(self, args, kws):
         if (
-            isinstance(args[0], (StringView, DString, types.StringLiteral))
-            and isinstance(args[1], (StringView, DString, types.StringLiteral))
+            isinstance(args[0], any_string_ty)
+            and isinstance(args[1], any_string_ty)
             and len(args) == 2
         ):
             return nb_signature(types.boolean, string_view, string_view)

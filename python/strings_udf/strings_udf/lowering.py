@@ -324,7 +324,7 @@ def string_view_lt_impl(context, builder, sig, args):
 @cuda_lowering_registry.lower_cast(types.StringLiteral, string_view)
 def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     """
-    cast a literal to a string_view
+    Cast a literal to a string_view
     """
     # create an empty string_view
     sv = cgutils.create_struct_proxy(string_view)(context, builder)
