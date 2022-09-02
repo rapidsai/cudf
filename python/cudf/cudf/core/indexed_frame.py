@@ -3543,7 +3543,7 @@ class IndexedFrame(Frame):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
-        if group_keys is not True:
+        if group_keys not in {True, None}:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
