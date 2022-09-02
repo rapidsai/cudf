@@ -4149,7 +4149,7 @@ public final class Table implements AutoCloseable {
      * @return The split groups and uniq key table.
      */
     public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
-      ContigSplitGroupByResult result = Table.contiguousSplitGroups(
+      return Table.contiguousSplitGroups(
               operation.table.nativeHandle,
               operation.indices,
               groupByOptions.getIgnoreNullKeys(),
@@ -4157,7 +4157,6 @@ public final class Table implements AutoCloseable {
               groupByOptions.getKeysDescending(),
               groupByOptions.getKeysNullSmallest(),
               true); // generate uniq key table
-      return result;
     }
   }
 

@@ -49,6 +49,7 @@ public class ContigSplitGroupByResult implements AutoCloseable {
     if (uniqKeysTable == null && uniqKeyColumns != null && uniqKeyColumns.length > 0) {
       // new `Table` asserts uniqKeyColumns.length > 0
       uniqKeysTable = new Table(uniqKeyColumns);
+      uniqKeyColumns = null;
     }
     return uniqKeysTable;
   }
@@ -84,7 +85,7 @@ public class ContigSplitGroupByResult implements AutoCloseable {
    *
    * @return split group tables
    */
-  public ContiguousTable[] releaseGroups() {
+  ContiguousTable[] releaseGroups() {
     ContiguousTable[] copy = groups;
     groups = null;
     return copy;
