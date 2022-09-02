@@ -5,10 +5,10 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
+import sys
 import textwrap
 from collections import abc
 from shutil import get_terminal_size
-from types import NotImplementedType
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
@@ -74,6 +74,12 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+
+if sys.version_info >= (3, 10):
+    # Introduced in Python 3.10
+    from types import NotImplementedType
+else:
+    NotImplementedType = Any
 
 
 def _format_percentile_names(percentiles):

@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import numbers
 import operator
+import sys
 import textwrap
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from types import NotImplementedType
 from typing import (
     Any,
     Callable,
@@ -55,6 +55,13 @@ from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
+
+if sys.version_info >= (3, 10):
+    # Introduced in Python 3.10
+    from types import NotImplementedType
+else:
+    NotImplementedType = Any
+
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.

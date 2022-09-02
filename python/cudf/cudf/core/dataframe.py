@@ -103,10 +103,12 @@ from cudf.utils.utils import (
     _external_only_api,
 )
 
-if sys.version_info < (3, 10):
-    NotImplementedType = Any
-else:
+if sys.version_info >= (3, 10):
+    # Introduced in Python 3.10
     from types import NotImplementedType
+else:
+    NotImplementedType = Any
+
 
 T = TypeVar("T", bound="DataFrame")
 
