@@ -1761,3 +1761,19 @@ def test_concat_decimal_non_numeric(s1, s2, expected):
 def test_concat_struct_column(s1, s2, expected):
     s = gd.concat([s1, s2])
     assert_eq(s, expected, check_index_type=True)
+
+
+def test_concat_categorical_ordering():
+    # https://github.com/rapidsai/cudf/issues/11486
+    sr = pd.Series(
+        ["a", "b", "c", "d", "e", "a", "b", "c", "d", "e"], dtype="category"
+    )
+    sr = sr.cat.set_categories(["d", "a", "b", "c", "e"])
+
+    df = pd.DataFrame({"a": sr})
+    gdf = gd.from_pandas(df)
+
+    expect = pd.concat([df, df, df])
+    got = gd.concat([gdf, gdf, gdf])
+
+    assert_eq(expect, got)
