@@ -211,6 +211,8 @@ struct sorting_physical_element_comparator {
   }
 };
 
+using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
+
 // The has_nested_columns template parameter of the device_row_comparator is
 // necessary to help the compiler optimize our code. Without it, the list and
 // struct view specializations are present in the code paths used for primitive
@@ -312,15 +314,14 @@ class device_row_comparator {
      * preprocessed_table::depths
      * @param comparator Physical element relational comparison functor.
      */
-    __device__ element_comparator(
-      Nullate check_nulls,
-      column_device_view lhs,
-      column_device_view rhs,
-      null_order null_precedence                                              = null_order::BEFORE,
-      int depth                                                               = 0,
-      PhysicalElementComparator comparator                                    = {},
-      thrust::optional<detail::dremel_device_view const> l_dremel_device_view = {},
-      thrust::optional<detail::dremel_device_view const> r_dremel_device_view = {})
+    __device__ element_comparator(Nullate check_nulls,
+                                  column_device_view lhs,
+                                  column_device_view rhs,
+                                  null_order null_precedence                = null_order::BEFORE,
+                                  int depth                                 = 0,
+                                  PhysicalElementComparator comparator      = {},
+                                  optional_dremel_view l_dremel_device_view = {},
+                                  optional_dremel_view r_dremel_device_view = {})
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
@@ -496,8 +497,8 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    thrust::optional<detail::dremel_device_view const> _l_dremel_device_view;
-    thrust::optional<detail::dremel_device_view const> _r_dremel_device_view;
+    optional_dremel_view _l_dremel_device_view;
+    optional_dremel_view _r_dremel_device_view;
     PhysicalElementComparator const _comparator;
   };
 
@@ -532,12 +533,10 @@ class device_row_comparator {
       auto [l_dremel_i, r_dremel_i] = [&]() {
         if (_lhs.column(i).type().id() == type_id::LIST) {
           auto idx = list_column_index++;
-          return std::make_tuple(
-            thrust::optional<detail::dremel_device_view const>(_l_dremel[idx]),
-            thrust::optional<detail::dremel_device_view const>(_r_dremel[idx]));
+          return std::make_tuple(optional_dremel_view(_l_dremel[idx]),
+                                 optional_dremel_view(_r_dremel[idx]));
         } else {
-          return std::make_tuple(thrust::optional<detail::dremel_device_view const>{},
-                                 thrust::optional<detail::dremel_device_view const>{});
+          return std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
         }
       }();
       auto element_comp = element_comparator{_check_nulls,
