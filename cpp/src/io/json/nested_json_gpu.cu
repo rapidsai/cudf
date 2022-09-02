@@ -18,7 +18,6 @@
 
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
-#include <io/json/data_casting.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/type_inference.cuh>
@@ -26,6 +25,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/json.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -1514,13 +1514,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         inference_options(options).view(), d_input, string_ranges_it, col_size, stream);
 
       // Convert strings to the inferred data type
-      auto col = cudf::io::json::experimental::parse_data(string_spans_it,
-                                                          col_size,
-                                                          target_type,
-                                                          make_validity(json_col).first,
-                                                          casting_options(options).view(),
-                                                          stream,
-                                                          mr);
+      auto col = cudf::io::json::experimental::detail::parse_data(string_spans_it,
+                                                                  col_size,
+                                                                  target_type,
+                                                                  make_validity(json_col).first,
+                                                                  casting_options(options).view(),
+                                                                  stream,
+                                                                  mr);
 
       // Reset nullable if we do not have nulls
       if (col->null_count() == 0) { col->set_null_mask({}); }
