@@ -501,6 +501,12 @@ def groupby_agg(
     in `dask.dataframe`, because it allows the cudf backend to
     perform multiple aggregations at once.
     """
+    if shuffle:
+        # Temporary error until shuffle-based groupby is implemented
+        raise NotImplementedError(
+            "The shuffle option is not yet implemented in dask_cudf."
+        )
+
     # Assert that aggregations are supported
     aggs = _redirect_aggs(aggs_in)
     if not _aggs_supported(aggs, SUPPORTED_AGGS):
@@ -509,14 +515,16 @@ def groupby_agg(
             f"Aggregations must be specified with dict or list syntax."
         )
 
-    # Deal with default split_out and split_every params
+    # If split_every is False, we use an all-to-one reduction
     if split_every is False:
         split_every = max(ddf.npartitions, 2)
+
+    # Deal with default split_out and split_every params
     split_every = split_every or 8
     split_out = split_out or 1
 
     # Deal with sort/shuffle defaults
-    if split_out > 1 and sort is True:
+    if split_out > 1 and sort:
         # NOTE: This can be changed when `shuffle` is not `None`
         # as soon as the shuffle-based groupby is implemented
         raise ValueError(
@@ -600,12 +608,6 @@ def groupby_agg(
         "str_cols_out": str_cols_out,
         "aggs_renames": aggs_renames,
     }
-
-    if shuffle:
-        # Temporary error until shuffle-based groupby is implemented
-        raise NotImplementedError(
-            "The shuffle option is not yet implemented in dask_cudf."
-        )
 
     return aca(
         [ddf],
@@ -732,13 +734,11 @@ def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
 def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     """Node in groupby-aggregation reduction tree.
 
-    Following the initial `_groupby_partition_agg` tasks,
-    the `groupby_agg` algorithm will perform a tree reduction
-    to combine the data from the input partitions into
-    `split_out` different output partitions.  For each node in
-    the reduction tree, the input DataFrame objects are
-    concatenated, and "sum", "min" and/or "max" groupby
-    aggregations are used to combine the necessary statistics.
+    The input DataFrame (`df`) corresponds to the
+    concatenated output of one or more `_groupby_partition_agg`
+    tasks. In this function, "sum", "min" and/or "max" groupby
+    aggregations will be used to combine the statistics for
+    duplicate keys.
     """
 
     agg_dict = {}
