@@ -22,8 +22,6 @@
 
 #include <memory>
 
-
-
 /**
  * @brief Return a cudf::string_view array for the given strings column
  *

@@ -71,7 +71,6 @@ __device__ inline bool ends_with(cudf::string_view const dstr,
   return end_str.compare(tgt, bytes) == 0;
 }
 
-
 /**
  * @brief Returns true if the end of the specified string
  * matches the given target` string.

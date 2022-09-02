@@ -16,7 +16,6 @@
  */
 #pragma once
 
-
 #include <cudf/strings/string_view.cuh>
 
 namespace cudf {
@@ -56,7 +55,6 @@ __device__ inline cudf::size_type count(string_view const source,
   }
   return count;
 }
-
 
 }  // namespace udf
 }  // namespace strings
