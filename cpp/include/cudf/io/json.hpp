@@ -209,7 +209,7 @@ class json_reader_options {
   /**
    * @brief Whether the experimental reader should keep quotes of string values.
    *
-   * @returns true the experimental reader should keep quotes, false otherwise
+   * @returns true if the experimental reader should keep quotes, false otherwise
    */
   bool is_keeping_quotes() const { return _keep_quotes; }
 

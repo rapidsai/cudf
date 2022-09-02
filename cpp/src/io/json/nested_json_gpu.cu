@@ -1441,7 +1441,7 @@ auto casting_options(cudf::io::json_reader_options const& options)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  auto const stream     = rmm::cuda_stream_default;
+  auto const stream     = cudf::default_stream_value;
   parse_opts.keepquotes = options.is_keeping_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
@@ -1453,7 +1453,7 @@ auto inference_options(cudf::io::json_reader_options const& options)
 {
   cudf::io::detail::inference_options parse_opts{};
 
-  auto const stream     = rmm::cuda_stream_default;
+  auto const stream     = cudf::default_stream_value;
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"null"}, stream);
@@ -1602,7 +1602,10 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   constexpr uint32_t token_begin_offset_zero    = 0;
   constexpr uint32_t token_end_offset_zero      = 0;
   constexpr uint32_t node_init_child_count_zero = 0;
-  constexpr bool include_quote_chars            = true;
+
+  // Whether the tokenizer stage should keep quote characters for string values
+  // If the tokenizer keeps the quote characters, they may be stripped during type casting
+  constexpr bool include_quote_chars = true;
 
   // We initialize the very root node and root column, which represent the JSON document being
   // parsed. That root node is a list node and that root column is a list column. The column has the
