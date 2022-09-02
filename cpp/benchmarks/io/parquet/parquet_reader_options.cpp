@@ -35,16 +35,22 @@ std::vector<std::string> get_col_names(cudf::io::source_info const& source)
   return cudf::io::read_parquet(read_options).metadata.column_names;
 }
 
-template <column_selection ColSelection, row_selection RowSelection, cudf::type_id Timestamp>
+template <column_selection ColSelection,
+          row_selection RowSelection,
+          converts_strings ConvertsStrings,
+          uses_pandas_metadata UsesPandasMetadata,
+          cudf::type_id Timestamp>
 void BM_parquet_read_options(nvbench::state& state,
                              nvbench::type_list<nvbench::enum_type<ColSelection>,
                                                 nvbench::enum_type<RowSelection>,
+                                                nvbench::enum_type<ConvertsStrings>,
+                                                nvbench::enum_type<UsesPandasMetadata>,
                                                 nvbench::enum_type<Timestamp>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto constexpr str_to_categories   = true;
-  auto constexpr use_pandas_metadata = true;
+  auto constexpr str_to_categories = ConvertsStrings == converts_strings::YES;
+  auto constexpr uses_pd_metadata  = UsesPandasMetadata == uses_pandas_metadata::YES;
 
   auto const ts_type = cudf::data_type{Timestamp};
 
@@ -72,7 +78,7 @@ void BM_parquet_read_options(nvbench::state& state,
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)
       .convert_strings_to_categories(str_to_categories)
-      .use_pandas_metadata(use_pandas_metadata)
+      .use_pandas_metadata(uses_pd_metadata)
       .timestamp_type(ts_type);
 
   // TODO: add read_parquet_metadata to properly calculate #row_groups
@@ -123,13 +129,34 @@ using col_selections = nvbench::enum_type_list<column_selection::ALL,
                                                column_selection::FIRST_HALF,
                                                column_selection::SECOND_HALF>;
 
+// TODO: row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file
+// and determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
+
 NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                     NVBENCH_TYPE_AXES(col_selections,
                                       nvbench::enum_type_list<row_selection::ALL>,
+                                      nvbench::enum_type_list<converts_strings::YES>,
+                                      nvbench::enum_type_list<uses_pandas_metadata::YES>,
                                       nvbench::enum_type_list<cudf::type_id::EMPTY>))
   .set_name("parquet_read_column_selection")
-  .set_type_axes_names({"column_selection", "row_selection", "timestamp_type"})
+  .set_type_axes_names({"column_selection",
+                        "row_selection",
+                        "str_to_categories",
+                        "uses_pandas_metadata",
+                        "timestamp_type"})
   .set_min_samples(4);
 
-// row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file and
-// determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
+NVBENCH_BENCH_TYPES(
+  BM_parquet_read_options,
+  NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
+                    nvbench::enum_type_list<row_selection::ALL>,
+                    nvbench::enum_type_list<converts_strings::YES, converts_strings::NO>,
+                    nvbench::enum_type_list<uses_pandas_metadata::YES, uses_pandas_metadata::NO>,
+                    nvbench::enum_type_list<cudf::type_id::EMPTY>))
+  .set_name("parquet_read_misc_options")
+  .set_type_axes_names({"column_selection",
+                        "row_selection",
+                        "str_to_categories",
+                        "uses_pandas_metadata",
+                        "timestamp_type"})
+  .set_min_samples(4);
