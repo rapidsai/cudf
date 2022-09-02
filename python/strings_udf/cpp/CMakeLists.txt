@@ -26,7 +26,6 @@ include(rapids-export)
 include(rapids-find)
 
 rapids_cpm_init()
-include(cmake/thirdparty/get_jitify.cmake)
 
 # set the project name and version
 project(
@@ -47,7 +46,6 @@ find_package(CUDAToolkit REQUIRED)
 # depends on an installed cudf dev env
 set(UDF_INCLUDES ${CONDA_PREFIX}/include)
 list(APPEND UDF_INCLUDES ${CONDA_PREFIX}/include/rapids/libcudacxx)
-list(APPEND UDF_INCLUDES ${CMAKE_SOURCE_DIR}/build/_deps/jitify-src)
 
 set(UDF_LIBS ${CONDA_PREFIX}/lib/libcudf.so nvrtc)
 

@@ -16,15 +16,12 @@
 
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/types.hpp>
 
-#include <rmm/device_uvector.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <memory>
-#include <string>
-#include <vector>
+
 
 
 /**

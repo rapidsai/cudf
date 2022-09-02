@@ -14,24 +14,17 @@
 * limitations under the License.
 */
 
-#include "jitify.hpp"
 
-#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/udf/udf_apis.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cuda_runtime.h>

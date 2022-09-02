@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include "type_traits_patch.hpp"  // must be included before char_types_enum.hpp
 
 #include <cudf/strings/char_types/char_types_enum.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
