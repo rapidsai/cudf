@@ -38,6 +38,13 @@ namespace io {
 
 class json_reader_options_builder;
 
+struct schema_element {
+  std::map<std::string, schema_element> child_types;
+  data_type type;
+
+  schema_element(data_type const& type) : type(type){};
+};
+
 /**
  * @brief Input arguments to the `read_json` interface.
  *
@@ -65,7 +72,10 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
+  std::variant<std::vector<data_type>,
+               std::map<std::string, data_type>,
+               std::map<std::string, schema_element>>
+    _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -123,7 +133,10 @@ class json_reader_options {
    *
    * @returns Data types of the columns
    */
-  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
+  std::variant<std::vector<data_type>,
+               std::map<std::string, data_type>,
+               std::map<std::string, schema_element>> const&
+  get_dtypes() const
   {
     return _dtypes;
   }
@@ -228,6 +241,13 @@ class json_reader_options {
   void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
 
   /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   */
+  void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
+
+  /**
    * @brief Set the compression type.
    *
    * @param comp_type The compression type used
@@ -318,6 +338,18 @@ class json_reader_options_builder {
    * @return this for chaining
    */
   json_reader_options_builder& dtypes(std::map<std::string, data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> schema_element map
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::map<std::string, schema_element> types)
   {
     options._dtypes = std::move(types);
     return *this;

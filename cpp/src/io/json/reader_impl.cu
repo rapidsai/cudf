@@ -432,6 +432,18 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                            return it->second;
                          });
           return sorted_dtypes;
+        },
+        [&](const std::map<std::string, schema_element>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(column_names),
+                         std::cend(column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second.type;
+                         });
+          return sorted_dtypes;
         }},
       reader_opts.get_dtypes());
   } else {
@@ -530,10 +542,10 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                     0,
                                     stream);
   auto repl   = make_strings_column(cudf::detail::make_device_uvector_async(repl_chars, stream),
-                                  cudf::detail::make_device_uvector_async(repl_offsets, stream),
-                                  {},
-                                  0,
-                                  stream);
+                                    cudf::detail::make_device_uvector_async(repl_offsets, stream),
+                                    {},
+                                    0,
+                                    stream);
 
   auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
   std::vector<std::unique_ptr<column>> out_columns;

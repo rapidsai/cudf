@@ -24,6 +24,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/json.hpp>
@@ -1464,6 +1465,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   json_column const& json_col,
   device_span<SymbolT const> d_input,
   cudf::io::json_reader_options const& options,
+  std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -1477,6 +1479,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                stream,
                                mr},
             json_col.current_offset - json_col.valid_count};
+  };
+
+  auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
+    if (schema.has_value() &&
+        (schema.value().child_types.find(child_name) != std::end(schema.value().child_types))) {
+      return schema.value().child_types.find(child_name)->second;
+    }
+    return {};
   };
 
   switch (json_col.type) {
@@ -1509,9 +1519,16 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
             data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
         });
 
-      // Infer column type
-      auto target_type = cudf::io::detail::detect_data_type(
-        inference_options(options).view(), d_input, string_ranges_it, col_size, stream);
+      data_type target_type{};
+
+      if (schema.has_value()) {
+        target_type = schema.value().type;
+      }
+      // Infer column type, if we don't have an explicit type for it
+      else {
+        target_type = cudf::io::detail::detect_data_type(
+          inference_options(options).view(), d_input, string_ranges_it, col_size, stream);
+      }
 
       // Convert strings to the inferred data type
       auto col = cudf::io::json::experimental::detail::parse_data(string_spans_it,
@@ -1533,11 +1550,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       std::vector<column_name_info> column_names{};
       size_type num_rows{json_col.current_offset};
       // Create children columns
-      for (auto const& col : json_col.child_columns) {
-        column_names.emplace_back(col.first);
-        auto const& child_col = col.second;
-        auto [child_column, names] =
-          json_column_to_cudf_column(child_col, d_input, options, stream, mr);
+      for (auto const& col_name : json_col.column_order) {
+        auto const& col = json_col.child_columns.find(col_name);
+        column_names.emplace_back(col->first);
+        auto const& child_col      = col->second;
+        auto [child_column, names] = json_column_to_cudf_column(
+          child_col, d_input, options, get_child_schema(col_name), stream, mr);
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));
@@ -1561,8 +1579,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto offsets_column =
         std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
       // Create children column
-      auto [child_column, names] = json_column_to_cudf_column(
-        json_col.child_columns.begin()->second, d_input, options, stream, mr);
+      auto [child_column, names] =
+        json_column_to_cudf_column(json_col.child_columns.begin()->second,
+                                   d_input,
+                                   options,
+                                   get_child_schema(json_col.child_columns.begin()->first),
+                                   stream,
+                                   mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows - 1,
@@ -1642,16 +1665,47 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   std::vector<column_name_info> out_column_names;
 
   // Iterate over the struct's child columns and convert to cudf column
+  size_type column_index = 0;
   for (auto const& col_name : root_struct_col.column_order) {
     auto const& json_col = root_struct_col.child_columns.find(col_name)->second;
     // Insert this columns name into the schema
     out_column_names.emplace_back(col_name);
 
+    std::optional<schema_element> child_schema_element = std::visit(
+      cudf::detail::visitor_overload{
+        [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
+          std::cout << "Column by index: #" << column_index
+                    << ", type id: " << static_cast<int>(user_dtypes[column_index].id()) << "\n";
+          return (static_cast<std::size_t>(column_index) < user_dtypes.size())
+                   ? std::optional<schema_element>{user_dtypes[column_index]}
+                   : std::optional<schema_element>{};
+        },
+        [col_name](
+          std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
+          std::cout << "Column by flat name: #" << col_name
+                    << ", type id: " << static_cast<int>(user_dtypes.find(col_name)->second.id())
+                    << "\n";
+          return (user_dtypes.find(col_name) == std::end(user_dtypes))
+                   ? std::optional<schema_element>{user_dtypes.find(col_name)->second}
+                   : std::optional<schema_element>{};
+        },
+        [col_name](std::map<std::string, schema_element> const& user_dtypes)
+          -> std::optional<schema_element> {
+          std::cout << "Column by nested name: #" << col_name << ", type id: "
+                    << static_cast<int>(user_dtypes.find(col_name)->second.type.id()) << "\n";
+          return (user_dtypes.find(col_name) == std::end(user_dtypes))
+                   ? user_dtypes.find(col_name)->second
+                   : std::optional<schema_element>{};
+        }},
+      options.get_dtypes());
+
     // Get this JSON column's cudf column and schema info
     auto [cudf_col, col_name_info] =
-      json_column_to_cudf_column(json_col, d_input, options, stream, mr);
+      json_column_to_cudf_column(json_col, d_input, options, child_schema_element, stream, mr);
     out_column_names.back().children = std::move(col_name_info);
     out_columns.emplace_back(std::move(cudf_col));
+
+    column_index++;
   }
 
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
