@@ -515,21 +515,39 @@ TEST_P(JsonReaderParamTest, Dates)
                                                       validity});
 }
 
-TEST_F(JsonReaderTest, Durations)
+TEST_P(JsonReaderParamTest, Durations)
 {
-  auto filepath = temp_env->get_temp_dir() + "Durations.json";
+  auto const test_opt          = GetParam();
+  bool const test_experimental = (test_opt == json_test_t::json_experimental_record_orient);
+  std::string row_orient =
+    "[-2]\n[-1]\n[0]\n"
+    "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n"
+    "[0:0:0.000123]\n[0:0:0.000123000]\n[00:00:00.100000001]\n"
+    "[-2147483648]\n[2147483647]\n";
+  std::string record_orient = to_records_orient({{{"0", "-2"}},
+                                                 {{"0", "-1"}},
+                                                 {{"0", "0"}},
+                                                 {{"0", R"("1 days")"}},
+                                                 {{"0", R"("0 days 23:01:00")"}},
+                                                 {{"0", R"("0 days 00:00:00.000000123")"}},
+                                                 {{"0", R"("0:0:0.000123")"}},
+                                                 {{"0", R"("0:0:0.000123000")"}},
+                                                 {{"0", R"("00:00:00.100000001")"}},
+                                                 {{"0", R"(-2147483648)"}},
+                                                 {{"0", R"(2147483647)"}}},
+                                                "\n");
+  std::string data = (test_opt == json_test_t::json_lines_row_orient) ? row_orient : record_orient;
+  auto filepath    = temp_env->get_temp_dir() + "Durations.json";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << "[-2]\n[-1]\n[0]\n";
-    outfile << "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n";
-    outfile << "[0:0:0.000123]\n[0:0:0.000123000]\n[00:00:00.100000001]\n";
-    outfile << "[-2147483648]\n[2147483647]\n";
+    outfile << data;
   }
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{filepath})
       .dtypes({data_type{type_id::DURATION_NANOSECONDS}})
-      .lines(true);
+      .lines(true)
+      .experimental(test_experimental);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
   const auto view = result.tbl->view();
