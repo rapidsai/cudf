@@ -41,8 +41,6 @@ class json_reader_options_builder;
 struct schema_element {
   std::map<std::string, schema_element> child_types;
   data_type type;
-
-  schema_element(data_type const& type) : type(type){};
 };
 
 /**
