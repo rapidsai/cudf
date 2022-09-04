@@ -1444,6 +1444,7 @@ auto casting_options(cudf::io::json_reader_options const& options)
 
   auto const stream     = cudf::default_stream_value;
   parse_opts.keepquotes = options.is_keeping_quotes();
+  parse_opts.dayfirst   = options.is_enabled_dayfirst();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
