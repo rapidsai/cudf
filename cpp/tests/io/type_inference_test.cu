@@ -60,7 +60,7 @@ TEST_F(TypeInference, Basic)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = detect_data_type(options.view(), d_data, d_col_strings, size, stream);
+  auto res_type = detect_data_type(options.view(), d_data, d_col_strings, size, 0, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }

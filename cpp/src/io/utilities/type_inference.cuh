@@ -182,7 +182,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
       bool is_negative       = (*field_begin == '-');
       char const* data_begin = field_begin + (is_negative || (*field_begin == '+'));
       cudf::size_type* ptr   = cudf::io::gpu::infer_integral_field_counter(
-        data_begin, data_begin + digit_count, is_negative, *column_info);
+          data_begin, data_begin + digit_count, is_negative, *column_info);
       atomicAdd(ptr, 1);
     } else if (is_like_float(
                  field_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
@@ -224,6 +224,7 @@ cudf::data_type detect_data_type(inference_options_view const& options,
                                  device_span<char const> data,
                                  ColumnStringIter column_strings_begin,
                                  std::size_t const size,
+                                 size_type omission_null_count,
                                  rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(size != 0, "No data available for data type inference.\n");
@@ -233,14 +234,15 @@ cudf::data_type detect_data_type(inference_options_view const& options,
   auto get_type_id = [&](auto const& cinfo) {
     auto int_count_total =
       cinfo.big_int_count + cinfo.negative_small_int_count + cinfo.positive_small_int_count;
-    if (cinfo.null_count == static_cast<int>(size)) {
+    if ((cinfo.null_count + omission_null_count) == static_cast<int>(size)) {
       // Entire column is NULL; allocate the smallest amount of memory
       return type_id::INT8;
     } else if (cinfo.string_count > 0) {
       return type_id::STRING;
     } else if (cinfo.datetime_count > 0) {
       return type_id::TIMESTAMP_MILLISECONDS;
-    } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
+    } else if (cinfo.float_count > 0 ||
+               (int_count_total > 0 && (cinfo.null_count + omission_null_count) > 0)) {
       return type_id::FLOAT64;
     } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
       return type_id::INT64;
