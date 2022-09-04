@@ -1541,7 +1541,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                                                   mr);
 
       // Reset nullable if we do not have nulls
-      if (col->null_count() == 0) { col->set_null_mask({}); }
+      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
+        col->set_null_mask({});
+      }
 
       return {std::move(col), {{"offsets"}, {"chars"}}};
       break;
