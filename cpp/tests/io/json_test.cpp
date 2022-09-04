@@ -28,6 +28,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 #include <arrow/io/api.h>
 
 #include <fstream>
@@ -156,14 +158,91 @@ void check_float_column(cudf::column_view const& col,
 struct JsonReaderTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(JsonReaderTest, BasicJsonLines)
+/**
+ * @brief Enum class to be used to specify the test case of parametrized tests
+ */
+enum class json_test_t {
+  // Run test with the existing JSON lines reader using row-orient input data
+  json_lines_row_orient,
+  // Run test with the existing JSON lines reader using record-orient input data
+  json_lines_record_orient,
+  // Run test with the nested JSON lines reader using record-orient input data
+  json_experimental_record_orient
+};
+
+/**
+ * @brief Test fixture for parametrized JSON reader tests
+ */
+struct JsonReaderParamTest : public cudf::test::BaseFixture,
+                             public testing::WithParamInterface<json_test_t> {
+};
+
+/**
+ * @brief Test fixture for parametrized JSON reader tests, testing record orient-only for existing
+ * JSON lines reader and the new experimental reader
+ */
+struct JsonReaderDualTest : public cudf::test::BaseFixture,
+                            public testing::WithParamInterface<json_test_t> {
+};
+
+/**
+ * @brief Generates a JSON lines string that uses the record orient
+ *
+ * @param records An array of a map of key-value pairs
+ * @param record_delimiter The delimiter to be used to delimit a record
+ * @param prefix The prefix prepended to the whole string
+ * @param suffix The suffix to be appended after the whole string
+ * @return The JSON lines string that uses the record orient
+ */
+std::string to_records_orient(std::vector<std::map<std::string, std::string>> const& records,
+                              std::string record_delimiter,
+                              std::string prefix = "",
+                              std::string suffix = "")
 {
-  std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
+  std::string result = prefix;
+  for (auto record_it = std::cbegin(records); record_it != std::cend(records); record_it++) {
+    result += "{";
+    for (auto kv_pair_it = std::cbegin(*record_it); kv_pair_it != std::cend(*record_it);
+         kv_pair_it++) {
+      auto const& [key, value] = *kv_pair_it;
+      result += "\"" + key + "\":" + value;
+      result += (kv_pair_it != std::prev(std::end(*record_it))) ? ", " : "";
+    }
+    result += "}";
+    if (record_it != std::prev(std::end(records))) { result += record_delimiter; }
+  }
+  return (result + suffix);
+}
+
+// Parametrize qualifying JSON tests for executing both experimental reader and existing JSON lines
+// reader
+INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
+                        JsonReaderParamTest,
+                        ::testing::Values(json_test_t::json_lines_row_orient,
+                                          json_test_t::json_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient));
+
+// Parametrize qualifying JSON tests for executing both experimental reader and existing JSON lines
+// reader
+INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
+                        JsonReaderDualTest,
+                        ::testing::Values(json_test_t::json_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient));
+
+TEST_P(JsonReaderParamTest, BasicJsonLines)
+{
+  auto const test_opt          = GetParam();
+  bool const test_experimental = (test_opt == json_test_t::json_experimental_record_orient);
+  std::string row_orient       = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
+  std::string record_orient    = to_records_orient(
+    {{{"0", "1"}, {"1", "1.1"}}, {{"0", "2"}, {"1", "2.2"}}, {{"0", "3"}, {"1", "3.3"}}}, "\n");
+  std::string data = (test_opt == json_test_t::json_lines_row_orient) ? row_orient : record_orient;
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{data.data(), data.size()})
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<double>()})
-      .lines(true);
+      .lines(true)
+      .experimental(test_experimental);
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 2);
