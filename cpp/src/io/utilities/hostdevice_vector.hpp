@@ -56,7 +56,7 @@ class hostdevice_vector {
     d_data.resize(max_size, stream);
   }
 
-  void insert(const T& data)
+  void push_back(const T& data)
   {
     CUDF_EXPECTS(size() < capacity(),
                  "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
