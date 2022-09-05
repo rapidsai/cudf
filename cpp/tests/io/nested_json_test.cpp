@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/span.hpp"
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -24,6 +23,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -158,8 +158,8 @@ TEST_F(JsonTest, StackContext)
                             R"(}] )";
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
   hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
@@ -172,7 +172,7 @@ TEST_F(JsonTest, StackContext)
   // Make sure we copied back the stack context
   stream.synchronize();
 
-  std::vector<char> golden_stack_context{
+  std::vector<char> const golden_stack_context{
     '_', '_', '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '[', '[', '[', '[', '[', '[', '[', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
@@ -206,8 +206,8 @@ TEST_F(JsonTest, StackContextUtf8)
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
   hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
@@ -220,7 +220,7 @@ TEST_F(JsonTest, StackContextUtf8)
   // Make sure we copied back the stack context
   stream.synchronize();
 
-  std::vector<char> golden_stack_context{
+  std::vector<char> const golden_stack_context{
     '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
@@ -236,20 +236,20 @@ TEST_F(JsonTest, TokenStream)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
   // Test input
-  std::string input = R"(  [{)"
-                      R"("category": "reference",)"
-                      R"("index:": [4,12,42],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "[Sayings of the Century]",)"
-                      R"("price": 8.95)"
-                      R"(},  )"
-                      R"({)"
-                      R"("category": "reference",)"
-                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "{}[], <=semantic-symbols-string",)"
-                      R"("price": 8.95)"
-                      R"(}] )";
+  std::string const input = R"(  [{)"
+                            R"("category": "reference",)"
+                            R"("index:": [4,12,42],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "[Sayings of the Century]",)"
+                            R"("price": 8.95)"
+                            R"(},  )"
+                            R"({)"
+                            R"("category": "reference",)"
+                            R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "{}[], <=semantic-symbols-string",)"
+                            R"("price": 8.95)"
+                            R"(}] )";
 
   constexpr auto stream = cudf::default_stream_value;
 
@@ -257,22 +257,22 @@ TEST_F(JsonTest, TokenStream)
   cudf::io::json_reader_options default_options{};
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] =
     cuio_json::detail::get_token_stream(d_input, default_options, stream);
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> tokens_gpu =
+  thrust::host_vector<PdaTokenT> const tokens_gpu =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
     cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
-  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream = {
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> const golden_token_stream = {
     {2, token_t::ListBegin},
     {3, token_t::StructBegin},
     {4, token_t::StructMemberBegin},
@@ -383,7 +383,7 @@ TEST_F(JsonTest, TokenStream2)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
   // value end with comma, space, close-brace ", }"
-  std::string input =
+  std::string const input =
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
 
   constexpr auto stream = cudf::default_stream_value;
@@ -392,23 +392,23 @@ TEST_F(JsonTest, TokenStream2)
   cudf::io::json_reader_options default_options{};
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] =
     cuio_json::detail::get_token_stream(d_input, default_options, stream);
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> tokens_gpu =
+  thrust::host_vector<PdaTokenT> const tokens_gpu =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
     cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
   // clang-format off
-  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream = {
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> const golden_token_stream = {
     {0, token_t::ListBegin},
     {2, token_t::StructBegin}, {3, token_t::StructEnd}, //{}
     {6, token_t::StructBegin},

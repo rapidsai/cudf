@@ -18,6 +18,8 @@
 
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -110,6 +112,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   // Whether a token does represent a node in the tree representation
   auto is_node = [] __device__(PdaTokenT const token) -> size_type {
     switch (token) {
@@ -214,7 +217,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                        return does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
                    });
   auto out_pid = thrust::make_zip_iterator(parent_token_ids.data(), initial_order.data());
-  // TODO: use radix sort.
+  // Uses radix sort for builtin types.
   thrust::stable_sort_by_key(rmm::exec_policy(stream),
                              token_levels.data(),
                              token_levels.data() + token_levels.size(),

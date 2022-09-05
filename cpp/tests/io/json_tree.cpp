@@ -363,27 +363,27 @@ struct JsonTest : public cudf::test::BaseFixture {
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  auto stream = cudf::default_stream_value;
+  constexpr auto stream = cudf::default_stream_value;
 
   // Test input
-  std::string input = R"(  [{)"
-                      R"("category": "reference",)"
-                      R"("index:": [4,12,42],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "[Sayings of the Century]",)"
-                      R"("price": 8.95)"
-                      R"(},  )"
-                      R"({)"
-                      R"("category": "reference",)"
-                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "{}[], <=semantic-symbols-string",)"
-                      R"("price": 8.95)"
-                      R"(}] )";
+  std::string const input = R"(  [{)"
+                            R"("category": "reference",)"
+                            R"("index:": [4,12,42],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "[Sayings of the Century]",)"
+                            R"("price": 8.95)"
+                            R"(},  )"
+                            R"({)"
+                            R"("category": "reference",)"
+                            R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "{}[], <=semantic-symbols-string",)"
+                            R"("price": 8.95)"
+                            R"(}] )";
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+    d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   cudf::io::json_reader_options const options{};
 
@@ -394,12 +394,12 @@ TEST_F(JsonTest, TreeRepresentation)
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
-  auto tree_rep =
+  auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  cudf::io::json::test::compare_trees(tree_rep, gpu_tree);
+  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 
   // Golden sample of node categories
   std::vector<cuio_json::node_t> golden_node_categories = {
@@ -443,26 +443,26 @@ TEST_F(JsonTest, TreeRepresentation)
     147, 155, 159, 160, 162, 168, 170, 172, 175, 176, 181, 195, 209, 217, 252, 260, 267};
 
   // Check results against golden samples
-  ASSERT_EQ(golden_node_categories.size(), tree_rep.node_categories.size());
-  ASSERT_EQ(golden_parent_node_ids.size(), tree_rep.parent_node_ids.size());
-  ASSERT_EQ(golden_node_levels.size(), tree_rep.node_levels.size());
-  ASSERT_EQ(golden_node_range_begin.size(), tree_rep.node_range_begin.size());
-  ASSERT_EQ(golden_node_range_end.size(), tree_rep.node_range_end.size());
+  ASSERT_EQ(golden_node_categories.size(), cpu_tree.node_categories.size());
+  ASSERT_EQ(golden_parent_node_ids.size(), cpu_tree.parent_node_ids.size());
+  ASSERT_EQ(golden_node_levels.size(), cpu_tree.node_levels.size());
+  ASSERT_EQ(golden_node_range_begin.size(), cpu_tree.node_range_begin.size());
+  ASSERT_EQ(golden_node_range_end.size(), cpu_tree.node_range_end.size());
 
   for (std::size_t i = 0; i < golden_node_categories.size(); i++) {
-    ASSERT_EQ(golden_node_categories[i], tree_rep.node_categories[i]);
-    ASSERT_EQ(golden_parent_node_ids[i], tree_rep.parent_node_ids[i]);
-    ASSERT_EQ(golden_node_levels[i], tree_rep.node_levels[i]);
-    ASSERT_EQ(golden_node_range_begin[i], tree_rep.node_range_begin[i]);
-    ASSERT_EQ(golden_node_range_end[i], tree_rep.node_range_end[i]);
+    ASSERT_EQ(golden_node_categories[i], cpu_tree.node_categories[i]);
+    ASSERT_EQ(golden_parent_node_ids[i], cpu_tree.parent_node_ids[i]);
+    ASSERT_EQ(golden_node_levels[i], cpu_tree.node_levels[i]);
+    ASSERT_EQ(golden_node_range_begin[i], cpu_tree.node_range_begin[i]);
+    ASSERT_EQ(golden_node_range_end[i], cpu_tree.node_range_end[i]);
   }
 }
 
 TEST_F(JsonTest, TreeRepresentation2)
 {
-  auto stream = cudf::default_stream_value;
+  constexpr auto stream = cudf::default_stream_value;
   // Test input: value end with comma, space, close-brace ", }"
-  std::string input =
+  std::string const input =
     //  0         1         2         3         4         5         6         7         8         9
     //  0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
@@ -480,12 +480,12 @@ TEST_F(JsonTest, TreeRepresentation2)
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
-  auto tree_rep =
+  auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  cudf::io::json::test::compare_trees(tree_rep, gpu_tree);
+  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
   // TODO compare with CPU version
 
   // Golden sample of node categories
@@ -501,7 +501,7 @@ TEST_F(JsonTest, TreeRepresentation2)
     cuio_json::parent_node_sentinel, 0,
     0, 2,  3,  4,  5,  4, 7,
     0, 9, 10, 11, 12, 11, 14,
-      9, 16, 17, 18, 17, 20};
+       9, 16, 17, 18, 17, 20};
   // clang-format on
 
   // Golden sample of node levels
@@ -518,17 +518,17 @@ TEST_F(JsonTest, TreeRepresentation2)
                                                     45, 48, 53, 57, 61, 66, 71, 73, 78, 83, 88};
 
   // Check results against golden samples
-  ASSERT_EQ(golden_node_categories.size(), tree_rep.node_categories.size());
-  ASSERT_EQ(golden_parent_node_ids.size(), tree_rep.parent_node_ids.size());
-  ASSERT_EQ(golden_node_levels.size(), tree_rep.node_levels.size());
-  ASSERT_EQ(golden_node_range_begin.size(), tree_rep.node_range_begin.size());
-  ASSERT_EQ(golden_node_range_end.size(), tree_rep.node_range_end.size());
+  ASSERT_EQ(golden_node_categories.size(), cpu_tree.node_categories.size());
+  ASSERT_EQ(golden_parent_node_ids.size(), cpu_tree.parent_node_ids.size());
+  ASSERT_EQ(golden_node_levels.size(), cpu_tree.node_levels.size());
+  ASSERT_EQ(golden_node_range_begin.size(), cpu_tree.node_range_begin.size());
+  ASSERT_EQ(golden_node_range_end.size(), cpu_tree.node_range_end.size());
 
   for (std::size_t i = 0; i < golden_node_categories.size(); i++) {
-    ASSERT_EQ(golden_node_categories[i], tree_rep.node_categories[i]);
-    ASSERT_EQ(golden_parent_node_ids[i], tree_rep.parent_node_ids[i]);
-    ASSERT_EQ(golden_node_levels[i], tree_rep.node_levels[i]);
-    ASSERT_EQ(golden_node_range_begin[i], tree_rep.node_range_begin[i]);
-    ASSERT_EQ(golden_node_range_end[i], tree_rep.node_range_end[i]);
+    ASSERT_EQ(golden_node_categories[i], cpu_tree.node_categories[i]);
+    ASSERT_EQ(golden_parent_node_ids[i], cpu_tree.parent_node_ids[i]);
+    ASSERT_EQ(golden_node_levels[i], cpu_tree.node_levels[i]);
+    ASSERT_EQ(golden_node_range_begin[i], cpu_tree.node_range_begin[i]);
+    ASSERT_EQ(golden_node_range_end[i], cpu_tree.node_range_end[i]);
   }
 }
