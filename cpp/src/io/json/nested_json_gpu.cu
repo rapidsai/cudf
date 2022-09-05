@@ -595,7 +595,7 @@ auto get_translation_table()
      {ValueEnd, StructMemberEnd},             // COMMA
      {ErrorBegin},                            // COLON
      {ValueEnd},                              // WHITE_SPACE
-     {ValueEnd},                              // LINE_BREAK //TODO StructMemberEnd here?
+     {ValueEnd},                              // LINE_BREAK
      {}}};                                    // OTHER
 
   pda_tlt[static_cast<StateT>(pda_state_t::PD_STR)] = {{              /*ROOT*/

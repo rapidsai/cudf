@@ -384,7 +384,8 @@ TEST_F(JsonTest, TokenStream2)
   using cuio_json::SymbolT;
   // value end with comma, space, close-brace ", }"
   std::string const input =
-    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
+    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11)"
+    "\n}}]";
 
   constexpr auto stream = cudf::default_stream_value;
 
@@ -429,11 +430,11 @@ TEST_F(JsonTest, TokenStream2)
         {64, token_t::StructMemberBegin}, {64, token_t::FieldNameBegin}, {66, token_t::FieldNameEnd}, //b
             {70, token_t::StructBegin},
                 {71, token_t::StructMemberBegin}, {71, token_t::FieldNameBegin}, {73, token_t::FieldNameEnd}, {76, token_t::ValueBegin}, {78, token_t::ValueEnd}, {79, token_t::StructMemberEnd}, //b.x
-                {81, token_t::StructMemberBegin}, {81, token_t::FieldNameBegin}, {83, token_t::FieldNameEnd}, {86, token_t::ValueBegin}, {88, token_t::ValueEnd}, {88, token_t::StructMemberEnd}, //b.z
-            {88, token_t::StructEnd},
-        {89, token_t::StructMemberEnd},
-    {89, token_t::StructEnd},
-    {90, token_t::ListEnd}};
+                {81, token_t::StructMemberBegin}, {81, token_t::FieldNameBegin}, {83, token_t::FieldNameEnd}, {86, token_t::ValueBegin}, {88, token_t::ValueEnd}, {89, token_t::StructMemberEnd}, //b.z
+            {89, token_t::StructEnd},
+        {90, token_t::StructMemberEnd},
+    {90, token_t::StructEnd},
+    {91, token_t::ListEnd}};
   // clang-format on
 
   // Verify the number of tokens matches

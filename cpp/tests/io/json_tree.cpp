@@ -132,9 +132,9 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
     std::cout << name << std::endl;
   };
 
-#define COMPARE_MEMBER(member)                                    \
-  for (std::size_t i = 0; i < cpu_num_nodes; i++) {               \
-    EXPECT_EQ(cpu_tree.member[i], gpu_tree.member[i]) << #member; \
+#define COMPARE_MEMBER(member)                                                       \
+  for (std::size_t i = 0; i < cpu_num_nodes; i++) {                                  \
+    EXPECT_EQ(cpu_tree.member[i], gpu_tree.member[i]) << #member << "[" << i << "]"; \
   }
   COMPARE_MEMBER(node_categories);
   COMPARE_MEMBER(parent_node_ids);
@@ -463,9 +463,10 @@ TEST_F(JsonTest, TreeRepresentation2)
   constexpr auto stream = cudf::default_stream_value;
   // Test input: value end with comma, space, close-brace ", }"
   std::string const input =
-    //  0         1         2         3         4         5         6         7         8         9
-    //  0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
-    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
+    // 0         1         2         3         4         5         6         7         8         9
+    // 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11)"
+    "\n}}]";
   // Prepare input & output buffers
   cudf::string_scalar d_scalar(input, true, stream);
   auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
@@ -511,11 +512,11 @@ TEST_F(JsonTest, TreeRepresentation2)
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_begin = {0,  2,  6,  9,  13, 16, 21, 25, 29, 36, 39,
-                                                      44, 47, 52, 56, 60, 65, 70, 72, 76, 82, 86};
+                                                      44, 47, 52, 56, 60, 66, 71, 73, 77, 83, 87};
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_end = {1,  3,  7,  10, 14, 17, 22, 26, 30, 37, 40,
-                                                    45, 48, 53, 57, 61, 66, 71, 73, 78, 83, 88};
+                                                    45, 48, 53, 57, 61, 67, 72, 74, 79, 84, 89};
 
   // Check results against golden samples
   ASSERT_EQ(golden_node_categories.size(), cpu_tree.node_categories.size());
