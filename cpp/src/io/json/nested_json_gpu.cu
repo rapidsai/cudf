@@ -1050,6 +1050,7 @@ void make_json_column(json_column& root_column,
 {
   // Default name for a list's child column
   std::string const list_child_name = "element";
+  constexpr bool include_quote_char = true;
 
   // Parse the JSON and get the token stream
   const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
@@ -1085,12 +1086,17 @@ void make_json_column(json_column& root_column,
     };
   };
 
-  // Skips the quote char if the token is a beginning-of-string or beginning-of-field-name token
-  auto get_token_index = [](PdaTokenT const token, SymbolOffsetT const token_index) {
-    constexpr SymbolOffsetT skip_quote_char = 1;
+  // Includes quote char for end-of-string token or Skips the quote char for beginning-of-field-name
+  auto get_token_index = [include_quote_char](PdaTokenT const token,
+                                              SymbolOffsetT const token_index) {
+    constexpr SymbolOffsetT quote_char_size = 1;
     switch (token) {
-      case token_t::StringBegin: return token_index + skip_quote_char;
-      case token_t::FieldNameBegin: return token_index + skip_quote_char;
+      // Strip off or include quote char for StringBegin
+      case token_t::StringBegin: return token_index + (include_quote_char ? 0 : quote_char_size);
+      // Strip off or Include trailing quote char for string values for StringEnd
+      case token_t::StringEnd: return token_index + (include_quote_char ? quote_char_size : 0);
+      // Strip off quote char included for FieldNameBegin
+      case token_t::FieldNameBegin: return token_index + quote_char_size;
       default: return token_index;
     };
   };

@@ -64,6 +64,7 @@ struct node_ranges {
   T1 tokens;
   T2 token_indices;
   T3 num_tokens;
+  bool include_quote_char;
   __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
   {
     // Whether a token expects to be followed by its respective end-of-* token partner
@@ -84,11 +85,18 @@ struct node_ranges {
         default: return token_t::ErrorBegin;
       };
     };
-    auto get_token_index = [] __device__(PdaTokenT const token, SymbolOffsetT const token_index) {
-      constexpr SymbolOffsetT skip_quote_char = 1;
+    // Includes quote char for end-of-string token or Skips the quote char for
+    // beginning-of-field-name token
+    auto get_token_index = [include_quote_char = include_quote_char] __device__(
+                             PdaTokenT const token, SymbolOffsetT const token_index) {
+      constexpr SymbolOffsetT quote_char_size = 1;
       switch (token) {
-        case token_t::StringBegin: return token_index + skip_quote_char;
-        case token_t::FieldNameBegin: return token_index + skip_quote_char;
+        // Strip off quote char included for StringBegin
+        case token_t::StringBegin: return token_index + (include_quote_char ? 0 : quote_char_size);
+        // Strip off or Include trailing quote char for string values for StringEnd
+        case token_t::StringEnd: return token_index + (include_quote_char ? quote_char_size : 0);
+        // Strip off quote char included for FieldNameBegin
+        case token_t::FieldNameBegin: return token_index + quote_char_size;
         default: return token_index;
       };
     };
@@ -185,10 +193,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
   auto node_range_tuple_it =
     thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
+  // Whether the tokenizer stage should keep quote characters for string values
+  // If the tokenizer keeps the quote characters, they may be stripped during type casting
+  constexpr bool include_quote_char = true;
   using node_ranges_t =
     node_ranges<decltype(tokens.begin()), decltype(token_indices.begin()), decltype(num_tokens)>;
   auto node_range_out_it = thrust::make_transform_output_iterator(
-    node_range_tuple_it, node_ranges_t{tokens.begin(), token_indices.begin(), num_tokens});
+    node_range_tuple_it,
+    node_ranges_t{tokens.begin(), token_indices.begin(), num_tokens, include_quote_char});
 
   auto node_range_out_end =
     thrust::copy_if(rmm::exec_policy(stream),

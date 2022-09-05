@@ -519,7 +519,7 @@ TEST_F(JsonTest, UTF_JSON)
   CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, default_options, stream));
 }
 
-TEST_F(JsonTest, FromParquet)
+TEST_F(JsonTest, DISABLED_FromParquet)
 {
   using cuio_json::SymbolT;
 
