@@ -1104,23 +1104,15 @@ void make_json_column(json_column& root_column,
   auto get_token_index = [include_quote_char](PdaTokenT const token,
                                               SymbolOffsetT const token_index) {
     constexpr SymbolOffsetT quote_char_size = 1;
-    if (include_quote_char) {
-      switch (token) {
-        // Include trailing quote char for string values excluded for StringEnd
-        case token_t::StringEnd: return token_index + quote_char_size;
-        // Strip off quote char included for FieldNameBegin
-        case token_t::FieldNameBegin: return token_index + quote_char_size;
-        default: return token_index;
-      };
-    } else {
-      switch (token) {
-        // Strip off quote char included for StringBegin
-        case token_t::StringBegin: return token_index + quote_char_size;
-        // Strip off quote char included for FieldNameBegin
-        case token_t::FieldNameBegin: return token_index + quote_char_size;
-        default: return token_index;
-      };
-    }
+    switch (token) {
+      // Optionally strip off quote char included for StringBegin
+      case token_t::StringBegin: return token_index + (include_quote_char ? 0 : quote_char_size);
+      // Optionally include trailing quote char for string values excluded for StringEnd
+      case token_t::StringEnd: return token_index + (include_quote_char ? quote_char_size : 0);
+      // Strip off quote char included for FieldNameBegin
+      case token_t::FieldNameBegin: return token_index + quote_char_size;
+      default: return token_index;
+    };
   };
 
   // The end-of-* partner token for a given beginning-of-* token
