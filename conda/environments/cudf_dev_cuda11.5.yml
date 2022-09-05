@@ -44,7 +44,7 @@ dependencies:
   - black=22.3.0
   - isort=5.10.1
   - mypy=0.971
-  - types-cachetools==5.2.1
+  - types-cachetools
   - doxygen=1.8.20
   - pydocstyle=6.1.1
   - typing_extensions
