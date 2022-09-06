@@ -182,7 +182,9 @@ ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
   reduction/reduce.cpp reduction/scan.cpp
 )
-ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
+ConfigureNVBench(
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -199,7 +201,10 @@ ConfigureBench(
   groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
 
-ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
+ConfigureNVBench(
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
+  groupby/group_struct_keys.cpp
+)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -219,11 +224,13 @@ ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks.cpp)
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_READER_BENCH io/parquet/parquet_reader.cpp)
+ConfigureNVBench(
+  PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_READER_BENCH io/orc/orc_reader.cpp)
+ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
@@ -235,11 +242,7 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
-
-# ##################################################################################################
-# * orc writer chunks benchmark ---------------------------------------------------------------
-ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
+ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
@@ -276,6 +279,7 @@ ConfigureBench(
   string/factory.cu
   string/filter.cpp
   string/find.cpp
+  string/like.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
@@ -285,14 +289,17 @@ ConfigureBench(
   string/url_decode.cu
 )
 
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
+
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
+ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
-ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
+ConfigureNVBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
 
 add_custom_target(
   run_benchmarks

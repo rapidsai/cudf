@@ -1909,3 +1909,31 @@ def test_series_between_with_null(data, left, right, inclusive):
     actual = gs.between(left, right, inclusive=inclusive)
 
     assert_eq(expected, actual.to_pandas(nullable=True))
+
+
+def test_default_construction():
+    s = cudf.Series([np.int8(8), np.int16(128)])
+    assert s.dtype == np.dtype("i2")
+
+
+@pytest.mark.parametrize(
+    "data", [[0, 1, 2, 3, 4], range(5), [np.int8(8), np.int16(128)]]
+)
+def test_default_integer_bitwidth_construction(default_integer_bitwidth, data):
+    s = cudf.Series(data)
+    assert s.dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+
+
+@pytest.mark.parametrize("data", [[1.5, 2.5, 4.5], [1000, 2000, 4000, 3.14]])
+def test_default_float_bitwidth_construction(default_float_bitwidth, data):
+    s = cudf.Series(data)
+    assert s.dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_series_ordered_dedup():
+    # part of https://github.com/rapidsai/cudf/issues/11486
+    sr = cudf.Series(np.random.randint(0, 100, 1000))
+    # pandas unique() preserves order
+    expect = pd.Series(sr.to_pandas().unique())
+    got = cudf.Series(sr._column.unique(preserve_order=True))
+    assert_eq(expect.values, got.values)

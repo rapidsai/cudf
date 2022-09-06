@@ -18,9 +18,8 @@
 
 #include "parquet_common.hpp"
 
-#include <thrust/optional.h>
-
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -147,7 +146,8 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
-  thrust::optional<int32_t> field_id  = thrust::nullopt;
+  std::optional<int32_t> field_id     = std::nullopt;
+  bool output_as_byte_array           = false;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
@@ -363,7 +363,7 @@ struct ColumnIndex {
 };
 
 // bit space we are reserving in column_buffer::user_data
-constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
+constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xff'ffffu);
 constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 // if this column has a list parent anywhere above it in the hierarchy
 constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT = (1 << 25);

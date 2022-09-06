@@ -48,6 +48,7 @@ cdef extern from "cudf/io/types.hpp" \
         STATISTICS_NONE = 0,
         STATISTICS_ROWGROUP = 1,
         STATISTICS_PAGE = 2,
+        STATISTICS_COLUMN = 3,
 
     cdef cppclass column_name_info:
         string name
@@ -72,6 +73,7 @@ cdef extern from "cudf/io/types.hpp" \
         column_in_metadata& set_int96_timestamps(bool req)
         column_in_metadata& set_decimal_precision(uint8_t precision)
         column_in_metadata& child(size_type i)
+        column_in_metadata& set_output_as_binary(bool binary)
 
     cdef cppclass table_input_metadata:
         table_input_metadata() except +

@@ -303,7 +303,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
-    compinfo.insert(gpu::CompressedStreamInfo(
+    compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
@@ -879,7 +879,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
                    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
-                   return make_column(col_buffer, &schema_info.back(), stream, _mr);
+                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream, _mr);
                  });
 }
 

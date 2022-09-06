@@ -239,16 +239,20 @@ public final class Table implements AutoCloseable {
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines) throws CudfException;
 
+  private static native long readAndInferJSON(long address, long length,
+      boolean dayFirst, boolean lines) throws CudfException;
+
   /**
    * Read in Parquet formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
    *                           all of them
+   * @param binaryToString     whether to convert this column to String if binary
    * @param filePath           the path of the file to read, or null if no path should be read.
    * @param address            the address of the buffer to read from or 0 if we should not.
    * @param length             the length of the buffer to read from.
    * @param timeUnit           return type of TimeStamp in units
    */
-  private static native long[] readParquet(String[] filterColumnNames, String filePath,
+  private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
                                            long address, long length, int timeUnit) throws CudfException;
 
   /**
@@ -276,6 +280,7 @@ public final class Table implements AutoCloseable {
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
+   * @param isBinaryValues  true if a column is a binary
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -290,6 +295,7 @@ public final class Table implements AutoCloseable {
                                                    boolean[] isInt96,
                                                    int[] precisions,
                                                    boolean[] isMapValues,
+                                                   boolean[] isBinaryValues,
                                                    boolean[] hasParquetFieldIds,
                                                    int[] parquetFieldIds,
                                                    String filename) throws CudfException;
@@ -308,6 +314,7 @@ public final class Table implements AutoCloseable {
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
+   * @param isBinaryValues  true if a column is a binary
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -322,6 +329,7 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isInt96,
                                                      int[] precisions,
                                                      boolean[] isMapValues,
+                                                     boolean[] isBinaryValues,
                                                      boolean[] hasParquetFieldIds,
                                                      int[] parquetFieldIds,
                                                      HostBufferConsumer consumer) throws CudfException;
@@ -732,12 +740,13 @@ public final class Table implements AutoCloseable {
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
-  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+  private static native ContigSplitGroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
-                                                                boolean[] keysNullSmallest);
+                                                                boolean[] keysNullSmallest,
+                                                                boolean genUniqKeys);
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
@@ -919,6 +928,26 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read JSON formatted data and infer the column names and schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU and the metadata for the table returned.
+   */
+  public static TableWithMeta readJSON(JSONOptions opts, HostMemoryBuffer buffer,
+      long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
    * Read JSON formatted data.
    * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
    * @param opts various JSON parsing options.
@@ -956,7 +985,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    return new Table(readParquet(opts.getIncludeColumnNames(),
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
@@ -1016,7 +1045,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readParquet(opts.getIncludeColumnNames(),
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
@@ -1189,6 +1218,7 @@ public final class Table implements AutoCloseable {
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
+      boolean[] isBinaryValues = options.getFlatIsBinary();
       int[] precisions = options.getFlatPrecision();
       boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
       int[] parquetFieldIds = options.getFlatParquetFieldId();
@@ -1206,6 +1236,7 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          isBinaryValues,
           hasParquetFieldIds,
           parquetFieldIds,
           outputFile.getAbsolutePath());
@@ -1216,6 +1247,7 @@ public final class Table implements AutoCloseable {
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
+      boolean[] isBinaryValues = options.getFlatIsBinary();
       int[] precisions = options.getFlatPrecision();
       boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
       int[] parquetFieldIds = options.getFlatParquetFieldId();
@@ -1233,6 +1265,7 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          isBinaryValues,
           hasParquetFieldIds,
           parquetFieldIds,
           consumer);
@@ -4086,13 +4119,44 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      return Table.contiguousSplitGroups(
+      try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
-          groupByOptions.getKeysNullSmallest());
+          groupByOptions.getKeysNullSmallest(),
+          false) // not generate uniq key table
+      ) {
+        // take the ownership of the `groups` in ContigSplitGroupByResult
+        return ret.releaseGroups();
+      }
+    }
+
+    /**
+     * Similar to {@link #contiguousSplitGroups}, return an extra uniq key table in which
+     * each row is corresponding to a group split.
+     *
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * Example, see the example in {@link #contiguousSplitGroups}
+     * The `uniqKeysTable` in ContigSplitGroupByResult is:
+     *    a
+     *    b
+     *  Note: only 2 rows because of only has 2 split groups
+     *
+     * @return The split groups and uniq key table.
+     */
+    public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      return Table.contiguousSplitGroups(
+              operation.table.nativeHandle,
+              operation.indices,
+              groupByOptions.getIgnoreNullKeys(),
+              groupByOptions.getKeySorted(),
+              groupByOptions.getKeysDescending(),
+              groupByOptions.getKeysNullSmallest(),
+              true); // generate uniq key table
     }
   }
 

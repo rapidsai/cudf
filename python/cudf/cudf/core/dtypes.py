@@ -3,7 +3,7 @@
 import decimal
 import operator
 import pickle
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,7 @@ import cudf
 from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_GE_130
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 
 
 def dtype(arbitrary):
@@ -120,13 +120,36 @@ class _BaseDtype(ExtensionDtype, Serializable):
 
 class CategoricalDtype(_BaseDtype):
     """
-    dtype similar to pd.CategoricalDtype with the categories
-    stored on the GPU.
+    Type for categorical data with the categories and orderedness.
+
+    Parameters
+    ----------
+    categories : sequence, optional
+        Must be unique, and must not contain any nulls.
+        The categories are stored in an Index,
+        and if an index is provided the dtype of that index will be used.
+    ordered : bool or None, default False
+        Whether or not this categorical is treated as a ordered categorical.
+        None can be used to maintain the ordered value of existing categoricals
+        when used in operations that combine categoricals, e.g. astype, and
+        will resolve to False if there is no existing ordered to maintain.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
+    >>> cudf.Series(['a', 'b', 'a', 'c'], dtype=dtype)
+    0       a
+    1       b
+    2       a
+    3    <NA>
+    dtype: category
+    Categories (2, object): ['b' < 'a']
     """
 
-    ordered: Optional[bool]
+    ordered: bool
 
-    def __init__(self, categories=None, ordered: bool = None) -> None:
+    def __init__(self, categories=None, ordered: bool = False) -> None:
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 
@@ -369,7 +392,7 @@ class StructDtype(_BaseDtype):
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[Buffer] = []
+        frames: List[DeviceBufferLike] = []
 
         fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
 

@@ -25,7 +25,7 @@ class ColumnParameters:
     """Parameters for generating column of data
 
     Attributes
-    ---
+    ----------
     cardinality : int or None
         Size of a random set of values that generated data is sampled from.
         The values in the random set are derived from the given generator.
@@ -65,7 +65,7 @@ class Parameters:
     """Parameters for random dataset generation
 
     Attributes
-    ---
+    ----------
     num_rows : int
         Number of rows to generate
     column_parameters : List[ColumnParams]

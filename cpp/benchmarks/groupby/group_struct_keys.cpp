@@ -69,22 +69,17 @@ void bench_groupby_struct_keys(nvbench::state& state)
     child_cols = std::vector<std::unique_ptr<cudf::column>>{};
     child_cols.push_back(struct_col.release());
   }
-
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
 
   auto const keys_table = cudf::table(std::move(child_cols));
-  auto const vals_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{n_rows}, profile);
+  auto const vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{n_rows}, profile);
 
   cudf::groupby::groupby gb_obj(keys_table.view());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals_table->get_column(0).view();
+  requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
 
   // Set up nvbench default stream

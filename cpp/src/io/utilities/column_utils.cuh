@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #pragma once
+
+#include <io/statistics/statistics.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -66,9 +68,16 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
       col_desc[index].parent_column = parent_col_view.begin() + index;
       column_device_view col        = parent_col_view.column(index);
       // traverse till leaf column
-      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-        col = (col.type().id() == type_id::LIST) ? col.child(lists_column_view::child_column_index)
-                                                 : col.child(0);
+      while (col.type().id() == type_id::LIST || col.type().id() == type_id::STRUCT) {
+        auto const child = (col.type().id() == type_id::LIST)
+                             ? col.child(lists_column_view::child_column_index)
+                             : col.child(0);
+        // stop early if writing a byte array
+        if (col_desc[index].stats_dtype == dtype_byte_array &&
+            (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+          break;
+        }
+        col = child;
       }
       // Store leaf_column to device storage
       column_device_view* leaf_col_ptr = leaf_columns.begin() + index;

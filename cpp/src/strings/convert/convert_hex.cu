@@ -151,8 +151,10 @@ struct integer_to_hex_fn {
       return;
     }
 
-    auto const value = d_column.element<IntegerType>(idx);        // ex. 123456
-    auto value_bytes = reinterpret_cast<uint8_t const*>(&value);  // 0x40E20100
+    // Reinterpret an integer value as a little-endian byte sequence.
+    // For example, 123456 becomes 0x40E2'0100
+    auto const value = d_column.element<IntegerType>(idx);
+    auto value_bytes = reinterpret_cast<uint8_t const*>(&value);
 
     // compute the number of output bytes
     int bytes      = sizeof(IntegerType);
