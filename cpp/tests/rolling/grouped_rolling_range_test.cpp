@@ -257,8 +257,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
   }
 };
 
-using DecimalTypes =
-  ::testing::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
+using DecimalTypes = ::testing::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
 
 TYPED_TEST_SUITE(GroupedRollingRangeOrderByDecimalTypedTest, DecimalTypes);
 
