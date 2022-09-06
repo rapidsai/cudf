@@ -352,7 +352,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       _curr_block.consume_bytes(_curr_block.remaining_size());
       read_next_compressed_chunk(chunk_load_size);
       _stream->peek();
-      if (_stream->eof()) { break; }
+      if (_stream->eof() || _compressed_pos > _compressed_end) { break; }
     }
     read_size = std::min(read_size, _curr_block.remaining_size());
     _curr_block.consume_bytes(read_size);
