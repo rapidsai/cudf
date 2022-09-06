@@ -337,9 +337,9 @@ def test_read_parquet_multi_file(s3_base, s3so, pdf):
                 f"s3://{bucket}/{fname_2}",
             ],
             storage_options=s3so,
-        )
+        ).reset_index(drop=True)
 
-    expect = pd.concat([pdf, pdf])
+    expect = pd.concat([pdf, pdf], ignore_index=True)
     assert_eq(expect, got)
 
 
