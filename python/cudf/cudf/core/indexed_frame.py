@@ -53,10 +53,9 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
     _compile_or_get,
-    _launch_arg_from_col,
+    _get_input_args_from_frame,
     _post_process_output_col,
     _return_col_from_dtype,
-    _supported_cols_from_frame,
 )
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
@@ -1807,16 +1806,9 @@ class IndexedFrame(Frame):
         # Mask and data column preallocated
         ans_col = _return_col_from_dtype(retty, len(self))
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask), len(self)]
-        offsets = []
-
-        # if _compile_or_get succeeds, it is safe to create a kernel that only
-        # consumes the columns that are of supported dtype
-        for col in _supported_cols_from_frame(self).values():
-            launch_args.append(_launch_arg_from_col(col))
-            offsets.append(col.offset)
-        launch_args += offsets
-        launch_args += list(args)
+        output_args = [(ans_col, ans_mask), len(self)]
+        input_args = _get_input_args_from_frame(self)
+        launch_args = output_args + input_args + list(args)
 
         try:
             kernel.forall(len(self))(*launch_args)

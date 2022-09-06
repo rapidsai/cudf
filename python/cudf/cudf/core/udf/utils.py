@@ -252,6 +252,26 @@ def _launch_arg_from_col(col):
         return data, mask
 
 
+def _get_input_args_from_frame(fr):
+    args = []
+    offsets = []
+    for col in _supported_cols_from_frame(fr).values():
+        getter = launch_arg_getters.get(col.dtype)
+        if getter:
+            data = getter(col)
+        else:
+            data = col.data
+        if col.mask is not None:
+            # argument is a tuple of data, mask
+            args.append((data, col.mask))
+        else:
+            # argument is just the data pointer
+            args.append(data)
+        offsets.append(col.offset)
+
+    return args + offsets
+
+
 def _return_col_from_dtype(dt, size):
     return cp.empty(size, dtype=dt)
 

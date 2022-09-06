@@ -18,6 +18,12 @@ masked_typing.MASKED_INIT_MAP[types.pyobject] = string_view
 masked_typing.MASKED_INIT_MAP[string_view] = string_view
 
 
+def _is_valid_string_arg(ty):
+    return (
+        isinstance(ty, MaskedType) and isinstance(ty.value_type, StringView)
+    ) or isinstance(ty, types.StringLiteral)
+
+
 # String functions
 @cuda_decl_registry.register_global(len)
 class MaskedStringViewLength(AbstractTemplate):
@@ -39,15 +45,7 @@ class MaskedStringViewContains(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        if (
-            isinstance(args[0], MaskedType)
-            and isinstance(args[0].value_type, StringView)
-            or isinstance(args[0], types.StringLiteral)
-        ) and (
-            isinstance(args[1], MaskedType)
-            and isinstance(args[1].value_type, StringView)
-            or isinstance(args[1], types.StringLiteral)
-        ):
+        if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
             return nb_signature(
                 MaskedType(types.boolean),
                 MaskedType(string_view),
@@ -63,15 +61,7 @@ class MaskedStringViewCmpOp(AbstractTemplate):
     """
 
     def generic(self, args, kws):
-        if (
-            isinstance(args[0], MaskedType)
-            and isinstance(args[0].value_type, StringView)
-            or isinstance(args[0], types.StringLiteral)
-        ) and (
-            isinstance(args[1], MaskedType)
-            and isinstance(args[1].value_type, StringView)
-            or isinstance(args[1], types.StringLiteral)
-        ):
+        if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
             return nb_signature(
                 MaskedType(types.boolean),
                 MaskedType(string_view),

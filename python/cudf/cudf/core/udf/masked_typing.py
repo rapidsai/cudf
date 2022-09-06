@@ -45,21 +45,11 @@ SUPPORTED_NUMPY_TYPES = (
     NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
 )
 supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
-
-redstart = "\033[91m"
-redend = "\033[0m"
+MASKED_INIT_MAP: Dict[Any, Any] = {}
 
 
-MASKED_INIT_MAP: Dict[Any, Any] = {
-    types.pyobject: types.Poison(
-        "\n"
-        + redstart
-        + "strings_udf library required for usage of string dtypes "
-        "inside user defined functions. Try conda install strings_udf."
-        + redend
-        + "\n"
-    )
-}
+def _format_error_string(err):
+    return "\033[91m" + "\n" + err + "\n" + "\033[0m"
 
 
 def _type_to_masked_type(t):
@@ -68,19 +58,26 @@ def _type_to_masked_type(t):
         if isinstance(t, SUPPORTED_NUMBA_TYPES):
             return t
         else:
-            return types.Poison(
-                # Unsupported Dtype. Numba tends to print out the type info
-                # for whatever operands and operation failed to type and then
-                # output its own error message. Putting the message in the repr
-                # then is one way of getting the true cause to the user
-                "\n"
-                + redstart
-                + "Unsupported MaskedType. This is usually caused by "
+            # Unsupported Dtype. Numba tends to print out the type info
+            # for whatever operands and operation failed to type and then
+            # output its own error message. Putting the message in the repr
+            # then is one way of getting the true cause to the user
+            err = _format_error_string(
+                "Unsupported MaskedType. This is usually caused by "
                 "attempting to use a column of unsupported dtype in a UDF. "
-                f"Supported dtypes are:\n{supported_type_str}" + redend
+                f"Supported dtypes are:\n{supported_type_str}"
             )
+            return types.Poison(err)
     else:
         return result
+
+
+MASKED_INIT_MAP[types.pyobject] = types.Poison(
+    _format_error_string(
+        "strings_udf library required for usage of string dtypes "
+        "inside user defined functions. Try conda install strings_udf."
+    )
+)
 
 
 # Masked scalars of all types
@@ -171,11 +168,7 @@ def typeof_masked(val, c):
 # type in a kernel.
 def register_masked_constructor(supported_masked_types):
     class MaskedConstructor(ConcreteTemplate):
-
         key = api.Masked
-        units = ["ns", "ms", "us", "s"]
-        datetime_cases = {types.NPDatetime(u) for u in units}
-        timedelta_cases = {types.NPTimedelta(u) for u in units}
         cases = [
             nb_signature(MaskedType(t), t, types.boolean)
             for t in supported_masked_types
