@@ -3543,11 +3543,6 @@ class IndexedFrame(Frame):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
-
         if squeeze is not False:
             raise NotImplementedError(
                 "squeeze parameter is not yet implemented"
@@ -3573,6 +3568,7 @@ class IndexedFrame(Frame):
                 as_index=as_index,
                 dropna=dropna,
                 sort=sort,
+                group_keys=group_keys,
             )
         )
 

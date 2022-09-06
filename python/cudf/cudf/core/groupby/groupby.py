@@ -174,7 +174,14 @@ class GroupBy(Serializable, Reducible, Scannable):
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
+        self,
+        obj,
+        by=None,
+        level=None,
+        sort=False,
+        as_index=True,
+        dropna=True,
+        group_keys=True,
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -210,6 +217,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._level = level
         self._sort = sort
         self._dropna = dropna
+        self._group_keys = group_keys
 
         if isinstance(by, _Grouping):
             by._obj = self.obj
@@ -544,7 +552,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_columns(
+            grouped_key_cols, name=self.grouping.keys.name
+        )
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
@@ -707,8 +717,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
-        group_names, offsets, _, grouped_values = self._grouped()
+        group_names, offsets, group_keys, grouped_values = self._grouped()
 
+        result_index = cudf.MultiIndex.from_frame(
+            cudf.DataFrame(
+                {group_keys.name: group_keys, None: grouped_values.index}
+            )
+        )
         ngroups = len(offsets) - 1
         if ngroups > self._MAX_GROUPS_BEFORE_WARN:
             warnings.warn(
@@ -724,6 +739,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             return self.obj.head(0)
 
         if cudf.api.types.is_scalar(chunk_results[0]):
+            raise TypeError("Hi")
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series):
@@ -732,8 +748,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index.names = self.grouping.names
             else:
                 result = cudf.concat(chunk_results)
+                if self._group_keys:
+                    result.index = result_index
         else:
             result = cudf.concat(chunk_results)
+            if self._group_keys:
+                result.index = result_index
 
         if self._sort:
             result = result.sort_index()
@@ -1582,7 +1602,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys,
+            dropna=self._dropna,
+            sort=self._sort,
+            group_keys=self._group_keys,
         )
 
 

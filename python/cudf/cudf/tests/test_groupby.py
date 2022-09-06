@@ -1692,6 +1692,9 @@ def test_groupby_apply_return_scalars(func, args):
     gdf = cudf.from_pandas(pdf)
 
     expected = pdf.groupby("A").apply(func, *args)
+    import pdb
+
+    pdb.set_trace()
     actual = gdf.groupby("A").apply(func, *args)
 
     assert_groupby_results_equal(expected, actual)
