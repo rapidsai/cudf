@@ -111,8 +111,8 @@ __device__ __inline__ bool is_like_float(
 /**
  * @brief Constructs column type histogram for a given column string input `data`.
  *
- * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
- * `thrust::tuple<device_span, string_view>`
+ * @tparam ColumnStringIter Iterator type whose `value_type` is a 
+ * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and `offset_t` needs to be convertible to `std::size_t`.
  *
  * @param[in] options View of inference options
  * @param[in] data JSON string input
@@ -215,8 +215,8 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
 /**
  * @brief Constructs column type histogram for a given column string input `data`.
  *
- * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
- * `thrust::tuple<device_span, string_view>`
+ * @tparam ColumnStringIter Iterator type whose `value_type` is a 
+ * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and `offset_t` needs to be convertible to `std::size_t`.
  *
  * @param options View of inference options
  * @param data JSON string input
