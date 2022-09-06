@@ -64,7 +64,6 @@ using base = BaseGroupedRollingRangeOrderByDecimalTest;  // Shortcut to base tes
 
 template <typename DecimalT>
 struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrderByDecimalTest {
-
   using Rep = typename DecimalT::rep;
 
   auto make_fixed_point_range_bounds(typename DecimalT::rep value, scale_type scale) const
@@ -140,19 +139,19 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
 
   void run_test_unbounded_preceding_to_unbounded_following(scale_type oby_column_scale)
   {
-    auto const order_by = generate_order_by_column(oby_column_scale);
+    auto const order_by  = generate_order_by_column(oby_column_scale);
     auto const preceding = make_unbounded_decimal_range_bounds();
     auto const following = make_unbounded_decimal_range_bounds();
-    auto results = cudf::grouped_range_rolling_window(
-      cudf::table_view{{grouping_keys->view()}},
-      order_by->view(),
-      cudf::order::ASCENDING,
-      agg_values->view(),
-      preceding,
-      following,
-      1,  // min_periods
-      *cudf::make_sum_aggregation<rolling_aggregation>());
-    
+    auto results =
+      cudf::grouped_range_rolling_window(cudf::table_view{{grouping_keys->view()}},
+                                         order_by->view(),
+                                         cudf::order::ASCENDING,
+                                         agg_values->view(),
+                                         preceding,
+                                         following,
+                                         1,  // min_periods
+                                         *cudf::make_sum_aggregation<rolling_aggregation>());
+
     auto expected_results = bigints{{6, 6, 6, 6, 6, 6, 8, 8, 8, 8, 12, 12, 12, 12}, no_nulls()};
   }
 };
