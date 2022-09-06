@@ -240,10 +240,17 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                                              stream);
       }
       decompressed = true;
+      // record the host-to-device copy and decompression
+      CUDF_CUDA_TRY(cudaEventRecord(event, stream.value()));
     }
 
     void reset()
     {
+      if (decompressed) {
+        // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
+        CUDF_CUDA_TRY(cudaEventSynchronize(event));
+      }
+
       h_compressed_blocks.resize(0);
       h_compressed_offsets.resize(1);
       h_decompressed_offsets.resize(1);
