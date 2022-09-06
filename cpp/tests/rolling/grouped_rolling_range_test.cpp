@@ -207,29 +207,60 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
    */
   void run_test_unbounded_preceding_to_current_row(scale_type oby_column_scale)
   {
-    auto const order_by  = generate_order_by_column(oby_column_scale);
-    auto const preceding = make_unbounded_fixed_point_range_bounds();
-    auto const following = make_fixed_point_range_bounds(
-      rescale_range_value(Rep{0}, oby_column_scale), oby_column_scale);
-    auto results =
-      cudf::grouped_range_rolling_window(cudf::table_view{{grouping_keys->view()}},
-                                         order_by->view(),
-                                         cudf::order::ASCENDING,
-                                         agg_values->view(),
-                                         preceding,
-                                         following,
-                                         1,  // min_periods
-                                         *cudf::make_sum_aggregation<rolling_aggregation>());
+    auto const order_by            = generate_order_by_column(oby_column_scale);
+    auto const unbounded_preceding = make_unbounded_fixed_point_range_bounds();
 
-    auto expected_results = bigints{{1, 2, 3, 4, 5, 6, 2, 4, 6, 8, 3, 6, 9, 12}, no_nulls()};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    for (int32_t range_scale = oby_column_scale; range_scale <= 2; ++range_scale) {
+      auto const current_row = make_fixed_point_range_bounds(
+        rescale_range_value(Rep{0}, scale_type{range_scale}), scale_type{range_scale});
+      auto const results =
+        cudf::grouped_range_rolling_window(cudf::table_view{{grouping_keys->view()}},
+                                           order_by->view(),
+                                           cudf::order::ASCENDING,
+                                           agg_values->view(),
+                                           unbounded_preceding,
+                                           current_row,
+                                           1,  // min_periods
+                                           *cudf::make_sum_aggregation<rolling_aggregation>());
+
+      auto expected_results = bigints{{1, 2, 3, 4, 5, 6, 2, 4, 6, 8, 3, 6, 9, 12}, no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
+  }
+
+  /**
+   * @brief Run grouped_rolling test for specified order-by column scale with
+   * unbounded preceding and unbounded following.
+   *
+   */
+  void run_test_current_row_to_unbounded_following(scale_type oby_column_scale)
+  {
+    auto const order_by            = generate_order_by_column(oby_column_scale);
+    auto const unbounded_following = make_unbounded_fixed_point_range_bounds();
+
+    for (int32_t range_scale = oby_column_scale; range_scale <= 2; ++range_scale) {
+      auto const current_row = make_fixed_point_range_bounds(
+        rescale_range_value(Rep{0}, scale_type{range_scale}), scale_type{range_scale});
+      auto const results =
+        cudf::grouped_range_rolling_window(cudf::table_view{{grouping_keys->view()}},
+                                           order_by->view(),
+                                           cudf::order::ASCENDING,
+                                           agg_values->view(),
+                                           current_row,
+                                           unbounded_following,
+                                           1,  // min_periods
+                                           *cudf::make_sum_aggregation<rolling_aggregation>());
+
+      auto expected_results = bigints{{6, 5, 4, 3, 2, 1, 8, 6, 4, 2, 12, 9, 6, 3}, no_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
+    }
   }
 };
 
-using RepresentationTypes =
+using DecimalTypes =
   ::testing::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
 
-TYPED_TEST_SUITE(GroupedRollingRangeOrderByDecimalTypedTest, RepresentationTypes);
+TYPED_TEST_SUITE(GroupedRollingRangeOrderByDecimalTypedTest, DecimalTypes);
 
 TYPED_TEST(GroupedRollingRangeOrderByDecimalTypedTest, BoundedRanges)
 {
@@ -242,10 +273,11 @@ TYPED_TEST(GroupedRollingRangeOrderByDecimalTypedTest, BoundedRanges)
 
 TYPED_TEST(GroupedRollingRangeOrderByDecimalTypedTest, UnboundedRanges)
 {
-  for (auto const order_by_column_scale : {-2, -1, 0, 1, 2}) {
-    this->run_test_unbounded_preceding_to_unbounded_following(scale_type{order_by_column_scale});
-    auto const range_scale = scale_type{order_by_column_scale};
-    this->run_test_unbounded_preceding_to_current_row(range_scale);
+  for (auto const order_by_scale : {-2, -1, 0, 1, 2}) {
+    auto const order_by_column_scale = scale_type{order_by_scale};
+    this->run_test_unbounded_preceding_to_unbounded_following(order_by_column_scale);
+    this->run_test_unbounded_preceding_to_current_row(order_by_column_scale);
+    this->run_test_current_row_to_unbounded_following(order_by_column_scale);
   }
 }
 
