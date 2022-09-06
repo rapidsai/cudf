@@ -15,6 +15,7 @@ from cudf._lib.cpp.stream_compaction cimport (
     distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
+    stable_distinct as cpp_stable_distinct,
     unique as cpp_unique,
 )
 from cudf._lib.cpp.table.table cimport table
@@ -101,6 +102,66 @@ def apply_boolean_mask(list columns, Column boolean_mask):
             cpp_apply_boolean_mask(
                 source_table_view,
                 boolean_mask_view
+            )
+        )
+
+    return columns_from_unique_ptr(move(c_result))
+
+
+def stable_distinct(list columns,
+                    object keys,
+                    object keep='first',
+                    bool nulls_are_equal=True):
+
+    """
+    Drop duplicate rows in provided columns. Retain original order.
+
+    Parameters
+    ----------
+    columns : List of columns
+    keys : List of column indices. If set, then these columns are checked for
+           duplicates rather than all of columns (optional)
+    keep : keep 'first' or 'last' or none of the duplicate rows
+    nulls_are_equal : if True, nulls are treated equal else not.
+
+    Returns
+    -------
+    List of columns with duplicates dropped
+
+    """
+    cdef vector[size_type] cpp_keys = (
+        keys if keys is not None else range(len(columns))
+    )
+    cdef duplicate_keep_option cpp_keep_option
+
+    if keep == 'first':
+        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
+    elif keep == 'last':
+        cpp_keep_option = duplicate_keep_option.KEEP_LAST
+    elif keep is False:
+        cpp_keep_option = duplicate_keep_option.KEEP_NONE
+    else:
+        raise ValueError('keep must be either "first", "last" or False')
+
+    # shifting the index number by number of index columns
+    cdef null_equality cpp_nulls_equal = (
+        null_equality.EQUAL
+        if nulls_are_equal
+        else null_equality.UNEQUAL
+    )
+
+    cdef table_view source_table_view = table_view_from_columns(columns)
+    cdef table_view keys_view = source_table_view.select(cpp_keys)
+
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_stable_distinct(
+                source_table_view,
+                cpp_keys,
+                cpp_keep_option,
+                cpp_nulls_equal
             )
         )
 

@@ -281,6 +281,33 @@ std::unique_ptr<table> distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Create a new table without duplicate rows.
+ *
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. The row order is guaranteed to be preserved as in the input.
+ *
+ * If there are duplicate rows, which row to be copied depends on the specified value of the `keep`
+ * parameter.
+ *
+ * This API produces exactly the same set of output rows as `cudf::distinct`.
+ *
+ * @param input The input table
+ * @param keys Vector of indices indicating key columns in the `input` table
+ * @param keep Copy any, first, last, or none of the found duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param mr Device memory resource used to allocate the returned table
+ * @return A table containing the resulting distinct rows
+ */
+std::unique_ptr<table> stable_distinct(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Count the number of consecutive groups of equivalent rows in a column.
  *
  * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both

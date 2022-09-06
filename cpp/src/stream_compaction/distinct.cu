@@ -162,4 +162,16 @@ std::unique_ptr<table> distinct(table_view const& input,
     input, keys, keep, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
+std::unique_ptr<table> stable_distinct(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option keep,
+                                       null_equality nulls_equal,
+                                       nan_equality nans_equal,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::stable_distinct(
+    input, keys, keep, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+}
+
 }  // namespace cudf

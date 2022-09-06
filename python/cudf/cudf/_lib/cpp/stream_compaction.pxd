@@ -43,3 +43,10 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         column_view source_table,
         null_policy null_handling,
         nan_policy nan_handling) except +
+
+    cdef unique_ptr[table] stable_distinct(
+        table_view input,
+        vector[size_type] keys,
+        duplicate_keep_option keep,
+        null_equality nulls_equal,
+    ) except +
