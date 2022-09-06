@@ -142,10 +142,9 @@ Type
 Wild         185.0
 Captive      210.0
 
-
->>> df = cudf.DataFrame({'A': 'a a b'.split(),
+>>> df = cudf.DataFrame({{'A': 'a a b'.split(),
 ...                      'B': [1,2,3],
-...                      'C': [4,6,5]})
+...                      'C': [4,6,5]}})
 >>> g1 = df.groupby('A', group_keys=False)
 >>> g2 = df.groupby('A', group_keys=True)
 
