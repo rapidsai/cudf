@@ -49,17 +49,25 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
             if (p != _LIB_PARAM_NAME and p not in cudf_objects)
         )
 
-        if arg_str:
-            arg_str += ", "
+        if _LIB_PARAM_NAME in parameters:
+            if arg_str:
+                arg_str += ", "
 
-        cudf_arg_str = arg_str + f"{_LIB_PARAM_NAME}=cudf"
-        pandas_arg_str = arg_str + f"{_LIB_PARAM_NAME}=pandas"
+            cudf_arg_str = arg_str + f"{_LIB_PARAM_NAME}=cudf"
+            pandas_arg_str = arg_str + f"{_LIB_PARAM_NAME}=pandas"
+        else:
+            cudf_arg_str = pandas_arg_str = arg_str
 
         if cudf_objects:
-            cudf_arg_str += ", " + ", ".join(
+            if cudf_arg_str:
+                cudf_arg_str += ", "
+            if pandas_arg_str:
+                pandas_arg_str += ", "
+
+            cudf_arg_str += ", ".join(
                 f"{fixture}={fixture}" for fixture in cudf_objects
             )
-            pandas_arg_str += ", " + ", ".join(
+            pandas_arg_str += ", ".join(
                 f"{fixture}={fixture}.to_pandas()" for fixture in cudf_objects
             )
 
@@ -70,7 +78,7 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
             import makefun
             @makefun.wraps(
                 test,
-                remove_args=("{_LIB_PARAM_NAME}",),
+                remove_args=remove_args,
             )
             def wrapped_test({params_str}):
                 print()
@@ -82,6 +90,9 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
         globals_ = {
             "test": test,
             "assert_func": assert_func,
+            "remove_args": (f"{_LIB_PARAM_NAME}",)
+            if _LIB_PARAM_NAME in parameters
+            else None,
         }
         exec(src, globals_)
         wrapped_test = globals_["wrapped_test"]
@@ -236,3 +247,8 @@ def test_fixture_concat(lib, df):
 @pandas_comparison_test(cudf_objects="df")
 def test_param_concat(lib, df):
     return lib.concat([df, df])
+
+
+@pandas_comparison_test(cudf_objects="df")
+def test_df_head(df):
+    return df.head()
