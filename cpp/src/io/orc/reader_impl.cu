@@ -303,7 +303,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
-    compinfo.insert(gpu::CompressedStreamInfo(
+    compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
