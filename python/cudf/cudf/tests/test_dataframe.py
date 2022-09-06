@@ -9514,3 +9514,19 @@ def test_dataframe_assign_scalar_to_empty_series():
     expected.a = 0
     actual.a = 0
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {0: [1, 2, 3], 2: [10, 11, 23]},
+        {("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},
+    ],
+)
+def test_non_string_column_name_to_arrow(data):
+    df = cudf.DataFrame(data)
+
+    expected = df.to_arrow()
+    actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)

@@ -222,6 +222,11 @@ def set_allocator(
     )
 
 
+def clear_cache():
+    """Clear all internal caches"""
+    cudf.Scalar._clear_instance_cache()
+
+
 class GetAttrGetItemMixin:
     """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 
@@ -319,7 +324,7 @@ def search_range(start, stop, x, step=1, side="left"):
     `all(x <= n for x in range_left) and all(x > n for x in range_right)`
 
     Parameters
-    --------
+    ----------
     start : int
         Start value of the series
     stop : int

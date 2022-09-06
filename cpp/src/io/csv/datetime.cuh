@@ -21,6 +21,7 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/reduce.h>
@@ -302,6 +303,37 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 
   ++(*begin);
   return parse_integer<T>(begin, end);
+}
+
+/**
+ * @brief Finds the first element after the leading space characters.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @return Pointer to the first character excluding any leading spaces
+ */
+__inline__ __device__ auto skip_spaces(char const* begin, char const* end)
+{
+  return thrust::find_if(thrust::seq, begin, end, [](auto elem) { return elem != ' '; });
+}
+
+/**
+ * @brief Excludes the prefix from the input range if the string starts with the prefix.
+ *
+ * @tparam N length of the prefix, plus one
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param prefix String we're searching for at the start of the input range
+ * @return Pointer to the start of the string excluding the prefix
+ */
+template <int N>
+__inline__ __device__ auto skip_if_starts_with(char const* begin,
+                                               char const* end,
+                                               const char (&prefix)[N])
+{
+  static constexpr size_t prefix_len = N - 1;
+  if (end - begin < prefix_len) return begin;
+  return thrust::equal(thrust::seq, begin, begin + prefix_len, prefix) ? begin + prefix_len : begin;
 }
 
 /**

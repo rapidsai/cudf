@@ -48,6 +48,7 @@ cdef extern from "cudf/io/types.hpp" \
         STATISTICS_NONE = 0,
         STATISTICS_ROWGROUP = 1,
         STATISTICS_PAGE = 2,
+        STATISTICS_COLUMN = 3,
 
     cdef cppclass column_name_info:
         string name
