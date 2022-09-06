@@ -219,7 +219,7 @@ TEST_F(DataChunkSourceTest, BgzipSource)
 {
   auto filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"bananarama"};
-  for (int i = 0; i < 26; i++) {
+  for (int i = 0; i < 24; i++) {
     input = input + input;
   }
   {
@@ -237,7 +237,7 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
 {
   auto filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"bananarama"};
-  for (int i = 0; i < 26; i++) {
+  for (int i = 0; i < 24; i++) {
     input = input + input;
   }
   std::string garbage{"garbage"};
