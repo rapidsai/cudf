@@ -87,8 +87,11 @@ __device__ __inline__ bool is_digit(char const c, bool const is_hex = false)
  * False positives are possible because positions are not taken into account.
  * For example, field "e.123-" would match the pattern.
  */
-__device__ __inline__ bool is_like_float(
-  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt)
+__device__ __inline__ bool is_like_float(std::size_t len,
+                                         uint32_t digit_cnt,
+                                         uint32_t decimal_cnt,
+                                         uint32_t dash_cnt,
+                                         uint32_t exponent_cnt)
 {
   // Can't have more than one exponent and one decimal point
   if (decimal_cnt > 1) return false;
