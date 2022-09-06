@@ -1525,9 +1525,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       std::vector<column_name_info> column_names{};
       size_type num_rows{json_col.current_offset};
       // Create children columns
-      for (auto const& col : json_col.child_columns) {
-        column_names.emplace_back(col.first);
-        auto const& child_col = col.second;
+      for (auto const& col_name : json_col.column_order) {
+        auto const& col = json_col.child_columns.find(col_name);
+        column_names.emplace_back(col->first);
+        auto const& child_col = col->second;
         auto [child_column, names] =
           json_column_to_cudf_column(child_col, d_input, options, stream, mr);
         CUDF_EXPECTS(num_rows == child_column->size(),
