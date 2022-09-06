@@ -18,9 +18,12 @@ from cudf._lib.cpp.interop cimport (
     to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
 )
+from cudf._lib.cpp.io.types cimport column_in_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+
+from cudf.api.types import is_list_dtype, is_struct_dtype
 
 
 def from_dlpack(dlpack_capsule):
@@ -84,41 +87,56 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object metadata) except *:
+cdef vector[column_metadata] gather_metadata(dict cols_dtypes) except *:
     """
-    Metadata is stored as lists, and expected format is as follows,
-    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
-    First value signifies name of the main parent column,
-    and adjacent list will signify child column.
+    Generates a column_metadata vector for each column.
+
+    Parameters
+    ----------
+    cols_dtypes : dict
+        A dict mapping of column names & their dtypes.
     """
     cdef vector[column_metadata] cpp_metadata
-    if isinstance(metadata, list):
-        cpp_metadata.reserve(len(metadata))
-        for i, val in enumerate(metadata):
-            cpp_metadata.push_back(column_metadata(str.encode(str(val[0]))))
-            if len(val) == 2:
-                cpp_metadata[i].children_meta = gather_metadata(val[1])
+    cpp_metadata.reserve(len(cols_dtypes))
 
-        return cpp_metadata
+    if cols_dtypes is not None:
+        for idx, (col_name, col_dtype) in enumerate(cols_dtypes.items()):
+            cpp_metadata.push_back(column_metadata(col_name.encode()))
+            if is_struct_dtype(col_dtype):
+                _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
-        raise ValueError("Malformed metadata has been encountered")
+        raise TypeError(
+            "A dictionary of column names and dtypes is required to "
+            "construct column_metadata"
+        )
+    return cpp_metadata
+
+cdef _set_col_children_metadata(dtype,
+                                column_metadata& col_meta):
+    if is_struct_dtype(dtype):
+        col_meta.children_meta.reserve(len(dtype.fields))
+        for i, name in enumerate(dtype.fields):
+            value = dtype.fields[name]
+            col_meta.children_meta.push_back(column_metadata(name.encode()))
+            _set_col_children_metadata(
+                value, col_meta.children_meta[i]
+            )
 
 
-def to_arrow(list source_columns, object metadata):
+def to_arrow(list source_columns, dict cols_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
     source_columns : a list of columns to convert
-    metadata : a list of metadata, see `gather_metadata` for layout
+    cols_dtype : A dict mapping of column names & their dtypes.
 
     Returns
     -------
     pyarrow table
     """
-
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(cols_dtypes)
     cdef table_view input_table_view = table_view_from_columns(source_columns)
 
     cdef shared_ptr[CTable] cpp_arrow_table
