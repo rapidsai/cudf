@@ -1637,13 +1637,6 @@ table_with_metadata reader::impl::read(std::vector<std::vector<size_type>> const
         // this column contains repetition levels and will require a preprocess
         if (schema.max_repetition_level > 0) { has_lists = true; }
 
-        // Spec requires each row group to contain exactly one chunk for every
-        // column. If there are too many or too few, continue with best effort
-        if (chunks.size() >= chunks.max_size()) {
-          std::cerr << "Detected too many column chunks" << std::endl;
-          continue;
-        }
-
         auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
@@ -1656,25 +1649,25 @@ table_with_metadata reader::impl::read(std::vector<std::vector<size_type>> const
             ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
             : col_meta.data_page_offset;
 
-        chunks.insert(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
-                                           nullptr,
-                                           col_meta.num_values,
-                                           schema.type,
-                                           type_width,
-                                           row_group_start,
-                                           row_group_rows,
-                                           schema.max_definition_level,
-                                           schema.max_repetition_level,
-                                           _metadata->get_output_nesting_depth(col.schema_idx),
-                                           required_bits(schema.max_definition_level),
-                                           required_bits(schema.max_repetition_level),
-                                           col_meta.codec,
-                                           converted_type,
-                                           schema.logical_type,
-                                           schema.decimal_scale,
-                                           clock_rate,
-                                           i,
-                                           col.schema_idx));
+        chunks.push_back(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
+                                              nullptr,
+                                              col_meta.num_values,
+                                              schema.type,
+                                              type_width,
+                                              row_group_start,
+                                              row_group_rows,
+                                              schema.max_definition_level,
+                                              schema.max_repetition_level,
+                                              _metadata->get_output_nesting_depth(col.schema_idx),
+                                              required_bits(schema.max_definition_level),
+                                              required_bits(schema.max_repetition_level),
+                                              col_meta.codec,
+                                              converted_type,
+                                              schema.logical_type,
+                                              schema.decimal_scale,
+                                              clock_rate,
+                                              i,
+                                              col.schema_idx));
 
         // Map each column chunk to its column index and its source index
         chunk_source_map[chunks.size() - 1] = row_group_source;
