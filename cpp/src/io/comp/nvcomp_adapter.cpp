@@ -68,7 +68,8 @@ namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
 template <typename... Args>
-nvcompStatus_t batched_decompress_get_temp_size_ex(compression_type compression, Args&&... args)
+std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_type compression,
+                                                                  Args&&... args)
 {
 #if NVCOMP_HAS_TEMPSIZE_EX
   switch (compression) {
@@ -78,10 +79,10 @@ nvcompStatus_t batched_decompress_get_temp_size_ex(compression_type compression,
 #if NVCOMP_HAS_ZSTD_DECOMP
       return nvcompBatchedZstdDecompressGetTempSizeEx(std::forward<Args>(args)...);
 #else
-      CUDF_FAIL("Unsupported compression type");
+      return std::nullopt;
 #endif
     case compression_type::DEFLATE: [[fallthrough]];
-    default: CUDF_FAIL("Unsupported compression type");
+    default: return std::nullopt;
   }
 #endif
   CUDF_FAIL("GetTempSizeEx is not supported in the current nvCOMP version");
@@ -140,13 +141,11 @@ size_t batched_decompress_temp_size(compression_type compression,
 {
   size_t temp_size         = 0;
   auto const nvcomp_status = [&]() {
-    try {
-      return batched_decompress_get_temp_size_ex(
-        compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
-    } catch (cudf::logic_error const& err) {
-      return batched_decompress_get_temp_size(
-        compression, num_chunks, max_uncomp_chunk_size, &temp_size);
-    }
+    auto maybe_result = batched_decompress_get_temp_size_ex(
+      compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
+    if (maybe_result.has_value()) { return *maybe_result; }
+    return batched_decompress_get_temp_size(
+      compression, num_chunks, max_uncomp_chunk_size, &temp_size);
   }();
 
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
