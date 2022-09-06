@@ -25,7 +25,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-itemsizes: Dict[Any, Any] = {}
+itemsizes: Dict[Any, int] = {}
 
 
 def _get_frame_row_type(dtype):

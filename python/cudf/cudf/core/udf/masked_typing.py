@@ -55,7 +55,7 @@ MASKED_INIT_MAP: Dict[Any, Any] = {
         "\n"
         + redstart
         + "strings_udf library required for usage of string dtypes "
-        "inside user defined functions. try conda install strings_udf"
+        "inside user defined functions. Try conda install strings_udf."
         + redend
         + "\n"
     )
@@ -68,7 +68,6 @@ def _type_to_masked_type(t):
         if isinstance(t, SUPPORTED_NUMBA_TYPES):
             return t
         else:
-            breakpoint()
             return types.Poison(
                 # Unsupported Dtype. Numba tends to print out the type info
                 # for whatever operands and operation failed to type and then
