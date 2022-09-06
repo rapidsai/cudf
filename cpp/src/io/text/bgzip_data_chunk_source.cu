@@ -240,17 +240,10 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                                              stream);
       }
       decompressed = true;
-      // record the host-to-device copy and decompression
-      CUDF_CUDA_TRY(cudaEventRecord(event, stream.value()));
     }
 
     void reset()
     {
-      if (decompressed) {
-        // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
-        CUDF_CUDA_TRY(cudaEventSynchronize(event));
-      }
-
       h_compressed_blocks.resize(0);
       h_compressed_offsets.resize(1);
       h_decompressed_offsets.resize(1);
@@ -306,6 +299,10 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   void read_next_compressed_chunk(std::size_t requested_size)
   {
     std::swap(_curr_block, _prev_block);
+    if (_curr_block.decompressed) {
+      // synchronize on the last decompression + copy, so we don't clobber any buffers
+      CUDF_CUDA_TRY(cudaEventSynchronize(_curr_block.event));
+    }
     _curr_block.reset();
     // read chunks until we have enough decompressed data
     while (_curr_block.decompressed_size() < requested_size) {
@@ -373,6 +370,8 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                                     read_size,
                                     cudaMemcpyDeviceToDevice,
                                     cuda_stream.value()));
+      // record the host-to-device copy, decompression and device copy
+      CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, cuda_stream.value()));
       _curr_block.consume_bytes(read_size);
       return std::make_unique<device_uvector_data_chunk>(std::move(data));
     }
@@ -391,6 +390,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                                   read_size - _prev_block.remaining_size(),
                                   cudaMemcpyDeviceToDevice,
                                   cuda_stream.value()));
+    // record the host-to-device copy, decompression and device copy
+    CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, cuda_stream.value()));
+    CUDF_CUDA_TRY(cudaEventRecord(_prev_block.event, cuda_stream.value()));
     read_size -= _prev_block.remaining_size();
     _prev_block.consume_bytes(_prev_block.remaining_size());
     _curr_block.consume_bytes(read_size);
