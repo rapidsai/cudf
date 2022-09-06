@@ -129,16 +129,14 @@ def drop_duplicates(list columns,
     )
     cdef duplicate_keep_option cpp_keep_option
 
-    if keep == 'any':
-        cpp_keep_option = duplicate_keep_option.KEEP_ANY
-    elif keep == 'first':
+    if keep == 'first':
         cpp_keep_option = duplicate_keep_option.KEEP_FIRST
     elif keep == 'last':
         cpp_keep_option = duplicate_keep_option.KEEP_LAST
     elif keep is False:
         cpp_keep_option = duplicate_keep_option.KEEP_NONE
     else:
-        raise ValueError('keep must be either "any", "first", "last" or False')
+        raise ValueError('keep must be either "first", "last" or False')
 
     # shifting the index number by number of index columns
     cdef null_equality cpp_nulls_equal = (
