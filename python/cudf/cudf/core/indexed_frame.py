@@ -3535,7 +3535,7 @@ class IndexedFrame(Frame):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
@@ -3557,6 +3557,8 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be specified."
             )
+        if group_keys is None:
+            group_keys = False
 
         return (
             self.__class__._resampler(self, by=by)
