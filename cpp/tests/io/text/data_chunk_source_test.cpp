@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <fstream>
+#include <random>
 
 using namespace cudf::test;
 
@@ -112,6 +113,162 @@ TEST_F(DataChunkSourceTest, Host)
   auto source         = cudf::io::text::make_source(content);
 
   test_source(content, *source);
+}
+
+template <typename T>
+void write_int(std::ostream& stream, T val)
+{
+  // endianness check
+  auto const i = static_cast<T>(0x0100);
+  std::array<char, sizeof(T)> bytes;
+  std::memcpy(&bytes[0], &i, sizeof(T));
+  auto const little_endian = bytes[0] == 0;
+  // write
+  std::memcpy(&bytes[0], &val, sizeof(T));
+  if (not little_endian) { std::reverse(bytes.begin(), bytes.end()); }
+  stream.write(bytes.data(), bytes.size());
+}
+
+void write_bgzip_block(std::ostream& stream,
+                       const std::string& data,
+                       bool add_extra_garbage_before,
+                       bool add_extra_garbage_after)
+{
+  std::array<uint8_t, 10> const header{{
+    31,   // magic number
+    139,  // magic number
+    8,    // compression type: deflate
+    4,    // flags: extra header
+    0,    // mtime
+    0,    // mtime
+    0,    // mtime
+    0,    // mtime: irrelevant
+    4,    // xfl: irrelevant
+    3     // OS: irrelevant
+  }};
+  std::array<char, 4> extra_blocklen_field{{66, 67, 2, 0}};
+  std::array<char, 11> extra_garbage_field1{{13,  // magic number
+                                             37,  // magic number
+                                             7,   // field length
+                                             0,   // field length
+                                             1,
+                                             2,
+                                             3,
+                                             4,
+                                             5,
+                                             6,
+                                             7}};
+  std::array<char, 23> extra_garbage_field2{{12,  // magic number
+                                             34,  // magic number
+                                             2,   // field length
+                                             0,   // field length
+                                             1,  2,
+                                             56,  // magic number
+                                             78,  // magic number
+                                             1,   // field length
+                                             0,   // field length
+                                             3,   //
+                                             90,  // magic number
+                                             12,  // magic number
+                                             8,   // field length
+                                             0,   // field length
+                                             1,  2, 3, 4, 5, 6, 7, 8}};
+  stream.write(reinterpret_cast<const char*>(header.data()), header.size());
+  uint16_t extra_size = extra_blocklen_field.size() + 2;
+  if (add_extra_garbage_before) { extra_size += extra_garbage_field1.size(); }
+  if (add_extra_garbage_after) { extra_size += extra_garbage_field2.size(); }
+  write_int(stream, extra_size);
+  if (add_extra_garbage_before) {
+    stream.write(extra_garbage_field1.data(), extra_garbage_field1.size());
+  }
+  stream.write(extra_blocklen_field.data(), extra_blocklen_field.size());
+  auto compressed_size          = data.size() + 5;
+  uint16_t block_size_minus_one = compressed_size + 19 + extra_size;
+  write_int(stream, block_size_minus_one);
+  if (add_extra_garbage_after) {
+    stream.write(extra_garbage_field2.data(), extra_garbage_field2.size());
+  }
+  write_int<uint8_t>(stream, 1);
+  write_int<uint16_t>(stream, data.size());
+  write_int<uint16_t>(stream, ~static_cast<uint16_t>(data.size()));
+  stream.write(data.data(), data.size());
+  // this does not produce a valid file, since we write 0 as the CRC
+  // the parser ignores the checksum, so it doesn't matter to the test
+  // to check output with gzip, plug in the CRC of `data` here.
+  write_int<uint32_t>(stream, 0);
+  write_int<uint32_t>(stream, data.size());
+}
+
+void write_bgzip(std::ostream& stream, const std::string& data, std::default_random_engine& rng)
+{
+  // make sure the block size with header stays below 65536
+  std::uniform_int_distribution<std::size_t> block_size_dist{1, 65000};
+  auto begin     = data.begin();
+  auto const end = data.end();
+  int i          = 0;
+  while (begin < end) {
+    auto len = std::min<std::size_t>(end - begin, block_size_dist(rng));
+    write_bgzip_block(stream, std::string{begin, begin + len}, i & 1, i & 2);
+    begin += len;
+    i++;
+  }
+  write_bgzip_block(stream, {}, false, false);
+}
+
+TEST_F(DataChunkSourceTest, BgzipSource)
+{
+  auto filename = temp_env->get_temp_filepath("bgzip_source");
+  std::string input{"bananarama"};
+  for (int i = 0; i < 26; i++) {
+    input = input + input;
+  }
+  {
+    std::ofstream stream{filename};
+    std::default_random_engine rng{};
+    write_bgzip(stream, input, rng);
+  }
+
+  auto source = cudf::io::text::make_source_from_bgzip_file(filename);
+
+  test_source(input, *source);
+}
+
+TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
+{
+  auto filename = temp_env->get_temp_filepath("bgzip_source");
+  std::string input{"bananarama"};
+  for (int i = 0; i < 26; i++) {
+    input = input + input;
+  }
+  std::string garbage{"garbage"};
+  for (int i = 0; i < 10; i++) {
+    garbage = garbage + garbage;
+  }
+  std::string garbage2{"GARBAGE"};
+  std::string endinput{"end of bananarama"};
+  std::size_t begin_compressed_offset{};
+  std::size_t end_compressed_offset{};
+  std::size_t begin_local_offset{garbage2.size()};
+  std::size_t end_local_offset{endinput.size()};
+  {
+    std::ofstream stream{filename};
+    stream.write(garbage.data(), garbage.size());
+    std::default_random_engine rng{};
+    begin_compressed_offset = stream.tellp();
+    write_bgzip(stream, garbage2 + input, rng);
+    end_compressed_offset = stream.tellp();
+    write_bgzip_block(stream, endinput + garbage2 + garbage2, false, false);
+    input += endinput;
+    write_bgzip_block(stream, {}, false, false);
+    stream.write(garbage.data(), garbage.size());
+  }
+
+  auto source =
+    cudf::io::text::make_source_from_bgzip_file(filename,
+                                                begin_compressed_offset << 16 | begin_local_offset,
+                                                end_compressed_offset << 16 | end_local_offset);
+
+  test_source(input, *source);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
