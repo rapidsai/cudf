@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/trie.cuh>
 #include <io/utilities/type_inference.cuh>
 
@@ -39,8 +38,8 @@ struct TypeInference : public cudf::test::BaseFixture {
 
 TEST_F(TypeInference, Basic)
 {
-  auto stream  = rmm::cuda_stream_default;
-  auto options = inference_options{};
+  auto const stream = rmm::cuda_stream_default;
+  auto options      = inference_options{};
 
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);

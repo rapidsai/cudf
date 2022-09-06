@@ -209,7 +209,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
              colon_count <= 2) {
       atomicAdd(&column_info->datetime_count, 1);
     }
-  }  // for
+  }  // grid-stride for loop
 }
 
 /**
