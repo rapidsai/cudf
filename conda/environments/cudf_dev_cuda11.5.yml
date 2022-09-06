@@ -2,6 +2,7 @@
 
 name: cudf_dev
 channels:
+  - conda-forge/label/pandas_rc
   - rapidsai
   - nvidia
   - rapidsai-nightly
@@ -20,7 +21,7 @@ dependencies:
   - python>=3.8,<3.10
   - numba>=0.54
   - numpy
-  - pandas>=1.0,<1.5.0dev0
+  - pandas=1.5.0rc0
   - pyarrow=9
   - fastavro>=0.22.9
   - python-snappy>=0.6.0

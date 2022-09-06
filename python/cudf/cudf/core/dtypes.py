@@ -17,9 +17,14 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_130
+from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150
 from cudf.core.abc import Serializable
 from cudf.core.buffer import DeviceBufferLike
+
+if PANDAS_GE_150:
+    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
+else:
+    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 
 def dtype(arbitrary):
@@ -597,8 +602,6 @@ class IntervalDtype(StructDtype):
         return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
-        from pandas.core.arrays._arrow_utils import ArrowIntervalType
-
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
@@ -609,6 +612,9 @@ class IntervalDtype(StructDtype):
             return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
         else:
             return cls(subtype=pd_dtype.subtype)
+
+    def to_pandas(self) -> pd.IntervalDtype:
+        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other):
         if isinstance(other, str):
