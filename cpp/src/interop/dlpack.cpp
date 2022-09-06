@@ -152,18 +152,22 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
 
   // We only support 1D and 2D tensors with some restrictions on layout
   if (tensor.ndim == 1) {
-    // 1D tensors must have dense layout (strides == nullptr <=> dense row-major)
-    CUDF_EXPECTS(nullptr == tensor.strides || tensor.strides[0] == 1,
+    // 1D tensors must have dense layout (strides == nullptr <=> dense layout), or have shape (0,)
+    CUDF_EXPECTS(nullptr == tensor.strides || tensor.strides[0] == 1 || tensor.shape[0] == 0,
                  "from_dlpack of 1D DLTensor only for unit-stride data");
   } else if (tensor.ndim == 2) {
-    // 2D tensors must have column-major layout and the fastest dimension must have dense layout
-    CUDF_EXPECTS((
-                   // 1D tensor reshaped into (N, 1) is fine
-                   tensor.shape[1] == 1 && (nullptr == tensor.strides || tensor.strides[0] == 1))
-                   // General case
-                   || (nullptr != tensor.strides && tensor.strides[0] == 1 &&
-                       tensor.strides[1] >= tensor.shape[0]),
-                 "from_dlpack of 2D DLTensor only for column-major unit-stride data");
+    CUDF_EXPECTS(
+      // Empty array is fine. If ncols == 0 then we get an empty dataframe
+      // irrespective of nrows, which is slightly different behaviour from
+      // cudf.DataFrame(np.empty((3, 0))) because there's no way to communicate
+      // the index information out with a table view if no columns exist.
+      (tensor.shape[0] == 0 || tensor.shape[1] == 0)
+        // (N, 1) is fine as long as the 1D array has dense layout
+        || (tensor.shape[1] == 1 && (nullptr == tensor.strides || tensor.strides[0] == 1))
+        // Column major is fine as long as the fastest dimension has dense layout
+        || (nullptr != tensor.strides && tensor.strides[0] == 1 &&
+            tensor.strides[1] >= tensor.shape[0]),
+      "from_dlpack of 2D DLTensor only for column-major unit-stride data");
   } else {
     CUDF_FAIL("DLTensor must be 1D or 2D");
   }
@@ -217,7 +221,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
-  if (num_rows == 0) { return nullptr; }
+  if (num_rows == 0 && num_cols == 0) { return nullptr; }
 
   // Ensure that type is convertible to DLDataType
   data_type const type    = input.column(0).type();
@@ -245,7 +249,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
   if (tensor.ndim > 1) {
     tensor.shape[1]   = num_cols;
     tensor.strides    = context->strides;
-    tensor.strides[0] = 1;
+    tensor.strides[0] = num_rows > 1 ? 1 : 0;
     tensor.strides[1] = num_rows;
   }
 
