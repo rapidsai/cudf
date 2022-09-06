@@ -141,6 +141,33 @@ Parrot       25.0
 Type
 Wild         185.0
 Captive      210.0
+
+
+>>> df = cudf.DataFrame({'A': 'a a b'.split(),
+...                      'B': [1,2,3],
+...                      'C': [4,6,5]})
+>>> g1 = df.groupby('A', group_keys=False)
+>>> g2 = df.groupby('A', group_keys=True)
+
+Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
+differ in their ``group_keys`` argument. Calling `apply` in various ways,
+we can get different grouping results:
+
+>>> g1[['B', 'C']].apply(lambda x: x / x.sum())
+          B    C
+0  0.333333  0.4
+1  0.666667  0.6
+2  1.000000  1.0
+
+In the above, the groups are not part of the index. We can have them included
+by using ``g2`` where ``group_keys=True``:
+
+>>> g2[['B', 'C']].apply(lambda x: x / x.sum())
+            B    C
+A
+a 0  0.333333  0.4
+  1  0.666667  0.6
+b 2  1.000000  1.0
 """
 )
 
