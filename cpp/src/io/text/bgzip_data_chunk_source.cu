@@ -104,7 +104,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   {
     std::array<char, 12> buffer{};
     CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(buffer)), "read failed");
-    CUDF_EXPECTS(buffer[0] == 31 && buffer[1] == 139 && buffer[2] == 8 && buffer[3] == 4,
+    uint8_t magic_expected_2 = 139;
+    CUDF_EXPECTS(buffer[0] == 31 && buffer[1] == reinterpret_cast<const char&>(magic_expected_2) &&
+                   buffer[2] == 8 && buffer[3] == 4,
                  "malformed BGZIP header");
     auto extra_length = read_int<uint16_t>(&buffer[10]);
     uint16_t extra_offset{};
@@ -118,7 +120,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       if (buffer[0] == 66 && buffer[1] == 67) {
         CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
         CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(uint16_t)), "read failed");
-        CUDF_EXPECTS(_stream->seekg(remaining_size, std::ios_base::cur), "seek failed");
+        CUDF_EXPECTS(_stream->seekg(remaining_size - 6, std::ios_base::cur), "seek failed");
         auto block_size = read_int<uint16_t>(&buffer[0]);
         return {block_size + 1, extra_length};
       } else {
@@ -228,13 +230,15 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         span_it,
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t*>(d_compressed_blocks.data()),
                                        reinterpret_cast<uint8_t*>(d_decompressed_blocks.begin())});
-      cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
-                                           d_compressed_spans,
-                                           d_decompressed_spans,
-                                           d_decompressed_status,
-                                           max_decompressed_size,
-                                           decompressed_size(),
-                                           stream);
+      if (decompressed_size() > 0) {
+        cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
+                                             d_compressed_spans,
+                                             d_decompressed_spans,
+                                             d_decompressed_status,
+                                             max_decompressed_size,
+                                             decompressed_size(),
+                                             stream);
+      }
       decompressed = true;
     }
 
@@ -299,7 +303,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     // read chunks until we have enough decompressed data
     while (_curr_block.decompressed_size() < requested_size) {
       _stream->peek();
-      if (_stream->eof()) { break; }
+      if (_stream->eof() || _compressed_pos > _compressed_end) { break; }
       auto header = read_header();
       _curr_block.read_block(header, *_stream);
       auto footer = read_footer();
@@ -343,7 +347,10 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       read_size -= _curr_block.remaining_size();
       _curr_block.consume_bytes(_curr_block.remaining_size());
       read_next_compressed_chunk(chunk_load_size);
+      _stream->peek();
+      if (_stream->eof()) { break; }
     }
+    read_size = std::min(read_size, _curr_block.remaining_size());
     _curr_block.consume_bytes(read_size);
   }
 
@@ -377,8 +384,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                                   read_size - _prev_block.remaining_size(),
                                   cudaMemcpyDeviceToDevice,
                                   cuda_stream.value()));
+    read_size -= _prev_block.remaining_size();
     _prev_block.consume_bytes(_prev_block.remaining_size());
-    _curr_block.consume_bytes(read_size - _prev_block.remaining_size());
+    _curr_block.consume_bytes(read_size);
     return std::make_unique<device_uvector_data_chunk>(std::move(data));
   }
 
