@@ -245,7 +245,7 @@ cudf::io::column_type_histogram detect_column_type(inference_options_view const&
     d_column_info.data(), 0, sizeof(cudf::io::column_type_histogram), stream.value()));
 
   detect_column_type_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_strings_begin, omission_null_count, size, d_column_info.data());
+    options, data, column_strings_begin, size, d_column_info.data());
 
   return d_column_info.value(stream);
 }
