@@ -508,7 +508,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
@@ -559,6 +558,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/traits.cpp
   src/utilities/type_checks.cpp
 )
 
@@ -661,16 +661,6 @@ else()
   # Make sure to export to consumers what runtime we used
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
-
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"

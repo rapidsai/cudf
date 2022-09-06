@@ -133,9 +133,9 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
     std::cout << name << std::endl;
   };
 
-#define COMPARE_MEMBER(member)                                    \
-  for (std::size_t i = 0; i < cpu_num_nodes; i++) {               \
-    EXPECT_EQ(cpu_tree.member[i], gpu_tree.member[i]) << #member; \
+#define COMPARE_MEMBER(member)                                                       \
+  for (std::size_t i = 0; i < cpu_num_nodes; i++) {                                  \
+    EXPECT_EQ(cpu_tree.member[i], gpu_tree.member[i]) << #member << "[" << i << "]"; \
   }
   COMPARE_MEMBER(node_categories);
   COMPARE_MEMBER(parent_node_ids);
@@ -174,6 +174,7 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
                                          device_span<SymbolOffsetT const> token_indices_gpu1,
                                          rmm::cuda_stream_view stream)
 {
+  constexpr bool include_quote_char = true;
   // Copy the JSON tokens to the host
   thrust::host_vector<PdaTokenT> tokens = cudf::detail::make_host_vector_async(tokens_gpu, stream);
   thrust::host_vector<SymbolOffsetT> token_indices =
@@ -234,11 +235,17 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
     };
   };
 
-  auto get_token_index = [](PdaTokenT const token, SymbolOffsetT const token_index) {
-    constexpr SymbolOffsetT skip_quote_char = 1;
+  // Includes quote char for end-of-string token or Skips the quote char for beginning-of-field-name
+  auto get_token_index = [include_quote_char](PdaTokenT const token,
+                                              SymbolOffsetT const token_index) {
+    constexpr SymbolOffsetT quote_char_size = 1;
     switch (token) {
-      case token_t::StringBegin: return token_index + skip_quote_char;
-      case token_t::FieldNameBegin: return token_index + skip_quote_char;
+      // Strip off or include quote char for StringBegin
+      case token_t::StringBegin: return token_index + (include_quote_char ? 0 : quote_char_size);
+      // Strip off or Include trailing quote char for string values for StringEnd
+      case token_t::StringEnd: return token_index + (include_quote_char ? quote_char_size : 0);
+      // Strip off quote char included for FieldNameBegin
+      case token_t::FieldNameBegin: return token_index + quote_char_size;
       default: return token_index;
     };
   };
@@ -446,27 +453,27 @@ struct JsonTest : public cudf::test::BaseFixture {
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  auto stream = cudf::default_stream_value;
+  constexpr auto stream = cudf::default_stream_value;
 
   // Test input
-  std::string input = R"(  [{)"
-                      R"("category": "reference",)"
-                      R"("index:": [4,12,42],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "[Sayings of the Century]",)"
-                      R"("price": 8.95)"
-                      R"(},  )"
-                      R"({)"
-                      R"("category": "reference",)"
-                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "{}[], <=semantic-symbols-string",)"
-                      R"("price": 8.95)"
-                      R"(}] )";
+  std::string const input = R"(  [{)"
+                            R"("category": "reference",)"
+                            R"("index:": [4,12,42],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "[Sayings of the Century]",)"
+                            R"("price": 8.95)"
+                            R"(},  )"
+                            R"({)"
+                            R"("category": "reference",)"
+                            R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "{}[], <=semantic-symbols-string",)"
+                            R"("price": 8.95)"
+                            R"(}] )";
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+    d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   cudf::io::json_reader_options const options{};
 
@@ -477,12 +484,12 @@ TEST_F(JsonTest, TreeRepresentation)
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
-  auto tree_rep =
+  auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
-  cudf::io::json::test::compare_trees(tree_rep, gpu_tree);
+  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 
   // Golden sample of node categories
   std::vector<cuio_json::node_t> golden_node_categories = {
@@ -517,8 +524,8 @@ TEST_F(JsonTest, TreeRepresentation)
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_begin = {
-    2,   3,   5,   17,  29,  38,  39,  41,  44,  49,  59,  72,  81,  108, 116, 124, 126,
-    138, 150, 158, 159, 161, 164, 169, 171, 174, 175, 180, 189, 199, 212, 221, 255, 263};
+    2,   3,   5,   16,  29,  38,  39,  41,  44,  49,  58,  72,  80,  108, 116, 124, 126,
+    137, 150, 158, 159, 161, 164, 169, 171, 174, 175, 180, 189, 198, 212, 220, 255, 263};
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_end = {
@@ -526,29 +533,30 @@ TEST_F(JsonTest, TreeRepresentation)
     147, 155, 159, 160, 162, 168, 170, 172, 175, 176, 181, 195, 209, 217, 252, 260, 267};
 
   // Check results against golden samples
-  ASSERT_EQ(golden_node_categories.size(), tree_rep.node_categories.size());
-  ASSERT_EQ(golden_parent_node_ids.size(), tree_rep.parent_node_ids.size());
-  ASSERT_EQ(golden_node_levels.size(), tree_rep.node_levels.size());
-  ASSERT_EQ(golden_node_range_begin.size(), tree_rep.node_range_begin.size());
-  ASSERT_EQ(golden_node_range_end.size(), tree_rep.node_range_end.size());
+  ASSERT_EQ(golden_node_categories.size(), cpu_tree.node_categories.size());
+  ASSERT_EQ(golden_parent_node_ids.size(), cpu_tree.parent_node_ids.size());
+  ASSERT_EQ(golden_node_levels.size(), cpu_tree.node_levels.size());
+  ASSERT_EQ(golden_node_range_begin.size(), cpu_tree.node_range_begin.size());
+  ASSERT_EQ(golden_node_range_end.size(), cpu_tree.node_range_end.size());
 
   for (std::size_t i = 0; i < golden_node_categories.size(); i++) {
-    ASSERT_EQ(golden_node_categories[i], tree_rep.node_categories[i]);
-    ASSERT_EQ(golden_parent_node_ids[i], tree_rep.parent_node_ids[i]);
-    ASSERT_EQ(golden_node_levels[i], tree_rep.node_levels[i]);
-    ASSERT_EQ(golden_node_range_begin[i], tree_rep.node_range_begin[i]);
-    ASSERT_EQ(golden_node_range_end[i], tree_rep.node_range_end[i]);
+    ASSERT_EQ(golden_node_categories[i], cpu_tree.node_categories[i]) << "[" << i << "]";
+    ASSERT_EQ(golden_parent_node_ids[i], cpu_tree.parent_node_ids[i]) << "[" << i << "]";
+    ASSERT_EQ(golden_node_levels[i], cpu_tree.node_levels[i]) << "[" << i << "]";
+    ASSERT_EQ(golden_node_range_begin[i], cpu_tree.node_range_begin[i]) << "[" << i << "]";
+    ASSERT_EQ(golden_node_range_end[i], cpu_tree.node_range_end[i]) << "[" << i << "]";
   }
 }
 
 TEST_F(JsonTest, TreeRepresentation2)
 {
-  auto stream = cudf::default_stream_value;
+  constexpr auto stream = cudf::default_stream_value;
   // Test input: value end with comma, space, close-brace ", }"
-  std::string input =
-    //  0         1         2         3         4         5         6         7         8         9
-    //  0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
-    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
+  std::string const input =
+    // 0         1         2         3         4         5         6         7         8         9
+    // 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11)"
+    "\n}}]";
   // Prepare input & output buffers
   cudf::string_scalar d_scalar(input, true, stream);
   auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
@@ -563,12 +571,12 @@ TEST_F(JsonTest, TreeRepresentation2)
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
-  auto tree_rep =
+  auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
-  cudf::io::json::test::compare_trees(tree_rep, gpu_tree);
+  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
   // TODO compare with CPU version
 
   // Golden sample of node categories
@@ -584,7 +592,7 @@ TEST_F(JsonTest, TreeRepresentation2)
     cuio_json::parent_node_sentinel, 0,
     0, 2,  3,  4,  5,  4, 7,
     0, 9, 10, 11, 12, 11, 14,
-      9, 16, 17, 18, 17, 20};
+       9, 16, 17, 18, 17, 20};
   // clang-format on
 
   // Golden sample of node levels
@@ -594,25 +602,25 @@ TEST_F(JsonTest, TreeRepresentation2)
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_begin = {0,  2,  6,  9,  13, 16, 21, 25, 29, 36, 39,
-                                                      44, 47, 52, 56, 60, 65, 70, 72, 76, 82, 86};
+                                                      44, 47, 52, 56, 60, 66, 71, 73, 77, 83, 87};
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_end = {1,  3,  7,  10, 14, 17, 22, 26, 30, 37, 40,
-                                                    45, 48, 53, 57, 61, 66, 71, 73, 78, 83, 88};
+                                                    45, 48, 53, 57, 61, 67, 72, 74, 79, 84, 89};
 
   // Check results against golden samples
-  ASSERT_EQ(golden_node_categories.size(), tree_rep.node_categories.size());
-  ASSERT_EQ(golden_parent_node_ids.size(), tree_rep.parent_node_ids.size());
-  ASSERT_EQ(golden_node_levels.size(), tree_rep.node_levels.size());
-  ASSERT_EQ(golden_node_range_begin.size(), tree_rep.node_range_begin.size());
-  ASSERT_EQ(golden_node_range_end.size(), tree_rep.node_range_end.size());
+  ASSERT_EQ(golden_node_categories.size(), cpu_tree.node_categories.size());
+  ASSERT_EQ(golden_parent_node_ids.size(), cpu_tree.parent_node_ids.size());
+  ASSERT_EQ(golden_node_levels.size(), cpu_tree.node_levels.size());
+  ASSERT_EQ(golden_node_range_begin.size(), cpu_tree.node_range_begin.size());
+  ASSERT_EQ(golden_node_range_end.size(), cpu_tree.node_range_end.size());
 
   for (std::size_t i = 0; i < golden_node_categories.size(); i++) {
-    ASSERT_EQ(golden_node_categories[i], tree_rep.node_categories[i]);
-    ASSERT_EQ(golden_parent_node_ids[i], tree_rep.parent_node_ids[i]);
-    ASSERT_EQ(golden_node_levels[i], tree_rep.node_levels[i]);
-    ASSERT_EQ(golden_node_range_begin[i], tree_rep.node_range_begin[i]);
-    ASSERT_EQ(golden_node_range_end[i], tree_rep.node_range_end[i]);
+    ASSERT_EQ(golden_node_categories[i], cpu_tree.node_categories[i]);
+    ASSERT_EQ(golden_parent_node_ids[i], cpu_tree.parent_node_ids[i]);
+    ASSERT_EQ(golden_node_levels[i], cpu_tree.node_levels[i]);
+    ASSERT_EQ(golden_node_range_begin[i], cpu_tree.node_range_begin[i]);
+    ASSERT_EQ(golden_node_range_end[i], cpu_tree.node_range_end[i]);
   }
 }
 

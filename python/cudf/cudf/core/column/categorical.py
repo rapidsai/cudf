@@ -123,7 +123,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool:
         """
         Whether the categories have an ordered relationship.
         """
@@ -729,7 +729,7 @@ class CategoricalColumn(column.ColumnBase):
         return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool:
         return self.dtype.ordered
 
     @ordered.setter
@@ -945,8 +945,8 @@ class CategoricalColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view
 
-    def unique(self) -> CategoricalColumn:
-        codes = self.as_numerical.unique()
+    def unique(self, preserve_order=False) -> CategoricalColumn:
+        codes = self.as_numerical.unique(preserve_order=preserve_order)
         return column.build_categorical_column(
             categories=self.categories,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -1316,7 +1316,9 @@ class CategoricalColumn(column.ColumnBase):
         head = next((obj for obj in objs if obj.valid_count), objs[0])
 
         # Combine and de-dupe the categories
-        cats = column.concat_columns([o.categories for o in objs]).unique()
+        cats = column.concat_columns([o.categories for o in objs]).unique(
+            preserve_order=True
+        )
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
         codes = [o.codes for o in objs]
 
@@ -1456,10 +1458,8 @@ class CategoricalColumn(column.ColumnBase):
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
             # drop_duplicates() instead of unique() to preserve order
-            new_cats = (
-                cudf.Series(new_cats)
-                .drop_duplicates(ignore_index=True)
-                ._column
+            new_cats = cudf.Series(new_cats)._column.unique(
+                preserve_order=True
             )
 
         cur_codes = self.codes

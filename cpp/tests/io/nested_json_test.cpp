@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/span.hpp"
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -24,6 +23,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -35,6 +35,98 @@
 #include <string>
 
 namespace cuio_json = cudf::io::json;
+
+namespace {
+// Forward declaration
+void print_column(std::string const& input,
+                  cuio_json::json_column const& column,
+                  uint32_t indent = 0);
+
+/**
+ * @brief Helper to generate indentation
+ */
+std::string pad(uint32_t indent = 0)
+{
+  std::string pad{};
+  if (indent > 0) pad.insert(pad.begin(), indent, ' ');
+  return pad;
+}
+
+/**
+ * @brief Prints a string column.
+ */
+void print_json_string_col(std::string const& input,
+                           cuio_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  for (std::size_t i = 0; i < column.string_offsets.size(); i++) {
+    std::cout << pad(indent) << i << ": [" << (column.validity[i] ? "1" : "0") << "] '"
+              << input.substr(column.string_offsets[i], column.string_lengths[i]) << "'\n";
+  }
+}
+
+/**
+ * @brief Prints a list column.
+ */
+void print_json_list_col(std::string const& input,
+                         cuio_json::json_column const& column,
+                         uint32_t indent = 0)
+{
+  std::cout << pad(indent) << " [LIST]\n";
+  std::cout << pad(indent) << " -> num. child-columns: " << column.child_columns.size() << "\n";
+  std::cout << pad(indent) << " -> num. rows: " << column.current_offset << "\n";
+  std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
+  std::cout << pad(indent) << " offsets[]: "
+            << "\n";
+  for (std::size_t i = 0; i < column.child_offsets.size() - 1; i++) {
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "] ["
+              << column.child_offsets[i] << ", " << column.child_offsets[i + 1] << ")\n";
+  }
+  if (column.child_columns.size() > 0) {
+    std::cout << pad(indent) << column.child_columns.begin()->first << "[]: "
+              << "\n";
+    print_column(input, column.child_columns.begin()->second, indent + 2);
+  }
+}
+
+/**
+ * @brief Prints a struct column.
+ */
+void print_json_struct_col(std::string const& input,
+                           cuio_json::json_column const& column,
+                           uint32_t indent = 0)
+{
+  std::cout << pad(indent) << " [STRUCT]\n";
+  std::cout << pad(indent) << " -> num. child-columns: " << column.child_columns.size() << "\n";
+  std::cout << pad(indent) << " -> num. rows: " << column.current_offset << "\n";
+  std::cout << pad(indent) << " -> num. valid: " << column.valid_count << "\n";
+  std::cout << pad(indent) << " -> validity[]: "
+            << "\n";
+  for (decltype(column.current_offset) i = 0; i < column.current_offset; i++) {
+    std::cout << pad(indent + 2) << i << ": [" << (column.validity[i] ? "1" : "0") << "]\n";
+  }
+  auto it = std::begin(column.child_columns);
+  for (std::size_t i = 0; i < column.child_columns.size(); i++) {
+    std::cout << pad(indent + 2) << "child #" << i << " '" << it->first << "'[] \n";
+    print_column(input, it->second, indent + 2);
+    it++;
+  }
+}
+
+/**
+ * @brief Prints the column's data and recurses through and prints all the child columns.
+ */
+void print_column(std::string const& input, cuio_json::json_column const& column, uint32_t indent)
+{
+  switch (column.type) {
+    case cuio_json::json_col_t::StringColumn: print_json_string_col(input, column, indent); break;
+    case cuio_json::json_col_t::ListColumn: print_json_list_col(input, column, indent); break;
+    case cuio_json::json_col_t::StructColumn: print_json_struct_col(input, column, indent); break;
+    case cuio_json::json_col_t::Unknown: std::cout << pad(indent) << "[UNKNOWN]\n"; break;
+    default: break;
+  }
+}
+}  // namespace
 
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {
@@ -66,8 +158,8 @@ TEST_F(JsonTest, StackContext)
                             R"(}] )";
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
   hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
@@ -80,7 +172,7 @@ TEST_F(JsonTest, StackContext)
   // Make sure we copied back the stack context
   stream.synchronize();
 
-  std::vector<char> golden_stack_context{
+  std::vector<char> const golden_stack_context{
     '_', '_', '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '[', '[', '[', '[', '[', '[', '[', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
@@ -114,8 +206,8 @@ TEST_F(JsonTest, StackContextUtf8)
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
   hostdevice_vector<StackSymbolT> stack_context(input.size(), stream);
 
@@ -128,7 +220,7 @@ TEST_F(JsonTest, StackContextUtf8)
   // Make sure we copied back the stack context
   stream.synchronize();
 
-  std::vector<char> golden_stack_context{
+  std::vector<char> const golden_stack_context{
     '_', '[', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
     '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{', '{',
@@ -144,20 +236,20 @@ TEST_F(JsonTest, TokenStream)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
   // Test input
-  std::string input = R"(  [{)"
-                      R"("category": "reference",)"
-                      R"("index:": [4,12,42],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "[Sayings of the Century]",)"
-                      R"("price": 8.95)"
-                      R"(},  )"
-                      R"({)"
-                      R"("category": "reference",)"
-                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
-                      R"("author": "Nigel Rees",)"
-                      R"("title": "{}[], <=semantic-symbols-string",)"
-                      R"("price": 8.95)"
-                      R"(}] )";
+  std::string const input = R"(  [{)"
+                            R"("category": "reference",)"
+                            R"("index:": [4,12,42],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "[Sayings of the Century]",)"
+                            R"("price": 8.95)"
+                            R"(},  )"
+                            R"({)"
+                            R"("category": "reference",)"
+                            R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                            R"("author": "Nigel Rees",)"
+                            R"("title": "{}[], <=semantic-symbols-string",)"
+                            R"("price": 8.95)"
+                            R"(}] )";
 
   constexpr auto stream = cudf::default_stream_value;
 
@@ -165,22 +257,22 @@ TEST_F(JsonTest, TokenStream)
   cudf::io::json_reader_options default_options{};
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] =
     cuio_json::detail::get_token_stream(d_input, default_options, stream);
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> tokens_gpu =
+  thrust::host_vector<PdaTokenT> const tokens_gpu =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
     cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
-  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream = {
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> const golden_token_stream = {
     {2, token_t::ListBegin},
     {3, token_t::StructBegin},
     {4, token_t::StructMemberBegin},
@@ -291,8 +383,9 @@ TEST_F(JsonTest, TokenStream2)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
   // value end with comma, space, close-brace ", }"
-  std::string input =
-    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11}}])";
+  std::string const input =
+    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11)"
+    "\n}}]";
 
   constexpr auto stream = cudf::default_stream_value;
 
@@ -300,23 +393,23 @@ TEST_F(JsonTest, TokenStream2)
   cudf::io::json_reader_options default_options{};
 
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input =
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] =
     cuio_json::detail::get_token_stream(d_input, default_options, stream);
   // Copy back the number of tokens that were written
-  thrust::host_vector<PdaTokenT> tokens_gpu =
+  thrust::host_vector<PdaTokenT> const tokens_gpu =
     cudf::detail::make_host_vector_async(d_tokens_gpu, stream);
-  thrust::host_vector<SymbolOffsetT> token_indices_gpu =
+  thrust::host_vector<SymbolOffsetT> const token_indices_gpu =
     cudf::detail::make_host_vector_async(d_token_indices_gpu, stream);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
   // clang-format off
-  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream = {
+  std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> const golden_token_stream = {
     {0, token_t::ListBegin},
     {2, token_t::StructBegin}, {3, token_t::StructEnd}, //{}
     {6, token_t::StructBegin},
@@ -337,11 +430,11 @@ TEST_F(JsonTest, TokenStream2)
         {64, token_t::StructMemberBegin}, {64, token_t::FieldNameBegin}, {66, token_t::FieldNameEnd}, //b
             {70, token_t::StructBegin},
                 {71, token_t::StructMemberBegin}, {71, token_t::FieldNameBegin}, {73, token_t::FieldNameEnd}, {76, token_t::ValueBegin}, {78, token_t::ValueEnd}, {79, token_t::StructMemberEnd}, //b.x
-                {81, token_t::StructMemberBegin}, {81, token_t::FieldNameBegin}, {83, token_t::FieldNameEnd}, {86, token_t::ValueBegin}, {88, token_t::ValueEnd}, {88, token_t::StructMemberEnd}, //b.z
-            {88, token_t::StructEnd},
-        {89, token_t::StructMemberEnd},
-    {89, token_t::StructEnd},
-    {90, token_t::ListEnd}};
+                {81, token_t::StructMemberBegin}, {81, token_t::FieldNameBegin}, {83, token_t::FieldNameEnd}, {86, token_t::ValueBegin}, {88, token_t::ValueEnd}, {89, token_t::StructMemberEnd}, //b.z
+            {89, token_t::StructEnd},
+        {90, token_t::StructMemberEnd},
+    {90, token_t::StructEnd},
+    {91, token_t::ListEnd}};
   // clang-format on
 
   // Verify the number of tokens matches
@@ -426,7 +519,7 @@ TEST_F(JsonTest, UTF_JSON)
   CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, default_options, stream));
 }
 
-TEST_F(JsonTest, FromParquet)
+TEST_F(JsonTest, DISABLED_FromParquet)
 {
   using cuio_json::SymbolT;
 
