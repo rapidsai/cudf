@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
+using cudf::io::parse_options;
 using cudf::io::detail::infer_data_type;
-using cudf::io::detail::inference_options;
 
 // Base test fixture for tests
 struct TypeInference : public cudf::test::BaseFixture {
@@ -39,8 +39,8 @@ struct TypeInference : public cudf::test::BaseFixture {
 TEST_F(TypeInference, Basic)
 {
   auto const stream = rmm::cuda_stream_default;
-  auto options      = inference_options{};
 
+  auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -61,7 +61,7 @@ TEST_F(TypeInference, Basic)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }
@@ -69,8 +69,8 @@ TEST_F(TypeInference, Basic)
 TEST_F(TypeInference, OmittedNull)
 {
   auto const stream = rmm::cuda_stream_default;
-  auto options      = inference_options{};
 
+  auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -91,7 +91,7 @@ TEST_F(TypeInference, OmittedNull)
 
   cudf::size_type constexpr num_omitted_nulls = 1;
   auto res_type =
-    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type,
             cudf::data_type{cudf::type_id::FLOAT64});  // FLOAT64 to align with pandas's behavior
@@ -100,8 +100,8 @@ TEST_F(TypeInference, OmittedNull)
 TEST_F(TypeInference, String)
 {
   auto const stream = rmm::cuda_stream_default;
-  auto options      = inference_options{};
 
+  auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -122,7 +122,7 @@ TEST_F(TypeInference, String)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
@@ -130,8 +130,8 @@ TEST_F(TypeInference, String)
 TEST_F(TypeInference, Bool)
 {
   auto const stream = rmm::cuda_stream_default;
-  auto options      = inference_options{};
 
+  auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -152,7 +152,7 @@ TEST_F(TypeInference, Bool)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::BOOL8});
 }
@@ -160,8 +160,8 @@ TEST_F(TypeInference, Bool)
 TEST_F(TypeInference, Timestamp)
 {
   auto const stream = rmm::cuda_stream_default;
-  auto options      = inference_options{};
 
+  auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -182,7 +182,7 @@ TEST_F(TypeInference, Timestamp)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
 }

@@ -33,34 +33,6 @@
 
 namespace cudf::io::detail {
 /**
- * @brief Non-owning view for type inference options
- */
-struct inference_options_view {
-  cudf::detail::trie_view trie_true;
-  cudf::detail::trie_view trie_false;
-  cudf::detail::trie_view trie_na;
-  char quote_char;
-};
-
-/**
- * @brief Structure for type inference options
- */
-struct inference_options {
-  cudf::detail::optional_trie trie_true;
-  cudf::detail::optional_trie trie_false;
-  cudf::detail::optional_trie trie_na;
-  char quote_char = '"';
-
-  [[nodiscard]] inference_options_view view() const
-  {
-    return {cudf::detail::make_trie_view(trie_true),
-            cudf::detail::make_trie_view(trie_false),
-            cudf::detail::make_trie_view(trie_na),
-            quote_char};
-  }
-};
-
-/**
  * @brief Returns true if the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
@@ -124,7 +96,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @param[out] column_info Histogram of column type counters
  */
 template <typename ColumnStringIter>
-__global__ void infer_column_type_kernel(inference_options_view options,
+__global__ void infer_column_type_kernel(json_parse_options_view options,
                                          device_span<char const> data,
                                          ColumnStringIter column_strings_begin,
                                          std::size_t size,
@@ -232,7 +204,7 @@ __global__ void infer_column_type_kernel(inference_options_view options,
  * @return A histogram containing column-specific type counters
  */
 template <typename ColumnStringIter>
-cudf::io::column_type_histogram infer_column_type(inference_options_view const& options,
+cudf::io::column_type_histogram infer_column_type(json_parse_options_view const& options,
                                                   cudf::device_span<char const> data,
                                                   ColumnStringIter column_strings_begin,
                                                   std::size_t const size,
@@ -269,7 +241,7 @@ cudf::io::column_type_histogram infer_column_type(inference_options_view const& 
  * @return The inferred data type
  */
 template <typename ColumnStringIter>
-cudf::data_type infer_data_type(inference_options_view const& options,
+cudf::data_type infer_data_type(json_parse_options_view const& options,
                                 device_span<char const> data,
                                 ColumnStringIter column_strings_begin,
                                 cudf::size_type omission_null_count,
