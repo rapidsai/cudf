@@ -249,7 +249,42 @@ def test_param_concat(lib, df):
     return lib.concat([df, df])
 
 
-def pandas_copy_semantics_comparison_test(cudf_object):
+def set_element(frame):
+    """Change the first element of frame."""
+    # Handle default values to replace with for different dtypes. We provide
+    # two options to ensure that at least one of them is different from the
+    # original value of the element we plan to overwrite.
+    defaults_by_kind = {
+        "b": (True, False),
+        "i": (0, 1),
+        "u": (0, 1),
+        "O": ("a", "b"),
+    }
+
+    if isinstance(frame, (cudf.Series, pd.Series)):
+        try:
+            defaults = defaults_by_kind[frame.dtype.kind]
+        except KeyError:
+            raise TypeError("Provided frame has an unsupported dtype.")
+
+        default = defaults[0] if frame.iloc[0] != defaults[0] else defaults[1]
+        frame.iloc[0] = default
+    elif isinstance(frame, (cudf.DataFrame, pd.DataFrame)):
+        try:
+            defaults = defaults_by_kind[frame.iloc[:, 0].dtype.kind]
+        except KeyError:
+            raise TypeError("Provided frame has an unsupported dtype.")
+        default = (
+            defaults[0] if frame.iloc[0, 0] != defaults[0] else defaults[1]
+        )
+        frame.iloc[0, 0] = default
+    else:
+        raise TypeError(
+            f"Object {frame} of type {type(frame)} is unsupported."
+        )
+
+
+def pandas_copy_semantics_comparison_test(cudf_object, modify=set_element):
     def deco(test):
         """Verify that cudf and pandas methods have the same semantics.
 
@@ -288,11 +323,8 @@ def pandas_copy_semantics_comparison_test(cudf_object):
                 cudf_output = test({cudf_arg_str})
                 pandas_output = test({pandas_arg_str})
 
-                # TODO: Generalize this to different data types and make it
-                # robust to the values already contained. It may also need to
-                # be specialized for DataFrame vs. Series ops.
-                cudf_output.iloc[0] = 230849
-                pandas_output.iloc[0] = 230849
+                modify(cudf_output)
+                modify(pandas_output)
 
                 cudf_modified = {cudf_object}.equals(cudf_object_orig)
                 pandas_modified = pandas_object.equals(pandas_object_orig)
@@ -309,6 +341,7 @@ def pandas_copy_semantics_comparison_test(cudf_object):
             if _LIB_PARAM_NAME in parameters
             else None,
             "cudf_object": cudf_object,
+            "modify": modify,
         }
         exec(src, globals_)
         wrapped_test = globals_["wrapped_test"]
