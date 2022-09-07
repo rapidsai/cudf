@@ -29,7 +29,7 @@
 #include <string>
 #include <vector>
 
-using cudf::io::detail::detect_data_type;
+using cudf::io::detail::infer_data_type;
 using cudf::io::detail::inference_options;
 
 // Base test fixture for tests
@@ -61,7 +61,7 @@ TEST_F(TypeInference, Basic)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    detect_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }
@@ -91,7 +91,7 @@ TEST_F(TypeInference, OmittedNull)
 
   cudf::size_type constexpr num_omitted_nulls = 1;
   auto res_type =
-    detect_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type,
             cudf::data_type{cudf::type_id::FLOAT64});  // FLOAT64 to align with pandas's behavior
@@ -122,7 +122,7 @@ TEST_F(TypeInference, String)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    detect_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
@@ -152,7 +152,7 @@ TEST_F(TypeInference, Bool)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    detect_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::BOOL8});
 }
@@ -182,7 +182,7 @@ TEST_F(TypeInference, Timestamp)
 
   cudf::size_type constexpr num_omitted_nulls = 0;
   auto res_type =
-    detect_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+    infer_data_type(options.view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
 }

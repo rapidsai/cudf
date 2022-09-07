@@ -31,9 +31,7 @@
 
 #include <cstddef>
 
-namespace cudf {
-namespace io {
-namespace detail {
+namespace cudf::io::detail {
 /**
  * @brief Non-owning view for type inference options
  */
@@ -43,6 +41,7 @@ struct inference_options_view {
   cudf::detail::trie_view trie_na;
   char quote_char;
 };
+
 /**
  * @brief Structure for type inference options
  */
@@ -125,11 +124,11 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @param[out] column_info Histogram of column type counters
  */
 template <typename ColumnStringIter>
-__global__ void detect_column_type_kernel(inference_options_view const options,
-                                          device_span<char const> const data,
-                                          ColumnStringIter column_strings_begin,
-                                          std::size_t const size,
-                                          cudf::io::column_type_histogram* column_info)
+__global__ void infer_column_type_kernel(inference_options_view options,
+                                         device_span<char const> data,
+                                         ColumnStringIter column_strings_begin,
+                                         std::size_t size,
+                                         cudf::io::column_type_histogram* column_info)
 {
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
        idx += gridDim.x * blockDim.x) {
@@ -143,8 +142,11 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
       continue;
     }
 
+    if (field_len == 0) {
+      atomicAdd(&column_info->null_count, 1);
+      continue;
+    }
     // Handling strings
-    if (field_len == 0) continue;
     if (*field_begin == options.quote_char && field_begin[field_len - 1] == options.quote_char) {
       atomicAdd(&column_info->string_count, 1);
       continue;
@@ -196,7 +198,7 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
           options.trie_false, {field_begin, static_cast<std::size_t>(field_len)})) {
       atomicAdd(&column_info->bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      bool is_negative       = (*field_begin == '-');
+      auto const is_negative = (*field_begin == '-');
       char const* data_begin = field_begin + (is_negative || (*field_begin == '+'));
       cudf::size_type* ptr   = cudf::io::gpu::infer_integral_field_counter(
         data_begin, data_begin + digit_count, is_negative, *column_info);
@@ -231,11 +233,11 @@ __global__ void detect_column_type_kernel(inference_options_view const options,
  * @return A histogram containing column-specific type counters
  */
 template <typename ColumnStringIter>
-cudf::io::column_type_histogram detect_column_type(inference_options_view const& options,
-                                                   cudf::device_span<char const> data,
-                                                   ColumnStringIter column_strings_begin,
-                                                   std::size_t const size,
-                                                   rmm::cuda_stream_view stream)
+cudf::io::column_type_histogram infer_column_type(inference_options_view const& options,
+                                                  cudf::device_span<char const> data,
+                                                  ColumnStringIter column_strings_begin,
+                                                  std::size_t const size,
+                                                  rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 128;
 
@@ -244,17 +246,17 @@ cudf::io::column_type_histogram detect_column_type(inference_options_view const&
   CUDF_CUDA_TRY(cudaMemsetAsync(
     d_column_info.data(), 0, sizeof(cudf::io::column_type_histogram), stream.value()));
 
-  detect_column_type_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+  infer_column_type_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_strings_begin, size, d_column_info.data());
 
   return d_column_info.value(stream);
 }
 
 /**
- * @brief Detects data type for a given JSON string input `data`.
+ * @brief Infers data type for a given JSON string input `data`.
  *
  * @throw cudf::logic_error if input size is 0
- * @throw cudf::logic_error if data type detection failed
+ * @throw cudf::logic_error if data type inference failed
  *
  * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
  * `thrust::tuple<device_span, string_view>`
@@ -265,19 +267,19 @@ cudf::io::column_type_histogram detect_column_type(inference_options_view const&
  * @param omission_null_count Number of omitted nulls
  * @param size Size of the string input
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return The detected data type
+ * @return The inferred data type
  */
 template <typename ColumnStringIter>
-cudf::data_type detect_data_type(inference_options_view const& options,
-                                 device_span<char const> data,
-                                 ColumnStringIter column_strings_begin,
-                                 cudf::size_type omission_null_count,
-                                 std::size_t const size,
-                                 rmm::cuda_stream_view stream)
+cudf::data_type infer_data_type(inference_options_view const& options,
+                                device_span<char const> data,
+                                ColumnStringIter column_strings_begin,
+                                cudf::size_type omission_null_count,
+                                std::size_t const size,
+                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(size != 0, "No data available for data type inference.\n");
 
-  auto const h_column_info = detect_column_type(options, data, column_strings_begin, size, stream);
+  auto const h_column_info = infer_column_type(options, data, column_strings_begin, size, stream);
 
   auto get_type_id = [&](auto const& cinfo) {
     auto int_count_total =
@@ -301,11 +303,9 @@ cudf::data_type detect_data_type(inference_options_view const& options,
     } else if (cinfo.bool_count > 0) {
       return type_id::BOOL8;
     } else {
-      CUDF_FAIL("Data type detection failed.\n");
+      CUDF_FAIL("Data type inference failed.\n");
     }
   };
   return cudf::data_type{get_type_id(h_column_info)};
 }
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail
