@@ -41,11 +41,11 @@ class stringview_model(models.StructModel):
         # const char* _data{}
         # Pointer to device memory contain char array for this string
         ("data", types.CPointer(types.char)),
-        #  size_type _bytes{};
-        #  Number of bytes in _data for this string
+        # size_type _bytes{};
+        # Number of bytes in _data for this string
         ("bytes", types.int32),
-        #  mutable size_type _length{};
-        #  Number of characters in this string (computed)
+        # mutable size_type _length{};
+        # Number of characters in this string (computed)
         ("length", types.int32),
     )
 
@@ -77,15 +77,14 @@ string_view = StringView()
 
 class StrViewArgHandler:
     """
-    As part of Numbas preprocessing step incoming function arguments are
+    As part of Numba's preprocessing step, incoming function arguments are
     modified based on the associated type for that argument that was used
     to JIT the kernel. However it only knows how to handle built in array
     types natively. With string UDFs, the jitted type is string_view*,
     which numba does not know how to handle.
 
-    This small piece of code implements the necessary handling. Really all
-    it does is funnel the handling of string_view* to the handling
-    of raw pointer arguments, which numba knows how to use.
+    This class converts string_view* to raw pointer arguments, which Numba
+    knows how to use.
 
     See numba.cuda.compiler._prepare_args for details.
     """
