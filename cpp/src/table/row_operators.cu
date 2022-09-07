@@ -291,6 +291,8 @@ void check_lex_compatibility(table_view const& input)
       check_column(list_col.child());
     } else if (c.type().id() == type_id::STRUCT) {
       for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+        CUDF_EXPECTS(child->type().id() != type_id::LIST,
+                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
         check_column(*child);
       }
     }
