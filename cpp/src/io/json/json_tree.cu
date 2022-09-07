@@ -300,6 +300,7 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   // GPU version
   // 3. convert node_category+fieldname to node_type!
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
@@ -472,24 +473,24 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
   thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 0);  ///
   // thrust::device_pointer_cast(col_id.data())[0] = 0;
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
-    std::cout << level << ".before gather\n";
+    // std::cout << level << ".before gather\n";
     thrust::gather(rmm::exec_policy(stream),
                    parent_indices.data() +
                      level_boundaries[level - 1],  // FIXME: might be wrong. might be a bug here.
                    parent_indices.data() + level_boundaries[level],
                    col_id.data(),  // + level_boundaries[level - 1],
                    parent_col_id.data() + level_boundaries[level - 1]);
-    std::cout << level << ".after gather\n";
-    print_level_data(level,
-                     level_boundaries[level - 1],
-                     level_boundaries[level],
-                     scatter_indices,
-                     parent_indices,
-                     parent_col_id,
-                     node_type,
-                     d_tree.node_levels,
-                     col_id);
-    std::cout << level << ".before sort\n";
+    // std::cout << level << ".after gather\n";
+    // print_level_data(level,
+    //                  level_boundaries[level - 1],
+    //                  level_boundaries[level],
+    //                  scatter_indices,
+    //                  parent_indices,
+    //                  parent_col_id,
+    //                  node_type,
+    //                  d_tree.node_levels,
+    //                  col_id);
+    // std::cout << level << ".before sort\n";
     // TODO probably sort_by_key value should be a gather/scatter index to restore original order.
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream),
@@ -503,20 +504,20 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                      //  gather_indices.begin() + level_boundaries[level - 1],
                                      //  parent_indices.begin() + level_boundaries[level - 1]
         ));
-    std::cout << level << ".after sort\n";
-    print_level_data(level,
-                     level_boundaries[level - 1],
-                     level_boundaries[level],
-                     scatter_indices,
-                     parent_indices,
-                     parent_col_id,
-                     node_type,
-                     d_tree.node_levels,
-                     col_id);
+    // std::cout << level << ".after sort\n";
+    // print_level_data(level,
+    //                  level_boundaries[level - 1],
+    //                  level_boundaries[level],
+    //                  scatter_indices,
+    //                  parent_indices,
+    //                  parent_col_id,
+    //                  node_type,
+    //                  d_tree.node_levels,
+    //                  col_id);
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
-    std::cout << level << ".before transform\n";
+    // std::cout << level << ".before transform\n";
     thrust::transform(rmm::exec_policy(stream),
                       adjacent_pair_it,
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
@@ -526,45 +527,71 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              rhs = thrust::get<1>(adjacent_pair);
                         return lhs != rhs ? 1 : 0;
                       });
-    std::cout << level << ".before scan\n";
-    // includes previous level last col_id to continue the index.
+    // std::cout << level << ".before scan\n";
+    // // includes previous level last col_id to continue the index.
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            col_id.data() + level_boundaries[level - 1] - 1,
                            col_id.data() + level_boundaries[level],
                            col_id.data() + level_boundaries[level - 1] - 1);
-    // print node_id, parent_node_idx, parent_col_id, node_type, level.
-    std::cout << level << ".after scan\n";
-    print_level_data(level,
-                     level_boundaries[level - 1],
-                     level_boundaries[level],
-                     scatter_indices,
-                     parent_indices,
-                     parent_col_id,
-                     node_type,
-                     d_tree.node_levels,
-                     col_id);
-    // TODO scatter/gather to restore original order.
+    // // print node_id, parent_node_idx, parent_col_id, node_type, level.
+    // std::cout << level << ".after scan\n";
+    // print_level_data(level,
+    //                  level_boundaries[level - 1],
+    //                  level_boundaries[level],
+    //                  scatter_indices,
+    //                  parent_indices,
+    //                  parent_col_id,
+    //                  node_type,
+    //                  d_tree.node_levels,
+    //                  col_id);
+    // TODO scatter/gather to restore original order. (scatter will be faster.)
     thrust::sort_by_key(
       rmm::exec_policy(stream),
       scatter_indices.begin() + level_boundaries[level - 1],
       scatter_indices.begin() + level_boundaries[level],
       thrust::make_zip_iterator(col_id.begin() + level_boundaries[level - 1],
                                 parent_col_id.data() + level_boundaries[level - 1]));
-    print_level_data(level,
-                     level_boundaries[level - 1],
-                     level_boundaries[level],
-                     scatter_indices,
-                     parent_indices,
-                     parent_col_id,
-                     node_type,
-                     d_tree.node_levels,
-                     col_id);
+    // print_level_data(level,
+    //                  level_boundaries[level - 1],
+    //                  level_boundaries[level],
+    //                  scatter_indices,
+    //                  parent_indices,
+    //                  parent_col_id,
+    //                  node_type,
+    //                  d_tree.node_levels,
+    //                  col_id);
   }
+  auto translate_col_id = [](auto col_id) {
+    std::unordered_map<int, int> col_id_map;
+    std::vector<int> new_col_ids(col_id.size());
+    int unique_id = 0;
+    for (auto id : col_id) {
+      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
+    }
+    for (size_t i = 0; i < col_id.size(); i++) {
+      new_col_ids[i] = col_id_map[col_id[i]];
+    }
+    return new_col_ids;
+  };
+  // TODO can we do this with scatter instead of sort?
+  thrust::sort_by_key(rmm::exec_policy(stream),
+                      scatter_indices.begin(),
+                      scatter_indices.end(),
+                      thrust::make_zip_iterator(parent_indices.begin(),
+                                                node_type.begin(),
+                                                parent_col_id.begin(),
+                                                col_id.begin(),
+                                                d_tree.node_levels.begin()));
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(parent_indices, stream), "gpu.parent_indices");
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
-  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream), "parent_col_id");
-  print_vec(cudf::detail::make_std_vector_async(col_id, stream), "col_id");
+  print_vec(cudf::detail::make_std_vector_async(parent_indices, stream),
+            "gpu.parent_indices");  // once original order is restored, is this required?
+  print_vec(cudf::detail::make_std_vector_async(node_type, stream),
+            "gpu.node_type");  // is this needed?
+  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream),
+            "parent_col_id");                                                // is this needed?
+  print_vec(cudf::detail::make_std_vector_async(col_id, stream), "col_id");  // required.
+  print_vec(translate_col_id(cudf::detail::make_std_vector_async(col_id, stream)),
+            "col_id (translated)");  // is this required? required to be ordered for the next step?
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
   // auto sorted_cpu_col_id = [&]() {
   //     auto sc = cudf::detail::make_std_vector_async(scatter_indices, stream);
