@@ -1062,6 +1062,20 @@ def test_string_udf_isspace(data):
 
 
 @pytest.mark.parametrize(
+    "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022", "cuda"]}]
+)
+@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", ""])
+def test_string_udf_count(data, substr):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row["str_col"]
+        return st.count(substr)
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
 )
 @pytest.mark.parametrize("operator", [float, int, bool])

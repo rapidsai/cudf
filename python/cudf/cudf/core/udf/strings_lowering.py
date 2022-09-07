@@ -9,6 +9,7 @@ from numba.cuda.cudaimpl import lower as cuda_lower
 from strings_udf._typing import size_type, string_view
 from strings_udf.lowering import (
     string_view_contains_impl,
+    string_view_count_impl,
     string_view_endswith_impl,
     string_view_find_impl,
     string_view_isalnum_impl,
@@ -127,6 +128,30 @@ def masked_string_view_rfind_impl(context, builder, sig, args):
         context, builder, value=args[1]
     )
     result = string_view_rfind_impl(
+        context,
+        builder,
+        size_type(string_view, string_view),
+        (masked_sv_str.value, masked_sv_substr.value),
+    )
+
+    ret.value = result
+    ret.valid = builder.and_(masked_sv_str.valid, masked_sv_substr.valid)
+    return ret._getvalue()
+
+
+@cuda_lower(
+    "MaskedType.count", MaskedType(string_view), MaskedType(string_view)
+)
+def masked_string_view_count_impl(context, builder, sig, args):
+    ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    masked_sv_ty = sig.args[0]
+    masked_sv_str = cgutils.create_struct_proxy(masked_sv_ty)(
+        context, builder, value=args[0]
+    )
+    masked_sv_substr = cgutils.create_struct_proxy(masked_sv_ty)(
+        context, builder, value=args[1]
+    )
+    result = string_view_count_impl(
         context,
         builder,
         size_type(string_view, string_view),

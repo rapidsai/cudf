@@ -401,7 +401,7 @@ def call_string_view_count(st, substr):
 
 
 @cuda_lower("StringView.count", string_view, string_view)
-def string_view_coount_impl(context, builder, sig, args):
+def string_view_count_impl(context, builder, sig, args):
     sv_ptr, substr_ptr = builder.alloca(args[0].type), builder.alloca(
         args[1].type
     )

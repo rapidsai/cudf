@@ -117,6 +117,15 @@ class MaskedStringViewRFind(AbstractTemplate):
         )
 
 
+class MaskedStringViewCount(AbstractTemplate):
+    key = "MaskedType.count"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(size_type), MaskedType(string_view), recvr=self.this
+        )
+
+
 class MaskedStringViewIsAlnum(AbstractTemplate):
     key = "MaskedType.isalnum"
 
@@ -188,6 +197,11 @@ class MaskedStringViewAttrs(AttributeTemplate):
     def resolve_rfind(self, mod):
         return types.BoundFunction(
             MaskedStringViewRFind, MaskedType(string_view)
+        )
+
+    def resolve_count(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewCount, MaskedType(string_view)
         )
 
     def resolve_isalnum(self, mod):
