@@ -10,6 +10,7 @@ from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.spillable_buffer cimport SpillLock
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -53,7 +54,8 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         else incol._reduction_result_dtype(reduction_op)
     )
 
-    cdef column_view c_incol_view = incol.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_incol_view = incol.view(slock)
     cdef unique_ptr[scalar] c_result
     cdef ReduceAggregation cython_agg = make_reduce_aggregation(
         reduction_op, kwargs)
@@ -72,11 +74,9 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
     with nogil:
-        c_result = move(cpp_reduce(
-            c_incol_view,
-            cython_agg.c_obj,
-            c_out_dtype
-        ))
+        c_result = move(
+            cpp_reduce(c_incol_view, cython_agg.c_obj, c_out_dtype)
+        )
 
     if is_decimal_type_id(c_result.get()[0].type().id()):
         scale = -c_result.get()[0].type().scale()
@@ -102,7 +102,8 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     inclusive: bool
         Flag for including nulls in relevant scan
     """
-    cdef column_view c_incol_view = incol.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_incol_view = incol.view(slock)
     cdef unique_ptr[column] c_result
     cdef ScanAggregation cython_agg = make_scan_aggregation(scan_op, kwargs)
 
@@ -110,11 +111,9 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
         scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE
 
     with nogil:
-        c_result = move(cpp_scan(
-            c_incol_view,
-            cython_agg.c_obj,
-            c_inclusive
-        ))
+        c_result = move(
+            cpp_scan(c_incol_view, cython_agg.c_obj, c_inclusive)
+        )
 
     py_result = Column.from_unique_ptr(move(c_result))
     return py_result
@@ -133,7 +132,8 @@ def minmax(Column incol):
     -------
     A pair of ``(min, max)`` values of ``incol``
     """
-    cdef column_view c_incol_view = incol.view()
+    cdef SpillLock slock = SpillLock()
+    cdef column_view c_incol_view = incol.view(slock)
     cdef pair[unique_ptr[scalar], unique_ptr[scalar]] c_result
 
     with nogil:
