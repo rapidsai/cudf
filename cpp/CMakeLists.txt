@@ -120,8 +120,7 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 set(_ctk_static_suffix "")
 if(CUDA_STATIC_RUNTIME)
   set(_ctk_static_suffix "_static")
-  # Control legacy FindCUDA.cmake behavior too
-  # Remove this after we push it into rapids-cmake:
+  # Control legacy FindCUDA.cmake behavior too Remove this after we push it into rapids-cmake:
   # https://github.com/rapidsai/rapids-cmake/pull/259
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
 endif()
