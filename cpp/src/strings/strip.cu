@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strip.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -27,11 +28,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/logical.h>
-#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -59,38 +55,15 @@ struct strip_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
+
     auto const d_str = d_strings.element<string_view>(idx);
 
-    auto is_strip_character = [d_to_strip = d_to_strip] __device__(char_utf8 chr) -> bool {
-      return d_to_strip.empty() ? (chr <= ' ') :  // whitespace check
-               thrust::any_of(
-                 thrust::seq, d_to_strip.begin(), d_to_strip.end(), [chr] __device__(char_utf8 c) {
-                   return c == chr;
-                 });
-    };
-
-    size_type const left_offset = [&] {
-      if (side != side_type::LEFT && side != side_type::BOTH) return 0;
-      auto const itr =
-        thrust::find_if_not(thrust::seq, d_str.begin(), d_str.end(), is_strip_character);
-      return itr != d_str.end() ? itr.byte_offset() : d_str.size_bytes();
-    }();
-
-    size_type right_offset = d_str.size_bytes();
-    if (side == side_type::RIGHT || side == side_type::BOTH) {
-      auto const length = d_str.length();
-      auto itr          = d_str.end();
-      for (size_type n = 0; n < length; ++n) {
-        if (!is_strip_character(*(--itr))) break;
-        right_offset = itr.byte_offset();
-      }
+    auto const d_stripped = strip(d_str, d_to_strip, side);
+    if (d_chars) {
+      copy_string(d_chars + d_offsets[idx], d_stripped);
+    } else {
+      d_offsets[idx] = d_stripped.size_bytes();
     }
-
-    auto const bytes = (right_offset > left_offset) ? right_offset - left_offset : 0;
-    if (d_chars)
-      memcpy(d_chars + d_offsets[idx], d_str.data() + left_offset, bytes);
-    else
-      d_offsets[idx] = bytes;
   }
 };
 
