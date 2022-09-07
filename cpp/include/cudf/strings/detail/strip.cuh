@@ -44,7 +44,7 @@ __device__ cudf::string_view strip(cudf::string_view const d_str,
     return false;
   };
 
-  size_type const left_offset = [&] {
+  auto const left_offset = [&] {
     if (side != side_type::LEFT && side != side_type::BOTH) return 0;
     for (auto itr = d_str.begin(); itr < d_str.end(); ++itr) {
       if (!is_strip_character(*itr)) return itr.byte_offset();
@@ -52,7 +52,7 @@ __device__ cudf::string_view strip(cudf::string_view const d_str,
     return d_str.size_bytes();
   }();
 
-  size_type const right_offset = [&] {
+  auto const right_offset = [&] {
     if (side != side_type::RIGHT && side != side_type::BOTH) return d_str.size_bytes();
     for (auto itr = d_str.end(); itr > d_str.begin(); --itr) {
       if (!is_strip_character(*(itr - 1))) return itr.byte_offset();
