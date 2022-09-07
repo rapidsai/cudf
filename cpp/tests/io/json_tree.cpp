@@ -376,6 +376,24 @@ void records_orient_tree_traversal_cpu(host_span<SymbolT const> input,
 {
   // // move tree representation to cpu
   // tree_meta_t2 tree = to_cpu_tree(d_tree, stream);
+  auto to_cat = [](auto v) -> std::string {
+    switch (v) {
+      case NC_STRUCT: return " S";
+      case NC_LIST: return " L";
+      case NC_STR: return " \"";
+      case NC_VAL: return " V";
+      case NC_FN: return " F";
+      case NC_ERR: return "ER";
+      default: return "UN";
+    };
+  };
+  // auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
+  auto debug_print_vec = [&](auto const& cpu, auto const name, auto converter) {
+    for (auto const& v : cpu)
+      printf("%3s,", converter(v).c_str());
+    std::cout << name << std::endl;
+  };
+  debug_print_vec(tree.node_categories, "node_categories", to_cat);
 
   std::vector<int> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
@@ -435,13 +453,37 @@ void records_orient_tree_traversal_cpu(host_span<SymbolT const> input,
     }
   }
   // // Translate parent_node_ids
-  // for (auto& parent_node_id : tree.parent_node_ids) {
-  //   if (parent_node_id != top_node) parent_node_id = node_ids[parent_node_id];
-  // }
+  auto parent_col_ids(tree.parent_node_ids);
+  for (auto& parent_node_id : parent_col_ids) {
+    if (parent_node_id != top_node) parent_node_id = node_ids[parent_node_id];
+  }
   print_vec(node_ids, "cpu.node_ids (after)");
-  // print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)");
-  // TODO convert node_ids to unique col_id.
-  // TODO row_offset
+  print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)");
+  // TODO row_offsets
+  std::vector<int> row_offsets(tree.parent_node_ids.size(), 0);
+  std::unordered_map<int, int> col_id_current_offset;
+  for (std::size_t i = 0; i < tree.parent_node_ids.size(); i++) {
+    auto current_col_id = node_ids[i];
+    auto parent_col_id  = parent_col_ids[i];
+    auto parent_node_id = tree.parent_node_ids[i];
+    if (parent_col_id == top_node) {  // TODO: JSON lines may treat top node as list.
+      row_offsets[current_col_id] = 0;
+    } else {
+      if (tree.node_categories[parent_node_id] == node_t::NC_LIST) {
+        col_id_current_offset[current_col_id]++;
+        row_offsets[i] = col_id_current_offset[current_col_id] - 1;
+      } else {
+        row_offsets[i]                        = col_id_current_offset[parent_col_id] - 1;
+        col_id_current_offset[current_col_id] = col_id_current_offset[parent_col_id];
+      }
+    }
+  }
+  print_vec(row_offsets, "cpu.row_offsets (generated)");
+  // TODO convert this tree into json_t columns!? how?
+  //      validity later. (needed: partial inference on type for generating validity for each value
+  //      type or string type) offsets -> string offsets (range_begin), string length
+  //      (range_end-range_begin).
+  //              -> child offsets (child node count?! how? scan op?)
 }
 
 }  // namespace test
@@ -633,7 +675,46 @@ TEST_F(JsonTest, TreeTraversal)
   std::string input =
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10, "z": 11}}])";
   // std::string input = R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x", "y"}, "b" : {"x",
-  // "z"}}])"; std::cout<<input<<std::endl;
+  // "z"}}])";
+  std::cout << input << std::endl;
+  cudf::string_scalar d_scalar(input, true, stream);
+  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                             static_cast<size_t>(d_scalar.size())};
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
+  // host tree generation
+  auto cpu_tree =
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
+  // host tree traversal
+  cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
+  // gpu tree generation
+  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
+  // gpu tree traversal
+  cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
+}
+
+TEST_F(JsonTest, TreeTraversal2)
+{
+  auto stream = cudf::default_stream_value;
+  cudf::io::json_reader_options const options{};
+
+  // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i}
+  std::string input =
+    R"([ {}, { "a": { "y" : 1, "z": [] }},
+             { "a": { "x" : 2, "y": 3}, "b" : {"x": 4, "z": 5}},
+             { "a": { "y" : 6, "z": [7, 8, 9]}, "b": {"x": 10, "z": 11}},
+             { "a": { "z": [12, 13, 14, 15]}},
+             { "a": { "z": [16], "x": 2}}
+        ])";
+  // row offset a a.x a.y a.z   b b.x b.z
+  //            1       1   1
+  //            2   2   2       2   2   2
+  //            3       3   3   3   3   3   a.z[] 0, 1, 2
+  //            4           4               a.z[] 3, 4, 5, 6
+  //            5   5       5               a.z[] 7
+  std::cout << input << std::endl;
   cudf::string_scalar d_scalar(input, true, stream);
   auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
                                                              static_cast<size_t>(d_scalar.size())};
