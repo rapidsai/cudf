@@ -23,6 +23,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/system/cuda/experimental/pinned_allocator.h>
+
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
  * a mirror host pinned memory for the CPU.
@@ -37,71 +40,53 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  hostdevice_vector() {}
+  hostdevice_vector() : hostdevice_vector(0, cudf::default_stream_value) {}
 
-  hostdevice_vector(hostdevice_vector&& v) { move(std::move(v)); }
-  hostdevice_vector& operator=(hostdevice_vector&& v)
-  {
-    move(std::move(v));
-    return *this;
-  }
-
-  explicit hostdevice_vector(size_t max_size, rmm::cuda_stream_view stream)
-    : hostdevice_vector(max_size, max_size, stream)
+  explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
+    : hostdevice_vector(size, size, stream)
   {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : max_elements(max_size), num_elements(initial_size)
+    : d_data(0, stream)
   {
-    if (max_elements != 0) {
-      CUDF_CUDA_TRY(cudaMallocHost(reinterpret_cast<void**>(&h_data), sizeof(T) * max_elements));
-      d_data.resize(sizeof(T) * max_elements, stream);
-    }
+    CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
+    h_data.reserve(max_size);
+    h_data.resize(initial_size);
+    d_data.resize(max_size, stream);
   }
 
-  ~hostdevice_vector()
+  void push_back(const T& data)
   {
-    if (max_elements != 0) {
-      [[maybe_unused]] auto const free_result = cudaFreeHost(h_data);
-      assert(free_result == cudaSuccess);
-    }
+    CUDF_EXPECTS(size() < capacity(),
+                 "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
+    h_data.push_back(data);
   }
 
-  bool insert(const T& data)
-  {
-    if (num_elements < max_elements) {
-      h_data[num_elements] = data;
-      num_elements++;
-      return true;
-    }
-    return false;
-  }
+  [[nodiscard]] size_t capacity() const noexcept { return h_data.capacity(); }
+  [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
+  [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * size(); }
 
-  [[nodiscard]] size_t max_size() const noexcept { return max_elements; }
-  [[nodiscard]] size_t size() const noexcept { return num_elements; }
-  [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
+  [[nodiscard]] T& operator[](size_t i) { return h_data[i]; }
+  [[nodiscard]] T const& operator[](size_t i) const { return h_data[i]; }
 
-  T& operator[](size_t i) { return h_data[i]; }
-  T const& operator[](size_t i) const { return h_data[i]; }
+  [[nodiscard]] T* host_ptr(size_t offset = 0) { return h_data.data() + offset; }
+  [[nodiscard]] T const* host_ptr(size_t offset = 0) const { return h_data.data() + offset; }
 
-  T* host_ptr(size_t offset = 0) { return h_data + offset; }
-  T const* host_ptr(size_t offset = 0) const { return h_data + offset; }
+  [[nodiscard]] T* begin() { return host_ptr(); }
+  [[nodiscard]] T const* begin() const { return host_ptr(); }
 
-  T* begin() { return h_data; }
-  T const* begin() const { return h_data; }
+  [[nodiscard]] T* end() { return host_ptr(size()); }
+  [[nodiscard]] T const* end() const { return host_ptr(size()); }
 
-  T* end() { return h_data + num_elements; }
-  T const* end() const { return h_data + num_elements; }
+  [[nodiscard]] T* device_ptr(size_t offset = 0) { return d_data.data() + offset; }
+  [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
 
-  auto d_begin() { return static_cast<T*>(d_data.data()); }
-  auto d_begin() const { return static_cast<T const*>(d_data.data()); }
+  [[nodiscard]] T* d_begin() { return device_ptr(); }
+  [[nodiscard]] T const* d_begin() const { return device_ptr(); }
 
-  auto d_end() { return static_cast<T*>(d_data.data()) + num_elements; }
-  auto d_end() const { return static_cast<T const*>(d_data.data()) + num_elements; }
-
-  auto device_ptr(size_t offset = 0) { return static_cast<T*>(d_data.data()) + offset; }
-  auto device_ptr(size_t offset = 0) const { return static_cast<T const*>(d_data.data()) + offset; }
+  [[nodiscard]] T* d_end() { return device_ptr(size()); }
+  [[nodiscard]] T const* d_end() const { return device_ptr(size()); }
 
   /**
    * @brief Returns the specified element from device memory
@@ -117,56 +102,32 @@ class hostdevice_vector {
    */
   [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
   {
-    CUDF_EXPECTS(element_index < size(), "Attempt to access out of bounds element.");
-    T value;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  reinterpret_cast<T const*>(d_data.data()) + element_index,
-                                  sizeof(value),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
-    return value;
+    return d_data.element(element_index, stream);
   }
 
-  operator cudf::device_span<T>() { return {device_ptr(), max_elements}; }
-  operator cudf::device_span<T const>() const { return {device_ptr(), max_elements}; }
+  operator cudf::host_span<T>() { return {host_ptr(), size()}; }
+  operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
 
-  operator cudf::host_span<T>() { return {h_data, max_elements}; }
-  operator cudf::host_span<T const>() const { return {h_data, max_elements}; }
+  operator cudf::device_span<T>() { return {device_ptr(), size()}; }
+  operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream.value()));
+      device_ptr(), host_ptr(), memory_size(), cudaMemcpyHostToDevice, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
+      host_ptr(), device_ptr(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
  private:
-  void move(hostdevice_vector&& v)
-  {
-    stream       = v.stream;
-    max_elements = v.max_elements;
-    num_elements = v.num_elements;
-    h_data       = v.h_data;
-    d_data       = std::move(v.d_data);
-
-    v.max_elements = 0;
-    v.num_elements = 0;
-    v.h_data       = nullptr;
-  }
-
-  rmm::cuda_stream_view stream{cudf::default_stream_value};
-  size_t max_elements{};
-  size_t num_elements{};
-  T* h_data{};
-  rmm::device_buffer d_data{};
+  thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>> h_data;
+  rmm::device_uvector<T> d_data;
 };
 
 namespace cudf {

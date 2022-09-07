@@ -222,6 +222,11 @@ def set_allocator(
     )
 
 
+def clear_cache():
+    """Clear all internal caches"""
+    cudf.Scalar._clear_instance_cache()
+
+
 class GetAttrGetItemMixin:
     """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 

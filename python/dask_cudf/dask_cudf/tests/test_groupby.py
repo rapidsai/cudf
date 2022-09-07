@@ -574,15 +574,11 @@ def test_groupby_categorical_key():
     gddf["name"] = gddf["name"].astype("category")
     ddf = gddf.to_dask_dataframe()
 
-    got = (
-        gddf.groupby("name", sort=True)
-        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
+    got = gddf.groupby("name", sort=True).agg(
+        {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
-    expect = (
-        ddf.groupby("name", sort=True)
-        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
+    expect = ddf.groupby("name", sort=True).agg(
+        {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
     dd.assert_eq(expect, got)
 
