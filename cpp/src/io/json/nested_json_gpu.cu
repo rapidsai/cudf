@@ -1517,7 +1517,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Reset nullable if we do not have nulls
       if (col->null_count() == 0) { col->set_null_mask({}); }
 
-      return {std::move(col), {{"offsets"}, {"chars"}}};
+      // For string columns return ["offsets", "char"] schema
+      if (target_type.id() == type_id::STRING) {
+        return {std::move(col), {{"offsets"}, {"chars"}}};
+      }
+      // Non-string columns do not have child columns in the schema
+      else {
+        return {std::move(col), {}};
+      }
       break;
     }
     case json_col_t::StructColumn: {
