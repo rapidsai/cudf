@@ -1,9 +1,9 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 from ptxcompiler.patch import patch_needed, CMD
 import os
-import warnings
 import sys
 import subprocess
+import re
 
 
 def versions_compatible(path):
@@ -18,7 +18,11 @@ def versions_compatible(path):
     """
     # obtain the cuda version used to compile this PTX file
     file = open(path).read()
-    major, minor = file.split("\n")[4].split(" ")[-2][:-1].split(".")
+    major, minor = (
+        re.search("Cuda compilation tools, release ([0-9\.]+)", f)
+        .group(1)
+        .split(".")
+    )
 
     # adapted from patch_needed()
     cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
@@ -34,7 +38,6 @@ def versions_compatible(path):
 
 ptxpath = os.getenv("CONDA_PREFIX") + "/lib/shim.ptx"
 ENABLED = versions_compatible(ptxpath)
-warnings.warn(f"String UDFs are enabled: {ENABLED}")
 
 from . import _version
 
