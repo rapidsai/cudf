@@ -288,7 +288,9 @@ def pandas_copy_semantics_comparison_test(cudf_object):
                 cudf_output = test({cudf_arg_str})
                 pandas_output = test({pandas_arg_str})
 
-                # TODO: Make this better
+                # TODO: Generalize this to different data types and make it
+                # robust to the values already contained. It may also need to
+                # be specialized for DataFrame vs. Series ops.
                 cudf_output.iloc[0] = 230849
                 pandas_output.iloc[0] = 230849
 
@@ -318,6 +320,10 @@ def pandas_copy_semantics_comparison_test(cudf_object):
     return deco
 
 
+# TODO: Instead of requiring the user to pass `cudf_object`, we could require
+# the cudf object (fixture or parameter) to be the first argument. The current
+# approach seems more explicit, but perhaps we would prefer the other, less
+# verbose approach?
 @pandas_copy_semantics_comparison_test(cudf_object="df")
 def test_df_head(df):
     return df.head()
