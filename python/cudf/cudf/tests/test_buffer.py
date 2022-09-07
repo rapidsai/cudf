@@ -42,8 +42,9 @@ def test_buffer_from_cuda_iface_contiguous(data):
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
     buf = as_device_buffer_like(data)
-    ary = cp.array(buf).flatten().view("uint8")
-    assert (ary == buf).all()
+    got = cp.array(buf).reshape(-1).view("uint8")
+    expect = data.reshape(-1).view("uint8")
+    assert (expect == got).all()
 
 
 @pytest.mark.parametrize("creator", [Buffer, as_device_buffer_like])
@@ -83,7 +84,9 @@ def test_buffer_repr(size, expect):
 def test_buffer_slice(idx):
     ary = cp.arange(arr_len, dtype="uint8")
     buf = as_device_buffer_like(ary)
-    assert (ary[idx] == buf[idx]).all()
+    expect = ary[idx]
+    got = cp.array(buf[idx])
+    assert (expect == got).all()
 
 
 @pytest.mark.parametrize(

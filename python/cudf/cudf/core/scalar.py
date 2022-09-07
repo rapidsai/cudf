@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import decimal
+from collections import OrderedDict
 
 import numpy as np
 import pyarrow as pa
@@ -16,7 +17,56 @@ from cudf.utils.dtypes import (
 )
 
 
-class Scalar(BinaryOperand):
+# Note that the metaclass below can easily be generalized for use with
+# other classes, if needed in the future. Simply replace the arguments
+# of the `__call__` method with `*args` and `**kwargs`. This will
+# result in additional overhead when constructing the cache key, as
+# unpacking *args and **kwargs is not cheap. See the discussion in
+# https://github.com/rapidsai/cudf/pull/11246#discussion_r955843532
+# for details.
+class CachedScalarInstanceMeta(type):
+    """
+    Metaclass for Scalar that caches `maxsize` instances.
+
+    After `maxsize` is reached, evicts the least recently used
+    instances to make room for new values.
+    """
+
+    def __new__(cls, names, bases, attrs, **kwargs):
+        return type.__new__(cls, names, bases, attrs)
+
+    # choose 128 because that's the default `maxsize` for
+    # `functools.lru_cache`:
+    def __init__(self, names, bases, attrs, maxsize=128):
+        self.__maxsize = maxsize
+        self.__instances = OrderedDict()
+
+    def __call__(self, value, dtype=None):
+        # the cache key is constructed from the arguments, and also
+        # the _types_ of the arguments, since objects of different
+        # types can compare equal
+        cache_key = (value, type(value), dtype, type(dtype))
+        try:
+            # try retrieving an instance from the cache:
+            self.__instances.move_to_end(cache_key)
+            return self.__instances[cache_key]
+        except KeyError:
+            # if an instance couldn't be found in the cache,
+            # construct it and add to cache:
+            obj = super().__call__(value, dtype=dtype)
+            self.__instances[cache_key] = obj
+            if len(self.__instances) > self.__maxsize:
+                self.__instances.popitem(last=False)
+            return obj
+        except TypeError:
+            # couldn't hash the arguments, don't cache:
+            return super().__call__(value, dtype=dtype)
+
+    def _clear_instance_cache(self):
+        self.__instances.clear()
+
+
+class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     """
     A GPU-backed scalar object with NumPy scalar like properties
     May be used in binary operations against other scalars, cuDF
@@ -70,12 +120,23 @@ class Scalar(BinaryOperand):
                 self._host_dtype = value._host_dtype
             else:
                 self._device_value = value._device_value
-        elif isinstance(value, cudf._lib.scalar.DeviceScalar):
-            self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
                 value, dtype
             )
+
+    @classmethod
+    def from_device_scalar(cls, device_scalar):
+        if not isinstance(device_scalar, cudf._lib.scalar.DeviceScalar):
+            raise TypeError(
+                "Expected an instance of DeviceScalar, "
+                f"got {type(device_scalar).__name__}"
+            )
+        obj = object.__new__(cls)
+        obj._host_value = None
+        obj._host_dtype = None
+        obj._device_value = device_scalar
+        return obj
 
     @property
     def _is_host_value_current(self):
