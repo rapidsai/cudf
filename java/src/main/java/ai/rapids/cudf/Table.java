@@ -740,12 +740,13 @@ public final class Table implements AutoCloseable {
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
-  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+  private static native ContigSplitGroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
-                                                                boolean[] keysNullSmallest);
+                                                                boolean[] keysNullSmallest,
+                                                                boolean genUniqKeys);
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
@@ -4118,13 +4119,44 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      return Table.contiguousSplitGroups(
+      try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
-          groupByOptions.getKeysNullSmallest());
+          groupByOptions.getKeysNullSmallest(),
+          false) // not generate uniq key table
+      ) {
+        // take the ownership of the `groups` in ContigSplitGroupByResult
+        return ret.releaseGroups();
+      }
+    }
+
+    /**
+     * Similar to {@link #contiguousSplitGroups}, return an extra uniq key table in which
+     * each row is corresponding to a group split.
+     *
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * Example, see the example in {@link #contiguousSplitGroups}
+     * The `uniqKeysTable` in ContigSplitGroupByResult is:
+     *    a
+     *    b
+     *  Note: only 2 rows because of only has 2 split groups
+     *
+     * @return The split groups and uniq key table.
+     */
+    public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      return Table.contiguousSplitGroups(
+              operation.table.nativeHandle,
+              operation.indices,
+              groupByOptions.getIgnoreNullKeys(),
+              groupByOptions.getKeySorted(),
+              groupByOptions.getKeysDescending(),
+              groupByOptions.getKeysNullSmallest(),
+              true); // generate uniq key table
     }
   }
 

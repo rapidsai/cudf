@@ -136,19 +136,27 @@ INSTANTIATE_TEST_CASE_P(StringsPadTest,
 TEST_F(StringsPadTest, ZFill)
 {
   std::vector<const char*> h_strings{
-    "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé"};
-  cudf::test::strings_column_wrapper strings(
+    "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé", "+abé", "é+a", "100-"};
+  cudf::test::strings_column_wrapper input(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::size_type width = 6;
-  std::string phil      = "+";
-  auto strings_view     = cudf::strings_column_view(strings);
+  auto strings_view = cudf::strings_column_view(input);
 
-  auto results = cudf::strings::zfill(strings_view, width);
+  auto results = cudf::strings::zfill(strings_view, 6);
 
-  std::vector<const char*> h_expected{
-    "654321", "-12345", nullptr, "000000", "0000-5", "000987", "000004", "00+8.5", "0000éé"};
+  std::vector<const char*> h_expected{"654321",
+                                      "-12345",
+                                      nullptr,
+                                      "000000",
+                                      "-00005",
+                                      "000987",
+                                      "000004",
+                                      "+008.5",
+                                      "0000éé",
+                                      "+00abé",
+                                      "000é+a",
+                                      "00100-"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
