@@ -9,7 +9,7 @@ jobs:
   libcudf-wheel:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
     with:
-      package-name: libcudf_cu11
+      package-name: libcudf
       package-dir: cpp
       python-version: "3.8"
       cibw-before-all: "apt-get install -y libzstd-dev liblz4-dev libboost-regex-dev libboost-system-dev libboost-filesystem-dev libsnappy-dev libprotobuf-dev libprotoc-dev protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
