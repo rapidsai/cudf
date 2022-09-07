@@ -194,7 +194,7 @@ fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
 
 // Creates a nullable column of INT32 elements with 5 elements: {null, 1, null, 3, null}
 auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;})
 fixed_width_column_wrapper<int32_t> w(elements, elements + 5, validity);
 
 // Creates a non-nullable INT32 column with 4 elements: {1, 2, 3, 4}
@@ -221,7 +221,7 @@ Example:
 
     // Creates a nullable column of 5 DECIMAL32 elements of scale 2: {null, 100, null, 300, null}
     auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
-    auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
+    auto validity = make_counting_transform_iterator(0, [](auto i){ return i % 2; });
     fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
 ```
 
@@ -244,7 +244,7 @@ dictionary_column_wrapper<int32_t> w(element.begin(), elements.end());
 // Creates a nullable dictionary column with 5 elements and a validity iterator.
 std::vector<int32_t> elements{0, 2, 0, 6, 0};
 // Validity iterator here sets even rows to null.
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;})
 // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
 dictionary_column_wrapper<int32_t> w(elements, elements + 5, validity);
 
@@ -269,7 +269,7 @@ dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
 // Creates a nullable dictionary column with 7 string elements and a validity iterator.
 // Validity iterator here sets even rows to null.
 // keys = {"a", "bb"}, indices = {NULL, 1, NULL, 1, NULL, 0, NULL}
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
 dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
 ```
 
@@ -292,7 +292,7 @@ strings_column_wrapper s(strings.begin(), strings.end());
 // Creates a nullable STRING column with 7 string elements:
 // {NULL, "this", NULL, "a", NULL, "of", NULL}
 std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
 strings_column_wrapper s(strings.begin(), strings.end(), validity);
 
 // Creates a non-nullable STRING column with 7 string elements:
@@ -301,7 +301,7 @@ strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"});
 
 // Creates a nullable STRING column with 7 string elements:
 // {NULL, "this", NULL, "a", NULL, "of", NULL}
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
 strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
 ```
 
@@ -340,13 +340,13 @@ lists_column_wrapper l(elements, elements+5);
 
 // Creates a LIST column with 1 lists composed of 2 total integers
 // [{0, NULL}]
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
 lists_column_wrapper l{{0, 1}, validity};
 
 // Creates a LIST column with 1 lists composed of 5 total integers
 // [{0, NULL, 2, NULL, 4}]
 auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
 lists_column_wrapper l(elements, elements+5, validity);
 
 // Creates a LIST column with 1 list composed of 2 total strings
@@ -355,7 +355,7 @@ lists_column_wrapper l{"abc", "def"};
 
 // Creates a LIST of LIST columns with 2 lists on the top level and 4 below
 // [ {{0, 1}, NULL}, {{4, 5}, NULL} ]
-auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
 lists_column_wrapper l{ {{{0, 1}, {2, 3}}, validity}, {{{4, 5}, {6, 7}}, validity} };
 ```
 
@@ -401,7 +401,7 @@ string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "
 
 struct_column_wrapper struct_column_wrapper{
   {child_int_col_wrapper, child_string_col_wrapper}
-  cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity
+  cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i % 2; }) // Validity
 };
 
 auto struct_col {struct_column_wrapper.release()};

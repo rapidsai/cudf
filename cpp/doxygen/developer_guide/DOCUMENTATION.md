@@ -34,8 +34,8 @@ Changing the copyright year may not be necessary if no content has changed (e.g.
 
 ## Doxygen
 
-The [doxygen tool](http://www.doxygen.nl/manual/index.html) is used to generate HTML pages from the C++ comments in the source code.
-Doxygen recognizes and parses block comments and performs specialized output formatting when it encounters [doxygen commands](http://www.doxygen.nl/manual/commands.html).
+The [doxygen tool](https://www.doxygen.nl/manual/index.html) is used to generate HTML pages from the C++ comments in the source code.
+Doxygen recognizes and parses block comments and performs specialized output formatting when it encounters [doxygen commands](https://www.doxygen.nl/manual/commands.html).
 
 There are almost 200 commands (also called tags in this document) that doxygen recognizes in comment blocks.
 This document provides guidance on which commands/tags to use and how to use them in the libcudf C++ source code.
@@ -192,7 +192,7 @@ Also, try to include a short [example](#inline-examples) if possible.
 
 ### @brief
 
-The [\@brief](http://www.doxygen.nl/manual/commands.html#cmdbrief) text should be a short, one sentence description.
+The [\@brief](https://www.doxygen.nl/manual/commands.html#cmdbrief) text should be a short, one sentence description.
 Doxygen does not provide much space to show this text in the output pages.
 Always follow the \@brief line with a blank comment line.
 
@@ -207,7 +207,7 @@ The longer description is the rest of the comment text that is not tagged with a
 ### \@copydoc
 
 Documentation for declarations in headers should be clear and complete.
-You can use the [\@copydoc](http://www.doxygen.nl/manual/commands.html#cmdcopydoc) tag to avoid duplicating the comment block for a function definition.
+You can use the [\@copydoc](https://www.doxygen.nl/manual/commands.html#cmdcopydoc) tag to avoid duplicating the comment block for a function definition.
 
       /**
        * @copydoc complicated_function(int,double*,float*)
@@ -241,7 +241,7 @@ The following tags should appear near the end of function comment block in the o
 
 #### \@throw
 
-Add an [\@throw](http://www.doxygen.nl/manual/commands.html#cmdthrow) comment line in the doxygen block for each exception that the function may throw.
+Add an [\@throw](https://www.doxygen.nl/manual/commands.html#cmdthrow) comment line in the doxygen block for each exception that the function may throw.
 You only need to include exceptions thrown by the function itself.
 If the function calls another function that may throw an exception, you do not need to document those exceptions here.
 
@@ -255,7 +255,7 @@ Using \@throws is also acceptable but VS Code and other tools only do syntax hig
 
 #### @tparam
 
-Add a [\@tparam](http://www.doxygen.nl/manual/commands.html#cmdtparam) comment line for each template parameter declared by this function.
+Add a [\@tparam](https://www.doxygen.nl/manual/commands.html#cmdtparam) comment line for each template parameter declared by this function.
 The name of the parameter specified after the doxygen tag must match exactly to the template parameter name.
 
      *
@@ -268,7 +268,7 @@ For example, if the template is for a functor or predicate, then describe the ex
 
 #### @param
 
-Add a [\@param](http://www.doxygen.nl/manual/commands.html#cmdparam) comment line for each function parameter passed to this function.
+Add a [\@param](https://www.doxygen.nl/manual/commands.html#cmdparam) comment line for each function parameter passed to this function.
 The name of the parameter specified after the doxygen tag must match the function's parameter name.
 Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not clear from the declaration and the parameter name itself.
 
@@ -282,7 +282,7 @@ It is also recommended to vertically aligning the 3 columns of text if possible 
 
 #### @return
 
-Add a single [\@return](http://www.doxygen.nl/manual/commands.html#cmdreturn) comment line at the end of the comment block if the function returns an object or value.
+Add a single [\@return](https://www.doxygen.nl/manual/commands.html#cmdreturn) comment line at the end of the comment block if the function returns an object or value.
 Include a brief description of what is returned.
 
     /**
@@ -296,7 +296,7 @@ Do not include the type of the object returned with the `@return` comment.
 ### Inline Examples
 
 It is usually helpful to include a source code example inside your comment block when documenting a function or other declaration.
-Use the [\@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and [\@endcode](http://www.doxygen.nl/manual/commands.html#cmdendcode) pair to include inline examples.
+Use the [\@code](https://www.doxygen.nl/manual/commands.html#cmdcode) and [\@endcode](https://www.doxygen.nl/manual/commands.html#cmdendcode) pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
 By default, the \@code tag uses syntax highlighting based on the source code in which it is found.
@@ -336,7 +336,7 @@ When writing example snippets, using fully qualified class names allows doxygen 
      * @endcode
      *
 
-Although using 3 backtick marks \`\`\` for example blocks will work too, they do not standout as well in VS Code and other source editors.
+Although using 3 backtick marks \`\`\` for example blocks will work too, they do not stand out as well in VS Code and other source editors.
 
 Do not use the `@example` tag in the comments for a declaration, or doxygen will interpret the entire source file as example source code.
 The source file is then published under a separate _Examples_ page in the output.
@@ -374,7 +374,7 @@ If you introduce a new namespace, provide a description block for only one decla
 
 Grouping declarations into modules helps users to find APIs in the doxygen pages.
 Generally, common functions are already grouped logically into header files but doxygen does not automatically group them this way in its output.
-The doxygen output includes a _Modules_ page that organizes items into groups specified using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html).
+The doxygen output includes a _Modules_ page that organizes items into groups specified using the [Grouping doxygen commands](https://www.doxygen.nl/manual/grouping.html).
 These commands can group common functions across header files, source files, and even namespaces.
 Groups can also be nested by defining new groups within existing groups.
 
@@ -383,7 +383,7 @@ The [doxygen_groups.h](../include/doxygen_groups.h) file does not need to be inc
 Modify this file only to add or update groups.
 The existing groups have been carefully structured and named, so new groups should be added thoughtfully.
 
-When creating a new API, specify its group using the [\@ingroup](http://www.doxygen.nl/manual/commands.html#cmdingroup) tag and the group reference id from the [doxygen_groups.h](../include/doxygen_groups.h) file.
+When creating a new API, specify its group using the [\@ingroup](https://www.doxygen.nl/manual/commands.html#cmdingroup) tag and the group reference id from the [doxygen_groups.h](../include/doxygen_groups.h) file.
 
     namespace cudf {
 
@@ -399,7 +399,7 @@ When creating a new API, specify its group using the [\@ingroup](http://www.doxy
 
     }  // namespace cudf
 
-You can also use the \@addtogroup with a `@{ ... @}` pair to automatically include  doxygen comment blocks as part of a group.
+You can also use the \@addtogroup with a `@{ ... @}` pair to automatically include doxygen comment blocks as part of a group.
 
     namespace cudf {
     /**
@@ -434,7 +434,7 @@ Summary of groups tags
 ## Build Doxygen Output
 
 We recommend installing Doxygen using conda (`conda install doxygen`) or a Linux package manager (`sudo apt install doxygen`).
-Alternatively you can [build and install doxygen from source](http://www.doxygen.nl/manual/install.html).
+Alternatively you can [build and install doxygen from source](https://www.doxygen.nl/manual/install.html).
 
 To build the libcudf HTML documentation simply run the `doxygen` command from the `cpp/doxygen` directory containing the `Doxyfile`.
 The libcudf documentation can also be built using `make docs_cudf` from the cmake build directory (e.g. `cpp/build`).
@@ -443,7 +443,7 @@ The output is generated in the `cpp/doxygen/html/` directory.
 You can load the local `index.html` file generated there into any web browser to view the result.
 
 To view docs built on a remote server, you can run a simple HTTP server using Python: `cd html && python -m http.server`.
-Then open `http://<IP address>:8000` in your local web browser, inserting the IP address of the machine on which you ran the HTTP server.
+Then open `<IP address>:8000` in your local web browser, inserting the IP address of the machine on which you ran the HTTP server.
 
 The doxygen output is intended for building documentation only for the public APIs and classes.
 For example, the output should not include documentation for `detail` or `/src` files, and these directories are excluded in the `Doxyfile` configuration.
