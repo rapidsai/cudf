@@ -36,7 +36,7 @@ dependencies:
   - nbsphinx
   - numpydoc
   - ipython
-  - pandoc=<2.0.0
+  - pandoc<=2.0.0
   - cudatoolkit=11.5
   - cuda-python >=11.5,<11.7.1
   - pip

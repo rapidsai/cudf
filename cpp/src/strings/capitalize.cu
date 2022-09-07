@@ -278,6 +278,7 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
                     thrust::make_counting_iterator<size_type>(input.size()),
                     results->mutable_view().data<bool>(),
                     is_title_fn{get_character_flags_table(), *d_column});
+  results->set_null_count(input.null_count());
   return results;
 }
 
