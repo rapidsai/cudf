@@ -186,12 +186,11 @@ __global__ void infer_column_type_kernel(inference_options_view options,
       }
     }
 
-    // Integers have to have the length of the string
-    auto int_req_number_cnt = static_cast<uint32_t>(field_len);
-    // Off by one if they start with a minus sign
-    if ((*field_begin == '-' || *field_begin == '+') && field_len > 1) { --int_req_number_cnt; }
-    // Off by one if they are a hexadecimal number
-    if (maybe_hex) { --int_req_number_cnt; }
+    // All characters must be digits in an integer, except for the starting sign and 'x' in the
+    // hexadecimal prefix
+    auto const int_req_number_cnt =
+      static_cast<uint32_t>(field_len) -
+      ((*field_begin == '-' || *field_begin == '+') && field_len > 1) - maybe_hex;
     if (cudf::detail::serialized_trie_contains(
           options.trie_true, {field_begin, static_cast<std::size_t>(field_len)}) ||
         cudf::detail::serialized_trie_contains(
