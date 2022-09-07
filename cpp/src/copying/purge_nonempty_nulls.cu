@@ -42,7 +42,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
   auto const type         = input.type().id();
   auto const offsets      = (type == type_id::STRING) ? (strings_column_view{input}).offsets()
                                                       : (lists_column_view{input}).offsets();
-  auto const d_input      = cudf::column_device_view::create(input);
+  auto const d_input      = cudf::column_device_view::create(input, stream);
   auto const is_dirty_row = [d_input = *d_input, offsets = offsets.begin<size_type>()] __device__(
                               size_type const& row_idx) {
     return d_input.is_null_nocheck(row_idx) && (offsets[row_idx] != offsets[row_idx + 1]);
