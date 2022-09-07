@@ -58,7 +58,7 @@ auto self_comparison(cudf::table_view input,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  if (cudf::get_nested_columns(input).size() > 0) {
+  if (cudf::detail::has_nested_columns(input)) {
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(input.num_rows()),
@@ -92,7 +92,7 @@ auto two_table_comparison(cudf::table_view lhs,
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  if (cudf::get_nested_columns(lhs).size() > 0 || cudf::get_nested_columns(rhs).size() > 0) {
+  if (cudf::detail::has_nested_columns(lhs) || cudf::detail::has_nested_columns(rhs)) {
     thrust::transform(rmm::exec_policy(stream),
                       lhs_it,
                       lhs_it + lhs.num_rows(),

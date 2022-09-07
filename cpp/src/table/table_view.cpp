@@ -114,15 +114,6 @@ std::vector<column_view> get_nullable_columns(table_view const& table)
   return result;
 }
 
-std::vector<column_view> get_nested_columns(table_view const& table)
-{
-  std::vector<column_view> result;
-  for (auto const& col : table) {
-    if (is_nested(col.type())) { result.push_back(col); }
-  }
-  return result;
-}
-
 namespace detail {
 
 template <typename TableView>
@@ -142,6 +133,12 @@ template bool is_relationally_comparable<table_view>(table_view const& lhs, tabl
 // Explicit template instantiation for a table of mutable views
 template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
                                                              mutable_table_view const& rhs);
+
+bool has_nested_columns(table_view const& table)
+{
+  return std::any_of(
+    table.begin(), table.end(), [](column_view const& col) { return is_nested(col.type()); });
+}
 
 }  // namespace detail
 }  // namespace cudf

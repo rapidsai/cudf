@@ -127,7 +127,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   auto comp =
     experimental::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
-  if (cudf::get_nested_columns(input).size() > 0) {
+  if (cudf::detail::has_nested_columns(input)) {
     auto comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
     if (stable) {
       thrust::stable_sort(rmm::exec_policy(stream),

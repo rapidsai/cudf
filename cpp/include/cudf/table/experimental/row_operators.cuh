@@ -443,20 +443,20 @@ class device_row_comparator {
       // in the child column. The element_index is used to keep track of the current
       // child element that we're actually comparing.
       weak_ordering state{weak_ordering::EQUIVALENT};
-      for (int left_dremel_index = l_start, right_dremel_index = r_start, element_index = 0;
-           left_dremel_index < l_end and right_dremel_index < r_end;
-           ++left_dremel_index, ++right_dremel_index) {
+      for (int l_dremel_index = l_start, r_dremel_index = r_start, element_index = 0;
+           l_dremel_index < l_end and r_dremel_index < r_end;
+           ++l_dremel_index, ++r_dremel_index) {
         // First early exit: the definition levels do not match.
-        if (l_def_levels[left_dremel_index] != r_def_levels[right_dremel_index]) {
-          state = (l_def_levels[left_dremel_index] < r_def_levels[right_dremel_index])
+        if (l_def_levels[l_dremel_index] != r_def_levels[r_dremel_index]) {
+          state = (l_def_levels[l_dremel_index] < r_def_levels[r_dremel_index])
                     ? weak_ordering::LESS
                     : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
         }
 
         // Second early exit: the repetition levels do not match.
-        if (l_rep_levels[left_dremel_index] != r_rep_levels[right_dremel_index]) {
-          state = (l_rep_levels[left_dremel_index] < r_rep_levels[right_dremel_index])
+        if (l_rep_levels[l_dremel_index] != r_rep_levels[r_dremel_index]) {
+          state = (l_rep_levels[l_dremel_index] < r_rep_levels[r_dremel_index])
                     ? weak_ordering::LESS
                     : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
@@ -467,16 +467,17 @@ class device_row_comparator {
         //    an underlying element to compare, not just an empty list or a
         //    null. Therefore, we access the element_index element of each list
         //    and compare the values.
-        // 2) If we are 1 - the maximum definition level and the column is
-        //    nullable, the current element must be a null in the leaf data.
-        //    In this case we ignore the null and skip to the next element.
-        if (l_def_levels[left_dremel_index] == l_max_def_level) {
+        // 2) If we are one level below the maximum definition level and the
+        //    column is nullable, the current element must be a null in the
+        //    leaf data. In this case we ignore the null and skip to the next
+        //    element.
+        if (l_def_levels[l_dremel_index] == l_max_def_level) {
           int last_null_depth                    = _depth;
           cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
             lcol.type(), comparator, element_index, element_index);
           if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
           ++element_index;
-        } else if (lcol.nullable() and l_def_levels[left_dremel_index] == l_max_def_level - 1) {
+        } else if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
           ++element_index;
         }
       }

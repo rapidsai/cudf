@@ -269,7 +269,7 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
       dremel_device_views.push_back(dremel_data.back());
     }
   }
-  auto d_dremel_device_views = detail::make_device_uvector_async(dremel_device_views, stream);
+  auto d_dremel_device_views = detail::make_device_uvector_sync(dremel_device_views, stream);
   return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
 }
 
@@ -359,16 +359,18 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
   auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  if (cudf::get_nested_columns(t).size() > 0) {
-    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
-    return std::shared_ptr<preprocessed_table>(
-      new preprocessed_table(std::move(d_t),
-                             std::move(d_column_order),
-                             std::move(d_null_precedence),
-                             std::move(d_depths),
-                             std::move(dremel_data),
-                             std::move(d_dremel_device_view)));
-  } else {
+  if (detail::has_nested_columns(t)) > 0)
+    {
+      auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
+      return std::shared_ptr<preprocessed_table>(
+        new preprocessed_table(std::move(d_t),
+                               std::move(d_column_order),
+                               std::move(d_null_precedence),
+                               std::move(d_depths),
+                               std::move(dremel_data),
+                               std::move(d_dremel_device_view)));
+    }
+  else {
     return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t),
                                                                       std::move(d_column_order),
                                                                       std::move(d_null_precedence),

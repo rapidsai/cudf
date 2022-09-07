@@ -166,6 +166,14 @@ class table_view_base {
    */
   table_view_base& operator=(table_view_base&&) = default;
 };
+
+/**
+ * @brief The function to collect all nested columns in a given table.
+ *
+ * @param table The input table
+ * @return A vector containing all nested columns in the input table
+ */
+bool has_nested_columns(table_view const& table);
 }  // namespace detail
 
 /**
@@ -335,14 +343,6 @@ inline bool has_nested_nulls(table_view const& input)
  * @return A vector containing all nullable columns in the input table
  */
 std::vector<column_view> get_nullable_columns(table_view const& table);
-
-/**
- * @brief The function to collect all nested columns in a given table.
- *
- * @param table The input table
- * @return A vector containing all nested columns in the input table
- */
-std::vector<column_view> get_nested_columns(table_view const& table);
 
 /**
  * @brief Checks if two `table_view`s have columns of same types
