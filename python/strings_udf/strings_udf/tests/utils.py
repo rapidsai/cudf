@@ -15,20 +15,6 @@ from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view
 
 
-def run_udf_test(data, func, dtype):
-    dtype = np.dtype(dtype)
-    cudf_column = cudf.Series(data)._column
-    str_view_ary = to_string_view_array(cudf_column)
-
-    output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
-
-    kernel = get_kernel(func, dtype)
-    kernel.forall(len(data))(str_view_ary, output_ary)
-    got = cudf.Series(output_ary, dtype=dtype)
-    expect = pd.Series(data).apply(func)
-    assert_eq(expect, got, check_dtype=False)
-
-
 def get_kernel(func, dtype):
     func = cuda.jit(device=True)(func)
 
@@ -46,3 +32,17 @@ def get_kernel(func, dtype):
     )
 
     return kernel
+
+
+def run_udf_test(data, func, dtype):
+    dtype = np.dtype(dtype)
+    cudf_column = cudf.Series(data)._column
+    str_view_ary = to_string_view_array(cudf_column)
+
+    output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
+
+    kernel = get_kernel(func, dtype)
+    kernel.forall(len(data))(str_view_ary, output_ary)
+    got = cudf.Series(output_ary, dtype=dtype)
+    expect = pd.Series(data).apply(func)
+    assert_eq(expect, got, check_dtype=False)
