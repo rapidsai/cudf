@@ -12,9 +12,10 @@ from cudf.testing._utils import assert_eq
 
 
 def _is_cudf(lib):
-    # Is it safe to use `if lib is cudf`? I think there are some cases where
-    # the imports of a package in different modules may not be identical for
-    # that purpose, will have to double-check.
+    # TODO: Is it safe to use `if lib is cudf`? I think there are some cases
+    # where the imports of a package in different modules may not be considered
+    # identical by `is` so we have to check the name as below, but this is
+    # probably worth verifying.
     return lib.__name__ == "cudf"
 
 
@@ -30,11 +31,6 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
         decorated function but calls the original function twice, once each for
         pandas and cudf and asserts that the two results are equal.
         """
-        parameters = inspect.signature(test).parameters
-        params_str = ", ".join(
-            f"{p}" for p in parameters if p != _LIB_PARAM_NAME
-        )
-
         # Handle parameters (fixtures or parametrize fixtures, it doesn't
         # matter) that are cudf objects that need to be converted to pandas.
         nonlocal cudf_objects
@@ -42,6 +38,11 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
             cudf_objects = []
         elif isinstance(cudf_objects, str):
             cudf_objects = [cudf_objects]
+
+        parameters = inspect.signature(test).parameters
+        params_str = ", ".join(
+            f"{p}" for p in parameters if p != _LIB_PARAM_NAME
+        )
 
         arg_str = ", ".join(
             f"{p}={p}"
@@ -81,7 +82,6 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
                 remove_args=remove_args,
             )
             def wrapped_test({params_str}):
-                print()
                 cudf_output = test({cudf_arg_str})
                 pandas_output = test({pandas_arg_str})
                 assert_func(pandas_output, cudf_output)
@@ -249,6 +249,75 @@ def test_param_concat(lib, df):
     return lib.concat([df, df])
 
 
-@pandas_comparison_test(cudf_objects="df")
+def pandas_copy_semantics_comparison_test(cudf_object):
+    def deco(test):
+        """Verify that cudf and pandas methods have the same semantics.
+
+        This decorator generates a new function that looks identical to the
+        decorated function but calls the original function twice, once each for
+        pandas and cudf. The function is assumed to take a single input
+        """
+        # These tests must have exactly one parameter that is a cudf object.
+        nonlocal cudf_object
+
+        parameters = inspect.signature(test).parameters
+        params_str = ", ".join(f"{p}" for p in parameters)
+        arg_str = ", ".join(f"{p}={p}" for p in parameters if p != cudf_object)
+
+        if arg_str:
+            arg_str += ", "
+
+        cudf_arg_str = arg_str + f"{cudf_object}={cudf_object}"
+        pandas_arg_str = arg_str + f"{cudf_object}=pandas_object"
+
+        src = textwrap.dedent(
+            f"""
+            import pandas
+            import cudf
+            import makefun
+            @makefun.wraps(
+                test,
+                remove_args=remove_args,
+            )
+            def wrapped_test({params_str}):
+                cudf_object_orig = {cudf_object}.copy()
+
+                pandas_object = {cudf_object}.to_pandas()
+                pandas_object_orig = pandas_object.copy()
+
+                cudf_output = test({cudf_arg_str})
+                pandas_output = test({pandas_arg_str})
+
+                # TODO: Make this better
+                cudf_output.iloc[0] = 230849
+                pandas_output.iloc[0] = 230849
+
+                cudf_modified = {cudf_object}.equals(cudf_object_orig)
+                pandas_modified = pandas_object.equals(pandas_object_orig)
+                assert cudf_modified == pandas_modified, (
+                    f"The cudf object was{{' not' if cudf_modified else ''}} "
+                    "modified, while pandas object was"
+                    f"{{' not' if pandas_modified else ''}}."
+                )
+            """
+        )
+        globals_ = {
+            "test": test,
+            "remove_args": (f"{_LIB_PARAM_NAME}",)
+            if _LIB_PARAM_NAME in parameters
+            else None,
+            "cudf_object": cudf_object,
+        }
+        exec(src, globals_)
+        wrapped_test = globals_["wrapped_test"]
+        # In case marks were applied to the original benchmark, copy them over.
+        if marks := getattr(test, "pytestmark", None):
+            wrapped_test.pytestmark = marks
+        return wrapped_test
+
+    return deco
+
+
+@pandas_copy_semantics_comparison_test(cudf_object="df")
 def test_df_head(df):
     return df.head()
