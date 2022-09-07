@@ -12,13 +12,13 @@ from numba.cuda.cudaimpl import (
 )
 
 from strings_udf._lib.tables import get_character_flags_table_ptr
-from strings_udf._typing import string_view
+from strings_udf._typing import size_type, string_view
 
 character_flags_table_ptr = get_character_flags_table_ptr()
 
 
 _string_view_len = cuda.declare_device(
-    "len", types.int32(types.CPointer(string_view))
+    "len", size_type(types.CPointer(string_view))
 )
 
 _string_view_contains = cuda.declare_device(
@@ -67,12 +67,12 @@ _string_view_endswith = cuda.declare_device(
 
 _string_view_find = cuda.declare_device(
     "find",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+    size_type(types.CPointer(string_view), types.CPointer(string_view)),
 )
 
 _string_view_rfind = cuda.declare_device(
     "rfind",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+    size_type(types.CPointer(string_view), types.CPointer(string_view)),
 )
 
 _string_view_isdigit = cuda.declare_device(
@@ -110,7 +110,7 @@ _string_view_islower = cuda.declare_device(
 
 _string_view_count = cuda.declare_device(
     "pycount",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+    size_type(types.CPointer(string_view), types.CPointer(string_view)),
 )
 
 
@@ -126,7 +126,7 @@ def string_view_len_impl(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_len_string_view,
-        nb_signature(types.int32, types.CPointer(string_view)),
+        nb_signature(size_type, types.CPointer(string_view)),
         (sv_ptr,),
     )
 
@@ -334,9 +334,9 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     sv.data = context.insert_addrspace_conv(
         builder, s, nvvm.ADDRSPACE_CONSTANT
     )
-    sv.length = context.get_constant(types.int32, len(fromty.literal_value))
+    sv.length = context.get_constant(size_type, len(fromty.literal_value))
     sv.bytes = context.get_constant(
-        types.int32, len(fromty.literal_value.encode("UTF-8"))
+        size_type, len(fromty.literal_value.encode("UTF-8"))
     )
 
     return sv._getvalue()
@@ -413,7 +413,7 @@ def string_view_coount_impl(context, builder, sig, args):
         builder,
         call_string_view_count,
         nb_signature(
-            types.int32,
+            size_type,
             types.CPointer(string_view),
             types.CPointer(string_view),
         ),
@@ -440,7 +440,7 @@ def string_view_find_impl(context, builder, sig, args):
         builder,
         call_string_view_find,
         nb_signature(
-            types.int32,
+            size_type,
             types.CPointer(string_view),
             types.CPointer(string_view),
         ),
@@ -467,7 +467,7 @@ def string_view_rfind_impl(context, builder, sig, args):
         builder,
         call_string_view_rfind,
         nb_signature(
-            types.int32,
+            size_type,
             types.CPointer(string_view),
             types.CPointer(string_view),
         ),

@@ -8,7 +8,7 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 
-from strings_udf._typing import StringView, string_view
+from strings_udf._typing import StringView, size_type, string_view
 
 from cudf.core.udf import masked_typing
 from cudf.core.udf._ops import comparison_ops
@@ -35,7 +35,7 @@ class MaskedStringViewLength(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(
             args[0].value_type, StringView
         ):
-            return nb_signature(MaskedType(types.int32), args[0])
+            return nb_signature(MaskedType(size_type), args[0])
 
 
 @cuda_decl_registry.register_global(operator.contains)
@@ -78,7 +78,7 @@ class StringLiteralLength(AbstractTemplate):
 
     def generic(self, args, kws):
         if isinstance(args[0], types.StringLiteral) and len(args) == 1:
-            return nb_signature(types.int32, args[0])
+            return nb_signature(size_type, args[0])
 
 
 class MaskedStringViewStartsWith(AbstractTemplate):
@@ -104,7 +104,7 @@ class MaskedStringViewFind(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            MaskedType(types.int32), MaskedType(string_view), recvr=self.this
+            MaskedType(size_type), MaskedType(string_view), recvr=self.this
         )
 
 
@@ -113,7 +113,7 @@ class MaskedStringViewRFind(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            MaskedType(types.int32), MaskedType(string_view), recvr=self.this
+            MaskedType(size_type), MaskedType(string_view), recvr=self.this
         )
 
 

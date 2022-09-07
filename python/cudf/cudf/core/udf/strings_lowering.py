@@ -6,7 +6,7 @@ from numba import types
 from numba.core import cgutils
 from numba.cuda.cudaimpl import lower as cuda_lower
 
-from strings_udf._typing import string_view
+from strings_udf._typing import size_type, string_view
 from strings_udf.lowering import (
     string_view_contains_impl,
     string_view_endswith_impl,
@@ -34,7 +34,7 @@ def masked_string_view_len_impl(context, builder, sig, args):
         context, builder, value=args[0]
     )
     result = string_view_len_impl(
-        context, builder, types.int32(string_view), (masked_sv.value,)
+        context, builder, size_type(string_view), (masked_sv.value,)
     )
     ret.value = result
     ret.valid = masked_sv.valid
@@ -105,7 +105,7 @@ def masked_string_view_find_impl(context, builder, sig, args):
     result = string_view_find_impl(
         context,
         builder,
-        types.boolean(string_view, string_view),
+        size_type(string_view, string_view),
         (masked_sv_str.value, masked_sv_substr.value),
     )
 
@@ -129,7 +129,7 @@ def masked_string_view_rfind_impl(context, builder, sig, args):
     result = string_view_rfind_impl(
         context,
         builder,
-        types.boolean(string_view, string_view),
+        size_type(string_view, string_view),
         (masked_sv_str.value, masked_sv_substr.value),
     )
 

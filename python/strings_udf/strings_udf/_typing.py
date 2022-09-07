@@ -13,6 +13,9 @@ from numba.cuda.cudadrv import nvvm
 
 data_layout = nvvm.data_layout
 
+# libcudf size_type
+size_type = types.int32
+
 # workaround for numba < 0.56
 if isinstance(data_layout, dict):
     data_layout = data_layout[64]
@@ -43,10 +46,10 @@ class stringview_model(models.StructModel):
         ("data", types.CPointer(types.char)),
         # size_type _bytes{};
         # Number of bytes in _data for this string
-        ("bytes", types.int32),
+        ("bytes", size_type),
         # mutable size_type _length{};
         # Number of characters in this string (computed)
-        ("length", types.int32),
+        ("length", size_type),
     )
 
     def __init__(self, dmm, fe_type):
@@ -63,8 +66,8 @@ class dstring_model(models.StructModel):
 
     _members = (
         ("m_data", types.CPointer(types.char)),
-        ("m_bytes", types.int32),
-        ("m_size", types.int32),
+        ("m_bytes", size_type),
+        ("m_size", size_type),
     )
 
     def __init__(self, dmm, fe_type):
@@ -112,7 +115,7 @@ class StringLength(AbstractTemplate):
             # string_view -> int32
             # dstring -> int32
             # literal -> int32
-            return nb_signature(types.int32, args[0])
+            return nb_signature(size_type, args[0])
 
 
 @cuda_decl_registry.register_global(operator.contains)
@@ -236,14 +239,14 @@ class StringViewFind(AbstractTemplate):
     key = "StringView.find"
 
     def generic(self, args, kws):
-        return nb_signature(types.int32, string_view, recvr=self.this)
+        return nb_signature(size_type, string_view, recvr=self.this)
 
 
 class StringViewRFind(AbstractTemplate):
     key = "StringView.rfind"
 
     def generic(self, args, kws):
-        return nb_signature(types.int32, string_view, recvr=self.this)
+        return nb_signature(size_type, string_view, recvr=self.this)
 
 
 class StringViewIsAlnum(AbstractTemplate):
@@ -306,7 +309,7 @@ class StringViewCount(AbstractTemplate):
     key = "StringView.count"
 
     def generic(self, args, kws):
-        return nb_signature(types.int32, string_view, recvr=self.this)
+        return nb_signature(size_type, string_view, recvr=self.this)
 
 
 @cuda_decl_registry.register_attr

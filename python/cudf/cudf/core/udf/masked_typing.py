@@ -49,6 +49,9 @@ MASKED_INIT_MAP: Dict[Any, Any] = {}
 
 
 def _format_error_string(err):
+    """
+    Wrap an error message in newlines and color it red.
+    """
     return "\033[91m" + "\n" + err + "\n" + "\033[0m"
 
 
