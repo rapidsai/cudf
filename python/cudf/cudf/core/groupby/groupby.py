@@ -777,15 +777,12 @@ class GroupBy(Serializable, Reducible, Scannable):
             else:
                 result = cudf.concat(chunk_results)
                 if self._group_keys:
-                    result_index = cudf.MultiIndex.from_frame(
-                        cudf.DataFrame(
-                            {
-                                group_keys.name: group_keys,
-                                None: grouped_values.index,
-                            }
-                        )
+                    result.index = cudf.MultiIndex._from_data(
+                        {
+                            group_keys.name: group_keys._column,
+                            None: grouped_values.index._column,
+                        }
                     )
-                    result.index = result_index
 
         if self._sort:
             result = result.sort_index()
