@@ -38,8 +38,8 @@ __device__ inline cudf::size_type count(string_view const source,
                                         cudf::size_type end   = -1)
 {
   auto const tgt_length = target.length();
-  if (tgt_length == 0) return 0;
   auto const src_length = source.length();
+  if (tgt_length == 0) return src_length + 1;
 
   start = start < 0 ? 0 : start;
   end   = end < 0 || end > src_length ? src_length : end;
