@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
-import sys
 import textwrap
 from collections import abc
 from shutil import get_terminal_size
@@ -20,7 +19,12 @@ from pandas.core.dtypes.common import is_float
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import _is_null_host_scalar
-from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf._typing import (
+    ColumnLike,
+    DataFrameOrSeries,
+    NotImplementedType,
+    ScalarLike,
+)
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -74,12 +78,6 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-
-if sys.version_info >= (3, 10):
-    # Introduced in Python 3.10
-    from types import NotImplementedType
-else:
-    NotImplementedType = Any
 
 
 def _format_percentile_names(percentiles):

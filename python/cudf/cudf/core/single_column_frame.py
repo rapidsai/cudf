@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import sys
 import warnings
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
@@ -12,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import Dtype, NotImplementedType, ScalarLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -21,13 +20,6 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-
-if sys.version_info >= (3, 10):
-    # Introduced in Python 3.10
-    from types import NotImplementedType
-else:
-    NotImplementedType = Any
-
 
 T = TypeVar("T", bound="Frame")
 

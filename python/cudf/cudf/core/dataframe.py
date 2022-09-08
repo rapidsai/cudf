@@ -39,7 +39,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, NotImplementedType
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -102,13 +102,6 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
-
-if sys.version_info >= (3, 10):
-    # Introduced in Python 3.10
-    from types import NotImplementedType
-else:
-    NotImplementedType = Any
-
 
 T = TypeVar("T", bound="DataFrame")
 
