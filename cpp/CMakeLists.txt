@@ -712,7 +712,7 @@ target_compile_options(
 target_link_libraries(
   cudftestutil
   PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
-  PRIVATE conda_env
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
