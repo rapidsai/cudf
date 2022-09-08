@@ -298,9 +298,6 @@ class regex_parser {
     if (!is_quoted && chr == '^') {
       type                     = NCCLASS;
       std::tie(is_quoted, chr) = next_char();
-      // negated classes also don't match '\n'
-      literals.push_back('\n');
-      literals.push_back('\n');
     }
 
     // parse class into a set of spans

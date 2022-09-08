@@ -228,6 +228,8 @@ std::unique_ptr<column> round_with(column_view const& input,
   thrust::transform(
     rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), out_view.begin<T>(), Functor{n});
 
+  result->set_null_count(input.null_count());
+
   return result;
 }
 
@@ -276,6 +278,8 @@ std::unique_ptr<column> round_with(column_view const& input,
                       out_view.begin<Type>(),
                       FixedPointRoundFunctor{n});
   }
+
+  result->set_null_count(input.null_count());
 
   return result;
 }
