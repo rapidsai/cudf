@@ -819,6 +819,9 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
           valueHash = v.hashCode();
         }
         break;
+      case DECIMAL128:
+        valueHash = getBigDecimal().hashCode();
+        break;
       default:
         throw new IllegalStateException("Unknown scalar type: " + type);
       }

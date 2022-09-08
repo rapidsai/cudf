@@ -3915,6 +3915,9 @@ public final class Table implements AutoCloseable {
           case TIMESTAMP_DAYS:
           case TIMESTAMP_NANOSECONDS:
           case TIMESTAMP_MICROSECONDS:
+          case DECIMAL32:
+          case DECIMAL64:
+          case DECIMAL128:
             break;
           default:
             throw new IllegalArgumentException("Expected range-based window orderBy's " +
