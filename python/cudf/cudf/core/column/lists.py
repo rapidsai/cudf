@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
@@ -163,6 +163,10 @@ class ListColumn(ColumnBase):
             )
         else:
             super().set_base_data(value)
+
+    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+        super().set_base_children(value)
+        self._dtype = cudf.ListDtype(element_type=value[1].dtype)
 
     @property
     def __cuda_array_interface__(self):

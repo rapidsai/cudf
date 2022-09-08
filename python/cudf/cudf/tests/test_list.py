@@ -842,6 +842,7 @@ def test_memory_usage():
             0,
         ),
         ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2),
+        ([[[{"a": 1, "b": 2, "c": 10}]]], 0),
     ],
 )
 def test_nested_list_extract_host_scalars(data, idx):

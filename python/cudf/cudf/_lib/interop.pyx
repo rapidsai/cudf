@@ -102,7 +102,7 @@ cdef vector[column_metadata] gather_metadata(dict cols_dtypes) except *:
     if cols_dtypes is not None:
         for idx, (col_name, col_dtype) in enumerate(cols_dtypes.items()):
             cpp_metadata.push_back(column_metadata(col_name.encode()))
-            if is_struct_dtype(col_dtype):
+            if is_struct_dtype(col_dtype) or is_list_dtype(col_dtype):
                 _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
         raise TypeError(
@@ -121,6 +121,19 @@ cdef _set_col_children_metadata(dtype,
             _set_col_children_metadata(
                 value, col_meta.children_meta[i]
             )
+    elif is_list_dtype(dtype):
+        col_meta.children_meta.reserve(2)
+        # Offsets - child 0
+        col_meta.children_meta.push_back(column_metadata())
+
+        # Element column - child 1
+        col_meta.children_meta.push_back(column_metadata())
+        _set_col_children_metadata(
+            dtype.element_type, col_meta.children_meta[1]
+        )
+    else:
+        col_meta.children_meta.reserve(1)
+        col_meta.children_meta.push_back(column_metadata())
 
 
 def to_arrow(list source_columns, dict cols_dtypes):
