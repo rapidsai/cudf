@@ -10,7 +10,7 @@ from pandas.api.extensions import ExtensionDtype
 if TYPE_CHECKING:
     import cudf
 
-# Backwards compat: mypy > 0.780 rejects Type[NotImplemented], but
+# Backwards compat: mypy >= 0.790 rejects Type[NotImplemented], but
 # NotImplementedType is only introduced in 3.10
 if sys.version_info >= (3, 10):
     from types import NotImplementedType
