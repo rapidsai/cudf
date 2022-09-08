@@ -2118,13 +2118,14 @@ TEST_F(CollectSetTest, FloatGroupedRollingWindowWithNaNs)
   auto const following   = 1;
   auto const min_periods = 1;
   // test on nan_equality::UNEQUAL
-  auto const result =
-    grouped_rolling_collect_set(table_view{std::vector<column_view>{group_column}},
-                                input_column,
-                                preceding,
-                                following,
-                                min_periods,
-                                *make_collect_set_aggregation<rolling_aggregation>());
+  auto const result = grouped_rolling_collect_set(
+    table_view{std::vector<column_view>{group_column}},
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    *make_collect_set_aggregation<rolling_aggregation>(
+      null_policy::INCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
 
   auto const expected_result = lists_column_wrapper<double>{
     {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
