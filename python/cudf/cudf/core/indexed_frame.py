@@ -3535,18 +3535,13 @@ class IndexedFrame(Frame):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
     ):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
 
         if squeeze is not False:
             raise NotImplementedError(
@@ -3562,6 +3557,8 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be specified."
             )
+        if group_keys is None:
+            group_keys = False
 
         return (
             self.__class__._resampler(self, by=by)
@@ -3573,6 +3570,7 @@ class IndexedFrame(Frame):
                 as_index=as_index,
                 dropna=dropna,
                 sort=sort,
+                group_keys=group_keys,
             )
         )
 
