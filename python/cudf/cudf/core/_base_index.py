@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+from functools import cached_property
 from typing import Any, Set, TypeVar
 
 import pandas as pd
@@ -23,7 +24,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core.abc import Serializable
-from cudf.core.column import column
+from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_mixed_with_object_dtype
@@ -68,6 +69,10 @@ class BaseIndex(Serializable):
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
+
+    @cached_property
+    def _values(self) -> ColumnBase:
+        raise NotImplementedError
 
     def copy(self, deep: bool = True) -> BaseIndex:
         raise NotImplementedError

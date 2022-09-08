@@ -259,7 +259,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         of the actual types correctly.
         """
         if self._values.has_nulls():
-            return cudf.Index(
+            return cudf.RangeIndex(
                 self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
         else:
@@ -881,38 +881,38 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def max(self):
         return self._minmax("max")
 
-    def to_frame(self, index=True, name=None):
-        """Create a DataFrame with a column containing this Index"""
+    # def to_frame(self, index=True, name=None):
+    #     """Create a DataFrame with a column containing this Index"""
 
-        if name is not None:
-            col_name = name
-        elif self.name is None:
-            col_name = 0
-        else:
-            col_name = self.name
-        return cudf.DataFrame(
-            {col_name: self._range}, index=self if index else None
-        )
+    #     if name is not None:
+    #         col_name = name
+    #     elif self.name is None:
+    #         col_name = 0
+    #     else:
+    #         col_name = self.name
+    #     return cudf.DataFrame(
+    #         {col_name: self._range}, index=self if index else None
+    #     )
 
-    def isin(self, values):
-        """Return a boolean array where the index values are in values
+    # def isin(self, values):
+    #     """Return a boolean array where the index values are in values
 
-        Compute boolean array of whether each index value is found in
-        the passed set of values. The length of the returned boolean
-        array matches the length of the index.
-        """
+    #     Compute boolean array of whether each index value is found in
+    #     the passed set of values. The length of the returned boolean
+    #     array matches the length of the index.
+    #     """
 
-        # To match pandas behavior, even though only list-like objects are
-        # supposed to be passed, only scalars throw errors. Other types (like
-        # dicts) just transparently return False (see the implementation of
-        # ColumnBase.isin).
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
+    #     # To match pandas behavior, even though only list-like objects are
+    #     # supposed to be passed, only scalars throw errors. Other types (like
+    #     # dicts) just transparently return False (see the implementation of
+    #     # ColumnBase.isin).
+    #     if is_scalar(values):
+    #         raise TypeError(
+    #             "only list-like objects are allowed to be passed "
+    #             f"to isin(), you passed a {type(values).__name__}"
+    #         )
 
-        return np.isin(self.values_host, values)
+    #     return np.isin(self.values_host, values)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -1043,25 +1043,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @_cudf_nvtx_annotate
     def _values(self):
         return self._column
-
-    def __contains__(self, item):
-        return item in self._values
-
-    def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
-        if self._values.has_nulls():
-            return cudf.Index(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
-            )
-        else:
-            return self
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -1461,6 +1442,29 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             _index_from_data({self.name: result_col}),
             inplace=inplace,
         )
+
+    @property
+    def values(self):
+        return self._values.values
+
+    def __contains__(self, item):
+        return item in self._values
+
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        if self._values.has_nulls():
+            return cudf.Index(
+                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+            )
+        else:
+            return self
 
     def to_frame(self, index=True, name=None):
         """Create a DataFrame with a column containing this Index
