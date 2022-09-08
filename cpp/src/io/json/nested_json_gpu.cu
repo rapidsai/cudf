@@ -1050,7 +1050,7 @@ void make_json_column(json_column& root_column,
 {
   // Default name for a list's child column
   std::string const list_child_name = "element";
-  constexpr bool include_quote_char = true;
+  constexpr bool include_quote_char = false;  // TODO if merge conflict with PR #11574, make it true
 
   // Parse the JSON and get the token stream
   const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
