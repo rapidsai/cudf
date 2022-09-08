@@ -23,13 +23,28 @@ wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 pre-commit run --hook-stage manual --all-files
 PRE_COMMIT_RETVAL=$?
 
+# Check for copyright headers in the files modified currently
+COPYRIGHT=`python ci/checks/copyright.py --git-modified-only 2>&1`
+COPYRIGHT_RETVAL=$?
+
+# Output results if failure otherwise show pass
+if [ "$COPYRIGHT_RETVAL" != "0" ]; then
+  echo -e "\n\n>>>> FAILED: copyright check; begin output\n\n"
+  echo -e "$COPYRIGHT"
+  echo -e "\n\n>>>> FAILED: copyright check; end output\n\n"
+else
+  echo -e "\n\n>>>> PASSED: copyright check\n\n"
+  echo -e "$COPYRIGHT"
+fi
+
+
 # Run header meta.yml check and get results/return code
 HEADER_META=`ci/checks/headers_test.sh`
 HEADER_META_RETVAL=$?
 echo -e "$HEADER_META"
 
 RETVALS=(
-  $PRE_COMMIT_RETVAL $HEADER_META_RETVAL
+  $PRE_COMMIT_RETVAL $COPYRIGHT_RETVAL $HEADER_META_RETVAL
 )
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
