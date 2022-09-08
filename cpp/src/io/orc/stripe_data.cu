@@ -755,7 +755,11 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
               mask = 1;
               mask <<= (bw * 8) - 1;
               mask -= 1;
-              rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
+              if (std::is_signed<T>::value and baseval > mask) {
+                rle->baseval.u64[r] = -(int64_t)(baseval & mask);
+              } else {
+                rle->baseval.u64[r] = baseval;
+              }
             }
             rle->m2_pw_byte3[r] = (pw << 8) | byte3;
             pos += bw;
