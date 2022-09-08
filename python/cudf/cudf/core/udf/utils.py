@@ -238,20 +238,6 @@ def _get_kernel(kernel_string, globals_, sig, func):
 launch_arg_getters: Dict[Any, Any] = {}
 
 
-def _launch_arg_from_col(col):
-    getter = launch_arg_getters.get(col.dtype)
-    if getter:
-        data = getter(col)
-    else:
-        data = col.data
-
-    mask = col.mask
-    if mask is None:
-        return data
-    else:
-        return data, mask
-
-
 def _get_input_args_from_frame(fr):
     args = []
     offsets = []

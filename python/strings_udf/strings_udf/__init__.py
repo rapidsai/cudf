@@ -19,7 +19,7 @@ def versions_compatible(path):
     # obtain the cuda version used to compile this PTX file
     file = open(path).read()
     major, minor = (
-        re.search("Cuda compilation tools, release ([0-9\.]+)", f)
+        re.search("Cuda compilation tools, release ([0-9\.]+)", file)
         .group(1)
         .split(".")
     )

@@ -31,6 +31,30 @@ def string_udf_test(f):
         return pytest.mark.skip(reason="String UDFs not enabled")(f)
 
 
+string_data = [
+    "abc",
+    "ABC",
+    "AbC",
+    "123",
+    "123aBc",
+    "123@.!",
+    "",
+    "rapids ai",
+    "gpu",
+    "True",
+    "False",
+    "1.234",
+    ".123a",
+    "0.013",
+    "1.0",
+    "01",
+    "20010101",
+    "cudf",
+    "cuda",
+    "gpu",
+]
+
+
 def run_masked_udf_test(func, data, args=(), **kwargs):
     gdf = data
     pdf = data.to_pandas(nullable=True)
@@ -691,11 +715,8 @@ def test_masked_udf_caching():
 
 
 @string_udf_test
-@pytest.mark.parametrize(
-    "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022"]}]
-)
+@pytest.mark.parametrize("data", [{"str_col": string_data}])
 def test_string_udf_len(data):
-    # tests the `len` function in string udfs
     data = cudf.DataFrame(data)
 
     def func(row):
@@ -706,12 +727,10 @@ def test_string_udf_len(data):
 
 
 @string_udf_test
-@pytest.mark.parametrize(
-    "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022", "cuDF"]}]
-)
+@pytest.mark.parametrize("data", [{"str_col": string_data}])
 @pytest.mark.parametrize("substr", ["a", "cu", "2"])
 def test_string_udf_startswith(data, substr):
-    # tests the `startswith` method of strings
+
     data = cudf.DataFrame(data)
 
     def func(row):
@@ -724,23 +743,10 @@ def test_string_udf_startswith(data, substr):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "gpu",
-                "2022",
-                "cuDF",
-                "again_gpu",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 @pytest.mark.parametrize("substr", ["a", "gpu", "2"])
 def test_string_udf_endswith(data, substr):
-    # tests the `endswith` method of strings
     data = cudf.DataFrame(data)
 
     def func(row):
@@ -753,23 +759,10 @@ def test_string_udf_endswith(data, substr):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "gpu",
-                "2022",
-                "cuDF",
-                "again_gpu",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 @pytest.mark.parametrize("substr", ["u", "gpu", "a"])
 def test_string_udf_find(data, substr):
-    # tests the `find` method of strings
     data = cudf.DataFrame(data)
 
     def func(row):
@@ -782,23 +775,10 @@ def test_string_udf_find(data, substr):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "gpu",
-                "2022",
-                "cuDF",
-                "again_gpu",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 @pytest.mark.parametrize("substr", ["u", "gpu", "a"])
 def test_string_udf_rfind(data, substr):
-    # tests the `find` method of strings
     data = cudf.DataFrame(data)
 
     def func(row):
@@ -811,23 +791,10 @@ def test_string_udf_rfind(data, substr):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "gpu",
-                "2022",
-                "cuDF",
-                "again_gpu",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 @pytest.mark.parametrize("substr", ["a", "cu", "", "12"])
 def test_string_udf_contains(data, substr):
-    # tests the boolean operation `substr in str`
     data = cudf.DataFrame(data)
 
     def func(row):
@@ -840,19 +807,7 @@ def test_string_udf_contains(data, substr):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "gpu",
-                "2022",
-                "cuDF",
-                "again_gpu",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 @pytest.mark.parametrize("other", ["cudf", "123", "", " "])
 @pytest.mark.parametrize("cmpop", comparison_ops)
@@ -869,19 +824,7 @@ def test_string_udf_cmpops(data, other, cmpop):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "gpu",
-                "2022",
-                "cuDF",
-                "again_gpu",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_isalnum(data):
     data = cudf.DataFrame(data)
@@ -896,19 +839,7 @@ def test_string_udf_isalnum(data):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "",
-                "  ",
-                "12 ab",
-                "@2a",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_isalpha(data):
     data = cudf.DataFrame(data)
@@ -923,19 +854,7 @@ def test_string_udf_isalpha(data):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "123",
-                "",
-                "  ",
-                "12 ab",
-                "@2a",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_isdigit(data):
     data = cudf.DataFrame(data)
@@ -950,22 +869,7 @@ def test_string_udf_isdigit(data):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "",
-                "  ",
-                "12 ab",
-                "@2a",
-                "12.34",
-                "0.123",
-                ".123" ".12abc",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_isdecimal(data):
     data = cudf.DataFrame(data)
@@ -980,21 +884,7 @@ def test_string_udf_isdecimal(data):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "",
-                "rApIdS",
-                "12 ab",
-                "@2a",
-                "12.34",
-                "ABC DEF",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_isupper(data):
     data = cudf.DataFrame(data)
@@ -1009,21 +899,7 @@ def test_string_udf_isupper(data):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "rapids",
-                "AI",
-                "",
-                "rApIdS",
-                "12 ab",
-                "@2a",
-                "12.34",
-                "abc def",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_islower(data):
     data = cudf.DataFrame(data)
@@ -1038,18 +914,7 @@ def test_string_udf_islower(data):
 @string_udf_test
 @pytest.mark.parametrize(
     "data",
-    [
-        {
-            "str_col": [
-                "cudf",
-                "",
-                "  ",
-                "   123   ",
-                "2022 2222",
-                "cuDF",
-            ]
-        }
-    ],
+    [{"str_col": string_data}],
 )
 def test_string_udf_isspace(data):
     data = cudf.DataFrame(data)
@@ -1061,9 +926,7 @@ def test_string_udf_isspace(data):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
-@pytest.mark.parametrize(
-    "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022", "cuda"]}]
-)
+@pytest.mark.parametrize("data", [{"str_col": string_data}])
 @pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", ""])
 def test_string_udf_count(data, substr):
     data = cudf.DataFrame(data)
