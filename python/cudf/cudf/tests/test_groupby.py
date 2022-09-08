@@ -2685,3 +2685,31 @@ def test_groupby_pct_change_empty_columns():
     expected = pdf.groupby("id").pct_change()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        None,
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/pull/34998",
+            ),
+        ),
+        False,
+    ],
+)
+def test_groupby_group_keys(group_keys):
+    gdf = cudf.DataFrame(
+        {"A": "a a b".split(), "B": [1, 2, 3], "C": [4, 6, 5]}
+    )
+    pdf = gdf.to_pandas()
+
+    g_group = gdf.groupby("A", group_keys=group_keys)
+    p_group = pdf.groupby("A", group_keys=group_keys)
+
+    actual = g_group[["B", "C"]].apply(lambda x: x / x.sum())
+    expected = p_group[["B", "C"]].apply(lambda x: x / x.sum())
+    assert_eq(actual, expected)

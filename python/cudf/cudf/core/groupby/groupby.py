@@ -69,6 +69,12 @@ sort : bool, default False
     ``False`` for better performance. Note this does not influence
     the order of observations within each group. Groupby preserves
     the order of rows within each group.
+group_keys : bool, optional
+    When calling apply and the ``by`` argument produces a like-indexed
+    result, add group keys to index to identify pieces. By default group
+    keys are not included when the result's index (and column) labels match
+    the inputs, and are included otherwise. This argument has no effect if
+    the result produced is not like-indexed with respect to the input.
 {ret}
 Examples
 --------
@@ -135,6 +141,32 @@ Parrot       25.0
 Type
 Wild         185.0
 Captive      210.0
+
+>>> df = cudf.DataFrame({{'A': 'a a b'.split(),
+...                      'B': [1,2,3],
+...                      'C': [4,6,5]}})
+>>> g1 = df.groupby('A', group_keys=False)
+>>> g2 = df.groupby('A', group_keys=True)
+
+Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
+differ in their ``group_keys`` argument. Calling `apply` in various ways,
+we can get different grouping results:
+
+>>> g1[['B', 'C']].apply(lambda x: x / x.sum())
+          B    C
+0  0.333333  0.4
+1  0.666667  0.6
+2  1.000000  1.0
+
+In the above, the groups are not part of the index. We can have them included
+by using ``g2`` where ``group_keys=True``:
+
+>>> g2[['B', 'C']].apply(lambda x: x / x.sum())
+            B    C
+A
+a 0  0.333333  0.4
+  1  0.666667  0.6
+b 2  1.000000  1.0
 """
 )
 
@@ -174,7 +206,14 @@ class GroupBy(Serializable, Reducible, Scannable):
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
+        self,
+        obj,
+        by=None,
+        level=None,
+        sort=False,
+        as_index=True,
+        dropna=True,
+        group_keys=True,
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -210,6 +249,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._level = level
         self._sort = sort
         self._dropna = dropna
+        self._group_keys = group_keys
 
         if isinstance(by, _Grouping):
             by._obj = self.obj
@@ -544,7 +584,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_columns(
+            grouped_key_cols, name=self.grouping.keys.name
+        )
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
@@ -707,7 +749,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
-        group_names, offsets, _, grouped_values = self._grouped()
+        group_names, offsets, group_keys, grouped_values = self._grouped()
 
         ngroups = len(offsets) - 1
         if ngroups > self._MAX_GROUPS_BEFORE_WARN:
@@ -726,14 +768,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
-        elif isinstance(chunk_results[0], cudf.Series):
-            if isinstance(self.obj, cudf.DataFrame):
+        else:
+            if isinstance(chunk_results[0], cudf.Series) and isinstance(
+                self.obj, cudf.DataFrame
+            ):
                 result = cudf.concat(chunk_results, axis=1).T
                 result.index.names = self.grouping.names
             else:
                 result = cudf.concat(chunk_results)
-        else:
-            result = cudf.concat(chunk_results)
+                if self._group_keys:
+                    result.index = cudf.MultiIndex._from_data(
+                        {
+                            group_keys.name: group_keys._column,
+                            None: grouped_values.index._column,
+                        }
+                    )
 
         if self._sort:
             result = result.sort_index()
@@ -1582,7 +1631,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys,
+            dropna=self._dropna,
+            sort=self._sort,
+            group_keys=self._group_keys,
         )
 
 

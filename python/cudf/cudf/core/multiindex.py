@@ -1131,7 +1131,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             [4, 2],
             [5, 1]])
         >>> type(midx.values)
-        <class 'cupy._core.core.ndarray'>
+        <class 'cupy...ndarray'>
         """
         return self.to_frame(index=False).values
 
