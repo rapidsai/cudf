@@ -21,6 +21,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/io/json.hpp>
@@ -920,6 +921,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   constexpr std::size_t single_item = 1;
 
   // Symbol representing the JSON-root (i.e., we're at nesting level '0')
@@ -973,6 +975,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
   rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream, mr};
@@ -1048,6 +1051,7 @@ void make_json_column(json_column& root_column,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   // Default name for a list's child column
   std::string const list_child_name = "element";
   constexpr bool include_quote_char = false;  // TODO if merge conflict with PR #11574, make it true
@@ -1421,6 +1425,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto make_validity =
     [stream, mr](json_column const& json_col) -> std::pair<rmm::device_buffer, size_type> {
     if (json_col.current_offset == json_col.valid_count) { return {rmm::device_buffer{}, 0}; }
@@ -1516,6 +1521,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Allocate device memory for the JSON input & copy over to device
