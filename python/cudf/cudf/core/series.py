@@ -3075,7 +3075,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
