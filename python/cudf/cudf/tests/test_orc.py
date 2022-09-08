@@ -1846,6 +1846,7 @@ def test_negative_timestamp(tmpdir, engine):
     expected = cudf.DataFrame(
         {
             "a": [
+                pd.Timestamp("1969-12-31 23:59:59.000123"),
                 pd.Timestamp("1969-12-31 23:59:58.000999"),
                 pd.Timestamp("1969-12-31 23:59:58.001001"),
                 pd.Timestamp("1839-12-24 03:58:56.000826"),
