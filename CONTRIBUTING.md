@@ -99,13 +99,13 @@ cd $CUDF_HOME
 **Note:** Using a conda environment is the easiest way to satisfy the library's dependencies.
 Instructions for a minimal build environment without conda are included below.
 
-- Create the conda development environment `cudf_dev`:
+- Create the conda development environment:
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.5.yml
+conda env create --name cudf_dev --file conda/environments/all_cuda-115_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -113,9 +113,6 @@ conda activate cudf_dev
 - **Note**: the conda environment files are updated frequently, so the
   development environment may also need to be updated if dependency versions or
   pinnings are changed.
-
-- For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in
-  `conda/environments/`.
 
 #### Building without a conda environment
 
