@@ -442,7 +442,8 @@ static __device__ uint32_t IntegerRLE(
           s->u.intrle.literal_w    = bytecnt;
         } else {
           uint32_t range, w;
-          if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4) {
+          if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4 and
+              vmin <= std::numeric_limits<int64_t>::max()) {
             s->u.intrle.literal_mode = 2;
             w                        = mode2_w;
             range                    = (uint32_t)vrange_mode2;

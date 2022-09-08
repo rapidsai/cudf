@@ -1841,8 +1841,9 @@ def test_orc_writer_cols_as_map_type_error():
         df.to_orc(buffer, cols_as_map_type=1)
 
 
-def test_negative_timestamp(tmpdir):
-    ref = cudf.DataFrame(
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_negative_timestamp(tmpdir, engine):
+    expected = cudf.DataFrame(
         {
             "a": [
                 pd.Timestamp("1969-12-31 23:59:58.000999"),
@@ -1851,16 +1852,21 @@ def test_negative_timestamp(tmpdir):
             ]
         }
     )
-
     cudf_fname = tmpdir.join("cudf_neg_ts.orc")
-    ref.to_orc(cudf_fname)
-    df = cudf.read_orc(cudf_fname)
-    pdf = pd.read_orc(cudf_fname)
-    assert_eq(df, pdf)
+    expected.to_orc(cudf_fname)
+
+    cudf_got = cudf.read_orc(cudf_fname, engine=engine)
+    assert_eq(expected, cudf_got)
+    assert_eq(expected, pd.read_orc(cudf_fname))
+    assert pyarrow.orc.ORCFile(cudf_fname).read().equals(cudf_got.to_arrow())
 
     pyorc_fname = tmpdir.join("pyorc_neg_ts.orc")
-    pyorc_table = pa.Table.from_pandas(ref.to_pandas(), preserve_index=False)
+    pyorc_table = pa.Table.from_pandas(
+        expected.to_pandas(), preserve_index=False
+    )
     pyarrow.orc.write_table(pyorc_table, pyorc_fname)
-    df = cudf.read_orc(pyorc_fname)
-    pdf = pd.read_orc(pyorc_fname)
-    assert_eq(df, pdf)
+
+    cudf_got = cudf.read_orc(pyorc_fname, engine=engine)
+    assert_eq(expected, cudf_got)
+    assert_eq(expected, pd.read_orc(pyorc_fname))
+    assert pyarrow.orc.ORCFile(pyorc_fname).read().equals(cudf_got.to_arrow())
