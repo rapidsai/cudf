@@ -109,6 +109,114 @@ def pandas_comparison_test(*args, cudf_objects=None, assert_func=assert_eq):
     return deco
 
 
+def set_element(frame):
+    """Change the first element of frame."""
+    # Handle default values to replace with for different dtypes. We provide
+    # two options to ensure that at least one of them is different from the
+    # original value of the element we plan to overwrite.
+    defaults_by_kind = {
+        "b": (True, False),
+        "i": (0, 1),
+        "u": (0, 1),
+        "O": ("a", "b"),
+    }
+
+    if isinstance(frame, (cudf.Series, pd.Series)):
+        try:
+            defaults = defaults_by_kind[frame.dtype.kind]
+        except KeyError:
+            raise TypeError("Provided frame has an unsupported dtype.")
+
+        default = defaults[0] if frame.iloc[0] != defaults[0] else defaults[1]
+        frame.iloc[0] = default
+    elif isinstance(frame, (cudf.DataFrame, pd.DataFrame)):
+        try:
+            defaults = defaults_by_kind[frame.iloc[:, 0].dtype.kind]
+        except KeyError:
+            raise TypeError("Provided frame has an unsupported dtype.")
+        default = (
+            defaults[0] if frame.iloc[0, 0] != defaults[0] else defaults[1]
+        )
+        frame.iloc[0, 0] = default
+    else:
+        raise TypeError(
+            f"Object {frame} of type {type(frame)} is unsupported."
+        )
+
+
+def pandas_copy_semantics_comparison_test(cudf_object, modify=set_element):
+    def deco(test):
+        """Verify that cudf and pandas methods have the same semantics.
+
+        This decorator generates a new function that looks identical to the
+        decorated function but calls the original function twice, once each for
+        pandas and cudf. The function is assumed to take a single input that is
+        a cudf/pandas object and return a new object of the same type. The
+        resulting test then verifies that both returned objects have the same
+        view or copy semantics by modifying the outputs and seeing what effect
+        this has on the inputs.
+        """
+        # These tests must have exactly one parameter that is a cudf object.
+        nonlocal cudf_object
+
+        parameters = inspect.signature(test).parameters
+        params_str = ", ".join(f"{p}" for p in parameters)
+        arg_str = ", ".join(f"{p}={p}" for p in parameters if p != cudf_object)
+
+        if arg_str:
+            arg_str += ", "
+
+        cudf_arg_str = arg_str + f"{cudf_object}={cudf_object}"
+        pandas_arg_str = arg_str + f"{cudf_object}=pandas_object"
+
+        src = textwrap.dedent(
+            f"""
+            import pandas
+            import cudf
+            import makefun
+            @makefun.wraps(
+                test,
+                remove_args=remove_args,
+            )
+            def wrapped_test({params_str}):
+                cudf_object_orig = {cudf_object}.copy()
+
+                pandas_object = {cudf_object}.to_pandas()
+                pandas_object_orig = pandas_object.copy()
+
+                cudf_output = test({cudf_arg_str})
+                pandas_output = test({pandas_arg_str})
+
+                modify(cudf_output)
+                modify(pandas_output)
+
+                cudf_modified = {cudf_object}.equals(cudf_object_orig)
+                pandas_modified = pandas_object.equals(pandas_object_orig)
+                assert cudf_modified == pandas_modified, (
+                    f"The cudf object was{{' not' if cudf_modified else ''}} "
+                    "modified, while pandas object was"
+                    f"{{' not' if pandas_modified else ''}}."
+                )
+            """
+        )
+        globals_ = {
+            "test": test,
+            "remove_args": (f"{_LIB_PARAM_NAME}",)
+            if _LIB_PARAM_NAME in parameters
+            else None,
+            "cudf_object": cudf_object,
+            "modify": modify,
+        }
+        exec(src, globals_)
+        wrapped_test = globals_["wrapped_test"]
+        # In case marks were applied to the original benchmark, copy them over.
+        if marks := getattr(test, "pytestmark", None):
+            wrapped_test.pytestmark = marks
+        return wrapped_test
+
+    return deco
+
+
 @pandas_comparison_test
 def test_init(lib):
     data = [
@@ -247,110 +355,6 @@ def test_fixture_concat(lib, df):
 @pandas_comparison_test(cudf_objects="df")
 def test_param_concat(lib, df):
     return lib.concat([df, df])
-
-
-def set_element(frame):
-    """Change the first element of frame."""
-    # Handle default values to replace with for different dtypes. We provide
-    # two options to ensure that at least one of them is different from the
-    # original value of the element we plan to overwrite.
-    defaults_by_kind = {
-        "b": (True, False),
-        "i": (0, 1),
-        "u": (0, 1),
-        "O": ("a", "b"),
-    }
-
-    if isinstance(frame, (cudf.Series, pd.Series)):
-        try:
-            defaults = defaults_by_kind[frame.dtype.kind]
-        except KeyError:
-            raise TypeError("Provided frame has an unsupported dtype.")
-
-        default = defaults[0] if frame.iloc[0] != defaults[0] else defaults[1]
-        frame.iloc[0] = default
-    elif isinstance(frame, (cudf.DataFrame, pd.DataFrame)):
-        try:
-            defaults = defaults_by_kind[frame.iloc[:, 0].dtype.kind]
-        except KeyError:
-            raise TypeError("Provided frame has an unsupported dtype.")
-        default = (
-            defaults[0] if frame.iloc[0, 0] != defaults[0] else defaults[1]
-        )
-        frame.iloc[0, 0] = default
-    else:
-        raise TypeError(
-            f"Object {frame} of type {type(frame)} is unsupported."
-        )
-
-
-def pandas_copy_semantics_comparison_test(cudf_object, modify=set_element):
-    def deco(test):
-        """Verify that cudf and pandas methods have the same semantics.
-
-        This decorator generates a new function that looks identical to the
-        decorated function but calls the original function twice, once each for
-        pandas and cudf. The function is assumed to take a single input
-        """
-        # These tests must have exactly one parameter that is a cudf object.
-        nonlocal cudf_object
-
-        parameters = inspect.signature(test).parameters
-        params_str = ", ".join(f"{p}" for p in parameters)
-        arg_str = ", ".join(f"{p}={p}" for p in parameters if p != cudf_object)
-
-        if arg_str:
-            arg_str += ", "
-
-        cudf_arg_str = arg_str + f"{cudf_object}={cudf_object}"
-        pandas_arg_str = arg_str + f"{cudf_object}=pandas_object"
-
-        src = textwrap.dedent(
-            f"""
-            import pandas
-            import cudf
-            import makefun
-            @makefun.wraps(
-                test,
-                remove_args=remove_args,
-            )
-            def wrapped_test({params_str}):
-                cudf_object_orig = {cudf_object}.copy()
-
-                pandas_object = {cudf_object}.to_pandas()
-                pandas_object_orig = pandas_object.copy()
-
-                cudf_output = test({cudf_arg_str})
-                pandas_output = test({pandas_arg_str})
-
-                modify(cudf_output)
-                modify(pandas_output)
-
-                cudf_modified = {cudf_object}.equals(cudf_object_orig)
-                pandas_modified = pandas_object.equals(pandas_object_orig)
-                assert cudf_modified == pandas_modified, (
-                    f"The cudf object was{{' not' if cudf_modified else ''}} "
-                    "modified, while pandas object was"
-                    f"{{' not' if pandas_modified else ''}}."
-                )
-            """
-        )
-        globals_ = {
-            "test": test,
-            "remove_args": (f"{_LIB_PARAM_NAME}",)
-            if _LIB_PARAM_NAME in parameters
-            else None,
-            "cudf_object": cudf_object,
-            "modify": modify,
-        }
-        exec(src, globals_)
-        wrapped_test = globals_["wrapped_test"]
-        # In case marks were applied to the original benchmark, copy them over.
-        if marks := getattr(test, "pytestmark", None):
-            wrapped_test.pytestmark = marks
-        return wrapped_test
-
-    return deco
 
 
 # TODO: Instead of requiring the user to pass `cudf_object`, we could require
