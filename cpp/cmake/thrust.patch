@@ -114,3 +114,102 @@ index d0e3f94..76774b0 100644
  /**
   * Dispatch between 32-bit and 64-bit index based versions of the same algorithm
   * implementation. This version allows using different token sequences for callables
+diff --git a/dependencies/cub/cub/util_namespace.cuh b/dependencies/cub/cub/util_namespace.cuh
+index 2a1bb38b..a3854c09 100644
+--- a/dependencies/cub/cub/util_namespace.cuh
++++ b/dependencies/cub/cub/util_namespace.cuh
+@@ -108,6 +108,77 @@
+ #define CUB_NS_QUALIFIER ::cub
+ #endif
+ 
++#if !defined(CUB_DETAIL_MAGIC_NS_NAME)
++#define CUB_DETAIL_COUNT_N(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, \
++                           _14, _15, _16, _17, _18, _19, _20, N, ...)              \
++                           N
++#define CUB_DETAIL_COUNT(...)                                                      \
++  CUB_DETAIL_IDENTITY(CUB_DETAIL_COUNT_N(__VA_ARGS__, 20, 19, 18, 17, 16, 15, 14, 13, 12, \
++                                         11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))
++#define CUB_DETAIL_IDENTITY(N) N
++#define CUB_DETAIL_APPLY(MACRO, ...) CUB_DETAIL_IDENTITY(MACRO(__VA_ARGS__))
++#define CUB_DETAIL_MAGIC_NS_NAME1(P1) \
++    CUB_##P1##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME2(P1, P2) \
++    CUB_##P1##_##P2##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME3(P1, P2, P3) \
++    CUB_##P1##_##P2##_##P3##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME4(P1, P2, P3, P4) \
++    CUB_##P1##_##P2##_##P3##_##P4##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME5(P1, P2, P3, P4, P5) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME6(P1, P2, P3, P4, P5, P6) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME7(P1, P2, P3, P4, P5, P6, P7) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME8(P1, P2, P3, P4, P5, P6, P7, P8) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME9(P1, P2, P3, P4, P5, P6, P7, P8, P9) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME10(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME11(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME12(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME13(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME14(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME15(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_##P15##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME16(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_##P15##_##P16##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME17(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_##P15##_##P16##_##P17##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME18(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_##P15##_##P16##_##P17##_##P18##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME19(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_##P15##_##P16##_##P17##_##P18##_##P19##_NS
++#define CUB_DETAIL_MAGIC_NS_NAME20(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20) \
++    CUB_##P1##_##P2##_##P3##_##P4##_##P5##_##P6##_##P7##_##P8##_##P9##_##P10##_##P11##_##P12##_##P13##_##P14##_##P15##_##P16##_##P17##_##P18##_##P19##_##P20##_NS
++#define CUB_DETAIL_DISPATCH(N) CUB_DETAIL_MAGIC_NS_NAME ## N
++#define CUB_DETAIL_MAGIC_NS_NAME(...) CUB_DETAIL_IDENTITY(CUB_DETAIL_APPLY(CUB_DETAIL_DISPATCH, CUB_DETAIL_COUNT(__VA_ARGS__))(__VA_ARGS__))
++#endif // !defined(CUB_DETAIL_MAGIC_NS_NAME)
++
++#if defined(CUB_DISABLE_NAMESPACE_MAGIC)
++#if !defined(CUB_WRAPPED_NAMESPACE)
++#if !defined(CUB_IGNORE_NAMESPACE_MAGIC_ERROR)
++#error "Disabling namespace magic is unsafe without wrapping namespace"
++#endif // !defined(CUB_IGNORE_NAMESPACE_MAGIC_ERROR)
++#endif // !defined(CUB_WRAPPED_NAMESPACE)
++#define CUB_DETAIL_MAGIC_NS_BEGIN
++#define CUB_DETAIL_MAGIC_NS_END
++#else // not defined(CUB_DISABLE_NAMESPACE_MAGIC)
++#if defined(_NVHPC_CUDA)
++#define CUB_DETAIL_MAGIC_NS_BEGIN inline namespace CUB_DETAIL_MAGIC_NS_NAME(CUB_VERSION, NV_TARGET_SM_INTEGER_LIST) {
++#define CUB_DETAIL_MAGIC_NS_END }
++#else // not defined(_NVHPC_CUDA)
++#define CUB_DETAIL_MAGIC_NS_BEGIN inline namespace CUB_DETAIL_MAGIC_NS_NAME(CUB_VERSION, __CUDA_ARCH_LIST__) {
++#define CUB_DETAIL_MAGIC_NS_END }
++#endif // not defined(_NVHPC_CUDA)
++#endif // not defined(CUB_DISABLE_NAMESPACE_MAGIC)
++
+ /**
+  * \def CUB_NAMESPACE_BEGIN
+  * This macro is used to open a `cub::` namespace block, along with any
+@@ -117,7 +188,8 @@
+ #define CUB_NAMESPACE_BEGIN                                                 \
+   CUB_NS_PREFIX                                                             \
+   namespace cub                                                             \
+-  {
++  {                                                                         \
++  CUB_DETAIL_MAGIC_NS_BEGIN
+
+ /**
+  * \def CUB_NAMESPACE_END
+@@ -126,6 +198,7 @@
+  * This macro is defined by CUB and may not be overridden.
+  */
+ #define CUB_NAMESPACE_END                                                   \
++  CUB_DETAIL_MAGIC_NS_END                                                   \
+   } /* end namespace cub */                                                 \
+   CUB_NS_POSTFIX
