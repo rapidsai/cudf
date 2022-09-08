@@ -135,6 +135,19 @@ struct PageInfo {
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
+  // for nested types, we run a preprocess step in order to determine output
+  // column sizes. Because of this, we can jump directly to the position in the
+  // input data to start decoding instead of reading all of the data and discarding
+  // rows we don't care about.
+  //
+  // NOTE: for flat hierarchies we do not do the preprocess step, so skipped_values and
+  // skipped_leaf_values will always be 0.
+  //
+  // # of values skipped in the repetition/definition level stream
+  int skipped_values;
+  // # of values skipped in the actual data stream.
+  int skipped_leaf_values;
+
   // nesting information (input/output) for each page
   int num_nesting_levels;
   PageNestingInfo* nesting;
@@ -416,6 +429,9 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @param input_columns Input column information
  * @param output_columns Output column information
  * @param num_rows Maximum number of rows to read
+ * @param min_rows crop all rows below min_row
+ * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+ * bounds
  * @param stream Cuda stream
  */
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
@@ -423,6 +439,8 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<input_column_info>& input_columns,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
+                          size_t min_row,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
@@ -435,11 +453,13 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     hostdevice_vector<ColumnChunkDesc> const& chunks,
                     size_t num_rows,
+                    size_t min_row,
                     rmm::cuda_stream_view stream);
 
 /**
