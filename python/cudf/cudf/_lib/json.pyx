@@ -1,11 +1,11 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
 
-import collections.abc as abc
 import io
 import os
+from collections import abc
 
 import cudf
 
@@ -22,7 +22,7 @@ from cudf._lib.cpp.io.json cimport (
     read_json as libcudf_read_json,
 )
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.io.utils cimport make_source_info
+from cudf._lib.io.utils cimport make_source_info, update_struct_field_names
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -31,7 +31,8 @@ cpdef read_json(object filepaths_or_buffers,
                 object dtype,
                 bool lines,
                 object compression,
-                object byte_range):
+                object byte_range,
+                bool experimental):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -82,15 +83,15 @@ cpdef read_json(object filepaths_or_buffers,
             for k, v in dtype.items():
                 c_dtypes_map[str(k).encode()] = \
                     _get_cudf_data_type_from_dtype(v)
-        elif not isinstance(dtype, abc.Iterable):
-            raise TypeError("`dtype` must be 'list like' or 'dict'")
-        else:
+        elif isinstance(dtype, abc.Collection):
             is_list_like_dtypes = True
             c_dtypes_list.reserve(len(dtype))
             for col_dtype in dtype:
                 c_dtypes_list.push_back(
                     _get_cudf_data_type_from_dtype(
                         col_dtype))
+        else:
+            raise TypeError("`dtype` must be 'list like' or 'dict'")
 
     cdef json_reader_options opts = move(
         json_reader_options.builder(make_source_info(filepaths_or_buffers))
@@ -98,6 +99,7 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
+        .experimental(experimental)
         .build()
     )
     if is_list_like_dtypes:
@@ -106,14 +108,20 @@ cpdef read_json(object filepaths_or_buffers,
         opts.set_dtypes(c_dtypes_map)
 
     # Read JSON
-    cdef cudf_io_types.table_with_metadata c_out_table
+    cdef cudf_io_types.table_with_metadata c_result
 
     with nogil:
-        c_out_table = move(libcudf_read_json(opts))
+        c_result = move(libcudf_read_json(opts))
 
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
-    return data_from_unique_ptr(move(c_out_table.tbl),
-                                column_names=column_names)
+    meta_names = [info.name.decode() for info in c_result.metadata.schema_info]
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+        move(c_result.tbl),
+        column_names=meta_names
+    ))
+
+    update_struct_field_names(df, c_result.metadata.schema_info)
+
+    return df
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
     if cudf.api.types.is_categorical_dtype(dtype):

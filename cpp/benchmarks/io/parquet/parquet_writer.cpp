@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -42,11 +40,10 @@ void BM_parq_write_varying_inout(benchmark::State& state)
     state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
   auto const sink_type = static_cast<io_type>(state.range(4));
 
-  data_profile table_data_profile;
-  table_data_profile.set_cardinality(cardinality);
-  table_data_profile.set_avg_run_length(run_length);
-  auto const tbl = create_random_table(
-    cycle_dtypes(data_types, num_cols), table_size_bytes{data_size}, table_data_profile);
+  auto const tbl =
+    create_random_table(cycle_dtypes(data_types, num_cols),
+                        table_size_bytes{data_size},
+                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
@@ -74,6 +71,7 @@ void BM_parq_write_varying_options(benchmark::State& state)
                                              int32_t(type_group_id::FLOATING_POINT),
                                              int32_t(type_group_id::FIXED_POINT),
                                              int32_t(type_group_id::TIMESTAMP),
+                                             int32_t(type_group_id::DURATION),
                                              int32_t(cudf::type_id::STRING),
                                              int32_t(cudf::type_id::LIST)});
 
@@ -109,8 +107,10 @@ WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, integral, type_group_id:
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, durations, type_group_id::DURATION);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, struct, cudf::type_id::STRUCT);
 
 BENCHMARK_DEFINE_F(ParquetWrite, writer_options)
 (::benchmark::State& state) { BM_parq_write_varying_options(state); }

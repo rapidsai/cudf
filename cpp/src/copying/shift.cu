@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/strings/detail/copying.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -70,7 +71,7 @@ struct shift_functor {
                    std::unique_ptr<column>>
   operator()(Args&&...)
   {
-    CUDF_FAIL("shift does not support non-fixed-width types.");
+    CUDF_FAIL("shift only supports fixed-width or string types.");
   }
 
   template <typename T, typename... Args>
@@ -125,6 +126,7 @@ struct shift_functor {
 
     // avoid assigning elements we know to be invalid.
     if (not scalar_is_valid) {
+      if (std::abs(offset) > size) { return output; }
       if (offset > 0) {
         index_begin = thrust::make_counting_iterator<size_type>(offset);
         data        = data + offset;
@@ -155,7 +157,6 @@ std::unique_ptr<column> shift(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.type() == fill_value.type(),
                "shift requires each fill value type to match the corresponding column type.");
 
@@ -172,7 +173,8 @@ std::unique_ptr<column> shift(column_view const& input,
                               scalar const& fill_value,
                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::shift(input, offset, fill_value, rmm::cuda_stream_default, mr);
+  CUDF_FUNC_RANGE();
+  return detail::shift(input, offset, fill_value, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

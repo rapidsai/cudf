@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -106,7 +122,7 @@ cudf::size_type find_all_from_set(device_span<char const> data,
 {
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
   const int grid_size = divCeil(data.size(), (size_t)block_size);
 
@@ -131,7 +147,7 @@ cudf::size_type find_all_from_set(host_span<char const> data,
 
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>));
 
   const size_t chunk_count = divCeil(data.size(), max_chunk_bytes);
@@ -143,7 +159,7 @@ cudf::size_type find_all_from_set(host_span<char const> data,
     const int grid_size   = divCeil(chunk_bits, block_size);
 
     // Copy chunk to device
-    CUDA_TRY(
+    CUDF_CUDA_TRY(
       cudaMemcpyAsync(d_chunk.data(), h_chunk, chunk_bytes, cudaMemcpyDefault, stream.value()));
 
     for (char key : keys) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +33,17 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -70,15 +78,15 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& input,
-                                                  OptionalScalarIterator const& lo_itr,
-                                                  ReplaceScalarIterator const& lo_replace_itr,
-                                                  OptionalScalarIterator const& hi_itr,
-                                                  ReplaceScalarIterator const& hi_replace_itr,
+                                                  OptionalScalarIterator lo_itr,
+                                                  ReplaceScalarIterator lo_replace_itr,
+                                                  OptionalScalarIterator hi_itr,
+                                                  ReplaceScalarIterator hi_replace_itr,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
@@ -147,10 +155,10 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -194,10 +202,10 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -209,10 +217,10 @@ std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<column> clamp(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -383,7 +391,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo_replace, hi, hi_replace, rmm::cuda_stream_default, mr);
+  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::default_stream_value, mr);
 }
 
 // clamp input at lo and hi
@@ -393,6 +401,6 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo, hi, hi, rmm::cuda_stream_default, mr);
+  return detail::clamp(input, lo, lo, hi, hi, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

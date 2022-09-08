@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -10,17 +10,17 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask>=2021.11.1,<=2022.01.0",
-    "distributed>=2021.11.1,<=2022.01.0",
+    "dask>=2022.7.1",
+    "distributed>=2022.7.1",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.4.0dev0",
+    "pandas>=1.0,<1.5.0dev0",
 ]
 
 extras_require = {
     "test": [
         "numpy",
-        "pandas>=1.0,<1.4.0dev0",
+        "pandas>=1.0,<1.5.0dev0",
         "pytest",
         "numba>=0.53.1",
         "dask>=2021.09.1",
@@ -65,10 +65,11 @@ if not os.path.isdir(CUDA_HOME):
     raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
-cupy_package_name = "cupy-cuda" + get_cuda_version_from_header(
-    cuda_include_dir
+install_requires.append(
+    "cupy-cuda"
+    + get_cuda_version_from_header(cuda_include_dir)
+    + ">=9.5.0,<12.0.0a0"
 )
-install_requires.append(cupy_package_name)
 
 
 setup(
@@ -84,8 +85,8 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(exclude=["tests", "tests.*"]),
     cmdclass=versioneer.get_cmdclass(),

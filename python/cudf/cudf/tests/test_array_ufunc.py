@@ -60,7 +60,9 @@ def test_ufunc_index(ufunc):
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
     pandas_args = args = [
-        cudf.Index(cp.random.randint(low=1, high=10, size=N),)
+        cudf.Index(
+            cp.random.randint(low=1, high=10, size=N),
+        )
         for _ in range(ufunc.nin)
     ]
 
@@ -88,6 +90,8 @@ def test_ufunc_index(ufunc):
         if fname in ("power", "float_power"):
             if (got - expect).abs().max() == 1:
                 pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        elif fname in ("bitwise_and", "bitwise_or", "bitwise_xor"):
+            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46769")
         raise
 
 
@@ -283,7 +287,8 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
 
 
 @pytest.mark.parametrize(
-    "func", [np.add],
+    "func",
+    [np.add],
 )
 def test_ufunc_cudf_series_error_with_out_kwarg(func):
     cudf_s1 = cudf.Series(data=[-1, 2, 3, 0])

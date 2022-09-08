@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -55,6 +55,9 @@ class BinaryOperation(IntEnum):
     )
     POW = (
         <underlying_type_t_binary_operator> binary_operator.POW
+    )
+    INT_POW = (
+        <underlying_type_t_binary_operator> binary_operator.INT_POW
     )
     EQ = (
         <underlying_type_t_binary_operator> binary_operator.EQUAL
@@ -160,6 +163,10 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
+    # TODO: Shouldn't have to keep special-casing. We need to define a separate
+    # pipeline for libcudf binops that don't map to Python binops.
+    if op not in {"INT_POW", "NULL_EQUALS"}:
+        op = op[2:-2]
 
     op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (

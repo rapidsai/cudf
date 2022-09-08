@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #####################################
 # conda existence test for headers  #
 #####################################
@@ -10,7 +10,7 @@ DIRNAMES="cudf cudf_test"
 
 # existence tests for lib${LIBNAME}
 for DIRNAME in ${DIRNAMES[@]}; do
-    HEADERS=`cd cpp && find include/${DIRNAME}/ -type f \( -iname "*.h" -o  -iname "*.hpp" \) -printf "    - test -f \\\$PREFIX/%p\n" | sort`
+    HEADERS=`cd cpp && find include/${DIRNAME}/ -type f \( -iname "*.h" -o  -iname "*.hpp" \) -printf "        - test -f \\\$PREFIX/%p\n" | sort`
     META_TESTS=`grep -E "test -f .*/include/${DIRNAME}/.*\.h(pp)?" conda/recipes/lib${LIBNAME}/meta.yaml | sort`
     HEADER_DIFF=`diff <(echo "$HEADERS") <(echo "$META_TESTS")`
     LIB_RETVAL=$?

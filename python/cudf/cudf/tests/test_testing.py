@@ -1,7 +1,8 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -11,8 +12,26 @@ from cudf.testing import (
     assert_index_equal,
     assert_series_equal,
 )
-from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.testing._utils import (
+    NUMERIC_TYPES,
+    OTHER_TYPES,
+    assert_column_memory_eq,
+    assert_column_memory_ne,
+    assert_eq,
+)
 from cudf.testing.testing import assert_column_equal
+
+
+@pytest.fixture(
+    params=[
+        pa.array([*range(10)]),
+        pa.array(["hello", "world", "rapids", "AI"]),
+        pa.array([[1, 2, 3], [4, 5], [6], [], [7]]),
+        pa.array([{"f0": "hello", "f1": 42}, {"f0": "world", "f1": 3}]),
+    ]
+)
+def arrow_arrays(request):
+    return request.param
 
 
 @pytest.mark.parametrize("rdata", [[1, 2, 5], [1, 2, 6], [1, 2, 5, 6]])
@@ -24,7 +43,12 @@ from cudf.testing.testing import assert_column_equal
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_index_equal(
-    rdata, exact, check_names, rname, check_categorical, dtype,
+    rdata,
+    exact,
+    check_names,
+    rname,
+    check_categorical,
+    dtype,
 ):
     p_left = pd.Index([1, 2, 3], name="a", dtype=dtype)
     p_right = pd.Index(rdata, name=rname, dtype=dtype)
@@ -81,7 +105,12 @@ def test_basic_assert_index_equal(
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_series_equal(
-    rdata, rname, check_names, check_category_order, check_categorical, dtype,
+    rdata,
+    rname,
+    check_names,
+    check_category_order,
+    check_categorical,
+    dtype,
 ):
 
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
@@ -141,8 +170,8 @@ def test_assert_column_equal_dtype_edge_cases(other):
         assert_column_equal(base, other, check_dtype=False)
 
     # the exceptions are the empty and all null cases
-    assert_column_equal(base[:0], other[:0], check_dtype=False)
-    assert_column_equal(other[:0], base[:0], check_dtype=False)
+    assert_column_equal(base.slice(0, 0), other.slice(0, 0), check_dtype=False)
+    assert_column_equal(other.slice(0, 0), base.slice(0, 0), check_dtype=False)
 
     base = full(len(base), fill_value=cudf.NA, dtype=base.dtype)
     other = full(len(other), fill_value=cudf.NA, dtype=other.dtype)
@@ -369,3 +398,42 @@ def test_basic_scalar_equality(left, right):
 def test_basic_scalar_inequality(left, right):
     with pytest.raises(AssertionError, match=r".*not (almost )?equal.*"):
         assert_eq(left, right)
+
+
+def test_assert_column_memory_basic(arrow_arrays):
+    left = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
+    right = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
+
+    with pytest.raises(AssertionError):
+        assert_column_memory_eq(left, right)
+    assert_column_memory_ne(left, right)
+
+
+def test_assert_column_memory_slice(arrow_arrays):
+    col = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
+    left = col.slice(0, 1)
+    right = col.slice(1, 2)
+
+    with pytest.raises(AssertionError):
+        assert_column_memory_eq(left, right)
+    assert_column_memory_ne(left, right)
+
+    with pytest.raises(AssertionError):
+        assert_column_memory_eq(left, col)
+    assert_column_memory_ne(left, col)
+
+    with pytest.raises(AssertionError):
+        assert_column_memory_eq(right, col)
+    assert_column_memory_ne(right, col)
+
+
+def test_assert_column_memory_basic_same(arrow_arrays):
+    data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
+    buf = cudf.core.buffer.as_device_buffer_like(data.base_data)
+
+    left = cudf.core.column.build_column(buf, dtype=np.int32)
+    right = cudf.core.column.build_column(buf, dtype=np.int32)
+
+    assert_column_memory_eq(left, right)
+    with pytest.raises(AssertionError):
+        assert_column_memory_ne(left, right)

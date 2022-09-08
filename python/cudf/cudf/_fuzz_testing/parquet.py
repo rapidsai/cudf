@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -64,7 +64,7 @@ class ParquetReader(IOFuzz):
                 self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols
@@ -102,10 +102,6 @@ class ParquetReader(IOFuzz):
                 params_dict[param] = list(
                     np.unique(np.random.choice(self._df.columns, col_size))
                 )
-            elif param in ("skiprows", "num_rows"):
-                params_dict[param] = np.random.choice(
-                    [None, self._rand(len(self._df))]
-                )
             else:
                 params_dict[param] = np.random.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
@@ -139,7 +135,7 @@ class ParquetWriter(IOFuzz):
                 seed,
             ) = self.get_next_regression_params()
         else:
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES

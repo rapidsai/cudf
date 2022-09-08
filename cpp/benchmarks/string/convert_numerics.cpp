@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
-
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
@@ -29,9 +27,7 @@ namespace {
 template <typename NumericType>
 std::unique_ptr<cudf::column> get_numerics_column(cudf::size_type rows)
 {
-  std::unique_ptr<cudf::table> result =
-    create_random_table({cudf::type_to_id<NumericType>()}, row_count{rows});
-  return std::move(result->release().front());
+  return create_random_column(cudf::type_to_id<NumericType>(), row_count{rows});
 }
 
 template <typename NumericType>

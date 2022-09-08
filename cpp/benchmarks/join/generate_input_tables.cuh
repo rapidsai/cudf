@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/distance.h>
@@ -139,31 +139,31 @@ void generate_input_tables(key_type* const build_tbl,
 
   // Maximize exposed parallelism while minimizing storage for curand state
   int num_blocks_init_build_tbl{-1};
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &num_blocks_init_build_tbl, init_build_tbl<key_type, size_type>, block_size, 0));
 
   int num_blocks_init_probe_tbl{-1};
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &num_blocks_init_probe_tbl, init_probe_tbl<key_type, size_type>, block_size, 0));
 
   int dev_id{-1};
-  CUDA_TRY(cudaGetDevice(&dev_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
 
   int num_sms{-1};
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
   const int num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
-  rmm::device_uvector<curandState> devStates(num_states, rmm::cuda_stream_default);
+  rmm::device_uvector<curandState> devStates(num_states, cudf::default_stream_value);
 
   init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data(), num_states);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   init_build_tbl<key_type, size_type><<<num_sms * num_blocks_init_build_tbl, block_size>>>(
     build_tbl, build_tbl_size, multiplicity, devStates.data(), num_states);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   auto const rand_max = std::numeric_limits<key_type>::max();
 
@@ -177,5 +177,5 @@ void generate_input_tables(key_type* const build_tbl,
                                                           devStates.data(),
                                                           num_states);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 }

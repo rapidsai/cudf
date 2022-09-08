@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -31,6 +32,9 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 
 template <typename T>
 class GatherTest : public cudf::test::BaseFixture {
@@ -43,7 +47,7 @@ TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
 {
   constexpr cudf::size_type source_size{1000};
-  rmm::device_uvector<cudf::size_type> gather_map(source_size, rmm::cuda_stream_default);
+  rmm::device_uvector<cudf::size_type> gather_map(source_size, cudf::default_stream_value);
   thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
 
   auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });

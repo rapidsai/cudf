@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import collections
 import warnings
+from collections import abc
 from typing import TYPE_CHECKING, Any, Tuple, cast
 
 import numpy as np
@@ -15,7 +15,6 @@ from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
-    from cudf.core.frame import Frame
 
 
 class _Indexer:
@@ -35,24 +34,19 @@ class _Indexer:
 
 
 class _ColumnIndexer(_Indexer):
-    def get(self, obj: Frame) -> ColumnBase:
+    def get(self, obj: cudf.DataFrame) -> ColumnBase:
         return obj._data[self.name]
 
-    def set(self, obj: Frame, value: ColumnBase, validate=False):
+    def set(self, obj: cudf.DataFrame, value: ColumnBase, validate=False):
         obj._data.set_by_label(self.name, value, validate=validate)
 
 
 class _IndexIndexer(_Indexer):
-    def get(self, obj: Frame) -> ColumnBase:
-        if obj._index is not None:
-            return obj._index._data[self.name]
-        raise KeyError
+    def get(self, obj: cudf.DataFrame) -> ColumnBase:
+        return obj._index._data[self.name]
 
-    def set(self, obj: Frame, value: ColumnBase, validate=False):
-        if obj._index is not None:
-            obj._index._data.set_by_label(self.name, value, validate=validate)
-        else:
-            raise KeyError
+    def set(self, obj: cudf.DataFrame, value: ColumnBase, validate=False):
+        obj._index._data.set_by_label(self.name, value, validate=validate)
 
 
 def _match_join_keys(
@@ -166,7 +160,7 @@ def _match_categorical_dtypes_both(
 
 
 def _coerce_to_tuple(obj):
-    if isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
+    if isinstance(obj, abc.Iterable) and not isinstance(obj, str):
         return tuple(obj)
     else:
         return (obj,)

@@ -32,6 +32,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/pair.h>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -53,7 +55,7 @@ inline rmm::device_buffer create_data(data_type type,
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
-  CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
 
   return data;
 }
@@ -133,6 +135,7 @@ struct column_buffer {
  */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
+                                    std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr);
 

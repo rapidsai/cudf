@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/device_scalar.hpp>
+
+#include <thrust/iterator/iterator_traits.h>
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace detail {
@@ -48,7 +51,7 @@ __launch_bounds__(block_size) __global__
   // begin/end indices for the column data
   size_type begin = 0;
   size_type end   = out.size();
-  // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
+  // warp indices.  since 1 warp == 32 threads == sizeof(bitmask_type) * 8,
   // each warp will process one (32 bit) of the validity mask via
   // __ballot_sync()
   size_type warp_begin = cudf::word_index(begin);
@@ -71,7 +74,7 @@ __launch_bounds__(block_size) __global__
     // update validity
     if (has_nulls) {
       // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, opt_value.has_value());
+      int warp_mask = __ballot_sync(0xFFFF'FFFFu, opt_value.has_value());
       // only one guy in the warp needs to update the mask and count
       if (lane_id == 0) {
         out.set_mask_word(warp_cur, warp_mask);
@@ -163,7 +166,7 @@ std::unique_ptr<column> copy_if_else(
   std::unique_ptr<column> out = make_fixed_width_column(
     output_type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
 
-  auto out_v = mutable_column_device_view::create(*out);
+  auto out_v = mutable_column_device_view::create(*out, stream);
 
   // if we have validity in the output
   if (nullable) {

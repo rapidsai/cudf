@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 from typing import Callable
 
 import cachetools
@@ -6,7 +8,6 @@ from numba import cuda, typeof
 from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import Poison, Tuple, boolean, int64, void
-from nvtx import annotate
 
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.typing import MaskedType
@@ -17,6 +18,7 @@ from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
 )
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
@@ -28,7 +30,7 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-@annotate("NUMBA JIT", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -165,7 +167,7 @@ def _generate_cache_key(frame, func: Callable):
     )
 
 
-@annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _compile_or_get(frame, func, args, kernel_getter=None):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
@@ -206,7 +208,7 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
 
 
 def _get_kernel(kernel_string, globals_, sig, func):
-    """template kernel compilation helper function"""
+    """Template kernel compilation helper function."""
     f_ = cuda.jit(device=True)(func)
     globals_["f_"] = f_
     exec(kernel_string, globals_)

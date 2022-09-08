@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,11 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -82,7 +85,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                      : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, rmm::cuda_stream_default, mr);
+    source_table, gather_map, bounds_policy, index_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

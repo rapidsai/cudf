@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -19,7 +19,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options() except+
 
         cudf_io_types.source_info get_source() except+
-        vector[string] get_columns() except+
         vector[vector[size_type]] get_stripes() except+
         size_type get_skip_rows() except+
         size_type get_num_rows() except+
@@ -36,7 +35,6 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_index(bool val) except+
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
-        void set_decimal_cols_as_float(vector[string] val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -55,9 +53,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& use_index(bool val) except+
         orc_reader_options_builder& use_np_dtypes(bool val) except+
         orc_reader_options_builder& timestamp_type(data_type type) except+
-        orc_reader_options_builder& decimal_cols_as_float(
-            vector[string] val
-        ) except+
 
         orc_reader_options build() except+
 

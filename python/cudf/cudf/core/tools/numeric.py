@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import warnings
 
@@ -57,7 +57,7 @@ def to_numeric(arg, errors="raise", downcast=None):
         otherwise ndarray
 
     Notes
-    -------
+    -----
     An important difference from pandas is that this function does not accept
     mixed numeric/non-numeric type sequences. For example ``[1, 'a']``.
     A ``TypeError`` will be raised when such input is received, regardless of
@@ -144,16 +144,16 @@ def to_numeric(arg, errors="raise", downcast=None):
         col = col.as_numerical_column("d")
 
     if downcast:
-        downcast_type_map = {
-            "integer": list(np.typecodes["Integer"]),
-            "signed": list(np.typecodes["Integer"]),
-            "unsigned": list(np.typecodes["UnsignedInteger"]),
-        }
-        float_types = list(np.typecodes["Float"])
-        idx = float_types.index(cudf.dtype(np.float32).char)
-        downcast_type_map["float"] = float_types[idx:]
-
-        type_set = downcast_type_map[downcast]
+        if downcast == "float":
+            # we support only float32 & float64
+            type_set = [
+                cudf.dtype(np.float32).char,
+                cudf.dtype(np.float64).char,
+            ]
+        elif downcast in ("integer", "signed"):
+            type_set = list(np.typecodes["Integer"])
+        elif downcast == "unsigned":
+            type_set = list(np.typecodes["UnsignedInteger"])
 
         for t in type_set:
             downcast_dtype = cudf.dtype(t)
@@ -247,6 +247,8 @@ def _proc_inf_strings(col):
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
     col = libstrings.replace_multi(
-        col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
+        col,
+        as_column(["+", "inf", "inity"]),
+        as_column(["", "Inf", ""]),
     )
     return col

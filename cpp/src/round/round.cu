@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_range.cuh>
+#include <cudf/detail/fill.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -27,13 +28,15 @@
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cudf/detail/fill.hpp>
+#include <thrust/transform.h>
+#include <thrust/uninitialized_fill.h>
 #include <type_traits>
 
 namespace cudf {
@@ -225,6 +228,8 @@ std::unique_ptr<column> round_with(column_view const& input,
   thrust::transform(
     rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), out_view.begin<T>(), Functor{n});
 
+  result->set_null_count(input.null_count());
+
   return result;
 }
 
@@ -273,6 +278,8 @@ std::unique_ptr<column> round_with(column_view const& input,
                       out_view.begin<Type>(),
                       FixedPointRoundFunctor{n});
   }
+
+  result->set_null_count(input.null_count());
 
   return result;
 }
@@ -341,7 +348,7 @@ std::unique_ptr<column> round(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round(input, decimal_places, method, rmm::cuda_stream_default, mr);
+  return detail::round(input, decimal_places, method, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

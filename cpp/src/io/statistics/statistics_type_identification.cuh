@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "byte_array_view.cuh"
+
 #include <cudf/fixed_point/fixed_point.hpp>
 
 #include <cudf/wrappers/timestamps.hpp>
@@ -39,14 +41,17 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-enum class io_file_format { ORC, PARQUET };
+using cudf::io::statistics::byte_array_view;
 
-template <io_file_format IO>
+enum class io_file_format { ORC, PARQUET };
+enum class is_int96_timestamp { YES, NO };
+
+template <io_file_format IO, is_int96_timestamp INT96>
 struct conversion_map;
 
 // Every timestamp or duration type is converted to milliseconds in ORC statistics
-template <>
-struct conversion_map<io_file_format::ORC> {
+template <is_int96_timestamp INT96>
+struct conversion_map<io_file_format::ORC, INT96> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
@@ -59,9 +64,16 @@ struct conversion_map<io_file_format::ORC> {
 // milliseconds. Timestamps and durations with nanosecond resolution are
 // converted to microseconds.
 template <>
-struct conversion_map<io_file_format::PARQUET> {
+struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::YES> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
+                           std::pair<cudf::duration_s, cudf::duration_ms>,
+                           std::pair<cudf::duration_ns, cudf::duration_us>>;
+};
+// int64 nanosecond timestamp won't be converted
+template <>
+struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::NO> {
+  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::duration_s, cudf::duration_ms>,
                            std::pair<cudf::duration_ns, cudf::duration_us>>;
 };
@@ -115,22 +127,27 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    int64_t,
-    typename std::conditional_t<std::is_same_v<T, string_view>, string_view, void>>;
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
+    typename std::conditional_t<
+      std::is_same_v<T, string_view>,
+      string_view,
+      std::conditional_t<std::is_same_v<T, byte_array_view>, byte_array_view, void>>>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
   // decimal32/64      -> int64_t
+  // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
+  // byte_array_view   -> byte_array_view
   // timestamp_[T]     -> int64_t
 
  public:
   // Does type T have an extrema?
-  static constexpr bool is_supported = std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
-                                       cudf::is_duration<T>() or cudf::is_timestamp<T>() or
-                                       cudf::is_fixed_point<T>();
+  static constexpr bool is_supported =
+    std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or cudf::is_duration<T>() or
+    cudf::is_timestamp<T>() or cudf::is_fixed_point<T>() or std::is_same_v<T, byte_array_view>;
 
   using type = typename std::
     conditional_t<std::is_arithmetic_v<T>, arithmetic_extrema_type, non_arithmetic_extrema_type>;
@@ -140,7 +157,8 @@ class extrema_type {
    */
   __device__ static type convert(const T& val)
   {
-    if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view>) {
+    if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
+                  std::is_same_v<T, byte_array_view>) {
       return val;
     } else if constexpr (cudf::is_fixed_point<T>()) {
       return val.value();
@@ -169,25 +187,28 @@ class aggregation_type {
   using arithmetic_aggregation_type =
     typename std::conditional_t<std::is_integral_v<T>, integral_aggregation_type, double>;
 
-  using non_arithmetic_aggregation_type =
-    typename std::conditional_t<cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
-                                  cudf::is_timestamp<T>()  // To be disabled with static_assert
-                                  or std::is_same_v<T, string_view>,
-                                int64_t,
-                                void>;
+  using non_arithmetic_aggregation_type = typename std::conditional_t<
+    cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
+      cudf::is_timestamp<T>()  // To be disabled with static_assert
+      or std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>,
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
+    void>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
   // decimal32/64      -> int64_t
+  // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> int64_t
+  // byte_array        -> int64_t
   // NOTE : timestamps do not have an aggregation type
 
  public:
   // Does type T aggregate?
   static constexpr bool is_supported = std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
-                                       cudf::is_duration<T>() or cudf::is_fixed_point<T>();
+                                       cudf::is_duration<T>() or cudf::is_fixed_point<T>() or
+                                       std::is_same_v<T, byte_array_view>;
 
   using type = typename std::conditional_t<std::is_arithmetic_v<T>,
                                            arithmetic_aggregation_type,
@@ -198,7 +219,7 @@ class aggregation_type {
    */
   __device__ static type convert(const T& val)
   {
-    if constexpr (std::is_same_v<T, string_view>) {
+    if constexpr (std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>) {
       return val.size_bytes();
     } else if constexpr (std::is_integral_v<T>) {
       return val;
@@ -220,14 +241,22 @@ class aggregation_type {
 template <typename T>
 __inline__ __device__ constexpr T minimum_identity()
 {
-  if constexpr (std::is_same_v<T, string_view>) { return string_view::max(); }
+  if constexpr (std::is_same_v<T, string_view>) {
+    return string_view::max();
+  } else if constexpr (std::is_same_v<T, byte_array_view>) {
+    return byte_array_view::max();
+  }
   return cuda::std::numeric_limits<T>::max();
 }
 
 template <typename T>
 __inline__ __device__ constexpr T maximum_identity()
 {
-  if constexpr (std::is_same_v<T, string_view>) { return string_view::min(); }
+  if constexpr (std::is_same_v<T, string_view>) {
+    return string_view::min();
+  } else if constexpr (std::is_same_v<T, byte_array_view>) {
+    return byte_array_view::min();
+  }
   return cuda::std::numeric_limits<T>::lowest();
 }
 
@@ -247,7 +276,8 @@ class statistics_type_category {
 
   // Types for which sum does not make sense, but extrema do
   static constexpr bool include_extrema =
-    aggregation_type<T>::is_supported or cudf::is_timestamp<T>();
+    aggregation_type<T>::is_supported or cudf::is_timestamp<T>() or
+    (std::is_same_v<T, cudf::list_view> and IO == io_file_format::PARQUET);
 
   // Types for which only value count makes sense (e.g. nested)
   static constexpr bool include_count = (IO == io_file_format::ORC) ? true : include_extrema;

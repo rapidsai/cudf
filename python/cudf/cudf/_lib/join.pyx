@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from itertools import chain
 
@@ -16,31 +16,25 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.utils cimport table_view_from_table
+from cudf._lib.utils cimport table_view_from_columns
 
 # The functions below return the *gathermaps* that represent
 # the join result when joining on the keys `lhs` and `rhs`.
 
-cpdef join(lhs, rhs, how=None):
+cpdef join(list lhs, list rhs, how=None):
     cdef pair[cpp_join.gather_map_type, cpp_join.gather_map_type] c_result
-    cdef table_view c_lhs = table_view_from_table(lhs)
-    cdef table_view c_rhs = table_view_from_table(rhs)
+    cdef table_view c_lhs = table_view_from_columns(lhs)
+    cdef table_view c_rhs = table_view_from_columns(rhs)
 
     if how == "inner":
-        c_result = move(cpp_join.inner_join(
-            c_lhs,
-            c_rhs
-        ))
+        with nogil:
+            c_result = move(cpp_join.inner_join(c_lhs, c_rhs))
     elif how == "left":
-        c_result = move(cpp_join.left_join(
-            c_lhs,
-            c_rhs
-        ))
+        with nogil:
+            c_result = move(cpp_join.left_join(c_lhs, c_rhs))
     elif how == "outer":
-        c_result = move(cpp_join.full_join(
-            c_lhs,
-            c_rhs
-        ))
+        with nogil:
+            c_result = move(cpp_join.full_join(c_lhs, c_rhs))
     else:
         raise ValueError(f"Invalid join type {how}")
 
@@ -49,30 +43,23 @@ cpdef join(lhs, rhs, how=None):
     return left_rows, right_rows
 
 
-cpdef semi_join(lhs, rhs, how=None):
+cpdef semi_join(list lhs, list rhs, how=None):
     # left-semi and left-anti joins
     cdef cpp_join.gather_map_type c_result
-    cdef table_view c_lhs = table_view_from_table(lhs)
-    cdef table_view c_rhs = table_view_from_table(rhs)
+    cdef table_view c_lhs = table_view_from_columns(lhs)
+    cdef table_view c_rhs = table_view_from_columns(rhs)
 
     if how == "leftsemi":
-        c_result = move(cpp_join.left_semi_join(
-            c_lhs,
-            c_rhs
-        ))
+        with nogil:
+            c_result = move(cpp_join.left_semi_join(c_lhs, c_rhs))
     elif how == "leftanti":
-        c_result = move(cpp_join.left_anti_join(
-            c_lhs,
-            c_rhs
-        ))
+        with nogil:
+            c_result = move(cpp_join.left_anti_join(c_lhs, c_rhs))
     else:
         raise ValueError(f"Invalid join type {how}")
 
     cdef Column left_rows = _gather_map_as_column(move(c_result))
-    return (
-        left_rows,
-        None
-    )
+    return left_rows, None
 
 
 cdef Column _gather_map_as_column(cpp_join.gather_map_type gather_map):

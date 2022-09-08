@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -13,28 +13,19 @@
 # =============================================================================
 
 # This function finds nvcomp and sets any additional necessary environment variables.
-function(find_and_configure_nvcomp VERSION)
+function(find_and_configure_nvcomp)
 
-  # Find or install nvcomp
-  rapids_cpm_find(
-    nvcomp ${VERSION}
-    GLOBAL_TARGETS nvcomp::nvcomp
-    CPM_ARGS GITHUB_REPOSITORY NVIDIA/nvcomp
-    GIT_TAG c435afaf4ba8a8d12f379d688effcb185886cec1
-    OPTIONS "BUILD_STATIC ON" "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
+  include(${rapids-cmake-dir}/cpm/nvcomp.cmake)
+  rapids_cpm_nvcomp(
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+    USE_PROPRIETARY_BINARY ${CUDF_USE_PROPRIETARY_NVCOMP}
   )
 
-  if(NOT TARGET nvcomp::nvcomp)
-    add_library(nvcomp::nvcomp ALIAS nvcomp)
-  endif()
-
   # Per-thread default stream
-  if(TARGET nvcomp AND PER_THREAD_DEFAULT_STREAM)
+  if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
     target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
   endif()
-
 endfunction()
 
-set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
-
-find_and_configure_nvcomp(${CUDF_MIN_VERSION_nvCOMP})
+find_and_configure_nvcomp()

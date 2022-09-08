@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import Enum
 
@@ -8,9 +8,6 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
-
-import cudf._lib as libcudfxx
-
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.null_mask cimport (
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
@@ -20,7 +17,7 @@ from cudf._lib.cpp.null_mask cimport (
 )
 from cudf._lib.cpp.types cimport mask_state, size_type
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 
 
 class MaskState(Enum):
@@ -50,7 +47,7 @@ def copy_bitmask(Column col):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = Buffer(rmm_db)
+    buf = as_device_buffer_like(rmm_db)
     return buf
 
 
@@ -96,5 +93,5 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = Buffer(rmm_db)
+    buf = as_device_buffer_like(rmm_db)
     return buf

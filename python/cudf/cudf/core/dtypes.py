@@ -1,8 +1,9 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import decimal
+import operator
 import pickle
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -17,8 +18,9 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core._compat import PANDAS_GE_130
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 
 
 def dtype(arbitrary):
@@ -68,6 +70,50 @@ def dtype(arbitrary):
             )
 
 
+def _decode_type(
+    cls: Type,
+    header: dict,
+    frames: list,
+    is_valid_class: Callable[[Type, Type], bool] = operator.is_,
+) -> Tuple[dict, list, Type]:
+    """Decode metadata-encoded type and check validity
+
+    Parameters
+    ----------
+    cls : type
+        class performing deserialization
+    header : dict
+        metadata for deserialization
+    frames : list
+        buffers containing data for deserialization
+    is_valid_class : Callable
+        function to call to check if the encoded class type is valid for
+        serialization by `cls` (default is to check type equality), called
+        as `is_valid_class(decoded_class, cls)`.
+
+    Returns
+    -------
+    tuple
+        Tuple of validated headers, frames, and the decoded class
+        constructor.
+
+    Raises
+    ------
+    AssertionError
+        if the number of frames doesn't match the count encoded in the
+        headers, or `is_valid_class` is not true.
+    """
+    assert header["frame_count"] == len(frames), (
+        f"Deserialization expected {header['frame_count']} frames, "
+        f"but received {len(frames)}."
+    )
+    klass = pickle.loads(header["type-serialized"])
+    assert is_valid_class(
+        klass, cls
+    ), f"Header-encoded {klass=} does not match decoding {cls=}."
+    return header, frames, klass
+
+
 class _BaseDtype(ExtensionDtype, Serializable):
     # Base type for all cudf-specific dtypes
     pass
@@ -75,13 +121,36 @@ class _BaseDtype(ExtensionDtype, Serializable):
 
 class CategoricalDtype(_BaseDtype):
     """
-    dtype similar to pd.CategoricalDtype with the categories
-    stored on the GPU.
+    Type for categorical data with the categories and orderedness.
+
+    Parameters
+    ----------
+    categories : sequence, optional
+        Must be unique, and must not contain any nulls.
+        The categories are stored in an Index,
+        and if an index is provided the dtype of that index will be used.
+    ordered : bool or None, default False
+        Whether or not this categorical is treated as a ordered categorical.
+        None can be used to maintain the ordered value of existing categoricals
+        when used in operations that combine categoricals, e.g. astype, and
+        will resolve to False if there is no existing ordered to maintain.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
+    >>> cudf.Series(['a', 'b', 'a', 'c'], dtype=dtype)
+    0       a
+    1       b
+    2       a
+    3    <NA>
+    dtype: category
+    Categories (2, object): ['b' < 'a']
     """
 
-    ordered: Optional[bool]
+    ordered: bool
 
-    def __init__(self, categories=None, ordered: bool = None) -> None:
+    def __init__(self, categories=None, ordered: bool = False) -> None:
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 
@@ -169,11 +238,12 @@ class CategoricalDtype(_BaseDtype):
             categories_header, categories_frames = self.categories.serialize()
         header["categories"] = categories_header
         frames.extend(categories_frames)
-
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
+        header, frames, klass = _decode_type(cls, header, frames)
         ordered = header["ordered"]
         categories_header = header["categories"]
         categories_frames = frames
@@ -181,7 +251,7 @@ class CategoricalDtype(_BaseDtype):
         categories = categories_type.deserialize(
             categories_header, categories_frames
         )
-        return cls(categories=categories, ordered=ordered)
+        return klass(categories=categories, ordered=ordered)
 
 
 class ListDtype(_BaseDtype):
@@ -237,7 +307,7 @@ class ListDtype(_BaseDtype):
 
     def __repr__(self):
         if isinstance(self.element_type, (ListDtype, StructDtype)):
-            return f"{type(self).__name__}({self.element_type.__repr__()})"
+            return f"{type(self).__name__}({repr(self.element_type)})"
         else:
             return f"{type(self).__name__}({self.element_type})"
 
@@ -254,19 +324,19 @@ class ListDtype(_BaseDtype):
             header["element-type"], frames = self.element_type.serialize()
         else:
             header["element-type"] = self.element_type
-
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
+        header, frames, klass = _decode_type(cls, header, frames)
         if isinstance(header["element-type"], dict):
             element_type = pickle.loads(
                 header["element-type"]["type-serialized"]
             ).deserialize(header["element-type"], frames)
         else:
             element_type = header["element-type"]
-
-        return cls(element_type=element_type)
+        return klass(element_type=element_type)
 
 
 class StructDtype(_BaseDtype):
@@ -323,9 +393,9 @@ class StructDtype(_BaseDtype):
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[Buffer] = []
+        frames: List[DeviceBufferLike] = []
 
-        fields = {}
+        fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -336,22 +406,26 @@ class StructDtype(_BaseDtype):
                 )
                 frames.extend(dtype_frames)
             else:
-                fields[k] = dtype
+                fields[k] = pickle.dumps(dtype)
         header["fields"] = fields
-
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
+        header, frames, klass = _decode_type(cls, header, frames)
         fields = {}
         for k, dtype in header["fields"].items():
             if isinstance(dtype, tuple):
                 dtype_header, (start, stop) = dtype
                 fields[k] = pickle.loads(
                     dtype_header["type-serialized"]
-                ).deserialize(dtype_header, frames[start:stop],)
+                ).deserialize(
+                    dtype_header,
+                    frames[start:stop],
+                )
             else:
-                fields[k] = dtype
+                fields[k] = pickle.loads(dtype)
         return cls(fields)
 
 
@@ -449,13 +523,18 @@ class DecimalDtype(_BaseDtype):
                 "type-serialized": pickle.dumps(type(self)),
                 "precision": self.precision,
                 "scale": self.scale,
+                "frame_count": 0,
             },
             [],
         )
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        return cls(header["precision"], header["scale"])
+        header, frames, klass = _decode_type(
+            cls, header, frames, is_valid_class=issubclass
+        )
+        klass = pickle.loads(header["type-serialized"])
+        return klass(header["precision"], header["scale"])
 
     def __eq__(self, other: Dtype) -> bool:
         if other is self:
@@ -490,7 +569,7 @@ class IntervalDtype(StructDtype):
     """
     subtype: str, np.dtype
         The dtype of the Interval bounds.
-    closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+    closed: {'right', 'left', 'both', 'neither'}, default 'right'
         Whether the interval is closed on the left-side, right-side,
         both or neither. See the Notes for more detailed explanation.
     """
@@ -500,6 +579,8 @@ class IntervalDtype(StructDtype):
     def __init__(self, subtype, closed="right"):
         super().__init__(fields={"left": subtype, "right": subtype})
 
+        if closed is None:
+            closed = "right"
         if closed in ["left", "right", "neither", "both"]:
             self.closed = closed
         else:
@@ -510,7 +591,7 @@ class IntervalDtype(StructDtype):
         return self.fields["left"]
 
     def __repr__(self):
-        return f"interval[{self.fields['left']}]"
+        return f"interval[{self.subtype}, {self.closed}]"
 
     @classmethod
     def from_arrow(cls, typ):
@@ -524,9 +605,38 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        return cls(
-            subtype=pd_dtype.subtype
-        )  # TODO: needs `closed` when we upgrade Pandas
+        if PANDAS_GE_130:
+            return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
+        else:
+            return cls(subtype=pd_dtype.subtype)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            # This means equality isn't transitive but mimics pandas
+            return other == self.name
+        return (
+            type(self) == type(other)
+            and self.subtype == other.subtype
+            and self.closed == other.closed
+        )
+
+    def __hash__(self):
+        return hash((self.subtype, self.closed))
+
+    def serialize(self) -> Tuple[dict, list]:
+        header = {
+            "type-serialized": pickle.dumps(type(self)),
+            "fields": pickle.dumps((self.subtype, self.closed)),
+            "frame_count": 0,
+        }
+        return header, []
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        header, frames, klass = _decode_type(cls, header, frames)
+        klass = pickle.loads(header["type-serialized"])
+        subtype, closed = pickle.loads(header["fields"])
+        return klass(subtype, closed=closed)
 
 
 def is_categorical_dtype(obj):
@@ -678,8 +788,13 @@ def is_interval_dtype(obj):
     # TODO: Should there be any branch in this function that calls
     # pd.api.types.is_interval_dtype?
     return (
-        isinstance(obj, cudf.core.dtypes.IntervalDtype)
-        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        isinstance(
+            obj,
+            (
+                cudf.core.dtypes.IntervalDtype,
+                pd.core.dtypes.dtypes.IntervalDtype,
+            ),
+        )
         or obj is cudf.core.dtypes.IntervalDtype
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name

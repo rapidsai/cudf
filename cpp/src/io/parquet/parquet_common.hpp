@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,6 @@
 #pragma once
 
 #include <cstdint>
-
-#include <string>
-#include <vector>
 
 namespace cudf {
 namespace io {
@@ -44,7 +41,7 @@ enum Type : int8_t {
  */
 enum ConvertedType {
   UNKNOWN = -1,  // No type information present
-  UTF8    = 0,   // a BYTE_ARRAY actually contains UTF8 encoded chars
+  UTF8    = 0,   // a BYTE_ARRAY may contain UTF8 encoded chars
   MAP     = 1,   // a map is converted as an optional field containing a repeated key/value pair
   MAP_KEY_VALUE = 2,  // a key/value pair is converted into a group of two fields
   LIST =
@@ -121,6 +118,16 @@ enum class PageType : uint8_t {
   INDEX_PAGE      = 1,
   DICTIONARY_PAGE = 2,
   DATA_PAGE_V2    = 3,
+};
+
+/**
+ * @brief Enum to annotate whether lists of min/max elements inside ColumnIndex
+ * are ordered and if so, in which direction.
+ */
+enum BoundaryOrder {
+  UNORDERED  = 0,
+  ASCENDING  = 1,
+  DESCENDING = 2,
 };
 
 /**

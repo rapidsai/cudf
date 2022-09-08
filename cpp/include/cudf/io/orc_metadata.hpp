@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,9 +40,9 @@ namespace io {
  * contains one element per stripe, where each element contains column statistics for each column.
  */
 struct raw_orc_statistics {
-  std::vector<std::string> column_names;
-  std::vector<std::string> file_stats;
-  std::vector<std::vector<std::string>> stripes_stats;
+  std::vector<std::string> column_names;                ///< Column names
+  std::vector<std::string> file_stats;                  ///< File-level statistics for each column
+  std::vector<std::vector<std::string>> stripes_stats;  ///< Stripe-level statistics for each column
 };
 
 /**
@@ -74,8 +74,8 @@ using no_statistics = std::monostate;
  */
 template <typename T>
 struct minmax_statistics {
-  std::optional<T> minimum;
-  std::optional<T> maximum;
+  std::optional<T> minimum;  ///< Minimum value
+  std::optional<T> maximum;  ///< Maximum value
 };
 
 /**
@@ -85,7 +85,7 @@ struct minmax_statistics {
  */
 template <typename T>
 struct sum_statistics {
-  std::optional<T> sum;
+  std::optional<T> sum;  ///< Sum of values in column
 };
 
 /**
@@ -116,7 +116,7 @@ struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64
  * The `count` array includes the count of `false` and `true` values.
  */
 struct bucket_statistics {
-  std::vector<uint64_t> count;
+  std::vector<uint64_t> count;  ///< Count of `false` and `true` values
 };
 
 /**
@@ -144,8 +144,8 @@ using binary_statistics = sum_statistics<int64_t>;
  * the UNIX epoch. The `minimum_utc` and `maximum_utc` are the same values adjusted to UTC.
  */
 struct timestamp_statistics : minmax_statistics<int64_t> {
-  std::optional<int64_t> minimum_utc;
-  std::optional<int64_t> maximum_utc;
+  std::optional<int64_t> minimum_utc;  ///< minimum in milliseconds
+  std::optional<int64_t> maximum_utc;  ///< maximum in milliseconds
 };
 
 namespace orc {
@@ -162,7 +162,7 @@ struct column_statistics;
  * have additional statistics, accessible through `type_specific_stats` accessor.
  */
 struct column_statistics {
-  std::optional<uint64_t> number_of_values;
+  std::optional<uint64_t> number_of_values;  ///< number of statistics
   std::variant<no_statistics,
                integer_statistics,
                double_statistics,
@@ -172,8 +172,13 @@ struct column_statistics {
                date_statistics,
                binary_statistics,
                timestamp_statistics>
-    type_specific_stats;
+    type_specific_stats;  ///< type-specific statistics
 
+  /**
+   * @brief Construct a new column statistics object
+   *
+   * @param detail_statistics The statistics to initialize the object with
+   */
   column_statistics(cudf::io::orc::column_statistics&& detail_statistics);
 };
 
@@ -185,9 +190,9 @@ struct column_statistics {
  * column.
  */
 struct parsed_orc_statistics {
-  std::vector<std::string> column_names;
-  std::vector<column_statistics> file_stats;
-  std::vector<std::vector<column_statistics>> stripes_stats;
+  std::vector<std::string> column_names;                      ///< column names
+  std::vector<column_statistics> file_stats;                  ///< file-level statistics
+  std::vector<std::vector<column_statistics>> stripes_stats;  ///< stripe-level statistics
 };
 
 /**

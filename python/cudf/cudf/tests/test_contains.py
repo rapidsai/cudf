@@ -1,4 +1,6 @@
-from datetime import datetime as dt
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
+import datetime
 
 import numpy as np
 import pandas as pd
@@ -41,12 +43,12 @@ def get_string_series():
 testdata_all = [
     (
         cudf_date_series("20010101", "20020215", freq="400h"),
-        dt.strptime("2001-01-01", "%Y-%m-%d"),
+        datetime.datetime.strptime("2001-01-01", "%Y-%m-%d"),
         True,
     ),
     (
         cudf_date_series("20010101", "20020215", freq="400h"),
-        dt.strptime("2000-01-01", "%Y-%m-%d"),
+        datetime.datetime.strptime("2000-01-01", "%Y-%m-%d"),
         False,
     ),
     (cudf_date_series("20010101", "20020215", freq="400h"), 20000101, False),

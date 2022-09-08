@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -190,7 +192,10 @@ def test_categorical_compare_unordered(data):
 
     with pytest.raises(
         (TypeError, ValueError),
-        match="Unordered Categoricals can only compare equality or not",
+        match=(
+            "The only binary operations supported by unordered categorical "
+            "columns are equality and inequality."
+        ),
     ):
         dsr < dsr
 
@@ -346,7 +351,8 @@ def test_create_list_series(data):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_1(), data_test_2(), data_test_non_numeric()],
+    "data",
+    [data_test_1(), data_test_2(), data_test_non_numeric()],
 )
 def test_unique(data):
     expect = Series(data).list.unique()
@@ -355,7 +361,8 @@ def test_unique(data):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_2(), data_test_non_numeric()],
+    "data",
+    [data_test_2(), data_test_non_numeric()],
 )
 def test_len(data):
     expect = Series(data).list.len()
@@ -364,7 +371,8 @@ def test_len(data):
 
 
 @pytest.mark.parametrize(
-    "data, search_key", [(data_test_2(), 1)],
+    "data, search_key",
+    [(data_test_2(), 1)],
 )
 def test_contains(data, search_key):
     expect = Series(data).list.contains(search_key)
@@ -373,23 +381,21 @@ def test_contains(data, search_key):
 
 
 @pytest.mark.parametrize(
-    "data, index, expectation",
+    "data, index",
     [
-        (data_test_1(), 1, does_not_raise()),
-        (data_test_2(), 2, pytest.raises(IndexError)),
+        (data_test_1(), 1),
+        (data_test_2(), 2),
     ],
 )
-def test_get(data, index, expectation):
-    with expectation:
-        expect = Series(data).list.get(index)
-
-    if expectation == does_not_raise():
-        ds = dgd.from_cudf(Series(data), 5)
-        assert_eq(expect, ds.list.get(index).compute())
+def test_get(data, index):
+    expect = Series(data).list.get(index)
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.get(index).compute())
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_1(), data_test_2(), data_test_nested()],
+    "data",
+    [data_test_1(), data_test_2(), data_test_nested()],
 )
 def test_leaves(data):
     expect = Series(data).list.leaves
@@ -454,7 +460,8 @@ struct_accessor_data_params = [
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_create_struct_series(data):
     expect = pd.Series(data)
@@ -463,7 +470,8 @@ def test_create_struct_series(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_struct_field_str(data):
     for test_key in ["a", "b"]:
@@ -473,7 +481,8 @@ def test_struct_field_str(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_struct_field_integer(data):
     for test_key in [0, 1]:
@@ -483,7 +492,8 @@ def test_struct_field_integer(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_dask_struct_field_Key_Error(data):
     got = dgd.from_cudf(Series(data), 2)
@@ -493,7 +503,8 @@ def test_dask_struct_field_Key_Error(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_dask_struct_field_Int_Error(data):
     # breakpoint()
@@ -514,5 +525,5 @@ def test_dask_struct_field_Int_Error(data):
 def test_struct_explode(data):
     expect = Series(data).struct.explode()
     got = dgd.from_cudf(Series(data), 2).struct.explode()
-
-    assert_eq(expect, got.compute())
+    # Output index will not agree for >1 partitions
+    assert_eq(expect, got.compute().reset_index(drop=True))

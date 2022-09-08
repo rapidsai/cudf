@@ -9,7 +9,7 @@ The following is the license header comment that should appear at the beginning 
 
 ```c++
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,7 +235,7 @@ Also, `@copydoc` is useful when documenting a `detail` function that differs onl
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 std::vector<size_type> const& indices,
-                                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                                                rmm::cuda_stream_view stream = cudf::default_stream_value);
 ```
 
 Note, you must specify the whole signature of the function, including optional parameters, so that doxygen will be able to locate it.
@@ -368,6 +368,20 @@ Although using 3 backtick marks `` ``` `` for example blocks will work too, they
 
 Do not use the `@example` tag in the comments for a declaration, or doxygen will interpret the entire source file as example source code.
 The source file is then published under a separate _Examples_ page in the output.
+
+### Deprecations
+
+Add a single [@deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) comment line
+to comment blocks for APIs that will be removed in future releases. Mention alternative /
+replacement APIs in the deprecation comment.
+
+```c++
+/**
+ * ...
+ *
+ * @deprecated This function is deprecated. Use another new function instead.
+ */
+```
 
 ## Namespaces
 

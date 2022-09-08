@@ -1,8 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pickle
 from functools import cached_property
-from typing import List, Sequence
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pyarrow as pa
@@ -14,24 +13,38 @@ from cudf._lib.lists import (
     concatenate_rows,
     contains_scalar,
     count_elements,
-    drop_list_duplicates,
-    extract_element,
+    distinct,
+    extract_element_column,
+    extract_element_scalar,
+    index_of_column,
+    index_of_scalar,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
-from cudf.core.buffer import Buffer
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    is_list_dtype,
+    is_scalar,
+)
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
+from cudf.core.missing import NA
 
 
 class ListColumn(ColumnBase):
     dtype: ListDtype
+    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
 
     def __init__(
-        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
+        self,
+        size,
+        dtype,
+        mask=None,
+        offset=0,
+        null_count=None,
+        children=(),
     ):
         super().__init__(
             None,
@@ -57,9 +70,9 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[0][
-                current_offset
-            ]
+            current_offset = current_base_child.base_children[
+                0
+            ].element_indexing(current_offset)
             n += child0_size
             current_base_child = current_base_child.base_children[1]
 
@@ -79,7 +92,7 @@ class ListColumn(ColumnBase):
         if isinstance(value, cudf.Scalar):
             if value.dtype != self.dtype:
                 raise TypeError("list nesting level mismatch")
-        elif value is cudf.NA:
+        elif value is NA:
             value = cudf.Scalar(value, dtype=self.dtype)
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
@@ -92,53 +105,15 @@ class ListColumn(ColumnBase):
         # avoid it being negative
         return max(0, len(self.base_children[0]) - 1)
 
-    def binary_operator(
-        self, binop: str, other: BinaryOperand, reflect: bool = False
-    ) -> ColumnBase:
-        """
-        Calls a binary operator *binop* on operands *self*
-        and *other*.
-
-        Parameters
-        ----------
-        self, other : list columns
-
-        binop :  binary operator
-            Only "add" operator is currently being supported
-            for lists concatenation functions
-
-        reflect : boolean, default False
-            If ``True``, swap the order of the operands. See
-            https://docs.python.org/3/reference/datamodel.html#object.__ror__
-            for more information on when this is necessary.
-
-        Returns
-        -------
-        Series : the output dtype is determined by the
-            input operands.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
-        >>> gdf
-            val
-        0  [a, a]
-        1     [b]
-        2     [c]
-        >>> gdf['val'] + gdf['val']
-        0    [a, a, a, a]
-        1          [b, b]
-        2          [c, c]
-        Name: val, dtype: list
-
-        """
-
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # Lists only support __add__, which concatenates lists.
+        reflect, op = self._check_reflected_op(op)
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
         if isinstance(other.dtype, ListDtype):
-            if binop == "add":
-                return concatenate_rows(
-                    cudf.core.frame.Frame({0: self, 1: other})
-                )
+            if op == "__add__":
+                return concatenate_rows([self, other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -172,8 +147,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
+            nbuf = pa.py_buffer(self.mask.memoryview())
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -190,69 +164,16 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["null_count"] = self.null_count
-        header["size"] = self.size
-        header["dtype"], dtype_frames = self.dtype.serialize()
-        header["dtype_frames_count"] = len(dtype_frames)
-        frames.extend(dtype_frames)
-
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-
-        # Get null mask
-        if header["null_count"] > 0:
-            mask = Buffer(frames[-1])
-        else:
-            mask = None
-
-        # Deserialize dtype
-        dtype = pickle.loads(header["dtype"]["type-serialized"]).deserialize(
-            header["dtype"], frames[: header["dtype_frames_count"]]
-        )
-
-        # Deserialize child columns
-        children = []
-        f = header["dtype_frames_count"]
-        for h in header["subheaders"]:
-            fcount = h["frame_count"]
-            child_frames = frames[f : f + fcount]
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, child_frames))
-            f += fcount
-
-        # Materialize list column
-        return column.build_column(
-            data=None,
-            dtype=dtype,
-            mask=mask,
-            children=tuple(children),
-            size=header["size"],
-        )
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
+
+    def normalize_binop_value(self, other):
+        if not isinstance(other, ListColumn):
+            return NotImplemented
+        return other
 
     def _with_type_metadata(
         self: "cudf.core.column.ListColumn", dtype: Dtype
@@ -319,16 +240,31 @@ class ListColumn(ColumnBase):
         """
         Create a strings column from a list column
         """
-        # Convert the leaf child column to strings column
+        lc = self._transform_leaves(
+            lambda col, dtype: col.as_string_column(dtype), dtype
+        )
+
+        # Separator strings to match the Python format
+        separators = as_column([", ", "[", "]"])
+
+        # Call libcudf to format the list column
+        return format_list_column(lc, separators)
+
+    def _transform_leaves(self, func, *args, **kwargs):
+        # return a new list column with the same nested structure
+        # as ``self``, but with the leaf column transformed
+        # by applying ``func`` to it
+
         cc: List[ListColumn] = []
         c: ColumnBase = self
+
         while isinstance(c, ListColumn):
             cc.insert(0, c)
             c = c.children[1]
-        s = c.as_string_column(dtype)
+
+        lc = func(c, *args, **kwargs)
 
         # Rebuild the list column replacing just the leaf child
-        lc = s
         for c in cc:
             o = c.children[0]
             lc = cudf.core.column.ListColumn(  # type: ignore
@@ -339,12 +275,7 @@ class ListColumn(ColumnBase):
                 null_count=c.null_count,
                 children=(o, lc),
             )
-
-        # Separator strings to match the Python format
-        separators = as_column([", ", "[", "]"])
-
-        # Call libcudf to format the list column
-        return format_list_column(lc, separators)
+        return lc
 
 
 class ListMethods(ColumnMethods):
@@ -361,16 +292,29 @@ class ListMethods(ColumnMethods):
             )
         super().__init__(parent=parent)
 
-    def get(self, index: int) -> ParentType:
+    def get(
+        self,
+        index: int,
+        default: Optional[Union[ScalarLike, ColumnLike]] = None,
+    ) -> ParentType:
         """
-        Extract element at the given index from each component
+        Extract element at the given index from each list in a Series of lists.
 
-        Extract element from lists, tuples, or strings in
-        each element in the Series/Index.
+        ``index`` can be an integer or a sequence of integers.  If
+        ``index`` is an integer, the element at position ``index`` is
+        extracted from each list.  If ``index`` is a sequence, it must
+        be of the same length as the Series, and ``index[i]``
+        specifies the position of the element to extract from the
+        ``i``-th list in the Series.
+
+        If the index is out of bounds for any list, return <NA> or, if
+        provided, ``default``.  Thus, this method never raises an
+        ``IndexError``.
 
         Parameters
         ----------
-        index : int
+        index : int or sequence of ints
+        default : scalar, optional
 
         Returns
         -------
@@ -384,14 +328,46 @@ class ListMethods(ColumnMethods):
         1    5
         2    6
         dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2)
+        0    <NA>
+        1       5
+        2       6
+        dtype: int64
+
+        >>> s.list.get(2, default=0)
+        0   0
+        1   5
+        2   6
+        dtype: int64
+
+        >>> s.list.get([0, 1, 2])
+        0   1
+        1   4
+        2   6
+        dtype: int64
         """
-        min_col_list_len = self.len().min()
-        if -min_col_list_len <= index < min_col_list_len:
-            return self._return_or_inplace(
-                extract_element(self._column, index)
-            )
+        if is_scalar(index):
+            out = extract_element_scalar(self._column, cudf.Scalar(index))
         else:
-            raise IndexError("list index out of range")
+            index = as_column(index)
+            out = extract_element_column(self._column, as_column(index))
+
+        if not (default is None or default is NA):
+            # determine rows for which `index` is out-of-bounds
+            lengths = count_elements(self._column)
+            out_of_bounds_mask = (np.negative(index) > lengths) | (
+                index >= lengths
+            )
+
+            # replace the value in those rows (should be NA) with `default`
+            if out_of_bounds_mask.any():
+                out = out._scatter_by_column(
+                    out_of_bounds_mask, cudf.Scalar(default)
+                )
+
+        return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:
         """
@@ -421,16 +397,75 @@ class ListMethods(ColumnMethods):
             )
         except RuntimeError as e:
             if (
-                "Type/Scale of search key does not"
-                "match list column element type" in str(e)
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
             ):
-                raise TypeError(
-                    "Type/Scale of search key does not"
-                    "match list column element type"
-                ) from e
+                raise TypeError(str(e)) from e
             raise
-        else:
-            return res
+        return res
+
+    def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
+        """
+        Returns integers representing the index of the search key for each row.
+
+        If ``search_key`` is a sequence, it must be the same length as the
+        Series and ``search_key[i]`` represents the search key for the
+        ``i``-th row of the Series.
+
+        If the search key is not contained in a row, -1 is returned. If either
+        the row or the search key are null, <NA> is returned. If the search key
+        is contained multiple times, the smallest matching index is returned.
+
+        Parameters
+        ----------
+        search_key : scalar or sequence of scalars
+            Element or elements being searched for in each row of the list
+            column
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.index(4)
+        0   -1
+        1    1
+        2    0
+        dtype: int32
+
+        >>> s = cudf.Series([["a", "b", "c"], ["x", "y", "z"]])
+        >>> s.list.index(["b", "z"])
+        0    1
+        1    2
+        dtype: int32
+
+        >>> s = cudf.Series([[4, 5, 6], None, [-3, -2, -1]])
+        >>> s.list.index([None, 3, -2])
+        0    <NA>
+        1    <NA>
+        2       1
+        dtype: int32
+        """
+
+        try:
+            if is_scalar(search_key):
+                return self._return_or_inplace(
+                    index_of_scalar(self._column, cudf.Scalar(search_key))
+                )
+            else:
+                return self._return_or_inplace(
+                    index_of_column(self._column, as_column(search_key))
+                )
+
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
+            ):
+                raise TypeError(str(e)) from e
+            raise
 
     @property
     def leaves(self) -> ParentType:
@@ -567,9 +602,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            drop_list_duplicates(
-                self._column, nulls_equal=True, nans_all_equal=True
-            )
+            distinct(self._column, nulls_equal=True, nans_all_equal=True)
         )
 
     def sort_values(
@@ -681,3 +714,31 @@ class ListMethods(ColumnMethods):
                     "of nesting"
                 )
         return self._return_or_inplace(result)
+
+    def astype(self, dtype):
+        """
+        Return a new list Series with the leaf values casted
+        to the specified data type.
+
+        Parameters
+        ----------
+        dtype: data type to cast leaves values to
+
+        Returns
+        -------
+        A new Series of lists
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2], [3, 4]])
+        >>> s.dtype
+        ListDtype(int64)
+        >>> s2 = s.list.astype("float64")
+        >>> s2.dtype
+        ListDtype(float64)
+        """
+        return self._return_or_inplace(
+            self._column._transform_leaves(
+                lambda col, dtype: col.astype(dtype), dtype
+            )
+        )

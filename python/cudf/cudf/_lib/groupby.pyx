@@ -26,7 +26,12 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport table_view_from_table
+from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
+    data_from_unique_ptr,
+    table_view_from_columns,
+    table_view_from_table,
+)
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -46,7 +51,6 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.utilities.host_span cimport host_span
-from cudf._lib.utils cimport data_from_unique_ptr
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -62,11 +66,39 @@ _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
 
+
+cdef _agg_result_from_columns(
+    vector[libcudf_groupby.aggregation_result]& c_result_columns,
+    set column_included,
+    int n_input_columns
+):
+    """Construct the list of result columns from libcudf result. The result
+    contains the same number of lists as the number of input columns. Result
+    for an input column that has no applicable aggregations is an empty list.
+    """
+    cdef:
+        int i
+        int j
+        int result_index = 0
+        vector[unique_ptr[column]]* c_result
+    result_columns = []
+    for i in range(n_input_columns):
+        if i in column_included:
+            c_result = &c_result_columns[result_index].results
+            result_columns.append([
+                Column.from_unique_ptr(move(c_result[0][j]))
+                for j in range(c_result[0].size())
+            ])
+            result_index += 1
+        else:
+            result_columns.append([])
+    return result_columns
+
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, keys, bool dropna=True, *args, **kwargs):
+    def __cinit__(self, list keys, bool dropna=True, *args, **kwargs):
         cdef libcudf_types.null_policy c_null_handling
 
         if dropna:
@@ -74,7 +106,7 @@ cdef class GroupBy:
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        cdef table_view keys_view = table_view_from_table(keys)
+        cdef table_view keys_view = table_view_from_columns(keys)
 
         with nogil:
             self.c_obj.reset(
@@ -84,46 +116,42 @@ cdef class GroupBy:
                 )
             )
 
-    def __init__(self, keys, bool dropna=True):
+    def __init__(self, list keys, bool dropna=True):
         self.keys = keys
         self.dropna = dropna
 
-    def groups(self, values):
-
-        cdef table_view values_view = table_view_from_table(values)
+    def groups(self, list values):
+        cdef table_view values_view = table_view_from_columns(values)
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
 
-        c_grouped_keys = move(c_groups.keys)
-        c_grouped_values = move(c_groups.values)
-        c_group_offsets = c_groups.offsets
-
-        grouped_keys = cudf.core.index._index_from_data(
-            *data_from_unique_ptr(
-                move(c_grouped_keys),
-                column_names=range(c_grouped_keys.get()[0].num_columns())
-            )
-        )
-        grouped_values = data_from_unique_ptr(
-            move(c_grouped_values),
-            index_names=values._index_names,
-            column_names=values._column_names
-        )
-        return grouped_keys, grouped_values, c_group_offsets
+        grouped_key_cols = columns_from_unique_ptr(move(c_groups.keys))
+        grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
+        return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
     def aggregate_internal(self, values, aggregations):
-        from cudf.core.column_accessor import ColumnAccessor
+        """`values` is a list of columns and `aggregations` is a list of list
+        of aggregations. `aggregations[i]` is a list of aggregations for
+        `values[i]`. Returns a tuple containing 1) list of list of aggregation
+        results, 2) a list of grouped keys, and 3) a list of list of
+        aggregations performed.
+        """
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef libcudf_groupby.aggregation_request c_agg_request
         cdef Column col
         cdef GroupbyAggregation agg_obj
 
-        allow_empty = all(len(v) == 0 for v in aggregations.values())
+        cdef pair[
+            unique_ptr[table],
+            vector[libcudf_groupby.aggregation_result]
+        ] c_result
 
-        included_aggregations = defaultdict(list)
-        for i, (col_name, aggs) in enumerate(aggregations.items()):
-            col = values._data[col_name]
+        allow_empty = all(len(v) == 0 for v in aggregations)
+
+        included_aggregations = []
+        column_included = set()
+        for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
             valid_aggregations = (
@@ -135,35 +163,26 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
-            if (valid_aggregations is _DECIMAL_AGGS
-                    and rmm._cuda.gpu.runtimeGetVersion() < 11000):
-                raise RuntimeError(
-                    "Decimal aggregations are only supported on CUDA >= 11 "
-                    "due to an nvcc compiler bug."
-                )
+            included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
             for agg in aggs:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations[col_name].append(agg)
+                    included_aggregations_i.append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
+            included_aggregations.append(included_aggregations_i)
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-
+                column_included.add(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
-
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
 
         with nogil:
             c_result = move(
@@ -172,37 +191,38 @@ cdef class GroupBy:
                 )
             )
 
-        grouped_keys, _ = data_from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
+        grouped_keys = columns_from_unique_ptr(
+            move(c_result.first)
         )
 
-        result_data = ColumnAccessor(multiindex=True)
-        # Note: This loop relies on the included_aggregations dict being
-        # insertion ordered to map results to requested aggregations by index.
-        for i, col_name in enumerate(included_aggregations):
-            for j, agg_name in enumerate(included_aggregations[col_name]):
-                if callable(agg_name):
-                    agg_name = agg_name.__name__
-                result_data[(col_name, agg_name)] = (
-                    Column.from_unique_ptr(move(c_result.second[i].results[j]))
-                )
+        result_columns = _agg_result_from_columns(
+            c_result.second, column_included, len(values)
+        )
 
-        return result_data, cudf.core.index._index_from_data(
-            grouped_keys)
+        return result_columns, grouped_keys, included_aggregations
 
     def scan_internal(self, values, aggregations):
-        from cudf.core.column_accessor import ColumnAccessor
+        """`values` is a list of columns and `aggregations` is a list of list
+        of aggregations. `aggregations[i]` is a list of aggregations for
+        `values[i]`. Returns a tuple containing 1) list of list of aggregation
+        results, 2) a list of grouped keys, and 3) a list of list of
+        aggregations performed.
+        """
         cdef vector[libcudf_groupby.scan_request] c_agg_requests
         cdef libcudf_groupby.scan_request c_agg_request
         cdef Column col
         cdef GroupbyScanAggregation agg_obj
 
-        allow_empty = all(len(v) == 0 for v in aggregations.values())
+        cdef pair[
+            unique_ptr[table],
+            vector[libcudf_groupby.aggregation_result]
+        ] c_result
 
-        included_aggregations = defaultdict(list)
-        for i, (col_name, aggs) in enumerate(aggregations.items()):
-            col = values._data[col_name]
+        allow_empty = all(len(v) == 0 for v in aggregations)
+
+        included_aggregations = []
+        column_included = set()
+        for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
             valid_aggregations = (
@@ -214,35 +234,26 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
-            if (valid_aggregations is _DECIMAL_AGGS
-                    and rmm._cuda.gpu.runtimeGetVersion() < 11000):
-                raise RuntimeError(
-                    "Decimal aggregations are only supported on CUDA >= 11 "
-                    "due to an nvcc compiler bug."
-                )
+            included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.scan_request())
             for agg in aggs:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations[col_name].append(agg)
+                    included_aggregations_i.append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
+            included_aggregations.append(included_aggregations_i)
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-
+                column_included.add(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
-
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
 
         with nogil:
             c_result = move(
@@ -251,24 +262,15 @@ cdef class GroupBy:
                 )
             )
 
-        grouped_keys, _ = data_from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
+        grouped_keys = columns_from_unique_ptr(
+            move(c_result.first)
         )
 
-        result_data = ColumnAccessor(multiindex=True)
-        # Note: This loop relies on the included_aggregations dict being
-        # insertion ordered to map results to requested aggregations by index.
-        for i, col_name in enumerate(included_aggregations):
-            for j, agg_name in enumerate(included_aggregations[col_name]):
-                if callable(agg_name):
-                    agg_name = agg_name.__name__
-                result_data[(col_name, agg_name)] = (
-                    Column.from_unique_ptr(move(c_result.second[i].results[j]))
-                )
+        result_columns = _agg_result_from_columns(
+            c_result.second, column_included, len(values)
+        )
 
-        return result_data, cudf.core.index._index_from_data(
-            grouped_keys)
+        return result_columns, grouped_keys, included_aggregations
 
     def aggregate(self, values, aggregations):
         """
@@ -292,8 +294,8 @@ cdef class GroupBy:
 
         return self.aggregate_internal(values, aggregations)
 
-    def shift(self, values, int periods, list fill_values):
-        cdef table_view view = table_view_from_table(values)
+    def shift(self, list values, int periods, list fill_values):
+        cdef table_view view = table_view_from_columns(values)
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
@@ -301,7 +303,7 @@ cdef class GroupBy:
         cdef DeviceScalar d_slr
         d_slrs = []
         c_fill_values.reserve(num_col)
-        for val, col in zip(fill_values, values._columns):
+        for val, col in zip(fill_values, values):
             d_slr = as_device_scalar(val, dtype=col.dtype)
             d_slrs.append(d_slr)
             c_fill_values.push_back(
@@ -315,21 +317,13 @@ cdef class GroupBy:
                 self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
-        grouped_keys = cudf.core.index._index_from_data(
-            *data_from_unique_ptr(
-                move(c_result.first),
-                column_names=self.keys._column_names
-            )
-        )
-
-        shifted, _ = data_from_unique_ptr(
-            move(c_result.second), column_names=values._column_names
-        )
+        grouped_keys = columns_from_unique_ptr(move(c_result.first))
+        shifted = columns_from_unique_ptr(move(c_result.second))
 
         return shifted, grouped_keys
 
-    def replace_nulls(self, values, object method):
-        cdef table_view val_view = table_view_from_table(values)
+    def replace_nulls(self, list values, object method):
+        cdef table_view val_view = table_view_from_columns(values)
         cdef pair[unique_ptr[table], unique_ptr[table]] c_result
         cdef replace_policy policy = (
             replace_policy.PRECEDING
@@ -344,15 +338,13 @@ cdef class GroupBy:
                 self.c_obj.get()[0].replace_nulls(val_view, policies)
             )
 
-        return data_from_unique_ptr(
-            move(c_result.second), column_names=values._column_names
-        )[0]
+        return columns_from_unique_ptr(move(c_result.second))
 
 
-_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
+_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "rank"}
 
 
-def _is_all_scan_aggregate(aggs):
+def _is_all_scan_aggregate(all_aggs):
     """
     Returns true if all are scan aggregations.
     Raises
@@ -365,16 +357,12 @@ def _is_all_scan_aggregate(aggs):
         return agg.__name__ if callable(agg) else agg
 
     all_scan = all(
-        all(
-            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
-        )
-        for col_name in aggs
+        get_name(agg_name) in _GROUPBY_SCANS for aggs in all_aggs
+        for agg_name in aggs
     )
     any_scan = any(
-        any(
-            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
-        )
-        for col_name in aggs
+        get_name(agg_name) in _GROUPBY_SCANS for aggs in all_aggs
+        for agg_name in aggs
     )
 
     if not all_scan and any_scan:

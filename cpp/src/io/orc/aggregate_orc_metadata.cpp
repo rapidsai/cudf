@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <optional>
 
 namespace cudf::io::orc::detail {
 
@@ -92,12 +93,13 @@ void add_column_to_mapping(std::map<size_type, std::vector<size_type>>& selected
 /**
  * @brief Create a metadata object from each element in the source vector
  */
-auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sources)
+auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sources,
+                            rmm::cuda_stream_view stream)
 {
   std::vector<metadata> metadatas;
   std::transform(
-    sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const& source) {
-      return metadata(source.get());
+    sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [stream](auto const& source) {
+      return metadata(source.get(), stream);
     });
   return metadatas;
 }
@@ -121,8 +123,8 @@ size_type aggregate_orc_metadata::calc_num_stripes() const
 }
 
 aggregate_orc_metadata::aggregate_orc_metadata(
-  std::vector<std::unique_ptr<datasource>> const& sources)
-  : per_file_metadata(metadatas_from_sources(sources)),
+  std::vector<std::unique_ptr<datasource>> const& sources, rmm::cuda_stream_view stream)
+  : per_file_metadata(metadatas_from_sources(sources, stream)),
     num_rows(calc_num_rows()),
     num_stripes(calc_num_stripes())
 {
@@ -152,7 +154,8 @@ aggregate_orc_metadata::aggregate_orc_metadata(
 std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   size_type& row_start,
-  size_type& row_count)
+  size_type& row_count,
+  rmm::cuda_stream_view stream)
 {
   std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
 
@@ -177,7 +180,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
                                              per_file_metadata[src_file_idx].ff.stripes.size()),
           "Invalid stripe index");
         stripe_infos.push_back(
-          std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+          std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
       }
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
@@ -206,7 +209,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
         count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         if (count > row_start || count == 0) {
           stripe_infos.push_back(
-            std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+            std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         } else {
           stripe_skip_rows = count;
         }
@@ -233,10 +236,9 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
           "Invalid stripe information");
         const auto buffer =
           per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
-        size_t sf_length = 0;
-        auto sf_data     = per_file_metadata[mapping.source_idx].decompressor->Decompress(
-          buffer->data(), sf_comp_length, &sf_length);
-        ProtobufReader(sf_data, sf_length)
+        auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
+          {buffer->data(), buffer->size()}, stream);
+        ProtobufReader(sf_data.data(), sf_data.size())
           .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
         mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
         if (stripe->indexLength == 0) { row_grp_idx_present = false; }
@@ -248,17 +250,17 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
 }
 
 column_hierarchy aggregate_orc_metadata::select_columns(
-  std::vector<std::string> const& column_paths)
+  std::optional<std::vector<std::string>> const& column_paths)
 {
   auto const& pfm = per_file_metadata[0];
 
   column_hierarchy::nesting_map selected_columns;
-  if (column_paths.empty()) {
+  if (not column_paths.has_value()) {
     for (auto const& col_id : pfm.ff.types[0].subtypes) {
       add_column_to_mapping(selected_columns, pfm, col_id);
     }
   } else {
-    for (const auto& path : column_paths) {
+    for (const auto& path : column_paths.value()) {
       bool name_found = false;
       for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
         if (pfm.column_path(col_id) == path) {

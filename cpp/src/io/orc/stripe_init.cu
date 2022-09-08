@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -26,14 +26,25 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
+
+struct comp_in_out {
+  uint8_t const* in_ptr;
+  size_t in_size;
+  uint8_t* out_ptr;
+  size_t out_size;
+};
 struct compressed_stream_s {
   CompressedStreamInfo info;
-  gpu_inflate_input_s ctl;
+  comp_in_out ctl;
 };
 
 // blockDim {128,1,1}
-extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
-  CompressedStreamInfo* strm_info, int32_t num_streams, uint32_t block_size, uint32_t log2maxcr)
+__global__ void __launch_bounds__(128, 8)
+  gpuParseCompressedStripeData(CompressedStreamInfo* strm_info,
+                               int32_t num_streams,
+                               uint32_t block_size,
+                               uint32_t log2maxcr,
+                               bool allow_block_size_estimate)
 {
   __shared__ compressed_stream_s strm_g[4];
 
@@ -53,13 +64,14 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
     uint32_t max_uncompressed_block_size = 0;
     uint32_t num_compressed_blocks       = 0;
     uint32_t num_uncompressed_blocks     = 0;
-    while (cur + BLOCK_HEADER_SIZE < end) {
+    while (cur + block_header_size < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
-      uint32_t is_uncompressed = block_len & 1;
+      auto const is_uncompressed = static_cast<bool>(block_len & 1);
       uint32_t uncompressed_size;
-      gpu_inflate_input_s* init_ctl = nullptr;
+      device_span<uint8_t const>* init_in_ctl = nullptr;
+      device_span<uint8_t>* init_out_ctl      = nullptr;
       block_len >>= 1;
-      cur += BLOCK_HEADER_SIZE;
+      cur += block_header_size;
       if (block_len > block_size || cur + block_len > end) {
         // Fatal
         num_compressed_blocks       = 0;
@@ -70,9 +82,10 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual
       // uncompressed size and avoid waste due to block size alignment For now, rely on the max
       // compression ratio to limit waste for the most extreme cases (small single-block streams)
-      uncompressed_size = (is_uncompressed)                         ? block_len
-                          : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr
-                                                                    : block_size;
+      uncompressed_size = (is_uncompressed) ? block_len
+                          : allow_block_size_estimate && (block_len < (block_size >> log2maxcr))
+                            ? block_len << log2maxcr
+                            : block_size;
       if (is_uncompressed) {
         if (uncompressed_size <= 32) {
           // For short blocks, copy the uncompressed data to output
@@ -82,27 +95,34 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
             uncompressed[max_uncompressed_size + lane_id] = cur[lane_id];
           }
         } else {
-          init_ctl = s->info.copyctl;
-          init_ctl = (init_ctl && num_uncompressed_blocks < s->info.num_uncompressed_blocks)
-                       ? &init_ctl[num_uncompressed_blocks]
-                       : nullptr;
+          init_in_ctl =
+            (s->info.copy_in_ctl && num_uncompressed_blocks < s->info.num_uncompressed_blocks)
+              ? &s->info.copy_in_ctl[num_uncompressed_blocks]
+              : nullptr;
+          init_out_ctl =
+            (s->info.copy_out_ctl && num_uncompressed_blocks < s->info.num_uncompressed_blocks)
+              ? &s->info.copy_out_ctl[num_uncompressed_blocks]
+              : nullptr;
           num_uncompressed_blocks++;
         }
       } else {
-        init_ctl = s->info.decctl;
-        init_ctl = (init_ctl && num_compressed_blocks < s->info.num_compressed_blocks)
-                     ? &init_ctl[num_compressed_blocks]
-                     : nullptr;
+        init_in_ctl = (s->info.dec_in_ctl && num_compressed_blocks < s->info.num_compressed_blocks)
+                        ? &s->info.dec_in_ctl[num_compressed_blocks]
+                        : nullptr;
+        init_out_ctl =
+          (s->info.dec_out_ctl && num_compressed_blocks < s->info.num_compressed_blocks)
+            ? &s->info.dec_out_ctl[num_compressed_blocks]
+            : nullptr;
         num_compressed_blocks++;
       }
-      if (!lane_id && init_ctl) {
-        s->ctl.srcDevice = const_cast<uint8_t*>(cur);
-        s->ctl.srcSize   = block_len;
-        s->ctl.dstDevice = uncompressed + max_uncompressed_size;
-        s->ctl.dstSize   = uncompressed_size;
+      if (!lane_id && init_in_ctl) {
+        s->ctl = {cur, block_len, uncompressed + max_uncompressed_size, uncompressed_size};
       }
       __syncwarp();
-      if (init_ctl && lane_id == 0) *init_ctl = s->ctl;
+      if (init_in_ctl && lane_id == 0) {
+        *init_in_ctl  = {s->ctl.in_ptr, s->ctl.in_size};
+        *init_out_ctl = {s->ctl.out_ptr, s->ctl.out_size};
+      }
       cur += block_len;
       max_uncompressed_size += uncompressed_size;
       max_uncompressed_block_size = max(max_uncompressed_block_size, uncompressed_size);
@@ -121,7 +141,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
 }
 
 // blockDim {128,1,1}
-extern "C" __global__ void __launch_bounds__(128, 8)
+__global__ void __launch_bounds__(128, 8)
   gpuPostDecompressionReassemble(CompressedStreamInfo* strm_info, int32_t num_streams)
 {
   __shared__ compressed_stream_s strm_g[4];
@@ -137,35 +157,35 @@ extern "C" __global__ void __launch_bounds__(128, 8)
       s->info.num_compressed_blocks + s->info.num_uncompressed_blocks > 0 &&
       s->info.max_uncompressed_size > 0) {
     // Walk through the compressed blocks
-    const uint8_t* cur                  = s->info.compressed_data;
-    const uint8_t* end                  = cur + s->info.compressed_data_size;
-    const gpu_inflate_input_s* dec_in   = s->info.decctl;
-    const gpu_inflate_status_s* dec_out = s->info.decstatus;
-    uint8_t* uncompressed_actual        = s->info.uncompressed_data;
-    uint8_t* uncompressed_estimated     = uncompressed_actual;
-    uint32_t num_compressed_blocks      = 0;
-    uint32_t max_compressed_blocks      = s->info.num_compressed_blocks;
+    const uint8_t* cur              = s->info.compressed_data;
+    const uint8_t* end              = cur + s->info.compressed_data_size;
+    auto dec_out                    = s->info.dec_out_ctl;
+    auto dec_status                 = s->info.decstatus;
+    uint8_t* uncompressed_actual    = s->info.uncompressed_data;
+    uint8_t* uncompressed_estimated = uncompressed_actual;
+    uint32_t num_compressed_blocks  = 0;
+    uint32_t max_compressed_blocks  = s->info.num_compressed_blocks;
 
-    while (cur + BLOCK_HEADER_SIZE < end) {
+    while (cur + block_header_size < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
-      uint32_t is_uncompressed = block_len & 1;
+      auto const is_uncompressed = static_cast<bool>(block_len & 1);
       uint32_t uncompressed_size_est, uncompressed_size_actual;
       block_len >>= 1;
-      cur += BLOCK_HEADER_SIZE;
+      cur += block_header_size;
       if (cur + block_len > end) { break; }
       if (is_uncompressed) {
         uncompressed_size_est    = block_len;
         uncompressed_size_actual = block_len;
       } else {
         if (num_compressed_blocks > max_compressed_blocks) { break; }
-        if (shuffle((lane_id == 0) ? dec_out[num_compressed_blocks].status : 0) != 0) {
+        if (shuffle((lane_id == 0) ? dec_status[num_compressed_blocks].status : 0) != 0) {
           // Decompression failed, not much point in doing anything else
           break;
         }
-        uncompressed_size_est =
-          shuffle((lane_id == 0) ? *(const uint32_t*)&dec_in[num_compressed_blocks].dstSize : 0);
-        uncompressed_size_actual = shuffle(
-          (lane_id == 0) ? *(const uint32_t*)&dec_out[num_compressed_blocks].bytes_written : 0);
+        uint32_t const dst_size      = dec_out[num_compressed_blocks].size();
+        uncompressed_size_est        = shuffle((lane_id == 0) ? dst_size : 0);
+        uint32_t const bytes_written = dec_status[num_compressed_blocks].bytes_written;
+        uncompressed_size_actual     = shuffle((lane_id == 0) ? bytes_written : 0);
       }
       // In practice, this should never happen with a well-behaved writer, as we would expect the
       // uncompressed size to always be equal to the compression block size except for the last
@@ -224,8 +244,8 @@ enum row_entry_state_e {
  * @return bytes consumed
  */
 static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
-                                                      const uint8_t* start,
-                                                      const uint8_t* end)
+                                                      uint8_t const* const start,
+                                                      uint8_t const* const end)
 {
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
 
@@ -360,20 +380,20 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
   if (strm_len > 0) {
     int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
     if (compressed_offset > 0) {
-      const uint8_t* start            = s->strm_info[ci_id].compressed_data;
-      const uint8_t* cur              = start;
-      const uint8_t* end              = cur + s->strm_info[ci_id].compressed_data_size;
-      gpu_inflate_status_s* decstatus = s->strm_info[ci_id].decstatus;
-      uint32_t uncomp_offset          = 0;
+      const uint8_t* start   = s->strm_info[ci_id].compressed_data;
+      const uint8_t* cur     = start;
+      const uint8_t* end     = cur + s->strm_info[ci_id].compressed_data_size;
+      auto decstatus         = s->strm_info[ci_id].decstatus.data();
+      uint32_t uncomp_offset = 0;
       for (;;) {
-        uint32_t block_len, is_uncompressed;
+        uint32_t block_len;
 
-        if (cur + BLOCK_HEADER_SIZE > end || cur + BLOCK_HEADER_SIZE >= start + compressed_offset) {
+        if (cur + block_header_size > end || cur + block_header_size >= start + compressed_offset) {
           break;
         }
         block_len = cur[0] | (cur[1] << 8) | (cur[2] << 16);
-        cur += BLOCK_HEADER_SIZE;
-        is_uncompressed = block_len & 1;
+        cur += block_header_size;
+        auto const is_uncompressed = static_cast<bool>(block_len & 1);
         block_len >>= 1;
         cur += block_len;
         if (cur > end) { break; }
@@ -403,15 +423,14 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
  * value
  */
 // blockDim {128,1,1}
-extern "C" __global__ void __launch_bounds__(128, 8)
-  gpuParseRowGroupIndex(RowGroup* row_groups,
-                        CompressedStreamInfo* strm_info,
-                        ColumnDesc* chunks,
-                        uint32_t num_columns,
-                        uint32_t num_stripes,
-                        uint32_t num_rowgroups,
-                        uint32_t rowidx_stride,
-                        bool use_base_stride)
+__global__ void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_groups,
+                                                                CompressedStreamInfo* strm_info,
+                                                                ColumnDesc* chunks,
+                                                                uint32_t num_columns,
+                                                                uint32_t num_stripes,
+                                                                uint32_t num_rowgroups,
+                                                                uint32_t rowidx_stride,
+                                                                bool use_base_stride)
 {
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s* const s = &state_g;
@@ -457,7 +476,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
                           : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows;
       auto const start_row =
         (use_base_stride)
-          ? rowidx_stride
+          ? i * rowidx_stride
           : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
       for (int j = t4; j < rowgroup_size4; j += 4) {
         ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =
@@ -517,12 +536,13 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                         int32_t num_streams,
                                         uint32_t compression_block_size,
                                         uint32_t log2maxcr,
+                                        bool allow_block_size_estimate,
                                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    strm_info, num_streams, compression_block_size, log2maxcr);
+    strm_info, num_streams, compression_block_size, log2maxcr, allow_block_size_estimate);
 }
 
 void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,

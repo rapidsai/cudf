@@ -28,6 +28,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -37,6 +38,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -79,6 +82,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   *
    * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
@@ -92,7 +96,14 @@ class column_wrapper {
  */
 template <typename From, typename To>
 struct fixed_width_type_converter {
-  // Are the types same - simply copy elements from [begin, end) to out
+  /**
+   * @brief No conversion necessary: Same type, simply copy element to output.
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target value, same as source value
+   */
   template <typename FromT                                      = From,
             typename ToT                                        = To,
             std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
@@ -101,7 +112,14 @@ struct fixed_width_type_converter {
     return element;
   }
 
-  // Are the types convertible or can target be constructed from source?
+  /**
+   * @brief Convert types if possible, otherwise construct target from source.
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target value
+   */
   template <
     typename FromT          = From,
     typename ToT            = To,
@@ -113,7 +131,14 @@ struct fixed_width_type_converter {
     return static_cast<ToT>(element);
   }
 
-  // Convert integral values to timestamps
+  /**
+   * @brief Convert integral values to timestamps
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target `timestamp` value
+   */
   template <
     typename FromT                                                                  = From,
     typename ToT                                                                    = To,
@@ -145,7 +170,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), rmm::cuda_stream_default};
+  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), cudf::default_stream_value};
 }
 
 /**
@@ -171,7 +196,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::default_stream_value};
 }
 
 /**
@@ -198,7 +223,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::default_stream_value};
 }
 
 /**
@@ -246,7 +271,7 @@ rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
   auto null_mask = make_null_mask_vector(begin, end);
   return rmm::device_buffer{null_mask.data(),
                             null_mask.size() * sizeof(decltype(null_mask.front())),
-                            rmm::cuda_stream_default};
+                            cudf::default_stream_value};
 }
 
 /**
@@ -273,7 +298,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     offsets.push_back(offsets.back() + tmp.length());
   }
-  return std::make_pair(std::move(chars), std::move(offsets));
+  return std::pair(std::move(chars), std::move(offsets));
 };
 }  // namespace detail
 
@@ -482,6 +507,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   }
 };
 
+/**
+ * @brief A wrapper for a column of fixed-width elements.
+ *
+ * @tparam Rep The type of the column
+ */
 template <typename Rep>
 class fixed_point_column_wrapper : public detail::column_wrapper {
  public:
@@ -517,7 +547,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default}});
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::default_stream_value}});
   }
 
   /**
@@ -581,7 +611,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default},
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::default_stream_value},
       detail::make_null_mask(v, v + size),
       cudf::UNKNOWN_NULL_COUNT});
   }
@@ -700,13 +730,11 @@ class strings_column_wrapper : public detail::column_wrapper {
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    std::vector<char> chars;
-    std::vector<cudf::size_type> offsets;
-    auto all_valid           = thrust::make_constant_iterator(true);
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
-    wrapped                  = cudf::make_strings_column(d_chars, d_offsets);
+    auto all_valid        = thrust::make_constant_iterator(true);
+    auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
+    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
+    wrapped               = cudf::make_strings_column(d_chars, d_offsets);
   }
 
   /**
@@ -742,14 +770,12 @@ class strings_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
-    std::vector<char> chars;
-    std::vector<size_type> offsets;
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    auto null_mask           = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
-    auto d_bitmask           = cudf::detail::make_device_uvector_sync(null_mask);
-    wrapped                  = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
+    auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, v);
+    auto null_mask        = detail::make_null_mask_vector(v, v + num_strings);
+    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
+    auto d_bitmask        = cudf::detail::make_device_uvector_sync(null_mask);
+    wrapped               = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
   }
 
   /**
@@ -1035,17 +1061,20 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
  public:
   /**
    * @brief Cast to dictionary_column_view
+   *
    */
   operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
 
   /**
    * @brief Access keys column view
+   *
    * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   *
    * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
@@ -1443,7 +1472,45 @@ class lists_column_wrapper : public detail::column_wrapper {
     build_from_nested(elements, validity);
   }
 
+  /**
+   * @brief Construct a list column containing a single empty, optionally null row.
+   *
+   * @param valid Whether or not the empty row is also null
+   * @return A list column containing a single empty row
+   */
+  static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<int> values{};
+    return lists_column_wrapper<T>(
+      1,
+      offsets.release(),
+      values.release(),
+      valid ? 0 : 1,
+      valid ? rmm::device_buffer{} : cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+  }
+
  private:
+  /**
+   * @brief Construct a list column from constituent parts.
+   *
+   * @param num_rows The number of lists the column represents
+   * @param offsets The column of offset values for this column
+   * @param values The column of values bounded by the offsets
+   * @param null_count The number of null list entries
+   * @param null_mask The bits specifying the null lists in device memory
+   */
+  lists_column_wrapper(size_type num_rows,
+                       std::unique_ptr<cudf::column>&& offsets,
+                       std::unique_ptr<cudf::column>&& values,
+                       size_type null_count,
+                       rmm::device_buffer&& null_mask)
+  {
+    // construct the list column
+    wrapped = make_lists_column(
+      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+  }
+
   /**
    * @brief Initialize as a nested list column composed of other list columns.
    *
@@ -1466,20 +1533,18 @@ class lists_column_wrapper : public detail::column_wrapper {
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
     // compute the expected hierarchy and depth
-    auto const hierarchy_and_depth = std::accumulate(
-      elements.begin(),
-      elements.end(),
-      std::pair<column_view, int32_t>{{}, -1},
-      [](auto acc, lists_column_wrapper const& lcw) {
-        return lcw.depth > acc.second ? std::make_pair(lcw.get_view(), lcw.depth) : acc;
-      });
+    auto const hierarchy_and_depth =
+      std::accumulate(elements.begin(),
+                      elements.end(),
+                      std::pair<column_view, int32_t>{{}, -1},
+                      [](auto acc, lists_column_wrapper const& lcw) {
+                        return lcw.depth > acc.second ? std::pair(lcw.get_view(), lcw.depth) : acc;
+                      });
     column_view expected_hierarchy = hierarchy_and_depth.first;
     int32_t const expected_depth   = hierarchy_and_depth.second;
 
     // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
-    std::vector<std::unique_ptr<column>> stubs;
-    std::vector<column_view> cols;
-    std::tie(cols, stubs) = preprocess_columns(elements, expected_hierarchy, expected_depth);
+    auto [cols, stubs] = preprocess_columns(elements, expected_hierarchy, expected_depth);
 
     // generate offsets
     size_type count = 0;

@@ -25,12 +25,27 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/iterator/reverse_iterator.h>
-
-using hash_value_type = uint32_t;
+#include <thrust/pair.h>
+#include <thrust/reverse.h>
 
 namespace cudf {
 namespace detail {
+
+/**
+ * Normalization of floating point NaNs, passthrough for all other values.
+ */
+template <typename T>
+T __device__ inline normalize_nans(T const& key)
+{
+  if constexpr (cudf::is_floating_point<T>()) {
+    if (std::isnan(key)) { return std::numeric_limits<T>::quiet_NaN(); }
+  }
+  return key;
+}
 
 /**
  * Normalization of floating point NaNs and zeros, passthrough for all other values.
@@ -39,13 +54,110 @@ template <typename T>
 T __device__ inline normalize_nans_and_zeros(T const& key)
 {
   if constexpr (cudf::is_floating_point<T>()) {
-    if (std::isnan(key)) {
-      return std::numeric_limits<T>::quiet_NaN();
-    } else if (key == T{0.0}) {
-      return T{0.0};
-    }
+    if (key == T{0.0}) { return T{0.0}; }
   }
-  return key;
+  return normalize_nans(key);
+}
+
+__device__ inline uint32_t rotate_bits_left(uint32_t x, uint32_t r)
+{
+  // This function is equivalent to (x << r) | (x >> (32 - r))
+  return __funnelshift_l(x, x, r);
+}
+
+__device__ inline uint32_t rotate_bits_right(uint32_t x, uint32_t r)
+{
+  // This function is equivalent to (x >> r) | (x << (32 - r))
+  return __funnelshift_r(x, x, r);
+}
+
+__device__ inline uint64_t rotate_bits_right(uint64_t x, uint32_t r)
+{
+  return (x >> r) | (x << (64 - r));
+}
+
+// Swap the endianness of a 32 bit value
+__device__ inline uint32_t swap_endian(uint32_t x)
+{
+  // The selector 0x0123 reverses the byte order
+  return __byte_perm(x, 0, 0x0123);
+}
+
+// Swap the endianness of a 64 bit value
+// There is no CUDA intrinsic for permuting bytes in 64 bit integers
+__device__ inline uint64_t swap_endian(uint64_t x)
+{
+  // Reverse the endianness of each 32 bit section
+  uint32_t low_bits  = swap_endian(static_cast<uint32_t>(x));
+  uint32_t high_bits = swap_endian(static_cast<uint32_t>(x >> 32));
+  // Reassemble a 64 bit result, swapping the low bits and high bits
+  return (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
+};
+
+template <int capacity, typename hash_step_callable>
+struct hash_circular_buffer {
+  uint8_t storage[capacity];
+  uint8_t* cur;
+  int available_space{capacity};
+  hash_step_callable hash_step;
+
+  __device__ inline hash_circular_buffer(hash_step_callable hash_step)
+    : cur{storage}, hash_step{hash_step}
+  {
+  }
+
+  __device__ inline void put(uint8_t const* in, int size)
+  {
+    int copy_start = 0;
+    while (size >= available_space) {
+      // The buffer will be filled by this chunk of data. Copy a chunk of the
+      // data to fill the buffer and trigger a hash step.
+      memcpy(cur, in + copy_start, available_space);
+      hash_step(storage);
+      size -= available_space;
+      copy_start += available_space;
+      cur             = storage;
+      available_space = capacity;
+    }
+    // The buffer will not be filled by the remaining data. That is, `size >= 0
+    // && size < capacity`. We copy the remaining data into the buffer but do
+    // not trigger a hash step.
+    memcpy(cur, in + copy_start, size);
+    cur += size;
+    available_space -= size;
+  }
+
+  __device__ inline void pad(int const space_to_leave)
+  {
+    if (space_to_leave > available_space) {
+      memset(cur, 0x00, available_space);
+      hash_step(storage);
+      cur             = storage;
+      available_space = capacity;
+    }
+    memset(cur, 0x00, available_space - space_to_leave);
+    cur += available_space - space_to_leave;
+    available_space = space_to_leave;
+  }
+
+  __device__ inline const uint8_t& operator[](int idx) const { return storage[idx]; }
+};
+
+// Get a uint8_t pointer to a column element and its size as a pair.
+template <typename Element>
+auto __device__ inline get_element_pointer_and_size(Element const& element)
+{
+  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
+  } else {
+    CUDF_UNREACHABLE("Unsupported type.");
+  }
+}
+
+template <>
+auto __device__ inline get_element_pointer_and_size(string_view const& element)
+{
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
 }
 
 /**
@@ -57,22 +169,19 @@ T __device__ inline normalize_nans_and_zeros(T const& key)
  */
 void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destination)
 {
-  // Transform 0xABCD1234 => 0x0000ABCD00001234 => 0x0B0A0D0C02010403
+  // Transform 0xABCD'1234 => 0x0000'ABCD'0000'1234 => 0x0B0A'0D0C'0201'0403
   uint64_t x = num;
-  x          = ((x & 0xFFFF0000) << 16) | ((x & 0xFFFF));
-  x          = ((x & 0xF0000000F) << 8) | ((x & 0xF0000000F0) >> 4) | ((x & 0xF0000000F00) << 16) |
-      ((x & 0xF0000000F000) << 4);
+  x          = ((x & 0xFFFF'0000u) << 16) | ((x & 0xFFFF));
+  x          = ((x & 0x000F'0000'000Fu) << 8) | ((x & 0x00F0'0000'00F0u) >> 4) |
+      ((x & 0x0F00'0000'0F00u) << 16) | ((x & 0xF000'0000'F000) << 4);
 
   // Calculate a mask of ascii value offsets for bytes that contain alphabetical hex digits
-  uint64_t offsets = (((x + 0x0606060606060606) >> 4) & 0x0101010101010101) * 0x27;
+  uint64_t offsets = (((x + 0x0606'0606'0606'0606) >> 4) & 0x0101'0101'0101'0101) * 0x27;
 
-  x |= 0x3030303030303030;
+  x |= 0x3030'3030'3030'3030;
   x += offsets;
   std::memcpy(destination, reinterpret_cast<uint8_t*>(&x), 8);
 }
-
-}  // namespace detail
-}  // namespace cudf
 
 // MurmurHash3_32 implementation from
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
@@ -87,13 +196,8 @@ template <typename Key>
 struct MurmurHash3_32 {
   using result_type = hash_value_type;
 
-  MurmurHash3_32() = default;
+  constexpr MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
-
-  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    return (x << r) | (x >> (32 - r));
-  }
 
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
@@ -114,56 +218,35 @@ struct MurmurHash3_32 {
     return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
-  // TODO Do we need this operator() and/or compute? Probably not both.
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
-    return compute(key);
-  }
-
-  // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  hash_value_type __device__ inline compute_floating_point(T const& key) const
-  {
-    if (key == T{0.0}) {
-      return compute(T{0.0});
-    } else if (std::isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      return compute(nan);
-    } else {
-      return compute(key);
-    }
+    return compute(detail::normalize_nans_and_zeros(key));
   }
 
   template <typename T>
   result_type __device__ inline compute(T const& key) const
   {
     return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+  }
+
+  result_type __device__ inline compute_remaining_bytes(std::byte const* data,
+                                                        cudf::size_type len,
+                                                        cudf::size_type tail_offset,
+                                                        result_type h) const
+  {
+    // Process remaining bytes that do not fill a four-byte chunk.
+    uint32_t k1 = 0;
+    switch (len % 4) {
+      case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16; [[fallthrough]];
+      case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8; [[fallthrough]];
+      case 1:
+        k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
+        k1 *= c1;
+        k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
+        k1 *= c2;
+        h ^= k1;
+    };
+    return h;
   }
 
   result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
@@ -171,337 +254,96 @@ struct MurmurHash3_32 {
     constexpr cudf::size_type BLOCK_SIZE = 4;
     cudf::size_type const nblocks        = len / BLOCK_SIZE;
     cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
-    result_type h1                       = m_seed;
-    constexpr uint32_t c1                = 0xcc9e2d51;
-    constexpr uint32_t c2                = 0x1b873593;
-    constexpr uint32_t c3                = 0xe6546b64;
-    constexpr uint32_t rot_c1            = 15;
-    constexpr uint32_t rot_c2            = 13;
+    result_type h                        = m_seed;
 
     // Process all four-byte chunks.
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
-      h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
-      h1 = h1 * 5 + c3;
+      h ^= k1;
+      h = cudf::detail::rotate_bits_left(h, rot_c2);
+      h = h * 5 + c3;
     }
 
-    // Process remaining bytes that do not fill a four-byte chunk.
-    uint32_t k1 = 0;
-    switch (len % 4) {
-      case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16;
-      case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8;
-      case 1:
-        k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
-        k1 *= c1;
-        k1 = rotl32(k1, rot_c1);
-        k1 *= c2;
-        h1 ^= k1;
-    };
+    h = compute_remaining_bytes(data, len, tail_offset, h);
 
     // Finalize hash.
-    h1 ^= len;
-    h1 = fmix32(h1);
-    return h1;
+    h ^= len;
+    h = fmix32(h);
+    return h;
   }
 
  private:
   uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
+  static constexpr uint32_t c1     = 0xcc9e2d51;
+  static constexpr uint32_t c2     = 0x1b873593;
+  static constexpr uint32_t c3     = 0xe6546b64;
+  static constexpr uint32_t rot_c1 = 15;
+  static constexpr uint32_t rot_c2 = 13;
 };
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& key) const
 {
-  return this->compute(static_cast<uint8_t>(key));
+  return compute(static_cast<uint8_t>(key));
 }
 
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
+template <>
+hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
+{
+  return compute(detail::normalize_nans_and_zeros(key));
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
+{
+  return compute(detail::normalize_nans_and_zeros(key));
+}
+
 template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
   auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
-template <>
-hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
+  return compute_bytes(data, len);
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
-  return this->compute(key.value());
+  return compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<numeric::decimal64>::operator()(
   numeric::decimal64 const& key) const
 {
-  return this->compute(key.value());
+  return compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<numeric::decimal128>::operator()(
   numeric::decimal128 const& key) const
 {
-  return this->compute(key.value());
+  return compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::list_view>::operator()(
   cudf::list_view const& key) const
 {
-  cudf_assert(false && "List column hashing is not supported");
-  return 0;
+  CUDF_UNREACHABLE("List column hashing is not supported");
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
   cudf::struct_view const& key) const
 {
-  cudf_assert(false && "Direct hashing of struct_view is not supported");
-  return 0;
-}
-
-template <typename Key>
-struct SparkMurmurHash3_32 {
-  using result_type = hash_value_type;
-
-  SparkMurmurHash3_32() = default;
-  constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
-
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    return (x << r) | (x >> (32 - r));
-  }
-
-  __device__ inline uint32_t fmix32(uint32_t h) const
-  {
-    h ^= h >> 16;
-    h *= 0x85ebca6b;
-    h ^= h >> 13;
-    h *= 0xc2b2ae35;
-    h ^= h >> 16;
-    return h;
-  }
-
-  result_type __device__ inline operator()(Key const& key) const { return compute(key); }
-
-  // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  hash_value_type __device__ inline compute_floating_point(T const& key) const
-  {
-    if (std::isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      return compute(nan);
-    } else {
-      return compute(key);
-    }
-  }
-
-  template <typename T>
-  result_type __device__ inline compute(T const& key) const
-  {
-    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
-  }
-
-  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
-                                                      cudf::size_type offset) const
-  {
-    // Individual byte reads for unaligned accesses (very likely for strings)
-    auto block = reinterpret_cast<uint8_t const*>(data + offset);
-    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
-  }
-
-  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
-  {
-    constexpr cudf::size_type BLOCK_SIZE = 4;
-    cudf::size_type const nblocks        = len / BLOCK_SIZE;
-    result_type h1                       = m_seed;
-    constexpr uint32_t c1                = 0xcc9e2d51;
-    constexpr uint32_t c2                = 0x1b873593;
-    constexpr uint32_t c3                = 0xe6546b64;
-    constexpr uint32_t rot_c1            = 15;
-    constexpr uint32_t rot_c2            = 13;
-
-    // Process all four-byte chunks.
-    for (cudf::size_type i = 0; i < nblocks; i++) {
-      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
-      k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
-      k1 *= c2;
-      h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
-      h1 = h1 * 5 + c3;
-    }
-
-    // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
-    // (does not conform to normal MurmurHash3).
-    for (cudf::size_type i = nblocks * 4; i < len; i++) {
-      // We require a two-step cast to get the k1 value from the byte. First,
-      // we must cast to a signed int8_t. Then, the sign bit is preserved when
-      // casting to uint32_t under 2's complement. Java preserves the
-      // signedness when casting byte-to-int, but C++ does not.
-      uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
-      k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
-      k1 *= c2;
-      h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
-      h1 = h1 * 5 + c3;
-    }
-
-    // Finalize hash.
-    h1 ^= len;
-    h1 = fmix32(h1);
-    return h1;
-  }
-
- private:
-  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
-};
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<bool>::operator()(bool const& key) const
-{
-  return this->compute<uint32_t>(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<int8_t>::operator()(int8_t const& key) const
-{
-  return this->compute<uint32_t>(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<uint8_t>::operator()(uint8_t const& key) const
-{
-  return this->compute<uint32_t>(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<int16_t>::operator()(int16_t const& key) const
-{
-  return this->compute<uint32_t>(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
-  uint16_t const& key) const
-{
-  return this->compute<uint32_t>(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
-  numeric::decimal32 const& key) const
-{
-  return this->compute<uint64_t>(key.value());
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal64>::operator()(
-  numeric::decimal64 const& key) const
-{
-  return this->compute<uint64_t>(key.value());
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::operator()(
-  numeric::decimal128 const& key) const
-{
-  // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
-  // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
-  // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
-  __int128_t const val               = key.value();
-  constexpr cudf::size_type key_size = sizeof(__int128_t);
-  std::byte const* data              = reinterpret_cast<std::byte const*>(&val);
-
-  // Small negative values start with 0xff..., small positive values start with 0x00...
-  bool const is_negative     = val < 0;
-  std::byte const zero_value = is_negative ? std::byte{0xff} : std::byte{0x00};
-
-  // If the value can be represented with a shorter than 16-byte integer, the
-  // leading bytes of the little-endian value are truncated and are not hashed.
-  auto const reverse_begin = thrust::reverse_iterator(data + key_size);
-  auto const reverse_end   = thrust::reverse_iterator(data);
-  auto const first_nonzero_byte =
-    thrust::find_if_not(thrust::seq, reverse_begin, reverse_end, [zero_value](std::byte const& v) {
-      return v == zero_value;
-    }).base();
-  // Max handles special case of 0 and -1 which would shorten to 0 length otherwise
-  cudf::size_type length =
-    std::max(1, static_cast<cudf::size_type>(thrust::distance(data, first_nonzero_byte)));
-
-  // Preserve the 2's complement sign bit by adding a byte back on if necessary.
-  // e.g. 0x0000ff would shorten to 0x00ff. The 0x00 byte is retained to
-  // preserve the sign bit, rather than leaving an "f" at the front which would
-  // change the sign bit. However, 0x00007f would shorten to 0x7f. No extra byte
-  // is needed because the leftmost bit matches the sign bit. Similarly for
-  // negative values: 0xffff00 --> 0xff00 and 0xffff80 --> 0x80.
-  if ((length < key_size) && (is_negative ^ bool(data[length - 1] & std::byte{0x80}))) { ++length; }
-
-  // Convert to big endian by reversing the range of nonzero bytes. Only those bytes are hashed.
-  __int128_t big_endian_value = 0;
-  auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
-  thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
-  return this->compute_bytes(big_endian_data, length);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::list_view>::operator()(
-  cudf::list_view const& key) const
-{
-  cudf_assert(false && "List column hashing is not supported");
-  return 0;
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operator()(
-  cudf::struct_view const& key) const
-{
-  cudf_assert(false && "Direct hashing of struct_view is not supported");
-  return 0;
-}
-
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
+  CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }
 
 /**
@@ -514,38 +356,11 @@ struct IdentityHash {
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
   template <typename return_type = result_type>
   constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
-    cudf_assert(false && "IdentityHash does not support this data type");
-    return 0;
+    CUDF_UNREACHABLE("IdentityHash does not support this data type");
   }
 
   template <typename return_type = result_type>
@@ -561,3 +376,6 @@ struct IdentityHash {
 
 template <typename Key>
 using default_hash = MurmurHash3_32<Key>;
+
+}  // namespace detail
+}  // namespace cudf

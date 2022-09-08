@@ -38,7 +38,9 @@ def _hide_deprecated_pandas_categorical_inplace_warnings(function_name):
 def _hide_cudf_safe_casting_warning():
     with warnings.catch_warnings():
         warnings.filterwarnings(
-            "ignore", "Can't safely cast column", category=UserWarning,
+            "ignore",
+            "Can't safely cast column",
+            category=UserWarning,
         )
         yield
 
@@ -133,6 +135,7 @@ def test_categorical_compare_unordered():
         rfunc=operator.lt,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
+        compare_error_message=False,
     )
 
 
@@ -178,9 +181,7 @@ def test_categorical_binary_add():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        expected_error_message=(
-            "Series of dtype `category` cannot perform the operation: add"
-        ),
+        compare_error_message=False,
     )
 
 
@@ -258,9 +259,7 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdf["a"], pdf["b"]],),
         rfunc_args_and_kwargs=([df["a"], df["b"]],),
-        expected_error_message=(
-            "Series of dtype `category` cannot perform the operation: add"
-        ),
+        compare_error_message=False,
     )
 
     # lhs is numerical
@@ -269,7 +268,7 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdf["b"], pdf["a"]],),
         rfunc_args_and_kwargs=([df["b"], df["a"]],),
-        expected_error_message="'add' operator not supported",
+        compare_error_message=False,
     )
 
 
@@ -641,6 +640,7 @@ def test_categorical_set_categories_categoricals(data, new_categories):
         pd.Series([1, 2, 3, -4], dtype="int64"),
         pd.Series([1, 2, 3, 4], dtype="uint64"),
         pd.Series([1, 2.3, 3, 4], dtype="float"),
+        np.asarray([0, 2, 1]),
         [None, 1, None, 2, None],
         [],
     ],
@@ -683,6 +683,10 @@ def test_categorical_creation(data, dtype):
 def test_categorical_dtype(categories, ordered):
     expected = pd.CategoricalDtype(categories=categories, ordered=ordered)
     got = cudf.CategoricalDtype(categories=categories, ordered=ordered)
+    assert_eq(expected, got)
+
+    expected = pd.CategoricalDtype(categories=categories)
+    got = cudf.CategoricalDtype(categories=categories)
     assert_eq(expected, got)
 
 

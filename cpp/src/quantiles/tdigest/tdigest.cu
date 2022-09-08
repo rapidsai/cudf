@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,22 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
 
 using namespace cudf::tdigest;
 
@@ -309,7 +320,25 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                              mr);
 }
 
-}  // namespace tdigest.
+/**
+ * @brief Create an empty tdigest scalar.
+ *
+ * An empty tdigest scalar is a struct_scalar that contains a single row of length 0
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @returns An empty tdigest scalar.
+ */
+std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  auto contents = make_empty_tdigest_column(stream, mr)->release();
+  return std::make_unique<struct_scalar>(
+    std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
+}
+
+}  // namespace tdigest
 
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
@@ -323,13 +352,18 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // output is a list column with each row containing percentiles.size() percentile values
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto row_size_iter = thrust::make_constant_iterator(percentiles.size());
+  auto const all_empty_rows =
+    thrust::count_if(rmm::exec_policy(stream),
+                     input.size_begin(),
+                     input.size_begin() + input.size(),
+                     [] __device__(auto const x) { return x == 0; }) == input.size();
+  auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<offset_type>());
 
-  if (percentiles.size() == 0) {
+  if (percentiles.size() == 0 || all_empty_rows) {
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
@@ -372,7 +406,8 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::mr::device_memory_resource* mr)
 {
-  return percentile_approx(input, percentiles, rmm::cuda_stream_default, mr);
+  CUDF_FUNC_RANGE();
+  return detail::percentile_approx(input, percentiles, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

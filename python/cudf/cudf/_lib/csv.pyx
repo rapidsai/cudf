@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -19,9 +19,9 @@ import cudf
 
 from cudf._lib.cpp.types cimport size_type
 
-import collections.abc as abc
 import errno
 import os
+from collections import abc
 from enum import IntEnum
 from io import BytesIO, StringIO
 
@@ -238,7 +238,7 @@ cdef csv_reader_options make_csv_reader_options(
                 "`parse_dates`: dictionaries are unsupported")
         if not isinstance(parse_dates, abc.Iterable):
             raise NotImplementedError(
-                "`parse_dates`: non-lists are unsupported")
+                "`parse_dates`: an iterable is required")
         for col in parse_dates:
             if isinstance(col, str):
                 c_parse_dates_names.push_back(str(col).encode())
@@ -279,7 +279,7 @@ cdef csv_reader_options make_csv_reader_options(
             )
             csv_reader_options_c.set_dtypes(c_dtypes_list)
             csv_reader_options_c.set_parse_hex(c_hex_col_indexes)
-        elif isinstance(dtype, abc.Iterable):
+        elif isinstance(dtype, abc.Collection):
             c_dtypes_list.reserve(len(dtype))
             for index, col_dtype in enumerate(dtype):
                 if col_dtype in CSV_HEX_TYPE_MAP:

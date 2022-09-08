@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,7 @@ def test_can_cast_safely_same_kind():
 
     assert data.can_cast_safely(to_dtype)
 
-    data = cudf.Series([1, 2, 2 ** 31], dtype="int64")._column
+    data = cudf.Series([1, 2, 2**31], dtype="int64")._column
     assert not data.can_cast_safely(to_dtype)
 
     # 'u' -> 'u'
@@ -35,7 +35,7 @@ def test_can_cast_safely_same_kind():
 
     assert data.can_cast_safely(to_dtype)
 
-    data = cudf.Series([1, 2, 2 ** 33], dtype="uint64")._column
+    data = cudf.Series([1, 2, 2**33], dtype="uint64")._column
     assert not data.can_cast_safely(to_dtype)
 
     # 'f' -> 'f'
@@ -56,7 +56,7 @@ def test_can_cast_safely_mixed_kind():
     assert data.can_cast_safely(to_dtype)
 
     # too big to fit into f32 exactly
-    data = cudf.Series([1, 2, 2 ** 24 + 1], dtype="int32")._column
+    data = cudf.Series([1, 2, 2**24 + 1], dtype="int32")._column
     assert not data.can_cast_safely(to_dtype)
 
     data = cudf.Series([1, 2, 3], dtype="uint32")._column
@@ -64,7 +64,7 @@ def test_can_cast_safely_mixed_kind():
     assert data.can_cast_safely(to_dtype)
 
     # too big to fit into f32 exactly
-    data = cudf.Series([1, 2, 2 ** 24 + 1], dtype="uint32")._column
+    data = cudf.Series([1, 2, 2**24 + 1], dtype="uint32")._column
     assert not data.can_cast_safely(to_dtype)
 
     to_dtype = np.dtype("float64")
@@ -82,7 +82,7 @@ def test_can_cast_safely_mixed_kind():
     assert data.can_cast_safely(to_dtype)
 
     # float out of int range
-    data = cudf.Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
+    data = cudf.Series([1.0, 2.0, 1.0 * (2**31)], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
 
     # negative signed integers casting to unsigned integers
@@ -174,9 +174,9 @@ def test_to_numeric_basic_1d(data):
 @pytest.mark.parametrize(
     "data",
     [
-        [1, 2 ** 11],
-        [1, 2 ** 33],
-        [1, 2 ** 63],
+        [1, 2**11],
+        [1, 2**33],
+        [1, 2**63],
         [np.iinfo(np.int64).max, np.iinfo(np.int64).min],
     ],
 )
@@ -196,12 +196,12 @@ def test_to_numeric_downcast_int(data, downcast):
 @pytest.mark.parametrize(
     "data",
     [
-        [1.0, 2.0 ** 11],
-        [-1.0, -(2.0 ** 11)],
-        [1.0, 2.0 ** 33],
-        [-1.0, -(2.0 ** 33)],
-        [1.0, 2.0 ** 65],
-        [-1.0, -(2.0 ** 65)],
+        [1.0, 2.0**11],
+        [-1.0, -(2.0**11)],
+        [1.0, 2.0**33],
+        [-1.0, -(2.0**33)],
+        [1.0, 2.0**65],
+        [-1.0, -(2.0**65)],
         [1.0, float("inf")],
         [1.0, float("-inf")],
         [1.0, float("nan")],
@@ -225,11 +225,11 @@ def test_to_numeric_downcast_float(data, downcast):
 @pytest.mark.parametrize(
     "data",
     [
-        [1.0, 2.0 ** 129],
-        [1.0, 2.0 ** 257],
+        [1.0, 2.0**129],
+        [1.0, 2.0**257],
         [1.0, 1.79e308],
-        [-1.0, -(2.0 ** 129)],
-        [-1.0, -(2.0 ** 257)],
+        [-1.0, -(2.0**129)],
+        [-1.0, -(2.0**257)],
         [-1.0, -1.79e308],
     ],
 )
@@ -247,11 +247,11 @@ def test_to_numeric_downcast_large_float(data, downcast):
 @pytest.mark.parametrize(
     "data",
     [
-        [1.0, 2.0 ** 129],
-        [1.0, 2.0 ** 257],
+        [1.0, 2.0**129],
+        [1.0, 2.0**257],
         [1.0, 1.79e308],
-        [-1.0, -(2.0 ** 129)],
-        [-1.0, -(2.0 ** 257)],
+        [-1.0, -(2.0**129)],
+        [-1.0, -(2.0**257)],
         [-1.0, -1.79e308],
     ],
 )
@@ -396,4 +396,21 @@ def test_series_construction_with_nulls(dtype, input_obj):
 
     expect = pd.Series(np_data, dtype=np_dtypes_to_pandas_dtypes[dtype])
     got = cudf.Series(np_data, dtype=dtype).to_pandas(nullable=True)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [[True, False, True]],
+)
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
+def test_series_to_numeric_bool(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = pd.to_numeric(ps, downcast=downcast)
+    got = cudf.to_numeric(gs, downcast=downcast)
+
     assert_eq(expect, got)

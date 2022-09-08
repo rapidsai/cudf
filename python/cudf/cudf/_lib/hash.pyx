@@ -14,16 +14,14 @@ from cudf._lib.cpp.hash cimport hash as cpp_hash, hash_id as cpp_hash_id
 from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
-def hash_partition(source_table, object columns_to_hash,
-                   int num_partitions, bool keep_index=True):
+def hash_partition(list source_columns, object columns_to_hash,
+                   int num_partitions):
     cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
-    cdef table_view c_source_view = table_view_from_table(
-        source_table, not keep_index
-    )
+    cdef table_view c_source_view = table_view_from_columns(source_columns)
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     with nogil:
@@ -36,27 +34,17 @@ def hash_partition(source_table, object columns_to_hash,
         )
 
     # Note that the offsets (`c_result.second`) may be empty when
-    # the original table (`source_table`) is empty. We need to
+    # the original table (`source_columns`) is empty. We need to
     # return a list of zeros in this case.
     return (
-        *data_from_unique_ptr(
-            move(c_result.first),
-            column_names=source_table._column_names,
-            index_names=(
-                source_table._index_names
-                if keep_index is True
-                else None
-            )
-
-        ),
-        list(c_result.second) if c_result.second.size()
-        else [0] * num_partitions
+        columns_from_unique_ptr(move(c_result.first)),
+        list(c_result.second)
+        if c_result.second.size() else [0] * num_partitions
     )
 
 
-def hash(source_table, str method, int seed=0):
-    cdef table_view c_source_view = table_view_from_table(
-        source_table, ignore_index=True)
+def hash(list source_columns, str method, int seed=0):
+    cdef table_view c_source_view = table_view_from_columns(source_columns)
     cdef unique_ptr[column] c_result
     cdef cpp_hash_id c_hash_function
     if method == "murmur3":

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,20 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
+#include <thrust/distance.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/iterator_traits.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
+#include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf {
@@ -382,7 +391,7 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_end,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();

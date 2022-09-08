@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,15 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
+
+#include <type_traits>
 #include <vector>
 
 namespace cudf {
@@ -50,10 +51,8 @@ void run_sort_test(table_view input,
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
 }
 
-using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-                                     cudf::test::FloatingPointTypes,
-                                     cudf::test::DurationTypes,
-                                     cudf::test::TimestampTypes>;
+using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integers, floats and bool
+                                     cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
 struct Sort : public BaseFixture {
@@ -87,7 +86,7 @@ TYPED_TEST(Sort, WithNullMax)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -125,7 +124,7 @@ TYPED_TEST(Sort, WithNullMin)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -161,7 +160,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -291,6 +290,100 @@ TYPED_TEST(Sort, WithNestedStructColumn)
     // Run test for sort and sort_by_key
     fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 5, 1, 3, 4, 0}};
     run_sort_test(input, expected_for_bool, column_order);
+  }
+}
+
+TYPED_TEST(Sort, WithNullableStructColumn)
+{
+  // Test for a struct column that has nulls on struct layer but not pushed down on the child
+  using T    = int;
+  using fwcw = cudf::test::fixed_width_column_wrapper<T>;
+  using mask = std::vector<bool>;
+
+  auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols,
+                         std::vector<bool> nulls) {
+    cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
+    auto struct_ = struct_col.release();
+    struct_->set_null_mask(cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+    return struct_;
+  };
+
+  {
+    /*
+         /+-------------+
+         |s1{s2{a,b}, c}|
+         +--------------+
+       0 |  { {1, 1}, 5}|
+       1 |  { {1, 2}, 4}|
+       2 |  {@{2, 1}, 6}|
+       3 |  {@{2, 2}, 5}|
+       4 | @{ {2, 2}, 3}|
+       5 | @{ {1, 1}, 3}|
+       6 |  { {1, 2}, 3}|
+       7 |  {@{1, 1}, 4}|
+       8 |  { {2, 1}, 5}|
+         +--------------+
+
+      Intermediate representation:
+      s1{s2{a}}, b, c
+    */
+
+    auto col_a   = fwcw{1, 1, 2, 2, 2, 1, 1, 1, 2};
+    auto col_b   = fwcw{1, 2, 1, 2, 2, 1, 2, 1, 1};
+    auto s2_mask = mask{1, 1, 0, 0, 1, 1, 1, 0, 1};
+    auto col_c   = fwcw{5, 4, 6, 5, 3, 3, 3, 4, 5};
+    auto s1_mask = mask{1, 1, 1, 1, 0, 0, 1, 1, 1};
+
+    std::vector<std::unique_ptr<cudf::column>> s2_children;
+    s2_children.push_back(col_a.release());
+    s2_children.push_back(col_b.release());
+    auto s2 = make_struct(std::move(s2_children), s2_mask);
+
+    std::vector<std::unique_ptr<cudf::column>> s1_children;
+    s1_children.push_back(std::move(s2));
+    s1_children.push_back(col_c.release());
+    auto s1 = make_struct(std::move(s1_children), s1_mask);
+
+    auto expect = fwcw{4, 5, 7, 3, 2, 0, 6, 1, 8};
+    run_sort_test(table_view({s1->view()}), expect);
+  }
+  { /*
+        /+-------------+
+        |s1{a,s2{b, c}}|
+        +--------------+
+      0 |  {1,  {1, 5}}|
+      1 |  {1,  {2, 4}}|
+      2 |  {2, @{2, 6}}|
+      3 |  {2, @{1, 5}}|
+      4 | @{2,  {2, 3}}|
+      5 | @{1,  {1, 3}}|
+      6 |  {1,  {2, 3}}|
+      7 |  {1, @{1, 4}}|
+      8 |  {2,  {1, 5}}|
+        +--------------+
+
+     Intermediate representation:
+     s1{a}, s2{b}, c
+   */
+
+    auto s1_mask = mask{1, 1, 1, 1, 0, 0, 1, 1, 1};
+    auto col_a   = fwcw{1, 1, 2, 2, 2, 1, 1, 1, 2};
+    auto s2_mask = mask{1, 1, 0, 0, 1, 1, 1, 0, 1};
+    auto col_b   = fwcw{1, 2, 1, 2, 2, 1, 2, 1, 1};
+    auto col_c   = fwcw{5, 4, 6, 5, 3, 3, 3, 4, 5};
+
+    std::vector<std::unique_ptr<cudf::column>> s22_children;
+    s22_children.push_back(col_b.release());
+    s22_children.push_back(col_c.release());
+    auto s22 = make_struct(std::move(s22_children), s2_mask);
+
+    std::vector<std::unique_ptr<cudf::column>> s12_children;
+    s12_children.push_back(col_a.release());
+    s12_children.push_back(std::move(s22));
+    auto s12 = make_struct(std::move(s12_children), s1_mask);
+
+    auto expect = fwcw{4, 5, 7, 0, 6, 1, 2, 3, 8};
+    run_sort_test(table_view({s12->view()}), expect);
   }
 }
 
@@ -555,7 +648,12 @@ TYPED_TEST(Sort, WithStructColumnCombinationsWithoutNulls)
   std::vector<order> column_order{order::DESCENDING};
 
   // desc_nulls_first
-  fixed_width_column_wrapper<int32_t> expected1{{3, 5, 6, 7, 2, 4, 1, 0}};
+  auto const expected1 = []() {
+    if constexpr (std::is_same_v<T, bool>) {
+      return fixed_width_column_wrapper<int32_t>{{3, 5, 6, 7, 1, 2, 4, 0}};
+    }
+    return fixed_width_column_wrapper<int32_t>{{3, 5, 6, 7, 2, 4, 1, 0}};
+  }();
   auto got = sorted_order(input, column_order, {null_order::AFTER});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, got->view());
   // Run test for sort and sort_by_key
@@ -577,28 +675,16 @@ TYPED_TEST(Sort, WithStructColumnCombinationsWithoutNulls)
   run_sort_test(input, expected3, column_order2, {null_order::BEFORE});
 
   // asce_nulls_last
-  fixed_width_column_wrapper<int32_t> expected4{{0, 1, 2, 4, 7, 6, 3, 5}};
+  auto const expected4 = []() {
+    if constexpr (std::is_same_v<T, bool>) {
+      return fixed_width_column_wrapper<int32_t>{{0, 2, 4, 1, 7, 6, 3, 5}};
+    }
+    return fixed_width_column_wrapper<int32_t>{{0, 1, 2, 4, 7, 6, 3, 5}};
+  }();
   got = sorted_order(input, column_order2, {null_order::AFTER});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected4, got->view());
   // Run test for sort and sort_by_key
   run_sort_test(input, expected4, column_order2, {null_order::AFTER});
-}
-
-TYPED_TEST(Sort, Stable)
-{
-  using T = TypeParam;
-  using R = int32_t;
-
-  fixed_width_column_wrapper<T> col1({0, 1, 1, 0, 0, 1, 0, 1}, {0, 1, 1, 1, 1, 1, 1, 1});
-  strings_column_wrapper col2({"2", "a", "b", "x", "k", "a", "x", "a"}, {1, 1, 1, 1, 0, 1, 1, 1});
-
-  fixed_width_column_wrapper<R> expected{{4, 3, 6, 1, 5, 7, 2, 0}};
-
-  auto got = stable_sorted_order(table_view({col1, col2}),
-                                 {order::ASCENDING, order::ASCENDING},
-                                 {null_order::AFTER, null_order::BEFORE});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
 TYPED_TEST(Sort, MisMatchInColumnOrderSize)
@@ -613,7 +699,6 @@ TYPED_TEST(Sort, MisMatchInColumnOrderSize)
   std::vector<order> column_order{order::ASCENDING, order::DESCENDING};
 
   EXPECT_THROW(sorted_order(input, column_order), logic_error);
-  EXPECT_THROW(stable_sorted_order(input, column_order), logic_error);
   EXPECT_THROW(sort(input, column_order), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order), logic_error);
 }
@@ -631,7 +716,6 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
   std::vector<null_order> null_precedence{null_order::AFTER, null_order::BEFORE};
 
   EXPECT_THROW(sorted_order(input, column_order, null_precedence), logic_error);
-  EXPECT_THROW(stable_sorted_order(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order, null_precedence), logic_error);
 }
@@ -652,6 +736,20 @@ TYPED_TEST(Sort, ZeroSizedColumns)
 
   // Run test for sort and sort_by_key
   run_sort_test(input, expected, column_order);
+}
+
+TYPED_TEST(Sort, WithListColumn)
+{
+  using T = int;
+  lists_column_wrapper<T> lc{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort(table_view({lc})),
+                            "Cannot lexicographic compare a table with a LIST column");
+
+  std::vector<std::unique_ptr<cudf::column>> child_cols;
+  child_cols.push_back(lc.release());
+  structs_column_wrapper sc{std::move(child_cols), {1, 0, 1}};
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort(table_view({sc})),
+                            "Cannot lexicographic compare a table with a LIST column");
 }
 
 struct SortByKey : public BaseFixture {
@@ -708,6 +806,60 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointSortedOrderGather)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(index_col, indices->view());
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
+
+struct SortCornerTest : public BaseFixture {
+};
+
+TEST_F(SortCornerTest, WithEmptyStructColumn)
+{
+  using int_col = fixed_width_column_wrapper<int32_t>;
+
+  // struct{}, int, int
+  int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
+  auto null_mask  = cudf::copy_bitmask(col_for_mask.release()->view());
+  auto struct_col = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask));
+
+  int_col col1{{1, 2, 3, 1, 2, 3}};
+  int_col col2{{1, 1, 1, 2, 2, 2}};
+  table_view input{{struct_col->view(), col1, col2}};
+
+  int_col expected{{1, 0, 3, 4, 2, 5}};
+  std::vector<order> column_order{order::ASCENDING, order::ASCENDING, order::ASCENDING};
+  auto got = sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+  // struct{struct{}, int}
+  int_col col3{{0, 1, 2, 3, 4, 5}};
+  std::vector<std::unique_ptr<cudf::column>> child_columns;
+  child_columns.push_back(std::move(struct_col));
+  child_columns.push_back(col3.release());
+  auto struct_col2 =
+    cudf::make_structs_column(6, std::move(child_columns), 0, rmm::device_buffer{});
+  table_view input2{{struct_col2->view()}};
+
+  int_col expected2{{5, 4, 3, 2, 0, 1}};
+  auto got2 = sorted_order(input2, {order::DESCENDING});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
+
+  // struct{struct{}, struct{int}}
+  int_col col_for_mask2{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 0, 1}};
+  auto null_mask2 = cudf::copy_bitmask(col_for_mask2.release()->view());
+  std::vector<std::unique_ptr<cudf::column>> child_columns2;
+  auto child_col_1 = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask2));
+  child_columns2.push_back(std::move(child_col_1));
+  int_col col4{{5, 4, 3, 2, 1, 0}};
+  std::vector<std::unique_ptr<cudf::column>> grand_child;
+  grand_child.push_back(std::move(col4.release()));
+  auto child_col_2 = cudf::make_structs_column(6, std::move(grand_child), 0, rmm::device_buffer{});
+  child_columns2.push_back(std::move(child_col_2));
+  auto struct_col3 =
+    cudf::make_structs_column(6, std::move(child_columns2), 0, rmm::device_buffer{});
+  table_view input3{{struct_col3->view()}};
+
+  int_col expected3{{4, 1, 5, 3, 2, 0}};
+  auto got3 = sorted_order(input3, {order::ASCENDING});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view());
+};
 
 }  // namespace test
 }  // namespace cudf

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -78,7 +78,7 @@ _TIMEDELTA_DATA_NON_OVERFLOW = [
 def test_timedelta_series_create(data, dtype):
     if dtype not in ("timedelta64[ns]"):
         pytest.skip(
-            "Bug in pandas" "https://github.com/pandas-dev/pandas/issues/35465"
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
         )
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
@@ -102,14 +102,17 @@ def test_timedelta_series_create(data, dtype):
 def test_timedelta_from_typecast(data, dtype, cast_dtype):
     if dtype not in ("timedelta64[ns]"):
         pytest.skip(
-            "Bug in pandas" "https://github.com/pandas-dev/pandas/issues/35465"
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
         )
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
     )
     gsr = cudf.Series(data, dtype=dtype)
 
-    assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
+    if cast_dtype == "int64":
+        assert_eq(psr.values.view(cast_dtype), gsr.astype(cast_dtype).values)
+    else:
+        assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
 
 
 @pytest.mark.parametrize(
@@ -315,7 +318,8 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
 @pytest.mark.parametrize("datetime_dtype", utils.DATETIME_TYPES)
 @pytest.mark.parametrize("timedelta_dtype", utils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize(
-    "ops", ["add", "sub"],
+    "ops",
+    ["add", "sub"],
 )
 def test_timedelta_ops_datetime_inputs(
     datetime_data, timedelta_data, datetime_dtype, timedelta_dtype, ops
@@ -342,10 +346,7 @@ def test_timedelta_ops_datetime_inputs(
             rfunc=operator.sub,
             lfunc_args_and_kwargs=([psr_timedelta, psr_datetime],),
             rfunc_args_and_kwargs=([gsr_timedelta, gsr_datetime],),
-            expected_error_message=re.escape(
-                f"Subtraction of {gsr_timedelta.dtype} with "
-                f"{gsr_datetime.dtype} cannot be performed."
-            ),
+            compare_error_message=False,
         )
 
 
@@ -622,7 +623,11 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    expected = getattr(psr, reduction_op)()
+    if len(psr) > 0 and psr.isnull().all() and reduction_op == "median":
+        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
+            expected = getattr(psr, reduction_op)()
+    else:
+        expected = getattr(psr, reduction_op)()
     actual = getattr(gsr, reduction_op)()
     if pd.isna(expected) and pd.isna(actual):
         pass
@@ -638,7 +643,8 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_components(data, dtype):
@@ -655,7 +661,8 @@ def test_timedelta_dt_components(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
@@ -690,7 +697,8 @@ def test_timedelta_dt_properties(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_index(data, dtype):
@@ -809,6 +817,7 @@ def test_timedelta_datetime_index_ops_misc(
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -872,6 +881,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -1140,10 +1150,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        expected_error_message=re.escape(
-            f"Addition of {sr.dtype} with {np.dtype('int64')} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1151,10 +1158,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
-        expected_error_message=re.escape(
-            f"Addition of {sr.dtype} with {np.dtype('object')} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     dt_sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -1165,10 +1169,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mod,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Modulus of {sr.dtype} with {dt_sr.dtype} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1176,10 +1177,8 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mod,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
-        expected_error_message=re.escape(
-            f"Modulus of {sr.dtype} with {np.dtype('object')} "
-            f"cannot be performed."
-        ),
+        check_exception_type=False,
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1187,10 +1186,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.gt,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Invalid comparison between dtype={sr.dtype}"
-            f" and {dt_sr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1198,10 +1194,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.lt,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Invalid comparison between dtype={sr.dtype}"
-            f" and {dt_sr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1209,10 +1202,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.ge,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Invalid comparison between dtype={sr.dtype}"
-            f" and {dt_sr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1220,10 +1210,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.le,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Invalid comparison between dtype={sr.dtype}"
-            f" and {dt_sr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1231,10 +1218,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.truediv,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Division of {sr.dtype} with {dt_sr.dtype} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1242,10 +1226,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.floordiv,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1253,10 +1234,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mul,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        expected_error_message=re.escape(
-            f"Multiplication of {sr.dtype} with {dt_sr.dtype} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1265,10 +1243,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            f"Multiplication of {sr.dtype} with {sr.dtype} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1276,9 +1251,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.xor,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        expected_error_message=re.escape(
-            f"Series of dtype {sr.dtype} cannot perform the operation xor"
-        ),
+        compare_error_message=False,
     )
 
 
@@ -1416,3 +1389,17 @@ def test_create_TimedeltaIndex(dtype, name):
     )
     pdi = gdi.to_pandas()
     assert_eq(pdi, gdi)
+
+
+@pytest.mark.parametrize("data", [[43534, 43543, 37897, 2000]])
+@pytest.mark.parametrize("dtype", ["timedelta64[ns]"])
+def test_timedelta_constructor(data, dtype):
+    expected = pd.TimedeltaIndex(data=data, dtype=dtype)
+    actual = cudf.TimedeltaIndex(data=data, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+    expected = pd.TimedeltaIndex(data=pd.Series(data), dtype=dtype)
+    actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
+
+    assert_eq(expected, actual)

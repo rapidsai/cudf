@@ -25,7 +25,8 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)
     col_from_buf = build_column(
-        Buffer(buf.ptr, buf.bufsize), protocol_dtype_to_cupy_dtype(dtype)
+        Buffer(data=buf.ptr, size=buf.bufsize, owner=None),
+        protocol_dtype_to_cupy_dtype(dtype),
     )
     # check that non null values are the equals as nulls are represented
     # by sentinel values in the buffer.
@@ -33,7 +34,10 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     # currently only non-null values are compared, null positions are
     # unchecked.
     non_null_idxs = ~cudf.Series(cudfcol).isna()
-    assert_eq(col_from_buf[non_null_idxs], cudfcol[non_null_idxs])
+    assert_eq(
+        col_from_buf.apply_boolean_mask(non_null_idxs),
+        cudfcol.apply_boolean_mask(non_null_idxs),
+    )
 
     if dtype[0] != _DtypeKind.BOOL:
         array_from_dlpack = cp.fromDlpack(buf.__dlpack__()).get()

@@ -17,10 +17,7 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core.scalar import (
-    NA,
-    Scalar,
-)
+from cudf.core.scalar import Scalar
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
@@ -45,6 +42,7 @@ from cudf.core.index import (
 )
 from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut
 from cudf.core.algorithms import factorize
@@ -58,32 +56,13 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.groupby import Grouper
-from cudf.core.ops import (
-    add,
-    arccos,
-    arcsin,
-    arctan,
-    cos,
-    exp,
-    floor_divide,
-    log,
-    logical_and,
-    logical_not,
-    logical_or,
-    multiply,
-    remainder,
-    sin,
-    sqrt,
-    subtract,
-    tan,
-    true_divide,
-)
 from cudf.core.reshape import (
     concat,
+    crosstab,
     get_dummies,
     melt,
-    merge_sorted,
     pivot,
+    pivot_table,
     unstack,
 )
 from cudf.core.series import isclose
@@ -102,7 +81,13 @@ from cudf.io import (
 )
 from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import set_allocator
+from cudf.utils.utils import set_allocator, clear_cache
+
+from cudf.options import (
+    get_option,
+    set_option,
+    describe_option,
+)
 
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed
@@ -125,6 +110,10 @@ except AttributeError:
     # Numba < 0.54: No occupancy warnings
     pass
 del numba_config
+
+
+rmm.register_reinitialize_hook(clear_cache)
+
 
 __version__ = get_versions()["version"]
 del get_versions
@@ -164,19 +153,22 @@ __all__ = [
     "UInt8Index",
     "api",
     "concat",
+    "crosstab",
     "cut",
     "date_range",
+    "describe_option",
     "factorize",
     "from_dataframe",
     "from_dlpack",
     "from_pandas",
     "get_dummies",
+    "get_option",
     "interval_range",
     "isclose",
     "melt",
     "merge",
-    "merge_sorted",
     "pivot",
+    "pivot_table",
     "read_avro",
     "read_csv",
     "read_feather",
@@ -186,6 +178,7 @@ __all__ = [
     "read_parquet",
     "read_text",
     "set_allocator",
+    "set_option",
     "testing",
     "to_datetime",
     "to_numeric",

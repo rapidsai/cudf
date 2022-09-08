@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -34,7 +35,9 @@
 
 #include <cub/cub.cuh>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
 #include <algorithm>
@@ -169,7 +172,7 @@ std::unique_ptr<column> url_encode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_encode(strings, rmm::cuda_stream_default, mr);
+  return detail::url_encode(strings, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -451,7 +454,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_decode(strings, rmm::cuda_stream_default, mr);
+  return detail::url_decode(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -23,6 +23,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -39,37 +40,6 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
-
-/**
- * @brief Binary operator with index values into the input column.
- *
- * @tparam T Type of the underlying column. Must support '<' operator.
- */
-template <typename T>
-struct element_arg_minmax_fn {
-  column_device_view const d_col;
-  bool const has_nulls;
-  bool const arg_min;
-
-  __device__ inline auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
-  {
-    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
-    // github.com/NVIDIA/thrust/issues/1525
-    // where invalid random values may be passed here by thrust::reduce_by_key
-    if (lhs_idx < 0 || lhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(lhs_idx))) {
-      return rhs_idx;
-    }
-    if (rhs_idx < 0 || rhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(rhs_idx))) {
-      return lhs_idx;
-    }
-
-    // Return `lhs_idx` iff:
-    //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
-    //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
-    auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
-    return less == arg_min ? lhs_idx : rhs_idx;
-  }
-};
 
 /**
  * @brief Value accessor for column which supports dictionary column too.
@@ -211,8 +181,8 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
 
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
-      auto const binop =
-        element_arg_minmax_fn<T>{*d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
+      auto const binop      = cudf::detail::element_argminmax_fn<T>{
+        *d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
       do_reduction(count_iter, result_begin, binop);
     } else {
       using OpType    = cudf::detail::corresponding_operator_t<K>;

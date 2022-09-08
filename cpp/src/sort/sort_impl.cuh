@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -31,6 +32,7 @@
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
+#include <thrust/swap.h>
 
 namespace cudf {
 namespace detail {
@@ -123,16 +125,10 @@ std::unique_ptr<column> sorted_order(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto flattened    = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
-  auto device_table = table_device_view::create(flattened, stream);
-  auto const d_column_order = make_device_uvector_async(flattened.orders(), stream);
+  auto comp =
+    experimental::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
+  auto comparator = comp.less(nullate::DYNAMIC{has_nested_nulls(input)});
 
-  auto const d_null_precedence = make_device_uvector_async(flattened.null_orders(), stream);
-  auto const comparator = row_lexicographic_comparator(nullate::DYNAMIC{has_nulls(flattened)},
-                                                       *device_table,
-                                                       *device_table,
-                                                       d_column_order.data(),
-                                                       d_null_precedence.data());
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),
                         mutable_indices_view.begin<size_type>(),

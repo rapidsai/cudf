@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/sorting.hpp>
@@ -25,6 +26,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
@@ -71,14 +74,10 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @brief A specialization for floating-point `Element` type relational comparison
  * to derive the order of the elements with respect to `lhs`.
  *
- * This Specialization handles `nan` in the following order:
+ * This specialization handles `nan` in the following order:
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
  * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
  *
- * @param lhs first element
- * @param rhs second element
- * @return Indicates the relationship between the elements in
- * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
@@ -118,10 +117,9 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  * @brief A specialization for non-floating-point `Element` type relational
  * comparison to derive the order of the elements with respect to `lhs`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return Indicates the relationship between the elements in
- * the `lhs` and `rhs` columns.
+ * @param lhs The first element
+ * @param rhs The second element
+ * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
@@ -212,13 +210,14 @@ class element_equality_comparator {
                             rhs.element<Element>(rhs_element_index));
   }
 
+  // @cond
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
-    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return false;
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
+  // @endcond
 
  private:
   column_device_view lhs;
@@ -227,9 +226,22 @@ class element_equality_comparator {
   null_equality nulls_are_equal;
 };
 
+/**
+ * @brief Performs a relational comparison between two elements in two columns.
+ *
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls
+ */
 template <typename Nullate>
 class row_equality_comparator {
  public:
+  /**
+   * @brief Construct a new row equality comparator object
+   *
+   * @param has_nulls Indicates if either input column contains nulls
+   * @param lhs The column containing the first element
+   * @param rhs The column containing the second element (may be the same as lhs)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   */
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
@@ -239,6 +251,13 @@ class row_equality_comparator {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
+  /**
+   * @brief Compares the specified rows for equality.
+   *
+   * @param lhs_row_index The index of the first row to compare (in the lhs table)
+   * @param rhs_row_index The index of the second row to compare (in the rhs table)
+   * @return true if both rows are equal, otherwise false
+   */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
@@ -285,6 +304,14 @@ class element_relational_comparator {
   {
   }
 
+  /**
+   * @brief Construct type-dispatched function object for performing a relational comparison between
+   * two elements in two columns.
+   *
+   * @param has_nulls Indicates if either input column contains nulls
+   * @param lhs The column containing the first element
+   * @param rhs The column containing the second element (may be the same as lhs)
+   */
   __host__ __device__ element_relational_comparator(Nullate has_nulls,
                                                     column_device_view lhs,
                                                     column_device_view rhs)
@@ -318,13 +345,14 @@ class element_relational_comparator {
                               rhs.element<Element>(rhs_element_index));
   }
 
+  // @cond
   template <typename Element,
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
-    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return weak_ordering::LESS;
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
+  // @endcond
 
  private:
   column_device_view lhs;
@@ -355,12 +383,13 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
+   * Behavior is undefined if called with incomparable column types.
    *
+   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
@@ -381,15 +410,13 @@ class row_lexicographic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
-                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the
    * `rhs` table
@@ -432,6 +459,14 @@ class row_lexicographic_comparator {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
+  /**
+   * @brief Returns the hash value of the given element in the given column.
+   *
+   * @tparam T The type of the element to hash
+   * @param col The column to hash
+   * @param row_index The index of the row to hash
+   * @return The hash value of the given element
+   */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
@@ -439,29 +474,63 @@ class element_hasher {
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
+  /**
+   * @brief Returns the hash value of the given element in the given column.
+   *
+   * @tparam T The type of the element to hash
+   * @param col The column to hash
+   * @param row_index The index of the row to hash
+   * @return The hash value of the given element
+   */
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
-  Nullate has_nulls;
+  Nullate has_nulls;  ///< A cudf::nullate type describing how to check for nulls.
 };
 
+/**
+ * @brief Function object for computing the hash value of a row in a column.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls
+ */
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher_with_seed {
  public:
+  /**
+   * @brief Constructs a function object for hashing an element in the given column
+   *
+   * @param has_nulls Indicates if either input column contains nulls
+   * @param seed The seed to use for the hash function
+   */
   __device__ element_hasher_with_seed(Nullate has_nulls, uint32_t seed)
     : _seed{seed}, _has_nulls{has_nulls}
   {
   }
 
+  /**
+   * @brief Constructs a function object for hashing an element in the given column
+   *
+   * @param has_nulls Indicates if either input column contains nulls
+   * @param seed The seed to use for the hash function
+   * @param null_hash The hash value to use for null elements
+   */
   __device__ element_hasher_with_seed(Nullate has_nulls, uint32_t seed, hash_value_type null_hash)
     : _seed{seed}, _null_hash{null_hash}, _has_nulls{has_nulls}
   {
   }
 
+  /**
+   * @brief Returns the hash value of the given element in the given column.
+   *
+   * @tparam T The type of the element to hash
+   * @param col The column to hash
+   * @param row_index The index of the row to hash
+   * @return The hash value of the given element
+   */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
@@ -469,11 +538,18 @@ class element_hasher_with_seed {
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
+  /**
+   * @brief Returns the hash value of the given element in the given column.
+   *
+   * @tparam T The type of the element to hash
+   * @param col The column to hash
+   * @param row_index The index of the row to hash
+   * @return The hash value of the given element
+   */
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
  private:
@@ -492,29 +568,45 @@ template <template <typename> class hash_function, typename Nullate>
 class row_hasher {
  public:
   row_hasher() = delete;
+
+  /**
+   * @brief Constructs a row_hasher object.
+   *
+   * @param has_nulls Indicates if either input table contains nulls
+   * @param t A table_device_view to hash
+   */
   CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t)
     : _table{t}, _has_nulls{has_nulls}
   {
   }
+  /**
+   * @brief Constructs a row_hasher object with a seed value.
+   *
+   * @param has_nulls Indicates if either input table contains nulls
+   * @param t A table_device_view to hash
+   * @param seed A seed value to use for hashing
+   */
   CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
     : _table{t}, _seed(seed), _has_nulls{has_nulls}
   {
   }
 
+  /**
+   * @brief Computes the hash value of the row at `row_index` in the `table`
+   *
+   * @param row_index The index of the row in the `table` to hash
+   * @return The hash value of the row at `row_index` in the `table`
+   */
   __device__ auto operator()(size_type row_index) const
   {
-    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
-    };
-
     // Hash the first column w/ the seed
-    auto const initial_hash =
-      hash_combiner(hash_value_type{0},
-                    type_dispatcher<dispatch_storage_type>(
-                      _table.column(0).type(),
-                      element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
-                      _table.column(0),
-                      row_index));
+    auto const initial_hash = cudf::detail::hash_combine(
+      hash_value_type{0},
+      type_dispatcher<dispatch_storage_type>(
+        _table.column(0).type(),
+        element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
+        _table.column(0),
+        row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
@@ -533,7 +625,9 @@ class row_hasher {
       thrust::make_counting_iterator(_table.num_columns()),
       hasher,
       initial_hash,
-      hash_combiner);
+      [](hash_value_type lhs, hash_value_type rhs) {
+        return cudf::detail::hash_combine(lhs, rhs);
+      });
   }
 
  private:

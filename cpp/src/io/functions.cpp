@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/orc/orc.h>
+#include <io/orc/orc.hpp>
 
 namespace cudf {
 namespace io {
@@ -155,7 +156,7 @@ table_with_metadata read_avro(avro_reader_options const& options,
 
   CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
-  return avro::read_avro(std::move(datasources[0]), options, rmm::cuda_stream_default, mr);
+  return avro::read_avro(std::move(datasources[0]), options, cudf::default_stream_value, mr);
 }
 
 compression_type infer_compression_type(compression_type compression, source_info const& info)
@@ -197,7 +198,7 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  return detail::json::read_json(datasources, options, rmm::cuda_stream_default, mr);
+  return detail::json::read_json(datasources, options, cudf::default_stream_value, mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
@@ -215,7 +216,7 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
   return cudf::io::detail::csv::read_csv(  //
     std::move(datasources[0]),
     options,
-    rmm::cuda_stream_default,
+    cudf::default_stream_value,
     mr);
 }
 
@@ -232,7 +233,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
     options.get_table(),
     options.get_metadata(),
     options,
-    rmm::cuda_stream_default,
+    cudf::default_stream_value,
     mr);
 }
 
@@ -240,6 +241,7 @@ namespace detail_orc = cudf::io::detail::orc;
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
+  auto stream = cudf::default_stream_value;
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
   if (src_info.type() == io_type::FILEPATH) {
@@ -256,7 +258,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata metadata(source.get());
+  orc::metadata metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;
@@ -344,7 +346,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 
   auto datasources = make_datasources(options.get_source());
   auto reader      = std::make_unique<detail_orc::reader>(
-    std::move(datasources), options, rmm::cuda_stream_default, mr);
+    std::move(datasources), options, cudf::default_stream_value, mr);
 
   return reader->read(options);
 }
@@ -362,7 +364,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::default_stream_value, mr);
 
   writer->write(options.get_table());
 }
@@ -379,7 +381,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::default_stream_value, mr);
 }
 
 /**
@@ -413,7 +415,8 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_parquet::reader>(std::move(datasources), options, mr);
+  auto reader      = std::make_unique<detail_parquet::reader>(
+    std::move(datasources), options, cudf::default_stream_value, mr);
 
   return reader->read(options);
 }
@@ -454,7 +457,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::default_stream_value, mr);
 
   writer->write(options.get_table(), options.get_partitions());
 
@@ -472,7 +475,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::default_stream_value, mr);
 }
 
 /**

@@ -2,4 +2,10 @@
 coverage:
   status:
     project: off
-    patch: off
+    patch: on
+      default:
+        target: auto
+        threshold: 0%
+
+github_checks:
+    annotations: true

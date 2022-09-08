@@ -88,13 +88,13 @@ class cufile_shim {
 void cufile_shim::modify_cufile_json() const
 {
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-  temp_directory tmp_config_dir{"cudf_cufile_config"};
+  static temp_directory tmp_config_dir{"cudf_cufile_config"};
 
   // Modify the config file based on the policy
   auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
   std::ifstream user_config_file(config_file_path);
   // Modified config file is stored in a temporary directory
-  auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
+  auto const cudf_config_path = tmp_config_dir.path() + "cufile.json";
   std::ofstream cudf_config_file(cudf_config_path);
 
   std::string line;
@@ -176,16 +176,6 @@ cufile_input_impl::cufile_input_impl(std::string const& filepath)
   pool.sleep_duration = 10;
 }
 
-std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
-                                                            size_t size,
-                                                            rmm::cuda_stream_view stream)
-{
-  rmm::device_buffer out_data(size, stream);
-  auto read_size = read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
-  out_data.resize(read_size, stream);
-  return datasource::buffer::create(std::move(out_data));
-}
-
 namespace {
 
 template <typename DataT,
@@ -234,25 +224,11 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
-size_t cufile_input_impl::read(size_t offset,
-                               size_t size,
-                               uint8_t* dst,
-                               rmm::cuda_stream_view stream)
-{
-  auto result = read_async(offset, size, dst, stream);
-  return result.get();
-}
-
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664),
     pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
-}
-
-void cufile_output_impl::write(void const* data, size_t offset, size_t size)
-{
-  write_async(data, offset, size).wait();
 }
 
 std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,27 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <benchmark/benchmark.h>
-
-#include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/sequence.h>
-#include <thrust/transform.h>
-
-#include <memory>
+#include <cudf/utilities/default_stream.hpp>
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value                             = 0,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto s = new ScalarType(value, true, stream, mr);
@@ -64,15 +55,12 @@ static void BM_shift(benchmark::State& state)
 {
   cudf::size_type size   = state.range(0);
   cudf::size_type offset = size * (static_cast<double>(shift_factor) / 100.0);
-  auto idx_begin         = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto idx_end           = thrust::make_counting_iterator<cudf::size_type>(size);
 
-  auto input = use_validity
-                 ? cudf::test::fixed_width_column_wrapper<int>(
-                     idx_begin,
-                     idx_end,
-                     thrust::make_transform_iterator(idx_begin, [](auto idx) { return true; }))
-                 : cudf::test::fixed_width_column_wrapper<int>(idx_begin, idx_end);
+  auto const input_table =
+    create_sequence_table({cudf::type_to_id<int>()},
+                          row_count{size},
+                          use_validity ? std::optional<double>{1.0} : std::nullopt);
+  cudf::column_view input{input_table->get_column(0)};
 
   auto fill = use_validity ? make_scalar<int>() : make_scalar<int>(777);
 

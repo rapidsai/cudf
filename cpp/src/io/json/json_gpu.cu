@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-#include "json_gpu.h"
+#include "json_gpu.hpp"
 
-#include <io/csv/datetime.cuh>
 #include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/lists/list_view.cuh>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
@@ -36,8 +33,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/detail/copy.h>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
+#include <thrust/generate.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/mismatch.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 using cudf::device_span;
 
@@ -97,179 +101,6 @@ __device__ std::pair<char const*, char const*> get_next_key(char const* begin,
 
   return {key_begin, key_end_pair.second};
 }
-
-/**
- * @brief Decodes a numeric value base on templated cudf type T with specified
- * base.
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed numeric value
- */
-template <typename T, int base>
-__inline__ __device__ T decode_value(const char* begin,
-                                     uint64_t end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T, base>(begin, end, opts);
-}
-
-/**
- * @brief Decodes a numeric value base on templated cudf type T
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed numeric value
- */
-template <typename T,
-          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(const char* begin,
-                                     const char* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T>(begin, end, opts);
-}
-
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return to_timestamp<T>(begin, end, opts.dayfirst);
-}
-
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
-{
-  return to_duration<T>(begin, end);
-}
-
-// The purpose of these is merely to allow compilation ONLY
-template <>
-__inline__ __device__ cudf::string_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::string_view{};
-}
-
-template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return cudf::dictionary32{};
-}
-
-template <>
-__inline__ __device__ cudf::list_view decode_value(const char*,
-                                                   const char*,
-                                                   parse_options_view const&)
-{
-  return cudf::list_view{};
-}
-template <>
-__inline__ __device__ cudf::struct_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::struct_view{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal32{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal64{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal128 decode_value(const char*,
-                                                       const char*,
-                                                       parse_options_view const&)
-{
-  return numeric::decimal128{};
-}
-
-/**
- * @brief Functor for converting plain text data to cuDF data type value.
- */
-struct ConvertFunctor {
-  /**
-   * @brief Template specialization for operator() for types whose values can be
-   * convertible to a 0 or 1 to represent false/true. The converting is done by
-   * checking against the default and user-specified true/false values list.
-   *
-   * It is handled here rather than within convertStrToValue() as that function
-   * is used by other types (ex. timestamp) that aren't 'booleable'.
-   */
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* output_column,
-                                                      cudf::size_type row,
-                                                      const parse_options_view& opts)
-  {
-    T& value{static_cast<T*>(output_column)[row]};
-
-    value = [&opts, end, begin]() -> T {
-      // Check for user-specified true/false values
-      auto const len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, len})) { return 1; }
-      if (serialized_trie_contains(opts.trie_false, {begin, len})) { return 0; }
-      return decode_value<T>(begin, end, opts);
-    }();
-
-    return true;
-  }
-
-  /**
-   * @brief Dispatch for floating points, which are set to NaN if the input
-   * is not valid. In such case, the validity mask is set to zero too.
-   */
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      parse_options_view const& opts)
-  {
-    T const value                    = decode_value<T>(begin, end, opts);
-    static_cast<T*>(out_buffer)[row] = value;
-
-    return !std::isnan(value);
-  }
-
-  /**
-   * @brief Default template operator() dispatch specialization all data types
-   * (including wrapper types) that is not covered by above.
-   */
-  template <typename T,
-            std::enable_if_t<!std::is_floating_point_v<T> and !std::is_integral_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* output_column,
-                                                      cudf::size_type row,
-                                                      const parse_options_view& opts)
-  {
-    static_cast<T*>(output_column)[row] = decode_value<T>(begin, end, opts);
-
-    return true;
-  }
-};
 
 /**
  * @brief Returns true is the input character is a valid digit.
@@ -350,7 +181,7 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
       ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts, true)}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
-          auto const key_hash  = MurmurHash3_32<cudf::string_view>{}(
+          auto const key_hash  = cudf::detail::MurmurHash3_32<cudf::string_view>{}(
             cudf::string_view(key_range.first, key_range.second - key_range.first));
           auto const hash_col = col_map.find(key_hash);
           // Fall back to field index if not found (parsing error)
@@ -373,10 +204,8 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
  *
  * Excludes the top-level brackets.
  *
- * @param[in] data Pointer to the JSON data in device memory
- * @param[in] data_size Size of the data buffer, in bytes
- * @param[in] rec_starts The offset of each row in the input
- * @param[in] num_rows The number of lines/rows
+ * @param[in] data Device span pointing to the JSON data in device memory
+ * @param[in] row_offsets The offset of each row in the input
  * @param[in] row Index of the row for which the range is returned
  *
  * @return The begin and end iterators of the row data.
@@ -449,7 +278,9 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
                                   desc.value_end,
                                   output_columns[desc.column],
                                   rec_id,
-                                  opts)) {
+                                  column_types[desc.column],
+                                  opts,
+                                  false)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[desc.column], rec_id);
           atomicAdd(&num_valid_fields[desc.column], 1);
@@ -661,7 +492,8 @@ __global__ void collect_keys_info_kernel(parse_options_view const options,
       keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data.begin();
       keys_info->column(1).element<uint16_t>(idx) = len;
       keys_info->column(2).element<uint32_t>(idx) =
-        MurmurHash3_32<cudf::string_view>{}(cudf::string_view(field_range.key_begin, len));
+        cudf::detail::MurmurHash3_32<cudf::string_view>{}(
+          cudf::string_view(field_range.key_begin, len));
     }
   }
 }
@@ -683,7 +515,7 @@ void convert_json_to_columns(parse_options_view const& opts,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
+  CUDF_CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
     &min_grid_size, &block_size, convert_data_to_columns_kernel));
 
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
@@ -697,7 +529,7 @@ void convert_json_to_columns(parse_options_view const& opts,
                                                                                valid_fields,
                                                                                num_valid_fields);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 /**
@@ -715,7 +547,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
   auto d_column_infos = [&]() {
@@ -757,7 +589,7 @@ void collect_keys_info(parse_options_view const& options,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, collect_keys_info_kernel));
 
   // Calculate actual block count to use based on records count
@@ -766,7 +598,7 @@ void collect_keys_info(parse_options_view const& options,
   collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 }  // namespace gpu

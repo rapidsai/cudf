@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,13 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 #include <vector>
@@ -57,6 +61,37 @@ std::unique_ptr<table> quantiles(table_view const& input,
                         mr);
 }
 
+std::unique_ptr<table> quantiles(table_view const& input,
+                                 std::vector<double> const& q,
+                                 interpolation interp,
+                                 cudf::sorted is_input_sorted,
+                                 std::vector<order> const& column_order,
+                                 std::vector<null_order> const& null_precedence,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  if (q.empty()) { return empty_like(input); }
+
+  CUDF_EXPECTS(interp == interpolation::HIGHER || interp == interpolation::LOWER ||
+                 interp == interpolation::NEAREST,
+               "multi-column quantiles require a non-arithmetic interpolation strategy.");
+
+  CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
+
+  if (is_input_sorted == sorted::YES) {
+    return detail::quantiles(input,
+                             thrust::make_counting_iterator<size_type>(0),
+                             q,
+                             interp,
+                             cudf::default_stream_value,
+                             mr);
+  } else {
+    auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
+    return detail::quantiles(
+      input, sorted_idx->view().data<size_type>(), q, interp, cudf::default_stream_value, mr);
+  }
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> quantiles(table_view const& input,
@@ -68,22 +103,14 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  if (q.empty()) { return empty_like(input); }
-
-  CUDF_EXPECTS(interp == interpolation::HIGHER || interp == interpolation::LOWER ||
-                 interp == interpolation::NEAREST,
-               "multi-column quantiles require a non-arithmetic interpolation strategy.");
-
-  CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
-
-  if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(
-      input, thrust::make_counting_iterator<size_type>(0), q, interp, rmm::cuda_stream_default, mr);
-  } else {
-    auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
-    return detail::quantiles(
-      input, sorted_idx->view().data<size_type>(), q, interp, rmm::cuda_stream_default, mr);
-  }
+  return detail::quantiles(input,
+                           q,
+                           interp,
+                           is_input_sorted,
+                           column_order,
+                           null_precedence,
+                           cudf::default_stream_value,
+                           mr);
 }
 
 }  // namespace cudf

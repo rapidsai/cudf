@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import copy
 import json
@@ -53,7 +53,7 @@ class IOFuzz:
                         "_crash.json"
                     ):
                         self._load_params(file_name)
-        self._regression = True if self._inputs else False
+        self._regression = bool(self._inputs)
         self._idx = 0
         self._current_params = {}
         self._current_buffer = None

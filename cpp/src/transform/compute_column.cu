@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -67,12 +68,13 @@ __launch_bounds__(max_block_size) __global__
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-  auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
+  auto const start_idx =
+    static_cast<cudf::thread_index_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  auto const stride = static_cast<cudf::thread_index_type>(blockDim.x * gridDim.x);
   auto evaluator =
     cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 
-  for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
+  for (thread_index_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
     evaluator.evaluate(output_dest, row_index, thread_intermediate_storage);
   }
@@ -101,9 +103,9 @@ std::unique_ptr<column> compute_column(table_view const& table,
   // Configure kernel parameters
   auto const& device_expression_data = parser.device_expression_data;
   int device_id;
-  CUDA_TRY(cudaGetDevice(&device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
@@ -124,7 +126,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   }
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return output_column;
 }
 
@@ -135,7 +137,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, rmm::cuda_stream_default, mr);
+  return detail::compute_column(table, expr, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

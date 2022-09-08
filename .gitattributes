@@ -1,2 +1,4 @@
 python/cudf/cudf/_version.py export-subst
-CHANGELOG.md merge=union
+python/cudf_kafka/cudf_kafka/_version.py export-subst
+python/custreamz/custreamz/_version.py export-subst
+python/dask_cudf/dask_cudf/_version.py export-subst

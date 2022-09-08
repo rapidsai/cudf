@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -32,9 +33,13 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <vector>
 
 namespace cudf {
@@ -56,7 +61,7 @@ namespace detail {
 template <int block_size, typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
                                      device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const*> source,
+                                     device_span<bitmask_type const* const> source,
                                      device_span<size_type const> source_begin_bits,
                                      size_type source_size_bits,
                                      size_type* count_ptr)
@@ -103,7 +108,7 @@ __global__ void offset_bitmask_binop(Binop op,
 }
 
 /**
- * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const *> const, host_span<size_type>
+ * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const* const>, host_span<size_type>
  * const, size_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -111,7 +116,7 @@ __global__ void offset_bitmask_binop(Binop op,
 template <typename Binop>
 std::pair<rmm::device_buffer, size_type> bitmask_binop(
   Binop op,
-  host_span<bitmask_type const*> masks,
+  host_span<bitmask_type const* const> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
@@ -126,10 +131,9 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
                           masks,
                           masks_begin_bits,
                           mask_size_bits,
-                          stream,
-                          mr);
+                          stream);
 
-  return std::make_pair(std::move(dest_mask), null_count);
+  return std::pair(std::move(dest_mask), null_count);
 }
 
 /**
@@ -142,18 +146,15 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
  * @param[in] masks_begin_bits The bit offsets from which each mask is to be merged
  * @param[in] mask_size_bits The number of bits to be ANDed in each mask
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned device_buffer
  * @return size_type Count of set bits
  */
 template <typename Binop>
-size_type inplace_bitmask_binop(
-  Binop op,
-  device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const*> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+size_type inplace_bitmask_binop(Binop op,
+                                device_span<bitmask_type> dest_mask,
+                                host_span<bitmask_type const* const> masks,
+                                host_span<size_type const> masks_begin_bits,
+                                size_type mask_size_bits,
+                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
@@ -162,24 +163,25 @@ size_type inplace_bitmask_binop(
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<size_type> d_counter{0, stream, mr};
   rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice, stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
-                           masks_begin_bits.data(),
-                           masks_begin_bits.size_bytes(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
+                                masks_begin_bits.data(),
+                                masks_begin_bits.size_bytes(),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
 
   auto constexpr block_size = 256;
   cudf::detail::grid_1d config(dest_mask.size(), block_size);
   offset_bitmask_binop<block_size>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       op, dest_mask, d_masks, d_begin_bits, mask_size_bits, d_counter.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return d_counter.value(stream);
 }
 
@@ -279,7 +281,8 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                     OffsetIterator first_bit_indices_end,
                                                     OffsetIterator last_bit_indices_begin,
                                                     count_bits_policy count_bits,
-                                                    rmm::cuda_stream_view stream)
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   auto const num_ranges =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
@@ -293,27 +296,25 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 
   // Allocate temporary memory.
   size_t temp_storage_bytes{0};
-  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
-                                           temp_storage_bytes,
-                                           num_set_bits_in_word,
-                                           d_bit_counts.begin(),
-                                           num_ranges,
-                                           first_word_indices,
-                                           last_word_indices,
-                                           stream.value()));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
+                                                temp_storage_bytes,
+                                                num_set_bits_in_word,
+                                                d_bit_counts.begin(),
+                                                num_ranges,
+                                                first_word_indices,
+                                                last_word_indices,
+                                                stream.value()));
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
   // Perform segmented reduction.
-  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
-                                           temp_storage_bytes,
-                                           num_set_bits_in_word,
-                                           d_bit_counts.begin(),
-                                           num_ranges,
-                                           first_word_indices,
-                                           last_word_indices,
-                                           stream.value()));
-
-  CHECK_CUDA(stream.value());
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
+                                                temp_storage_bytes,
+                                                num_set_bits_in_word,
+                                                d_bit_counts.begin(),
+                                                num_ranges,
+                                                first_word_indices,
+                                                last_word_indices,
+                                                stream.value()));
 
   // Adjust counts in segment boundaries (if segments are not word-aligned).
   constexpr size_type block_size{256};
@@ -329,14 +330,15 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     // set bits from the length of the segment.
     auto segments_begin =
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-    auto segments_size = thrust::transform_iterator(segments_begin, [] __device__(auto segment) {
-      auto const begin = thrust::get<0>(segment);
-      auto const end   = thrust::get<1>(segment);
-      return end - begin;
-    });
+    auto segment_length_iterator =
+      thrust::transform_iterator(segments_begin, [] __device__(auto const& segment) {
+        auto const begin = thrust::get<0>(segment);
+        auto const end   = thrust::get<1>(segment);
+        return end - begin;
+      });
     thrust::transform(rmm::exec_policy(stream),
-                      segments_size,
-                      segments_size + num_ranges,
+                      segment_length_iterator,
+                      segment_length_iterator + num_ranges,
                       d_bit_counts.data(),
                       d_bit_counts.data(),
                       [] __device__(auto segment_size, auto segment_bit_count) {
@@ -344,7 +346,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                       });
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return d_bit_counts;
 }
 
@@ -438,7 +440,8 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        first_bit_indices_end,
                                        last_bit_indices_begin,
                                        count_bits,
-                                       stream);
+                                       stream,
+                                       rmm::mr::get_current_device_resource());
 
   // Copy the results back to the host.
   return make_std_vector_sync(d_bit_counts, stream);
@@ -499,6 +502,87 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
     return std::vector<size_type>(num_segments, 0);
   }
   return detail::segmented_count_unset_bits(bitmask, indices_begin, indices_end, stream);
+}
+
+/**
+ * @brief Create an output null mask whose validity is determined by the
+ * validity of any/all elements of segments of an input null mask.
+ *
+ * @tparam OffsetIterator Random-access input iterator type.
+ * @param bitmask Null mask residing in device memory whose segments will be reduced into a new
+ * mask.
+ * @param first_bit_indices_begin Random-access input iterator to the beginning of a sequence of
+ * indices of the first bit in each segment (inclusive).
+ * @param first_bit_indices_end Random-access input iterator to the end of a sequence of indices of
+ * the first bit in each segment (inclusive).
+ * @param last_bit_indices_begin Random-access input iterator to the beginning of a sequence of
+ * indices of the last bit in each segment (exclusive).
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduction is valid if any element in
+ * the segment is valid.
+ * @param valid_initial_value Indicates whether a valid initial value was provided to the reduction.
+ * True indicates a valid initial value, false indicates a null initial value, and null indicates no
+ * initial value was provided.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned buffer's device memory.
+ * @return A pair containing the reduced null mask and number of nulls.
+ */
+template <typename OffsetIterator>
+std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
+  bitmask_type const* bitmask,
+  OffsetIterator first_bit_indices_begin,
+  OffsetIterator first_bit_indices_end,
+  OffsetIterator last_bit_indices_begin,
+  null_policy null_handling,
+  std::optional<bool> valid_initial_value,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto const segments_begin =
+    thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
+  auto const segment_length_iterator =
+    thrust::make_transform_iterator(segments_begin, [] __device__(auto const& segment) {
+      auto const begin = thrust::get<0>(segment);
+      auto const end   = thrust::get<1>(segment);
+      return end - begin;
+    });
+
+  auto const num_segments =
+    static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
+
+  if (bitmask == nullptr) {
+    return cudf::detail::valid_if(
+      segment_length_iterator,
+      segment_length_iterator + num_segments,
+      [valid_initial_value] __device__(auto const& length) {
+        return valid_initial_value.value_or(length > 0);
+      },
+      stream,
+      mr);
+  }
+
+  auto const segment_valid_counts =
+    cudf::detail::segmented_count_bits(bitmask,
+                                       first_bit_indices_begin,
+                                       first_bit_indices_end,
+                                       last_bit_indices_begin,
+                                       cudf::detail::count_bits_policy::SET_BITS,
+                                       stream,
+                                       rmm::mr::get_current_device_resource());
+  auto const length_and_valid_count =
+    thrust::make_zip_iterator(segment_length_iterator, segment_valid_counts.begin());
+  return cudf::detail::valid_if(
+    length_and_valid_count,
+    length_and_valid_count + num_segments,
+    [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
+      auto const length      = thrust::get<0>(length_and_valid_count);
+      auto const valid_count = thrust::get<1>(length_and_valid_count);
+      return (null_handling == null_policy::EXCLUDE)
+               ? (valid_initial_value.value_or(false) || valid_count > 0)
+               : (valid_initial_value.value_or(length > 0) && valid_count == length);
+    },
+    stream,
+    mr);
 }
 
 }  // namespace detail

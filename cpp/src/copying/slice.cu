@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,12 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 
@@ -111,25 +114,25 @@ std::vector<table_view> slice(table_view const& input,
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default);
+  return detail::slice(input, indices, cudf::default_stream_value);
 }
 
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default);
+  return detail::slice(input, indices, cudf::default_stream_value);
 };
 
 std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default);
+  return detail::slice(input, indices, cudf::default_stream_value);
 }
 
 std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default);
+  return detail::slice(input, indices, cudf::default_stream_value);
 };
 
 }  // namespace cudf

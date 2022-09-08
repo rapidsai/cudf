@@ -3,8 +3,7 @@
 
 from __future__ import annotations
 
-from numbers import Number
-from typing import Sequence, Union
+from typing import cast
 
 import numpy as np
 
@@ -12,9 +11,11 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
+from cudf.core.missing import NA
+from cudf.core.mixins import Scannable
 
 
-class NumericalBaseColumn(ColumnBase):
+class NumericalBaseColumn(ColumnBase, Scannable):
     """A column composed of numerical data.
 
     This class encodes a standard interface for different types of columns
@@ -30,6 +31,13 @@ class NumericalBaseColumn(ColumnBase):
         "mean",
         "var",
         "std",
+    }
+
+    _VALID_SCANS = {
+        "cumsum",
+        "cumprod",
+        "cummin",
+        "cummax",
     }
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
@@ -55,7 +63,7 @@ class NumericalBaseColumn(ColumnBase):
             return 0
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4_numerator / (V ** 2)
+        term_one_section_two = m4_numerator / (V**2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
@@ -84,22 +92,33 @@ class NumericalBaseColumn(ColumnBase):
         return skew
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> NumericalBaseColumn:
-        if isinstance(q, Number) or cudf.api.types.is_list_like(q):
-            np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all be in the interval [0, 1]"
-                )
+        if np.logical_or(q < 0, q > 1).any():
+            raise ValueError(
+                "percentiles should all be in the interval [0, 1]"
+            )
         # Beyond this point, q either being scalar or list-like
         # will only have values in range [0, 1]
-        result = self._numeric_quantile(q, interpolation, exact)
-        if isinstance(q, Number):
+        if len(self) == 0:
+            result = cast(
+                NumericalBaseColumn,
+                cudf.core.column.column_empty(
+                    row_count=len(q), dtype=self.dtype, masked=True
+                ),
+            )
+        else:
+            result = self._numeric_quantile(q, interpolation, exact)
+        if return_scalar:
+            scalar_result = result.element_indexing(0)
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result[0] is cudf.NA
-                else result[0]
+                if scalar_result is NA
+                else scalar_result
             )
         return result
 
@@ -129,20 +148,26 @@ class NumericalBaseColumn(ColumnBase):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
+        return self.quantile(
+            np.array([0.5]),
+            interpolation="linear",
+            exact=True,
+            return_scalar=True,
+        )
 
     def _numeric_quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: np.ndarray, interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
-        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=True, na_position="first"
         )
-        sorted_indices = sorted_indices[self.null_count :]
+        sorted_indices = sorted_indices.slice(
+            self.null_count, len(sorted_indices)
+        )
 
         return libcudf.quantiles.quantile(
-            self, quant, interpolation, sorted_indices, exact
+            self, q, interpolation, sorted_indices, exact
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:
@@ -174,7 +199,7 @@ class NumericalBaseColumn(ColumnBase):
         """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 
-    def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)._with_type_metadata(
-            self.dtype
-        )
+    def _scan(self, op: str) -> ColumnBase:
+        return libcudf.reduce.scan(
+            op.replace("cum", ""), self, True
+        )._with_type_metadata(self.dtype)

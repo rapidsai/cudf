@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -26,6 +26,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -34,6 +35,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
@@ -174,8 +176,8 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
   std::unique_ptr<cudf::scalar> repl =
-    cudf::make_string_scalar("rep", rmm::cuda_stream_default, mr());
-  repl->set_valid_async(true, rmm::cuda_stream_default);
+    cudf::make_string_scalar("rep", cudf::default_stream_value, mr());
+  repl->set_valid_async(true, cudf::default_stream_value);
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
   cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};

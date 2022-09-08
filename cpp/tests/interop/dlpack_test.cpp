@@ -22,6 +22,8 @@
 
 #include <dlpack/dlpack.h>
 
+#include <thrust/host_vector.h>
+
 using namespace cudf::test;
 
 struct dlpack_deleter {
@@ -65,6 +67,7 @@ class DLPackUntypedTests : public BaseFixture {
 TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
 {
   cudf::table_view empty(std::vector<cudf::column_view>{});
+  // No type information to construct a correct empty dlpack object
   EXPECT_EQ(nullptr, cudf::to_dlpack(empty));
 }
 
@@ -73,7 +76,18 @@ TEST_F(DLPackUntypedTests, EmptyColsToDlpack)
   fixed_width_column_wrapper<int32_t> col1({});
   fixed_width_column_wrapper<int32_t> col2({});
   cudf::table_view input({col1, col2});
-  EXPECT_EQ(nullptr, cudf::to_dlpack(input));
+  unique_managed_tensor tensor(cudf::to_dlpack(input));
+  validate_dtype<int32_t>(tensor->dl_tensor.dtype);
+  EXPECT_NE(nullptr, tensor);
+  EXPECT_EQ(nullptr, tensor->dl_tensor.data);
+  EXPECT_EQ(2, tensor->dl_tensor.ndim);
+  EXPECT_EQ(0, tensor->dl_tensor.strides[0]);
+  EXPECT_EQ(0, tensor->dl_tensor.strides[1]);
+  EXPECT_EQ(0, tensor->dl_tensor.shape[0]);
+  EXPECT_EQ(2, tensor->dl_tensor.shape[1]);
+  EXPECT_EQ(kDLCUDA, tensor->dl_tensor.device.device_type);
+  auto result = cudf::from_dlpack(tensor.get());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
 
 TEST_F(DLPackUntypedTests, NullTensorFromDlpack)
@@ -204,6 +218,120 @@ TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack)
   // Spoof an unsupported number of lanes
   tensor->dl_tensor.dtype.lanes = 2;
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedBroadcast1DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 1;
+  // Broadcasted (stride-0) 1D tensor
+  auto const data       = cudf::test::make_type_param_vector<T>({1});
+  int64_t shape[ndim]   = {5};
+  int64_t strides[ndim] = {0};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedStrided1DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 1;
+  // Strided 1D tensor
+  auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  int64_t shape[ndim]   = {2};
+  int64_t strides[ndim] = {2};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedImplicitRowMajor2DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 2;
+  // Row major 2D tensor
+  auto const data     = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  int64_t shape[ndim] = {2, 2};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = nullptr;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedExplicitRowMajor2DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 2;
+  // Row major 2D tensor with explicit strides
+  auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  int64_t shape[ndim]   = {2, 2};
+  int64_t strides[ndim] = {2, 1};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
+}
+
+TEST_F(DLPackUntypedTests, UnsupportedStridedColMajor2DTensorFromDlpack)
+{
+  using T            = float;
+  constexpr int ndim = 2;
+  // Column major, but strided in fastest dimension
+  auto const data       = cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6, 7, 8});
+  int64_t shape[ndim]   = {2, 2};
+  int64_t strides[ndim] = {2, 4};
+
+  DLManagedTensor tensor{};
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = ndim;
+  tensor.dl_tensor.byte_offset        = 0;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data = host_vector.data();
+
+  EXPECT_THROW(cudf::from_dlpack(&tensor), cudf::logic_error);
 }
 
 template <typename T>
@@ -365,6 +493,6 @@ TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
   cudf::table_view input(std::vector<cudf::column_view>{});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
-  // Verify that from_dlpack(to_dlpack(input)) == input
+  EXPECT_EQ(nullptr, tensor.get());
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }

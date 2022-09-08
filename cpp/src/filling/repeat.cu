@@ -26,6 +26,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -34,10 +35,13 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 
 #include <limits>
 #include <memory>
@@ -162,7 +166,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, check_count, rmm::cuda_stream_default, mr);
+  return detail::repeat(input_table, count, check_count, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -170,7 +174,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, rmm::cuda_stream_default, mr);
+  return detail::repeat(input_table, count, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

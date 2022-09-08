@@ -83,7 +83,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
-  groupby/lists_tests.cpp
+  groupby/lists_tests.cu
   groupby/m2_tests.cpp
   groupby/min_tests.cpp
   groupby/max_scan_tests.cpp
@@ -138,7 +138,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu hash_map/multimap_test.cu)
+ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
@@ -150,7 +150,14 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
+  REDUCTION_TEST
+  reductions/collect_ops_tests.cpp
+  reductions/rank_tests.cpp
+  reductions/reduction_tests.cpp
+  reductions/scan_tests.cpp
+  reductions/segmented_reduction_tests.cpp
+  reductions/list_rank_test.cpp
+  reductions/tdigest_tests.cu
 )
 
 # ##################################################################################################
@@ -215,15 +222,23 @@ ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
+ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
+ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
+ConfigureTest(FST_TEST io/fst/fst_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
-ConfigureTest(SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/rank_test.cpp)
+ConfigureTest(
+  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/stable_sort_tests.cpp
+  sort/rank_test.cpp
+)
 
 # ##################################################################################################
 # * copying tests ---------------------------------------------------------------------------------
@@ -240,6 +255,7 @@ ConfigureTest(
   copying/gather_tests.cpp
   copying/get_value_tests.cpp
   copying/pack_tests.cpp
+  copying/purge_nonempty_nulls_tests.cpp
   copying/sample_tests.cpp
   copying/scatter_tests.cpp
   copying/scatter_list_tests.cpp
@@ -299,6 +315,7 @@ ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
 )
 
 # ##################################################################################################
@@ -313,9 +330,11 @@ ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/distinct_count_tests.cpp
+  stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
-  stream_compaction/drop_duplicates_tests.cpp
+  stream_compaction/unique_count_tests.cpp
+  stream_compaction/unique_tests.cpp
 )
 
 # ##################################################################################################
@@ -326,6 +345,7 @@ ConfigureTest(
   rolling/empty_input_test.cpp
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
+  rolling/nth_element_test.cpp
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp
@@ -340,8 +360,8 @@ ConfigureTest(
 # ##################################################################################################
 # * search test -----------------------------------------------------------------------------------
 ConfigureTest(
-  SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
-  search/search_test.cpp
+  SEARCH_TEST search/search_dictionary_test.cpp search/search_list_test.cpp
+  search/search_struct_test.cpp search/search_test.cpp
 )
 
 # ##################################################################################################
@@ -391,6 +411,7 @@ ConfigureTest(
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp
+  strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
   strings/replace_regex_tests.cpp
@@ -410,6 +431,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
+  text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -460,11 +482,16 @@ ConfigureTest(
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
   lists/count_elements_tests.cpp
-  lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
+  lists/set_operations/difference_distinct_tests.cpp
+  lists/set_operations/have_overlap_tests.cpp
+  lists/set_operations/intersect_distinct_tests.cpp
+  lists/set_operations/union_distinct_tests.cpp
   lists/sort_lists_tests.cpp
+  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/distinct_tests.cpp
 )
 
 # ##################################################################################################

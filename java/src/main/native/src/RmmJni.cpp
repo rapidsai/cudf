@@ -356,8 +356,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     } else if (use_cuda_async_alloc) {
       // Use `limiting_resource_adaptor` to set a hard limit on the max pool size since
       // `cuda_async_memory_resource` only has a release threshold.
+      auto const alignment = 512; // Async allocator aligns to 512.
       Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::limiting_resource_adaptor>(
-          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, pool_size), pool_size);
+          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, pool_size), pool_size,
+          alignment);
     } else if (use_managed_mem) {
       Initialized_resource = std::make_shared<rmm::mr::managed_memory_resource>();
     } else {

@@ -34,6 +34,7 @@
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <cmath>
@@ -118,52 +119,19 @@ struct has_nans {
     return false;
   }
 };
-
-/**
- * @brief A functor to be used along with device type_dispatcher to check if
- * the row `index` of `column_device_view` is `NaN`.
- */
-struct check_nan {
-  // Check if it's `NaN` for floating point type columns
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  __device__ inline bool operator()(column_device_view const& input, size_type index)
-  {
-    return std::isnan(input.data<T>()[index]);
-  }
-  // Non-floating point type columns can never have `NaN`, so it will always return false.
-  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
-  __device__ inline bool operator()(column_device_view const&, size_type)
-  {
-    return false;
-  }
-};
 }  // namespace
 
 cudf::size_type distinct_count(table_view const& keys,
                                null_equality nulls_equal,
                                rmm::cuda_stream_view stream)
 {
-  auto table_ptr = cudf::table_device_view::create(keys, stream);
-  row_equality_comparator comp(
-    nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr, *table_ptr, nulls_equal);
-  return thrust::count_if(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
-    [comp] __device__(cudf::size_type i) { return (i == 0 or not comp(i, i - 1)); });
-}
-
-cudf::size_type unordered_distinct_count(table_view const& keys,
-                                         null_equality nulls_equal,
-                                         rmm::cuda_stream_view stream)
-{
   auto table_ptr      = cudf::table_device_view::create(keys, stream);
   auto const num_rows = table_ptr->num_rows();
   auto const has_null = nullate::DYNAMIC{cudf::has_nulls(keys)};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
-                        COMPACTION_EMPTY_KEY_SENTINEL,
-                        COMPACTION_EMPTY_VALUE_SENTINEL,
+                        cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                        cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
@@ -191,50 +159,9 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling,
                                rmm::cuda_stream_view stream)
 {
-  auto const num_rows = input.size();
-
-  if (num_rows == 0 or num_rows == input.null_count()) { return 0; }
-
-  auto const count_nulls      = null_handling == null_policy::INCLUDE;
-  auto const nan_is_null      = nan_handling == nan_policy::NAN_IS_NULL;
-  auto const should_check_nan = cudf::is_floating_point(input.type());
-  auto input_device_view      = cudf::column_device_view::create(input, stream);
-  auto device_view            = *input_device_view;
-  auto input_table_view       = table_view{{input}};
-  auto table_ptr              = cudf::table_device_view::create(input_table_view, stream);
-  row_equality_comparator comp(nullate::DYNAMIC{cudf::has_nulls(input_table_view)},
-                               *table_ptr,
-                               *table_ptr,
-                               null_equality::EQUAL);
-
-  return thrust::count_if(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(num_rows),
-    [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {
-      auto const is_null = device_view.is_null(i);
-      auto const is_nan  = nan_is_null and should_check_nan and
-                          cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i);
-      if (not count_nulls and (is_null or (nan_is_null and is_nan))) { return false; }
-      if (i == 0) { return true; }
-      if (count_nulls and nan_is_null and (is_nan or is_null)) {
-        auto const prev_is_nan =
-          should_check_nan and
-          cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1);
-        return not(prev_is_nan or device_view.is_null(i - 1));
-      }
-      return not comp(i, i - 1);
-    });
-}
-
-cudf::size_type unordered_distinct_count(column_view const& input,
-                                         null_policy null_handling,
-                                         nan_policy nan_handling,
-                                         rmm::cuda_stream_view stream)
-{
   if (0 == input.size() or input.null_count() == input.size()) { return 0; }
 
-  auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
+  auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // Check for nulls. If the null policy is EXCLUDE and null values were found,
   // we decrement the count.
@@ -268,19 +195,4 @@ cudf::size_type distinct_count(table_view const& input, null_equality nulls_equa
   CUDF_FUNC_RANGE();
   return detail::distinct_count(input, nulls_equal);
 }
-
-cudf::size_type unordered_distinct_count(column_view const& input,
-                                         null_policy null_handling,
-                                         nan_policy nan_handling)
-{
-  CUDF_FUNC_RANGE();
-  return detail::unordered_distinct_count(input, null_handling, nan_handling);
-}
-
-cudf::size_type unordered_distinct_count(table_view const& input, null_equality nulls_equal)
-{
-  CUDF_FUNC_RANGE();
-  return detail::unordered_distinct_count(input, nulls_equal);
-}
-
 }  // namespace cudf

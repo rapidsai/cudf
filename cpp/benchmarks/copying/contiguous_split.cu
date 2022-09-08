@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf/column/column.hpp>
-
-#include <cudf/copying.hpp>
-
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
+#include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 template <typename T>
 void BM_contiguous_split_common(benchmark::State& state,
@@ -48,15 +47,12 @@ void BM_contiguous_split_common(benchmark::State& state,
                    });
   }
 
-  std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());
-  std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) {
-    auto ret = in.release();
+  for (auto const& col : src_cols)
     // computing the null count is not a part of the benchmark's target code path, and we want the
     // property to be pre-computed so that we measure the performance of only the intended code path
-    [[maybe_unused]] auto const nulls = ret->null_count();
-    return ret;
-  });
-  auto const src_table = cudf::table(std::move(columns));
+    [[maybe_unused]] auto const nulls = col->null_count();
+
+  auto const src_table = cudf::table(std::move(src_cols));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
@@ -81,20 +77,14 @@ void BM_contiguous_split(benchmark::State& state)
   int64_t const num_rows  = total_desired_bytes / (num_cols * el_size);
 
   // generate input table
-  srand(31337);
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  std::vector<cudf::test::fixed_width_column_wrapper<int>> src_cols(num_cols);
-  for (int idx = 0; idx < num_cols; idx++) {
-    auto rand_elements =
-      cudf::detail::make_counting_transform_iterator(0, [](int i) { return rand(); });
-    if (include_validity) {
-      src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(
-        rand_elements, rand_elements + num_rows, valids);
-    } else {
-      src_cols[idx] =
-        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
-    }
-  }
+  auto builder = data_profile_builder().cardinality(0).distribution<int>(cudf::type_id::INT32,
+                                                                         distribution_id::UNIFORM);
+  if (not include_validity) builder.no_validity();
+
+  auto src_cols = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
+                                      row_count{static_cast<cudf::size_type>(num_rows)},
+                                      data_profile{builder})
+                    ->release();
 
   int64_t const total_bytes =
     total_desired_bytes +
@@ -106,12 +96,6 @@ void BM_contiguous_split(benchmark::State& state)
 
 class ContiguousSplitStrings : public cudf::benchmark {
 };
-
-int rand_range(int r)
-{
-  return static_cast<int>((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) *
-                          (float)(r - 1));
-}
 
 void BM_contiguous_split_strings(benchmark::State& state)
 {
@@ -128,22 +112,21 @@ void BM_contiguous_split_strings(benchmark::State& state)
   int64_t const num_rows      = col_len_bytes / string_len;
 
   // generate input table
-  srand(31337);
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
-  std::vector<cudf::test::strings_column_wrapper> src_cols;
-  std::vector<const char*> one_col(num_rows);
+  data_profile profile = data_profile_builder().no_validity().cardinality(0).distribution(
+    cudf::type_id::INT32,
+    distribution_id::UNIFORM,
+    0ul,
+    include_validity ? h_strings.size() * 2 : h_strings.size() - 1);  // out of bounds nullified
+  cudf::test::strings_column_wrapper one_col(h_strings.begin(), h_strings.end());
+  std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);
   for (int64_t idx = 0; idx < num_cols; idx++) {
-    // fill in a random set of strings
-    for (int64_t s_idx = 0; s_idx < num_rows; s_idx++) {
-      one_col[s_idx] = h_strings[rand_range(h_strings.size())];
-    }
-    if (include_validity) {
-      src_cols.push_back(
-        cudf::test::strings_column_wrapper(one_col.begin(), one_col.end(), valids));
-    } else {
-      src_cols.push_back(cudf::test::strings_column_wrapper(one_col.begin(), one_col.end()));
-    }
+    auto random_indices = create_random_column(
+      cudf::type_id::INT32, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
+    auto str_table = cudf::gather(cudf::table_view{{one_col}},
+                                  *random_indices,
+                                  (include_validity ? cudf::out_of_bounds_policy::NULLIFY
+                                                    : cudf::out_of_bounds_policy::DONT_CHECK));
+    src_cols[idx]  = std::move(str_table->release()[0]);
   }
 
   int64_t const total_bytes =

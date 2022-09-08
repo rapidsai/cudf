@@ -1,9 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import warnings
 from typing import Union
-from warnings import warn
 
 import cupy as cp
 
@@ -183,10 +183,10 @@ class SubwordTokenizer:
 
             truncation = False
             warning_msg = (
-                "When truncation is not True, the behaviour currently differs "
+                "When truncation is not True, the behavior currently differs "
                 "from HuggingFace as cudf always returns overflowing tokens"
             )
-            warn(warning_msg)
+            warnings.warn(warning_msg)
 
         if padding != "max_length":
             error_msg = (
@@ -207,7 +207,7 @@ class SubwordTokenizer:
             raise NotImplementedError(error_msg)
 
         stride = max_length - stride
-        # behaviour varies from subword_tokenize but maps with huggingface
+        # behavior varies from subword_tokenize but maps with huggingface
 
         input_ids, attention_mask, metadata = cpp_subword_tokenize(
             text._column,

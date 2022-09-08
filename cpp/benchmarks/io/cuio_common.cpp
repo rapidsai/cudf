@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <benchmarks/io/cuio_common.hpp>
 
+#include <cstdio>
 #include <fstream>
 #include <numeric>
 #include <string>
@@ -140,4 +141,34 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
   }
 
   return selected_segments;
+}
+
+// Executes the command and returns stderr output
+std::string exec_cmd(std::string_view cmd)
+{
+  // Prevent the output from the command from mixing with the original process' output
+  std::fflush(nullptr);
+  // Switch stderr and stdout to only capture stderr
+  auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
+  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
+  CUDF_EXPECTS(pipe != nullptr, "popen() failed");
+
+  std::array<char, 128> buffer;
+  std::string error_out;
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    error_out += buffer.data();
+  }
+  return error_out;
+}
+
+void try_drop_l3_cache()
+{
+  static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
+  if (not is_drop_cache_enabled) { return; }
+
+  std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
+  CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),
+                           drop_cache_cmds.cend(),
+                           [](auto& cmd) { return exec_cmd(cmd).empty(); }),
+               "Failed to execute the drop cache command");
 }

@@ -1,6 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from .reductions import Reducible
 from .binops import BinaryOperand
+from .reductions import Reducible
+from .scans import Scannable
 
-__all__ = ["Reducible", "BinaryOperand"]
+__all__ = ["BinaryOperand", "Reducible", "Scannable"]

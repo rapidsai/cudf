@@ -25,7 +25,7 @@ class ColumnParameters:
     """Parameters for generating column of data
 
     Attributes
-    ---
+    ----------
     cardinality : int or None
         Size of a random set of values that generated data is sampled from.
         The values in the random set are derived from the given generator.
@@ -65,7 +65,7 @@ class Parameters:
     """Parameters for random dataset generation
 
     Attributes
-    ---
+    ----------
     num_rows : int
         Number of rows to generate
     column_parameters : List[ColumnParams]
@@ -75,7 +75,10 @@ class Parameters:
     """
 
     def __init__(
-        self, num_rows=2048, column_parameters=None, seed=None,
+        self,
+        num_rows=2048,
+        column_parameters=None,
+        seed=None,
     ):
         self.num_rows = num_rows
         if column_parameters is None:
@@ -201,7 +204,10 @@ def _generate_column(column_params, num_rows):
 
 
 def generate(
-    path, parameters, format=None, use_threads=True,
+    path,
+    parameters,
+    format=None,
+    use_threads=True,
 ):
     """
     Generate dataset using given parameters and write to given format
@@ -294,7 +300,10 @@ def get_dataframe(parameters, use_threads):
         pool.close()
         pool.join()
     # Convert to Pandas DataFrame and sort columns appropriately
-    tbl = pa.Table.from_arrays(column_data, schema=schema,)
+    tbl = pa.Table.from_arrays(
+        column_data,
+        schema=schema,
+    )
     if columns_to_sort:
         tbl = tbl.to_pandas()
         tbl = tbl.sort_values(columns_to_sort)
@@ -303,7 +312,7 @@ def get_dataframe(parameters, use_threads):
 
 
 def rand_dataframe(
-    dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1), use_threads=True
+    dtypes_meta, rows, seed=random.randint(0, 2**32 - 1), use_threads=True
 ):
     """
     Generates a random table.
@@ -495,7 +504,11 @@ def rand_dataframe(
                         generator=lambda cardinality=cardinality: [
                             mimesis.random.random.schoice(
                                 string.printable,
-                                meta.get("max_string_length", 1000),
+                                np.random.randint(
+                                    low=0,
+                                    high=meta.get("max_string_length", 1000),
+                                    size=1,
+                                )[0],
                             )
                             for _ in range(cardinality)
                         ],
@@ -550,7 +563,11 @@ def rand_dataframe(
             # is merged.
 
     df = get_dataframe(
-        Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
+        Parameters(
+            num_rows=rows,
+            column_parameters=column_params,
+            seed=seed,
+        ),
         use_threads=use_threads,
     )
 
@@ -568,7 +585,10 @@ def int_generator(dtype, size, min_bound=None, max_bound=None):
         low, high = iinfo.min, iinfo.max
 
     return lambda: np.random.randint(
-        low=low, high=high, size=size, dtype=dtype,
+        low=low,
+        high=high,
+        size=size,
+        dtype=dtype,
     )
 
 
@@ -578,12 +598,18 @@ def float_generator(dtype, size, min_bound=None, max_bound=None):
     """
     if min_bound is not None and max_bound is not None:
         low, high = min_bound, max_bound
-        return lambda: np.random.uniform(low=low, high=high, size=size,)
+        return lambda: np.random.uniform(
+            low=low,
+            high=high,
+            size=size,
+        )
     else:
         finfo = np.finfo(dtype)
         return (
             lambda: np.random.uniform(
-                low=finfo.min / 2, high=finfo.max / 2, size=size,
+                low=finfo.min / 2,
+                high=finfo.max / 2,
+                size=size,
             )
             * 2
         )
@@ -632,11 +658,11 @@ def boolean_generator(size):
 
 def decimal_generator(dtype, size):
     max_integral = 10 ** (dtype.precision - dtype.scale) - 1
-    max_float = (10 ** dtype.scale - 1) if dtype.scale != 0 else 0
+    max_float = (10**dtype.scale - 1) if dtype.scale != 0 else 0
     return lambda: (
         np.random.uniform(
             low=-max_integral,
-            high=max_integral + (max_float / 10 ** dtype.scale),
+            high=max_integral + (max_float / 10**dtype.scale),
             size=size,
         )
     )
@@ -658,7 +684,10 @@ def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
         values = float_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind in ("U", "O"):
         values = [
-            mimesis.random.random.schoice(string.printable, 100,)
+            mimesis.random.random.schoice(
+                string.printable,
+                100,
+            )
             for _ in range(cardinality)
         ]
     elif dtype.kind == "M":
@@ -722,7 +751,9 @@ def make_array_for_struct(dtype, cardinality, size, max_null_frequency):
     return pa.array(
         vals,
         mask=np.random.choice(
-            [True, False], size=size, p=[null_frequency, 1 - null_frequency],
+            [True, False],
+            size=size,
+            p=[null_frequency, 1 - null_frequency],
         )
         if null_frequency > 0.0
         else None,

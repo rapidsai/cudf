@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <tests/strings/utilities.h>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -142,16 +144,17 @@ TEST_F(StringsDatetimeTest, ToTimestampTimezone)
                                              "2019-07-17 02:34:56-0300",
                                              "2019-03-20 12:34:56+1030",
                                              "2020-02-29 12:00:00-0500",
+                                             "2022-04-07 09:15:00Z",
                                              "1938-11-23 10:28:49+0700"};
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::to_timestamps(
     strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, "%Y-%m-%d %H:%M:%S%z");
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> expected{
-    131243025, 1563341696, 1553047496, 1582995600, -981664271};
+    131243025, 1563341696, 1553047496, 1582995600, 1649322900, -981664271};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S%z");
-  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 
@@ -178,30 +181,50 @@ TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
 
 TEST_F(StringsDatetimeTest, ToTimestampVariableFractions)
 {
-  cudf::test::strings_column_wrapper strings{"01:02:03.000001000",
-                                             "01:02:03.000001",
-                                             "01:02:03.1",
-                                             "01:02:03.01",
-                                             "01:02:03.0098700",
-                                             "01:02:03.0023456"};
-  auto strings_view = cudf::strings_column_view(strings);
+  cudf::test::strings_column_wrapper test1{"01:02:03.000001000",
+                                           "01:02:03.000001",
+                                           "01:02:03.1",
+                                           "01:02:03.01",
+                                           "01:02:03.0098700",
+                                           "01:02:03.0023456"};
+  auto strings_view = cudf::strings_column_view(test1);
   auto results      = cudf::strings::to_timestamps(
     strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%H:%M:%S.%9f");
   auto durations =
     cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
 
-  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected{
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected1{
     cudf::duration_ns{3723000001000},
     cudf::duration_ns{3723000001000},
     cudf::duration_ns{3723100000000},
     cudf::duration_ns{3723010000000},
     cudf::duration_ns{3723009870000},
     cudf::duration_ns{3723002345600}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected1);
 
   results = cudf::strings::is_timestamp(strings_view, "%H:%M:%S.%f");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results,
                                  cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1});
+
+  cudf::test::strings_column_wrapper test2{"01:02:03.100001Z",
+                                           "01:02:03.001Z",
+                                           "01:02:03.1Z",
+                                           "01:02:03.01Z",
+                                           "01:02:03.0098Z",
+                                           "01:02:03.00234Z"};
+  strings_view = cudf::strings_column_view(test2);
+  results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS}, "%H:%M:%S.%6f%Z");
+  durations = cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_MICROSECONDS});
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_us> expected2{
+    cudf::duration_us{3723100001},
+    cudf::duration_us{3723001000},
+    cudf::duration_us{3723100000},
+    cudf::duration_us{3723010000},
+    cudf::duration_us{3723009800},
+    cudf::duration_us{3723002340}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected2);
 }
 
 TEST_F(StringsDatetimeTest, ToTimestampYear)
@@ -262,11 +285,13 @@ TEST_F(StringsDatetimeTest, IsTimestamp)
                                              "2020-02-30 01:32:03 01AM +0000",
                                              "2020-00-31 01:32:03 1AM +0000",
                                              "2020-02-00 02:32:03 2AM +0000",
+                                             "2022-08-24 02:32:60 2AM +0000",
                                              "2020-2-9 9:12:13 9AM +1111"};
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S %I%p %z");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *results, cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1});
+    *results,
+    cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1});
 }
 
 TEST_F(StringsDatetimeTest, FromTimestamp)
@@ -409,7 +434,7 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfYear)
 cudf::test::strings_column_wrapper format_names({"AM", "PM",
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
   "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-  "January", "February", "March", "April", "May", "June", "July", 
+  "January", "February", "March", "April", "May", "June", "July",
   "August", "September", "October", "November", "December",
   "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
 // clang-format on

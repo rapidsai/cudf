@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,11 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/filling.hpp>
-#include <cudf/null_mask.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-
-#include <random>
-
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
 
 class Repeat : public cudf::benchmark {
 };
@@ -35,46 +26,28 @@ class Repeat : public cudf::benchmark {
 template <class TypeParam, bool nulls>
 void BM_repeat(benchmark::State& state)
 {
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-  auto const n_rows    = static_cast<cudf::size_type>(state.range(0));
-  auto const n_cols    = static_cast<cudf::size_type>(state.range(1));
+  auto const n_rows = static_cast<cudf::size_type>(state.range(0));
+  auto const n_cols = static_cast<cudf::size_type>(state.range(1));
 
-  auto idx_begin = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto idx_end   = thrust::make_counting_iterator<cudf::size_type>(n_rows);
-
-  std::vector<column_wrapper> columns;
-  columns.reserve(n_rows);
-  std::generate_n(std::back_inserter(columns), n_cols, [&]() {
-    return nulls ? column_wrapper(
-                     idx_begin,
-                     idx_end,
-                     thrust::make_transform_iterator(idx_begin, [](auto idx) { return true; }))
-                 : column_wrapper(idx_begin, idx_end);
-  });
+  auto const input_table =
+    create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
+                          row_count{n_rows},
+                          nulls ? std::optional<double>{1.0} : std::nullopt);
+  // Create table view
+  auto input = cudf::table_view(*input_table);
 
   // repeat counts
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 3);
-
-  std::vector<cudf::size_type> host_repeat_count(n_rows);
-  std::generate(
-    host_repeat_count.begin(), host_repeat_count.end(), [&] { return distribution(generator); });
-
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> repeat_count(host_repeat_count.begin(),
-                                                                       host_repeat_count.end());
-
-  // Create column views
-  auto const column_views = std::vector<cudf::column_view>(columns.begin(), columns.end());
-
-  // Create table view
-  auto input = cudf::table_view(column_views);
+  using sizeT                = cudf::size_type;
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    cudf::type_to_id<sizeT>(), distribution_id::UNIFORM, 0, 3);
+  auto repeat_count = create_random_column(cudf::type_to_id<sizeT>(), row_count{n_rows}, profile);
 
   // warm up
-  auto output = cudf::repeat(input, repeat_count);
+  auto output = cudf::repeat(input, *repeat_count);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::repeat(input, repeat_count);
+    cudf::repeat(input, *repeat_count);
   }
 
   auto data_bytes =

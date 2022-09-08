@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,16 +24,19 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
 };
 
 template <typename T>
@@ -643,7 +646,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
                                           0,
                                           cudf::create_null_mask(2, cudf::mask_state::UNALLOCATED));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *expected);
 }
 
 TYPED_TEST(ListsStructsLeafTest, FromNested)

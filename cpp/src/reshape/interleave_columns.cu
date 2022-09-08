@@ -24,9 +24,15 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
@@ -253,10 +259,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
                          func_value,
                          func_validity);
 
-    rmm::device_buffer mask;
-    size_type null_count;
-
-    std::tie(mask, null_count) = valid_if(index_begin, index_end, func_validity, stream, mr);
+    auto [mask, null_count] = valid_if(index_begin, index_end, func_validity, stream, mr);
 
     output->set_null_mask(std::move(mask), null_count);
 
@@ -291,7 +294,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, rmm::cuda_stream_default, mr);
+  return detail::interleave_columns(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

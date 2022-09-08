@@ -22,8 +22,10 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -182,7 +184,8 @@ template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
-  CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(
+    cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return {host_data, bitmask_to_host(c)};
 }
 
@@ -205,7 +208,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   auto host_rep_types = thrust::host_vector<Rep>(c.size());
 
-  CUDA_TRY(cudaMemcpy(
+  CUDF_CUDA_TRY(cudaMemcpy(
     host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDeviceToHost));
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
@@ -231,11 +234,11 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   auto const scv     = strings_column_view(c);
   auto const h_chars = cudf::detail::make_std_vector_sync<char>(
     cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-    rmm::cuda_stream_default);
+    cudf::default_stream_value);
   auto const h_offsets = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-    rmm::cuda_stream_default);
+    cudf::default_stream_value);
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;

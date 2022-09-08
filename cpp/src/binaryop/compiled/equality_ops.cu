@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,41 +17,43 @@
 #include "binary_ops.cuh"
 
 namespace cudf::binops::compiled {
-void dispatch_equality_op(mutable_column_device_view& outd,
-                          column_device_view const& lhsd,
-                          column_device_view const& rhsd,
+void dispatch_equality_op(mutable_column_view& out,
+                          column_view const& lhs,
+                          column_view const& rhs,
                           bool is_lhs_scalar,
                           bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream)
 {
-  auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
-
-  // Execute it on every element
-
+  CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
+               "Unsupported operator for these types");
+  auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
+  auto outd         = mutable_column_device_view::create(out, stream);
+  auto lhsd         = column_device_view::create(lhs, stream);
+  auto rhsd         = column_device_view::create(rhs, stream);
   if (common_dtype) {
     if (op == binary_operator::EQUAL) {
       for_each(stream,
-               outd.size(),
+               out.size(),
                binary_op_device_dispatcher<ops::Equal>{
-                 *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+                 *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
       for_each(stream,
-               outd.size(),
+               out.size(),
                binary_op_device_dispatcher<ops::NotEqual>{
-                 *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+                 *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     }
   } else {
     if (op == binary_operator::EQUAL) {
       for_each(stream,
-               outd.size(),
+               out.size(),
                binary_op_double_device_dispatcher<ops::Equal>{
-                 outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+                 *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
       for_each(stream,
-               outd.size(),
+               out.size(),
                binary_op_double_device_dispatcher<ops::NotEqual>{
-                 outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+                 *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     }
   }
 }

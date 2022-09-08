@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,100 +23,6 @@ class NvcompJni {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
-
-  /**
-   * Determine if data is compressed with the nvcomp LZ4 compressor.
-   * @param inPtr device address of the compressed data
-   * @param inSize size of the compressed data in bytes
-   * @param stream CUDA stream to use
-   * @return true if the data is compressed with the nvcomp LZ4 compressor
-   */
-  static native boolean isLZ4Data(long inPtr, long inSize, long stream);
-
-  /**
-   * Determine if the metadata corresponds to data compressed with the nvcomp LZ4 compressor.
-   * @param metadataPtr address of the metadata object
-   * @return true if the metadata describes data compressed with the nvcomp LZ4 compressor.
-   */
-  static native boolean isLZ4Metadata(long metadataPtr);
-
-  /**
-   * Return the LZ4 compression configuration necessary for a particular chunk size.
-   * @param chunkSize maximum size of an uncompressed chunk in bytes
-   * @param uncompressedSize total size of the uncompressed data
-   * @return array of three longs containing metadata size, temp storage size,
-   *         and output buffer size
-   */
-  static native long[] lz4CompressConfigure(long chunkSize, long uncompressedSize);
-
-  /**
-   * Perform LZ4 compression asynchronously using the specified CUDA stream.
-   * @param compressedSizeOutputPtr host address of a 64-bit integer to update
-   *                                with the resulting compressed size of the
-   *                                data. For the operation to be truly
-   *                                asynchronous this should point to pinned
-   *                                host memory.
-   * @param inPtr device address of the uncompressed data
-   * @param inSize size of the uncompressed data in bytes
-   * @param inputType type of uncompressed data
-   * @param chunkSize size of an LZ4 chunk in bytes
-   * @param tempPtr device address of the temporary compression storage buffer
-   * @param tempSize size of the temporary storage buffer in bytes
-   * @param outPtr device address of the output buffer
-   * @param outSize size of the output buffer in bytes
-   * @param stream CUDA stream to use
-   */
-  static native void lz4CompressAsync(
-      long compressedSizeOutputPtr,
-      long inPtr,
-      long inSize,
-      int inputType,
-      long chunkSize,
-      long tempPtr,
-      long tempSize,
-      long outPtr,
-      long outSize,
-      long stream);
-
-  /**
-   * Return the decompression configuration for a compressed input.
-   * NOTE: The resulting configuration object must be closed to destroy the corresponding
-   * host-side metadata created by this method to avoid a native memory leak.
-   * @param inPtr device address of the compressed data
-   * @param inSize size of the compressed data
-   * @return array of four longs containing metadata address, metadata size, temp storage size,
-   *         and output buffer size
-   */
-  static native long[] lz4DecompressConfigure(long inPtr, long inSize, long stream);
-
-  /**
-   * Perform LZ4 decompression asynchronously using the specified CUDA stream.
-   * @param inPtr device address of the uncompressed data
-   * @param inSize size of the uncompressed data in bytes
-   * @param metadataPtr host address of the metadata
-   * @param metadataSize size of the metadata in bytes
-   * @param tempPtr device address of the temporary compression storage buffer
-   * @param tempSize size of the temporary storage buffer in bytes
-   * @param outPtr device address of the output buffer
-   * @param outSize size of the output buffer in bytes
-   * @param stream CUDA stream to use
-   */
-  static native void lz4DecompressAsync(
-      long inPtr,
-      long inSize,
-      long metadataPtr,
-      long metadataSize,
-      long tempPtr,
-      long tempSize,
-      long outPtr,
-      long outSize,
-      long stream);
-
-  /**
-   * Destroy host-side metadata created by {@link NvcompJni#lz4DecompressConfigure(long, long, long)}
-   * @param metadataPtr host address of metadata
-   */
-  static native void lz4DestroyMetadata(long metadataPtr);
 
   /**
    * Get the temporary workspace size required to perform compression of entire LZ4 batch.

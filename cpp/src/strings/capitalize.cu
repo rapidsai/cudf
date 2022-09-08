@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,23 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/is_flags.h>
-#include <strings/utf8.cuh>
-#include <strings/utilities.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/capitalize.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -43,7 +45,7 @@ using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
 __device__ char_info get_char_info(character_flags_table_type const* d_flags, char_utf8 chr)
 {
   auto const code_point = detail::utf8_to_codepoint(chr);
-  auto const flag = code_point <= 0x00FFFF ? d_flags[code_point] : character_flags_table_type{0};
+  auto const flag = code_point <= 0x00'FFFF ? d_flags[code_point] : character_flags_table_type{0};
   return char_info{code_point, flag};
 }
 
@@ -155,7 +157,7 @@ struct capitalize_fn : base_fn<capitalize_fn> {
 
   __device__ bool capitalize_next(char_utf8 const chr, character_flags_table_type const)
   {
-    return !d_delimiters.empty() && (d_delimiters.find(chr) >= 0);
+    return !d_delimiters.empty() && (d_delimiters.find(chr) != string_view::npos);
   }
 };
 
@@ -276,6 +278,7 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
                     thrust::make_counting_iterator<size_type>(input.size()),
                     results->mutable_view().data<bool>(),
                     is_title_fn{get_character_flags_table(), *d_column});
+  results->set_null_count(input.null_count());
   return results;
 }
 
@@ -286,7 +289,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::capitalize(input, delimiter, rmm::cuda_stream_default, mr);
+  return detail::capitalize(input, delimiter, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
@@ -294,14 +297,14 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::title(input, sequence_type, rmm::cuda_stream_default, mr);
+  return detail::title(input, sequence_type, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_title(input, rmm::cuda_stream_default, mr);
+  return detail::is_title(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

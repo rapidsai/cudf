@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -25,6 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
 namespace cudf {
@@ -178,7 +180,7 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_index(dictionary, key, rmm::cuda_stream_default, mr);
+  return detail::get_index(dictionary, key, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

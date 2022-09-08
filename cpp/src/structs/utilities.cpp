@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <bitset>
 #include <iterator>
@@ -208,98 +209,6 @@ flattened_table flatten_nested_columns(table_view const& input,
   return table_flattener{input, column_order, null_precedence, nullability}();
 }
 
-namespace {
-using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
-using column_index_t    = typename vector_of_columns::size_type;
-
-// Forward declaration, to enable recursion via `unflattener`.
-std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
-                                               column_index_t& current_index,
-                                               cudf::column_view const& blueprint);
-
-/**
- * @brief Helper functor to reconstruct STRUCT columns from its flattened member columns.
- *
- */
-class unflattener {
- public:
-  unflattener(vector_of_columns& flattened_, column_index_t& current_index_)
-    : flattened{flattened_}, current_index{current_index_}
-  {
-  }
-
-  auto operator()(column_view const& blueprint)
-  {
-    return is_struct(blueprint) ? unflatten_struct(flattened, current_index, blueprint)
-                                : std::move(flattened[current_index++]);
-  }
-
- private:
-  vector_of_columns& flattened;
-  column_index_t& current_index;
-
-};  // class unflattener;
-
-std::unique_ptr<cudf::column> unflatten_struct(vector_of_columns& flattened,
-                                               column_index_t& current_index,
-                                               cudf::column_view const& blueprint)
-{
-  // "Consume" columns from `flattened`, starting at `current_index`,
-  // based on the provided `blueprint` struct col. Recurse for struct children.
-  CUDF_EXPECTS(blueprint.type().id() == type_id::STRUCT,
-               "Expected blueprint column to be a STRUCT column.");
-
-  CUDF_EXPECTS(current_index < flattened.size(), "STRUCT column can't have 0 children.");
-
-  auto const num_rows = flattened[current_index]->size();
-
-  // cudf::flatten_nested_columns() executes depth first, and serializes the struct null vector
-  // before the child/member columns.
-  // E.g. STRUCT_1< STRUCT_2< A, B >, C > is flattened to:
-  //      1. Null Vector for STRUCT_1
-  //      2. Null Vector for STRUCT_2
-  //      3. Member STRUCT_2::A
-  //      4. Member STRUCT_2::B
-  //      5. Member STRUCT_1::C
-  //
-  // Extract null-vector *before* child columns are constructed.
-  auto struct_null_column_contents = flattened[current_index++]->release();
-  auto unflattening_iter =
-    thrust::make_transform_iterator(blueprint.child_begin(), unflattener{flattened, current_index});
-
-  return cudf::make_structs_column(
-    num_rows,
-    vector_of_columns{unflattening_iter, unflattening_iter + blueprint.num_children()},
-    UNKNOWN_NULL_COUNT,  // Do count?
-    std::move(*struct_null_column_contents.null_mask));
-}
-}  // namespace
-
-std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::table>&& flattened,
-                                                      table_view const& blueprint)
-{
-  // Bail, if LISTs are present.
-  auto const has_lists = std::any_of(blueprint.begin(), blueprint.end(), is_or_has_nested_lists);
-  CUDF_EXPECTS(not has_lists, "Unflattening LIST columns is not supported.");
-
-  // If there are no STRUCTs, unflattening is a NOOP.
-  auto const has_structs = std::any_of(blueprint.begin(), blueprint.end(), is_struct);
-  if (not has_structs) {
-    return std::move(flattened);  // Unchanged.
-  }
-
-  // There be struct columns.
-  // Note: Requires null vectors for all struct input columns.
-  auto flattened_columns = flattened->release();
-  auto current_idx       = column_index_t{0};
-
-  auto unflattening_iter =
-    thrust::make_transform_iterator(blueprint.begin(), unflattener{flattened_columns, current_idx});
-
-  return std::make_unique<cudf::table>(
-    vector_of_columns{unflattening_iter, unflattening_iter + blueprint.num_columns()});
-}
-
 // Helper function to superimpose validity of parent struct
 // over the specified member (child) column.
 void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
@@ -308,6 +217,11 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  if (child.type().id() == cudf::type_id::EMPTY) {
+    // EMPTY columns should not have a null mask,
+    // so don't superimpose null mask on empty columns.
+    return;
+  }
   if (!child.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
     child.set_null_mask(cudf::detail::copy_bitmask(parent_null_mask, 0, child.size(), stream, mr));
@@ -327,8 +241,7 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
       masks,
       begin_bits,
       child.size(),
-      stream,
-      mr);
+      stream);
     auto const null_count = child.size() - valid_count;
     child.set_null_count(null_count);
   }
@@ -370,7 +283,7 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
     auto [new_child_mask, null_count] = [&] {
       if (not child.nullable()) {
         // Adopt parent STRUCT's null mask.
-        return std::make_pair(structs_column.null_mask(), 0);
+        return std::pair(structs_column.null_mask(), 0);
       }
 
       // Both STRUCT and child are nullable. AND() for the child's new null mask.
@@ -386,8 +299,8 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                                                               stream,
                                                               mr);
       ret_validity_buffers.push_back(std::move(new_mask));
-      return std::make_pair(
-        reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()), null_count);
+      return std::pair(reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()),
+                       null_count);
     }();
 
     return cudf::column_view(
@@ -438,6 +351,12 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
                                   std::make_move_iterator(null_masks.end()));
   }
   return {table_view{superimposed_columns}, std::move(superimposed_nullmasks)};
+}
+
+bool contains_null_structs(column_view const& col)
+{
+  return (is_struct(col) && col.has_nulls()) ||
+         std::any_of(col.child_begin(), col.child_end(), contains_null_structs);
 }
 
 }  // namespace detail

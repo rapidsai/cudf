@@ -25,6 +25,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+
 namespace cudf {
 namespace reduction {
 namespace detail {
@@ -35,15 +38,15 @@ namespace detail {
 struct row_arg_minmax_fn {
   size_type const num_rows;
   row_lexicographic_comparator<nullate::DYNAMIC> const comp;
-  bool const arg_min;
+  bool const is_arg_min;
 
   row_arg_minmax_fn(table_device_view const& table,
                     bool has_nulls,
                     null_order const* null_precedence,
-                    bool const arg_min)
+                    bool const is_arg_min)
     : num_rows(table.num_rows()),
       comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
-      arg_min(arg_min)
+      is_arg_min(is_arg_min)
   {
   }
 
@@ -53,7 +56,7 @@ struct row_arg_minmax_fn {
   // `thrust::reduce_by_key` or `thrust::scan_by_key` will result in significant compile time.
   __attribute__((noinline)) __device__ auto operator()(size_type lhs_idx, size_type rhs_idx) const
   {
-    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/issues/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
     if (lhs_idx < 0 || lhs_idx >= num_rows) { return rhs_idx; }
@@ -62,7 +65,7 @@ struct row_arg_minmax_fn {
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
     //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
-    return comp(lhs_idx, rhs_idx) == arg_min ? lhs_idx : rhs_idx;
+    return comp(lhs_idx, rhs_idx) == is_arg_min ? lhs_idx : rhs_idx;
   }
 };
 

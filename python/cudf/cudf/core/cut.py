@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
+from collections import abc
 
 import cupy
 import numpy as np
@@ -21,27 +23,33 @@ def cut(
     duplicates: str = "raise",
     ordered: bool = True,
 ):
+    """Bin values into discrete intervals.
 
-    """
-    Bin values into discrete intervals.
     Use cut when you need to segment and sort data values into bins. This
     function is also useful for going from a continuous variable to a
     categorical variable.
+
     Parameters
     ----------
     x : array-like
         The input array to be binned. Must be 1-dimensional.
     bins : int, sequence of scalars, or IntervalIndex
         The criteria to bin by.
-        * int : Defines the number of equal-width bins in the
-        range of x. The range of x is extended by .1% on each
-        side to include the minimum and maximum values of x.
+
+        * int : Defines the number of equal-width bins in the range of `x`. The
+          range of `x` is extended by .1% on each side to include the minimum
+          and maximum values of `x`.
+        * sequence of scalars : Defines the bin edges allowing for non-uniform
+          width. No extension of the range of `x` is done.
+        * IntervalIndex : Defines the exact bins to be used. Note that
+          IntervalIndex for `bins` must be non-overlapping.
+
     right : bool, default True
         Indicates whether bins includes the rightmost edge or not.
     labels : array or False, default None
         Specifies the labels for the returned bins. Must be the same
         length as the resulting bins. If False, returns only integer
-        indicators of thebins. If True,raises an error. When ordered=False,
+        indicators of the bins. If True,raises an error. When ordered=False,
         labels must be provided.
     retbins : bool, default False
         Whether to return the bins or not.
@@ -56,6 +64,7 @@ def cut(
         Categorical and Series (with Categorical dtype). If True,
         the resulting categorical will be ordered. If False, the resulting
         categorical will be unordered (labels must be provided).
+
     Returns
     -------
     out : CategoricalIndex
@@ -66,30 +75,38 @@ def cut(
         For scalar or sequence bins, this is an ndarray with the computed
         bins. If set duplicates=drop, bins will drop non-unique bin. For
         an IntervalIndex bins, this is equal to bins.
+
     Examples
     --------
     Discretize into three equal-sized bins.
+
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
     CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0],
-    ...         (5.0, 7.0],(0.994, 3.0]], categories=[(0.994, 3.0],
-    ...         (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category')
+                (5.0, 7.0], (0.994, 3.0]], categories=[(0.994, 3.0],
+                (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category')
+
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3, retbins=True)
     (CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0],
-    ...         (5.0, 7.0],(0.994, 3.0]],categories=[(0.994, 3.0],
-    ...         (3.0, 5.0], (5.0, 7.0]],ordered=True, dtype='category'),
-    array([0.994, 3.   , 5.   , 7.   ]))
+                (5.0, 7.0], (0.994, 3.0]], categories=[(0.994, 3.0],
+                (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category'),
+     array([0.994, 3.   , 5.   , 7.   ]))
+
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]),
-    ...        3, labels=["bad", "medium", "good"])
+    ...          3, labels=["bad", "medium", "good"])
     CategoricalIndex(['bad', 'good', 'medium', 'medium', 'good', 'bad'],
-    ...       categories=['bad', 'medium', 'good'],ordered=True,
-    ...       dtype='category')
+                     categories=['bad', 'medium', 'good'],ordered=True,
+                     dtype='category')
+
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3,
-    ...       labels=["B", "A", "B"], ordered=False)
+    ...          labels=["B", "A", "B"], ordered=False)
     CategoricalIndex(['B', 'B', 'A', 'A', 'B', 'B'], categories=['A', 'B'],
-    ...        ordered=False, dtype='category')
+               ordered=False, dtype='category')
+
     >>> cudf.cut([0, 1, 1, 2], bins=4, labels=False)
     array([0, 1, 1, 3], dtype=int32)
+
     Passing a Series as an input returns a Series with categorical dtype:
+
     >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
     >>> cudf.cut(s, 3)
@@ -123,7 +140,7 @@ def cut(
                 )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
-    if isinstance(bins, Sequence):
+    if isinstance(bins, abc.Sequence):
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
@@ -141,7 +158,7 @@ def cut(
 
     # create bins if given an int or single scalar
     if not isinstance(bins, pd.IntervalIndex):
-        if not isinstance(bins, (Sequence)):
+        if not isinstance(bins, (abc.Sequence)):
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
             ):

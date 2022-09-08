@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,15 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/scan.h>
 #include <thrust/tabulate.h>
 
 #include <optional>
@@ -210,7 +214,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, sizes, rmm::cuda_stream_default, mr);
+  return detail::sequences(starts, sizes, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
@@ -219,7 +223,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, steps, sizes, rmm::cuda_stream_default, mr);
+  return detail::sequences(starts, steps, sizes, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf::lists

@@ -311,6 +311,24 @@ cdef data_from_unique_ptr(
     }
     return data, index
 
+cdef columns_from_table_view(
+    table_view tv,
+    object owners,
+):
+    """
+    Given a ``cudf::table_view``, construsts a list of columns from it,
+    along with referencing an owner Python object that owns the memory
+    lifetime. owner must be either None or a list of column. If owner
+    is a list of columns, the owner of the `i`th ``cudf::column_view``
+    in the table view is ``owners[i]``. For more about memory ownership,
+    see ``Column.from_column_view``.
+    """
+
+    return [
+        Column.from_column_view(
+            tv.column(i), owners[i] if isinstance(owners, list) else None
+        ) for i in range(tv.num_columns())
+    ]
 
 cdef data_from_table_view(
     table_view tv,
@@ -323,8 +341,8 @@ cdef data_from_table_view(
     along with referencing an ``owner`` Python object that owns the memory
     lifetime. If ``owner`` is a Frame we reach inside of it and
     reach inside of each ``cudf.Column`` to make the owner of each newly
-    created ``Buffer`` underneath the ``cudf.Column`` objects of the
-    created Frame the respective ``Buffer`` from the relevant
+    created ``DeviceBufferLike`` underneath the ``cudf.Column`` objects of the
+    created Frame the respective ``DeviceBufferLike`` from the relevant
     ``cudf.Column`` of the ``owner`` Frame
     """
     cdef size_type column_idx = 0

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,13 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
@@ -267,8 +273,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
     template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
     __device__ size_type operator()(void const* tp)
     {
-      cudf_assert(false and "only index types are supported");
-      return 0;
+      CUDF_UNREACHABLE("only index types are supported");
     }
   };
   /**
@@ -365,7 +370,7 @@ struct output_indexalator : base_indexalator<output_indexalator> {
     template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
     __device__ void operator()(void* tp, size_type const value)
     {
-      cudf_assert(false and "only index types are supported");
+      CUDF_UNREACHABLE("only index types are supported");
     }
   };
 

@@ -35,7 +35,6 @@ Properties
    Index.size
    Index.values
 
-
 Modifying and computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
@@ -93,7 +92,9 @@ Conversion
 
    Index.astype
    Index.to_arrow
+   Index.to_cupy
    Index.to_list
+   Index.to_numpy
    Index.to_series
    Index.to_frame
    Index.to_pandas
@@ -151,7 +152,6 @@ Numeric Index
    UInt64Index
    Float64Index
 
-
 .. _api.categoricalindex:
 
 CategoricalIndex
@@ -204,7 +204,6 @@ MultiIndex
    :template: autosummary/class_without_autosummary.rst
 
    MultiIndex
-
 
 MultiIndex constructors
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -271,7 +270,6 @@ Time/date components
    DatetimeIndex.quarter
    DatetimeIndex.isocalendar
 
-
 Time-specific operations
 ~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
@@ -315,5 +313,4 @@ Conversion
    :toctree: api/
 
    TimedeltaIndex.to_series
-   TimedeltaIndex.round
    TimedeltaIndex.to_frame

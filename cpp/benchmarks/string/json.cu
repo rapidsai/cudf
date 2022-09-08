@@ -14,20 +14,18 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/strings/string_view.hpp>
-#include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/json.hpp>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/types.hpp>
 
 #include <thrust/random.h>
 
@@ -163,10 +161,7 @@ struct json_benchmark_row_builder {
 
 auto build_json_string_column(int desired_bytes, int num_rows)
 {
-  data_profile profile;
-  profile.set_cardinality(0);
-  profile.set_null_frequency(-0.1);
-  profile.set_distribution_params<float>(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_id::FLOAT32, distribution_id::UNIFORM, 0.0, 1.0);
   auto float_2bool_columns =
     create_random_table({cudf::type_id::FLOAT32, cudf::type_id::BOOL8, cudf::type_id::BOOL8},

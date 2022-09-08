@@ -1,25 +1,110 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import decimal
 import functools
+import hashlib
 import os
 import traceback
+from functools import partial
 from typing import FrozenSet, Set, Union
 
-import cupy as cp
 import numpy as np
-import pandas as pd
+from nvtx import annotate
 
 import rmm
 
 import cudf
 from cudf.core import column
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import to_cudf_compatible_scalar
+from cudf.core.buffer import as_device_buffer_like
 
 # The size of the mask in bytes
 mask_dtype = cudf.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
+
+# Mapping from ufuncs to the corresponding binary operators.
+_ufunc_binary_operations = {
+    # Arithmetic binary operations.
+    "add": "add",
+    "subtract": "sub",
+    "multiply": "mul",
+    "matmul": "matmul",
+    "divide": "truediv",
+    "true_divide": "truediv",
+    "floor_divide": "floordiv",
+    "power": "pow",
+    "float_power": "pow",
+    "remainder": "mod",
+    "mod": "mod",
+    "fmod": "mod",
+    # Bitwise binary operations.
+    "bitwise_and": "and",
+    "bitwise_or": "or",
+    "bitwise_xor": "xor",
+    # Comparison binary operators
+    "greater": "gt",
+    "greater_equal": "ge",
+    "less": "lt",
+    "less_equal": "le",
+    "not_equal": "ne",
+    "equal": "eq",
+}
+
+# These operators need to be mapped to their inverses when performing a
+# reflected ufunc operation because no reflected version of the operators
+# themselves exist. When these operators are invoked directly (not via
+# __array_ufunc__) Python takes care of calling the inverse operation.
+_ops_without_reflection = {
+    "gt": "lt",
+    "ge": "le",
+    "lt": "gt",
+    "le": "ge",
+    # ne and eq are symmetric, so they are their own inverse op
+    "ne": "ne",
+    "eq": "eq",
+}
+
+
+# This is the implementation of __array_ufunc__ used for Frame and Column.
+# For more detail on this function and how it should work, see
+# https://numpy.org/doc/stable/reference/ufuncs.html
+def _array_ufunc(obj, ufunc, method, inputs, kwargs):
+    # We don't currently support reduction, accumulation, etc. We also
+    # don't support any special kwargs or higher arity ufuncs than binary.
+    if method != "__call__" or kwargs or ufunc.nin > 2:
+        return NotImplemented
+
+    fname = ufunc.__name__
+    if fname in _ufunc_binary_operations:
+        reflect = obj is not inputs[0]
+        other = inputs[0] if reflect else inputs[1]
+
+        op = _ufunc_binary_operations[fname]
+        if reflect and op in _ops_without_reflection:
+            op = _ops_without_reflection[op]
+            reflect = False
+        op = f"__{'r' if reflect else ''}{op}__"
+
+        # float_power returns float irrespective of the input type.
+        # TODO: Do not get the attribute directly, get from the operator module
+        # so that we can still exploit reflection.
+        if fname == "float_power":
+            return getattr(obj, op)(other).astype(float)
+        return getattr(obj, op)(other)
+
+    # Special handling for various unary operations.
+    if fname == "negative":
+        return obj * -1
+    if fname == "positive":
+        return obj.copy(deep=True)
+    if fname == "invert":
+        return ~obj
+    if fname == "absolute":
+        # TODO: Make sure all obj (mainly Column) implement abs.
+        return abs(obj)
+    if fname == "fabs":
+        return abs(obj).astype(np.float64)
+
+    # None is a sentinel used by subclasses to trigger cupy dispatch.
+    return None
 
 
 _EQUALITY_OPS = {
@@ -31,6 +116,7 @@ _EQUALITY_OPS = {
     "__ge__",
 }
 
+_NVTX_COLORS = ["green", "blue", "purple", "rapids"]
 
 # The test root is set by pytest to support situations where tests are run from
 # a source tree on a built version of cudf.
@@ -86,41 +172,6 @@ def _external_only_api(func, alternative=""):
     return wrapper
 
 
-# TODO: We should evaluate whether calls to this could be more easily replaced
-# with column.full, which appears to be significantly faster in simple cases.
-def scalar_broadcast_to(scalar, size, dtype=None):
-
-    if isinstance(size, (tuple, list)):
-        size = size[0]
-
-    if cudf._lib.scalar._is_null_host_scalar(scalar):
-        if dtype is None:
-            dtype = "object"
-        return column.column_empty(size, dtype=dtype, masked=True)
-
-    if isinstance(scalar, pd.Categorical):
-        if dtype is None:
-            return _categorical_scalar_broadcast_to(scalar, size)
-        else:
-            return scalar_broadcast_to(scalar.categories[0], size).astype(
-                dtype
-            )
-
-    if isinstance(scalar, decimal.Decimal):
-        if dtype is None:
-            dtype = cudf.Decimal128Dtype._from_decimal(scalar)
-
-        out_col = column.column_empty(size, dtype=dtype)
-        if out_col.size != 0:
-            out_col[:] = scalar
-        return out_col
-
-    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
-    dtype = scalar.dtype
-
-    return cudf.core.column.full(size=size, fill_value=scalar, dtype=dtype)
-
-
 def initfunc(f):
     """
     Decorator for initialization functions that should
@@ -136,19 +187,6 @@ def initfunc(f):
 
     wrapper.initialized = False
     return wrapper
-
-
-# taken from dask array
-# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
-def _is_nep18_active():
-    class A:
-        def __array_function__(self, *args, **kwargs):
-            return True
-
-    try:
-        return np.concatenate([A()])
-    except ValueError:
-        return False
 
 
 @initfunc
@@ -174,7 +212,7 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
-    use_managed_memory = True if allocator == "managed" else False
+    use_managed_memory = allocator == "managed"
 
     rmm.reinitialize(
         pool_allocator=pool,
@@ -184,7 +222,9 @@ def set_allocator(
     )
 
 
-IS_NEP18_ACTIVE = _is_nep18_active()
+def clear_cache():
+    """Clear all internal caches"""
+    cudf.Scalar._clear_instance_cache()
 
 
 class GetAttrGetItemMixin:
@@ -242,8 +282,8 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return Buffer(dbuf)
-    return Buffer(mask_buf)
+        return as_device_buffer_like(dbuf)
+    return as_device_buffer_like(mask_buf)
 
 
 def _isnat(val):
@@ -284,7 +324,7 @@ def search_range(start, stop, x, step=1, side="left"):
     `all(x <= n for x in range_left) and all(x > n for x in range_right)`
 
     Parameters
-    --------
+    ----------
     start : int
         Start value of the series
     stop : int
@@ -297,7 +337,7 @@ def search_range(start, stop, x, step=1, side="left"):
         See description for usage.
 
     Returns
-    --------
+    -------
     int
         Insertion position of n.
 
@@ -316,87 +356,23 @@ def search_range(start, stop, x, step=1, side="left"):
     return max(min(length, i), 0)
 
 
-def _categorical_scalar_broadcast_to(cat_scalar, size):
-    if isinstance(cat_scalar, (cudf.Series, pd.Series)):
-        cats = cat_scalar.cat.categories
-        code = cat_scalar.cat.codes[0]
-        ordered = cat_scalar.cat.ordered
-    else:
-        # handles pd.Categorical, cudf.categorical.CategoricalColumn
-        cats = cat_scalar.categories
-        code = cat_scalar.codes[0]
-        ordered = cat_scalar.ordered
-
-    cats = column.as_column(cats)
-    codes = scalar_broadcast_to(code, size)
-
-    return column.build_categorical_column(
-        categories=cats,
-        codes=codes,
-        mask=codes.base_mask,
-        size=codes.size,
-        offset=codes.offset,
-        ordered=ordered,
-    )
+def _get_color_for_nvtx(name):
+    m = hashlib.sha256()
+    m.update(name.encode())
+    hash_value = int(m.hexdigest(), 16)
+    idx = hash_value % len(_NVTX_COLORS)
+    return _NVTX_COLORS[idx]
 
 
-def _create_pandas_series(
-    data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
-):
-    """
-    Wrapper to create a Pandas Series. If the length of data is 0 and
-    dtype is not passed, this wrapper defaults the dtype to `float64`.
-
-    Parameters
-    ----------
-    data : array-like, Iterable, dict, or scalar value
-        Contains data stored in Series. If data is a dict, argument
-        order is maintained.
-    index : array-like or Index (1d)
-        Values must be hashable and have the same length as data.
-        Non-unique index values are allowed. Will default to
-        RangeIndex (0, 1, 2, …, n) if not provided.
-        If data is dict-like and index is None, then the keys
-        in the data are used as the index. If the index is not None,
-        the resulting Series is reindexed with the index values.
-    dtype : str, numpy.dtype, or ExtensionDtype, optional
-        Data type for the output Series. If not specified, this
-        will be inferred from data. See the user guide for more usages.
-    name : str, optional
-        The name to give to the Series.
-    copy : bool, default False
-        Copy input data.
-
-    Returns
-    -------
-    pd.Series
-    """
-    if (data is None or len(data) == 0) and dtype is None:
-        dtype = "float64"
-    return pd.Series(
-        data=data,
-        index=index,
-        dtype=dtype,
-        name=name,
-        copy=copy,
-        fastpath=fastpath,
-    )
+def _cudf_nvtx_annotate(func, domain="cudf_python"):
+    """Decorator for applying nvtx annotations to methods in cudf."""
+    return annotate(
+        message=func.__qualname__,
+        color=_get_color_for_nvtx(func.__qualname__),
+        domain=domain,
+    )(func)
 
 
-def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
-    """Makes best effort to convert an array of indices into a python slice.
-    If the conversion is not possible, return input. `indices` are expected
-    to be valid.
-    """
-    # TODO: improve efficiency by avoiding sync.
-    if len(indices) == 1:
-        x = indices[0].item()
-        return slice(x, x + 1)
-    if len(indices) == 2:
-        x1, x2 = indices[0].item(), indices[1].item()
-        return slice(x1, x2 + 1, x2 - x1)
-    start, step = indices[0].item(), (indices[1] - indices[0]).item()
-    stop = start + step * len(indices)
-    if (indices == cp.arange(start, stop, step)).all():
-        return slice(start, stop, step)
-    return indices
+_dask_cudf_nvtx_annotate = partial(
+    _cudf_nvtx_annotate, domain="dask_cudf_python"
+)

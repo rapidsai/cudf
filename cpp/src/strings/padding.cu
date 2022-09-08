@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,14 @@
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -55,16 +60,16 @@ struct compute_pad_output_length_fn {
 std::unique_ptr<column> pad(
   strings_column_view const& strings,
   size_type width,
-  pad_side side                       = pad_side::RIGHT,
-  std::string const& fill_char        = " ",
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  side_type side                      = side_type::RIGHT,
+  std::string_view fill_char          = " ",
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
   char_utf8 d_fill_char    = 0;
-  size_type fill_char_size = to_char_utf8(fill_char.c_str(), d_fill_char);
+  size_type fill_char_size = to_char_utf8(fill_char.data(), d_fill_char);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
@@ -85,7 +90,7 @@ std::unique_ptr<column> pad(
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
-  if (side == pad_side::LEFT) {
+  if (side == side_type::LEFT) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -99,7 +104,7 @@ std::unique_ptr<column> pad(
           ptr += from_char_utf8(d_fill_char, ptr);
         copy_string(ptr, d_str);
       });
-  } else if (side == pad_side::RIGHT) {
+  } else if (side == side_type::RIGHT) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -113,7 +118,7 @@ std::unique_ptr<column> pad(
         while (length++ < width)
           ptr += from_char_utf8(d_fill_char, ptr);
       });
-  } else if (side == pad_side::BOTH) {
+  } else if (side == side_type::BOTH) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -141,80 +146,76 @@ std::unique_ptr<column> pad(
                              std::move(null_mask));
 }
 
-//
-// Although zfill is identical to pad(width,'left','0') this implementation is a little
-// more optimized since it does not need to calculate the size of the fillchar and can
-// directly write it to the output buffer without extra logic for multi-byte UTF-8 chars.
-//
 std::unique_ptr<column> zfill(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   size_type width,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
-
-  // copy bitmask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<int32_t>(0),
     compute_pad_output_length_fn{d_strings, width, 1});  // fillchar is 1 byte
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = offsets_column->view().data<int32_t>();
+    offsets_transformer_itr, offsets_transformer_itr + input.size(), stream, mr);
+  auto const d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
   auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
 
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count,
+                     input.size(),
                      [d_strings, width, d_offsets, d_chars] __device__(size_type idx) {
                        if (d_strings.is_null(idx)) return;
-                       string_view d_str = d_strings.element<string_view>(idx);
-                       auto length       = d_str.length();
-                       char* out_ptr     = d_chars + d_offsets[idx];
+                       auto d_str   = d_strings.element<string_view>(idx);
+                       auto length  = d_str.length();
+                       auto in_ptr  = d_str.data();
+                       auto out_ptr = d_chars + d_offsets[idx];
+                       // if the string starts with a sign, output the sign first
+                       if (!d_str.empty() && (*in_ptr == '-' || *in_ptr == '+')) {
+                         *out_ptr++ = *in_ptr++;
+                         d_str      = string_view{in_ptr, d_str.size_bytes() - 1};
+                       }
                        while (length++ < width)
                          *out_ptr++ = '0';  // prepend zero char
                        copy_string(out_ptr, d_str);
                      });
 
-  return make_strings_column(strings_count,
+  return make_strings_column(input.size(),
                              std::move(offsets_column),
                              std::move(chars_column),
-                             strings.null_count(),
-                             std::move(null_mask));
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail
 
 // Public APIs
 
-std::unique_ptr<column> pad(strings_column_view const& strings,
+std::unique_ptr<column> pad(strings_column_view const& input,
                             size_type width,
-                            pad_side side,
-                            std::string const& fill_char,
+                            side_type side,
+                            std::string_view fill_char,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(strings, width, side, fill_char, rmm::cuda_stream_default, mr);
+  return detail::pad(input, width, side, fill_char, cudf::default_stream_value, mr);
 }
 
-std::unique_ptr<column> zfill(strings_column_view const& strings,
+std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(strings, width, rmm::cuda_stream_default, mr);
+  return detail::zfill(input, width, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

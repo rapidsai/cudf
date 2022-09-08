@@ -4,7 +4,6 @@
 import decimal
 import operator
 import random
-from contextlib import contextmanager
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -26,23 +25,6 @@ from cudf.utils.dtypes import (
 )
 
 STRING_TYPES = {"str"}
-
-
-@contextmanager
-def _hide_deprecated_ops_warnings(func, lhs, rhs):
-    if func in {
-        cudf.logical_and,
-        cudf.logical_or,
-        cudf.remainder,
-    } and isinstance(lhs, cudf.Series):
-        name = func.__name__
-        with pytest.warns(
-            FutureWarning,
-            match=f"Series.{name} is deprecated and will be removed.",
-        ):
-            yield
-    else:
-        yield
 
 
 _binops = [
@@ -165,35 +147,6 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
         result = Series(result)
 
     np.testing.assert_almost_equal(result.to_numpy(), binop(arr1, arr2))
-
-
-_logical_binops = [
-    (operator.and_, operator.and_),
-    (operator.or_, operator.or_),
-    (np.logical_and, cudf.logical_and),
-    (np.logical_or, cudf.logical_or),
-]
-
-
-@pytest.mark.parametrize("lhstype", _int_types + [np.bool_])
-@pytest.mark.parametrize("rhstype", _int_types + [np.bool_])
-@pytest.mark.parametrize("binop,cubinop", _logical_binops)
-def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
-    arr1 = pd.Series(np.random.choice([True, False], 10))
-    if lhstype is not np.bool_:
-        arr1 = arr1 * (np.random.random(10) * 100).astype(lhstype)
-    sr1 = Series(arr1)
-
-    arr2 = pd.Series(np.random.choice([True, False], 10))
-    if rhstype is not np.bool_:
-        arr2 = arr2 * (np.random.random(10) * 100).astype(rhstype)
-    sr2 = Series(arr2)
-
-    with _hide_deprecated_ops_warnings(cubinop, sr1, sr2):
-        result = cubinop(sr1, sr2)
-    expect = binop(arr1, arr2)
-
-    utils.assert_eq(result, expect)
 
 
 _cmpops = [
@@ -464,7 +417,7 @@ _reflected_ops = [
 @pytest.mark.parametrize(
     "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
 )
-def test_reflected_ops_scalar(func, dtype, obj_class):
+def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
     random_series = utils.gen_rand(dtype, 100, low=10)
@@ -487,6 +440,19 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
 
     # verify
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+)
+def test_cudf_scalar_reflected_ops_scalar(func, dtype):
+    value = 42
+    scalar = cudf.Scalar(42)
+
+    expected = func(value)
+    actual = func(scalar).value
+
+    assert np.isclose(expected, actual)
 
 
 _cudf_scalar_reflected_ops = [
@@ -530,7 +496,7 @@ _cudf_scalar_reflected_ops = [
         )
     ),
 )
-def test_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
+def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
@@ -639,6 +605,14 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
     utils.assert_eq(cd_frame, pd_frame)
+
+    pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
+    pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2)
+    pd_frame = binop(pdf1, pdf2)
+    cd_frame = binop(gdf1, gdf2)
+    utils.assert_eq(pd_frame, cd_frame)
 
 
 @pytest.mark.parametrize(
@@ -938,54 +912,6 @@ def test_vector_to_none_binops(dtype):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "lhs",
-    [
-        1,
-        3,
-        4,
-        pd.Series([5, 6, 2]),
-        pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2]),
-        6,
-    ],
-)
-@pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
-@pytest.mark.parametrize(
-    "ops",
-    [
-        (np.remainder, cudf.remainder),
-        (np.floor_divide, cudf.floor_divide),
-        (np.subtract, cudf.subtract),
-        (np.add, cudf.add),
-        (np.true_divide, cudf.true_divide),
-        (np.multiply, cudf.multiply),
-    ],
-)
-def test_ufunc_ops(lhs, rhs, ops):
-    np_op, cu_op = ops
-
-    if isinstance(lhs, pd.Series):
-        culhs = cudf.from_pandas(lhs)
-    else:
-        culhs = lhs
-
-    if isinstance(rhs, pd.Series):
-        curhs = cudf.from_pandas(rhs)
-    else:
-        curhs = rhs
-
-    expect = np_op(lhs, rhs)
-    with _hide_deprecated_ops_warnings(cu_op, culhs, curhs):
-        got = cu_op(culhs, curhs)
-
-    if np.isscalar(expect):
-        assert got == expect
-    else:
-        utils.assert_eq(
-            expect, got,
-        )
-
-
 def dtype_scalar(val, dtype):
     if dtype == "str":
         return str(val)
@@ -997,7 +923,7 @@ def dtype_scalar(val, dtype):
         return dtype.type(val)
 
 
-def make_valid_scalar_add_data():
+def make_scalar_add_data():
     valid = set()
 
     # to any int, we may add any kind of
@@ -1063,7 +989,7 @@ def make_invalid_scalar_add_data():
     return sorted(list(invalid))
 
 
-@pytest.mark.parametrize("dtype_l,dtype_r", make_valid_scalar_add_data())
+@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_add_data())
 def test_scalar_add(dtype_l, dtype_r):
     test_value = 1
 
@@ -1558,8 +1484,8 @@ def test_scalar_power(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = lval_host ** rval_host
-    got = lval_gpu ** rval_gpu
+    expect = lval_host**rval_host
+    got = lval_gpu**rval_gpu
 
     assert expect == got.value
     assert expect.dtype == got.dtype
@@ -1573,7 +1499,42 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
     with pytest.raises(TypeError):
-        lval_gpu ** rval_gpu
+        lval_gpu**rval_gpu
+
+
+def make_scalar_null_binops_data():
+    return (
+        [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
+        + [(operator.sub, *dtypes) for dtypes in make_scalar_difference_data()]
+        + [(operator.mul, *dtypes) for dtypes in make_scalar_product_data()]
+        + [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
+        + [
+            (operator.floordiv, *dtypes)
+            for dtypes in make_scalar_floordiv_data()
+        ]
+        + [
+            (operator.truediv, *dtypes)
+            for dtypes in make_scalar_truediv_data()
+        ]
+        + [(operator.mod, *dtypes) for dtypes in make_scalar_remainder_data()]
+        + [(operator.pow, *dtypes) for dtypes in make_scalar_power_data()]
+    )
+
+
+@pytest.mark.parametrize("op,dtype_l,dtype_r", make_scalar_null_binops_data())
+def test_scalar_null_binops(op, dtype_l, dtype_r):
+    lhs = cudf.Scalar(cudf.NA, dtype=dtype_l)
+    rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
+
+    result = op(lhs, rhs)
+    assert result.value is cudf.NA
+
+    # make sure dtype is the same as had there been a valid scalar
+    valid_lhs = cudf.Scalar(0, dtype=dtype_l)
+    valid_rhs = cudf.Scalar(0, dtype=dtype_r)
+
+    valid_result = op(valid_lhs, valid_rhs)
+    assert result.dtype == valid_result.dtype
 
 
 @pytest.mark.parametrize(
@@ -3021,4 +2982,93 @@ def test_binops_dot(df, other):
     expected = pdf @ host_other
     got = df @ other
 
+    utils.assert_eq(expected, got)
+
+
+def test_binop_series_with_repeated_index():
+    # GH: #11094
+    psr1 = pd.Series([1, 1], index=["a", "a"])
+    psr2 = pd.Series([1], index=["a"])
+    gsr1 = cudf.from_pandas(psr1)
+    gsr2 = cudf.from_pandas(psr2)
+    expected = psr1 - psr2
+    got = gsr1 - gsr2
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_series():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_base = gs_base.to_pandas()
+    ps_exponent = gs_exponent.to_pandas()
+    expected = ps_base**ps_exponent
+    got = gs_base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_scalar():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = cudf.Scalar(1)
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent.value
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_int():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = 1
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_series():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base.value**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_scalar():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = cudf.Scalar(1)
+    expected = base.value**exponent.value
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_int():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = 1
+    expected = base.value**exponent
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_series():
+    # GH: #10178
+    base = 3
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_scalar():
+    # GH: #10178
+    base = 3
+    exponent = cudf.Scalar(1)
+    expected = base**exponent.value
+    got = base**exponent
     utils.assert_eq(expected, got)

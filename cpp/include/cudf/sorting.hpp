@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,15 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
 #include <vector>
 
 namespace cudf {
-
-/**
- * @brief Tie-breaker method to use for ranking the column.
- *
- * @ingroup column_sort
- */
-enum class rank_method {
-  FIRST,    ///< stable sort order ranking (no ties)
-  AVERAGE,  ///< mean of first in the group
-  MIN,      ///< min of first in the group
-  MAX,      ///< max of first in the group
-  DENSE     ///< rank always increases by 1 between groups
-};
 
 /**
  * @addtogroup column_sort
@@ -51,7 +41,7 @@ enum class rank_method {
  * equal to `input.num_columns()` or empty. If empty, all columns will be sorted
  * in ascending order.
  * @param null_precedence The desired order of null compared to other elements
- * for each column.  Size must be equal to `input.num_columns()` or empty.
+ * for each column. Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A non-nullable column of `size_type` elements containing the permuted row indices of
@@ -91,7 +81,7 @@ std::unique_ptr<column> stable_sorted_order(
  *                              `input.num_columns()` or empty. If empty,
  *                              `null_order::BEFORE` is assumed for all columns.
  *
- * @returns bool                true if sorted as expected, false if not.
+ * @returns bool                true if sorted as expected, false if not
  */
 bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
@@ -146,6 +136,36 @@ std::unique_ptr<table> sort_by_key(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Performs a key-value stable sort.
+ *
+ * Creates a new table that reorders the rows of `values` according to the
+ * lexicographic ordering of the rows of `keys`.
+ *
+ * The order of equivalent elements is guaranteed to be preserved.
+ *
+ * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
+ *
+ * @param values The table to reorder
+ * @param keys The table that determines the ordering
+ * @param column_order The desired order for each column in `keys`. Size must be
+ * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `keys`. Size must be equal to
+ * `keys.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return The reordering of `values` determined by the lexicographic order of
+ * the rows of `keys`.
+ */
+std::unique_ptr<table> stable_sort_by_key(
+  table_view const& values,
+  table_view const& keys,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Computes the ranks of input column in sorted order.
  *
  * Rank indicate the position of each element in the sorted column and rank
@@ -162,13 +182,13 @@ std::unique_ptr<table> sort_by_key(
  * @endcode
  *
  * @param input The column to rank
- * @param method The ranking method used for tie breaking (same values).
+ * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
  * @param null_handling  flag to include nulls during ranking. If nulls are not
  * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
  * for column
- * @param percentage flag to convert ranks to percentage in range (0,1}
+ * @param percentage flag to convert ranks to percentage in range (0,1]
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> A column of containing the rank of the each
  * element of the column of `input`. The output column type will be `size_type`
@@ -201,7 +221,7 @@ std::unique_ptr<column> rank(
  * `keys.num_columns()` or empty. If empty, all columns will be sorted with
  * `null_order::BEFORE`.
  * @param mr Device memory resource to allocate any returned objects
- * @return sorted order of the segment sorted table .
+ * @return sorted order of the segment sorted table
  *
  */
 std::unique_ptr<column> segmented_sorted_order(
@@ -242,7 +262,7 @@ std::unique_ptr<column> stable_segmented_sorted_order(
  * `keys.num_columns()` or empty. If empty, all columns will be sorted with
  * `null_order::BEFORE`.
  * @param mr Device memory resource to allocate any returned objects
- * @return table with elements in each segment sorted.
+ * @return table with elements in each segment sorted
  *
  */
 std::unique_ptr<table> segmented_sort_by_key(

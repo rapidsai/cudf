@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import operator
 
 from numba import types
@@ -15,8 +17,8 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from pandas._libs.missing import NAType as _NAType
 
+from cudf.core.missing import NA
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -61,7 +63,7 @@ class MaskedType(types.Type):
         Needed so that numba caches type instances with different
         `value_type` separately.
         """
-        return self.__repr__().__hash__()
+        return hash(repr(self))
 
     def unify(self, context, other):
         """
@@ -212,7 +214,7 @@ class NAType(types.Type):
 na_type = NAType()
 
 
-@typeof_impl.register(_NAType)
+@typeof_impl.register(type(NA))
 def typeof_na(val, c):
     """
     Tie instances of _NAType (cudf.NA) to our NAType.
@@ -271,7 +273,11 @@ class MaskedScalarNullOp(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
             # In the case of op(Masked, NA), the result has the same
             # dtype as the original regardless of what it is
-            return nb_signature(args[0], args[0], na_type,)
+            return nb_signature(
+                args[0],
+                args[0],
+                na_type,
+            )
         elif isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
             return nb_signature(args[1], na_type, args[1])
 
@@ -299,7 +305,11 @@ class MaskedScalarScalarOp(AbstractTemplate):
         return_type = self.context.resolve_function_type(
             self.key, to_resolve_types, kws
         ).return_type
-        return nb_signature(MaskedType(return_type), args[0], args[1],)
+        return nb_signature(
+            MaskedType(return_type),
+            args[0],
+            args[1],
+        )
 
 
 @cuda_decl_registry.register_global(operator.is_)
@@ -327,6 +337,36 @@ class MaskedScalarTruth(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType):
             return nb_signature(types.boolean, MaskedType(types.boolean))
+
+
+@cuda_decl_registry.register_global(float)
+class MaskedScalarFloatCast(AbstractTemplate):
+    """
+    Typing for float(Masked)
+    returns the result of calling "float" on the input
+    TODO: retains the validity of the input rather than
+    raising as in float(pd.NA)
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            # following numpy convention np.dtype(float) -> dtype('float64')
+            return nb_signature(MaskedType(types.float64), args[0])
+
+
+@cuda_decl_registry.register_global(int)
+class MaskedScalarIntCast(AbstractTemplate):
+    """
+    Typing for int(Masked)
+    returns the result of calling "int" on the input
+    TODO: retains the validity of the input rather than
+    raising as in int(pd.NA)
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            # following numpy convention np.dtype(int) -> dtype('int64')
+            return nb_signature(MaskedType(types.int64), args[0])
 
 
 @cuda_decl_registry.register_global(api.pack_return)

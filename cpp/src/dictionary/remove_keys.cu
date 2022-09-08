@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,13 @@
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -56,7 +59,7 @@ template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(
   dictionary_column_view const& dictionary_column,
   KeysKeeper keys_to_keep_fn,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const keys_view    = dictionary_column.keys();
@@ -148,7 +151,7 @@ std::unique_ptr<column> remove_keys_fn(
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
@@ -156,7 +159,7 @@ std::unique_ptr<column> remove_keys(
   CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
 
   // locate keys to remove by searching the keys column
-  auto const matches = cudf::detail::contains(keys_view, keys_to_remove, stream, mr);
+  auto const matches = cudf::detail::contains(keys_to_remove, keys_view, stream, mr);
   auto d_matches     = matches->view().data<bool>();
   // call common utility method to keep the keys not matched to keys_to_remove
   auto key_matcher = [d_matches] __device__(size_type idx) { return !d_matches[idx]; };
@@ -165,7 +168,7 @@ std::unique_ptr<column> remove_keys(
 
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // locate the keys to remove
@@ -179,7 +182,7 @@ std::unique_ptr<column> remove_unused_keys(
     thrust::sequence(rmm::exec_policy(stream), keys_positions.begin(), keys_positions.end());
     // wrap the indices for comparison in contains()
     column_view keys_positions_view(data_type{type_id::UINT32}, keys_size, keys_positions.data());
-    return cudf::detail::contains(keys_positions_view, indices_view, stream, mr);
+    return cudf::detail::contains(indices_view, keys_positions_view, stream, mr);
   }();
   auto d_matches = matches->view().data<bool>();
 
@@ -197,14 +200,14 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_keys(dictionary_column, keys_to_remove, rmm::cuda_stream_default, mr);
+  return detail::remove_keys(dictionary_column, keys_to_remove, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_unused_keys(dictionary_column, rmm::cuda_stream_default, mr);
+  return detail::remove_unused_keys(dictionary_column, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

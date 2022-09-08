@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,31 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+#include <thrust/scatter.h>
 #include <thrust/sequence.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -334,13 +345,14 @@ std::unique_ptr<column> rank(column_view const& input,
                              bool percentage,
                              rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::rank(input,
                       method,
                       column_order,
                       null_handling,
                       null_precedence,
                       percentage,
-                      rmm::cuda_stream_default,
+                      cudf::default_stream_value,
                       mr);
 }
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,14 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 
 namespace cudf {
@@ -82,7 +84,7 @@ bool is_sorted(cudf::table_view const& in,
   }
 
   return detail::is_sorted(
-    in, column_order, has_nulls(in), null_precedence, rmm::cuda_stream_default);
+    in, column_order, has_nulls(in), null_precedence, cudf::default_stream_value);
 }
 
 }  // namespace cudf

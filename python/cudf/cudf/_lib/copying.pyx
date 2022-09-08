@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pickle
+import warnings
 
 import pandas as pd
 
@@ -38,6 +39,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport (
+    columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
     data_from_unique_ptr,
@@ -166,7 +168,7 @@ def copy_range(Column input_column,
 
 
 def gather(
-    columns: list,
+    list columns,
     Column gather_map,
     bool nullify=False
 ):
@@ -190,60 +192,80 @@ def gather(
     return columns_from_unique_ptr(move(c_result))
 
 
-def scatter(object source, Column scatter_map, Column target_column,
-            bool bounds_check=True):
-    """
-    Scattering input into target as per the scatter map,
-    input can be a list of scalars or can be a table
-    """
-
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = table_view_from_columns(
-        (target_column,))
-    cdef bool c_bounds_check = bounds_check
+cdef scatter_scalar(list source_device_slrs,
+                    column_view scatter_map,
+                    table_view target_table,
+                    bool bounds_check):
+    cdef vector[reference_wrapper[constscalar]] c_source
+    cdef DeviceScalar d_slr
     cdef unique_ptr[table] c_result
 
-    # Needed for the table branch
-    cdef table_view source_table_view
+    c_source.reserve(len(source_device_slrs))
+    for d_slr in source_device_slrs:
+        c_source.push_back(
+            reference_wrapper[constscalar](d_slr.get_raw_ptr()[0])
+        )
 
-    # Needed for the scalar branch
-    cdef vector[reference_wrapper[constscalar]] source_scalars
-    cdef DeviceScalar slr
-
-    if isinstance(source, Column):
-        source_table_view = table_view_from_columns((<Column> source,))
-
-        with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source_table_view,
-                    scatter_map_view,
-                    target_table_view,
-                    c_bounds_check
-                )
+    with nogil:
+        c_result = move(
+            cpp_copying.scatter(
+                c_source,
+                scatter_map,
+                target_table,
+                bounds_check
             )
+        )
+
+    return columns_from_unique_ptr(move(c_result))
+
+
+cdef scatter_column(list source_columns,
+                    column_view scatter_map,
+                    table_view target_table,
+                    bool bounds_check):
+    cdef table_view c_source = table_view_from_columns(source_columns)
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.scatter(
+                c_source,
+                scatter_map,
+                target_table,
+                bounds_check
+            )
+        )
+    return columns_from_unique_ptr(move(c_result))
+
+
+def scatter(list sources, Column scatter_map, list target_columns,
+            bool bounds_check=True):
+    """
+    Scattering source into target as per the scatter map.
+    `source` can be a list of scalars, or a list of columns. The number of
+    items in `sources` must equal the number of `target_columns` to scatter.
+    """
+    # TODO: Only single column scatter is used, we should explore multi-column
+    # scatter for frames for performance increase.
+
+    if len(sources) != len(target_columns):
+        raise ValueError("Mismatched number of source and target columns.")
+
+    if len(sources) == 0:
+        return []
+
+    cdef column_view scatter_map_view = scatter_map.view()
+    cdef table_view target_table_view = table_view_from_columns(target_columns)
+
+    if isinstance(sources[0], Column):
+        return scatter_column(
+            sources, scatter_map_view, target_table_view, bounds_check
+        )
     else:
-        slr = as_device_scalar(source, target_column.dtype)
-        source_scalars.push_back(reference_wrapper[constscalar](
-            slr.get_raw_ptr()[0]))
-
-        with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source_scalars,
-                    scatter_map_view,
-                    target_table_view,
-                    c_bounds_check
-                )
-            )
-
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=(None,),
-        index_names=None
-    )
-
-    return next(iter(data.values()))
+        source_scalars = [as_device_scalar(slr) for slr in sources]
+        return scatter_scalar(
+            source_scalars, scatter_map_view, target_table_view, bounds_check
+        )
 
 
 def column_empty_like(Column input_column):
@@ -281,24 +303,14 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
-def table_empty_like(input_table, bool keep_index=True):
-
-    cdef table_view input_table_view = table_view_from_table(
-        input_table, not keep_index
-    )
-
+def columns_empty_like(list input_columns):
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_copying.empty_like(input_table_view))
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=input_table._column_names,
-        index_names=(
-            input_table._index._column_names if keep_index is True else None
-        )
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def column_slice(Column input_column, object indices):
@@ -330,20 +342,17 @@ def column_slice(Column input_column, object indices):
     return result
 
 
-def table_slice(input_table, object indices, bool keep_index=True):
+def columns_slice(list input_columns, list indices):
+    """
+    Given a list of input columns, return columns sliced by ``indices``.
 
-    cdef table_view input_table_view = table_view_from_table(
-        input_table, not keep_index
-    )
-
-    cdef vector[size_type] c_indices
-    c_indices.reserve(len(indices))
-
+    Returns a list of list of columns. The length of return is
+    `len(indices) / 2`. The `i`th item in return is a list of columns sliced
+    from ``input_columns`` with `slice(indices[i*2], indices[i*2 + 1])`.
+    """
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef vector[size_type] c_indices = indices
     cdef vector[table_view] c_result
-
-    cdef int index
-    for index in indices:
-        c_indices.push_back(index)
 
     with nogil:
         c_result = move(
@@ -352,18 +361,11 @@ def table_slice(input_table, object indices, bool keep_index=True):
                 c_indices)
         )
 
-    num_of_result_cols = c_result.size()
     return [
-        data_from_table_view(
-            c_result[i],
-            input_table,
-            column_names=input_table._column_names,
-            index_names=(
-                input_table._index._column_names if (
-                    keep_index is True)
-                else None
-            )
-        ) for i in range(num_of_result_cols)]
+        columns_from_table_view(
+            c_result[i], input_columns
+        ) for i in range(c_result.size())
+    ]
 
 
 def column_split(Column input_column, object splits):
@@ -397,20 +399,11 @@ def column_split(Column input_column, object splits):
     return result
 
 
-def table_split(input_table, object splits, bool keep_index=True):
+def columns_split(list input_columns, object splits):
 
-    cdef table_view input_table_view = table_view_from_table(
-        input_table, not keep_index
-    )
-
-    cdef vector[size_type] c_splits
-    c_splits.reserve(len(splits))
-
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef vector[size_type] c_splits = splits
     cdef vector[table_view] c_result
-
-    cdef int split
-    for split in splits:
-        c_splits.push_back(split)
 
     with nogil:
         c_result = move(
@@ -419,16 +412,11 @@ def table_split(input_table, object splits, bool keep_index=True):
                 c_splits)
         )
 
-    num_of_result_cols = c_result.size()
     return [
-        data_from_table_view(
-            c_result[i],
-            input_table,
-            column_names=input_table._column_names,
-            index_names=input_table._index_names if (
-                keep_index is True)
-            else None
-        ) for i in range(num_of_result_cols)]
+        columns_from_table_view(
+            c_result[i], input_columns
+        ) for i in range(c_result.size())
+    ]
 
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
@@ -621,9 +609,19 @@ def shift(Column input, int offset, object fill_value=None):
     cdef DeviceScalar fill
 
     if isinstance(fill_value, DeviceScalar):
+        fill_value_type = fill_value.dtype
         fill = fill_value
     else:
+        fill_value_type = type(fill_value)
         fill = as_device_scalar(fill_value, input.dtype)
+
+    if not cudf.utils.dtypes._can_cast(input.dtype, fill_value_type):
+        warnings.warn(
+            f"Passing {fill_value_type} to shift is deprecated and will "
+            f"raise in a future version"
+            f", pass a {input.dtype} scalar instead.",
+            FutureWarning,
+        )
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset
@@ -720,7 +718,11 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        gpu_data = Buffer(
+            data=self.gpu_data_ptr,
+            size=self.gpu_data_size,
+            owner=self
+        )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header
         frames.extend(data_frames)
@@ -779,7 +781,7 @@ cdef class _CPackedColumns:
         return p
 
     def unpack(self):
-        output_table = cudf.core.frame.Frame(*data_from_table_view(
+        output_table = cudf.DataFrame._from_data(*data_from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,

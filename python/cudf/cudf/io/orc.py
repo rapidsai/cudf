@@ -162,14 +162,16 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepaths_or_buffers, columns=None, **kwargs,
+    filepaths_or_buffers,
+    columns=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
         if compression is not None:
@@ -180,7 +182,7 @@ def read_orc_statistics(
             column_names,
             raw_file_statistics,
             raw_stripes_statistics,
-        ) = liborc.read_raw_orc_statistics(filepath_or_buffer)
+        ) = liborc.read_raw_orc_statistics(path_or_buf)
 
         # Parse column names
         column_names = [
@@ -285,19 +287,24 @@ def read_orc(
     skiprows=None,
     num_rows=None,
     use_index=True,
-    decimal_cols_as_float=None,
     timestamp_type=None,
     use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
-    if decimal_cols_as_float is not None:
+    from cudf import DataFrame
+
+    if skiprows is not None:
         warnings.warn(
-            "`decimal_cols_as_float` is deprecated and will be removed in "
-            "the future",
+            "skiprows is deprecated and will be removed.",
             FutureWarning,
         )
-    from cudf import DataFrame
+
+    if num_rows is not None:
+        warnings.warn(
+            "num_rows is deprecated and will be removed.",
+            FutureWarning,
+        )
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -321,12 +328,14 @@ def read_orc(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source, **kwargs,
+                passed_filesystem=None,
+                path=source,
+                **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
 
-        tmp_source, compression = ioutils.get_filepath_or_buffer(
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             use_python_file_object=use_python_file_object,
@@ -361,7 +370,6 @@ def read_orc(
                 skiprows,
                 num_rows,
                 use_index,
-                decimal_cols_as_float,
                 timestamp_type,
             )
         )
@@ -404,6 +412,7 @@ def to_orc(
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,
+    cols_as_map_type=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -426,6 +435,9 @@ def to_orc(
             "Categorical columns."
         )
 
+    if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):
+        raise TypeError("cols_as_map_type must be a list of column names.")
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
     )
@@ -440,6 +452,7 @@ def to_orc(
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
+                cols_as_map_type,
             )
     else:
         liborc.write_orc(
@@ -450,6 +463,7 @@ def to_orc(
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,
+            cols_as_map_type,
         )
 
 

@@ -28,8 +28,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -60,13 +59,14 @@ std::unique_ptr<column> add_keys(
     cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
 
   // Drop duplicates from the combined keys, then sort the result.
-  // sort(unordered_drop_duplicates([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
-  auto table_keys =
-    cudf::detail::unordered_drop_duplicates(table_view{{combined_keys->view()}},
-                                            std::vector<size_type>{0},  // only one key column
-                                            null_equality::EQUAL,
-                                            stream,
-                                            mr);
+  // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
+  auto table_keys = cudf::detail::distinct(table_view{{combined_keys->view()}},
+                                           std::vector<size_type>{0},  // only one key column
+                                           duplicate_keep_option::KEEP_ANY,
+                                           null_equality::EQUAL,
+                                           nan_equality::ALL_EQUAL,
+                                           stream,
+                                           mr);
   std::vector<order> column_order{order::ASCENDING};
   std::vector<null_order> null_precedence{null_order::AFTER};  // should be no nulls here
   auto sorted_keys =
@@ -132,7 +132,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
+  return detail::add_keys(dictionary_column, keys, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

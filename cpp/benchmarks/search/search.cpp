@@ -18,16 +18,11 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
-
-#include <random>
 
 class Search : public cudf::benchmark {
 };
@@ -75,38 +70,26 @@ BENCHMARK_REGISTER_F(Search, Column_Nulls)
 
 void BM_table(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<float>;
+  using Type = float;
 
   auto const num_columns{static_cast<cudf::size_type>(state.range(0))};
   auto const column_size{static_cast<cudf::size_type>(state.range(1))};
   auto const values_size = column_size;
 
-  auto make_table = [&](cudf::size_type col_size) {
-    cudf::test::UniformRandomGenerator<int> random_gen(0, 100);
-    auto data_it = cudf::detail::make_counting_transform_iterator(
-      0, [&](cudf::size_type row) { return random_gen.generate(); });
-    auto valid_it = cudf::detail::make_counting_transform_iterator(
-      0, [&](cudf::size_type row) { return random_gen.generate() < 90; });
-
-    std::vector<std::unique_ptr<cudf::column>> cols;
-    for (cudf::size_type i = 0; i < num_columns; i++) {
-      wrapper temp(data_it, data_it + col_size, valid_it);
-      cols.emplace_back(temp.release());
-    }
-
-    return cudf::table(std::move(cols));
-  };
-
-  auto data_table   = make_table(column_size);
-  auto values_table = make_table(values_size);
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.1).distribution(
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  auto data_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{column_size}, profile);
+  auto values_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{values_size}, profile);
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
-  auto sorted = cudf::sort(data_table);
+  auto sorted = cudf::sort(*data_table);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::lower_bound(sorted->view(), values_table, orders, null_orders);
+    auto col = cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
   }
 }
 

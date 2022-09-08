@@ -16,13 +16,13 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 static constexpr cudf::size_type default_repeat_times = 16;
 static constexpr cudf::size_type min_repeat_times     = -16;
@@ -35,17 +35,16 @@ static std::unique_ptr<cudf::table> create_data_table(cudf::size_type n_cols,
   CUDF_EXPECTS(n_cols == 1 || n_cols == 2, "Invalid number of columns.");
 
   std::vector<cudf::type_id> dtype_ids{cudf::type_id::STRING};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  auto builder = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
 
   if (n_cols == 2) {
     dtype_ids.push_back(cudf::type_id::INT32);
-    table_profile.set_distribution_params(
+    builder.distribution(
       cudf::type_id::INT32, distribution_id::NORMAL, min_repeat_times, max_repeat_times);
   }
 
-  return create_random_table(dtype_ids, row_count{n_rows}, table_profile);
+  return create_random_table(dtype_ids, row_count{n_rows}, data_profile{builder});
 }
 
 static void BM_repeat_strings_scalar_times(benchmark::State& state)
@@ -56,7 +55,7 @@ static void BM_repeat_strings_scalar_times(benchmark::State& state)
   auto const strings_col    = cudf::strings_column_view(table->view().column(0));
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings(strings_col, default_repeat_times);
   }
 
@@ -72,7 +71,7 @@ static void BM_repeat_strings_column_times(benchmark::State& state)
   auto const repeat_times_col = table->view().column(1);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings(strings_col, repeat_times_col);
   }
 
@@ -89,7 +88,7 @@ static void BM_compute_output_strings_sizes(benchmark::State& state)
   auto const repeat_times_col = table->view().column(1);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings_output_sizes(strings_col, repeat_times_col);
   }
 
@@ -108,7 +107,7 @@ static void BM_repeat_strings_column_times_precomputed_sizes(benchmark::State& s
     cudf::strings::repeat_strings_output_sizes(strings_col, repeat_times_col);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::repeat_strings(strings_col, repeat_times_col, *sizes);
   }
 

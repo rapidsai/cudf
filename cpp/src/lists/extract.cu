@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,19 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
+#include <cudf/lists/detail/extract.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/fill.h>
 #include <thrust/iterator/constant_iterator.h>
 
 #include <limits>
@@ -107,10 +111,10 @@ std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename index_t>
-std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
-                                             index_t const& index,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column,
+                                                  index_t const& index,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
 {
   auto const num_lists = lists_column.size();
   if (num_lists == 0) { return empty_like(lists_column.child()); }
@@ -135,6 +139,26 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
   return std::move(extracted_lists->release().children[lists_column_view::child_column_index]);
 }
 
+/**
+ * @copydoc cudf::lists::extract_list_element
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
+                                             size_type const index,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  return detail::extract_list_element_impl(lists_column, index, stream, mr);
+}
+
+std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
+                                             column_view const& indices,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  return detail::extract_list_element_impl(lists_column, indices, stream, mr);
+}
+
 }  // namespace detail
 
 /**
@@ -146,7 +170,8 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
                                              size_type index,
                                              rmm::mr::device_memory_resource* mr)
 {
-  return detail::extract_list_element(lists_column, index, rmm::cuda_stream_default, mr);
+  CUDF_FUNC_RANGE();
+  return detail::extract_list_element(lists_column, index, cudf::default_stream_value, mr);
 }
 
 /**
@@ -158,9 +183,10 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
                                              column_view const& indices,
                                              rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() == lists_column.size(),
                "Index column must have as many elements as lists column.");
-  return detail::extract_list_element(lists_column, indices, rmm::cuda_stream_default, mr);
+  return detail::extract_list_element(lists_column, indices, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

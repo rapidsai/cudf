@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,33 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf/column/column_view.hpp>
+
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <random>
+#include <cudf/unary.hpp>
 
 class ReductionDictionary : public cudf::benchmark {
 };
 
 template <typename T>
-void BM_reduction_dictionary(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
+void BM_reduction_dictionary(benchmark::State& state,
+                             std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(
-    (agg->kind == cudf::aggregation::ALL ? 1 : 0), (agg->kind == cudf::aggregation::ANY ? 0 : 100));
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::dictionary_column_wrapper<T, typename decltype(data_it)::value_type> values(
-    data_it, data_it + column_size);
+  // int column and encoded dictionary column
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    cudf::type_to_id<long>(),
+    distribution_id::UNIFORM,
+    (agg->kind == cudf::aggregation::ALL ? 1 : 0),
+    (agg->kind == cudf::aggregation::ANY ? 0 : 100));
+  auto int_column = create_random_column(cudf::type_to_id<long>(), row_count{column_size}, profile);
+  auto number_col = cudf::cast(*int_column, cudf::data_type{cudf::type_to_id<T>()});
+  auto values     = cudf::dictionary::encode(*number_col);
 
   cudf::data_type output_dtype = [&] {
     if (agg->kind == cudf::aggregation::ANY || agg->kind == cudf::aggregation::ALL)
@@ -48,12 +51,12 @@ void BM_reduction_dictionary(benchmark::State& state, std::unique_ptr<cudf::aggr
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(values, agg, output_dtype);
+    auto result = cudf::reduce(*values, agg, output_dtype);
   }
 }
 
 #define concat(a, b, c) a##b##c
-#define get_agg(op)     concat(cudf::make_, op, _aggregation())
+#define get_agg(op)     concat(cudf::make_, op, _aggregation<cudf::reduce_aggregation>())
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, aggregation)                       \

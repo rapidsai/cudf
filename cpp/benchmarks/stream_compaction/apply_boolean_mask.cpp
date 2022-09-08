@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,11 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <benchmark/benchmark.h>
-#include <chrono>
-#include <random>
 
 namespace {
 
@@ -44,16 +39,6 @@ void size_range(benchmark::internal::Benchmark* b)
   b->Unit(benchmark::kMillisecond);
   for (int size = tenK; size <= hundredM; size *= 10)
     b->Args({size, fifty_percent});
-}
-
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned const seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
 }
 
 template <typename T>
@@ -88,38 +73,22 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
 template <class T>
 void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
 {
-  using wrapper      = cudf::test::fixed_width_column_wrapper<T>;
-  using mask_wrapper = cudf::test::fixed_width_column_wrapper<bool>;
-
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
   const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))};
 
-  std::vector<wrapper> columns;
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.0).distribution(
+    cudf::type_to_id<T>(), distribution_id::UNIFORM, 0, 100);
 
-  std::vector<T> data(column_size);
-  std::vector<bool> validity(column_size, true);
+  auto source_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<T>()}, num_columns), row_count{column_size}, profile);
 
-  std::iota(data.begin(), data.end(), 0);
-
-  for (int i = 0; i < num_columns; i++) {
-    columns.emplace_back(data.cbegin(), data.cend(), validity.cbegin());
-  }
-
-  std::vector<bool> mask_data(column_size);
-  std::generate_n(
-    mask_data.begin(), column_size, [&]() { return random_int(0, 100) < percent_true; });
-  mask_wrapper mask(mask_data.begin(), mask_data.end());
-
-  std::vector<cudf::column_view> column_views(num_columns);
-
-  std::transform(columns.begin(), columns.end(), column_views.begin(), [](auto const& col) {
-    return static_cast<cudf::column_view>(col);
-  });
-  cudf::table_view source_table{column_views};
+  profile.set_bool_probability_true(percent_true / 100.0);
+  profile.set_null_probability(std::nullopt);  // no null mask
+  auto mask = create_random_column(cudf::type_id::BOOL8, row_count{column_size}, profile);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto result = cudf::apply_boolean_mask(source_table, mask);
+    auto result = cudf::apply_boolean_mask(*source_table, mask->view());
   }
 
   calculate_bandwidth<T>(state, num_columns);

@@ -26,8 +26,16 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
+#include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/remove.h>
+#include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
 namespace nvtext {
@@ -168,7 +176,7 @@ struct mark_special_tokens {
     });
     // search the special tokens array for the str_token
     cudf::string_view tokens(special_tokens, sizeof(special_tokens));
-    return tokens.find(str_token, size) >= 0;
+    return tokens.find(str_token, size) != cudf::string_view::npos;
   }
 
   /**
@@ -452,7 +460,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                                      num_code_points,
                                                                      device_token_ids.data(),
                                                                      device_tokens_per_word.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
@@ -464,7 +472,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                          device_start_word_indices,
                                                          device_end_word_indices,
                                                          num_strings);
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // check for special tokens and adjust indices
   thrust::for_each_n(
@@ -507,7 +515,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
       num_words,
       device_token_ids.data(),
       device_tokens_per_word.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.

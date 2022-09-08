@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 
 import cudf
@@ -34,12 +34,13 @@ def from_dlpack(pycapsule_obj):
     tensor is row-major, transpose it before passing it to this function.
     """
 
-    data, _ = libdlpack.from_dlpack(pycapsule_obj)
+    columns = libdlpack.from_dlpack(pycapsule_obj)
+    column_names = range(len(columns))
 
-    if len(data) == 1:
-        return cudf.Series._from_data(data)
+    if len(columns) == 1:
+        return cudf.Series._from_columns(columns, column_names=column_names)
     else:
-        return cudf.DataFrame._from_data(data)
+        return cudf.DataFrame._from_columns(columns, column_names=column_names)
 
 
 @ioutils.doc_to_dlpack()
@@ -67,9 +68,6 @@ def to_dlpack(cudf_obj):
     cuDF to_dlpack() produces column-major (Fortran order) output. If the
     output tensor needs to be row major, transpose the output of this function.
     """
-    if len(cudf_obj) == 0:
-        raise ValueError("Cannot create DLPack tensor of 0 size")
-
     if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
@@ -91,4 +89,4 @@ def to_dlpack(cudf_obj):
     )
     gdf = gdf.astype(dtype)
 
-    return libdlpack.to_dlpack(gdf)
+    return libdlpack.to_dlpack([*gdf._columns])

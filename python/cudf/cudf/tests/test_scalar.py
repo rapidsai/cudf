@@ -1,7 +1,6 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import datetime
-import datetime as dt
 import re
 from decimal import Decimal
 
@@ -10,8 +9,9 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
-from cudf import Scalar as pycudf_scalar
 from cudf._lib.copying import get_element
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -19,6 +19,13 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_scalar_cache():
+    cudf.Scalar._clear_instance_cache()
+    yield
+
 
 TEST_DECIMAL_TYPES = [
     cudf.Decimal64Dtype(1, 1),
@@ -137,7 +144,7 @@ def test_scalar_device_initialization(value):
     column = cudf.Series([value], nan_as_null=False)._column
     dev_slr = get_element(column, 0)
 
-    s = cudf.Scalar(dev_slr)
+    s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -158,7 +165,7 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
     column = cudf.Series([str(value)]).astype(dtype)._column
     dev_slr = get_element(column, 0)
 
-    s = cudf.Scalar(dev_slr)
+    s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -171,6 +178,7 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_scalar_roundtrip(value):
+
     s = cudf.Scalar(value)
 
     assert s._is_host_value_current
@@ -297,9 +305,9 @@ def test_date_duration_scalars(value):
 
     actual = s.value
 
-    if isinstance(value, dt.datetime):
+    if isinstance(value, datetime.datetime):
         expected = np.datetime64(value)
-    elif isinstance(value, dt.timedelta):
+    elif isinstance(value, datetime.timedelta):
         expected = np.timedelta64(value)
     elif isinstance(value, pd.Timestamp):
         expected = value.to_datetime64()
@@ -344,7 +352,7 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
         cls(pd.NA)
     except TypeError as e:
         with pytest.raises(TypeError, match=re.escape(str(e))):
-            slr = pycudf_scalar(None, dtype=dtype)
+            slr = cudf.Scalar(None, dtype=dtype)
             cls(slr)
 
 
@@ -354,7 +362,7 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_device_scalar_direct_construction(value, decimal_type):
-    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
 
     dtype = (
         value.dtype
@@ -378,7 +386,7 @@ def test_device_scalar_direct_construction(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_construct_from_scalar(value):
-    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
     x = cudf.Scalar(
         value, value.dtype if not isinstance(value, Decimal) else None
     )
@@ -402,3 +410,36 @@ def test_datetime_scalar_from_string(data, dtype):
     expected = np.datetime64(datetime.datetime(2000, 1, 1)).astype(dtype)
 
     assert expected == slr.value
+
+
+def test_scalar_cache():
+    s = cudf.Scalar(1)
+    s2 = cudf.Scalar(1)
+
+    assert s is s2
+
+
+def test_scalar_cache_rmm_hook():
+    # test that reinitializing rmm clears the cuDF scalar cache, as we
+    # register a hook with RMM that does that on reinitialization
+    s = cudf.Scalar(1)
+    s2 = cudf.Scalar(1)
+
+    assert s is s2
+
+    rmm.reinitialize()
+
+    s3 = cudf.Scalar(1)
+    assert s3 is not s
+
+
+def test_default_integer_bitwidth_scalar(default_integer_bitwidth):
+    # Test that integer scalars are default to 32 bits under user options.
+    slr = cudf.Scalar(128)
+    assert slr.dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+
+
+def test_default_float_bitwidth_scalar(default_float_bitwidth):
+    # Test that float scalars are default to 32 bits under user options.
+    slr = cudf.Scalar(128.0)
+    assert slr.dtype == np.dtype(f"f{default_float_bitwidth//8}")

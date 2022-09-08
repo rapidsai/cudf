@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,10 +27,11 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/lists/detail/drop_list_duplicates.hpp>
+#include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -98,7 +99,7 @@ void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& a
     agg,
     detail::group_sum(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
@@ -110,7 +111,7 @@ void aggregate_result_functor::operator()<aggregation::PRODUCT>(aggregation cons
     agg,
     detail::group_product(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
@@ -125,7 +126,7 @@ void aggregate_result_functor::operator()<aggregation::ARGMAX>(aggregation const
                                         helper.key_sort_order(stream),
                                         stream,
                                         mr));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg)
@@ -140,7 +141,7 @@ void aggregate_result_functor::operator()<aggregation::ARGMIN>(aggregation const
                                         helper.key_sort_order(stream),
                                         stream,
                                         mr));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
@@ -180,7 +181,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
   }();
 
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
@@ -220,7 +221,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
   }();
 
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
@@ -247,7 +248,7 @@ void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& 
                                    stream,
                                    mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::M2>(aggregation const& agg)
@@ -262,7 +263,7 @@ void aggregate_result_functor::operator()<aggregation::M2>(aggregation const& ag
     values,
     agg,
     detail::group_m2(get_grouped_values(), mean_result, helper.group_labels(stream), stream, mr));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg)
@@ -285,7 +286,7 @@ void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation con
                                   stream,
                                   mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& agg)
@@ -299,7 +300,7 @@ void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& a
 
   auto result = cudf::detail::unary_operation(var_result, unary_operator::SQRT, stream, mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::QUANTILE>(aggregation const& agg)
@@ -320,7 +321,7 @@ void aggregate_result_functor::operator()<aggregation::QUANTILE>(aggregation con
                                         stream,
                                         mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::MEDIAN>(aggregation const& agg)
@@ -340,7 +341,7 @@ void aggregate_result_functor::operator()<aggregation::MEDIAN>(aggregation const
                                         stream,
                                         mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& agg)
@@ -357,7 +358,7 @@ void aggregate_result_functor::operator()<aggregation::NUNIQUE>(aggregation cons
                                       stream,
                                       mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg)
@@ -403,7 +404,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation
                                       stream,
                                       mr);
   cache.add_result(values, agg, std::move(result));
-};
+}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation const& agg)
@@ -425,9 +426,9 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
   cache.add_result(
     values,
     agg,
-    lists::detail::drop_list_duplicates(
-      lists_column_view(collect_result->view()), nulls_equal, nans_equal, stream, mr));
-};
+    lists::detail::distinct(
+      lists_column_view{collect_result->view()}, nulls_equal, nans_equal, stream, mr));
+}
 
 /**
  * @brief Perform merging for the lists that correspond to the same key value.
@@ -454,7 +455,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation 
     agg,
     detail::group_merge_lists(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
-};
+}
 
 /**
  * @brief Perform merging for the lists corresponding to the same key value, then dropping duplicate
@@ -472,13 +473,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation 
  * column for this aggregation.
  *
  * Firstly, this aggregation performs `MERGE_LISTS` to concatenate the input lists (corresponding to
- * the same key) into intermediate lists, then it calls `lists::drop_list_duplicates` on them to
+ * the same key) into intermediate lists, then it calls `lists::distinct` on them to
  * remove duplicate list entries. As such, the input (partial results) to this aggregation should be
  * generated by (distributed) `COLLECT_LIST` aggregations, not `COLLECT_SET`, to avoid unnecessarily
  * removing duplicate entries for the partial results.
  *
  * Since duplicate list entries will be removed, the parameters `null_equality` and `nan_equality`
- * are needed for calling to `lists::drop_list_duplicates`.
+ * are needed for calling `lists::distinct`.
  */
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation const& agg)
@@ -493,12 +494,12 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
   auto const& merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
   cache.add_result(values,
                    agg,
-                   lists::detail::drop_list_duplicates(lists_column_view(merged_result->view()),
-                                                       merge_sets_agg._nulls_equal,
-                                                       merge_sets_agg._nans_equal,
-                                                       stream,
-                                                       mr));
-};
+                   lists::detail::distinct(lists_column_view{merged_result->view()},
+                                           merge_sets_agg._nulls_equal,
+                                           merge_sets_agg._nans_equal,
+                                           stream,
+                                           mr));
+}
 
 /**
  * @brief Perform merging for the M2 values that correspond to the same key value.
@@ -527,7 +528,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
     agg,
     detail::group_merge_m2(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
-};
+}
 
 /**
  * @brief Creates column views with only valid elements in both input column views
@@ -599,7 +600,7 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
                                             cov_agg._ddof,
                                             stream,
                                             mr));
-};
+}
 
 /**
  * @brief Perform correlation between two child columns of non-nullable struct column.
@@ -700,7 +701,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   detail::group_tdigest(
+                   cudf::detail::tdigest::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -709,7 +710,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
                      max_centroids,
                      stream,
                      mr));
-};
+}
 
 /**
  * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
@@ -744,14 +745,14 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   detail::group_merge_tdigest(get_grouped_values(),
-                                               helper.group_offsets(stream),
-                                               helper.group_labels(stream),
-                                               helper.num_groups(stream),
-                                               max_centroids,
-                                               stream,
-                                               mr));
-};
+                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                                                              helper.group_offsets(stream),
+                                                              helper.group_labels(stream),
+                                                              helper.num_groups(stream),
+                                                              max_centroids,
+                                                              stream,
+                                                              mr));
+}
 
 }  // namespace detail
 
@@ -777,7 +778,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
 
   auto results = detail::extract_results(requests, cache, stream, mr);
 
-  return std::make_pair(helper().unique_keys(stream, mr), std::move(results));
+  return std::pair(helper().unique_keys(stream, mr), std::move(results));
 }
 }  // namespace groupby
 }  // namespace cudf

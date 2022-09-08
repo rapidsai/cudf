@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,11 @@ bool is_element_valid_sync(column_view const& col_view,
   bitmask_type word;
   // null_mask() returns device ptr to bitmask without offset
   size_type index = element_index + col_view.offset();
-  CUDA_TRY(cudaMemcpyAsync(&word,
-                           col_view.null_mask() + word_index(index),
-                           sizeof(bitmask_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(&word,
+                                col_view.null_mask() + word_index(index),
+                                sizeof(bitmask_type),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
   stream.synchronize();
   return static_cast<bool>(word & (bitmask_type{1} << intra_word_index(index)));
 }

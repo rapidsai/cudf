@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 """
 Test related to Cut
@@ -132,15 +132,26 @@ def test_cut_labels_non_unique(
     ],
 )
 @pytest.mark.parametrize(
-    "bins", [1, 2, 3, [1, 2, 3], [0, 2, 4, 6, 10]],
+    "bins",
+    [1, 2, 3, [1, 2, 3], [0, 2, 4, 6, 10]],
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("precision", [3])
 def test_cut_right(x, bins, right, precision):
 
-    pcat = pd.cut(x=x, bins=bins, right=right, precision=precision,)
+    pcat = pd.cut(
+        x=x,
+        bins=bins,
+        right=right,
+        precision=precision,
+    )
     pindex = pd.CategoricalIndex(pcat)
-    gindex = cut(x=x, bins=bins, right=right, precision=precision,)
+    gindex = cut(
+        x=x,
+        bins=bins,
+        right=right,
+        precision=precision,
+    )
 
     assert_eq(pindex, gindex)
 
@@ -155,7 +166,8 @@ def test_cut_right(x, bins, right, precision):
     ],
 )
 @pytest.mark.parametrize(
-    "bins", [[0, 2, 4, 6, 10, 10], [1, 2, 2, 3, 3]],
+    "bins",
+    [[0, 2, 4, 6, 10, 10], [1, 2, 2, 3, 3]],
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
@@ -199,7 +211,8 @@ def test_cut_drop_duplicates(
     ],
 )
 @pytest.mark.parametrize(
-    "bins", [[0, 2, 4, 6, 10, 10], [1, 2, 2, 3, 3]],
+    "bins",
+    [[0, 2, 4, 6, 10, 10], [1, 2, 2, 3, 3]],
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
@@ -244,7 +257,8 @@ def test_cut_drop_duplicates_raises(
     ],
 )
 @pytest.mark.parametrize(
-    "bins", [pd.IntervalIndex.from_tuples([(0, 1), (2, 3), (4, 5)])],
+    "bins",
+    [pd.IntervalIndex.from_tuples([(0, 1), (2, 3), (4, 5)])],
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("precision", [1, 2, 3])

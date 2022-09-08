@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,47 +14,43 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
 
 #include <memory>
-#include <random>
 
 class Reduction : public cudf::benchmark {
 };
 
 template <typename type>
-void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
+void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  auto const dtype = cudf::type_to_id<type>();
+  data_profile const profile =
+    data_profile_builder().no_validity().distribution(dtype, distribution_id::UNIFORM, 0, 100);
+  auto const input_column = create_random_column(dtype, row_count{column_size}, profile);
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
-    data_it, data_it + column_size);
-
-  auto input_column = cudf::column_view(values);
   cudf::data_type output_dtype =
     (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
      agg->kind == cudf::aggregation::STD)
       ? cudf::data_type{cudf::type_id::FLOAT64}
-      : input_column.type();
+      : input_column->type();
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(input_column, agg, output_dtype);
+    auto result = cudf::reduce(*input_column, agg, output_dtype);
   }
 }
 
 #define concat(a, b, c) a##b##c
-#define get_agg(op)     concat(cudf::make_, op, _aggregation())
+#define get_agg(op)     concat(cudf::make_, op, _aggregation<cudf::reduce_aggregation>())
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, aggregation)             \

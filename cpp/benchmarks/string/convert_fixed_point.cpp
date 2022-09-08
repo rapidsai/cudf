@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
-
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
@@ -28,9 +26,9 @@ namespace {
 
 std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 {
-  std::unique_ptr<cudf::table> result =
-    create_random_table({cudf::type_id::FLOAT32}, row_count{static_cast<cudf::size_type>(rows)});
-  return cudf::strings::from_floats(result->release().front()->view());
+  auto result =
+    create_random_column(cudf::type_id::FLOAT32, row_count{static_cast<cudf::size_type>(rows)});
+  return cudf::strings::from_floats(result->view());
 }
 
 }  // anonymous namespace

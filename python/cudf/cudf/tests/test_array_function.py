@@ -1,17 +1,36 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
-from cudf.utils.utils import IS_NEP18_ACTIVE
 
-missing_arrfunc_cond = not IS_NEP18_ACTIVE
+
+# To determine if NEP18 is available in the current version of NumPy we simply
+# attempt to concatenate an object with `__array_function__` defined and see if
+# NumPy invokes the protocol or not. Taken from dask array
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
+# TODO: Unclear if this is still necessary. NEP 18 was introduced as the
+# default in 1.17 (https://github.com/numpy/numpy/releases/tag/v1.17.0) almost
+# 3 years ago, and it was originally introduced one version before in 1.16
+# (although not enabled by default then). Can we safely assume that testers
+# will have a sufficiently new version of numpy to run these tests?
+class _Test:
+    def __array_function__(self, *args, **kwargs):
+        return True
+
+
+try:
+    np.concatenate([_Test()])
+except ValueError:
+    missing_arrfunc_cond = True
+else:
+    missing_arrfunc_cond = False
+
+del _Test
+
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
-
-# Test implementation based on dask array test
-# https://github.com/dask/dask/blob/master/dask/array/tests/test_array_function.py
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

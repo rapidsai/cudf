@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace lists {
@@ -45,8 +47,8 @@ namespace lists {
  * @throws cudf::logic_error if gather_map is not list column of an index type.
  *
  * If indices in `gather_map_list` are outside the range `[-n, n)`, where `n` is the number of
- * elements in corresponding row of the source column, the behaviour is as follows:
- *   1. If `bounds_policy` is set to `DONT_CHECK`, the behaviour is undefined.
+ * elements in corresponding row of the source column, the behavior is as follows:
+ *   1. If `bounds_policy` is set to `DONT_CHECK`, the behavior is undefined.
  *   2. If `bounds_policy` is set to `NULLIFY`, the corresponding element in the list row
  *      is set to null in the output column.
  *

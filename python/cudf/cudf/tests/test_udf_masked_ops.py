@@ -7,7 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core.scalar import NA
+from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
@@ -243,6 +243,15 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
+def test_apply_contains():
+    def func(row):
+        x = row["a"]
+        return x in [1, 2]
+
+    gdf = cudf.DataFrame({"a": [1, 3]})
+    run_masked_udf_test(func, gdf, check_dtype=False)
+
+
 @parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
 def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
@@ -367,9 +376,12 @@ def test_apply_everything():
 
 
 @pytest.mark.parametrize(
-    "data", [cudf.Series([1, 2, 3]), cudf.Series([1, cudf.NA, 3])]
+    "data,name",
+    [([1, 2, 3], None), ([1, cudf.NA, 3], None), ([1, 2, 3], "test_name")],
 )
-def test_series_apply_basic(data):
+def test_series_apply_basic(data, name):
+    data = cudf.Series(data, name=name)
+
     def func(x):
         return x + 1
 
@@ -644,16 +656,16 @@ def test_masked_udf_caching():
     # recompile
 
     data = cudf.Series([1, 2, 3])
-    expect = data ** 2
-    got = data.applymap(lambda x: x ** 2)
 
+    expect = data**2
+    got = data.apply(lambda x: x**2)
     assert_eq(expect, got, check_dtype=False)
 
     # update the constant value being used and make sure
     # it does not result in a cache hit
 
-    expect = data ** 3
-    got = data.applymap(lambda x: x ** 3)
+    expect = data**3
+    got = data.apply(lambda x: x**3)
     assert_eq(expect, got, check_dtype=False)
 
     # make sure we get a hit when reapplying
@@ -668,3 +680,16 @@ def test_masked_udf_caching():
     data.apply(f)
 
     assert precompiled.currsize == 1
+
+
+@pytest.mark.parametrize(
+    "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
+)
+@pytest.mark.parametrize("operator", [float, int, bool])
+def test_masked_udf_casting(operator, data):
+    data = cudf.Series(data)
+
+    def func(x):
+        return operator(x)
+
+    run_masked_udf_series(func, data, check_dtype=False)

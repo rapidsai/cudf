@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 namespace cudf {
 namespace io {
@@ -360,19 +360,19 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
 {
   if (bytestream_readbyte(bs, pos) > 0x7f) {
     uint32_t next32 = bytestream_readu32(bs, pos + 1);
-    uint32_t zbit   = __ffs((~next32) & 0x80808080);
+    uint32_t zbit   = __ffs((~next32) & 0x8080'8080);
     if (sizeof(T) <= 4 || zbit) {
       return 1 + (zbit >> 3);  // up to 5x7 bits
     } else {
       next32 = bytestream_readu32(bs, pos + 5);
-      zbit   = __ffs((~next32) & 0x80808080);
+      zbit   = __ffs((~next32) & 0x8080'8080);
       if (zbit) {
         return 5 + (zbit >> 3);  // up to 9x7 bits
       } else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f)) {
         return 10;  // up to 70 bits
       } else {
         uint64_t next64 = bytestream_readu64(bs, pos + 10);
-        zbit            = __ffsll((~next64) & 0x8080808080808080ull);
+        zbit            = __ffsll((~next64) & 0x8080'8080'8080'8080ull);
         if (zbit) {
           return 10 + (zbit >> 3);  // Up to 18x7 bits (126)
         } else {
@@ -405,10 +405,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
       v = (v & 0x3fff) | (b << 14);
       if (b > 0x7f) {
         b = bytestream_readbyte(bs, pos++);
-        v = (v & 0x1fffff) | (b << 21);
+        v = (v & 0x1f'ffff) | (b << 21);
         if (b > 0x7f) {
           b = bytestream_readbyte(bs, pos++);
-          v = (v & 0x0fffffff) | (b << 28);
+          v = (v & 0x0fff'ffff) | (b << 28);
           if constexpr (sizeof(T) > 4) {
             uint32_t lo = v;
             uint64_t hi;
@@ -421,10 +421,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
                 v = (v & 0x3ff) | (b << 10);
                 if (b > 0x7f) {
                   b = bytestream_readbyte(bs, pos++);
-                  v = (v & 0x1ffff) | (b << 17);
+                  v = (v & 0x1'ffff) | (b << 17);
                   if (b > 0x7f) {
                     b = bytestream_readbyte(bs, pos++);
-                    v = (v & 0xffffff) | (b << 24);
+                    v = (v & 0xff'ffff) | (b << 24);
                     if (b > 0x7f) {
                       pos++;  // last bit is redundant (extra byte implies bit63 is 1)
                     }
@@ -962,15 +962,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s* bs,
   return rle->num_vals;
 }
 
-/**
- * @brief Powers of 10
- */
-static const __device__ __constant__ double kPow10[40] = {
-  1.0,   1.e1,  1.e2,  1.e3,  1.e4,  1.e5,  1.e6,  1.e7,  1.e8,  1.e9,  1.e10, 1.e11, 1.e12, 1.e13,
-  1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19, 1.e20, 1.e21, 1.e22, 1.e23, 1.e24, 1.e25, 1.e26, 1.e27,
-  1.e28, 1.e29, 1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36, 1.e37, 1.e38, 1.e39,
-};
-
 static const __device__ __constant__ int64_t kPow5i[28] = {1,
                                                            5,
                                                            25,
@@ -1045,34 +1036,24 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
       auto const pos = static_cast<int>(vals.i64[2 * t]);
       __int128_t v   = decode_varint128(bs, pos);
 
-      if (dtype_id == type_id::FLOAT64) {
-        double f      = v;
-        int32_t scale = (t < numvals) ? val_scale : 0;
-        if (scale >= 0)
-          vals.f64[t] = f / kPow10[min(scale, 39)];
-        else
-          vals.f64[t] = f * kPow10[min(-scale, 39)];
-      } else {
-        auto const scaled_value = [&]() {
-          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
-          // val_scale. So the difference of them will be used to add 0s or remove digits.
-          int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-          if (scale >= 0) {
-            scale = min(scale, 27);
-            return (v * kPow5i[scale]) << scale;
-          } else  // if (scale < 0)
-          {
-            scale = min(-scale, 27);
-            return (v / kPow5i[scale]) >> scale;
-          }
-        }();
-        if (dtype_id == type_id::DECIMAL32) {
-          vals.i32[t] = scaled_value;
-        } else if (dtype_id == type_id::DECIMAL64) {
-          vals.i64[t] = scaled_value;
+      auto const scaled_value = [&]() {
+        // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+        // val_scale. So the difference of them will be used to add 0s or remove digits.
+        int32_t const scale = (t < numvals) ? col_scale - val_scale : 0;
+        if (scale >= 0) {
+          auto const abs_scale = min(scale, 27);
+          return (v * kPow5i[abs_scale]) << abs_scale;
         } else {
-          vals.i128[t] = scaled_value;
+          auto const abs_scale = min(-scale, 27);
+          return (v / kPow5i[abs_scale]) >> abs_scale;
         }
+      }();
+      if (dtype_id == type_id::DECIMAL32) {
+        vals.i32[t] = scaled_value;
+      } else if (dtype_id == type_id::DECIMAL64) {
+        vals.i64[t] = scaled_value;
+      } else {
+        vals.i128[t] = scaled_value;
       }
     }
     // There is nothing to read, so break
@@ -1227,7 +1208,7 @@ __global__ void __launch_bounds__(block_size)
           // Need to arrange the bytes to apply mask properly.
           uint32_t bits = (i + 32 <= skippedrows) ? s->vals.u32[i >> 5]
                                                   : (__byte_perm(s->vals.u32[i >> 5], 0, 0x0123) &
-                                                     (0xffffffffu << (0x20 - skippedrows + i)));
+                                                     (0xffff'ffffu << (0x20 - skippedrows + i)));
           skip_count += __popc(bits);
         }
         skip_count = warp_reduce(temp_storage.wr_storage[t / 32]).Sum(skip_count);
@@ -1711,8 +1692,7 @@ __global__ void __launch_bounds__(block_size)
             case DECIMAL:
               if (s->chunk.dtype_id == type_id::DECIMAL32) {
                 static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
-              } else if (s->chunk.dtype_id == type_id::FLOAT64 or
-                         s->chunk.dtype_id == type_id::DECIMAL64) {
+              } else if (s->chunk.dtype_id == type_id::DECIMAL64) {
                 static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               } else {
                 // decimal128

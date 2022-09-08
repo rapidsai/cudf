@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,14 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <random>
 
@@ -52,18 +52,20 @@ static void BM_extract(benchmark::State& state, int groups)
     pattern += "(\\d+) ";
   }
 
-  std::uniform_int_distribution<int> distribution(0, samples.size() - 1);
-  auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto idx) { return samples.at(distribution(generator)); });
-  cudf::test::strings_column_wrapper input(elements, elements + n_rows);
-  cudf::strings_column_view view(input);
+  cudf::test::strings_column_wrapper samples_column(samples.begin(), samples.end());
+  data_profile const profile = data_profile_builder().no_validity().distribution(
+    cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0ul, samples.size() - 1);
+  auto map = create_random_column(cudf::type_to_id<cudf::size_type>(), row_count{n_rows}, profile);
+  auto input = cudf::gather(
+    cudf::table_view{{samples_column}}, map->view(), cudf::out_of_bounds_policy::DONT_CHECK);
+  cudf::strings_column_view strings_view(input->get_column(0).view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
-    auto results = cudf::strings::extract(view, pattern);
+    auto results = cudf::strings::extract(strings_view, pattern);
   }
 
-  state.SetBytesProcessed(state.iterations() * view.chars_size());
+  state.SetBytesProcessed(state.iterations() * strings_view.chars_size());
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

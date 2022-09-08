@@ -1,7 +1,7 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-import collections
 import enum
+from collections import abc
 from typing import (
     Any,
     Dict,
@@ -18,7 +18,7 @@ import numpy as np
 from numba.cuda import as_cuda_array
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, DeviceBufferLike
 from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
@@ -64,12 +64,12 @@ class _CuDFBuffer:
 
     def __init__(
         self,
-        buf: cudf.core.buffer.Buffer,
+        buf: DeviceBufferLike,
         dtype: np.dtype,
         allow_copy: bool = True,
     ) -> None:
         """
-        Use cudf.core.buffer.Buffer object.
+        Use DeviceBufferLike object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
@@ -80,9 +80,9 @@ class _CuDFBuffer:
     @property
     def bufsize(self) -> int:
         """
-        Buffer size in bytes.
+        The DeviceBufferLike size in bytes.
         """
-        return self._buf.nbytes
+        return self._buf.size
 
     @property
     def ptr(self) -> int:
@@ -92,17 +92,12 @@ class _CuDFBuffer:
         return self._buf.ptr
 
     def __dlpack__(self):
-        """
-        DLPack not implemented in NumPy yet, so leave it out here.
-        """
+        # DLPack not implemented in NumPy yet, so leave it out here.
         try:
-            cudarray = as_cuda_array(self._buf).view(self._dtype)
-            res = cp.asarray(cudarray).toDlpack()
-
+            cuda_array = as_cuda_array(self._buf).view(self._dtype)
+            return cp.asarray(cuda_array).toDlpack()
         except ValueError:
             raise TypeError(f"dtype {self._dtype} unsupported by `dlpack`")
-
-        return res
 
     def __dlpack_device__(self) -> Tuple[_Device, int]:
         """
@@ -191,25 +186,25 @@ class _CuDFColumn:
                         Data Interface format.
         Endianness : current only native endianness (``=``) is supported
 
-        Notes:
-
-            - Kind specifiers are aligned with DLPack where possible
-             (hence the jump to 20, leave enough room for future extension)
-            - Masks must be specified as boolean with either bit width 1
-             (for bit masks) or 8 (for byte masks).
-            - Dtype width in bits was preferred over bytes
-            - Endianness isn't too useful, but included now in case
-              in the future we need to support non-native endianness
-            - Went with Apache Arrow format strings over NumPy format strings
-              because they're more complete from a dataframe perspective
-            - Format strings are mostly useful for datetime specification,
-              and for categoricals.
-            - For categoricals, the format string describes the type of the
-              categorical in the data buffer. In case of a separate encoding
-              of the categorical (e.g. an integer to string mapping),
-              this can be derived from ``self.describe_categorical``.
-            - Data types not included: complex, Arrow-style null,
-              binary, decimal, and nested (list, struct, map, union) dtypes.
+        Notes
+        -----
+        - Kind specifiers are aligned with DLPack where possible
+         (hence the jump to 20, leave enough room for future extension)
+        - Masks must be specified as boolean with either bit width 1
+         (for bit masks) or 8 (for byte masks).
+        - Dtype width in bits was preferred over bytes
+        - Endianness isn't too useful, but included now in case
+          in the future we need to support non-native endianness
+        - Went with Apache Arrow format strings over NumPy format strings
+          because they're more complete from a dataframe perspective
+        - Format strings are mostly useful for datetime specification,
+          and for categoricals.
+        - For categoricals, the format string describes the type of the
+          categorical in the data buffer. In case of a separate encoding
+          of the categorical (e.g. an integer to string mapping),
+          this can be derived from ``self.describe_categorical``.
+        - Data types not included: complex, Arrow-style null,
+          binary, decimal, and nested (list, struct, map, union) dtypes.
         """
         dtype = self._col.dtype
 
@@ -438,7 +433,9 @@ class _CuDFColumn:
                 f"See {self.__class__.__name__}.describe_null method."
             )
 
-    def _get_offsets_buffer(self,) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
+    def _get_offsets_buffer(
+        self,
+    ) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
         """
         Return the buffer containing the offset values for
         variable-size binary data (e.g., variable-length strings)
@@ -464,7 +461,9 @@ class _CuDFColumn:
 
         return buffer, dtype
 
-    def _get_data_buffer(self,) -> Tuple[_CuDFBuffer, ProtoDtype]:
+    def _get_data_buffer(
+        self,
+    ) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
         Return the buffer containing the data and
                the buffer's associated dtype.
@@ -565,13 +564,13 @@ class _CuDFDataFrame:
         ]
 
     def select_columns(self, indices: Sequence[int]) -> "_CuDFDataFrame":
-        if not isinstance(indices, collections.abc.Sequence):
+        if not isinstance(indices, abc.Sequence):
             raise ValueError("`indices` is not a sequence")
 
         return _CuDFDataFrame(self._df.iloc[:, indices])
 
     def select_columns_by_name(self, names: Sequence[str]) -> "_CuDFDataFrame":
-        if not isinstance(names, collections.Sequence):
+        if not isinstance(names, abc.Sequence):
             raise ValueError("`names` is not a sequence")
 
         return _CuDFDataFrame(
@@ -618,11 +617,11 @@ from_dataframe : construct a cudf.DataFrame from an input data frame which
 Notes
 -----
 
-- Interpreting a raw pointer (as in ``Buffer.ptr``) is annoying and unsafe to
-  do in pure Python. It's more general but definitely less friendly than
-  having ``to_arrow`` and ``to_numpy`` methods. So for the buffers which lack
-  ``__dlpack__`` (e.g., because the column dtype isn't supported by DLPack),
-  this is worth looking at again.
+- Interpreting a raw pointer (as in ``DeviceBufferLike.ptr``) is annoying and
+  unsafe to do in pure Python. It's more general but definitely less friendly
+  than having ``to_arrow`` and ``to_numpy`` methods. So for the buffers which
+  lack ``__dlpack__`` (e.g., because the column dtype isn't supported by
+  DLPack), this is worth looking at again.
 
 """
 
@@ -712,7 +711,7 @@ def _protocol_to_cudf_column_numeric(
     _dbuffer, _ddtype = buffers["data"]
     _check_buffer_is_on_gpu(_dbuffer)
     cudfcol_num = build_column(
-        Buffer(_dbuffer.ptr, _dbuffer.bufsize),
+        Buffer(data=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None),
         protocol_dtype_to_cupy_dtype(_ddtype),
     )
     return _set_missing_values(col, cudfcol_num), buffers
@@ -742,7 +741,10 @@ def _set_missing_values(
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         bitmask = cp.asarray(
-            Buffer(valid_mask[0].ptr, valid_mask[0].bufsize), cp.bool8
+            Buffer(
+                data=valid_mask[0].ptr, size=valid_mask[0].bufsize, owner=None
+            ),
+            cp.bool8,
         )
         cudf_col[~bitmask] = None
 
@@ -780,7 +782,8 @@ def _protocol_to_cudf_column_categorical(
     _check_buffer_is_on_gpu(codes_buffer)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(
-        Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype
+        Buffer(data=codes_buffer.ptr, size=codes_buffer.bufsize, owner=None),
+        cdtype,
     )
 
     cudfcol = build_categorical_column(
@@ -811,7 +814,7 @@ def _protocol_to_cudf_column_string(
     data_buffer, data_dtype = buffers["data"]
     _check_buffer_is_on_gpu(data_buffer)
     encoded_string = build_column(
-        Buffer(data_buffer.ptr, data_buffer.bufsize),
+        Buffer(data=data_buffer.ptr, size=data_buffer.bufsize, owner=None),
         protocol_dtype_to_cupy_dtype(data_dtype),
     )
 
@@ -821,7 +824,7 @@ def _protocol_to_cudf_column_string(
     offset_buffer, offset_dtype = buffers["offsets"]
     _check_buffer_is_on_gpu(offset_buffer)
     offsets = build_column(
-        Buffer(offset_buffer.ptr, offset_buffer.bufsize),
+        Buffer(data=offset_buffer.ptr, size=offset_buffer.bufsize, owner=None),
         protocol_dtype_to_cupy_dtype(offset_dtype),
     )
 

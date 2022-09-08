@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CudaTest {
 
@@ -30,6 +31,23 @@ public class CudaTest {
     assert Cuda.getDriverVersion() >= 1000;
     assert Cuda.getRuntimeVersion() >= 1000;
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
+  }
+
+  @Test
+  public void testCudaException() {
+    assertThrows(CudaException.class, () -> {
+          try {
+            Cuda.memset(Long.MAX_VALUE, (byte) 0, 1024);
+          } catch (CudaFatalException ignored) {
+          } catch (CudaException ex) {
+            assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.cudaError);
+            throw ex;
+          }
+        }
+    );
+    // non-fatal CUDA error will not fail subsequent CUDA calls
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5)) {
+    }
   }
 
 }

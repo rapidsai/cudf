@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,15 @@
 #include <cudf/strings/split/partition.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 
 #include <vector>
 
@@ -179,7 +184,7 @@ struct rpartition_fn : public partition_fn {
 std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -207,7 +212,7 @@ std::unique_ptr<table> partition(
 std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -241,7 +246,7 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(strings, delimiter, rmm::cuda_stream_default, mr);
+  return detail::partition(strings, delimiter, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> rpartition(strings_column_view const& strings,
@@ -249,7 +254,7 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rpartition(strings, delimiter, rmm::cuda_stream_default, mr);
+  return detail::rpartition(strings, delimiter, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

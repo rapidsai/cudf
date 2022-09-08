@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -571,6 +571,17 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
   auto const result = cudf::scatter(source_vector, scatter_map, target_table, true);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected_table);
+}
+
+TEST_F(ScatterStringsTests, EmptyStrings)
+{
+  cudf::test::strings_column_wrapper input{"", "", ""};
+  cudf::table_view t({input});
+
+  // Test for issue 10717: all-empty-string column scatter
+  auto map    = cudf::test::fixed_width_column_wrapper<int32_t>({0});
+  auto result = cudf::scatter(t, map, t);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), t);
 }
 
 template <typename T>

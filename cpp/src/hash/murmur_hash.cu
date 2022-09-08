@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -29,26 +29,28 @@ namespace cudf {
 namespace detail {
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        uint32_t seed,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  // TODO this should be UINT32
-  auto output = make_numeric_column(
-    data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
+                                    input.num_rows(),
+                                    mask_state::UNALLOCATED,
+                                    stream,
+                                    mr);
 
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  bool const nullable     = has_nulls(input);
-  auto const device_input = table_device_view::create(input, stream);
-  auto output_view        = output->mutable_view();
+  bool const nullable   = has_nulls(input);
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(input, stream);
+  auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    output_view.begin<int32_t>(),
-    output_view.end<int32_t>(),
-    row_hasher<MurmurHash3_32, nullate::DYNAMIC>(nullate::DYNAMIC{nullable}, *device_input));
+  thrust::tabulate(rmm::exec_policy(stream),
+                   output_view.begin<hash_value_type>(),
+                   output_view.end<hash_value_type>(),
+                   row_hasher.device_hasher<MurmurHash3_32>(nullable, seed));
 
   return output;
 }
