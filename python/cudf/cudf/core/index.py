@@ -881,6 +881,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def max(self):
         return self._minmax("max")
 
+    @property  # type: ignore
     def values(self):
         return self._values.values
 
