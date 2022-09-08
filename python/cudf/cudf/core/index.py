@@ -881,38 +881,41 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def max(self):
         return self._minmax("max")
 
-    # def to_frame(self, index=True, name=None):
-    #     """Create a DataFrame with a column containing this Index"""
+    def values(self):
+        return self._values.values
 
-    #     if name is not None:
-    #         col_name = name
-    #     elif self.name is None:
-    #         col_name = 0
-    #     else:
-    #         col_name = self.name
-    #     return cudf.DataFrame(
-    #         {col_name: self._range}, index=self if index else None
-    #     )
+    def to_frame(self, index=True, name=None):
+        """Create a DataFrame with a column containing this Index"""
 
-    # def isin(self, values):
-    #     """Return a boolean array where the index values are in values
+        if name is not None:
+            col_name = name
+        elif self.name is None:
+            col_name = 0
+        else:
+            col_name = self.name
+        return cudf.DataFrame(
+            {col_name: self._range}, index=self if index else None
+        )
 
-    #     Compute boolean array of whether each index value is found in
-    #     the passed set of values. The length of the returned boolean
-    #     array matches the length of the index.
-    #     """
+    def isin(self, values):
+        """Return a boolean array where the index values are in values
 
-    #     # To match pandas behavior, even though only list-like objects are
-    #     # supposed to be passed, only scalars throw errors. Other types (like
-    #     # dicts) just transparently return False (see the implementation of
-    #     # ColumnBase.isin).
-    #     if is_scalar(values):
-    #         raise TypeError(
-    #             "only list-like objects are allowed to be passed "
-    #             f"to isin(), you passed a {type(values).__name__}"
-    #         )
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+        """
 
-    #     return np.isin(self.values_host, values)
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
+        return np.isin(self.values_host, values)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
