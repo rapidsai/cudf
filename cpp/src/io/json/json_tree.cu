@@ -408,6 +408,15 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
   print_vec(cudf::detail::make_std_vector_async(gather_indices, stream), "new_home");
   print_vec(cudf::detail::make_std_vector_async(parent_indices, stream), "parent_indices");
+  // XXX: restore parent_node_ids order using scatter. (check if this order is right?)
+  rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream);  // Used later for row_offsets
+  thrust::scatter(rmm::exec_policy(stream),
+                  d_tree.parent_node_ids.begin(),
+                  d_tree.parent_node_ids.end(),
+                  scatter_indices.begin(),
+                  parent_node_ids.begin());
+  print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream),
+            "parent_node_ids (restored)");
   // 2. Find level boundaries.
   hostdevice_vector<size_type> level_boundaries(num_nodes + 1, stream);
   auto level_end = thrust::copy_if(
@@ -471,7 +480,7 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              parent_col_id.end(),
                              0);  // XXX: is this needed?
   thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 0);  ///
-  // thrust::device_pointer_cast(col_id.data())[0] = 0;
+  thrust::device_pointer_cast(parent_col_id.data())[0] = -1;
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     // std::cout << level << ".before gather\n";
     thrust::gather(rmm::exec_policy(stream),
@@ -561,6 +570,13 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
     //                  d_tree.node_levels,
     //                  col_id);
   }
+  // FIXME: to make parent_col_id of last level correct, do we need a gather here?
+  thrust::gather(rmm::exec_policy(stream),
+                 parent_indices.begin() +
+                   level_boundaries[num_levels - 1],  // FIXME: might be wrong. might be a bug here.
+                 parent_indices.end(),
+                 col_id.data(),  // + level_boundaries[level - 1],
+                 parent_col_id.data() + level_boundaries[num_levels - 1]);
   auto translate_col_id = [](auto col_id) {
     std::unordered_map<int, int> col_id_map;
     std::vector<int> new_col_ids(col_id.size());
@@ -573,6 +589,7 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
     }
     return new_col_ids;
   };
+  // restore original order of col_id.
   // TODO can we do this with scatter instead of sort?
   thrust::sort_by_key(rmm::exec_policy(stream),
                       scatter_indices.begin(),
@@ -610,7 +627,59 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
   // }
   // printf(" (JSON)\n");
 
-  // TODO restore original order of col_id.
+  // 5. Generate row_offset.
+  // stable_sort by parent_col_id.
+  // scan_by_key on nodes who's parent is list on col_id.
+  // propagate to leaves! how?
+  thrust::stable_sort_by_key(
+    rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
+  rmm::device_uvector<size_type> row_offsets(num_nodes, stream);
+  // TODO is it possible to generate list child_offsets too here?
+  thrust::exclusive_scan_by_key(
+    rmm::exec_policy(stream),
+    parent_col_id.begin(),  // TODO: is there any way to limit this to list parents alone?
+    parent_col_id.end(),
+    thrust::make_constant_iterator<size_type>(1),
+    row_offsets.begin());
+  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream), "parent_col_id");
+  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
+  thrust::sort_by_key(rmm::exec_policy(stream),
+                      scatter_indices.begin(),
+                      scatter_indices.end(),
+                      thrust::make_zip_iterator(parent_col_id.begin(), row_offsets.begin()));
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(num_nodes),
+    row_offsets.begin(),
+    [node_categories = d_tree.node_categories.data(),
+     parent_node_ids = parent_node_ids.begin(),
+     row_offsets     = row_offsets.begin()] __device__(size_type node_id) {
+      auto parent_node_id = parent_node_ids[node_id];
+      while (node_categories[parent_node_id] != node_t::NC_LIST &&
+             parent_node_id != -1) {  // TODO replace -1 with sentinel
+        node_id        = parent_node_id;
+        parent_node_id = parent_node_ids[parent_node_id];
+      }
+      return row_offsets[node_id];
+    },
+    [node_categories = d_tree.node_categories.data(),
+     parent_node_ids = parent_node_ids.begin()] __device__(size_type node_id) {
+      auto parent_node_id = parent_node_ids[node_id];
+      return parent_node_id != -1 and
+             !(node_categories[parent_node_id] ==
+               node_t::NC_LIST);  // Parent is not a list, or sentinel/root (might be different
+                                  // condition for JSON_lines)
+    });
+  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
+  // For now: simple while loop for each thread to retrieve parents row_offset until a node's parent
+  // is list node. thrust::transform(rmm::exec_policy(stream), //parent node_id, node_category.
+  // problem with using parent_col_id is that it may not be null literal. scan operation is fine but
+  // how? propagate to leaves in parallel? does it have to be done level by level? need not be
+  // because there may be lists in between. revert back the order and simple scan_max is enough?
+  // won't work. regardless of order, a simple scan of op(a,b): return if b==0? a: b; will work.
+  // (need to be associative.)
+
   // TODO return col_id, row_offset of each node.
 }
 
