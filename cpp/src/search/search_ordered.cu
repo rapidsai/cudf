@@ -73,7 +73,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
   auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
 
-  if (cudf::detail::has_nested_columns(haystack) || cudf::get_nested_columns(needles).size() > 0) {
+  if (cudf::detail::has_nested_columns(haystack) || cudf::detail::has_nested_columns(needles)) {
     auto const d_comparator = comparator.less<true>(nullate::DYNAMIC{has_nulls});
     if (find_first) {
       thrust::lower_bound(rmm::exec_policy(stream),
