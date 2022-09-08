@@ -23,7 +23,7 @@ target_compile_options(
 )
 
 target_link_libraries(
-  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
+  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main conda_env
                       benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
 )
 
