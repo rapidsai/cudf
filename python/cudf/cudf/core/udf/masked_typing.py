@@ -78,7 +78,7 @@ def _type_to_masked_type(t):
 MASKED_INIT_MAP[types.pyobject] = types.Poison(
     _format_error_string(
         "strings_udf library required for usage of string dtypes "
-        "inside user defined functions. Try conda install strings_udf."
+        "inside user defined functions."
     )
 )
 
