@@ -23,8 +23,17 @@ target_compile_options(
 )
 
 target_link_libraries(
-  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main $<TARGET_NAME_IF_EXISTS:conda_env>
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
+  cudf_datagen
+  PUBLIC GTest::gmock
+         GTest::gtest
+         GTest::gmock_main
+         GTest::gtest_main
+         $<TARGET_NAME_IF_EXISTS:conda_env>
+         benchmark::benchmark
+         nvbench::nvbench
+         Threads::Threads
+         cudf
+         cudftestutil
 )
 
 target_include_directories(
