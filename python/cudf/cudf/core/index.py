@@ -883,7 +883,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     def values(self):
-        return self._values.values
+        return cupy.arange(self.start, self.stop, self.step)
 
     def to_frame(self, index=True, name=None):
         """Create a DataFrame with a column containing this Index"""
@@ -1449,7 +1449,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @property
     def values(self):
-        return self._values.values
+        return self._column.values
 
     def __contains__(self, item):
         return item in self._values
