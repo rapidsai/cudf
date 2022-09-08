@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
@@ -27,7 +27,7 @@ import io
 import os
 
 import cudf
-from cudf.api.types import is_list_dtype, is_struct_dtype
+from cudf.api.types import is_struct_dtype
 
 
 # Converts the Python source input to libcudf++ IO source_info
