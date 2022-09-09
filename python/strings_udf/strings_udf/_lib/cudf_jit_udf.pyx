@@ -20,6 +20,6 @@ def to_string_view_array(Column strings_col):
     with nogil:
         c_buffer = move(cpp_to_string_view_array(input_view))
 
-    buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = Buffer(buffer)
+    device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
+    buffer = Buffer(device_buffer)
     return buffer
