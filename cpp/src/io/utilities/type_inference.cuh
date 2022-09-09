@@ -96,7 +96,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @param[out] column_info Histogram of column type counters
  */
 template <typename ColumnStringIter>
-__global__ void infer_column_type_kernel(json_parse_options_view options,
+__global__ void infer_column_type_kernel(json_inference_options_view options,
                                          device_span<char const> data,
                                          ColumnStringIter column_strings_begin,
                                          std::size_t size,
@@ -200,7 +200,7 @@ __global__ void infer_column_type_kernel(json_parse_options_view options,
  * @return A histogram containing column-specific type counters
  */
 template <typename ColumnStringIter>
-cudf::io::column_type_histogram infer_column_type(json_parse_options_view const& options,
+cudf::io::column_type_histogram infer_column_type(json_inference_options_view const& options,
                                                   cudf::device_span<char const> data,
                                                   ColumnStringIter column_strings_begin,
                                                   std::size_t const size,
@@ -236,7 +236,7 @@ cudf::io::column_type_histogram infer_column_type(json_parse_options_view const&
  * @return The inferred data type
  */
 template <typename ColumnStringIter>
-cudf::data_type infer_data_type(json_parse_options_view const& options,
+cudf::data_type infer_data_type(json_inference_options_view const& options,
                                 device_span<char const> data,
                                 ColumnStringIter column_strings_begin,
                                 std::size_t const size,
