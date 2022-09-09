@@ -4037,7 +4037,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-/**
+  /**
    * Helper to get scalar for following == Decimal(100),
    * with data width depending upon the the order-by
    * column index:
