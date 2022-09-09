@@ -69,6 +69,7 @@ target_compile_options(
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
 target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf CUDA::nvrtc)
+install(TARGETS cudf_strings_udf DESTINATION ./strings_udf/_lib/)
 
 # Shim libraries. TODO: Will need to create separate shim libraries for different architectures.
 add_library(shim OBJECT src/strings/udf/shim.cu)
