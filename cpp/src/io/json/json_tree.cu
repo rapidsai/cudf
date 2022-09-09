@@ -295,10 +295,11 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
 // JSON tree traversal for record orient. (list of structs)
 // returns col_id of each node, and row_offset(TODO)
-void records_orient_tree_traversal(device_span<SymbolT const> d_input,
-                                   tree_meta_t& d_tree,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+std::tuple<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+records_orient_tree_traversal(device_span<SymbolT const> d_input,
+                              tree_meta_t& d_tree,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   // GPU version
@@ -554,7 +555,7 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
     //                  d_tree.node_levels,
     //                  col_id);
     // TODO scatter/gather to restore original order. (scatter will be faster.)
-    thrust::sort_by_key(
+    thrust::stable_sort_by_key(
       rmm::exec_policy(stream),
       scatter_indices.begin() + level_boundaries[level - 1],
       scatter_indices.begin() + level_boundaries[level],
@@ -610,15 +611,6 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
   print_vec(translate_col_id(cudf::detail::make_std_vector_async(col_id, stream)),
             "col_id (translated)");  // is this required? required to be ordered for the next step?
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
-  // auto sorted_cpu_col_id = [&]() {
-  //     auto sc = cudf::detail::make_std_vector_async(scatter_indices, stream);
-  //     std::vector<size_type> sorted_cpu_col_id(sc.size());
-  //     for(decltype(sc.size()) i=0; i<sc.size(); i++) {
-  //       sorted_cpu_col_id[sc[i]] = node_ids[i];
-  //     }
-  //     return sorted_cpu_col_id;
-  // }();
-  // print_vec(sorted_cpu_col_id, "cpu.node_id (sorted)");
 
   // auto sc = cudf::detail::make_std_vector_async(scatter_indices, stream);
   // for(int i=0; i< int(cpu_tree.node_range_begin.size()); i++) {
@@ -643,10 +635,10 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
     row_offsets.begin());
   print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream), "parent_col_id");
   print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
-  thrust::sort_by_key(rmm::exec_policy(stream),
-                      scatter_indices.begin(),
-                      scatter_indices.end(),
-                      thrust::make_zip_iterator(parent_col_id.begin(), row_offsets.begin()));
+  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                             scatter_indices.begin(),
+                             scatter_indices.end(),
+                             thrust::make_zip_iterator(parent_col_id.begin(), row_offsets.begin()));
   thrust::transform_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -661,6 +653,7 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
         node_id        = parent_node_id;
         parent_node_id = parent_node_ids[parent_node_id];
       }
+      // return -1;
       return row_offsets[node_id];
     },
     [node_categories = d_tree.node_categories.data(),
@@ -671,16 +664,11 @@ void records_orient_tree_traversal(device_span<SymbolT const> d_input,
                node_t::NC_LIST);  // Parent is not a list, or sentinel/root (might be different
                                   // condition for JSON_lines)
     });
+  d_tree.parent_node_ids = std::move(parent_node_ids);  // TODO do it inplace itself.
   print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
-  // For now: simple while loop for each thread to retrieve parents row_offset until a node's parent
-  // is list node. thrust::transform(rmm::exec_policy(stream), //parent node_id, node_category.
-  // problem with using parent_col_id is that it may not be null literal. scan operation is fine but
-  // how? propagate to leaves in parallel? does it have to be done level by level? need not be
-  // because there may be lists in between. revert back the order and simple scan_max is enough?
-  // won't work. regardless of order, a simple scan of op(a,b): return if b==0? a: b; will work.
-  // (need to be associative.)
-
-  // TODO return col_id, row_offset of each node.
+  // TODO check if d_tree is back to original order.
+  // return col_id, row_offset of each node.
+  return std::tuple{std::move(col_id), std::move(row_offsets)};
 }
 
 }  // namespace detail

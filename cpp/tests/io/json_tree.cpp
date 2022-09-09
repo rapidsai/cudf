@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/detail/utilities/vector_factories.hpp"
 #include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -104,6 +105,57 @@ tree_meta_t2 to_cpu_tree(tree_meta_t const& d_value, rmm::cuda_stream_view strea
           cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
 }
 
+// DEBUG prints
+auto to_cat = [](auto v) -> std::string {
+  switch (v) {
+    case NC_STRUCT: return " S";
+    case NC_LIST: return " L";
+    case NC_STR: return " \"";
+    case NC_VAL: return " V";
+    case NC_FN: return " F";
+    case NC_ERR: return "ER";
+    default: return "UN";
+  };
+};
+auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
+auto print_vec = [](auto const& cpu, auto const name, auto converter) {
+  for (auto const& v : cpu)
+    printf("%3s,", converter(v).c_str());
+  std::cout << name << std::endl;
+};
+void print_tree(tree_meta_t2 const& cpu_tree)
+{
+  print_vec(cpu_tree.node_categories, "node_categories", to_cat);
+  print_vec(cpu_tree.parent_node_ids, "parent_node_ids", to_int);
+  print_vec(cpu_tree.node_levels, "node_levels", to_int);
+  print_vec(cpu_tree.node_range_begin, "node_range_begin", to_int);
+  print_vec(cpu_tree.node_range_end, "node_range_end", to_int);
+}
+void print_tree(tree_meta_t const& d_gpu_tree)
+{
+  auto const cpu_tree = to_cpu_tree(d_gpu_tree, rmm::cuda_stream_default);
+  print_tree(cpu_tree);
+}
+
+template <typename T>
+bool compare_vector(std::vector<T> const& cpu_vec,
+                    rmm::device_uvector<T> const& d_vec,
+                    std::string const& name)
+{
+  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::default_stream_value);
+  print_vec(cpu_vec, name + "(cpu)", to_int);
+  print_vec(gpu_vec, name + "(gpu)", to_int);
+  bool mismatch = false;
+  if (!std::equal(cpu_vec.begin(), cpu_vec.end(), gpu_vec.begin())) {
+    for (auto i = 0lu; i < cpu_vec.size(); i++) {
+      mismatch |= (cpu_vec[i] != gpu_vec[i]);
+      printf("%3s,", (cpu_vec[i] == gpu_vec[i] ? " " : "x"));
+    }
+    printf("\n");
+  }
+  return mismatch;
+}
+
 void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, bool print = false)
 {
   auto cpu_num_nodes = cpu_tree.node_categories.size();
@@ -113,25 +165,7 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_begin.size());
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_end.size());
   auto gpu_tree = to_cpu_tree(d_gpu_tree, cudf::default_stream_value);
-  // DEBUG prints
-  auto to_cat = [](auto v) -> std::string {
-    switch (v) {
-      case NC_STRUCT: return " S";
-      case NC_LIST: return " L";
-      case NC_STR: return " \"";
-      case NC_VAL: return " V";
-      case NC_FN: return " F";
-      case NC_ERR: return "ER";
-      default: return "UN";
-    };
-  };
-  auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
-  bool mismatch  = false;
-  auto print_vec = [&](auto const& cpu, auto const name, auto converter) {
-    for (auto const& v : cpu)
-      printf("%3s,", converter(v).c_str());
-    std::cout << name << std::endl;
-  };
+  bool mismatch = false;
 
 #define COMPARE_MEMBER(member)                                                       \
   for (std::size_t i = 0; i < cpu_num_nodes; i++) {                                  \
@@ -361,39 +395,16 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
           std::move(node_range_end)};
 }
 
-// DEBUG print
-template <typename T>
-void print_vec(T const& cpu, std::string const name)
-{
-  for (auto const& v : cpu)
-    printf("%3d,", int(v));
-  std::cout << name << std::endl;
-}
-
-void records_orient_tree_traversal_cpu(host_span<SymbolT const> input,
-                                       tree_meta_t2 const& tree,
-                                       rmm::cuda_stream_view stream)
+std::tuple<std::vector<size_type>, std::vector<size_type>> records_orient_tree_traversal_cpu(
+  host_span<SymbolT const> input, tree_meta_t2 const& tree, rmm::cuda_stream_view stream)
 {
   // // move tree representation to cpu
   // tree_meta_t2 tree = to_cpu_tree(d_tree, stream);
-  auto to_cat = [](auto v) -> std::string {
-    switch (v) {
-      case NC_STRUCT: return " S";
-      case NC_LIST: return " L";
-      case NC_STR: return " \"";
-      case NC_VAL: return " V";
-      case NC_FN: return " F";
-      case NC_ERR: return "ER";
-      default: return "UN";
-    };
+
+  print_vec(tree.node_categories, "node_categories", to_cat);
+  auto print_vec = [](const auto& cpu, const auto name) {  // local lambda
+    cudf::io::json::test::print_vec(cpu, name, to_int);
   };
-  // auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
-  auto debug_print_vec = [&](auto const& cpu, auto const name, auto converter) {
-    for (auto const& v : cpu)
-      printf("%3s,", converter(v).c_str());
-    std::cout << name << std::endl;
-  };
-  debug_print_vec(tree.node_categories, "node_categories", to_cat);
 
   std::vector<int> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
@@ -459,7 +470,7 @@ void records_orient_tree_traversal_cpu(host_span<SymbolT const> input,
   }
   print_vec(node_ids, "cpu.node_ids (after)");
   print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)");
-  // TODO row_offsets
+  // row_offsets
   std::vector<int> row_offsets(tree.parent_node_ids.size(), 0);
   std::unordered_map<int, int> col_id_current_offset;
   for (std::size_t i = 0; i < tree.parent_node_ids.size(); i++) {
@@ -484,6 +495,7 @@ void records_orient_tree_traversal_cpu(host_span<SymbolT const> input,
   //      type or string type) offsets -> string offsets (range_begin), string length
   //      (range_end-range_begin).
   //              -> child offsets (child node count?! how? scan op?)
+  return {std::move(node_ids), std::move(row_offsets)};
 }
 
 }  // namespace test
@@ -619,7 +631,6 @@ TEST_F(JsonTest, TreeRepresentation2)
 
   // Print tree representation
   if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
-  // TODO compare with CPU version
 
   // Golden sample of node categories
   // clang-format off
@@ -726,9 +737,32 @@ TEST_F(JsonTest, TreeTraversal2)
   auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
   // host tree traversal
-  cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
+  auto [cpu_col_id, cpu_row_offsets] =
+    cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
   // gpu tree generation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // gpu tree traversal
-  cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
+  printf("BEFORE traversal (gpu_tree):\n");
+  cudf::io::json::test::print_tree(gpu_tree);
+  auto [gpu_col_id, gpu_row_offsets] =
+    cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
+  printf("AFTER  traversal (gpu_tree):\n");
+  cudf::io::json::test::print_tree(gpu_tree);
+  auto translate_col_id = [](auto col_id) {
+    std::unordered_map<int, int> col_id_map;
+    std::vector<int> new_col_ids(col_id.size());
+    int unique_id = 0;
+    for (auto id : col_id) {
+      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
+    }
+    for (size_t i = 0; i < col_id.size(); i++) {
+      new_col_ids[i] = col_id_map[col_id[i]];
+    }
+    return new_col_ids;
+  };
+  auto gpu_col_id2 = cudf::detail::make_device_uvector_async(
+    translate_col_id(cudf::detail::make_std_vector_async(gpu_col_id, stream)), stream);
+  EXPECT_FALSE(cudf::io::json::test::compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
+  EXPECT_FALSE(
+    cudf::io::json::test::compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
 }
