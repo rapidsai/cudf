@@ -71,17 +71,6 @@ target_compile_options(
 target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf CUDA::nvrtc)
 install(TARGETS cudf_strings_udf DESTINATION ./strings_udf/_lib/)
 
-# Shim libraries. TODO: Will need to create separate shim libraries for different architectures.
-add_library(shim OBJECT src/strings/udf/shim.cu)
-set(SHIM_CUDA_FLAGS "")
-list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
-
-set_property(TARGET shim PROPERTY CUDA_PTX_COMPILATION ON)
-
-target_include_directories(shim PUBLIC include)
-target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
-target_link_libraries(shim PUBLIC cudf::cudf)
-
 # This function will copy the generated PTX file from its generator-specific location in the build
 # tree into a specified location in the build tree from which we can install it.
 function(copy_ptx_to_location target destination)
@@ -105,5 +94,24 @@ file(COPY \${ptx_paths} DESTINATION \"${destination}\")"
   )
 endfunction()
 
-copy_ptx_to_location(shim "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf")
-install(FILES $<TARGET_OBJECTS:shim> DESTINATION ./strings_udf)
+# Create the shim library for each architecture.
+foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
+  set(tgt shim_${arch})
+
+  add_library(${tgt} OBJECT src/strings/udf/shim.cu)
+  set(SHIM_CUDA_FLAGS "")
+  list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+
+  set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
+
+  target_include_directories(${tgt} PUBLIC include)
+  target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
+  target_link_libraries(${tgt} PUBLIC cudf::cudf)
+
+  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf")
+  install(
+    FILES $<TARGET_OBJECTS:${tgt}>
+    DESTINATION ./strings_udf
+    RENAME ${tgt}.ptx
+  )
+endforeach()

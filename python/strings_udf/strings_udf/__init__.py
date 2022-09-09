@@ -1,9 +1,12 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 from ptxcompiler.patch import patch_needed, CMD
+import glob
 import os
 import sys
 import subprocess
 import re
+
+from numba import cuda
 
 
 def versions_compatible(path):
@@ -19,7 +22,7 @@ def versions_compatible(path):
     # obtain the cuda version used to compile this PTX file
     file = open(path).read()
     major, minor = (
-        re.search("Cuda compilation tools, release ([0-9\.]+)", file)
+        re.search(r"Cuda compilation tools, release ([0-9\.]+)", file)
         .group(1)
         .split(".")
     )
@@ -36,8 +39,15 @@ def versions_compatible(path):
     return driver_version >= (int(major), int(minor)) and not patch_needed()
 
 
-# ptxpath = os.getenv("CONDA_PREFIX") + "/lib/shim.ptx"
-ptxpath = os.path.join(os.path.dirname(__file__), "shim.ptx")
+# Load the highest compute capability file available that is less than the
+# current device's.
+dev = cuda.get_current_device()
+cc = "".join(str(x) for x in dev.compute_capability)
+files = glob.glob(os.path.join(os.path.dirname(__file__), "shim_*.ptx"))
+sms = [os.path.basename(f).rstrip(".ptx").lstrip("shim_") for f in files]
+selected_sm = max(sm for sm in sms if sm < cc)
+ptxpath = os.path.join(os.path.dirname(__file__), f"shim_{selected_sm}.ptx")
+
 ENABLED = versions_compatible(ptxpath)
 
 from . import _version
