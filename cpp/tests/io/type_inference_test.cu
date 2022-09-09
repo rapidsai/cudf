@@ -93,6 +93,34 @@ TEST_F(TypeInference, Null)
             cudf::data_type{cudf::type_id::FLOAT64});  // FLOAT64 to align with pandas's behavior
 }
 
+TEST_F(TypeInference, AllNull)
+{
+  auto const stream = rmm::cuda_stream_default;
+
+  auto options       = parse_options{',', '\n', '\"'};
+  options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+
+  std::string data = R"json([null])json";
+  rmm::device_uvector<char> d_data{data.size(), stream};
+  cudaMemcpyAsync(
+    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+
+  std::size_t constexpr size = 3;
+  auto const string_offset   = std::vector<int32_t>{1, 1, 1};
+  auto const string_length   = std::vector<std::size_t>{0, 0, 4};
+  rmm::device_vector<int32_t> d_string_offset{string_offset};
+  rmm::device_vector<std::size_t> d_string_length{string_length};
+
+  auto d_col_strings =
+    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+
+  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+
+  EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT8});  // INT8 if all nulls
+}
+
 TEST_F(TypeInference, String)
 {
   auto const stream = rmm::cuda_stream_default;

@@ -114,7 +114,6 @@ __global__ void infer_column_type_kernel(json_parse_options_view options,
       continue;
     }
 
-    if (field_len == 0) { continue; }
     // Handling strings
     if (*field_begin == options.quote_char && field_begin[field_len - 1] == options.quote_char) {
       atomicAdd(&column_info->string_count, 1);
