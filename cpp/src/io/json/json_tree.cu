@@ -34,15 +34,6 @@
 namespace cudf::io::json {
 namespace detail {
 
-// DEBUG print
-template <typename T>
-void print_vec(T const& cpu, std::string const name)
-{
-  for (auto const& v : cpu)
-    printf("%3d,", int(v));
-  std::cout << name << std::endl;
-}
-
 // The node that a token represents
 struct token_to_node {
   __device__ auto operator()(PdaTokenT const token) -> NodeT
@@ -59,11 +50,9 @@ struct token_to_node {
 };
 
 // Convert token indices to node range for each valid node.
-template <typename T1, typename T2, typename T3>
 struct node_ranges {
-  T1 tokens;
-  T2 token_indices;
-  T3 num_tokens;
+  device_span<PdaTokenT const> tokens;
+  device_span<SymbolOffsetT const> token_indices;
   bool include_quote_char;
   __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
   {
@@ -105,7 +94,7 @@ struct node_ranges {
     SymbolOffsetT range_begin = get_token_index(token, token_indices[i]);
     SymbolOffsetT range_end   = range_begin + 1;
     if (is_begin_of_section(token)) {
-      if ((i + 1) < num_tokens && end_of_partner(token) == tokens[i + 1]) {
+      if ((i + 1) < tokens.size() && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
         range_end = token_indices[i + 1];
       }
@@ -196,11 +185,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Whether the tokenizer stage should keep quote characters for string values
   // If the tokenizer keeps the quote characters, they may be stripped during type casting
   constexpr bool include_quote_char = true;
-  using node_ranges_t =
-    node_ranges<decltype(tokens.begin()), decltype(token_indices.begin()), decltype(num_tokens)>;
-  auto node_range_out_it = thrust::make_transform_output_iterator(
-    node_range_tuple_it,
-    node_ranges_t{tokens.begin(), token_indices.begin(), num_tokens, include_quote_char});
+  auto node_range_out_it            = thrust::make_transform_output_iterator(
+    node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
   auto node_range_out_end =
     thrust::copy_if(rmm::exec_policy(stream),
@@ -247,11 +233,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                       initial_order.data(),
                       initial_order.data() + initial_order.size(),
                       parent_token_ids.data());
-  // thrust::scatter(rmm::exec_policy(stream),
-  //                parent_token_ids.begin(),
-  //                parent_token_ids.end(),
-  //                initial_order.data(),
-  //                parent_token_ids.begin()); //same location not allowed in scatter
+
   rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
   thrust::exclusive_scan(
     rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
