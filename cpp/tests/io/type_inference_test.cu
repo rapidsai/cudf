@@ -59,14 +59,12 @@ TEST_F(TypeInference, Basic)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  cudf::size_type constexpr num_omitted_nulls = 0;
-  auto res_type =
-    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }
 
-TEST_F(TypeInference, OmittedNull)
+TEST_F(TypeInference, Null)
 {
   auto const stream = rmm::cuda_stream_default;
 
@@ -89,9 +87,7 @@ TEST_F(TypeInference, OmittedNull)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  cudf::size_type constexpr num_omitted_nulls = 1;
-  auto res_type =
-    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
 
   EXPECT_EQ(res_type,
             cudf::data_type{cudf::type_id::FLOAT64});  // FLOAT64 to align with pandas's behavior
@@ -120,9 +116,7 @@ TEST_F(TypeInference, String)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  cudf::size_type constexpr num_omitted_nulls = 0;
-  auto res_type =
-    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
@@ -150,9 +144,7 @@ TEST_F(TypeInference, Bool)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  cudf::size_type constexpr num_omitted_nulls = 0;
-  auto res_type =
-    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::BOOL8});
 }
@@ -180,9 +172,7 @@ TEST_F(TypeInference, Timestamp)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  cudf::size_type constexpr num_omitted_nulls = 0;
-  auto res_type =
-    infer_data_type(options.json_view(), d_data, d_col_strings, num_omitted_nulls, size, stream);
+  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
 }

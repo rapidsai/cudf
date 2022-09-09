@@ -114,10 +114,7 @@ __global__ void infer_column_type_kernel(json_parse_options_view options,
       continue;
     }
 
-    if (field_len == 0) {
-      atomicAdd(&column_info->null_count, 1);
-      continue;
-    }
+    if (field_len == 0) { continue; }
     // Handling strings
     if (*field_begin == options.quote_char && field_begin[field_len - 1] == options.quote_char) {
       atomicAdd(&column_info->string_count, 1);
@@ -235,7 +232,6 @@ cudf::io::column_type_histogram infer_column_type(json_parse_options_view const&
  * @param options View of inference options
  * @param data JSON string input
  * @param column_strings_begin The begining of an offset-length tuple sequence
- * @param omission_null_count Number of omitted nulls
  * @param size Size of the string input
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The inferred data type
@@ -244,7 +240,6 @@ template <typename ColumnStringIter>
 cudf::data_type infer_data_type(json_parse_options_view const& options,
                                 device_span<char const> data,
                                 ColumnStringIter column_strings_begin,
-                                cudf::size_type omission_null_count,
                                 std::size_t const size,
                                 rmm::cuda_stream_view stream)
 {
@@ -255,15 +250,14 @@ cudf::data_type infer_data_type(json_parse_options_view const& options,
   auto get_type_id = [&](auto const& cinfo) {
     auto int_count_total =
       cinfo.big_int_count + cinfo.negative_small_int_count + cinfo.positive_small_int_count;
-    if ((cinfo.null_count + omission_null_count) == static_cast<cudf::size_type>(size)) {
+    if (cinfo.null_count == static_cast<cudf::size_type>(size)) {
       // Entire column is NULL; allocate the smallest amount of memory
       return type_id::INT8;
     } else if (cinfo.string_count > 0) {
       return type_id::STRING;
     } else if (cinfo.datetime_count > 0) {
       return type_id::TIMESTAMP_MILLISECONDS;
-    } else if (cinfo.float_count > 0 ||
-               (int_count_total > 0 && (cinfo.null_count + omission_null_count) > 0)) {
+    } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
       return type_id::FLOAT64;
     } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
       return type_id::INT64;
