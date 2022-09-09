@@ -2187,7 +2187,9 @@ TEST_F(CollectSetTest, BasicRollingWindowWithNaNs)
                         prev_column,
                         foll_column,
                         1,
-                        *make_collect_set_aggregation<rolling_aggregation>());
+                        *make_collect_set_aggregation<rolling_aggregation>(
+                          null_policy::INCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
+
 
   auto const expected_result =
     lists_column_wrapper<double>{
