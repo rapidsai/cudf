@@ -26,7 +26,7 @@ def versions_compatible(path):
 
     # adapted from patch_needed()
     cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
-    if cp.returncode:
+    if cp.returncode != 0:
         # no driver
         return False
 
