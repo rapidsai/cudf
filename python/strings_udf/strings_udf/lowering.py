@@ -189,7 +189,7 @@ def create_binary_string_func(binary_func, signature):
     operator.contains,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_contains(st, substr):
+def string_view_contains_impl(st, substr):
     return _string_view_contains(st, substr)
 
 
@@ -197,7 +197,7 @@ def call_string_view_contains(st, substr):
     operator.eq,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_eq(st, rhs):
+def string_view_eq_impl(st, rhs):
     return _string_view_eq(st, rhs)
 
 
@@ -205,7 +205,7 @@ def call_string_view_eq(st, rhs):
     operator.ne,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_ne(st, rhs):
+def string_view_ne_impl(st, rhs):
     return _string_view_ne(st, rhs)
 
 
@@ -213,7 +213,7 @@ def call_string_view_ne(st, rhs):
     operator.ge,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_ge(st, rhs):
+def string_view_ge_impl(st, rhs):
     return _string_view_ge(st, rhs)
 
 
@@ -221,7 +221,7 @@ def call_string_view_ge(st, rhs):
     operator.le,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_le(st, rhs):
+def string_view_le_impl(st, rhs):
     return _string_view_le(st, rhs)
 
 
@@ -229,7 +229,7 @@ def call_string_view_le(st, rhs):
     operator.gt,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_gt(st, rhs):
+def string_view_gt_impl(st, rhs):
     return _string_view_gt(st, rhs)
 
 
@@ -237,7 +237,7 @@ def call_string_view_gt(st, rhs):
     operator.lt,
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_lt(st, rhs):
+def string_view_lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
 
 
@@ -245,7 +245,7 @@ def call_string_view_lt(st, rhs):
     "StringView.startswith",
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_startswith(sv, substr):
+def string_view_startswith_impl(sv, substr):
     return _string_view_startswith(sv, substr)
 
 
@@ -253,7 +253,7 @@ def call_string_view_startswith(sv, substr):
     "StringView.endswith",
     (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_endswith(sv, substr):
+def string_view_endswith_impl(sv, substr):
     return _string_view_endswith(sv, substr)
 
 
@@ -261,7 +261,7 @@ def call_string_view_endswith(sv, substr):
     "StringView.count",
     (size_type, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_count(st, substr):
+def string_view_count_impl(st, substr):
     return _string_view_count(st, substr)
 
 
@@ -269,7 +269,7 @@ def call_string_view_count(st, substr):
     "StringView.find",
     (size_type, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_find(sv, substr):
+def string_view_find_impl(sv, substr):
     return _string_view_find(sv, substr)
 
 
@@ -277,7 +277,7 @@ def call_string_view_find(sv, substr):
     "StringView.rfind",
     (size_type, types.CPointer(string_view), types.CPointer(string_view)),
 )
-def call_string_view_rfind(sv, substr):
+def string_view_rfind_impl(sv, substr):
     return _string_view_rfind(sv, substr)
 
 
@@ -307,40 +307,40 @@ def create_unary_identifier_func(id_func):
 
 
 @create_unary_identifier_func("StringView.isdigit")
-def call_string_view_isdigit(st, tbl):
+def string_view_isdigit_impl(st, tbl):
     return _string_view_isdigit(st, tbl)
 
 
 @create_unary_identifier_func("StringView.isalnum")
-def call_string_view_isalnum(st, tbl):
+def string_view_isalnum_impl(st, tbl):
     return _string_view_isalnum(st, tbl)
 
 
 @create_unary_identifier_func("StringView.isalpha")
-def call_string_view_isalpha(st, tbl):
+def string_view_isalpha_impl(st, tbl):
     return _string_view_isalpha(st, tbl)
 
 
 @create_unary_identifier_func("StringView.isnumeric")
-def call_string_view_isnumeric(st, tbl):
+def string_view_isnumeric_impl(st, tbl):
     return _string_view_isnumeric(st, tbl)
 
 
 @create_unary_identifier_func("StringView.isdecimal")
-def call_string_view_isdecimal(st, tbl):
+def string_view_isdecimal_impl(st, tbl):
     return _string_view_isdecimal(st, tbl)
 
 
 @create_unary_identifier_func("StringView.isspace")
-def call_string_view_isspace(st, tbl):
+def string_view_isspace_impl(st, tbl):
     return _string_view_isspace(st, tbl)
 
 
 @create_unary_identifier_func("StringView.isupper")
-def call_string_view_isupper(st, tbl):
+def string_view_isupper_impl(st, tbl):
     return _string_view_isupper(st, tbl)
 
 
 @create_unary_identifier_func("StringView.islower")
-def call_string_view_islower(st, tbl):
+def string_view_islower_impl(st, tbl):
     return _string_view_islower(st, tbl)
