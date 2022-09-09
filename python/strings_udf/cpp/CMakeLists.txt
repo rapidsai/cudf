@@ -22,6 +22,8 @@ include(rapids-find)
 
 rapids_cpm_init()
 
+rapids_cuda_init_architectures(STRINGS_UDF)
+
 project(
   strings-udf-cpp
   VERSION ${strings_udf_version}
@@ -43,18 +45,10 @@ rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-expo
 
 set(UDF_CXX_FLAGS "")
 set(UDF_CUDA_FLAGS "")
-set(SHIM_CUDA_FLAGS "")
 
 list(APPEND UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
-list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
 add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
-# TODO: Will need to create separate shim libraries for different architectures.
-add_library(shim OBJECT src/strings/udf/shim.cu)
-
-set_property(TARGET shim PROPERTY CUDA_PTX_COMPILATION ON)
-
-target_include_directories(shim PUBLIC include)
 target_include_directories(cudf_strings_udf PUBLIC include)
 
 set_target_properties(
@@ -74,14 +68,18 @@ target_compile_options(
   cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
-
-target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
-
 target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf CUDA::nvrtc)
-target_link_libraries(shim PUBLIC cudf::cudf)
 
-# install(TARGETS cudf_strings_udf PUBLIC_HEADER DESTINATION
-# ${CONDA_PREFIX}/include/cudf/strings/udf/ )
+# Shim libraries. TODO: Will need to create separate shim libraries for different architectures.
+add_library(shim OBJECT src/strings/udf/shim.cu)
+set(SHIM_CUDA_FLAGS "")
+list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+
+set_property(TARGET shim PROPERTY CUDA_PTX_COMPILATION ON)
+
+target_include_directories(shim PUBLIC include)
+target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
+target_link_libraries(shim PUBLIC cudf::cudf)
 
 # This function will copy the generated PTX file from its generator-specific location in the build
 # tree into a specified location in the build tree from which we can install it.

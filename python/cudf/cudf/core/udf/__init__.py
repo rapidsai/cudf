@@ -57,8 +57,8 @@ try:
     else:
         del strings_udf
 
-except ImportError:
+except ImportError as e:
     # allow cuDF to work without strings_udf
-    pass
+    raise
 
 masked_typing.register_masked_constructor(supported_masked_types)
