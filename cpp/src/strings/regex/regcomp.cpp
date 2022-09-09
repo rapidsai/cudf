@@ -556,6 +556,9 @@ class regex_parser {
     // are treated as regex expressions and sometimes they are not.
     if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
 
+    // handle alternation instruction
+    if (chr == '|') return OR;
+
     // Check that the previous item can be used with quantifiers.
     // If the previous item is a capture group, we need to check items inside the
     // capture group can be used with quantifiers too.
@@ -676,7 +679,6 @@ class regex_parser {
         // otherwise, fixed counted quantifier
         return COUNTED;
       }
-      case '|': return OR;
     }
     _chr = chr;
     return CHAR;
