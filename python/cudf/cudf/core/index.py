@@ -250,20 +250,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def _clean_nulls_from_index(self):
         """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
+        Rangeindex cannot have nulls, return original index
         """
-        if self._values.has_nulls():
-            return cudf.RangeIndex(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
-            )
-        else:
-            return self
+        return self
 
     def is_numeric(self):
         return True
@@ -881,7 +870,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def max(self):
         return self._minmax("max")
 
-    @property  # type: ignore
+    @property
     def values(self):
         return cupy.arange(self.start, self.stop, self.step)
 
@@ -897,6 +886,42 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return cudf.DataFrame(
             {col_name: self._range}, index=self if index else None
         )
+
+    def to_series(self, index=None, name=None):
+        """
+        Create a Series with both index and values equal to the index keys.
+        Useful with map for returning an indexer based on an index.
+
+        Parameters
+        ----------
+        index : Index, optional
+            Index of resulting Series. If None, defaults to original index.
+        name : str, optional
+            Name of resulting Series. If None, defaults to name of original
+            index.
+
+        Returns
+        -------
+        Series
+            The dtype will be based on the type of the Index values.
+        """
+        return cudf.Series._from_data(
+            self._values,
+            index=self.copy(deep=False) if index is None else index,
+            name=self.name if name is None else name,
+        )
+
+    def any(self):
+        """
+        Return whether any elements is True in Index.
+        """
+        return self._values.any()
+
+    def append(self, other):
+        """
+        Append a collection of Index options together.
+        """
+        return self._as_int_index().append(other)
 
     def isin(self, values):
         """Return a boolean array where the index values are in values
@@ -1458,6 +1483,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         """
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
+
         This will involve changing type of Index object
         to StringIndex but it is the responsibility of the `__repr__`
         methods using this method to replace or handle representation
@@ -1467,8 +1493,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             return cudf.Index(
                 self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
-        else:
-            return self
+
+        return self
 
     def to_frame(self, index=True, name=None):
         """Create a DataFrame with a column containing this Index
@@ -1612,7 +1638,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         index : Index, optional
             Index of resulting Series. If None, defaults to original index.
         name : str, optional
-            Dame of resulting Series. If None, defaults to name of original
+            Name of resulting Series. If None, defaults to name of original
             index.
 
         Returns
@@ -1620,7 +1646,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         Series
             The dtype will be based on the type of the Index values.
         """
-        return cudf.Series(
+        return cudf.Series._from_data(
             self._values,
             index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
