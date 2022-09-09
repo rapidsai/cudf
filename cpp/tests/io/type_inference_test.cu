@@ -106,7 +106,7 @@ TEST_F(TypeInference, String)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = "[\"1990\",\"8\",\"25\"]";
+  std::string data = R"json(["1990","8","25"])json";
   rmm::device_uvector<char> d_data{data.size(), stream};
   cudaMemcpyAsync(
     d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
