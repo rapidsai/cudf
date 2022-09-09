@@ -138,7 +138,7 @@ register_stringview_binaryop(operator.ge, types.boolean)
 register_stringview_binaryop(operator.contains, types.boolean)
 
 
-def create_binary_attribute(attrname, retty):
+def create_binary_attr(attrname, retty):
     class StringViewBinaryAttr(AbstractTemplate):
         key = attrname
 
@@ -171,24 +171,24 @@ class StringViewAttrs(AttributeTemplate):
 
     def resolve_startswith(self, mod):
         return types.BoundFunction(
-            create_binary_attribute("StringView.startswith", types.boolean),
+            create_binary_attr("StringView.startswith", types.boolean),
             string_view,
         )
 
     def resolve_endswith(self, mod):
         return types.BoundFunction(
-            create_binary_attribute("StringView.endswith", types.boolean),
+            create_binary_attr("StringView.endswith", types.boolean),
             string_view,
         )
 
     def resolve_find(self, mod):
         return types.BoundFunction(
-            create_binary_attribute("StringView.find", size_type), string_view
+            create_binary_attr("StringView.find", size_type), string_view
         )
 
     def resolve_rfind(self, mod):
         return types.BoundFunction(
-            create_binary_attribute("StringView.rfind", size_type), string_view
+            create_binary_attr("StringView.rfind", size_type), string_view
         )
 
     def resolve_isalnum(self, mod):
