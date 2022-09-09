@@ -755,7 +755,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             } else {
               uint64_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              uint64_t const mask = 1ul << ((bw * 8) - 1) - 1;
+              uint64_t const mask = (1ul << (bw * 8 - 1)) - 1;
               // Negative values are represented with the highest bit set to 1
               rle->baseval.u64[r] = (std::is_signed<T>::value and baseval > mask)
                                       ? -static_cast<int64_t>(baseval & mask)
