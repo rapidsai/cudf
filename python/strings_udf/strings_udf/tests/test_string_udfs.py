@@ -1,8 +1,65 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import numba
+import numpy as np
+import pandas as pd
 import pytest
+from numba import cuda
+from numba.core.typing import signature as nb_signature
+from numba.types import CPointer, void
 
-from .utils import run_udf_test
+import cudf
+from cudf.testing._utils import assert_eq
+
+from strings_udf import ptxpath
+from strings_udf._lib.cudf_jit_udf import to_string_view_array
+from strings_udf._typing import str_view_arg_handler, string_view
+
+
+def get_kernel(func, dtype):
+    """
+    Create a kernel for testing a single scalar string function
+    Allocates an output vector with a dtype specified by the caller
+    The returned kernel executes the input function on each data
+    element of the input and returns the output into the output vector
+    """
+
+    func = cuda.jit(device=True)(func)
+    outty = numba.np.numpy_support.from_dtype(dtype)
+    sig = nb_signature(void, CPointer(string_view), outty[::1])
+
+    @cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])
+    def kernel(input_strings, output_col):
+        id = cuda.grid(1)
+        if id < len(output_col):
+            st = input_strings[id]
+            result = func(st)
+            output_col[id] = result
+
+    return kernel
+
+
+def run_udf_test(data, func, dtype):
+    """
+    Run a test kernel on a set of input data
+    Converts the input data to a cuDF column and subsequently
+    to an array of cudf::string_view objects. It then creates
+    a CUDA kernel using get_kernel which calls the input function,
+    and then assembles the result back into a cuDF series before
+    comparing it with the equivalent pandas result
+    """
+    dtype = np.dtype(dtype)
+    cudf_column = cudf.Series(data)._column
+    str_view_ary = to_string_view_array(cudf_column)
+
+    output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
+
+    kernel = get_kernel(func, dtype)
+    kernel.forall(len(data))(str_view_ary, output_ary)
+    got = cudf.Series(output_ary, dtype=dtype)
+    expect = pd.Series(data).apply(func)
+    assert_eq(expect, got, check_dtype=False)
+
 
 string_data = [
     "abc",
@@ -28,7 +85,11 @@ string_data = [
 ]
 
 
-@pytest.mark.parametrize("data", [string_data])
+@pytest.fixture(scope="module")
+def data():
+    return string_data
+
+
 @pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_eq(data, rhs):
     def func(st):
@@ -37,7 +98,6 @@ def test_string_udf_eq(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_ne(data, rhs):
     def func(st):
@@ -46,7 +106,6 @@ def test_string_udf_ne(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_ge(data, rhs):
     def func(st):
@@ -55,7 +114,6 @@ def test_string_udf_ge(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_le(data, rhs):
     def func(st):
@@ -64,7 +122,6 @@ def test_string_udf_le(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_gt(data, rhs):
     def func(st):
@@ -73,7 +130,6 @@ def test_string_udf_gt(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_lt(data, rhs):
     def func(st):
@@ -82,7 +138,6 @@ def test_string_udf_lt(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("substr", ["a", "cu", "2", "abc"])
 def test_string_udf_contains(data, substr):
     def func(st):
@@ -91,7 +146,6 @@ def test_string_udf_contains(data, substr):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", ""])
 def test_string_udf_count(data, substr):
     def func(st):
@@ -100,7 +154,6 @@ def test_string_udf_count(data, substr):
     run_udf_test(data, func, "int32")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", "", "gpu"])
 def test_string_udf_find(data, substr):
     def func(st):
@@ -109,7 +162,6 @@ def test_string_udf_find(data, substr):
     run_udf_test(data, func, "int32")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("substr", ["c", "cu", "2", "abc"])
 def test_string_udf_endswith(data, substr):
     def func(st):
@@ -118,7 +170,6 @@ def test_string_udf_endswith(data, substr):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isalnum(data):
     def func(st):
         return st.isalnum()
@@ -126,7 +177,6 @@ def test_string_udf_isalnum(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isalpha(data):
     def func(st):
         return st.isalpha()
@@ -134,7 +184,6 @@ def test_string_udf_isalpha(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isdecimal(data):
     def func(st):
         return st.isdecimal()
@@ -142,7 +191,6 @@ def test_string_udf_isdecimal(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isdigit(data):
     def func(st):
         return st.isdigit()
@@ -150,7 +198,6 @@ def test_string_udf_isdigit(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_islower(data):
     def func(st):
         return st.islower()
@@ -158,7 +205,6 @@ def test_string_udf_islower(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isnumeric(data):
     def func(st):
         return st.isnumeric()
@@ -166,7 +212,6 @@ def test_string_udf_isnumeric(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isspace(data):
     def func(st):
         return st.isspace()
@@ -174,7 +219,6 @@ def test_string_udf_isspace(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_isupper(data):
     def func(st):
         return st.isupper()
@@ -182,7 +226,6 @@ def test_string_udf_isupper(data):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("data", [string_data])
 def test_string_udf_len(data):
     def func(st):
         return len(st)
@@ -190,7 +233,6 @@ def test_string_udf_len(data):
     run_udf_test(data, func, "int64")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", "", "gpu"])
 def test_string_udf_rfind(data, substr):
     def func(st):
@@ -199,7 +241,6 @@ def test_string_udf_rfind(data, substr):
     run_udf_test(data, func, "int32")
 
 
-@pytest.mark.parametrize("data", [string_data])
 @pytest.mark.parametrize("substr", ["c", "cu", "2", "abc"])
 def test_string_udf_startswith(data, substr):
     def func(st):

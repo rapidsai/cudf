@@ -5,6 +5,7 @@ import os
 import sys
 import subprocess
 import re
+from . import _version
 
 from numba import cuda
 
@@ -29,7 +30,7 @@ def versions_compatible(path):
 
     # adapted from patch_needed()
     cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
-    if cp.returncode:
+    if cp.returncode != 0:
         # no driver
         return False
 
@@ -49,7 +50,5 @@ selected_sm = max(sm for sm in sms if sm < cc)
 ptxpath = os.path.join(os.path.dirname(__file__), f"shim_{selected_sm}.ptx")
 
 ENABLED = versions_compatible(ptxpath)
-
-from . import _version
 
 __version__ = _version.get_versions()["version"]
