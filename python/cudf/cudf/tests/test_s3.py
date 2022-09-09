@@ -311,6 +311,38 @@ def test_read_parquet_ext(
     assert_eq(expect, got1)
 
 
+def test_read_parquet_multi_file(s3_base, s3so, pdf):
+    fname_1 = "test_parquet_reader_multi_file_1.parquet"
+    buffer_1 = BytesIO()
+    pdf.to_parquet(path=buffer_1)
+    buffer_1.seek(0)
+
+    fname_2 = "test_parquet_reader_multi_file_2.parquet"
+    buffer_2 = BytesIO()
+    pdf.to_parquet(path=buffer_2)
+    buffer_2.seek(0)
+
+    bucket = "parquet"
+    with s3_context(
+        s3_base=s3_base,
+        bucket=bucket,
+        files={
+            fname_1: buffer_1,
+            fname_2: buffer_2,
+        },
+    ):
+        got = cudf.read_parquet(
+            [
+                f"s3://{bucket}/{fname_1}",
+                f"s3://{bucket}/{fname_2}",
+            ],
+            storage_options=s3so,
+        ).reset_index(drop=True)
+
+    expect = pd.concat([pdf, pdf], ignore_index=True)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
 def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
     # Write to buffer
