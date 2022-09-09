@@ -66,7 +66,7 @@ def _get_frame_row_type(dtype):
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        itemsize = itemsizes.get(elemdtype) or elemdtype.itemsize
+        itemsize = itemsizes.get(elemdtype, elemdtype.itemsize)
         offset += itemsize + 1
 
         # Align the next member of the struct to be a multiple of the
