@@ -290,9 +290,8 @@ cudf::data_type infer_data_type(json_inference_options_view const& options,
       return type_id::UINT64;
     } else if (cinfo.bool_count > 0) {
       return type_id::BOOL8;
-    } else {
-      CUDF_FAIL("Data type inference failed.\n");
     }
+    CUDF_FAIL("Data type inference failed.\n");
   };
   return cudf::data_type{get_type_id(h_column_info)};
 }
