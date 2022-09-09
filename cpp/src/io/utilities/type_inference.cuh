@@ -29,6 +29,8 @@
 #include <thrust/distance.h>
 #include <thrust/tuple.h>
 
+#include <cub/block/block_reduce.cuh>
+
 #include <cstddef>
 
 namespace cudf::io::detail {
@@ -85,6 +87,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
 /**
  * @brief Constructs column type histogram for a given column string input `data`.
  *
+ * @tparam BlockSize Number of threads in each block
  * @tparam ColumnStringIter Iterator type whose `value_type` is a
  * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
  * `offset_t` needs to be convertible to `std::size_t`.
@@ -95,13 +98,19 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @param[in] size Size of the string input
  * @param[out] column_info Histogram of column type counters
  */
-template <typename ColumnStringIter>
+template <int BlockSize, typename ColumnStringIter>
 __global__ void infer_column_type_kernel(json_inference_options_view options,
                                          device_span<char const> data,
                                          ColumnStringIter column_strings_begin,
                                          std::size_t size,
                                          cudf::io::column_type_histogram* column_info)
 {
+  cudf::size_type null_count     = 0;
+  cudf::size_type string_count   = 0;
+  cudf::size_type bool_count     = 0;
+  cudf::size_type float_count    = 0;
+  cudf::size_type datetime_count = 0;
+
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
        idx += gridDim.x * blockDim.x) {
     auto const field_offset = thrust::get<0>(*(column_strings_begin + idx));
@@ -110,13 +119,13 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
 
     if (cudf::detail::serialized_trie_contains(
           options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
-      atomicAdd(&column_info->null_count, 1);
+      ++null_count;
       continue;
     }
 
     // Handling strings
     if (*field_begin == options.quote_char && field_begin[field_len - 1] == options.quote_char) {
-      atomicAdd(&column_info->string_count, 1);
+      ++string_count;
       continue;
     }
 
@@ -163,7 +172,7 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
           options.trie_true, {field_begin, static_cast<std::size_t>(field_len)}) ||
         cudf::detail::serialized_trie_contains(
           options.trie_false, {field_begin, static_cast<std::size_t>(field_len)})) {
-      atomicAdd(&column_info->bool_count, 1);
+      ++bool_count;
     } else if (digit_count == int_req_number_cnt) {
       auto const is_negative = (*field_begin == '-');
       char const* data_begin = field_begin + (is_negative || (*field_begin == '+'));
@@ -172,7 +181,7 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
       atomicAdd(ptr, 1);
     } else if (is_like_float(
                  field_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
-      atomicAdd(&column_info->float_count, 1);
+      ++float_count;
     }
     // A date field can have either one or two '-' or '\'; A legal combination will only have one
     // of them To simplify the process of auto column detection, we are not covering all the
@@ -180,9 +189,24 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
     else if (((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
               (dash_count == 0 && slash_count > 0 && slash_count <= 2)) &&
              colon_count <= 2) {
-      atomicAdd(&column_info->datetime_count, 1);
+      ++datetime_count;
     }
   }  // grid-stride for loop
+
+  using BlockReduce = cub::BlockReduce<cudf::size_type, BlockSize>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  auto block_null_count     = BlockReduce(temp_storage).Sum(null_count);
+  auto block_string_count   = BlockReduce(temp_storage).Sum(string_count);
+  auto block_bool_count     = BlockReduce(temp_storage).Sum(bool_count);
+  auto block_float_count    = BlockReduce(temp_storage).Sum(float_count);
+  auto block_datetime_count = BlockReduce(temp_storage).Sum(datetime_count);
+  if (threadIdx.x == 0) {
+    atomicAdd(&column_info->null_count, block_null_count);
+    atomicAdd(&column_info->string_count, block_string_count);
+    atomicAdd(&column_info->bool_count, block_bool_count);
+    atomicAdd(&column_info->float_count, block_float_count);
+    atomicAdd(&column_info->datetime_count, block_datetime_count);
+  }
 }
 
 /**
@@ -213,7 +237,7 @@ cudf::io::column_type_histogram infer_column_type(json_inference_options_view co
   CUDF_CUDA_TRY(cudaMemsetAsync(
     d_column_info.data(), 0, sizeof(cudf::io::column_type_histogram), stream.value()));
 
-  infer_column_type_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+  infer_column_type_kernel<block_size><<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_strings_begin, size, d_column_info.data());
 
   return d_column_info.value(stream);
