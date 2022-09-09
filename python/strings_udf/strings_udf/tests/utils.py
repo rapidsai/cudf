@@ -16,25 +16,37 @@ from strings_udf._typing import str_view_arg_handler, string_view
 
 
 def get_kernel(func, dtype):
-    func = cuda.jit(device=True)(func)
+    """
+    Create a kernel for testing a single scalar string function
+    Allocates an output vector with a dtype specified by the caller
+    The returned kernel executes the input function on each data
+    element of the input and returns the output into the output vector
+    """
 
-    def execute_function(input_strings, output_col):
+    func = cuda.jit(device=True)(func)
+    outty = numba.np.numpy_support.from_dtype(dtype)
+    sig = nb_signature(void, CPointer(string_view), outty[::1])
+
+    @cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])
+    def kernel(input_strings, output_col):
         id = cuda.grid(1)
         if id < len(output_col):
             st = input_strings[id]
             result = func(st)
             output_col[id] = result
 
-    outty = numba.np.numpy_support.from_dtype(dtype)
-    sig = nb_signature(void, CPointer(string_view), outty[::1])
-    kernel = cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])(
-        execute_function
-    )
-
     return kernel
 
 
 def run_udf_test(data, func, dtype):
+    """
+    Run a test kernel on a set of input data
+    Converts the input data to a cuDF column and subsequently
+    to an array of cudf::string_view objects. It then creates
+    a CUDA kernel using get_kernel which calls the input function,
+    and then assembles the result back into a cuDF series before
+    comparing it with the equivalent pandas result
+    """
     dtype = np.dtype(dtype)
     cudf_column = cudf.Series(data)._column
     str_view_ary = to_string_view_array(cudf_column)
