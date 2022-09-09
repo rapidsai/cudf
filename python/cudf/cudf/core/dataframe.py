@@ -21,7 +21,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -40,7 +39,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, NotImplementedType
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -1934,7 +1933,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:

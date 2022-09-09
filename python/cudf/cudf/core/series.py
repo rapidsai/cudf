@@ -8,7 +8,7 @@ import pickle
 import textwrap
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
 import numpy as np
@@ -19,7 +19,12 @@ from pandas.core.dtypes.common import is_float
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import _is_null_host_scalar
-from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf._typing import (
+    ColumnLike,
+    DataFrameOrSeries,
+    NotImplementedType,
+    ScalarLike,
+)
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -1289,7 +1294,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:
