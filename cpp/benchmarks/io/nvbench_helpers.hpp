@@ -122,7 +122,11 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto value) {
     switch (value) {
       case row_selection::ALL: return "ALL";
+      case row_selection::BYTE_RANGE: return "BYTE_RANGE";
       case row_selection::NROWS: return "NROWS";
+      case row_selection::SKIPFOOTER: return "SKIPFOOTER";
+      case row_selection::STRIPES: return "STRIPES";
+      case row_selection::ROW_GROUPS: return "ROW_GROUPS";
       default: return "Unknown";
     }
   },
