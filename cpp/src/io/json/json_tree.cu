@@ -480,7 +480,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              parent_col_id.begin(),
                              parent_col_id.end(),
                              0);  // XXX: is this needed?
-  thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 0);  ///
+  thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);  ///
+  thrust::device_pointer_cast(col_id.data())[0] = 0; // TODO: Could initialize to 0 and scatter to level_boundaries
   thrust::device_pointer_cast(parent_col_id.data())[0] = -1;
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     // std::cout << level << ".before gather\n";
@@ -529,9 +530,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
     // std::cout << level << ".before transform\n";
     thrust::transform(rmm::exec_policy(stream),
-                      adjacent_pair_it,
+                      adjacent_pair_it+1,
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
-                      col_id.data() + level_boundaries[level - 1],
+                      col_id.data() + level_boundaries[level - 1]+1,
                       [] __device__(auto adjacent_pair) -> size_type {
                         auto lhs = thrust::get<0>(adjacent_pair),
                              rhs = thrust::get<1>(adjacent_pair);
@@ -540,9 +541,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     // std::cout << level << ".before scan\n";
     // // includes previous level last col_id to continue the index.
     thrust::inclusive_scan(rmm::exec_policy(stream),
-                           col_id.data() + level_boundaries[level - 1] - 1,
-                           col_id.data() + level_boundaries[level],
-                           col_id.data() + level_boundaries[level - 1] - 1);
+                           col_id.data() + level_boundaries[level - 1] , // FIXME: This is where the bug is.
+                           col_id.data() + level_boundaries[level]+1, //TODO: +1 only for not-last-levels.
+                           col_id.data() + level_boundaries[level - 1] );
     // // print node_id, parent_node_idx, parent_col_id, node_type, level.
     // std::cout << level << ".after scan\n";
     // print_level_data(level,
