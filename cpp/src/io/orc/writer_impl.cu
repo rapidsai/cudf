@@ -1385,7 +1385,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                       file_segmentation const& segmentation,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
-                                      host_span<compression_result const> comp_out,
+                                      host_span<compression_result const> comp_res,
                                       std::vector<ColStatsBlob> const& rg_stats,
                                       StripeInformation* stripe,
                                       orc_streams* streams,
@@ -1410,17 +1410,17 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     }
     return record;
   };
-  auto scan_record = [=, &comp_out](gpu::encoder_chunk_streams const& stream,
+  auto scan_record = [=, &comp_res](gpu::encoder_chunk_streams const& stream,
                                     gpu::StreamIndexType type,
                                     row_group_index_info& record) {
     if (record.pos >= 0) {
       record.pos += stream.lengths[type];
       while ((record.pos >= 0) && (record.blk_pos >= 0) &&
              (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
-             (record.comp_pos + block_header_size + comp_out[record.blk_pos].bytes_written <
+             (record.comp_pos + block_header_size + comp_res[record.blk_pos].bytes_written <
               static_cast<size_t>(record.comp_size))) {
         record.pos -= compression_blocksize_;
-        record.comp_pos += block_header_size + comp_out[record.blk_pos].bytes_written;
+        record.comp_pos += block_header_size + comp_res[record.blk_pos].bytes_written;
         record.blk_pos += 1;
       }
     }
@@ -2226,10 +2226,10 @@ void writer::impl::write(table_view const& table)
 
     // Compress the data streams
     rmm::device_buffer compressed_data(compressed_bfr_size, stream);
-    hostdevice_vector<compression_result> comp_stats(num_compressed_blocks, stream);
+    hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
     thrust::fill(rmm::exec_policy(stream),
-                 comp_stats.d_begin(),
-                 comp_stats.d_end(),
+                 comp_results.d_begin(),
+                 comp_results.d_end(),
                  compression_result{0, compression_status::FAILURE});
     if (compression_kind_ != NONE) {
       strm_descs.host_to_device(stream);
@@ -2241,10 +2241,10 @@ void writer::impl::write(table_view const& table)
                                   comp_block_alignment(compression_kind_),
                                   strm_descs,
                                   enc_data.streams,
-                                  comp_stats,
+                                  comp_results,
                                   stream);
       strm_descs.device_to_host(stream);
-      comp_stats.device_to_host(stream, true);
+      comp_results.device_to_host(stream, true);
     }
 
     ProtobufWriter pbw_(&buffer_);
@@ -2271,7 +2271,7 @@ void writer::impl::write(table_view const& table)
                            segmentation,
                            enc_data.streams,
                            strm_descs,
-                           comp_stats,
+                           comp_results,
                            intermediate_stats.rowgroup_blobs,
                            &stripe,
                            &streams,

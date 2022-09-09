@@ -56,12 +56,12 @@ struct CompressedStreamInfo {
   }
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size;                // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl;     // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl;          // [in] output buffer to decompress into
-  device_span<compression_result> decstatus;  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl;    // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl;         // [out] output buffer to copy to
+  size_t compressed_data_size;              // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl;        // [in] output buffer to decompress into
+  device_span<compression_result> dec_res;  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl;  // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl;       // [out] output buffer to copy to
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
   uint32_t num_uncompressed_blocks;      // [in,out] number of entries in dec_in_ctl(in), number of
@@ -351,7 +351,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] comp_block_align Required alignment for compressed blocks
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
- * @param[out] comp_stat Per-block compression status
+ * @param[out] comp_res Per-block compression status
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void CompressOrcDataStreams(uint8_t* compressed_data,
@@ -362,7 +362,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t comp_block_align,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<compression_result> comp_stat,
+                            device_span<compression_result> comp_res,
                             rmm::cuda_stream_view stream);
 
 /**

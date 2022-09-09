@@ -1161,26 +1161,26 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<compression_result> comp_stats(max_comp_pages, stream);
+  rmm::device_uvector<compression_result> comp_res(max_comp_pages, stream);
   thrust::fill(rmm::exec_policy(stream),
-               comp_stats.begin(),
-               comp_stats.end(),
+               comp_res.begin(),
+               comp_res.end(),
                compression_result{0, compression_status::FAILURE});
 
-  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
+  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_res, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
         nvcomp::batched_compress(
-          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_stats, stream);
+          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
       } else {
-        gpu_snap(comp_in, comp_out, comp_stats, stream);
+        gpu_snap(comp_in, comp_out, comp_res, stream);
       }
       break;
     case parquet::Compression::ZSTD:
       if (nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
         nvcomp::batched_compress(
-          nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_stats, stream);
+          nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
       }
       break;
     case parquet::Compression::UNCOMPRESSED: break;
@@ -1191,7 +1191,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
-  EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, comp_res, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   if (column_stats != nullptr) {

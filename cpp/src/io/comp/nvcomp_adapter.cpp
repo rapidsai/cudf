@@ -158,7 +158,7 @@ size_t batched_decompress_temp_size(compression_type compression,
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
-                        device_span<compression_result> statuses,
+                        device_span<compression_result> results,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
@@ -199,7 +199,7 @@ void batched_decompress(compression_type compression,
                                                       stream.value());
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "unable to perform decompression");
 
-  update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, statuses, stream);
+  update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
 // Dispatcher for nvcompBatched<format>CompressGetTempSize
@@ -347,7 +347,7 @@ bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<compression_result> statuses,
+                      device_span<compression_result> results,
                       rmm::cuda_stream_view stream)
 {
   auto const num_chunks = inputs.size();
@@ -355,7 +355,7 @@ void batched_compress(compression_type compression,
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
   auto const max_uncomp_chunk_size = skip_unsupported_inputs(
-    nvcomp_args.input_data_sizes, statuses, compress_max_allowed_chunk_size(compression), stream);
+    nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
   auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);
@@ -374,7 +374,7 @@ void batched_compress(compression_type compression,
                          actual_compressed_data_sizes.data(),
                          stream.value());
 
-  update_compression_results(actual_compressed_data_sizes, statuses, stream);
+  update_compression_results(actual_compressed_data_sizes, results, stream);
 }
 
 bool is_compression_enabled(compression_type compression)

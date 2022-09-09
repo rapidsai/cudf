@@ -52,14 +52,14 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
  */
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
                                 device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> cudf_stats,
+                                device_span<compression_result> results,
                                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Fill the result array based on the actual output sizes.
  */
 void update_compression_results(device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> cudf_stats,
+                                device_span<compression_result> results,
                                 rmm::cuda_stream_view stream);
 
 /**
@@ -68,7 +68,7 @@ void update_compression_results(device_span<size_t const> actual_output_sizes,
  * Returns the size of the largest remaining input chunk.
  */
 size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
-                               device_span<compression_result> statuses,
+                               device_span<compression_result> results,
                                std::optional<size_t> max_valid_input_size,
                                rmm::cuda_stream_view stream);
 
