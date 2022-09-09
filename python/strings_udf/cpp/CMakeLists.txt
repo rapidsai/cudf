@@ -24,6 +24,7 @@ rapids_cpm_init()
 
 rapids_cuda_init_architectures(STRINGS_UDF)
 
+# Create a project so that we can enable CUDA architectures in this file.
 project(
   strings-udf-cpp
   VERSION ${strings_udf_version}
@@ -95,12 +96,12 @@ file(COPY \${ptx_paths} DESTINATION \"${destination}\")"
 endfunction()
 
 # Create the shim library for each architecture.
+set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 
   add_library(${tgt} OBJECT src/strings/udf/shim.cu)
-  set(SHIM_CUDA_FLAGS "")
-  list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
   set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
 
