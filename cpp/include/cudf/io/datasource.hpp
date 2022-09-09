@@ -105,15 +105,6 @@ class datasource {
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
 
   /**
-   * @brief Creates a source from a from an Arrow file.
-   *
-   * @param[in] arrow_file RandomAccessFile to which the API calls are forwarded
-   * @return Constructed datasource object
-   */
-  static std::unique_ptr<datasource> create(
-    std::shared_ptr<arrow::io::RandomAccessFile> arrow_file);
-
-  /**
    * @brief Creates a source from an user implemented datasource object.
    *
    * @param[in] source Non-owning pointer to the datasource object
