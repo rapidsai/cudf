@@ -118,191 +118,44 @@ class StringLength(AbstractTemplate):
             return nb_signature(size_type, args[0])
 
 
-@cuda_decl_registry.register_global(operator.contains)
-class StringViewContains(AbstractTemplate):
-    """
-    Return True if a string view contains a substring view
-    """
+def register_stringview_binaryop(op, retty):
+    class StringViewBinaryOp(AbstractTemplate):
+        def generic(self, args, kws):
+            if isinstance(args[0], any_string_ty) and isinstance(
+                args[1], any_string_ty
+            ):
+                return nb_signature(retty, string_view, string_view)
 
-    def generic(self, args, kws):
-        if isinstance(args[0], any_string_ty) and isinstance(
-            args[1], any_string_ty
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
+    cuda_decl_registry.register_global(op)(StringViewBinaryOp)
 
 
-@cuda_decl_registry.register_global(operator.eq)
-class StringViewEq(AbstractTemplate):
-    """
-    Compare two cudf::string_view with ==
-    """
-
-    def generic(self, args, kws):
-        if (
-            isinstance(args[0], any_string_ty)
-            and isinstance(args[1], any_string_ty)
-            and len(args) == 2
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
+register_stringview_binaryop(operator.eq, types.boolean)
+register_stringview_binaryop(operator.ne, types.boolean)
+register_stringview_binaryop(operator.lt, types.boolean)
+register_stringview_binaryop(operator.gt, types.boolean)
+register_stringview_binaryop(operator.le, types.boolean)
+register_stringview_binaryop(operator.ge, types.boolean)
+register_stringview_binaryop(operator.contains, types.boolean)
 
 
-@cuda_decl_registry.register_global(operator.ne)
-class StringViewNe(AbstractTemplate):
-    """
-    Compare two cudf::string_view with !=
-    """
+def create_binary_attribute(attrname, retty):
+    class StringViewBinaryAttr(AbstractTemplate):
+        key = attrname
 
-    def generic(self, args, kws):
-        if (
-            isinstance(args[0], any_string_ty)
-            and isinstance(args[1], any_string_ty)
-            and len(args) == 2
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
+        def generic(self, args, kws):
+            return nb_signature(retty, string_view, recvr=self.this)
+
+    return StringViewBinaryAttr
 
 
-@cuda_decl_registry.register_global(operator.ge)
-class StringViewGe(AbstractTemplate):
-    """
-    Compare two cudf::string_view with >=
-    """
+def create_identifier_attr(attrname):
+    class StringViewIdentifierAttr(AbstractTemplate):
+        key = attrname
 
-    def generic(self, args, kws):
-        if (
-            isinstance(args[0], any_string_ty)
-            and isinstance(args[1], any_string_ty)
-            and len(args) == 2
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
+        def generic(self, args, kws):
+            return nb_signature(types.boolean, recvr=self.this)
 
-
-@cuda_decl_registry.register_global(operator.le)
-class StringViewLe(AbstractTemplate):
-    """
-    Compare two cudf::string_view with <=
-    """
-
-    def generic(self, args, kws):
-        if (
-            isinstance(args[0], any_string_ty)
-            and isinstance(args[1], any_string_ty)
-            and len(args) == 2
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
-
-
-@cuda_decl_registry.register_global(operator.gt)
-class StringViewGt(AbstractTemplate):
-    """
-    Compare two cudf::string_view with >
-    """
-
-    def generic(self, args, kws):
-        if (
-            isinstance(args[0], any_string_ty)
-            and isinstance(args[1], any_string_ty)
-            and len(args) == 2
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
-
-
-@cuda_decl_registry.register_global(operator.lt)
-class StringViewLt(AbstractTemplate):
-    """
-    Compare two cudf::string_view with <
-    """
-
-    def generic(self, args, kws):
-        if (
-            isinstance(args[0], any_string_ty)
-            and isinstance(args[1], any_string_ty)
-            and len(args) == 2
-        ):
-            return nb_signature(types.boolean, string_view, string_view)
-
-
-class StringViewStartsWith(AbstractTemplate):
-    key = "StringView.startswith"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, string_view, recvr=self.this)
-
-
-class StringViewEndsWith(AbstractTemplate):
-    key = "StringView.endswith"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, string_view, recvr=self.this)
-
-
-class StringViewFind(AbstractTemplate):
-    key = "StringView.find"
-
-    def generic(self, args, kws):
-        return nb_signature(size_type, string_view, recvr=self.this)
-
-
-class StringViewRFind(AbstractTemplate):
-    key = "StringView.rfind"
-
-    def generic(self, args, kws):
-        return nb_signature(size_type, string_view, recvr=self.this)
-
-
-class StringViewIsAlnum(AbstractTemplate):
-    key = "StringView.isalnum"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsAlpha(AbstractTemplate):
-    key = "StringView.isalpha"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsDecimal(AbstractTemplate):
-    key = "StringView.isdecimal"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsDigit(AbstractTemplate):
-    key = "StringView.isdigit"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsNumeric(AbstractTemplate):
-    key = "StringView.isnumeric"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsUpper(AbstractTemplate):
-    key = "StringView.isupper"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsLower(AbstractTemplate):
-    key = "StringView.islower"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
-
-
-class StringViewIsSpace(AbstractTemplate):
-    key = "StringView.isspace"
-
-    def generic(self, args, kws):
-        return nb_signature(types.boolean, recvr=self.this)
+    return StringViewIdentifierAttr
 
 
 class StringViewCount(AbstractTemplate):
@@ -317,40 +170,66 @@ class StringViewAttrs(AttributeTemplate):
     key = string_view
 
     def resolve_startswith(self, mod):
-        return types.BoundFunction(StringViewStartsWith, string_view)
+        return types.BoundFunction(
+            create_binary_attribute("StringView.startswith", types.boolean),
+            string_view,
+        )
 
     def resolve_endswith(self, mod):
-        return types.BoundFunction(StringViewEndsWith, string_view)
+        return types.BoundFunction(
+            create_binary_attribute("StringView.endswith", types.boolean),
+            string_view,
+        )
 
     def resolve_find(self, mod):
-        return types.BoundFunction(StringViewFind, string_view)
+        return types.BoundFunction(
+            create_binary_attribute("StringView.find", size_type), string_view
+        )
 
     def resolve_rfind(self, mod):
-        return types.BoundFunction(StringViewRFind, string_view)
+        return types.BoundFunction(
+            create_binary_attribute("StringView.rfind", size_type), string_view
+        )
 
     def resolve_isalnum(self, mod):
-        return types.BoundFunction(StringViewIsAlnum, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isalnum"), string_view
+        )
 
     def resolve_isalpha(self, mod):
-        return types.BoundFunction(StringViewIsAlpha, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isalpha"), string_view
+        )
 
     def resolve_isdecimal(self, mod):
-        return types.BoundFunction(StringViewIsDecimal, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isdecimal"), string_view
+        )
 
     def resolve_isdigit(self, mod):
-        return types.BoundFunction(StringViewIsDigit, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isdigit"), string_view
+        )
 
     def resolve_isnumeric(self, mod):
-        return types.BoundFunction(StringViewIsNumeric, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isnumeric"), string_view
+        )
 
     def resolve_islower(self, mod):
-        return types.BoundFunction(StringViewIsLower, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.islower"), string_view
+        )
 
     def resolve_isupper(self, mod):
-        return types.BoundFunction(StringViewIsUpper, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isupper"), string_view
+        )
 
     def resolve_isspace(self, mod):
-        return types.BoundFunction(StringViewIsSpace, string_view)
+        return types.BoundFunction(
+            create_identifier_attr("StringView.isspace"), string_view
+        )
 
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
