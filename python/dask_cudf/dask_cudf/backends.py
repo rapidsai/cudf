@@ -431,13 +431,13 @@ def sizeof_cudf_series_index(obj):
 
 try:
     # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.backends import PandasBackendEntrypoint
-    from dask.utils import DaskBackendEntrypoint
+    from dask.dataframe.backends import PandasIOEntrypoint
+    from dask.utils import DaskBackendIOEntrypoint
 
-    class CudfBackendEntrypoint(DaskBackendEntrypoint):
+    class CudfIOEntrypoint(DaskBackendIOEntrypoint):
         @cached_property
         def fallback(self):
-            return PandasBackendEntrypoint()
+            return PandasIOEntrypoint()
 
         def move_from_fallback(self, ddf):
             if isinstance(ddf._meta, pd.DataFrame):
