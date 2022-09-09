@@ -18,6 +18,13 @@ set(strings_udf_version 22.10.00)
 
 include(../../fetch_rapids.cmake)
 
+include(rapids-cuda)
+
+# TODO: I believe this needs to come before the `project` call, but this is unfortunate because CUDA
+# is really only required in the cpp subdirectory so this is a bit out of place. I'm not sure if
+# there's a better solution here, though.
+rapids_cuda_init_architectures(STRINGS_UDF)
+
 project(
   strings-udf-python
   VERSION ${strings_udf_version}
@@ -25,10 +32,12 @@ project(
             # language to be enabled here. The test project that is built in scikit-build to verify
             # various linking options for the python library is hardcoded to build with C, so until
             # that is fixed we need to keep C.
-            C CXX
+            C CXX CUDA
 )
 
 find_package(cudf ${strings_udf_version} REQUIRED)
+
+add_subdirectory(cpp)
 
 include(rapids-cython)
 rapids_cython_init()

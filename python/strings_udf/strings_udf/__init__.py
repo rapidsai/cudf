@@ -36,7 +36,8 @@ def versions_compatible(path):
     return driver_version >= (int(major), int(minor)) and not patch_needed()
 
 
-ptxpath = os.getenv("CONDA_PREFIX") + "/lib/shim.ptx"
+# ptxpath = os.getenv("CONDA_PREFIX") + "/lib/shim.ptx"
+ptxpath = os.path.join(os.path.dirname(__file__), "shim.ptx")
 ENABLED = versions_compatible(ptxpath)
 
 from . import _version

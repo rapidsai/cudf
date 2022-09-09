@@ -14,11 +14,6 @@
 
 cmake_minimum_required(VERSION 3.20.1)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.08/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
-)
-include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
-
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -27,51 +22,30 @@ include(rapids-find)
 
 rapids_cpm_init()
 
-# set the project name and version
-project(
-  cudf_strings_udf
-  VERSION 0.1
-  DESCRIPTION "cudf strings-udf library"
-  LANGUAGES C CXX CUDA
+rapids_find_package(
+  CUDAToolkit REQUIRED
+  BUILD_EXPORT_SET strings-udf-exports
+  INSTALL_EXPORT_SET strings-udf-exports
 )
 
-if(NOT CONDA_PREFIX)
-  message(FATAL_ERROR " CONDA_PREFIX must be set")
-endif()
-
-message(STATUS "CONDA_PREFIX=${CONDA_PREFIX}")
-
-find_package(CUDAToolkit REQUIRED)
-
-# depends on an installed cudf dev env
-set(UDF_INCLUDES ${CONDA_PREFIX}/include)
-list(APPEND UDF_INCLUDES ${CONDA_PREFIX}/include/rapids/libcudacxx)
-
-set(UDF_LIBS ${CONDA_PREFIX}/lib/libcudf.so nvrtc)
+include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 
 set(UDF_CXX_FLAGS "")
 set(UDF_CUDA_FLAGS "")
 set(SHIM_CUDA_FLAGS "")
 
 list(APPEND UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
-list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -keep)
+list(APPEND SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
 add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
+# TODO: Will need to create separate shim libraries for different architectures.
 add_library(shim OBJECT src/strings/udf/shim.cu)
 
 set_property(TARGET shim PROPERTY CUDA_PTX_COMPILATION ON)
 
-target_include_directories(
-  shim
-  PRIVATE include
-  PUBLIC ${CMAKE_SOURCE_DIR}/include
-)
-
-target_include_directories(
-  shim
-  PRIVATE include
-  PUBLIC ${CONDA_PREFIX}/include
-)
+target_include_directories(shim PUBLIC include)
+target_include_directories(cudf_strings_udf PUBLIC include)
 
 set_target_properties(
   cudf_strings_udf
@@ -93,16 +67,34 @@ target_compile_options(
 
 target_compile_options(shim PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
 
-target_include_directories(
-  cudf_strings_udf
-  PRIVATE include
-  PUBLIC ${UDF_INCLUDES}
-)
-target_link_libraries(cudf_strings_udf PUBLIC ${UDF_LIBS})
+target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf CUDA::nvrtc)
+target_link_libraries(shim PUBLIC cudf::cudf)
 
-install(TARGETS cudf_strings_udf
-        PUBLIC_HEADER DESTINATION ${CONDA_PREFIX}/include/cudf/strings/udf/
-)
-install(FILES ${CMAKE_SOURCE_DIR}/build/CMakeFiles/shim.dir/src/strings/udf/shim.ptx
-        DESTINATION ${CONDA_PREFIX}/lib
-)
+# install(TARGETS cudf_strings_udf PUBLIC_HEADER DESTINATION
+# ${CONDA_PREFIX}/include/cudf/strings/udf/ )
+
+# This function will copy the generated PTX file from its generator-specific location in the build
+# tree into a specified location in the build tree from which we can install it.
+function(copy_ptx_to_location target destination)
+  set(cmake_generated_file
+      "${CMAKE_CURRENT_BINARY_DIR}/cmake/cp_${target}_$<LOWER_CASE:$<CONFIG>>_ptx.cmake"
+  )
+  file(
+    GENERATE
+    OUTPUT "${cmake_generated_file}"
+    CONTENT
+      "
+set(ptx_paths \"$<TARGET_OBJECTS:${target}>\")
+file(COPY \${ptx_paths} DESTINATION \"${destination}\")"
+  )
+
+  add_custom_target(
+    ${target}_cp_ptx ALL
+    COMMAND ${CMAKE_COMMAND} -P "${cmake_generated_file}"
+    DEPENDS $<TARGET_OBJECTS:${target}>
+    COMMENT "Copying PTX files to '${destination}'"
+  )
+endfunction()
+
+copy_ptx_to_location(shim "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf")
+install(FILES $<TARGET_OBJECTS:shim> DESTINATION ./strings_udf)
