@@ -2551,15 +2551,17 @@ def test_parquet_writer_zstd():
     size = 12345
     expected = cudf.DataFrame(
         {
-            "a": np.arange(0, stop=size, dtype="int64"),
+            "a": np.arange(0, stop=size, dtype="float64"),
             "b": np.random.choice(list("abcd"), size=size),
             "c": np.random.choice(np.arange(4), size=size),
         }
     )
+    
+    buff = BytesIO()
     try:
-        buff = BytesIO()
         expected.to_orc(buff, compression="ZSTD")
-        got = cudf.read_orc(buff)
-        assert_eq(expected, got)
     except RuntimeError:
         pytest.mark.xfail(reason="Newer nvCOMP version is required")
+    else:    
+        got = pd.read_orc(buff)
+        assert_eq(expected, got)

@@ -1748,13 +1748,15 @@ def test_writer_protobuf_large_rowindexentry():
 @pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
 def test_orc_writer_nvcomp(list_struct_buff, compression):
     expected = cudf.read_orc(list_struct_buff)
+
+    buff = BytesIO()
     try:
-        buff = BytesIO()
         expected.to_orc(buff, compression=compression)
-        got = cudf.read_orc(buff)
-        assert_eq(expected, got)
     except RuntimeError:
         pytest.mark.xfail(reason="Newer nvCOMP version is required")
+    else:
+        got = pd.read_orc(buff)
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("index", [True, False, None])
