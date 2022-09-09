@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 import re
+from . import _version
 
 
 def versions_compatible(path):
@@ -38,7 +39,5 @@ def versions_compatible(path):
 
 ptxpath = os.getenv("CONDA_PREFIX") + "/lib/shim.ptx"
 ENABLED = versions_compatible(ptxpath)
-
-from . import _version
 
 __version__ = _version.get_versions()["version"]
