@@ -75,7 +75,7 @@ namespace experimental {
 template <cudf::type_id t>
 struct dispatch_void_if_nested {
   /// The type to dispatch to if the type is nested
-  using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
+  using type = std::conditional_t<t == type_id::STRUCT or t == type_id::LIST, void, id_to_type<t>>;
 };
 
 namespace row {
@@ -1026,7 +1026,7 @@ class device_row_comparator {
     {
       column_device_view lcol = lhs.slice(lhs_element_index, 1);
       column_device_view rcol = rhs.slice(rhs_element_index, 1);
-      while (is_nested(lcol.type())) {
+      while (lcol.type().id() == type_id::STRUCT || lcol.type().id() == type_id::LIST) {
         if (check_nulls) {
           auto lvalid = detail::make_validity_iterator<true>(lcol);
           auto rvalid = detail::make_validity_iterator<true>(rcol);
@@ -1451,7 +1451,7 @@ class device_row_hasher {
     {
       auto hash                   = hash_value_type{0};
       column_device_view curr_col = col.slice(row_index, 1);
-      while (is_nested(curr_col.type())) {
+      while (curr_col.type().id() == type_id::STRUCT || curr_col.type().id() == type_id::LIST) {
         if (_check_nulls) {
           auto validity_it = detail::make_validity_iterator<true>(curr_col);
           hash             = detail::accumulate(

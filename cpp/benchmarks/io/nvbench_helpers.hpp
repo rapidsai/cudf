@@ -150,3 +150,29 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     }
   },
   [](auto) { return std::string{}; })
+
+enum class converts_strings : bool { YES, NO };
+
+enum class uses_pandas_metadata : bool { YES, NO };
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  converts_strings,
+  [](auto value) {
+    switch (value) {
+      case converts_strings::YES: return "YES";
+      case converts_strings::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  uses_pandas_metadata,
+  [](auto value) {
+    switch (value) {
+      case uses_pandas_metadata::YES: return "YES";
+      case uses_pandas_metadata::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })

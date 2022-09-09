@@ -88,8 +88,7 @@ class file_sink : public data_sink {
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
-    if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
-    return device_write_async(gpu_data, _bytes_written, stream).get();
+    return device_write_async(gpu_data, size, stream).get();
   }
 
  private:
