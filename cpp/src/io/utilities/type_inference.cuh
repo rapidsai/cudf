@@ -138,9 +138,9 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
     uint32_t exponent_count = 0;
     uint32_t other_count    = 0;
 
-    auto const maybe_hex = (field_len > 2 && field_begin[0] == '0' && field_begin[1] == 'x') ||
-                           (field_len > 3 && field_begin[0] == '-' && field_begin[1] == '0' &&
-                            field_begin[2] == 'x');
+    auto const maybe_hex =
+      (field_len > 2 && field_begin[0] == '0' && field_begin[1] == 'x') ||
+      (field_len > 3 && field_begin[0] == '-' && field_begin[1] == '0' && field_begin[2] == 'x');
     auto const field_end = field_begin + field_len;
 
     for (auto pos = field_begin; pos < field_end; ++pos) {
