@@ -179,7 +179,7 @@ struct column_statistics {
    *
    * @param detail_statistics The statistics to initialize the object with
    */
-  column_statistics(cudf::io::orc::column_statistics&& detail_statistics);
+  column_statistics(orc::column_statistics&& detail_statistics);
 };
 
 /**
@@ -205,6 +205,14 @@ struct parsed_orc_statistics {
  * @return Column names and decoded ORC statistics
  */
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
+
+struct orc_metadata {
+  // root columns (TMP)
+  std::vector<std::string> schema;
+  size_t num_stripes;
+};
+
+orc_metadata read_orc_metadata(source_info const& src_info);
 
 }  // namespace io
 }  // namespace cudf

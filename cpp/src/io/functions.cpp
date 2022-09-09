@@ -337,6 +337,17 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   return result;
 }
 
+orc_metadata read_orc_metadata(source_info const& src_info)
+{
+  auto sources = make_datasources(src_info);
+
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  auto internal_meta = orc::metadata(sources.front().get(), cudf::default_stream_value);
+  // CUDF_EXPECTS(internal_meta.ff.types.size() == 1, "expecting only one root node");
+
+  return {internal_meta.ff.types[0].fieldNames, internal_meta.ff.stripes.size()};
+}
+
 /**
  * @copydoc cudf::io::read_orc
  */
