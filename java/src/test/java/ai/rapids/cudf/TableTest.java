@@ -55,6 +55,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.function.IntFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -4005,6 +4006,104 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * Helper for constructing BigInteger from int
+   * @param x Integer value
+   * @return BigInteger equivalent of x
+   */
+  private static BigInteger big(int x)
+  {
+    return new BigInteger("" + x);
+  }
+
+  /**
+   * Helper to get scalar for preceding == Decimal(200),
+   * with data width depending upon the the order-by
+   * column index:
+   *   orderby_col_idx = 2 -> Decimal32
+   *   orderby_col_idx = 3 -> Decimal64
+   *   orderby_col_idx = 4 -> Decimal128
+   */
+  private static Scalar getPrecedingDecimal200(int orderby_col_idx)
+  {
+    switch(orderby_col_idx)
+    {
+      case 2: return Scalar.fromDecimal(0, 200);
+      case 3: return Scalar.fromDecimal(0, 200l);
+      case 4: return Scalar.fromDecimal(0, new BigInteger("" + 200));
+      default: 
+        throw new IllegalStateException("Unexpected order by column index: " 
+                                        + orderby_col_idx);
+    }
+  }
+
+/**
+   * Helper to get scalar for following == Decimal(100),
+   * with data width depending upon the the order-by
+   * column index:
+   *   orderby_col_idx = 2 -> Decimal32
+   *   orderby_col_idx = 3 -> Decimal64
+   *   orderby_col_idx = 4 -> Decimal128
+   */
+  private static Scalar getFollowingDecimal100(int orderby_col_idx)
+  {
+    switch(orderby_col_idx)
+    {
+      case 2: return Scalar.fromDecimal(2, 1);
+      case 3: return Scalar.fromDecimal(2, 1l);
+      case 4: return Scalar.fromDecimal(2, new BigInteger("" + 1));
+      default: 
+        throw new IllegalStateException("Unexpected order by column index: " 
+                                        + orderby_col_idx);
+    }
+  }
+
+  @Test
+  void testWindowingWithDecimalOrderBy() {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .decimal32Column(-1, 4000, 3000, 2000, 1000, 
+                             4000, 3000, 2000, 1000, 
+                             4000, 3000, 2000, 1000) // Decimal OBY Key
+        .decimal64Column(-1, 4000l, 3000l, 2000l, 1000l, 
+                             4000l, 3000l, 2000l, 1000l, 
+                             4000l, 3000l, 2000l, 1000l) // Decimal OBY Key
+        .decimal128Column(-1, RoundingMode.UNNECESSARY,
+                              big(4000), big(3000), big(2000), big(1000),
+                              big(4000), big(3000), big(2000), big(1000),
+                              big(4000), big(3000), big(2000), big(1000))
+        .column(9, 1, 5, 7, 2, 8, 9, 7, 6, 6, 0, 8) // Agg Column
+        .build()) {
+      for (int decimal_oby_col_idx = 2; decimal_oby_col_idx <= 4; ++decimal_oby_col_idx) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), 
+                                             OrderByArg.asc(1), 
+                                             OrderByArg.asc(decimal_oby_col_idx));
+            ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+            Scalar preceding_200 = Scalar.fromDecimal(0, 200);
+            Scalar following_100 = Scalar.fromDecimal(2, 1)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(5);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .window(getPrecedingDecimal200(decimal_oby_col_idx), getFollowingDecimal100(decimal_oby_col_idx))
+              .orderByColumnIndex(decimal_oby_col_idx)
+              .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                                                .aggregateWindowsOverRanges(RollingAggregation.count()
+                                                                                              .onColumn(5)
+                                                                                              .overWindow(window));
+                ColumnVector expect = ColumnVector.fromBoxedInts(2, 3, 4, 3, 2, 3, 4, 3, 2, 3, 4, 3)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+        }
+      }
+    }
+  }
+
   @Test
   void testWindowingMin() {
     try (Table unsorted = new Table.TestBuilder()
@@ -4960,6 +5059,8 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  // Test Decimal OBY column with Range queries.
 
   @Test
   void testWindowingWithoutGroupByColumns() {
