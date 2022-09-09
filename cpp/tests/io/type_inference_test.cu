@@ -45,7 +45,7 @@ TEST_F(TypeInference, Basic)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = "[42,52,5]";
+  std::string data = R"json([42,52,5])json";
   rmm::device_uvector<char> d_data{data.size(), stream};
   cudaMemcpyAsync(
     d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
@@ -73,7 +73,7 @@ TEST_F(TypeInference, Null)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = "[52,5]";
+  std::string data = R"json([52,5])json";
   rmm::device_uvector<char> d_data{data.size(), stream};
   cudaMemcpyAsync(
     d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
@@ -130,7 +130,7 @@ TEST_F(TypeInference, Bool)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = "[true,false,false]";
+  std::string data = R"json([true,false,false])json";
   rmm::device_uvector<char> d_data{data.size(), stream};
   cudaMemcpyAsync(
     d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
@@ -158,7 +158,7 @@ TEST_F(TypeInference, Timestamp)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = "[1970/2/5,1970/8/25]";
+  std::string data = R"json([1970/2/5,1970/8/25])json";
   rmm::device_uvector<char> d_data{data.size(), stream};
   cudaMemcpyAsync(
     d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
