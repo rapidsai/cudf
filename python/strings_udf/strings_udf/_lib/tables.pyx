@@ -1,7 +1,4 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
-#
-# distutils: language = c++
-# cython: c_string_type=unicode, c_string_encoding=utf8
 
 from libc.stdint cimport uint8_t, uintptr_t
 
