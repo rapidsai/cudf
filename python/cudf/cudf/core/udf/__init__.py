@@ -54,6 +54,9 @@ try:
         row_function.itemsizes[dtype("O")] = string_view.size_bytes
 
         _STRING_UDFS_ENABLED = True
+    else:
+        del strings_udf
+
 except ImportError:
     # allow cuDF to work without strings_udf
     pass
