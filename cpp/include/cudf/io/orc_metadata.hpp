@@ -206,9 +206,13 @@ struct parsed_orc_statistics {
  */
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
+struct column_info {
+  std::string name;                   ///< Column name
+  std::vector<column_info> children;  ///< Child info
+};
+
 struct orc_metadata {
-  // root columns (TMP)
-  std::vector<std::string> schema;
+  std::vector<column_info> schema;
   size_t num_stripes;
 };
 
