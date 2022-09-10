@@ -2556,12 +2556,12 @@ def test_parquet_writer_zstd():
             "c": np.random.choice(np.arange(4), size=size),
         }
     )
-    
+
     buff = BytesIO()
     try:
         expected.to_orc(buff, compression="ZSTD")
     except RuntimeError:
         pytest.mark.xfail(reason="Newer nvCOMP version is required")
-    else:    
+    else:
         got = pd.read_orc(buff)
         assert_eq(expected, got)
