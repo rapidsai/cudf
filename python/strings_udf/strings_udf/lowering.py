@@ -23,101 +23,101 @@ character_flags_table_ptr = get_character_flags_table_ptr()
 # a string_view whereas when a dstring is encountered, numba will convert it to
 # a view via its native view() method.
 
+_STR_VIEW_PTR = types.CPointer(string_view)
+
 
 # CUDA function declarations
-_string_view_len = cuda.declare_device(
-    "len", size_type(types.CPointer(string_view))
-)
+_string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
 
 _string_view_contains = cuda.declare_device(
     "contains",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_eq = cuda.declare_device(
     "eq",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 _string_view_ne = cuda.declare_device(
     "ne",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_ge = cuda.declare_device(
     "ge",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_le = cuda.declare_device(
     "le",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 _string_view_gt = cuda.declare_device(
     "gt",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_lt = cuda.declare_device(
     "lt",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_startswith = cuda.declare_device(
     "startswith",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_endswith = cuda.declare_device(
     "endswith",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_find = cuda.declare_device(
     "find",
-    size_type(types.CPointer(string_view), types.CPointer(string_view)),
+    size_type(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_rfind = cuda.declare_device(
     "rfind",
-    size_type(types.CPointer(string_view), types.CPointer(string_view)),
+    size_type(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 _string_view_isdigit = cuda.declare_device(
-    "pyisdigit", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisdigit", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 
 _string_view_isalnum = cuda.declare_device(
-    "pyisalnum", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisalnum", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_isalpha = cuda.declare_device(
-    "pyisalpha", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisalpha", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_isdecimal = cuda.declare_device(
-    "pyisdecimal", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisdecimal", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_isnumeric = cuda.declare_device(
-    "pyisnumeric", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisnumeric", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_isspace = cuda.declare_device(
-    "pyisspace", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisspace", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_isupper = cuda.declare_device(
-    "pyisupper", types.boolean(types.CPointer(string_view), types.int64)
+    "pyisupper", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_islower = cuda.declare_device(
-    "pyislower", types.boolean(types.CPointer(string_view), types.int64)
+    "pyislower", types.boolean(_STR_VIEW_PTR, types.int64)
 )
 
 _string_view_count = cuda.declare_device(
     "pycount",
-    size_type(types.CPointer(string_view), types.CPointer(string_view)),
+    size_type(_STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 
@@ -155,7 +155,7 @@ def string_view_len_impl(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_len_string_view,
-        nb_signature(size_type, types.CPointer(string_view)),
+        nb_signature(size_type, _STR_VIEW_PTR),
         (sv_ptr,),
     )
 
@@ -174,11 +174,7 @@ def create_binary_string_func(binary_func, retty):
             result = context.compile_internal(
                 builder,
                 cuda_func,
-                nb_signature(
-                    retty,
-                    types.CPointer(string_view),
-                    types.CPointer(string_view),
-                ),
+                nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
                 (lhs_ptr, rhs_ptr),
             )
 
@@ -261,9 +257,7 @@ def create_unary_identifier_func(id_func):
             result = context.compile_internal(
                 builder,
                 cuda_func,
-                nb_signature(
-                    types.boolean, types.CPointer(string_view), types.int64
-                ),
+                nb_signature(types.boolean, _STR_VIEW_PTR, types.int64),
                 (str_ptr, tbl_ptr),
             )
 
