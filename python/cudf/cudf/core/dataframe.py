@@ -304,7 +304,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 start = arg[0].start
                 if start is None:
                     start = self._frame.index[0]
-                df.index = as_index(start)
+                df.index = as_index(start, name=self._frame.index.name)
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
@@ -312,7 +312,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         row_selection
                     )
                 else:
-                    df.index = as_index(row_selection)
+                    df.index = as_index(
+                        row_selection, name=self._frame.index.name
+                    )
         # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
