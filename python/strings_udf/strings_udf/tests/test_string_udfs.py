@@ -61,36 +61,42 @@ def run_udf_test(data, func, dtype):
     assert_eq(expect, got, check_dtype=False)
 
 
-string_data = [
-    "abc",
-    "ABC",
-    "AbC",
-    "123",
-    "123aBc",
-    "123@.!",
-    "",
-    "rapids ai",
-    "gpu",
-    "True",
-    "False",
-    "1.234",
-    ".123a",
-    "0.013",
-    "1.0",
-    "01",
-    "20010101",
-    "cudf",
-    "cuda",
-    "gpu",
-]
-
-
 @pytest.fixture(scope="module")
 def data():
-    return string_data
+    return [
+        "abc",
+        "ABC",
+        "AbC",
+        "123",
+        "123aBc",
+        "123@.!",
+        "",
+        "rapids ai",
+        "gpu",
+        "True",
+        "False",
+        "1.234",
+        ".123a",
+        "0.013",
+        "1.0",
+        "01",
+        "20010101",
+        "cudf",
+        "cuda",
+        "gpu",
+    ]
 
 
-@pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
+@pytest.fixture(params=["cudf", "cuda", "gpucudf", "abc"])
+def rhs(request):
+    return request.param
+
+
+@pytest.fixture(params=["c", "cu", "2", "abc", "", "gpu"])
+def substr(request):
+    return request.param
+
+
 def test_string_udf_eq(data, rhs):
     def func(st):
         return st == rhs
@@ -98,7 +104,6 @@ def test_string_udf_eq(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_ne(data, rhs):
     def func(st):
         return st != rhs
@@ -106,7 +111,6 @@ def test_string_udf_ne(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_ge(data, rhs):
     def func(st):
         return st >= rhs
@@ -114,7 +118,6 @@ def test_string_udf_ge(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_le(data, rhs):
     def func(st):
         return st <= rhs
@@ -122,7 +125,6 @@ def test_string_udf_le(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_gt(data, rhs):
     def func(st):
         return st > rhs
@@ -130,7 +132,6 @@ def test_string_udf_gt(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("rhs", ["cudf", "cuda", "gpucudf", "abc"])
 def test_string_udf_lt(data, rhs):
     def func(st):
         return st < rhs
@@ -138,7 +139,6 @@ def test_string_udf_lt(data, rhs):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("substr", ["a", "cu", "2", "abc"])
 def test_string_udf_contains(data, substr):
     def func(st):
         return substr in st
@@ -146,7 +146,6 @@ def test_string_udf_contains(data, substr):
     run_udf_test(data, func, "bool")
 
 
-@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", ""])
 def test_string_udf_count(data, substr):
     def func(st):
         return st.count(substr)
@@ -154,7 +153,6 @@ def test_string_udf_count(data, substr):
     run_udf_test(data, func, "int32")
 
 
-@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", "", "gpu"])
 def test_string_udf_find(data, substr):
     def func(st):
         return st.find(substr)
@@ -162,7 +160,6 @@ def test_string_udf_find(data, substr):
     run_udf_test(data, func, "int32")
 
 
-@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc"])
 def test_string_udf_endswith(data, substr):
     def func(st):
         return st.endswith(substr)
@@ -233,7 +230,6 @@ def test_string_udf_len(data):
     run_udf_test(data, func, "int64")
 
 
-@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", "", "gpu"])
 def test_string_udf_rfind(data, substr):
     def func(st):
         return st.rfind(substr)
@@ -241,7 +237,6 @@ def test_string_udf_rfind(data, substr):
     run_udf_test(data, func, "int32")
 
 
-@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc"])
 def test_string_udf_startswith(data, substr):
     def func(st):
         return st.startswith(substr)
