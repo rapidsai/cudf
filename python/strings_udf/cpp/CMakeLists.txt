@@ -17,7 +17,6 @@ cmake_minimum_required(VERSION 3.20.1)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
-include(rapids-export)
 include(rapids-find)
 
 rapids_cpm_init()
@@ -42,12 +41,7 @@ rapids_find_package(
 )
 
 include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
-
-set(UDF_CXX_FLAGS "")
-set(UDF_CUDA_FLAGS "")
-
-list(APPEND UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET strings-udf-exports INSTALL_EXPORT_SET strings-udf-exports)
 
 add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
 target_include_directories(cudf_strings_udf PUBLIC include)
@@ -62,9 +56,10 @@ set_target_properties(
              CUDA_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
-             PUBLIC_HEADER "include/cudf/strings/udf/udf_apis.hpp"
 )
 
+set(UDF_CXX_FLAGS)
+set(UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 target_compile_options(
   cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
