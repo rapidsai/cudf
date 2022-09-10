@@ -615,7 +615,10 @@ class IntervalDtype(StructDtype):
             return cls(subtype=pd_dtype.subtype)
 
     def to_pandas(self) -> pd.IntervalDtype:
-        return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
+        if PANDAS_GE_130:
+            return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
+        else:
+            return pd.IntervalDtype(subtype=self.subtype)
 
     def __eq__(self, other):
         if isinstance(other, str):
