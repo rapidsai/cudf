@@ -163,12 +163,6 @@ def string_view_len_impl(context, builder, sig, args):
 
 
 def create_binary_string_func(binary_func, retty):
-    signature = (
-        retty,
-        types.CPointer(string_view),
-        types.CPointer(string_view),
-    )
-
     def deco(cuda_func):
         @cuda_lower(binary_func, string_view, string_view)
         def binary_func_impl(context, builder, sig, args):
@@ -180,7 +174,11 @@ def create_binary_string_func(binary_func, retty):
             result = context.compile_internal(
                 builder,
                 cuda_func,
-                nb_signature(*signature),
+                nb_signature(
+                    retty,
+                    types.CPointer(string_view),
+                    types.CPointer(string_view),
+                ),
                 (lhs_ptr, rhs_ptr),
             )
 
