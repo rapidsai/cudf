@@ -1,6 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 import operator
+from functools import partial
 
 from numba import cuda, types
 from numba.core import cgutils
@@ -29,91 +30,50 @@ _STR_VIEW_PTR = types.CPointer(string_view)
 # CUDA function declarations
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
 
-_string_view_contains = cuda.declare_device(
-    "contains",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
 
-_string_view_eq = cuda.declare_device(
-    "eq",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-_string_view_ne = cuda.declare_device(
-    "ne",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
+def _declare_binary_func(lhs, rhs, out, name):
+    # Declare a binary function
+    return cuda.declare_device(
+        name,
+        out(lhs, rhs),
+    )
 
-_string_view_ge = cuda.declare_device(
-    "ge",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
 
-_string_view_le = cuda.declare_device(
-    "le",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-_string_view_gt = cuda.declare_device(
-    "gt",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-
-_string_view_lt = cuda.declare_device(
-    "lt",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-
-_string_view_startswith = cuda.declare_device(
-    "startswith",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-
-_string_view_endswith = cuda.declare_device(
-    "endswith",
-    types.boolean(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-
-_string_view_find = cuda.declare_device(
-    "find",
-    size_type(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-
-_string_view_rfind = cuda.declare_device(
-    "rfind",
-    size_type(_STR_VIEW_PTR, _STR_VIEW_PTR),
-)
-
-_string_view_isdigit = cuda.declare_device(
-    "pyisdigit", types.boolean(_STR_VIEW_PTR, types.int64)
+# A binary function of the form f(string, string) -> bool
+_declare_bool_str_str_func = partial(
+    _declare_binary_func, _STR_VIEW_PTR, _STR_VIEW_PTR, types.boolean
 )
 
 
-_string_view_isalnum = cuda.declare_device(
-    "pyisalnum", types.boolean(_STR_VIEW_PTR, types.int64)
+_string_view_contains = _declare_bool_str_str_func("contains")
+_string_view_eq = _declare_bool_str_str_func("eq")
+_string_view_ne = _declare_bool_str_str_func("ne")
+_string_view_ge = _declare_bool_str_str_func("ge")
+_string_view_le = _declare_bool_str_str_func("le")
+_string_view_gt = _declare_bool_str_str_func("gt")
+_string_view_lt = _declare_bool_str_str_func("lt")
+_string_view_startswith = _declare_bool_str_str_func("startswith")
+_string_view_endswith = _declare_bool_str_str_func("endswith")
+_string_view_find = _declare_bool_str_str_func("find")
+_string_view_rfind = _declare_bool_str_str_func("rfind")
+_string_view_contains = _declare_bool_str_str_func("contains")
+
+
+# A binary function of the form f(string, int) -> bool
+_declare_bool_str_int_func = partial(
+    _declare_binary_func, _STR_VIEW_PTR, types.int64, types.boolean
 )
 
-_string_view_isalpha = cuda.declare_device(
-    "pyisalpha", types.boolean(_STR_VIEW_PTR, types.int64)
-)
 
-_string_view_isdecimal = cuda.declare_device(
-    "pyisdecimal", types.boolean(_STR_VIEW_PTR, types.int64)
-)
+_string_view_isdigit = _declare_bool_str_int_func("pyisdigit")
+_string_view_isalnum = _declare_bool_str_int_func("pypyisalnum")
+_string_view_isalpha = _declare_bool_str_int_func("pypyisalpha")
+_string_view_isdecimal = _declare_bool_str_int_func("pypyisdecimal")
+_string_view_isnumeric = _declare_bool_str_int_func("pypyisnumeric")
+_string_view_isspace = _declare_bool_str_int_func("pypyisspace")
+_string_view_isupper = _declare_bool_str_int_func("pypyisupper")
+_string_view_islower = _declare_bool_str_int_func("pypyislower")
 
-_string_view_isnumeric = cuda.declare_device(
-    "pyisnumeric", types.boolean(_STR_VIEW_PTR, types.int64)
-)
-
-_string_view_isspace = cuda.declare_device(
-    "pyisspace", types.boolean(_STR_VIEW_PTR, types.int64)
-)
-
-_string_view_isupper = cuda.declare_device(
-    "pyisupper", types.boolean(_STR_VIEW_PTR, types.int64)
-)
-
-_string_view_islower = cuda.declare_device(
-    "pyislower", types.boolean(_STR_VIEW_PTR, types.int64)
-)
 
 _string_view_count = cuda.declare_device(
     "pycount",
