@@ -162,7 +162,13 @@ def string_view_len_impl(context, builder, sig, args):
     return result
 
 
-def create_binary_string_func(binary_func, signature):
+def create_binary_string_func(binary_func, retty):
+    signature = (
+        retty,
+        types.CPointer(string_view),
+        types.CPointer(string_view),
+    )
+
     def deco(cuda_func):
         @cuda_lower(binary_func, string_view, string_view)
         def binary_func_impl(context, builder, sig, args):
@@ -185,98 +191,62 @@ def create_binary_string_func(binary_func, signature):
     return deco
 
 
-@create_binary_string_func(
-    operator.contains,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.contains, types.boolean)
 def string_view_contains_impl(st, substr):
     return _string_view_contains(st, substr)
 
 
-@create_binary_string_func(
-    operator.eq,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.eq, types.boolean)
 def string_view_eq_impl(st, rhs):
     return _string_view_eq(st, rhs)
 
 
-@create_binary_string_func(
-    operator.ne,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.ne, types.boolean)
 def string_view_ne_impl(st, rhs):
     return _string_view_ne(st, rhs)
 
 
-@create_binary_string_func(
-    operator.ge,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.ge, types.boolean)
 def string_view_ge_impl(st, rhs):
     return _string_view_ge(st, rhs)
 
 
-@create_binary_string_func(
-    operator.le,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.le, types.boolean)
 def string_view_le_impl(st, rhs):
     return _string_view_le(st, rhs)
 
 
-@create_binary_string_func(
-    operator.gt,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.gt, types.boolean)
 def string_view_gt_impl(st, rhs):
     return _string_view_gt(st, rhs)
 
 
-@create_binary_string_func(
-    operator.lt,
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func(operator.lt, types.boolean)
 def string_view_lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
 
 
-@create_binary_string_func(
-    "StringView.startswith",
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func("StringView.startswith", types.boolean)
 def string_view_startswith_impl(sv, substr):
     return _string_view_startswith(sv, substr)
 
 
-@create_binary_string_func(
-    "StringView.endswith",
-    (types.boolean, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func("StringView.endswith", types.boolean)
 def string_view_endswith_impl(sv, substr):
     return _string_view_endswith(sv, substr)
 
 
-@create_binary_string_func(
-    "StringView.count",
-    (size_type, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func("StringView.count", size_type)
 def string_view_count_impl(st, substr):
     return _string_view_count(st, substr)
 
 
-@create_binary_string_func(
-    "StringView.find",
-    (size_type, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func("StringView.find", size_type)
 def string_view_find_impl(sv, substr):
     return _string_view_find(sv, substr)
 
 
-@create_binary_string_func(
-    "StringView.rfind",
-    (size_type, types.CPointer(string_view), types.CPointer(string_view)),
-)
+@create_binary_string_func("StringView.rfind", size_type)
 def string_view_rfind_impl(sv, substr):
     return _string_view_rfind(sv, substr)
 
