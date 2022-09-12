@@ -47,10 +47,12 @@ if cp.returncode == 0:
         files = glob.glob(
             os.path.join(os.path.dirname(__file__), "shim_*.ptx")
         )
-        print("DEBUG strings_udf: files globbed:")
-        print(files)
         print("DEBUG strings_udf: path searched:")
         print(os.path.dirname(__file__))
+        print("DEBUG strings_udf: All files in path:")
+        print(os.listdir(os.path.dirname(__file__)))
+        print("DEBUG strings_udf: files globbed:")
+        print(files)
         dev = cuda.get_current_device()
         cc = "".join(str(x) for x in dev.compute_capability)
         files = glob.glob(
