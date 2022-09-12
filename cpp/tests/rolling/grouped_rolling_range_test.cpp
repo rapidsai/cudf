@@ -94,7 +94,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
    * value remains identical.
    *
    * Keeping the effective range bounds value identical ensures that
-   * the expected results from grouped_rolling remains the same.
+   * the expected result from grouped_rolling remains the same.
    */
   Rep rescale_range_value(Rep const& value_at_scale_0, scale_type new_scale) const
   {
@@ -257,9 +257,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
   }
 };
 
-using DecimalTypes = ::testing::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
-
-TYPED_TEST_SUITE(GroupedRollingRangeOrderByDecimalTypedTest, DecimalTypes);
+TYPED_TEST_SUITE(GroupedRollingRangeOrderByDecimalTypedTest, FixedPointTypes);
 
 TYPED_TEST(GroupedRollingRangeOrderByDecimalTypedTest, BoundedRanges)
 {
