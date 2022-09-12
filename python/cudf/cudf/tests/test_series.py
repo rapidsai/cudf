@@ -1939,3 +1939,17 @@ def test_series_ordered_dedup():
     expect = pd.Series(sr.to_pandas().unique())
     got = cudf.Series(sr._column.unique(preserve_order=True))
     assert_eq(expect.values, got.values)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "float64"])
+@pytest.mark.parametrize("bool_scalar", [True, False])
+def test_set_bool_error(dtype, bool_scalar):
+    sr = cudf.Series([1, 2, 3], dtype=dtype)
+    psr = sr.to_pandas(nullable=True)
+
+    assert_exceptions_equal(
+        lfunc=sr.__setitem__,
+        rfunc=psr.__setitem__,
+        lfunc_args_and_kwargs=([bool_scalar],),
+        rfunc_args_and_kwargs=([bool_scalar],),
+    )
