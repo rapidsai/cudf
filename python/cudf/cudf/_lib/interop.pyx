@@ -113,26 +113,28 @@ cdef vector[column_metadata] gather_metadata(list cols_dtypes) except *:
 
 cdef _set_col_children_metadata(dtype,
                                 column_metadata& col_meta):
+
+    cdef column_metadata element_metadata
+
     if is_struct_dtype(dtype):
-        col_meta.children_meta.reserve(len(dtype.fields))
-        for i, name in enumerate(dtype.fields):
-            value = dtype.fields[name]
-            col_meta.children_meta.push_back(column_metadata(name.encode()))
+        for name, value in dtype.fields.items():
+            element_metadata = column_metadata(name.encode())
             _set_col_children_metadata(
-                value, col_meta.children_meta[i]
+                value, element_metadata
             )
+            col_meta.children_meta.push_back(element_metadata)
     elif is_list_dtype(dtype):
         col_meta.children_meta.reserve(2)
         # Offsets - child 0
         col_meta.children_meta.push_back(column_metadata())
 
         # Element column - child 1
-        col_meta.children_meta.push_back(column_metadata())
+        element_metadata = column_metadata()
         _set_col_children_metadata(
-            dtype.element_type, col_meta.children_meta[1]
+            dtype.element_type, element_metadata
         )
+        col_meta.children_meta.push_back(element_metadata)
     else:
-        col_meta.children_meta.reserve(1)
         col_meta.children_meta.push_back(column_metadata())
 
 
