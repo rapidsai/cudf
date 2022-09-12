@@ -66,13 +66,13 @@ _declare_bool_str_int_func = partial(
 
 
 _string_view_isdigit = _declare_bool_str_int_func("pyisdigit")
-_string_view_isalnum = _declare_bool_str_int_func("pypyisalnum")
-_string_view_isalpha = _declare_bool_str_int_func("pypyisalpha")
-_string_view_isdecimal = _declare_bool_str_int_func("pypyisdecimal")
-_string_view_isnumeric = _declare_bool_str_int_func("pypyisnumeric")
-_string_view_isspace = _declare_bool_str_int_func("pypyisspace")
-_string_view_isupper = _declare_bool_str_int_func("pypyisupper")
-_string_view_islower = _declare_bool_str_int_func("pypyislower")
+_string_view_isalnum = _declare_bool_str_int_func("pyisalnum")
+_string_view_isalpha = _declare_bool_str_int_func("pyisalpha")
+_string_view_isdecimal = _declare_bool_str_int_func("pyisdecimal")
+_string_view_isnumeric = _declare_bool_str_int_func("pyisnumeric")
+_string_view_isspace = _declare_bool_str_int_func("pyisspace")
+_string_view_isupper = _declare_bool_str_int_func("pyisupper")
+_string_view_islower = _declare_bool_str_int_func("pyislower")
 
 
 _string_view_count = cuda.declare_device(
