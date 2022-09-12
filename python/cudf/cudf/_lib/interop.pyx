@@ -87,26 +87,26 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(dict cols_dtypes) except *:
+cdef vector[column_metadata] gather_metadata(list cols_dtypes) except *:
     """
     Generates a column_metadata vector for each column.
 
     Parameters
     ----------
-    cols_dtypes : dict
-        A dict mapping of column names & their dtypes.
+    cols_dtypes : list
+        A list of ``(column_name, dtype)`` pairs.
     """
     cdef vector[column_metadata] cpp_metadata
     cpp_metadata.reserve(len(cols_dtypes))
 
     if cols_dtypes is not None:
-        for idx, (col_name, col_dtype) in enumerate(cols_dtypes.items()):
+        for idx, (col_name, col_dtype) in enumerate(cols_dtypes):
             cpp_metadata.push_back(column_metadata(col_name.encode()))
             if is_struct_dtype(col_dtype) or is_list_dtype(col_dtype):
                 _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
         raise TypeError(
-            "A dictionary of column names and dtypes is required to "
+            "An iterable of (column_name, dtype) pairs is required to "
             "construct column_metadata"
         )
     return cpp_metadata
@@ -136,20 +136,20 @@ cdef _set_col_children_metadata(dtype,
         col_meta.children_meta.push_back(column_metadata())
 
 
-def to_arrow(list source_columns, dict cols_dtypes):
+def to_arrow(list source_columns, list column_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
     source_columns : a list of columns to convert
-    cols_dtype : A dict mapping of column names & their dtypes.
+    column_dtypes : list of ``(column_name, column_dtype)`` pairs
 
     Returns
     -------
     pyarrow table
     """
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(cols_dtypes)
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(column_dtypes)
     cdef table_view input_table_view = table_view_from_columns(source_columns)
 
     cdef shared_ptr[CTable] cpp_arrow_table
