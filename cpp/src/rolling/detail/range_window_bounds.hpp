@@ -53,7 +53,7 @@ constexpr bool is_supported_order_by_column_type()
 ///      after scaling the rep value to the same scale as the order by column:
 ///      a. For decimal32, the range-type is `int32_t`.
 ///      b. For decimal64, the range-type is `int64_t`.
-///      a. For decimal128, the range-type is `__int128_t`.
+///      c. For decimal128, the range-type is `__int128_t`.
 template <typename ColumnType, typename = void>
 struct range_type_impl {
   using type     = void;
