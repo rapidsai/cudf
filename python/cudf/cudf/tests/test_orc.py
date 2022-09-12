@@ -1841,9 +1841,9 @@ def test_orc_writer_cols_as_map_type_error():
         df.to_orc(buffer, cols_as_map_type=1)
 
 
-@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
-def test_negative_timestamp(tmpdir, engine):
-    expected = cudf.DataFrame(
+@pytest.fixture
+def negative_timestamp_df():
+    return cudf.DataFrame(
         {
             "a": [
                 pd.Timestamp("1969-12-31 23:59:59.000123"),
@@ -1853,21 +1853,22 @@ def test_negative_timestamp(tmpdir, engine):
             ]
         }
     )
-    cudf_fname = tmpdir.join("cudf_neg_ts.orc")
-    expected.to_orc(cudf_fname)
 
-    cudf_got = cudf.read_orc(cudf_fname, engine=engine)
-    assert_eq(expected, cudf_got)
-    assert_eq(expected, pd.read_orc(cudf_fname))
-    assert pyarrow.orc.ORCFile(cudf_fname).read().equals(cudf_got.to_arrow())
 
-    pyorc_fname = tmpdir.join("pyorc_neg_ts.orc")
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
+    buffer = BytesIO()
     pyorc_table = pa.Table.from_pandas(
-        expected.to_pandas(), preserve_index=False
+        negative_timestamp_df.to_pandas(), preserve_index=False
     )
-    pyarrow.orc.write_table(pyorc_table, pyorc_fname)
+    pyarrow.orc.write_table(pyorc_table, buffer)
 
-    cudf_got = cudf.read_orc(pyorc_fname, engine=engine)
-    assert_eq(expected, cudf_got)
-    assert_eq(expected, pd.read_orc(pyorc_fname))
-    assert pyarrow.orc.ORCFile(pyorc_fname).read().equals(cudf_got.to_arrow())
+    assert_eq(negative_timestamp_df, cudf.read_orc(buffer, engine=engine))
+
+
+def test_orc_writer_negative_timestamp(negative_timestamp_df):
+    buffer = BytesIO()
+    negative_timestamp_df.to_orc(buffer)
+
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
+    assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
