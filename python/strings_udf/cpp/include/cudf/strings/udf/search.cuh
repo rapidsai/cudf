@@ -43,7 +43,6 @@ __device__ inline cudf::size_type count(string_view const source,
   end   = (end < 0 || end > src_length) ? src_length : end;
 
   if (tgt_length == 0) { return (end - start) + 1; }
-  
   cudf::size_type count = 0;
   cudf::size_type pos   = start;
   while (pos != cudf::string_view::npos) {
