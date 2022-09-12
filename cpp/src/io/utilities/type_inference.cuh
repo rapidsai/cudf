@@ -88,6 +88,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @brief Constructs column type histogram for a given column string input `data`.
  *
  * @tparam BlockSize Number of threads in each block
+ * @tparam OptionsView Type of inference options view
  * @tparam ColumnStringIter Iterator type whose `value_type` is a
  * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
  * `offset_t` needs to be convertible to `std::size_t`.
@@ -98,18 +99,17 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @param[in] size Size of the string input
  * @param[out] column_info Histogram of column type counters
  */
-template <int BlockSize, typename ColumnStringIter>
-__global__ void infer_column_type_kernel(json_inference_options_view options,
+template <int BlockSize, typename OptionsView, typename ColumnStringIter>
+__global__ void infer_column_type_kernel(OptionsView options,
                                          device_span<char const> data,
                                          ColumnStringIter column_strings_begin,
                                          std::size_t size,
                                          cudf::io::column_type_histogram* column_info)
 {
-  cudf::size_type null_count     = 0;
-  cudf::size_type string_count   = 0;
-  cudf::size_type bool_count     = 0;
-  cudf::size_type float_count    = 0;
-  cudf::size_type datetime_count = 0;
+  cudf::size_type null_count   = 0;
+  cudf::size_type string_count = 0;
+  cudf::size_type bool_count   = 0;
+  cudf::size_type float_count  = 0;
 
   for (auto idx = threadIdx.x + blockDim.x * blockIdx.x; idx < size;
        idx += gridDim.x * blockDim.x) {
@@ -183,35 +183,30 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
                  field_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
       ++float_count;
     }
-    // A date field can have either one or two '-' or '\'; A legal combination will only have one
-    // of them To simplify the process of auto column detection, we are not covering all the
-    // date-time formation permutations
-    else if (((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
-              (dash_count == 0 && slash_count > 0 && slash_count <= 2)) &&
-             colon_count <= 2) {
-      ++datetime_count;
+    // All invalid JSON values are treated as string
+    else {
+      ++string_count;
     }
   }  // grid-stride for loop
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, BlockSize>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  auto block_null_count     = BlockReduce(temp_storage).Sum(null_count);
-  auto block_string_count   = BlockReduce(temp_storage).Sum(string_count);
-  auto block_bool_count     = BlockReduce(temp_storage).Sum(bool_count);
-  auto block_float_count    = BlockReduce(temp_storage).Sum(float_count);
-  auto block_datetime_count = BlockReduce(temp_storage).Sum(datetime_count);
+  auto block_null_count   = BlockReduce(temp_storage).Sum(null_count);
+  auto block_string_count = BlockReduce(temp_storage).Sum(string_count);
+  auto block_bool_count   = BlockReduce(temp_storage).Sum(bool_count);
+  auto block_float_count  = BlockReduce(temp_storage).Sum(float_count);
   if (threadIdx.x == 0) {
     atomicAdd(&column_info->null_count, block_null_count);
     atomicAdd(&column_info->string_count, block_string_count);
     atomicAdd(&column_info->bool_count, block_bool_count);
     atomicAdd(&column_info->float_count, block_float_count);
-    atomicAdd(&column_info->datetime_count, block_datetime_count);
   }
 }
 
 /**
  * @brief Constructs column type histogram for a given column string input `data`.
  *
+ * @tparam OptionsView Type of inference options view
  * @tparam ColumnStringIter Iterator type whose `value_type` is a
  * `thrust::tuple<offset_t, length_t>`, where `offset_t` and `length_t` are of integral type and
  * `offset_t` needs to be convertible to `std::size_t`.
@@ -223,8 +218,8 @@ __global__ void infer_column_type_kernel(json_inference_options_view options,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A histogram containing column-specific type counters
  */
-template <typename ColumnStringIter>
-cudf::io::column_type_histogram infer_column_type(json_inference_options_view const& options,
+template <typename OptionsView, typename ColumnStringIter>
+cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
                                                   cudf::device_span<char const> data,
                                                   ColumnStringIter column_strings_begin,
                                                   std::size_t const size,
@@ -247,8 +242,10 @@ cudf::io::column_type_histogram infer_column_type(json_inference_options_view co
  * @brief Infers data type for a given JSON string input `data`.
  *
  * @throw cudf::logic_error if input size is 0
+ * @throw cudf::logic_error if date time is not inferred as string
  * @throw cudf::logic_error if data type inference failed
  *
+ * @tparam OptionsView Type of inference options view
  * @tparam ColumnStringIter Iterator type whose `value_type` is convertible to
  * `thrust::tuple<device_span, string_view>`
  *
@@ -259,8 +256,8 @@ cudf::io::column_type_histogram infer_column_type(json_inference_options_view co
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The inferred data type
  */
-template <typename ColumnStringIter>
-cudf::data_type infer_data_type(json_inference_options_view const& options,
+template <typename OptionsView, typename ColumnStringIter>
+cudf::data_type infer_data_type(OptionsView const& options,
                                 device_span<char const> data,
                                 ColumnStringIter column_strings_begin,
                                 std::size_t const size,
@@ -279,7 +276,7 @@ cudf::data_type infer_data_type(json_inference_options_view const& options,
     } else if (cinfo.string_count > 0) {
       return type_id::STRING;
     } else if (cinfo.datetime_count > 0) {
-      return type_id::TIMESTAMP_MILLISECONDS;
+      CUDF_FAIL("Date time is inferred as string.\n");
     } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
       return type_id::FLOAT64;
     } else if (cinfo.big_int_count == 0 && int_count_total != 0) {

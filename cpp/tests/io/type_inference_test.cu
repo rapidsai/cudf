@@ -202,5 +202,6 @@ TEST_F(TypeInference, Timestamp)
 
   auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
 
-  EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
+  // All data time (quoted and unquoted) is inferred as string for now
+  EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
