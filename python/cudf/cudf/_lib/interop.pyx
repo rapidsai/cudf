@@ -87,14 +87,14 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(list cols_dtypes) except *:
+cdef vector[column_metadata] gather_metadata(object cols_dtypes) except *:
     """
     Generates a column_metadata vector for each column.
 
     Parameters
     ----------
-    cols_dtypes : list
-        A list of ``(column_name, dtype)`` pairs.
+    cols_dtypes : iterable
+        An iterable of ``(column_name, dtype)`` pairs.
     """
     cdef vector[column_metadata] cpp_metadata
     cpp_metadata.reserve(len(cols_dtypes))
@@ -138,14 +138,14 @@ cdef _set_col_children_metadata(dtype,
         col_meta.children_meta.push_back(column_metadata())
 
 
-def to_arrow(list source_columns, list column_dtypes):
+def to_arrow(list source_columns, object column_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
     source_columns : a list of columns to convert
-    column_dtypes : list of ``(column_name, column_dtype)`` pairs
+    column_dtypes : Iterable of ``(column_name, column_dtype)`` pairs
 
     Returns
     -------
