@@ -17,7 +17,7 @@ install_requires = [
     "cachetools",
     "cuda-python>=11.5,<11.7.1",
     "fsspec>=0.6.0",
-    "numba>=0.53.1",
+    "numba>=0.54",
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
@@ -133,6 +133,18 @@ class build_ext_and_proto(build_ext):
 cmdclass = versioneer.get_cmdclass()
 cmdclass["build_ext"] = build_ext_and_proto
 
+cmake_args=[]
+
+if os.getenv("CUDF_BUILD_WHEELS", "") != "":
+    import pyarrow as pa
+    cmake_args=[
+        "-DCUDF_BUILD_WHEELS=ON",
+        f"-DCUDF_PYARROW_WHEEL_DIR={pa.__path__[0]}",
+    ]
+
+def exclude_libcxx_symlink(cmake_manifest):
+    return list(filter(lambda name: not ('include/rapids/libcxx/include' in name), cmake_manifest))
+
 setup(
     name="cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
     version=versioneer.get_version(),
@@ -149,12 +161,19 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
     ],
+    cmake_args=cmake_args,
+    cmake_process_manifest_hook=exclude_libcxx_symlink,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
-    cmdclass=cmdclass,
-    install_requires=install_requires,
+    setup_requires=[
+        f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    ],
+    install_requires=install_requires + [
+        f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    ],
     extras_require=extras_require,
+    cmdclass=cmdclass,
     zip_safe=False,
 )

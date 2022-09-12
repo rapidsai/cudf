@@ -396,9 +396,11 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
     arrays.end(),
     metadata.begin(),
     std::back_inserter(fields),
-    [](auto const& array, auto const& meta) { return arrow::field(meta.name, array->type()); });
+    [](auto const& array, auto const& meta) {
+      return std::make_shared<arrow::Field>(meta.name, array->type());
+    });
 
-  auto result = arrow::Table::Make(arrow::schema(fields), arrays);
+  auto result = arrow::Table::Make(arrow::schema(fields), arrays, input.num_rows());
 
   // synchronize the stream because after the return the data may be accessed from the host before
   // the above `cudaMemcpyAsync` calls have completed their copies (especially if pinned host
