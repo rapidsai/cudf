@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -26,7 +27,10 @@ namespace cudf {
  * Use this value to ensure the correct stream is used when compiled with per
  * thread default stream.
  */
-#if defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+#if defined(CUDF_CUSTOM_DEFAULT_STREAM)
+static const rmm::cuda_stream cudf_default_stream{};
+static const rmm::cuda_stream_view default_stream_value{cudf_default_stream};
+#elif defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
 static const rmm::cuda_stream_view default_stream_value{rmm::cuda_stream_per_thread};
 #else
 static constexpr rmm::cuda_stream_view default_stream_value{};
