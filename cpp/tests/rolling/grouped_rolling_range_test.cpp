@@ -44,10 +44,10 @@ namespace cudf::test::rolling {
 template <typename T>
 using fwcw = cudf::test::fixed_width_column_wrapper<T>;
 template <typename T>
-using decimals   = cudf::test::fixed_point_column_wrapper<T>;
-using ints       = fwcw<int32_t>;
-using bigints    = fwcw<int64_t>;
-using column_ptr = std::unique_ptr<cudf::column>;
+using decimals_column = cudf::test::fixed_point_column_wrapper<T>;
+using ints_column     = fwcw<int32_t>;
+using bigints_column  = fwcw<int64_t>;
+using column_ptr      = std::unique_ptr<cudf::column>;
 using namespace numeric;
 using namespace cudf::test::iterators;
 
@@ -55,8 +55,8 @@ struct BaseGroupedRollingRangeOrderByDecimalTest : public BaseFixture {
   // Stand-in for std::pow(10, n), but for integral return.
   static constexpr std::array<int32_t, 6> pow10{1, 10, 100, 1000, 10000, 100000};
   // Test data.
-  column_ptr const grouping_keys = ints{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
-  column_ptr const agg_values    = ints{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
+  column_ptr const grouping_keys = ints_column{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}.release();
+  column_ptr const agg_values    = ints_column{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}.release();
   cudf::size_type const num_rows = grouping_keys->size();
 };
 
@@ -86,7 +86,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
       thrust::make_counting_iterator<Rep>(0),
       [&](auto i) -> Rep { return (i * 10000) / base::pow10[scale + 2]; });
 
-    return decimals<Rep>{begin, begin + num_rows, scale_type{scale}}.release();
+    return decimals_column<Rep>{begin, begin + num_rows, scale_type{scale}}.release();
   }
 
   /**
@@ -141,7 +141,7 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
     for (int32_t range_scale = order_by_column_scale; range_scale <= 2; ++range_scale) {
       auto const results = get_grouped_range_rolling_result(*order_by, scale_type{range_scale});
       auto const expected_results =
-        bigints{{2, 3, 4, 4, 4, 3, 4, 6, 8, 6, 6, 9, 12, 9}, no_nulls()};
+        bigints_column{{2, 3, 4, 4, 4, 3, 4, 6, 8, 6, 6, 9, 12, 9}, no_nulls()};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
     }
   }
@@ -171,7 +171,8 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
     for (auto range_scale = int32_t{order_by_column_scale}; range_scale <= 2; ++range_scale) {
       auto const results =
         get_grouped_range_rolling_result(*nulled_order_by, scale_type{range_scale});
-      auto const expected_results = bigints{{2, 2, 2, 3, 4, 3, 4, 4, 4, 4, 6, 6, 6, 6}, no_nulls()};
+      auto const expected_results =
+        bigints_column{{2, 2, 2, 3, 4, 3, 4, 4, 4, 4, 6, 6, 6, 6}, no_nulls()};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
     }
   }
@@ -196,7 +197,8 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
                                          1,  // min_periods
                                          *cudf::make_sum_aggregation<rolling_aggregation>());
 
-    auto expected_results = bigints{{6, 6, 6, 6, 6, 6, 8, 8, 8, 8, 12, 12, 12, 12}, no_nulls()};
+    auto expected_results =
+      bigints_column{{6, 6, 6, 6, 6, 6, 8, 8, 8, 8, 12, 12, 12, 12}, no_nulls()};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
   }
 
@@ -223,7 +225,8 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
                                            1,  // min_periods
                                            *cudf::make_sum_aggregation<rolling_aggregation>());
 
-      auto expected_results = bigints{{1, 2, 3, 4, 5, 6, 2, 4, 6, 8, 3, 6, 9, 12}, no_nulls()};
+      auto expected_results =
+        bigints_column{{1, 2, 3, 4, 5, 6, 2, 4, 6, 8, 3, 6, 9, 12}, no_nulls()};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
     }
   }
@@ -251,7 +254,8 @@ struct GroupedRollingRangeOrderByDecimalTypedTest : BaseGroupedRollingRangeOrder
                                            1,  // min_periods
                                            *cudf::make_sum_aggregation<rolling_aggregation>());
 
-      auto expected_results = bigints{{6, 5, 4, 3, 2, 1, 8, 6, 4, 2, 12, 9, 6, 3}, no_nulls()};
+      auto expected_results =
+        bigints_column{{6, 5, 4, 3, 2, 1, 8, 6, 4, 2, 12, 9, 6, 3}, no_nulls()};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_results);
     }
   }

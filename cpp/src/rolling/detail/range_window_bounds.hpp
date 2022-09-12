@@ -49,7 +49,8 @@ constexpr bool is_supported_order_by_column_type()
 ///      a. For `TIMESTAMP_DAYS`, the range-type is `DURATION_DAYS`.
 ///         Comparisons are done in `int32_t`.
 ///      b. For all other timestamp types, comparisons are done in `int64_t`.
-///   3. For decimal types, all comparisons are done with the rep type:
+///   3. For decimal types, all comparisons are done with the rep type,
+///      after scaling the rep value to the same scale as the order by column:
 ///      a. For decimal32, the range-type is `int32_t`.
 ///      b. For decimal64, the range-type is `int64_t`.
 ///      a. For decimal128, the range-type is `__int128_t`.
@@ -109,9 +110,7 @@ RepT range_comparable_value_impl(scalar const& range_scalar,
   return val;
 }
 
-template <typename RangeT,
-          typename RepT,
-          std::enable_if_t<cudf::is_duration<RangeT>(), void>* = nullptr>
+template <typename RangeT, typename RepT, CUDF_ENABLE_IF(cudf::is_duration<RangeT>())>
 RepT range_comparable_value_impl(scalar const& range_scalar,
                                  bool,
                                  data_type const&,
