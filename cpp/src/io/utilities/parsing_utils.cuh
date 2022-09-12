@@ -45,7 +45,7 @@ namespace io {
 /**
  * @brief Non-owning view for json type inference options
  */
-struct json_parse_options_view {
+struct json_inference_options_view {
   char quote_char;
   cudf::detail::trie_view trie_true;
   cudf::detail::trie_view trie_false;
@@ -89,7 +89,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
-  [[nodiscard]] json_parse_options_view json_view() const
+  [[nodiscard]] json_inference_options_view json_view() const
   {
     return {quotechar,
             cudf::detail::make_trie_view(trie_true),
