@@ -45,6 +45,7 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
 from cudf.core.index import Index, RangeIndex, _index_from_columns
@@ -3487,7 +3488,15 @@ class IndexedFrame(Frame):
             ],
             explode_column_num,
         )
-
+        # dtype of exploded column is the element dtype of the list
+        # column that was exploded, this needs to be copied over so
+        # that nested struct dtypes maintain the key names.
+        element_type = cast(
+            ListDtype, self._data[explode_column].dtype
+        ).element_type
+        exploded[explode_column_num] = exploded[
+            explode_column_num
+        ]._with_type_metadata(element_type)
         return self._from_columns_like_self(
             exploded,
             self._column_names,

@@ -2,11 +2,13 @@
 
 import functools
 import operator
+from string import printable
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from hypothesis import given, settings, strategies as st
 
 import cudf
 from cudf import NA
@@ -105,6 +107,27 @@ def test_listdtype_hash():
     c = cudf.core.dtypes.ListDtype("int32")
 
     assert hash(a) != hash(c)
+
+
+@settings(deadline=None)
+@given(
+    st.builds(
+        lambda x: [x],
+        st.recursive(
+            st.integers(min_value=-100, max_value=100),
+            lambda c: st.lists(c, min_size=1, max_size=1)
+            | st.dictionaries(
+                st.text(printable, min_size=1, max_size=20),
+                c,
+                min_size=1,
+                max_size=10,
+            ),
+        ),
+    )
+)
+def test_list_dtype_explode(x):
+    sr = cudf.Series([x])
+    assert sr.dtype.element_type == sr.explode().dtype
 
 
 @pytest.mark.parametrize(
