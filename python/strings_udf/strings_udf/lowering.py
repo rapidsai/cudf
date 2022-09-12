@@ -44,6 +44,9 @@ _declare_bool_str_str_func = partial(
     _declare_binary_func, _STR_VIEW_PTR, _STR_VIEW_PTR, types.boolean
 )
 
+_declare_size_type_str_str_func = partial(
+    _declare_binary_func, _STR_VIEW_PTR, _STR_VIEW_PTR, size_type
+)
 
 _string_view_contains = _declare_bool_str_str_func("contains")
 _string_view_eq = _declare_bool_str_str_func("eq")
@@ -54,8 +57,8 @@ _string_view_gt = _declare_bool_str_str_func("gt")
 _string_view_lt = _declare_bool_str_str_func("lt")
 _string_view_startswith = _declare_bool_str_str_func("startswith")
 _string_view_endswith = _declare_bool_str_str_func("endswith")
-_string_view_find = _declare_bool_str_str_func("find")
-_string_view_rfind = _declare_bool_str_str_func("rfind")
+_string_view_find = _declare_size_type_str_str_func("find")
+_string_view_rfind = _declare_size_type_str_str_func("rfind")
 _string_view_contains = _declare_bool_str_str_func("contains")
 
 
