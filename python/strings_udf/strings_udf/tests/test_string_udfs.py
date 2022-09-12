@@ -11,9 +11,13 @@ from numba.types import CPointer, void
 import cudf
 from cudf.testing._utils import assert_eq
 
+import strings_udf
 from strings_udf import ptxpath
 from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view
+
+if not strings_udf.ENABLED:
+    pytest.skip("Strings UDF not enabled.", allow_module_level=True)
 
 
 def get_kernel(func, dtype):
