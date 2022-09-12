@@ -87,8 +87,6 @@ using range_type = typename range_type_impl<ColumnType>::type;
 template <typename ColumnType>
 using range_rep_type = typename range_type_impl<ColumnType>::rep_type;
 
-namespace {
-
 template <typename T>
 void assert_non_negative([[maybe_unused]] T const& value)
 {
@@ -136,7 +134,6 @@ RepT range_comparable_value_impl(scalar const& range_scalar,
   assert_non_negative(value);
   return value;
 }
-}  // namespace
 
 /**
  * @brief Fetch the value of the range_window_bounds scalar, for comparisons
