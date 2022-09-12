@@ -1105,23 +1105,15 @@ void make_json_column(json_column& root_column,
   auto get_token_index = [include_quote_char](PdaTokenT const token,
                                               SymbolOffsetT const token_index) {
     constexpr SymbolOffsetT quote_char_size = 1;
-    if (include_quote_char) {
-      switch (token) {
-        // Include trailing quote char for string values excluded for StringEnd
-        case token_t::StringEnd: return token_index + quote_char_size;
-        // Strip off quote char included for FieldNameBegin
-        case token_t::FieldNameBegin: return token_index + quote_char_size;
-        default: return token_index;
-      };
-    } else {
-      switch (token) {
-        // Strip off quote char included for StringBegin
-        case token_t::StringBegin: return token_index + quote_char_size;
-        // Strip off quote char included for FieldNameBegin
-        case token_t::FieldNameBegin: return token_index + quote_char_size;
-        default: return token_index;
-      };
-    }
+    switch (token) {
+      // Optionally strip off quote char included for StringBegin
+      case token_t::StringBegin: return token_index + (include_quote_char ? 0 : quote_char_size);
+      // Optionally include trailing quote char for string values excluded for StringEnd
+      case token_t::StringEnd: return token_index + (include_quote_char ? quote_char_size : 0);
+      // Strip off quote char included for FieldNameBegin
+      case token_t::FieldNameBegin: return token_index + quote_char_size;
+      default: return token_index;
+    };
   };
 
   // The end-of-* partner token for a given beginning-of-* token
@@ -1451,17 +1443,6 @@ auto casting_options(cudf::io::json_reader_options const& options)
   return parse_opts;
 }
 
-auto inference_options(cudf::io::json_reader_options const& options)
-{
-  cudf::io::detail::inference_options parse_opts{};
-
-  auto const stream     = cudf::default_stream_value;
-  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
-  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
-  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"null"}, stream);
-  return parse_opts;
-}
-
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column(
   json_column const& json_col,
   device_span<SymbolT const> d_input,
@@ -1552,7 +1533,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         col->set_null_mask({});
       }
 
-      return {std::move(col), {{"offsets"}, {"chars"}}};
+      // For string columns return ["offsets", "char"] schema
+      if (target_type.id() == type_id::STRING) {
+        return {std::move(col), {{"offsets"}, {"chars"}}};
+      }
+      // Non-string columns do not have child columns in the schema
+      else {
+        return {std::move(col), {}};
+      }
       break;
     }
     case json_col_t::StructColumn: {
