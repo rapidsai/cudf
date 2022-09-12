@@ -30,7 +30,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf._typing import ColumnLike, DataFrameOrSeries, NotImplementedType
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -355,13 +355,11 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-
         axis: {{index (0), columns(1)}}
             Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA,
             the result will be NA.
-
 
         Returns
         -------
@@ -552,7 +550,7 @@ class IndexedFrame(Frame):
         inplace : bool, default False
             If True, in place.
 
-        See also
+        See Also
         --------
         Series.fillna
 
@@ -2400,20 +2398,16 @@ class IndexedFrame(Frame):
         -------
         Copy of the DataFrame with rows/columns containing nulls dropped.
 
-        See also
+        See Also
         --------
         cudf.DataFrame.isna
             Indicate null values.
-
         cudf.DataFrame.notna
             Indicate non-null values.
-
         cudf.DataFrame.fillna
             Replace null values.
-
         cudf.Series.dropna
             Drop null values.
-
         cudf.Index.dropna
             Drop null indices.
 
@@ -2997,7 +2991,7 @@ class IndexedFrame(Frame):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[cudf.BaseIndex],
     ]:
@@ -3541,18 +3535,13 @@ class IndexedFrame(Frame):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
     ):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
 
         if squeeze is not False:
             raise NotImplementedError(
@@ -3568,6 +3557,8 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be specified."
             )
+        if group_keys is None:
+            group_keys = False
 
         return (
             self.__class__._resampler(self, by=by)
@@ -3579,6 +3570,7 @@ class IndexedFrame(Frame):
                 as_index=as_index,
                 dropna=dropna,
                 sort=sort,
+                group_keys=group_keys,
             )
         )
 

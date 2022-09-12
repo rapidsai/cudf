@@ -35,7 +35,7 @@ unset GIT_DESCRIBE_TAG
 export INSTALL_DASK_MAIN=1
 
 # ucx-py version
-export UCX_PY_VERSION='0.27.*'
+export UCX_PY_VERSION='0.28.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -92,8 +92,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -152,6 +152,13 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
             echo "Running GoogleTest $test_name"
             ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
+
+        # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+            gt="$WORKSPACE/cpp/build/gtests/$test_name"
+            echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+            LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        done
     fi
 else
     #Project Flash
@@ -182,8 +189,16 @@ else
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
+        test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+    done
+
+    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
+        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"

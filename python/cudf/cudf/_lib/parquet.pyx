@@ -125,7 +125,7 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   skiprows=None, num_rows=None, strings_to_categorical=False,
+                   strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -151,8 +151,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-    cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
-    cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
+
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
@@ -168,8 +167,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
-        .skip_rows(cpp_skiprows)
-        .num_rows(cpp_num_rows)
         .timestamp_type(cpp_timestamp_type)
         .build()
     )
@@ -177,9 +174,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     allow_range_index = True
     if columns is not None:
         cpp_columns.reserve(len(columns))
-        if len(cpp_columns) == 0:
-            allow_range_index = False
-        for col in columns or []:
+        allow_range_index = False
+        for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
 
@@ -292,10 +288,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     step=range_index_meta['step'],
                     name=range_index_meta['name']
                 )
-                if skiprows is not None:
-                    idx = idx[skiprows:]
-                if num_rows is not None:
-                    idx = idx[:num_rows]
+
             df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]
@@ -328,6 +321,8 @@ cpdef write_parquet(
         object int96_timestamps=False,
         object row_group_size_bytes=None,
         object row_group_size_rows=None,
+        object max_page_size_bytes=None,
+        object max_page_size_rows=None,
         object partitions_info=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -426,6 +421,10 @@ cpdef write_parquet(
         args.set_row_group_size_bytes(row_group_size_bytes)
     if row_group_size_rows is not None:
         args.set_row_group_size_rows(row_group_size_rows)
+    if max_page_size_bytes is not None:
+        args.set_max_page_size_bytes(max_page_size_bytes)
+    if max_page_size_rows is not None:
+        args.set_max_page_size_rows(max_page_size_rows)
 
     with nogil:
         out_metadata_c = move(parquet_writer(args))
@@ -455,7 +454,7 @@ cdef class ParquetWriter:
         index(es) other than RangeIndex will be saved as columns.
     compression : {'snappy', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
-    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
     row_group_size_bytes: int, default 134217728
         Maximum size of each stripe of the output.
@@ -463,6 +462,12 @@ cdef class ParquetWriter:
     row_group_size_rows: int, default 1000000
         Maximum number of rows of each stripe of the output.
         By default, 1000000 (10^6 rows) will be used.
+    max_page_size_bytes: int, default 524288
+        Maximum uncompressed size of each page of the output.
+        By default, 524288 (512KB) will be used.
+    max_page_size_rows: int, default 20000
+        Maximum number of rows of each page of the output.
+        By default, 20000 will be used.
 
     See Also
     --------
@@ -478,11 +483,15 @@ cdef class ParquetWriter:
     cdef object index
     cdef size_t row_group_size_bytes
     cdef size_type row_group_size_rows
+    cdef size_t max_page_size_bytes
+    cdef size_type max_page_size_rows
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression=None, str statistics="ROWGROUP",
                   int row_group_size_bytes=134217728,
-                  int row_group_size_rows=1000000):
+                  int row_group_size_rows=1000000,
+                  int max_page_size_bytes=524288,
+                  int max_page_size_rows=20000):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -495,6 +504,8 @@ cdef class ParquetWriter:
         self.initialized = False
         self.row_group_size_bytes = row_group_size_bytes
         self.row_group_size_rows = row_group_size_rows
+        self.max_page_size_bytes = max_page_size_bytes
+        self.max_page_size_rows = max_page_size_rows
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -609,6 +620,8 @@ cdef class ParquetWriter:
                 .stats_level(self.stat_freq)
                 .row_group_size_bytes(self.row_group_size_bytes)
                 .row_group_size_rows(self.row_group_size_rows)
+                .max_page_size_bytes(self.max_page_size_bytes)
+                .max_page_size_rows(self.max_page_size_rows)
                 .build()
             )
             self.writer.reset(new cpp_parquet_chunked_writer(args))
@@ -646,6 +659,8 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
         return cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
     elif statistics == "PAGE":
         return cudf_io_types.statistics_freq.STATISTICS_PAGE
+    elif statistics == "COLUMN":
+        return cudf_io_types.statistics_freq.STATISTICS_COLUMN
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 
@@ -655,6 +670,8 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         return cudf_io_types.compression_type.NONE
     elif compression == "snappy":
         return cudf_io_types.compression_type.SNAPPY
+    elif compression == "ZSTD":
+        return cudf_io_types.compression_type.ZSTD
     else:
         raise ValueError("Unsupported `compression` type")
 

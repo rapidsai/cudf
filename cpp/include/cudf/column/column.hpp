@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
@@ -74,6 +75,33 @@ class column {
    * @param other The column whose contents will be moved into the new column
    */
   column(column&& other) noexcept;
+
+  /**
+   * @brief Construct a new column by taking ownership of the contents of a device_uvector.
+   *
+   * @param other The device_uvector whose contents will be moved into the new column.
+   * @param null_mask Optional, column's null value indicator bitmask. May
+   * be empty if `null_count` is 0 or `UNKNOWN_NULL_COUNT`.
+   * @param null_count Optional, the count of null elements. If unknown, specify
+   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
+   * the first invocation of `null_count()`.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  column(rmm::device_uvector<T>&& other,
+         rmm::device_buffer&& null_mask = {},
+         size_type null_count           = UNKNOWN_NULL_COUNT)
+    : _type{cudf::data_type{cudf::type_to_id<T>()}},
+      _size{[&]() {
+        CUDF_EXPECTS(
+          other.size() <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+          "The device_uvector size exceeds the maximum size_type.");
+        return static_cast<size_type>(other.size());
+      }()},
+      _data{other.release()},
+      _null_mask{std::move(null_mask)},
+      _null_count{null_count}
+  {
+  }
 
   /**
    * @brief Construct a new column from existing device memory.

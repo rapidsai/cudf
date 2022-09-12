@@ -262,26 +262,26 @@ auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
+__global__ void decompress_check_kernel(device_span<compression_result const> results,
                                         bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    if (stats[tid].status != 0) {
+  if (tid < results.size()) {
+    if (results[tid].status != compression_status::SUCCESS) {
       *any_block_failure = true;  // Doesn't need to be atomic
     }
   }
 }
 
-void decompress_check(device_span<decompress_status> stats,
+void decompress_check(device_span<compression_result> results,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
-  if (stats.empty()) { return; }  // early exit for empty stats
+  if (results.empty()) { return; }  // early exit for empty results
 
   dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
-  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
+  dim3 grid(cudf::util::div_rounding_up_safe(results.size(), static_cast<size_t>(block.x)));
+  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(results, any_block_failure);
 }
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
@@ -303,7 +303,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
-    compinfo.insert(gpu::CompressedStreamInfo(
+    compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
@@ -337,7 +337,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<decompress_status> inflate_stats(num_compressed_blocks, stream);
+  rmm::device_uvector<compression_result> inflate_res(num_compressed_blocks, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               inflate_res.begin(),
+               inflate_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;
@@ -349,8 +353,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
     compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
     compinfo[i].dec_out_ctl       = inflate_out.data() + start_pos;
-    compinfo[i].decstatus   = {inflate_stats.data() + start_pos, compinfo[i].num_compressed_blocks};
-    compinfo[i].copy_in_ctl = inflate_in.data() + start_pos_uncomp;
+    compinfo[i].dec_res      = {inflate_res.data() + start_pos, compinfo[i].num_compressed_blocks};
+    compinfo[i].copy_in_ctl  = inflate_in.data() + start_pos_uncomp;
     compinfo[i].copy_out_ctl = inflate_out.data() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
@@ -379,13 +383,13 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
           nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
                                      inflate_in_view,
                                      inflate_out_view,
-                                     inflate_stats,
+                                     inflate_res,
                                      max_uncomp_block_size,
                                      total_decomp_size,
                                      stream);
         } else {
           gpuinflate(
-            inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
+            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
         }
         break;
       case compression_type::SNAPPY:
@@ -393,26 +397,26 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
                                      inflate_out_view,
-                                     inflate_stats,
+                                     inflate_res,
                                      max_uncomp_block_size,
                                      total_decomp_size,
                                      stream);
         } else {
-          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_stats, stream);
+          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
         }
         break;
       case compression_type::ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    inflate_in_view,
                                    inflate_out_view,
-                                   inflate_stats,
+                                   inflate_res,
                                    max_uncomp_block_size,
                                    total_decomp_size,
                                    stream);
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
-    decompress_check(inflate_stats, any_block_failure.device_ptr(), stream);
+    decompress_check(inflate_res, any_block_failure.device_ptr(), stream);
   }
   if (num_uncompressed_blocks > 0) {
     device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
@@ -879,7 +883,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
                    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
-                   return make_column(col_buffer, &schema_info.back(), stream, _mr);
+                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream, _mr);
                  });
 }
 

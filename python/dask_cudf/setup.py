@@ -10,8 +10,8 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask>=2022.05.2",
-    "distributed>=2022.05.2",
+    "dask>=2022.7.1",
+    "distributed>=2022.7.1",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.5.0dev0",
@@ -68,7 +68,7 @@ cuda_include_dir = os.path.join(CUDA_HOME, "include")
 install_requires.append(
     "cupy-cuda"
     + get_cuda_version_from_header(cuda_include_dir)
-    + ">=9.5.0,<11.0.0a0"
+    + ">=9.5.0,<12.0.0a0"
 )
 
 

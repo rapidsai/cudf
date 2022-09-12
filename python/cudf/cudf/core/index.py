@@ -231,7 +231,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _num_rows(self):
         return len(self)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
@@ -2796,7 +2796,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     Currently supported inputs are:
 
     * ``Column``
-    * ``Buffer``
+    * ``DeviceBufferLike``
     * ``Series``
     * ``Index``
     * numba device array

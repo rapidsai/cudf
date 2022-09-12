@@ -31,7 +31,10 @@ function(ConfigureTest CMAKE_TEST_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
 
-  target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
+  target_link_libraries(
+    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
+                               $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
   install(
     TARGETS ${CMAKE_TEST_NAME}
@@ -222,8 +225,11 @@ ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
+ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
@@ -357,8 +363,8 @@ ConfigureTest(
 # ##################################################################################################
 # * search test -----------------------------------------------------------------------------------
 ConfigureTest(
-  SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
-  search/search_test.cpp
+  SEARCH_TEST search/search_dictionary_test.cpp search/search_list_test.cpp
+  search/search_struct_test.cpp search/search_test.cpp
 )
 
 # ##################################################################################################
@@ -408,6 +414,7 @@ ConfigureTest(
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp
+  strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
   strings/replace_regex_tests.cpp

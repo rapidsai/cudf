@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -15,13 +15,13 @@
 # Create `jitify_preprocess` executable
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
+target_compile_definitions(jitify_preprocess PRIVATE "_FILE_OFFSET_BITS=64")
 target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
 
 # Take a list of files to JIT-compile and run them through jitify_preprocess.
 function(jit_preprocess_files)
   cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
 
-  get_target_property(libcudacxx_raw_includes libcudacxx::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
   foreach(inc IN LISTS libcudacxx_raw_includes)
     list(APPEND libcudacxx_includes "-I${inc}")
   endforeach()
@@ -29,6 +29,9 @@ function(jit_preprocess_files)
     set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
     get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY)
     list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
+
+    # Note: need to pass _FILE_OFFSET_BITS=64 in COMMAND due to a limitation in how conda builds
+    # glibc
     add_custom_command(
       OUTPUT ${ARG_OUTPUT}
       DEPENDS jitify_preprocess "${ARG_SOURCE_DIRECTORY}/${ARG_FILE}"
@@ -38,7 +41,7 @@ function(jit_preprocess_files)
       COMMAND
         jitify_preprocess ${ARG_FILE} -o
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
-        -remove-unused-globals -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
+        -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
         -I${CUDF_SOURCE_DIR}/src ${libcudacxx_includes} -I${CUDAToolkit_INCLUDE_DIRS}
         --no-preinclude-workarounds --no-replace-pragma-once
       COMMENT "Custom command to JIT-compile files."

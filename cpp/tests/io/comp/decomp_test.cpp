@@ -58,7 +58,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     inf_out[0] = dst;
     inf_out.host_to_device(stream);
 
-    hostdevice_vector<cudf::io::decompress_status> inf_stat(1, stream);
+    hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
     inf_stat[0] = {};
     inf_stat.host_to_device(stream);
 
@@ -66,7 +66,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     cudaMemcpyAsync(
       decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value());
     inf_stat.device_to_host(stream, true);
-    ASSERT_EQ(inf_stat[0].status, 0);
+    ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }
 };
 
@@ -76,7 +76,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::decompress_status> d_inf_stat)
+                device_span<cudf::io::compression_result> d_inf_stat)
   {
     cudf::io::gpuinflate(d_inf_in,
                          d_inf_out,
@@ -92,7 +92,7 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::decompress_status> d_inf_stat)
+                device_span<cudf::io::compression_result> d_inf_stat)
   {
     cudf::io::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::default_stream_value);
   }
@@ -104,7 +104,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::decompress_status> d_inf_stat)
+                device_span<cudf::io::compression_result> d_inf_stat)
   {
     rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
                                  cudf::default_stream_value};

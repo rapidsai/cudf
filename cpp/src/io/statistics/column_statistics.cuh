@@ -101,6 +101,13 @@ struct calculate_group_statistics_functor {
                               !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
+    // Temporarily disable stats writing for int96 timestamps
+    // TODO: https://github.com/rapidsai/cudf/issues/10438
+    if constexpr (cudf::is_timestamp<T>() and IO == detail::io_file_format::PARQUET and
+                  INT96 == detail::is_int96_timestamp::YES) {
+      return;
+    }
+
     detail::storage_wrapper<block_size> storage(temp_storage);
 
     using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
@@ -303,11 +310,13 @@ __global__ void __launch_bounds__(block_size, 1)
     }
     // Temporarily disable stats writing for int96 timestamps
     // TODO: https://github.com/rapidsai/cudf/issues/10438
-    else if (not cudf::is_timestamp(state.col.leaf_column->type())) {
-      type_dispatcher(state.col.leaf_column->type(),
-                      calculate_group_statistics_functor<block_size, IO>(storage),
-                      state,
-                      threadIdx.x);
+    else {
+      type_dispatcher(
+        state.col.leaf_column->type(),
+        calculate_group_statistics_functor<block_size, IO, detail::is_int96_timestamp::YES>(
+          storage),
+        state,
+        threadIdx.x);
     }
   } else {
     type_dispatcher(state.col.leaf_column->type(),
