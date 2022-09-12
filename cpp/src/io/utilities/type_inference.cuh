@@ -280,8 +280,7 @@ cudf::data_type infer_data_type(json_inference_options_view const& options,
       return type_id::STRING;
     } else if (cinfo.datetime_count > 0) {
       return type_id::TIMESTAMP_MILLISECONDS;
-    } else if (cinfo.float_count > 0 ||
-               (int_count_total > 0 && (cinfo.null_count + omission_null_count) > 0)) {
+    } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
       return type_id::FLOAT64;
     } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
       return type_id::INT64;
