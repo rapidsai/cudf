@@ -34,6 +34,7 @@
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/count.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -75,11 +76,9 @@ struct token_to_node {
 };
 
 // Convert token indices to node range for each valid node.
-template <typename T1, typename T2, typename T3>
 struct node_ranges {
-  T1 tokens;
-  T2 token_indices;
-  T3 num_tokens;
+  device_span<PdaTokenT const> tokens;
+  device_span<SymbolOffsetT const> token_indices;
   bool include_quote_char;
   __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
   {
@@ -119,9 +118,9 @@ struct node_ranges {
     PdaTokenT const token = tokens[i];
     // The section from the original JSON input that this token demarcates
     SymbolOffsetT range_begin = get_token_index(token, token_indices[i]);
-    SymbolOffsetT range_end   = range_begin + 1;
+    SymbolOffsetT range_end   = range_begin + 1;  // non-leaf, non-field nodes ignore this value.
     if (is_begin_of_section(token)) {
-      if ((i + 1) < num_tokens && end_of_partner(token) == tokens[i + 1]) {
+      if ((i + 1) < tokens.size() && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
         range_end = token_indices[i + 1];
       }
@@ -172,7 +171,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
   auto num_tokens = tokens.size();
   auto is_node_it = thrust::make_transform_iterator(tokens.begin(), is_node);
-  auto num_nodes  = thrust::reduce(rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens);
+  auto num_nodes  = thrust::count_if(
+    rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
 
   // Node categories: copy_if with transform.
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
@@ -190,7 +190,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<size_type> token_levels(num_tokens, stream);
   auto push_pop_it = thrust::make_transform_iterator(
     tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
-      return does_push(token) ? 1 : (does_pop(token) ? -1 : 0);
+      return does_push(token) - does_pop(token);
     });
   thrust::exclusive_scan(
     rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
@@ -212,11 +212,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Whether the tokenizer stage should keep quote characters for string values
   // If the tokenizer keeps the quote characters, they may be stripped during type casting
   constexpr bool include_quote_char = true;
-  using node_ranges_t =
-    node_ranges<decltype(tokens.begin()), decltype(token_indices.begin()), decltype(num_tokens)>;
-  auto node_range_out_it = thrust::make_transform_output_iterator(
-    node_range_tuple_it,
-    node_ranges_t{tokens.begin(), token_indices.begin(), num_tokens, include_quote_char});
+  auto node_range_out_it            = thrust::make_transform_output_iterator(
+    node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
   auto node_range_out_end =
     thrust::copy_if(rmm::exec_policy(stream),
@@ -224,8 +221,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                     thrust::make_counting_iterator<size_type>(0) + num_tokens,
                     node_range_out_it,
                     [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
-                      PdaTokenT const token = tokens_gpu[i];
-                      return is_node(token);
+                      return is_node(tokens_gpu[i]);
                     });
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
@@ -239,10 +235,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids.begin(),
                    parent_token_ids.end(),
                    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
-                     if (i == 0)
-                       return -1;
-                     else
-                       return does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
+                     return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
                    });
   auto out_pid = thrust::make_zip_iterator(parent_token_ids.data(), initial_order.data());
   // Uses radix sort for builtin types.
@@ -258,17 +251,15 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                 parent_token_ids.data(),  // size_type{-1},
                                 thrust::equal_to<size_type>{},
                                 thrust::maximum<size_type>{});
-  // FIXME: Avoid sorting again by scatter + extra memory, or permutation iterator for
-  // parent_token_ids. Tradeoff?
-  thrust::sort_by_key(rmm::exec_policy(stream),
-                      initial_order.data(),
-                      initial_order.data() + initial_order.size(),
-                      parent_token_ids.data());
-  // thrust::scatter(rmm::exec_policy(stream),
-  //                parent_token_ids.begin(),
-  //                parent_token_ids.end(),
-  //                initial_order.data(),
-  //                parent_token_ids.begin()); //same location not allowed in scatter
+  // Reusing token_levels memory & use scatter to restore the original order.
+  std::swap(token_levels, parent_token_ids);
+  auto& sorted_parent_token_ids = token_levels;
+  thrust::scatter(rmm::exec_policy(stream),
+                  sorted_parent_token_ids.begin(),
+                  sorted_parent_token_ids.end(),
+                  initial_order.data(),
+                  parent_token_ids.data());
+
   rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
   thrust::exclusive_scan(
     rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
@@ -481,7 +472,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              parent_col_id.end(),
                              0);  // XXX: is this needed?
   thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);  ///
-  thrust::device_pointer_cast(col_id.data())[0] = 0; // TODO: Could initialize to 0 and scatter to level_boundaries
+  thrust::device_pointer_cast(col_id.data())[0] =
+    0;  // TODO: Could initialize to 0 and scatter to level_boundaries
   thrust::device_pointer_cast(parent_col_id.data())[0] = -1;
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     // std::cout << level << ".before gather\n";
@@ -530,9 +522,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
     // std::cout << level << ".before transform\n";
     thrust::transform(rmm::exec_policy(stream),
-                      adjacent_pair_it+1,
+                      adjacent_pair_it + 1,
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
-                      col_id.data() + level_boundaries[level - 1]+1,
+                      col_id.data() + level_boundaries[level - 1] + 1,
                       [] __device__(auto adjacent_pair) -> size_type {
                         auto lhs = thrust::get<0>(adjacent_pair),
                              rhs = thrust::get<1>(adjacent_pair);
@@ -540,10 +532,11 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                       });
     // std::cout << level << ".before scan\n";
     // // includes previous level last col_id to continue the index.
-    thrust::inclusive_scan(rmm::exec_policy(stream),
-                           col_id.data() + level_boundaries[level - 1] , // FIXME: This is where the bug is.
-                           col_id.data() + level_boundaries[level]+1, //TODO: +1 only for not-last-levels.
-                           col_id.data() + level_boundaries[level - 1] );
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream),
+      col_id.data() + level_boundaries[level - 1],  // FIXME: This is where the bug is.
+      col_id.data() + level_boundaries[level] + 1,  // TODO: +1 only for not-last-levels.
+      col_id.data() + level_boundaries[level - 1]);
     // // print node_id, parent_node_idx, parent_col_id, node_type, level.
     // std::cout << level << ".after scan\n";
     // print_level_data(level,
