@@ -1097,7 +1097,6 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
         ignore_index=ignore_index,
         axis=axis,
     )
-    # TODO: PREM
     # TODO: change `check_index_type` to `True`
     # after following bug from pandas is fixed:
     # https://github.com/pandas-dev/pandas/issues/46675
