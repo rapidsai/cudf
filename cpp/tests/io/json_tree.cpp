@@ -370,7 +370,7 @@ struct JsonTest : public cudf::test::BaseFixture {
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Test input
   std::string const input = R"(  [{)"
@@ -467,7 +467,7 @@ TEST_F(JsonTest, TreeRepresentation)
 
 TEST_F(JsonTest, TreeRepresentation2)
 {
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
   // Test input: value end with comma, space, close-brace ", }"
   std::string const input =
     // 0         1         2         3         4         5         6         7         8         9
@@ -543,7 +543,7 @@ TEST_F(JsonTest, TreeRepresentation2)
 
 TEST_F(JsonTest, TreeRepresentation3)
 {
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
   // Test input: Json lines with same TreeRepresentation2 input
   std::string const input =
     R"(  {}
