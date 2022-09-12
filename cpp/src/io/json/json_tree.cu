@@ -226,11 +226,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                 parent_token_ids.data(),  // size_type{-1},
                                 thrust::equal_to<size_type>{},
                                 thrust::maximum<size_type>{});
-  // FIXME: Avoid sorting again by scatter + extra memory. Tradeoff?
-  thrust::sort_by_key(rmm::exec_policy(stream),
-                      initial_order.data(),
-                      initial_order.data() + initial_order.size(),
-                      parent_token_ids.data());
+  // Reusing token_levels memory & use scatter to restore the original order.
+  std::swap(token_levels, parent_token_ids);
+  auto& sorted_parent_token_ids = token_levels;
+  thrust::scatter(rmm::exec_policy(stream),
+                  sorted_parent_token_ids.begin(),
+                  sorted_parent_token_ids.end(),
+                  initial_order.data(),
+                  parent_token_ids.data());
 
   rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
   thrust::exclusive_scan(
