@@ -9,6 +9,8 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
 
+from dask import config
+import dask.dataframe as dd
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -431,7 +433,6 @@ def sizeof_cudf_series_index(obj):
 
 try:
     # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.backends import PandasBackendEntrypoint
     from dask.dataframe.dispatch import DaskBackendEntrypoint
 
     class CudfBackendEntrypoint(DaskBackendEntrypoint):
@@ -441,33 +442,25 @@ try:
             # that data-dispatch functions are registered
             pass
 
-        @cached_property
-        def fallback(self):
-            return PandasBackendEntrypoint()
-
-        def move_from_fallback(self, ddf):
-            if isinstance(ddf._meta, pd.DataFrame):
-                return ddf.map_partitions(cudf.DataFrame.from_pandas)
-            elif isinstance(ddf._meta, pd.Series):
-                return ddf.map_partitions(cudf.Series.from_pandas)
-            return ddf
-
         def make_timeseries(self, *args, df_backend=None, **kwargs):
-            return self.fallback.make_timeseries(
-                *args, df_backend="cudf", **kwargs
-            )
+            with config.set({"dataframe.backend.library": "pandas"}):
+                return dd.make_timeseries(
+                    *args, df_backend="cudf", **kwargs
+                )
 
         def read_parquet(self, *args, engine=None, **kwargs):
             from .io.parquet import CudfEngine
 
-            return self.fallback.read_parquet(
-                *args, engine=CudfEngine, **kwargs,
-            )
+            with config.set({"dataframe.backend.library": "pandas"}):
+                return dd.read_parquet(
+                    *args, engine=CudfEngine, **kwargs,
+                )
 
         def read_json(self, *args, engine=None, **kwargs):
-            return self.fallback.read_json(
-                *args, engine=cudf.read_json, **kwargs
-            )
+            with config.set({"dataframe.backend.library": "pandas"}):
+                return dd.read_json(
+                    *args, engine=cudf.read_json, **kwargs
+                )
 
         def read_orc(self, *args, **kwargs):
             from .io import read_orc
@@ -483,48 +476,15 @@ try:
                 chunksize = blocksize
             return read_csv(*args, chunksize=chunksize, **kwargs,)
 
-        def read_table(self, *args, **kwargs):
-            # TODO: Can this be implemented with read_csv?
-            return self.move_from_fallback(
-                self.fallback.read_table(*args, **kwargs)
-            )
-
-        def read_fwf(self, *args, **kwargs):
-            # TODO: Can this be implemented with read_csv?
-            return self.move_from_fallback(
-                self.fallback.read_fwf(*args, **kwargs)
-            )
-
         def read_hdf(self, *args, **kwargs):
             # HDF5 reader not yet implemented in cudf
-            return self.move_from_fallback(
-                self.fallback.read_hdf(*args, **kwargs)
-            )
-
-        def read_sql(self, *args, **kwargs):
-            return self.move_from_fallback(
-                self.fallback.read_sql(*args, **kwargs)
-            )
-
-        def read_sql_query(self, *args, **kwargs):
-            return self.move_from_fallback(
-                self.fallback.read_sql_query(*args, **kwargs)
-            )
-
-        def read_sql_table(self, *args, **kwargs):
-            return self.move_from_fallback(
-                self.fallback.read_sql_table(*args, **kwargs)
-            )
-
-        def from_pandas(self, *args, **kwargs):
-            return self.move_from_fallback(
-                self.fallback.from_pandas(*args, **kwargs)
-            )
-
-        def from_array(self, *args, **kwargs):
-            return self.move_from_fallback(
-                self.fallback.from_array(*args, **kwargs)
-            )
+            with config.set({"dataframe.backend.library": "pandas"}):
+                ddf = self.move_from_pandas(dd.read_hdf(*args, **kwargs))
+            if isinstance(ddf._meta, pd.DataFrame):
+                return ddf.map_partitions(cudf.DataFrame.from_pandas)
+            elif isinstance(ddf._meta, pd.Series):
+                return ddf.map_partitions(cudf.Series.from_pandas)
+            return ddf
 
 
 except ImportError:
