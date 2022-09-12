@@ -460,6 +460,23 @@ TEST_F(StringsContainsTests, OverlappedClasses)
   }
 }
 
+TEST_F(StringsContainsTests, NegatedClasses)
+{
+  auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
+  auto sv    = cudf::strings_column_view(input);
+
+  {
+    auto results = cudf::strings::count_re(sv, "[^a-f]");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 4, 0, 5, 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::count_re(sv, "[^a-eá-é]");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({2, 5, 0, 1, 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(StringsContainsTests, IncompleteClassesRange)
 {
   auto input = cudf::test::strings_column_wrapper({"abc-def", "---", "", "ghijkl", "-wxyz-"});

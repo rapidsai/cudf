@@ -1458,7 +1458,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         return cls.from_frame(df, names=multiindex.names)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_unique(self):
         return len(self) == len(self.unique())

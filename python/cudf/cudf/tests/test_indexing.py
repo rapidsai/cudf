@@ -286,6 +286,7 @@ def test_dataframe_loc(scalar, step):
             "d": np.random.random(size).astype(np.float64),
         }
     )
+    pdf.index.name = "index"
 
     df = cudf.DataFrame.from_pandas(pdf)
 
@@ -628,6 +629,9 @@ def test_dataframe_iloc(nelem):
     pdf = pd.DataFrame()
     pdf["a"] = ha
     pdf["b"] = hb
+
+    gdf.index.name = "index"
+    pdf.index.name = "index"
 
     assert_eq(gdf.iloc[-1:1], pdf.iloc[-1:1])
     assert_eq(gdf.iloc[nelem - 1 : -1], pdf.iloc[nelem - 1 : -1])
