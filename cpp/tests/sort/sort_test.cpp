@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -740,16 +741,100 @@ TYPED_TEST(Sort, ZeroSizedColumns)
 
 TYPED_TEST(Sort, WithListColumn)
 {
-  using T = int;
-  lists_column_wrapper<T> lc{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  CUDF_EXPECT_THROW_MESSAGE(cudf::sort(table_view({lc})),
-                            "Cannot lexicographic compare a table with a LIST column");
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
-  std::vector<std::unique_ptr<cudf::column>> child_cols;
-  child_cols.push_back(lc.release());
-  structs_column_wrapper sc{std::move(child_cols), {1, 0, 1}};
-  CUDF_EXPECT_THROW_MESSAGE(cudf::sort(table_view({sc})),
-                            "Cannot lexicographic compare a table with a LIST column");
+  using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  lcw col{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},
+    {{7, 8}, {}},
+    lcw{lcw{}, lcw{}, lcw{}},
+    lcw{lcw{}},
+    {lcw{10}},
+    lcw{},
+  };
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 0, 1, 2, 4, 7};
+  auto result = cudf::sorted_order(cudf::table_view({col}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+}
+
+TYPED_TEST(Sort, WithNullableListColumn)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  using cudf::test::iterators::nulls_at;
+  lcw col{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                   // 0
+    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, nulls_at({3})},  // 1
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                       // 2
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                         // 3
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0})}},        // 4
+    {{7, 8}, {}},                                             // 5
+    lcw{lcw{}, lcw{}, lcw{}},                                 // 6
+    lcw{lcw{}},                                               // 7
+    {lcw{10}},                                                // 8
+    lcw{},                                                    // 9
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0, 2})}},     // 10
+    {{1, 2}, {3}, {4, 5}, {{0, 7}, nulls_at({0})}},           // 11
+  };
+
+  auto expect =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 7, 6, 10, 4, 11, 3, 1, 0, 2, 5, 8};
+  auto result = cudf::sorted_order(cudf::table_view({col}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+}
+
+TYPED_TEST(Sort, WithSlicedListColumn)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  using cudf::test::iterators::nulls_at;
+  lcw col{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                   //
+    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, nulls_at({3})},  // 0
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                       // 1
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                         // 2
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0})}},        // 3
+    {{7, 8}, {}},                                             // 4
+    lcw{lcw{}, lcw{}, lcw{}},                                 // 5
+    lcw{lcw{}},                                               // 6
+    {lcw{10}},                                                // 7
+    lcw{},                                                    // 8
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0, 2})}},     // 9
+    {{1, 2}, {3}, {4, 5}, {{0, 7}, nulls_at({0})}},           //
+  };
+
+  auto sliced_col = cudf::slice(col, {1, 10});
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 2, 0, 1, 4, 7};
+  auto result = cudf::sorted_order(cudf::table_view({sliced_col}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+}
+
+TYPED_TEST(Sort, WithEmptyListColumn)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  auto L1 = cudf::make_lists_column(0,
+                                    cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)),
+                                    cudf::make_empty_column(cudf::data_type{cudf::type_id::INT64}),
+                                    0,
+                                    {});
+  auto L0 = cudf::make_lists_column(
+    3, cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0}.release(), std::move(L1), 0, {});
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2};
+  auto result = cudf::sorted_order(cudf::table_view({*L0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
 struct SortByKey : public BaseFixture {
