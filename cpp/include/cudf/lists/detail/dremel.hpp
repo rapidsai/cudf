@@ -28,15 +28,11 @@ namespace cudf::detail {
  * @see the `dremel_data` struct for more info.
  */
 struct dremel_device_view {
-  // TODO: These elements are default initializable to support default
-  // initialization of the object. This is currently exploited to create views
-  // that will never actually be used. We should consider whether this
-  // represents a serious issue that should be worked around more robustly.
-  size_type const* offsets{};
-  uint8_t const* rep_levels{};
-  uint8_t const* def_levels{};
-  size_type const leaf_data_size{};
-  uint8_t const max_def_level{};
+  size_type const* offsets;
+  uint8_t const* rep_levels;
+  uint8_t const* def_levels;
+  size_type const leaf_data_size;
+  uint8_t const max_def_level;
 };
 
 /**
