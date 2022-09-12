@@ -59,6 +59,6 @@ try:
 
 except ImportError as e:
     # allow cuDF to work without strings_udf
-    raise
+    pass
 
 masked_typing.register_masked_constructor(supported_masked_types)
