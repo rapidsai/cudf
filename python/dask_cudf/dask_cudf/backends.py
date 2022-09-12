@@ -431,13 +431,19 @@ def sizeof_cudf_series_index(obj):
 
 try:
     # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.backends import PandasIOEntrypoint
-    from dask.utils import DaskBackendIOEntrypoint
+    from dask.dataframe.backends import PandasBackendEntrypoint
+    from dask.dataframe.dispatch import DaskBackendEntrypoint
 
-    class CudfIOEntrypoint(DaskBackendIOEntrypoint):
+    class CudfBackendEntrypoint(DaskBackendEntrypoint):
+
+        def __init__(self):
+            # Importing this class will already guarentee
+            # that data-dispatch functions are registered
+            pass
+
         @cached_property
         def fallback(self):
-            return PandasIOEntrypoint()
+            return PandasBackendEntrypoint()
 
         def move_from_fallback(self, ddf):
             if isinstance(ddf._meta, pd.DataFrame):
@@ -477,21 +483,48 @@ try:
                 chunksize = blocksize
             return read_csv(*args, chunksize=chunksize, **kwargs,)
 
+        def read_table(self, *args, **kwargs):
+            # TODO: Can this be implemented with read_csv?
+            return self.move_from_fallback(
+                self.fallback.read_table(*args, **kwargs)
+            )
+
+        def read_fwf(self, *args, **kwargs):
+            # TODO: Can this be implemented with read_csv?
+            return self.move_from_fallback(
+                self.fallback.read_fwf(*args, **kwargs)
+            )
+
+        def read_hdf(self, *args, **kwargs):
+            # HDF5 reader not yet implemented in cudf
+            return self.move_from_fallback(
+                self.fallback.read_hdf(*args, **kwargs)
+            )
+
+        def read_sql(self, *args, **kwargs):
+            return self.move_from_fallback(
+                self.fallback.read_sql(*args, **kwargs)
+            )
+
+        def read_sql_query(self, *args, **kwargs):
+            return self.move_from_fallback(
+                self.fallback.read_sql_query(*args, **kwargs)
+            )
+
+        def read_sql_table(self, *args, **kwargs):
+            return self.move_from_fallback(
+                self.fallback.read_sql_table(*args, **kwargs)
+            )
+
         def from_pandas(self, *args, **kwargs):
-            ddf = self.fallback.from_pandas(*args, **kwargs)
-            if isinstance(ddf._meta, pd.DataFrame):
-                return ddf.map_partitions(cudf.DataFrame.from_pandas)
-            elif isinstance(ddf._meta, pd.Series):
-                return ddf.map_partitions(cudf.Series.from_pandas)
-            return ddf
+            return self.move_from_fallback(
+                self.fallback.from_pandas(*args, **kwargs)
+            )
 
         def from_array(self, *args, **kwargs):
-            ddf = self.fallback.from_array(*args, **kwargs)
-            if isinstance(ddf._meta, pd.DataFrame):
-                return ddf.map_partitions(cudf.DataFrame.from_pandas)
-            elif isinstance(ddf._meta, pd.Series):
-                return ddf.map_partitions(cudf.Series.from_pandas)
-            return ddf
+            return self.move_from_fallback(
+                self.fallback.from_array(*args, **kwargs)
+            )
 
 
 except ImportError:
