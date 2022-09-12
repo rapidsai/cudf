@@ -162,6 +162,20 @@ TEST_F(StringsReplaceRegexTest, WordBoundary)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, Alternation)
+{
+  cudf::test::strings_column_wrapper input(
+    {"16  6  brr  232323  1  hello  90", "123 ABC 00 2022", "abé123  4567  89xyz"});
+  auto results = cudf::strings::replace_re(
+    cudf::strings_column_view(input), "(^|\\s)\\d+(\\s|$)", cudf::string_scalar("_"));
+  auto expected =
+    cudf::test::strings_column_wrapper({"__ brr __ hello _", "_ABC_2022", "abé123 _ 89xyz"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results = cudf::strings::replace_re(
+    cudf::strings_column_view(input), "(\\s|^)\\d+($|\\s)", cudf::string_scalar("_"));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, ZeroLengthMatch)
 {
   cudf::test::strings_column_wrapper input({"DD", "zéz", "DsDs", ""});
