@@ -401,6 +401,13 @@ std::tuple<std::vector<size_type>, std::vector<size_type>> records_orient_tree_t
   // // move tree representation to cpu
   // tree_meta_t2 tree = to_cpu_tree(d_tree, stream);
 
+  for (int i = 0; i < int(tree.node_range_begin.size()); i++) {
+    printf("%3s ",
+           std::string(input.data() + tree.node_range_begin[i],
+                       tree.node_range_end[i] - tree.node_range_begin[i])
+             .c_str());
+  }
+  printf(" (JSON)\n");
   print_vec(tree.node_categories, "node_categories", to_cat);
   auto print_vec = [](const auto& cpu, const auto name) {  // local lambda
     cudf::io::json::test::print_vec(cpu, name, to_int);
