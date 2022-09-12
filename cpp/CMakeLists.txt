@@ -749,6 +749,11 @@ if(CUDF_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
 endif()
 
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
+endif()
+
 # ##################################################################################################
 # * install targets -------------------------------------------------------------------------------
 rapids_cmake_install_lib_dir(lib_dir)

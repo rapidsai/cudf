@@ -2547,6 +2547,29 @@ def test_parquet_columns_and_index_param(index, columns):
     assert_eq(expected, got, check_index_type=True)
 
 
+def test_parquet_nested_struct_list():
+    buffer = BytesIO()
+    data = {
+        "payload": {
+            "Domain": {
+                "Name": "abc",
+                "Id": {"Name": "host", "Value": "127.0.0.8"},
+            },
+            "StreamId": "12345678",
+            "Duration": 10,
+            "Offset": 12,
+            "Resource": [{"Name": "ZoneName", "Value": "RAPIDS"}],
+        }
+    }
+    df = cudf.DataFrame({"a": cudf.Series(data)})
+
+    df.to_parquet(buffer)
+    expected = pd.read_parquet(buffer)
+    actual = cudf.read_parquet(buffer)
+    assert_eq(expected, actual)
+    assert_eq(actual.a.dtype, df.a.dtype)
+
+
 def test_parquet_writer_zstd():
     size = 12345
     expected = cudf.DataFrame(
