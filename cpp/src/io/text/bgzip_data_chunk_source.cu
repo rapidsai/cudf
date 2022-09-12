@@ -342,7 +342,12 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     read_next_compressed_chunk(chunk_load_size);
     // seek to the beginning of the provided local offset
     auto const local_pos = virtual_begin & 0xFFFFu;
-    _curr_block.consume_bytes(local_pos);
+    if (local_pos > 0) {
+      CUDF_EXPECTS(_curr_block.h_compressed_offsets.size() > 1 &&
+                     local_pos < _curr_block.h_compressed_offsets[1],
+                   "local part of virtual offset is out of bounds");
+      _curr_block.consume_bytes(local_pos);
+    }
   }
 
   void skip_bytes(std::size_t read_size) override
