@@ -50,7 +50,7 @@ void csv_read_common(DataType const& data_types,
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+               try_drop_l3_cache();  // Drop L3 cache for accurate measurement
 
                timer.start();
                cudf::io::read_csv(read_options);

@@ -70,7 +70,7 @@ void BM_csv_read_varying_options(
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+               try_drop_l3_cache();  // Drop L3 cache for accurate measurement
 
                timer.start();
                for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
