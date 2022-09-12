@@ -26,10 +26,15 @@ repos:
                 files: python/.*\.(py|pyx|pxd)$
                 types: [file]
       - repo: https://github.com/pre-commit/mirrors-mypy
-        rev: 'v0.782'
+        rev: 'v0.971'
         hooks:
               - id: mypy
-                args: ["--config-file=setup.cfg", "python/cudf/cudf", "python/dask_cudf/dask_cudf", "python/custreamz/custreamz", "python/cudf_kafka/cudf_kafka"]
+                additional_dependencies: [types-cachetools]
+                args: ["--config-file=setup.cfg",
+                       "python/cudf/cudf",
+                       "python/custreamz/custreamz",
+                       "python/cudf_kafka/cudf_kafka",
+                       "python/dask_cudf/dask_cudf"]
                 pass_filenames: false
       - repo: https://github.com/PyCQA/pydocstyle
         rev: 6.1.1
@@ -87,6 +92,18 @@ repos:
                 language: system
                 pass_filenames: false
                 verbose: true
+              - id: headers-recipe-check
+                name: headers-recipe-check
+                entry: ./ci/checks/headers_test.sh
+                files: |
+                  (?x)^(
+                    ^cpp/include/|
+                    ^conda/.*/meta.yaml
+                  )
+                types_or: [file]
+                language: system
+                pass_filenames: false
+                verbose: false
 
 default_language_version:
       python: python3

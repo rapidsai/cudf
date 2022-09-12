@@ -37,14 +37,8 @@ else
   echo -e "$COPYRIGHT"
 fi
 
-
-# Run header meta.yml check and get results/return code
-HEADER_META=`ci/checks/headers_test.sh`
-HEADER_META_RETVAL=$?
-echo -e "$HEADER_META"
-
 RETVALS=(
-  $PRE_COMMIT_RETVAL $COPYRIGHT_RETVAL $HEADER_META_RETVAL
+  $PRE_COMMIT_RETVAL $COPYRIGHT_RETVAL
 )
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
