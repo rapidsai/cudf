@@ -2701,7 +2701,7 @@ def test_groupby_pct_change_empty_columns():
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
 def test_groupby_group_keys(group_keys, by):
     gdf = cudf.DataFrame(
-        {"A": "a a b".split(), "B": [1, 1, 3], "C": [4, 6, 5]}
+        {"A": "a a a a b b".split(), "B": [1, 1, 2, 2, 3, 3], "C": [4, 6, 5, 9, 8, 7]}
     )
     pdf = gdf.to_pandas()
 
