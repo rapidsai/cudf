@@ -9,8 +9,11 @@ from . import _version
 
 from numba import cuda
 
+ENABLED = False
+ptxpath = None
 
-def versions_compatible(path):
+
+def compiler_from_ptx_file(path):
     """
     Example PTX header:
 
@@ -20,35 +23,47 @@ def versions_compatible(path):
     // Cuda compilation tools, release 11.5, V11.5.119
     // Based on NVVM 7
     """
-    # obtain the cuda version used to compile this PTX file
     file = open(path).read()
     major, minor = (
         re.search(r"Cuda compilation tools, release ([0-9\.]+)", file)
         .group(1)
         .split(".")
     )
+    return int(major), int(minor)
 
-    # adapted from patch_needed()
-    cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
-    if cp.returncode != 0:
-        # no driver
-        return False
 
+# adapted from PTXCompiler
+cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
+if cp.returncode == 0:
+    # must have a driver to proceed
     versions = [int(s) for s in cp.stdout.strip().split()]
     driver_version = tuple(versions[:2])
+    runtime_version = tuple(versions[2:])
 
-    return driver_version >= (int(major), int(minor)) and not patch_needed()
+    # CUDA enhanced compatibility not yet enabled
+    if driver_version >= runtime_version:
+        # Load the highest compute capability file available that is less than the
+        # current device's.
+        files = glob.glob(
+            os.path.join(os.path.dirname(__file__), "shim_*.ptx")
+        )
+        dev = cuda.get_current_device()
+        cc = "".join(str(x) for x in dev.compute_capability)
+        files = glob.glob(
+            os.path.join(os.path.dirname(__file__), "shim_*.ptx")
+        )
+        sms = [
+            os.path.basename(f).rstrip(".ptx").lstrip("shim_") for f in files
+        ]
+        selected_sm = max(sm for sm in sms if sm < cc)
+        ptxpath = os.path.join(
+            os.path.dirname(__file__), f"shim_{selected_sm}.ptx"
+        )
 
+        if driver_version >= compiler_from_ptx_file(ptxpath):
+            ENABLED = True
 
-# Load the highest compute capability file available that is less than the
-# current device's.
-dev = cuda.get_current_device()
-cc = "".join(str(x) for x in dev.compute_capability)
-files = glob.glob(os.path.join(os.path.dirname(__file__), "shim_*.ptx"))
-sms = [os.path.basename(f).rstrip(".ptx").lstrip("shim_") for f in files]
-selected_sm = max(sm for sm in sms if sm < cc)
-ptxpath = os.path.join(os.path.dirname(__file__), f"shim_{selected_sm}.ptx")
-
-ENABLED = versions_compatible(ptxpath)
+if not ENABLED:
+    del ptxpath
 
 __version__ = _version.get_versions()["version"]
