@@ -20,35 +20,58 @@
 
 # cmake-lint: disable=R0912,R0913,R0915
 
+include_guard(GLOBAL)
+
+function(find_libarrow_in_python_wheel VERSION)
+  function(find_arrow_lib _name _alias _lib)
+    if(CUDF_PYARROW_WHEEL_DIR)
+      list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+    endif()
+    rapids_find_generate_module(
+      "${_name}"
+      NO_CONFIG
+      VERSION "${VERSION}"
+      LIBRARY_NAMES "${_lib}"
+      BUILD_EXPORT_SET cudf-exports
+      INSTALL_EXPORT_SET cudf-exports
+      HEADER_NAMES arrow/python/arrow_to_pandas.h
+    )
+
+    find_package(${_name} ${VERSION} MODULE REQUIRED GLOBAL)
+    add_library(${_alias} ALIAS ${_name}::${_name})
+
+    if(CUDF_PYARROW_WHEEL_DIR)
+      list(POP_BACK CMAKE_PREFIX_PATH)
+    endif()
+  endfunction()
+
+  string(REPLACE "." "" PYARROW_SO_VER "${VERSION}")
+  find_arrow_lib(Arrow arrow_shared libarrow.so.${PYARROW_SO_VER})
+endfunction()
+
 # This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
          ENABLE_PARQUET
 )
 
+  if(CUDF_BUILD_WHEELS AND (NOT BUILD_STATIC))
+    # Generate a FindArrow.cmake to find pyarrow's libarrow.so
+    find_libarrow_in_python_wheel(${VERSION})
+    set(ARROW_FOUND TRUE PARENT_SCOPE)
+    set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+    return()
+  endif()
+
   if(BUILD_STATIC)
     if(TARGET arrow_static)
-      list(APPEND ARROW_LIBRARIES arrow_static)
-      set(ARROW_FOUND
-          TRUE
-          PARENT_SCOPE
-      )
-      set(ARROW_LIBRARIES
-          ${ARROW_LIBRARIES}
-          PARENT_SCOPE
-      )
+      set(ARROW_FOUND TRUE PARENT_SCOPE)
+      set(ARROW_LIBRARIES arrow_static PARENT_SCOPE)
       return()
     endif()
   else()
     if(TARGET arrow_shared)
-      list(APPEND ARROW_LIBRARIES arrow_shared)
-      set(ARROW_FOUND
-          TRUE
-          PARENT_SCOPE
-      )
-      set(ARROW_LIBRARIES
-          ${ARROW_LIBRARIES}
-          PARENT_SCOPE
-      )
+      set(ARROW_FOUND TRUE PARENT_SCOPE)
+      set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
       return()
     endif()
   endif()
@@ -92,6 +115,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   rapids_cpm_find(
     Arrow ${VERSION}
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared
+                   arrow_static parquet_static arrow_dataset_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
@@ -128,8 +152,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   set(ARROW_FOUND TRUE)
   set(ARROW_LIBRARIES "")
 
-  # Arrow_ADDED: set if CPM downloaded Arrow from Github Arrow_DIR:   set if CPM found Arrow on the
-  # system/conda/etc.
+  # Arrow_ADDED: set if CPM downloaded Arrow from Github
+  # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
   if(Arrow_ADDED OR Arrow_DIR)
     if(BUILD_STATIC)
       list(APPEND ARROW_LIBRARIES arrow_static)
@@ -302,7 +326,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       "${ARROW_LIBRARIES}"
       PARENT_SCOPE
   )
-
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)

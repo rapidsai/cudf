@@ -11,4 +11,5 @@ requires = [
     "ninja",
     "numpy",
     "pyarrow==9.0.0",
+    "protoc-wheel"
 ]
