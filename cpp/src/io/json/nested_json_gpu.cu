@@ -1491,12 +1491,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         });
 
       // Infer column type
-      auto target_type = cudf::io::detail::infer_data_type(casting_options(options).json_view(),
-                                                           d_input,
-                                                           string_ranges_it,
-                                                           (col_size - json_col.valid_count),
-                                                           col_size,
-                                                           stream);
+      auto target_type = cudf::io::detail::infer_data_type(
+        casting_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
 
       // Convert strings to the inferred data type
       auto col = cudf::io::json::experimental::detail::parse_data(string_spans_it,
