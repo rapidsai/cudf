@@ -166,7 +166,8 @@ class ListColumn(ColumnBase):
 
     def set_base_children(self, value: Tuple[ColumnBase, ...]):
         super().set_base_children(value)
-        self._dtype = cudf.ListDtype(element_type=value[1].dtype)
+        _, values = value
+        self._dtype = cudf.ListDtype(element_type=values.dtype)
 
     @property
     def __cuda_array_interface__(self):

@@ -2567,4 +2567,4 @@ def test_parquet_nested_struct_list():
     expected = pd.read_parquet(buffer)
     actual = cudf.read_parquet(buffer)
     assert_eq(expected, actual)
-    assert_eq(df.a.dtype, actual.a.dtype)
+    assert_eq(actual.a.dtype, df.a.dtype)
