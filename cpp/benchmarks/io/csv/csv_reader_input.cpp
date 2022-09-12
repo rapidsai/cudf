@@ -46,7 +46,7 @@ void csv_read_common(DataType const& data_types,
   cudf::io::csv_reader_options const read_options =
     cudf::io::csv_reader_options::builder(source_sink.make_source_info());
 
-  auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
+  auto const mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
