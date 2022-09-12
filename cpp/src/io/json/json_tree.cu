@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -92,7 +93,7 @@ struct node_ranges {
     PdaTokenT const token = tokens[i];
     // The section from the original JSON input that this token demarcates
     SymbolOffsetT range_begin = get_token_index(token, token_indices[i]);
-    SymbolOffsetT range_end   = range_begin + 1;
+    SymbolOffsetT range_end   = range_begin + 1;  // non-leaf, non-field nodes ignore this value.
     if (is_begin_of_section(token)) {
       if ((i + 1) < tokens.size() && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
@@ -145,7 +146,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
   auto num_tokens = tokens.size();
   auto is_node_it = thrust::make_transform_iterator(tokens.begin(), is_node);
-  auto num_nodes  = thrust::reduce(rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens);
+  auto num_nodes  = thrust::count_if(
+    rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
 
   // Node categories: copy_if with transform.
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
@@ -163,7 +165,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<size_type> token_levels(num_tokens, stream);
   auto push_pop_it = thrust::make_transform_iterator(
     tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
-      return does_push(token) ? 1 : (does_pop(token) ? -1 : 0);
+      return does_push(token) - does_pop(token);
     });
   thrust::exclusive_scan(
     rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
@@ -194,8 +196,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                     thrust::make_counting_iterator<size_type>(0) + num_tokens,
                     node_range_out_it,
                     [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
-                      PdaTokenT const token = tokens_gpu[i];
-                      return is_node(token);
+                      return is_node(tokens_gpu[i]);
                     });
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
@@ -209,10 +210,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids.begin(),
                    parent_token_ids.end(),
                    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
-                     if (i == 0)
-                       return -1;
-                     else
-                       return does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
+                     return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
                    });
   auto out_pid = thrust::make_zip_iterator(parent_token_ids.data(), initial_order.data());
   // Uses radix sort for builtin types.
