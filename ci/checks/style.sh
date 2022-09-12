@@ -19,16 +19,16 @@ export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.
 mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
-
+# Run pre-commit checks
 pre-commit run --hook-stage manual --all-files
 PRE_COMMIT_RETVAL=$?
 
 # Check for copyright headers in the files modified currently
 COPYRIGHT=`python ci/checks/copyright.py --git-modified-only 2>&1`
-CR_RETVAL=$?
+COPYRIGHT_RETVAL=$?
 
 # Output results if failure otherwise show pass
-if [ "$CR_RETVAL" != "0" ]; then
+if [ "$COPYRIGHT_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: copyright check; begin output\n\n"
   echo -e "$COPYRIGHT"
   echo -e "\n\n>>>> FAILED: copyright check; end output\n\n"
@@ -37,20 +37,8 @@ else
   echo -e "$COPYRIGHT"
 fi
 
-# Run clang-format and check for a consistent code format
-CLANG_FORMAT=`python cpp/scripts/run-clang-format.py 2>&1`
-CLANG_FORMAT_RETVAL=$?
-
-if [ "$CLANG_FORMAT_RETVAL" != "0" ]; then
-  echo -e "\n\n>>>> FAILED: clang format check; begin output\n\n"
-  echo -e "$CLANG_FORMAT"
-  echo -e "\n\n>>>> FAILED: clang format check; end output\n\n"
-else
-  echo -e "\n\n>>>> PASSED: clang format check\n\n"
-fi
-
 RETVALS=(
-  $CR_RETVAL $PRE_COMMIT_RETVAL $CLANG_FORMAT_RETVAL
+  $PRE_COMMIT_RETVAL $COPYRIGHT_RETVAL
 )
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
