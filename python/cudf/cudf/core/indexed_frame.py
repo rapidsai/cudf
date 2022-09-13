@@ -908,32 +908,39 @@ class IndexedFrame(Frame):
         See `ColumnBase._with_type_metadata` for more information.
         """
         super()._copy_type_metadata(other)
-
         if include_index:
-            if self._index is not None and other._index is not None:
-                self._index._copy_type_metadata(other._index)
-                # When other._index is a CategoricalIndex, the current index
-                # will be a NumericalIndex with an underlying CategoricalColumn
-                # (the above _copy_type_metadata call will have converted the
-                # column). Calling cudf.Index on that column generates the
-                # appropriate index.
-                if isinstance(
-                    other._index, cudf.core.index.CategoricalIndex
-                ) and not isinstance(
-                    self._index, cudf.core.index.CategoricalIndex
-                ):
-                    self._index = cudf.Index(
-                        cast(
-                            cudf.core.index.NumericIndex, self._index
-                        )._column,
-                        name=self._index.name,
-                    )
-                elif isinstance(
-                    other._index, cudf.MultiIndex
-                ) and not isinstance(self._index, cudf.MultiIndex):
-                    self._index = cudf.MultiIndex._from_data(
-                        self._index._data, name=self._index.name
-                    )
+            self._copy_index_metadata(other)
+        return self
+
+    def _copy_index_metadata(self: T, other: T) -> T:
+        """
+        Copy type metadata from the index of `other` to the index or
+        `self`.
+
+        See also :func:`_copy_type_metadata`.
+        """
+        if self._index is not None and other._index is not None:
+            self._index._copy_type_metadata(other._index)
+            # When other._index is a CategoricalIndex, the current index
+            # will be a NumericalIndex with an underlying CategoricalColumn
+            # (the above _copy_type_metadata call will have converted the
+            # column). Calling cudf.Index on that column generates the
+            # appropriate index.
+            if isinstance(
+                other._index, cudf.core.index.CategoricalIndex
+            ) and not isinstance(
+                self._index, cudf.core.index.CategoricalIndex
+            ):
+                self._index = cudf.Index(
+                    cast(cudf.core.index.NumericIndex, self._index)._column,
+                    name=self._index.name,
+                )
+            elif isinstance(other._index, cudf.MultiIndex) and not isinstance(
+                self._index, cudf.MultiIndex
+            ):
+                self._index = cudf.MultiIndex._from_data(
+                    self._index._data, name=self._index.name
+                )
         return self
 
     @_cudf_nvtx_annotate
