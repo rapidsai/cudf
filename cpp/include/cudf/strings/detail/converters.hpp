@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,49 +87,49 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc to_timestamps(strings_column_view const&,data_type,std::string
- * const&,rmm::mr::device_memory_resource*)
+ * @copydoc to_timestamps(strings_column_view const&,data_type,std::string_view,
+ * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
                                             data_type timestamp_type,
-                                            std::string const& format,
+                                            std::string_view format,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc from_timestamps(strings_column_view const&,std::string
- * const&,strings_column_view const&,rmm::mr::device_memory_resource*)
+ * @copydoc from_timestamps(strings_column_view const&,std::string_view,
+ * strings_column_view const&,rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_timestamps(column_view const& timestamps,
-                                        std::string const& format,
+                                        std::string_view format,
                                         strings_column_view const& names,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc to_durations(strings_column_view const&,data_type,std::string
- * const&,rmm::mr::device_memory_resource*)
+ * @copydoc to_durations(strings_column_view const&,data_type,std::string_view,
+ * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      data_type duration_type,
-                                     std::string const& format,
+                                     std::string_view format,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc from_durations(strings_column_view const&,std::string
- * const&,rmm::mr::device_memory_resource*)
+ * @copydoc from_durations(strings_column_view const&,std::string_view.
+ * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> from_durations(column_view const& durations,
-                                       std::string const& format,
+                                       std::string_view format,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
 

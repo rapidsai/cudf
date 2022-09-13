@@ -25,6 +25,7 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -77,6 +78,8 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 
   launch_transform_kernel(
     contains_fn{*d_strings, beginning_only}, *d_prog, d_results, input.size(), stream);
+
+  results->set_null_count(input.null_count());
 
   return results;
 }
@@ -133,7 +136,7 @@ std::unique_ptr<column> contains_re(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::contains_re(strings, pattern, flags, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
@@ -142,7 +145,7 @@ std::unique_ptr<column> matches_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::matches_re(strings, pattern, flags, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
@@ -151,7 +154,7 @@ std::unique_ptr<column> count_re(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::count_re(strings, pattern, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

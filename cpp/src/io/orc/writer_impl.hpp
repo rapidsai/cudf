@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -182,9 +182,6 @@ struct stripe_size_limits {
 class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
-
-  // ORC compresses streams into independent chunks
-  static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
 
  public:
   /**
@@ -393,7 +390,7 @@ class writer::impl {
                           file_segmentation const& segmentation,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
-                          host_span<decompress_status const> comp_out,
+                          host_span<compression_result const> comp_out,
                           std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,
@@ -431,8 +428,8 @@ class writer::impl {
 
   stripe_size_limits max_stripe_size;
   size_type row_index_stride;
-  size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
-  CompressionKind compression_kind_ = CompressionKind::NONE;
+  CompressionKind compression_kind_;
+  size_t compression_blocksize_;
 
   bool enable_dictionary_     = true;
   statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;

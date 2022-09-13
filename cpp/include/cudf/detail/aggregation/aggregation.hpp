@@ -570,7 +570,9 @@ class nunique_aggregation final : public groupby_aggregation, public reduce_aggr
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class nth_element_aggregation final : public groupby_aggregation,
+                                      public reduce_aggregation,
+                                      public rolling_aggregation {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}

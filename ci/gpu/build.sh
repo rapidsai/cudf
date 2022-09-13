@@ -35,7 +35,7 @@ unset GIT_DESCRIBE_TAG
 export INSTALL_DASK_MAIN=1
 
 # ucx-py version
-export UCX_PY_VERSION='0.26.*'
+export UCX_PY_VERSION='0.28.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -82,8 +82,6 @@ conda list --show-channel-urls
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
 
 function install_dask {
     # Install the conda-forge or nightly version of dask and distributed
@@ -94,8 +92,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -154,6 +152,13 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
             echo "Running GoogleTest $test_name"
             ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
+
+        # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+            gt="$WORKSPACE/cpp/build/gtests/$test_name"
+            echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+            LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        done
     fi
 else
     #Project Flash
@@ -169,12 +174,14 @@ else
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
+    # TODO: Move boa install to gpuci/rapidsai
+    gpuci_mamba_retry install boa
     gpuci_logger "Building cudf, dask-cudf, cudf_kafka and custreamz"
     export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
 
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
@@ -182,8 +189,16 @@ else
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
+        test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+    done
+
+    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
+        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
@@ -242,6 +257,17 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
+
+# Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
+# Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
+# Therefore, these runs only verify that benchmarks are valid.
+# They do not generate meaningful performance measurements.
+cd "$WORKSPACE/python/cudf"
+gpuci_logger "Python pytest for cuDF benchmarks"
+CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
+
+gpuci_logger "Python pytest for cuDF benchmarks using pandas"
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log

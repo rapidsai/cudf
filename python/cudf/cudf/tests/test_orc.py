@@ -1714,3 +1714,160 @@ def test_empty_columns():
 
     got_df = cudf.read_orc(buffer)
     assert_eq(expected, got_df)
+
+
+def test_orc_reader_zstd_compression(list_struct_buff):
+    expected = cudf.read_orc(list_struct_buff)
+    # save with ZSTD compression
+    buffer = BytesIO()
+    pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+    writer = pyarrow.orc.ORCWriter(buffer, compression="zstd")
+    writer.write(pyarrow_tbl)
+    writer.close()
+    try:
+        got = cudf.read_orc(buffer)
+        assert_eq(expected, got)
+    except RuntimeError:
+        pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_writer_protobuf_large_rowindexentry():
+    s = [
+        "Length of the two strings needs to add up to at least ~120",
+        "So that the encoded statistics are larger than 128 bytes",
+    ] * 5001  # generate more than 10K rows to have two row groups
+    df = cudf.DataFrame({"s1": s})
+
+    buff = BytesIO()
+    df.to_orc(buff)
+
+    got = cudf.read_orc(buff)
+    assert_frame_equal(df, got)
+
+
+@pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
+def test_orc_writer_nvcomp(list_struct_buff, compression):
+    expected = cudf.read_orc(list_struct_buff)
+
+    buff = BytesIO()
+    try:
+        expected.to_orc(buff, compression=compression)
+    except RuntimeError:
+        pytest.mark.xfail(reason="Newer nvCOMP version is required")
+    else:
+        got = pd.read_orc(buff)
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_orc_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_orc(buffer, index=index)
+
+    expected = pd.read_orc(buffer, columns=columns)
+    got = cudf.read_orc(buffer, columns=columns)
+
+    if columns:
+        # TODO: Remove workaround after this issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/47944
+        assert_eq(
+            expected.sort_index(axis=1),
+            got.sort_index(axis=1),
+            check_index_type=True,
+        )
+    else:
+        assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "df_data,cols_as_map_type,expected_data",
+    [
+        (
+            {"a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]},
+            ["a"],
+            {"a": [[(10, 20)], [(1, 21)]]},
+        ),
+        (
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+            },
+            ["b"],
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[(10, 20)], [(1, 21)]],
+            },
+        ),
+        (
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "c": [
+                    [{"a": {"a": 10}, "b": 20}],
+                    [{"a": {"a": 12}, "b": 21}],
+                ],
+            },
+            ["b", "c"],
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[(10, 20)], [(1, 21)]],
+                "c": [[({"a": 10}, 20)], [({"a": 12}, 21)]],
+            },
+        ),
+    ],
+)
+def test_orc_writer_cols_as_map_type(df_data, cols_as_map_type, expected_data):
+    df = cudf.DataFrame(df_data)
+    buffer = BytesIO()
+    df.to_orc(buffer, cols_as_map_type=cols_as_map_type)
+
+    got = pd.read_orc(buffer)
+    expected = pd.DataFrame(expected_data)
+
+    assert_eq(got, expected)
+
+
+def test_orc_writer_cols_as_map_type_error():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])}
+    )
+    buffer = BytesIO()
+    with pytest.raises(
+        TypeError, match="cols_as_map_type must be a list of column names."
+    ):
+        df.to_orc(buffer, cols_as_map_type=1)
+
+
+@pytest.fixture
+def negative_timestamp_df():
+    return cudf.DataFrame(
+        {
+            "a": [
+                pd.Timestamp("1969-12-31 23:59:59.000123"),
+                pd.Timestamp("1969-12-31 23:59:58.000999"),
+                pd.Timestamp("1969-12-31 23:59:58.001001"),
+                pd.Timestamp("1839-12-24 03:58:56.000826"),
+            ]
+        }
+    )
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
+    buffer = BytesIO()
+    pyorc_table = pa.Table.from_pandas(
+        negative_timestamp_df.to_pandas(), preserve_index=False
+    )
+    pyarrow.orc.write_table(pyorc_table, buffer)
+
+    assert_eq(negative_timestamp_df, cudf.read_orc(buffer, engine=engine))
+
+
+def test_orc_writer_negative_timestamp(negative_timestamp_df):
+    buffer = BytesIO()
+    negative_timestamp_df.to_orc(buffer)
+
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
+    assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())

@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -52,7 +53,7 @@ __global__ void valid_if_kernel(
   thread_index_type const stride = blockDim.x * gridDim.x;
   size_type warp_valid_count{0};
 
-  auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
+  auto active_mask = __ballot_sync(0xFFFF'FFFFu, i < size);
   while (i < size) {
     bitmask_type ballot = __ballot_sync(active_mask, p(*(begin + i)));
     if (lane_id == leader_lane) {
@@ -89,7 +90,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator begin,
   InputIterator end,
   Predicate p,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
@@ -172,7 +173,7 @@ __global__ void valid_if_n_kernel(InputIterator1 begin1,
       auto const arg_1         = *(begin1 + mask_idx);
       auto const arg_2         = *(begin2 + thread_idx);
       auto const bit_is_valid  = thread_active && p(arg_1, arg_2);
-      auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
+      auto const warp_validity = __ballot_sync(0xffff'ffffu, bit_is_valid);
       auto const mask_idx      = word_index(thread_idx);
 
       if (thread_active && threadIdx.x % warp_size == 0) { mask[mask_idx] = warp_validity; }

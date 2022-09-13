@@ -18,9 +18,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 
-using hash_value_type = uint32_t;
+using hash_value_type = uint32_t;  ///< Type of hash value
 
 /**
  * @addtogroup column_hash
@@ -32,11 +34,10 @@ using hash_value_type = uint32_t;
  *  @brief Identifies the hash function to be used
  */
 enum class hash_id {
-  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,         ///< Murmur3 hash function
-  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3,   ///< Spark Murmur3 hash function
-  HASH_MD5              ///< MD5 hash function
+  HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,        ///< Murmur3 hash function
+  HASH_SPARK_MURMUR3,  ///< Spark Murmur3 hash function
+  HASH_MD5             ///< MD5 hash function
 };
 
 /**
@@ -47,12 +48,12 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 /**
  * @brief Computes the hash value of each row in the input set of columns.
  *
- * @param input The table of columns to hash.
- * @param hash_function The hash function enum to use.
- * @param seed Optional seed value to use for the hash function.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input The table of columns to hash
+ * @param hash_function The hash function enum to use
+ * @param seed Optional seed value to use for the hash function
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns A column where each row is the hash of a column from the input.
+ * @returns A column where each row is the hash of a column from the input
  */
 std::unique_ptr<column> hash(
   table_view const& input,

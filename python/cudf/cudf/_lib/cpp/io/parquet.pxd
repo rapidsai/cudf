@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -16,13 +16,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_reader_options:
         parquet_reader_options() except +
         cudf_io_types.source_info get_source_info() except +
-        vector[string] get_columns() except +
         vector[vector[size_type]] get_row_groups() except +
         data_type get_timestamp_type() except +
         bool is_enabled_convert_strings_to_categories() except +
         bool is_enabled_use_pandas_metadata() except +
-        size_type get_skip_rows() except +
-        size_type get_num_rows() except +
 
         # setter
 
@@ -30,8 +27,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_row_groups(vector[vector[size_type]] row_grp) except +
         void enable_convert_strings_to_categories(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
-        void set_skip_rows(size_type val) except +
-        void set_num_rows(size_type val) except +
         void set_timestamp_type(data_type type) except +
 
         @staticmethod
@@ -56,8 +51,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& use_pandas_metadata(
             bool val
         ) except +
-        parquet_reader_options_builder& skip_rows(size_type val) except +
-        parquet_reader_options_builder& num_rows(size_type val) except +
         parquet_reader_options_builder& timestamp_type(
             data_type type
         ) except +
@@ -76,6 +69,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         string get_column_chunks_file_paths() except+
         size_t get_row_group_size_bytes() except+
         size_type get_row_group_size_rows() except+
+        size_t get_max_page_size_bytes() except+
+        size_type get_max_page_size_rows() except+
 
         void set_partitions(
             vector[cudf_io_types.partition_info] partitions
@@ -97,6 +92,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         void set_row_group_size_bytes(size_t val) except+
         void set_row_group_size_rows(size_type val) except+
+        void set_max_page_size_bytes(size_t val) except+
+        void set_max_page_size_rows(size_type val) except+
 
         @staticmethod
         parquet_writer_options_builder builder(
@@ -138,6 +135,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& row_group_size_rows(
             size_type val
         ) except+
+        parquet_writer_options_builder& max_page_size_bytes(
+            size_t val
+        ) except+
+        parquet_writer_options_builder& max_page_size_rows(
+            size_type val
+        ) except+
 
         parquet_writer_options build() except +
 
@@ -154,6 +157,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except+
         size_t get_row_group_size_bytes() except+
         size_type get_row_group_size_rows() except+
+        size_t get_max_page_size_bytes() except+
+        size_type get_max_page_size_rows() except+
 
         void set_metadata(
             cudf_io_types.table_input_metadata *m
@@ -169,6 +174,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         void set_row_group_size_bytes(size_t val) except+
         void set_row_group_size_rows(size_type val) except+
+        void set_max_page_size_bytes(size_t val) except+
+        void set_max_page_size_rows(size_type val) except+
 
         @staticmethod
         chunked_parquet_writer_options_builder builder(
@@ -192,10 +199,16 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         chunked_parquet_writer_options_builder& compression(
             cudf_io_types.compression_type compression
         ) except +
-        parquet_writer_options_builder& row_group_size_bytes(
+        chunked_parquet_writer_options_builder& row_group_size_bytes(
             size_t val
         ) except+
-        parquet_writer_options_builder& row_group_size_rows(
+        chunked_parquet_writer_options_builder& row_group_size_rows(
+            size_type val
+        ) except+
+        chunked_parquet_writer_options_builder& max_page_size_bytes(
+            size_t val
+        ) except+
+        chunked_parquet_writer_options_builder& max_page_size_rows(
             size_type val
         ) except+
 

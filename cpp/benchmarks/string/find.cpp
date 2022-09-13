@@ -24,6 +24,7 @@
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
 
@@ -36,16 +37,15 @@ static void BM_find_scalar(benchmark::State& state, FindAPI find_api)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
-  cudf::strings_column_view input(table->view().column(0));
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+  cudf::strings_column_view input(column->view());
   cudf::string_scalar target("+");
   cudf::test::strings_column_wrapper targets({"+", "-"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (find_api) {
       case find: cudf::strings::find(input, target); break;
       case find_multi:

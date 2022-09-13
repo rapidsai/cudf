@@ -22,24 +22,26 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/detail/convert/fixed_point.cuh>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <strings/convert/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
+#include <thrust/generate.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
+#include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
@@ -189,7 +191,7 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_fixed_point(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::to_fixed_point(strings, output_type, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -332,7 +334,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_fixed_point(input, rmm::cuda_stream_default, mr);
+  return detail::from_fixed_point(input, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -396,7 +398,7 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_fixed_point(input, decimal_type, rmm::cuda_stream_default, mr);
+  return detail::is_fixed_point(input, decimal_type, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

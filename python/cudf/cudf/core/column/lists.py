@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
@@ -13,7 +13,7 @@ from cudf._lib.lists import (
     concatenate_rows,
     contains_scalar,
     count_elements,
-    drop_list_duplicates,
+    distinct,
     extract_element_column,
     extract_element_scalar,
     index_of_column,
@@ -70,9 +70,9 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[0][
-                current_offset
-            ]
+            current_offset = current_base_child.base_children[
+                0
+            ].element_indexing(current_offset)
             n += child0_size
             current_base_child = current_base_child.base_children[1]
 
@@ -147,8 +147,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
+            nbuf = pa.py_buffer(self.mask.memoryview())
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -164,6 +163,11 @@ class ListColumn(ColumnBase):
             )
         else:
             super().set_base_data(value)
+
+    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+        super().set_base_children(value)
+        _, values = value
+        self._dtype = cudf.ListDtype(element_type=values.dtype)
 
     @property
     def __cuda_array_interface__(self):
@@ -603,9 +607,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            drop_list_duplicates(
-                self._column, nulls_equal=True, nans_all_equal=True
-            )
+            distinct(self._column, nulls_equal=True, nans_all_equal=True)
         )
 
     def sort_values(

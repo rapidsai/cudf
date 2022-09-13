@@ -37,7 +37,7 @@ FilesToCheck = [
     re.compile(r"[.]flake8[.]cython$"),
     re.compile(r"meta[.]yaml$")
 ]
-ExemptFiles = []
+ExemptFiles = ["cpp/include/cudf_test/cxxopts.hpp"]
 
 # this will break starting at year 10000, which is probably OK :)
 CheckSimple = re.compile(

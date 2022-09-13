@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <string>
 #include <vector>
@@ -43,8 +45,8 @@ namespace strings {
  * | \%Y | Year with century: 0001-9999 |
  * | \%H | 24-hour of the day: 00-23 |
  * | \%I | 12-hour of the day: 01-12 |
- * | \%M | Minute of the hour: 00-59|
- * | \%S | Second of the minute: 00-59 |
+ * | \%M | Minute of the hour: 00-59 |
+ * | \%S | Second of the minute: 00-59. Leap second is not supported. |
  * | \%f | 6-digit microsecond: 000000-999999 |
  * | \%z | UTC offset with format ±HHMM Example +0500 |
  * | \%j | Day of the year: 001-366 |
@@ -63,6 +65,9 @@ namespace strings {
  * precision with a single integer value (1-9) as follows:
  * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
  *
+ * Although leap second is not supported for "%S", no checking is performed on the value.
+ * The cudf::strings::is_timestamp can be used to verify the valid range of values.
+ *
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
  * @param strings Strings instance for this operation.
@@ -74,7 +79,7 @@ namespace strings {
 std::unique_ptr<column> to_timestamps(
   strings_column_view const& strings,
   data_type timestamp_type,
-  std::string const& format,
+  std::string_view format,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -92,7 +97,7 @@ std::unique_ptr<column> to_timestamps(
  * | \%H | 24-hour of the day: 00-23 |
  * | \%I | 12-hour of the day: 01-12 |
  * | \%M | Minute of the hour: 00-59|
- * | \%S | Second of the minute: 00-59 |
+ * | \%S | Second of the minute: 00-59. Leap second is not supported. |
  * | \%f | 6-digit microsecond: 000000-999999 |
  * | \%z | UTC offset with format ±HHMM Example +0500 |
  * | \%j | Day of the year: 001-366 |
@@ -115,7 +120,7 @@ std::unique_ptr<column> to_timestamps(
  */
 std::unique_ptr<column> is_timestamp(
   strings_column_view const& strings,
-  std::string const& format,
+  std::string_view format,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -225,7 +230,7 @@ std::unique_ptr<column> is_timestamp(
  */
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
-  std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
+  std::string_view format             = "%Y-%m-%dT%H:%M:%SZ",
   strings_column_view const& names    = strings_column_view(column_view{
     data_type{type_id::STRING}, 0, nullptr}),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

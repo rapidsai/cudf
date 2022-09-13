@@ -15,7 +15,8 @@
  */
 #pragma once
 
-#include "orc.h"
+#include "orc.hpp"
+
 #include <numeric>
 #include <string>
 

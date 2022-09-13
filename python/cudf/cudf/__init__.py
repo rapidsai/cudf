@@ -18,7 +18,6 @@ from cudf.api.extensions import (
     register_series_accessor,
 )
 from cudf.core.scalar import Scalar
-
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
@@ -59,10 +58,11 @@ from cudf.core.dtypes import (
 from cudf.core.groupby import Grouper
 from cudf.core.reshape import (
     concat,
+    crosstab,
     get_dummies,
     melt,
-    merge_sorted,
     pivot,
+    pivot_table,
     unstack,
 )
 from cudf.core.series import isclose
@@ -81,7 +81,13 @@ from cudf.io import (
 )
 from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import set_allocator
+from cudf.utils.utils import set_allocator, clear_cache
+
+from cudf.options import (
+    get_option,
+    set_option,
+    describe_option,
+)
 
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed
@@ -104,6 +110,10 @@ except AttributeError:
     # Numba < 0.54: No occupancy warnings
     pass
 del numba_config
+
+
+rmm.register_reinitialize_hook(clear_cache)
+
 
 __version__ = get_versions()["version"]
 del get_versions
@@ -143,19 +153,22 @@ __all__ = [
     "UInt8Index",
     "api",
     "concat",
+    "crosstab",
     "cut",
     "date_range",
+    "describe_option",
     "factorize",
     "from_dataframe",
     "from_dlpack",
     "from_pandas",
     "get_dummies",
+    "get_option",
     "interval_range",
     "isclose",
     "melt",
     "merge",
-    "merge_sorted",
     "pivot",
+    "pivot_table",
     "read_avro",
     "read_csv",
     "read_feather",
@@ -165,6 +178,7 @@ __all__ = [
     "read_parquet",
     "read_text",
     "set_allocator",
+    "set_option",
     "testing",
     "to_datetime",
     "to_numeric",

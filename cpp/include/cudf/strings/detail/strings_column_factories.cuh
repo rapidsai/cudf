@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -31,6 +32,7 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>

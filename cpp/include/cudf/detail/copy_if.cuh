@@ -28,6 +28,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -171,7 +172,7 @@ __launch_bounds__(block_size) __global__
         int valid_index = (block_offset / cudf::detail::warp_size) + wid;
 
         // compute the valid mask for this warp
-        uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
+        uint32_t valid_warp = __ballot_sync(0xffff'ffffu, temp_valids[threadIdx.x]);
 
         // Note the atomicOr's below assume that output_valid has been set to
         // all zero before the kernel
@@ -186,7 +187,7 @@ __launch_bounds__(block_size) __global__
 
         // if the block is full and not aligned then we have one more warp to cover
         if ((wid == 0) && (last_warp == num_warps)) {
-          uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
+          uint32_t valid_warp = __ballot_sync(0xffff'ffffu, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
             tmp_warp_valid_counts += __popc(valid_warp);
             atomicOr(&output_valid[valid_index + num_warps], valid_warp);
@@ -322,7 +323,7 @@ template <typename Filter>
 std::unique_ptr<table> copy_if(
   table_view const& input,
   Filter filter,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();

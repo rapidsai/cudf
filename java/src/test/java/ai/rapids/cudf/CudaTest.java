@@ -18,7 +18,8 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CudaTest {
 
@@ -44,5 +45,9 @@ public class CudaTest {
           }
         }
     );
+    // non-fatal CUDA error will not fail subsequent CUDA calls
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5)) {
+    }
   }
+
 }

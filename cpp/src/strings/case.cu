@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/is_flags.h>
-
-#include <strings/utf8.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -87,7 +85,7 @@ struct upper_lower_fn {
     for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
       uint32_t code_point = detail::utf8_to_codepoint(*itr);
 
-      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+      detail::character_flags_table_type flag = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
 
       // we apply special mapping in two cases:
       // - uncased characters with the special mapping flag, always
@@ -187,21 +185,21 @@ std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, rmm::cuda_stream_default, mr);
+  return detail::to_lower(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, rmm::cuda_stream_default, mr);
+  return detail::to_upper(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, rmm::cuda_stream_default, mr);
+  return detail::swapcase(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

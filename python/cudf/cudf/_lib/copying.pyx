@@ -718,7 +718,11 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        gpu_data = Buffer(
+            data=self.gpu_data_ptr,
+            size=self.gpu_data_size,
+            owner=self
+        )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header
         frames.extend(data_frames)
@@ -777,7 +781,7 @@ cdef class _CPackedColumns:
         return p
 
     def unpack(self):
-        output_table = cudf.core.frame.Frame(*data_from_table_view(
+        output_table = cudf.DataFrame._from_data(*data_from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,

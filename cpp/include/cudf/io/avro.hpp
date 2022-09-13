@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,6 @@ namespace io {
  * @file
  */
 
-/**
- * @brief Builder to build options for `read_avro()`.
- */
 class avro_reader_options_builder;
 
 /**
@@ -57,7 +54,7 @@ class avro_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read avro file.
+   * @param src source information used to read avro file
    */
   explicit avro_reader_options(source_info const& src) : _source(src) {}
 
@@ -73,54 +70,65 @@ class avro_reader_options {
 
   /**
    * @brief Returns source info.
+   *
+   * @return Source info
    */
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to be read.
+   *
+   * @return Names of the columns to be read
    */
   [[nodiscard]] std::vector<std::string> get_columns() const { return _columns; }
 
   /**
    * @brief Returns number of rows to skip from the start.
+   *
+   * @return Number of rows to skip from the start
    */
   [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
+   *
+   * @return Number of rows to read
    */
   [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Set names of the column to be read.
    *
-   * @param col_names Vector of column names.
+   * @param col_names Vector of column names
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Sets number of rows to skip.
    *
-   * @param val Number of rows to skip from start.
+   * @param val Number of rows to skip from start
    */
   void set_skip_rows(size_type val) { _skip_rows = val; }
 
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read after skip.
+   * @param val Number of rows to read after skip
    */
   void set_num_rows(size_type val) { _num_rows = val; }
 
   /**
    * @brief create avro_reader_options_builder which will build avro_reader_options.
    *
-   * @param src source information used to read avro file.
-   * @returns builder to build reader options.
+   * @param src source information used to read avro file
+   * @returns builder to build reader options
    */
   static avro_reader_options_builder builder(source_info const& src);
 };
 
+/**
+ * @brief Builder to build options for `read_avro()`.
+ */
 class avro_reader_options_builder {
   avro_reader_options options;
 
@@ -135,15 +143,15 @@ class avro_reader_options_builder {
   /**
    * @brief Constructor from source info.
    *
-   * @param src The source information used to read avro file.
+   * @param src The source information used to read avro file
    */
   explicit avro_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
    * @brief Set names of the column to be read.
    *
-   * @param col_names Vector of column names.
-   * @return this for chaining.
+   * @param col_names Vector of column names
+   * @return this for chaining
    */
   avro_reader_options_builder& columns(std::vector<std::string> col_names)
   {
@@ -154,8 +162,8 @@ class avro_reader_options_builder {
   /**
    * @brief Sets number of rows to skip.
    *
-   * @param val Number of rows to skip from start.
-   * @return this for chaining.
+   * @param val Number of rows to skip from start
+   * @return this for chaining
    */
   avro_reader_options_builder& skip_rows(size_type val)
   {
@@ -166,8 +174,8 @@ class avro_reader_options_builder {
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read after skip.
-   * @return this for chaining.
+   * @param val Number of rows to read after skip
+   * @return this for chaining
    */
   avro_reader_options_builder& num_rows(size_type val)
   {
@@ -184,6 +192,8 @@ class avro_reader_options_builder {
    * @brief move avro_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `avro_reader_options` object's r-value reference
    */
   avro_reader_options&& build() { return std::move(options); }
 };
@@ -198,11 +208,11 @@ class avro_reader_options_builder {
  *  auto result  = cudf::io::read_avro(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior.
- * @param mr Device memory resource used to allocate device memory of the table in the returned.
+ * @param options Settings for controlling reading behavior
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
- * @return The set of columns along with metadata.
+ * @return The set of columns along with metadata
  */
 table_with_metadata read_avro(
   avro_reader_options const& options,

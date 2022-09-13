@@ -18,6 +18,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -73,7 +74,7 @@ struct tdigest_groupby_simple_op {
     // make a simple set of matching keys.
     auto keys = cudf::make_fixed_width_column(
       data_type{type_id::INT32}, values.size(), mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
                  keys->mutable_view().template begin<int>(),
                  keys->mutable_view().template end<int>(),
                  0);
@@ -99,7 +100,7 @@ struct tdigest_groupby_simple_merge_op {
     // make a simple set of matching keys.
     auto merge_keys = cudf::make_fixed_width_column(
       data_type{type_id::INT32}, merge_values.size(), mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
                  merge_keys->mutable_view().template begin<int>(),
                  merge_keys->mutable_view().template end<int>(),
                  0);
@@ -271,7 +272,7 @@ TEST_F(TDigestMergeTest, Grouped)
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
   // 3 groups. 0-250000 in group 0.  250000-500000 in group 1 and 500000-750000 in group 1
   auto key_iter = cudf::detail::make_counting_transform_iterator(0, key_groups{});
-  thrust::copy(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
                key_iter,
                key_iter + keys->size(),
                keys->mutable_view().template begin<int>());

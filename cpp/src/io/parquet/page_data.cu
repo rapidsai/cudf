@@ -19,6 +19,8 @@
 #include <io/utilities/column_buffer.hpp>
 
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -90,62 +92,6 @@ struct page_state_s {
   int32_t lvl_count[NUM_LEVEL_TYPES];         // how many of each of the streams we've decoded
   int32_t row_index_lower_bound;              // lower bound of row indices we should process
 };
-
-/**
- * @brief Computes a 32-bit hash when given a byte stream and range.
- *
- * MurmurHash3_32 implementation from
- * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
- *
- * MurmurHash3 was written by Austin Appleby, and is placed in the public
- * domain. The author hereby disclaims copyright to this source code.
- *
- * @param[in] key The input data to hash
- * @param[in] len The length of the input data
- * @param[in] seed An initialization value
- *
- * @return The hash value
- */
-__device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed = 33)
-{
-  const auto* p     = reinterpret_cast<const uint8_t*>(key);
-  uint32_t h1       = seed, k1;
-  const uint32_t c1 = 0xcc9e2d51;
-  const uint32_t c2 = 0x1b873593;
-  int l             = len;
-  // body
-  while (l >= 4) {
-    k1 = p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-    p += 4;
-    l -= 4;
-  }
-  // tail
-  k1 = 0;
-  switch (l) {
-    case 3: k1 ^= p[2] << 16;
-    case 2: k1 ^= p[1] << 8;
-    case 1:
-      k1 ^= p[0];
-      k1 *= c1;
-      k1 = rotl32(k1, 15);
-      k1 *= c2;
-      h1 ^= k1;
-  }
-  // finalization
-  h1 ^= len;
-  h1 ^= h1 >> 16;
-  h1 *= 0x85ebca6b;
-  h1 ^= h1 >> 13;
-  h1 *= 0xc2b2ae35;
-  h1 ^= h1 >> 16;
-  return h1;
-}
 
 /**
  * @brief Read a 32-bit varint integer
@@ -541,8 +487,11 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
     }
   }
   if (s->dtype_len == 4) {
-    // Output hash
-    *static_cast<uint32_t*>(dstv) = device_str2hash32(ptr, len);
+    // Output hash. This hash value is used if the option to convert strings to
+    // categoricals is enabled. The seed value is chosen arbitrarily.
+    uint32_t constexpr hash_seed = 33;
+    cudf::string_view const sv{ptr, static_cast<size_type>(len)};
+    *static_cast<uint32_t*>(dstv) = cudf::detail::MurmurHash3_32<cudf::string_view>{hash_seed}(sv);
   } else {
     // Output string descriptor
     auto* dst   = static_cast<string_index_pair*>(dstv);
@@ -866,15 +815,13 @@ static __device__ void gpuOutputGeneric(volatile page_state_s* s,
  * @param[in] p The global page to be copied from
  * @param[in] chunks The global list of chunks
  * @param[in] num_rows Maximum number of rows to read
- * @param[in] min_row crop all rows below min_row
- * @param[in] num_chunk Number of column chunks
+ * @param[in] min_row Crop all rows below min_row
  */
 static __device__ bool setupLocalPageInfo(page_state_s* const s,
-                                          PageInfo* p,
-                                          ColumnChunkDesc const* chunks,
+                                          PageInfo const* p,
+                                          device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
-                                          size_t num_rows,
-                                          int32_t num_chunks)
+                                          size_t num_rows)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -1510,23 +1457,19 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  *
  * This function will write out the size field for each level of nesting.
  *
- * @param[in,out] pages List of pages
- * @param[in] chunks List of column chunks
- * @param[in] num_chunks Number of column chunks
- * @param[in] min_row Row index to start reading at
- * @param[in] num_rows Maximum number of rows to read
- * @param[in] num_chunks Number of column chunks
- * @param[in] trim_pass Whether or not this is the trim pass.  We first have to compute
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read. Pass as INT_MAX to guarantee reading all rows.
+ * @param trim_pass Whether or not this is the trim pass.  We first have to compute
  * the full size information of every page before we come through in a second (trim) pass
  * to determine what subset of rows in this page we should be reading.
  */
-// blockDim {block_size,1,1}
-extern "C" __global__ void __launch_bounds__(block_size)
+__global__ void __launch_bounds__(block_size)
   gpuComputePageSizes(PageInfo* pages,
-                      ColumnChunkDesc const* chunks,
+                      device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
                       size_t num_rows,
-                      int32_t num_chunks,
                       bool trim_pass)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -1536,8 +1479,7 @@ extern "C" __global__ void __launch_bounds__(block_size)
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
-  if (!setupLocalPageInfo(
-        s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX, num_chunks)) {
+  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
     return;
   }
 
@@ -1552,6 +1494,7 @@ extern "C" __global__ void __launch_bounds__(block_size)
     s->page.skipped_leaf_values = -1;
     s->input_row_count          = 0;
     s->input_value_count        = 0;
+
     // if this isn't the trim pass, make sure we visit absolutely everything
     if (!trim_pass) {
       s->first_row             = 0;
@@ -1606,19 +1549,13 @@ extern "C" __global__ void __launch_bounds__(block_size)
  * conversion will be performed to translate from the Parquet datatype to
  * desired output datatype (ex. 32-bit to 16-bit, string to hash).
  *
- * @param[in] pages List of pages
- * @param[in,out] chunks List of column chunks
- * @param[in] min_row Row index to start reading at
- * @param[in] num_rows Maximum number of rows to read
- * @param[in] num_chunks Number of column chunks
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read
  */
-// blockDim {block_size,1,1}
-extern "C" __global__ void __launch_bounds__(block_size)
-  gpuDecodePageData(PageInfo* pages,
-                    ColumnChunkDesc const* chunks,
-                    size_t min_row,
-                    size_t num_rows,
-                    int32_t num_chunks)
+__global__ void __launch_bounds__(block_size) gpuDecodePageData(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -1627,7 +1564,7 @@ extern "C" __global__ void __launch_bounds__(block_size)
   int t                 = threadIdx.x;
   int out_thread0;
 
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, num_chunks)) { return; }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows)) { return; }
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
@@ -1806,6 +1743,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
                           size_t min_row,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr)
 {
@@ -1814,10 +1752,16 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
 
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page.
-  // The output from this does not take row bounds (num_rows, min_row) into account
+  // This computes the size for the entire page, not taking row bounds into account.
+  // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
+  // the starting and ending read values to account for these bounds.
   gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size(), false);
-  stream.synchronize();
+    pages.device_ptr(),
+    chunks,
+    // if uses_custom_row_bounds is false, include all possible rows.
+    uses_custom_row_bounds ? min_row : 0,
+    uses_custom_row_bounds ? num_rows : INT_MAX,
+    !uses_custom_row_bounds);
 
   // computes:
   // PageInfo::chunk_row for all pages
@@ -1833,13 +1777,13 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
 
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
-  // PageInfo::skipped_values, which tells us where to start decoding in the input
-  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size(), true);
-
-  // retrieve pages back (PageInfo::num_rows has been set. if we don't bring it
-  // back, this value will get overwritten later on).
-  pages.device_to_host(stream, true);
+  // PageInfo::skipped_values, which tells us where to start decoding in the input  .
+  // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
+  // specified artifical bounds).
+  if (uses_custom_row_bounds) {
+    gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows, true);
+  }
 
   // ordering of pages is by input column schema, repeated across row groups.  so
   // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
@@ -1902,6 +1846,20 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
       if (out_buf.size == 0) {
         int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
 
+        // Handle a specific corner case.  It is possible to construct a parquet file such that
+        // a column within a row group contains more rows than the row group itself. This may be
+        // invalid, but we have seen instances of this in the wild, including how they were created
+        // using the apache parquet tools.  Normally, the trim pass would handle this case quietly,
+        // but if we are not running the trim pass (which is most of the time) we need to cap the
+        // number of rows we will allocate/read from the file with the amount specified in the
+        // associated row group. This only applies to columns that are not children of lists as
+        // those may have an arbitrary number of rows in them.
+        if (!uses_custom_row_bounds &&
+            !(out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) &&
+            size > static_cast<size_type>(num_rows)) {
+          size = static_cast<size_type>(num_rows);
+        }
+
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 
@@ -1921,6 +1879,9 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                                                                  static_cast<int>(l_idx)});
     }
   }
+
+  // retrieve pages back
+  pages.device_to_host(stream);
 }
 
 /**
@@ -1936,7 +1897,7 @@ void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   gpuDecodePageData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size());
+    pages.device_ptr(), chunks, min_row, num_rows);
 }
 
 }  // namespace gpu

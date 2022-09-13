@@ -40,7 +40,7 @@ using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
-constexpr std::size_t MAX_WORKING_MEM = 0x01FFFFFFFF;  ///< Memory size for state data
+constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for state data
 constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing working memory
 
 /**
@@ -51,7 +51,7 @@ constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing w
 struct alignas(16) reclass_device {
   int32_t builtins{};
   int32_t count{};
-  char32_t const* literals{};
+  reclass_range const* literals{};
 
   __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
 };

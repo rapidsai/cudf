@@ -17,12 +17,14 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/optional.h>
@@ -160,8 +162,6 @@ void flatten_hierarchy(ColIter begin,
  *
  */
 struct flatten_functor {
-  rmm::cuda_stream_view stream;
-
   // fixed width
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   void operator()(column_view const& col,
@@ -282,7 +282,7 @@ void flatten_hierarchy(ColIter begin,
 {
   std::for_each(begin, end, [&](column_view const& col) {
     cudf::type_dispatcher(col.type(),
-                          flatten_functor{stream},
+                          flatten_functor{},
                           col,
                           out,
                           info,
@@ -536,7 +536,8 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
  */
 std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
 {
-  return detail::row_bit_count(t, rmm::cuda_stream_default, mr);
+  CUDF_FUNC_RANGE();
+  return detail::row_bit_count(t, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

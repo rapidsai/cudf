@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#include "orc.h"
+#include "orc.hpp"
 
 #include <map>
+#include <optional>
 #include <vector>
 
 namespace cudf::io::orc::detail {
@@ -65,7 +66,8 @@ class aggregate_orc_metadata {
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
-  aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources);
+  aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources,
+                         rmm::cuda_stream_view stream);
 
   [[nodiscard]] auto const& get_schema(int schema_idx) const
   {
@@ -116,7 +118,8 @@ class aggregate_orc_metadata {
   std::vector<metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     size_type& row_start,
-    size_type& row_count);
+    size_type& row_count,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Filters ORC file to a selection of columns, based on their paths in the file.
@@ -124,10 +127,11 @@ class aggregate_orc_metadata {
    * Paths are in format "grandparent_col.parent_col.child_col", where the root ORC column is
    * omitted to match the cuDF table hierarchy.
    *
-   * @param column_paths List of full column names (i.e. paths) to select from the ORC file
+   * @param column_paths List of full column names (i.e. paths) to select from the ORC file;
+   * `nullopt` if user did not select columns to read
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(std::vector<std::string> const& column_paths);
+  column_hierarchy select_columns(std::optional<std::vector<std::string>> const& column_paths);
 };
 
 }  // namespace cudf::io::orc::detail

@@ -12,7 +12,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
+from dask_cudf.groupby import AGGS, CUMULATIVE_AGGS, _aggs_supported
 
 
 def check_groupby_result(ddf):
@@ -26,9 +26,8 @@ def check_groupby_result(ddf):
         )
 
 
-@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
-@pytest.mark.parametrize("series", [False, True])
-def test_groupby_basic(series, aggregation):
+@pytest.fixture
+def pdf():
     np.random.seed(0)
 
     # note that column name "x" is a substring of the groupby key;
@@ -40,6 +39,12 @@ def test_groupby_basic(series, aggregation):
             "y": np.random.normal(size=10000),
         }
     )
+    return pdf
+
+
+@pytest.mark.parametrize("aggregation", AGGS)
+@pytest.mark.parametrize("series", [False, True])
+def test_groupby_basic(series, aggregation, pdf):
 
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdf_grouped = gdf.groupby("xx")
@@ -66,7 +71,30 @@ def test_groupby_basic(series, aggregation):
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
+@pytest.mark.parametrize("series", [True, False])
+@pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
+def test_groupby_cumulative(aggregation, pdf, series):
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    gdf_grouped = gdf.groupby("xx")
+    ddf_grouped = ddf.groupby("xx")
+
+    if series:
+        gdf_grouped = gdf_grouped.xx
+        ddf_grouped = ddf_grouped.xx
+
+    a = getattr(gdf_grouped, aggregation)()
+    b = getattr(ddf_grouped, aggregation)().compute()
+
+    if aggregation == "cumsum" and series:
+        with pytest.xfail(reason="https://github.com/dask/dask/issues/9313"):
+            dd.assert_eq(a, b)
+    else:
+        dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize("aggregation", AGGS)
 @pytest.mark.parametrize(
     "func",
     [
@@ -537,15 +565,11 @@ def test_groupby_categorical_key():
     gddf["name"] = gddf["name"].astype("category")
     ddf = gddf.to_dask_dataframe()
 
-    got = (
-        gddf.groupby("name")
-        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
+    got = gddf.groupby("name", sort=True).agg(
+        {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
-    expect = (
-        ddf.groupby("name")
-        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
+    expect = ddf.groupby("name", sort=True).agg(
+        {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
     dd.assert_eq(expect, got)
 
@@ -670,7 +694,7 @@ def test_groupby_agg_redirect(aggregations):
     ],
 )
 def test_is_supported(arg, supported):
-    assert _aggs_supported(arg, SUPPORTED_AGGS) is supported
+    assert _aggs_supported(arg, AGGS) is supported
 
 
 def test_groupby_unique_lists():
@@ -729,3 +753,34 @@ def test_groupby_nested_dict(func):
     b.name = None
 
     dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df.groupby(["x", "y"]).min(),
+        pytest.param(
+            lambda df: df.groupby(["x", "y"]).agg("min"),
+            marks=pytest.mark.skip(
+                reason="https://github.com/dask/dask/issues/9093"
+            ),
+        ),
+        lambda df: df.groupby(["x", "y"]).y.min(),
+        lambda df: df.groupby(["x", "y"]).y.agg("min"),
+    ],
+)
+def test_groupby_all_columns(func):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=5)
+    gddf = ddf.map_partitions(cudf.from_pandas)
+
+    expect = func(ddf)
+    actual = func(gddf)
+
+    dd.assert_eq(expect, actual)

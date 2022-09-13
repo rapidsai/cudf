@@ -21,6 +21,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -302,6 +303,8 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
                     out_view.begin<Type>(),
                     FixedPointUnaryOpFunctor{n});
 
+  result->set_null_count(input.null_count());
+
   return result;
 }
 
@@ -326,6 +329,7 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
 
   auto output_view = output->mutable_view();
   thrust::transform(rmm::exec_policy(stream), begin, end, output_view.begin<OutputType>(), UFN{});
+  output->set_null_count(null_count);
   return output;
 }
 
@@ -637,7 +641,7 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unary_operation(input, op, rmm::cuda_stream_default, mr);
+  return detail::unary_operation(input, op, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
