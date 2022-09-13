@@ -12,7 +12,6 @@ import cudf
 from cudf.testing._utils import assert_eq
 
 import strings_udf
-from strings_udf import ptxpath
 from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view
 
@@ -32,7 +31,9 @@ def get_kernel(func, dtype):
     outty = numba.np.numpy_support.from_dtype(dtype)
     sig = nb_signature(void, CPointer(string_view), outty[::1])
 
-    @cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])
+    @cuda.jit(
+        sig, link=[strings_udf.ptxpath], extensions=[str_view_arg_handler]
+    )
     def kernel(input_strings, output_col):
         id = cuda.grid(1)
         if id < len(output_col):
