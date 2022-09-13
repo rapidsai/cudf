@@ -440,6 +440,14 @@ try:
             # that data-dispatch functions are registered
             pass
 
+        def from_dict(self, data, npartitions, orient="columns", **kwargs):
+            if orient != "columns":
+                raise ValueError(f"orient={orient} is not supported")
+            return dd.from_pandas(
+                cudf.DataFrame(data),
+                npartitions=npartitions,
+            )
+
         def read_parquet(self, *args, engine=None, **kwargs):
             from .io.parquet import CudfEngine
 
