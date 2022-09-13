@@ -162,7 +162,7 @@ cdef class SpillableBuffer:
             self._ptr, self._size
         )
         if base is not None:
-            # Since this is a view, we expose the buffer permanently by
+            # Since this is a view, we expose the base buffer permanently by
             # accessing `.ptr`
             base.ptr
         elif self._exposed:
