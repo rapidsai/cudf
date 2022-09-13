@@ -30,7 +30,12 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries, NotImplementedType
+from cudf._typing import (
+    ColumnLike,
+    DataFrameOrSeries,
+    Dtype,
+    NotImplementedType,
+)
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -328,18 +333,28 @@ class IndexedFrame(Frame):
         columns: List[ColumnBase],
         column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
 
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
+
+        If override_dtypes is provided then any non-None entry will be
+        used for the dtype of the matching column in preference to the
+        dtype of the column in self.
         """
         if column_names is None:
             column_names = self._column_names
         frame = self.__class__._from_columns(
             columns, column_names, index_names
         )
-        return frame._copy_type_metadata(self, include_index=bool(index_names))
+        return frame._copy_type_metadata(
+            self,
+            include_index=bool(index_names),
+            override_dtypes=override_dtypes,
+        )
 
     def _mimic_inplace(
         self: T, result: T, inplace: bool = False
@@ -900,26 +915,23 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(output, inplace=inplace)
 
     def _copy_type_metadata(
-        self: T, other: T, include_index: bool = True
+        self: T,
+        other: T,
+        include_index: bool = True,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> T:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
         See `ColumnBase._with_type_metadata` for more information.
         """
-        super()._copy_type_metadata(other)
-        if include_index:
-            self._copy_index_metadata(other)
-        return self
-
-    def _copy_index_metadata(self: T, other: T) -> T:
-        """
-        Copy type metadata from the index of `other` to the index or
-        `self`.
-
-        See also :func:`_copy_type_metadata`.
-        """
-        if self._index is not None and other._index is not None:
+        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+        if (
+            include_index
+            and self._index is not None
+            and other._index is not None
+        ):
             self._index._copy_type_metadata(other._index)
             # When other._index is a CategoricalIndex, the current index
             # will be a NumericalIndex with an underlying CategoricalColumn
@@ -3497,35 +3509,20 @@ class IndexedFrame(Frame):
             ],
             column_index + index_offset,
         )
-        # Sui generis implementation of _from_columns_like_self that
-        # copies type metadata from self for all columns except the
-        # exploded column (for which we use the inner dtype of the
-        # exploded list column). This latter dtype needs to be copied
-        # over so that nested struct dtypes maintain the key names.
-        # Should this pattern become more common elsewhere, it would
-        # make sense to implement something like
-        # _from_columns_with_dtypes uniformly.
+        # We must copy inner datatype of the exploded list column to
+        # maintain struct dtype key names
         exploded_dtype = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
-        frame = self.__class__._from_columns(
+        return self._from_columns_like_self(
             exploded,
             self._column_names,
             self._index_names if not ignore_index else None,
+            override_dtypes=(
+                exploded_dtype if i == column_index else None
+                for i, _ in enumerate(self._columns)
+            ),
         )
-        for i, (name, old_column, new_column) in enumerate(
-            zip(self._column_names, self._columns, exploded[index_offset:])
-        ):
-            frame._data.set_by_label(
-                name,
-                new_column._with_type_metadata(
-                    exploded_dtype if i == column_index else old_column.dtype
-                ),
-                validate=False,
-            )
-        if not ignore_index:
-            frame._copy_index_metadata(self)
-        return frame
 
     @_cudf_nvtx_annotate
     def tile(self, count):
