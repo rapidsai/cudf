@@ -180,8 +180,8 @@ else
     # but because there is no separate python package, we must also build the python on the 11.5 jobs
     # this means that at this point (on the GPU test jobs) the whole package is already built and has been
     # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
-    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, custreamz, and strings_udf"
-    gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
+    gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
@@ -247,6 +247,9 @@ cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
 
+gpuci_logger "Installing strings_udf"
+gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
 
@@ -272,6 +275,11 @@ run_strings_udf_test
 if [ ${STRING_UDF_TEST_RUN} -eq 0 ]; then
     echo "No strings UDF tests were run, but this script will continue to execute."
 fi
+
+cd "$WORKSPACE/python/cudf/cudf"
+gpuci_logger "Python py.test retest cuDF UDFs"
+py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
