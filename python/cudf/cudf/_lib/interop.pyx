@@ -160,21 +160,7 @@ def to_arrow(list source_columns, object column_dtypes):
             input_table_view, cpp_metadata
         )
 
-    print("names = cpp_arrow_table.get().ColumnNames():")
-    names = cpp_arrow_table.get().ColumnNames()
-    [print(name.decode('UTF-8')) for name in names]
-
-    print("table = pyarrow_wrap_table(cpp_arrow_table)")
-    table = pyarrow_wrap_table(cpp_arrow_table)
-    print("table.column_names:")
-    print(table.column_names)
-    print("field = table.field(0):")
-    field = table.field(0)
-    print("field.name:")
-    print(field.name)
-    print("table.to_string():")
-    print(table.to_string())
-    return table
+    return pyarrow_wrap_table(cpp_arrow_table)
 
 
 def from_arrow(object input_table):
