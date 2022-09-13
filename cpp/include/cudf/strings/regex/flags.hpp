@@ -72,6 +72,18 @@ constexpr bool is_ascii(regex_flags const f)
   return (f & regex_flags::ASCII) == regex_flags::ASCII;
 }
 
+/**
+ * @brief Capture groups setting
+ *
+ * These can be used to optimize the generated regex instructions
+ * which includes capture groups but does not require extracting
+ * the matched groups.
+ */
+enum capture_groups : uint32_t {
+  EXTRACT,     ///< Capture groups processed normally for extract
+  NON_CAPTURE  ///< Convert all capture groups to non-capture groups
+};
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
