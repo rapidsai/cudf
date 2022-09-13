@@ -69,7 +69,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
 
 cdef class SpillableBuffer:
-    """A spillable buffer that represents device memory.
+    """A spillable buffer that implements DeviceBufferLike.
 
     This buffer supports spilling the represented data to host memory.
     Spilling can be done manually by calling `.__spill__(target="cpu")`
