@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from collections.abc import Iterator
-from functools import cached_property
 
 import cupy as cp
 import numpy as np
@@ -9,8 +8,8 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
 
-from dask import config
 import dask.dataframe as dd
+from dask import config
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -433,10 +432,9 @@ def sizeof_cudf_series_index(obj):
 
 try:
     # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.dispatch import DaskBackendEntrypoint
+    from dask.dataframe.backends import DaskBackendEntrypoint
 
     class CudfBackendEntrypoint(DaskBackendEntrypoint):
-
         def __init__(self):
             # Importing this class will already guarentee
             # that data-dispatch functions are registered
@@ -444,7 +442,7 @@ try:
 
         def make_timeseries(self, *args, df_backend=None, **kwargs):
             with config.set({"dataframe.backend.library": "pandas"}):
-                return dd.make_timeseries(
+                return dd.io.demo.make_timeseries(
                     *args, df_backend="cudf", **kwargs
                 )
 
@@ -453,14 +451,14 @@ try:
 
             with config.set({"dataframe.backend.library": "pandas"}):
                 return dd.read_parquet(
-                    *args, engine=CudfEngine, **kwargs,
+                    *args,
+                    engine=CudfEngine,
+                    **kwargs,
                 )
 
         def read_json(self, *args, engine=None, **kwargs):
             with config.set({"dataframe.backend.library": "pandas"}):
-                return dd.read_json(
-                    *args, engine=cudf.read_json, **kwargs
-                )
+                return dd.read_json(*args, engine=cudf.read_json, **kwargs)
 
         def read_orc(self, *args, **kwargs):
             from .io import read_orc
@@ -474,7 +472,11 @@ try:
             blocksize = kwargs.pop("blocksize", "default")
             if chunksize is None and blocksize != "default":
                 chunksize = blocksize
-            return read_csv(*args, chunksize=chunksize, **kwargs,)
+            return read_csv(
+                *args,
+                chunksize=chunksize,
+                **kwargs,
+            )
 
         def read_hdf(self, *args, **kwargs):
             # HDF5 reader not yet implemented in cudf
@@ -485,7 +487,6 @@ try:
             elif isinstance(ddf._meta, pd.Series):
                 return ddf.map_partitions(cudf.Series.from_pandas)
             return ddf
-
 
 except ImportError:
     pass
