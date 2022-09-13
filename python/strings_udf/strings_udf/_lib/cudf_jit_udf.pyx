@@ -21,5 +21,4 @@ def to_string_view_array(Column strings_col):
         c_buffer = move(cpp_to_string_view_array(input_view))
 
     device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = Buffer(device_buffer)
-    return buffer
+    return Buffer(device_buffer)
