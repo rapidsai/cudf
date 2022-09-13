@@ -12,7 +12,7 @@ import pytest
 import rmm
 
 import cudf
-from cudf._lib.spillable_buffer import SpillableBuffer
+from cudf._lib.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.spill_manager import (
@@ -309,14 +309,14 @@ def test_ptr_restricted(manager: SpillManager):
     )
     assert buf.spillable
     assert buf.expose_counter == 1
-    _, token1 = buf.ptr_restricted()
+    spill_lock = SpillLock()
+    buf.get_ptr(spill_lock=spill_lock)
     assert not buf.spillable
     assert buf.expose_counter == 2
-    _, token2 = buf.ptr_restricted()
+    buf.get_ptr(spill_lock=spill_lock)
     assert not buf.spillable
     assert buf.expose_counter == 3
-    del token1
-    del token2
+    del spill_lock
     assert buf.spillable
     assert buf.expose_counter == 1
 

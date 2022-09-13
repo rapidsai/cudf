@@ -24,5 +24,3 @@ cdef class SpillableBuffer:
     cdef size_t _size
     cdef object _owner
     cdef object _manager
-
-    cdef void* ptr_raw(self, SpillLock spill_lock) except *
