@@ -27,7 +27,7 @@ namespace udf {
 /**
  * @brief Returns true if all characters in the string are of the type specified.
  *
- * The output will false if the string is empty or has at least one character
+ * The output will be false if the string is empty or has at least one character
  * not of the specified type. If all characters fit the type then true is returned.
  *
  * To ignore all but specific types, set the `verify_types` to those types
@@ -91,11 +91,11 @@ __device__ inline bool is_alpha(cudf::strings::detail::character_flags_table_typ
 }
 
 /**
- * @brief Returns true if all characters are alpha-numeric only
+ * @brief Returns true if all characters are alphanumeric only
  *
  * @param flags_table Table required for checking character types
  * @param d_str Input string to check
- * @return True if characters are alpha-numeric
+ * @return True if characters are alphanumeric
  */
 __device__ inline bool is_alpha_numeric(
   cudf::strings::detail::character_flags_table_type* flags_table, string_view d_str)
