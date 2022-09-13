@@ -6,7 +6,6 @@ import shutil
 
 from setuptools import find_packages
 from skbuild import setup
-from skbuild.command.build_ext import build_ext
 
 import versioneer
 
@@ -59,9 +58,6 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-cmdclass = versioneer.get_cmdclass()
-cmdclass["build_ext"] = build_ext
-
 setup(
     name="strings_udf",
     version=versioneer.get_version(),
@@ -82,7 +78,7 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["strings_udf._lib*"])
     },
-    cmdclass=cmdclass,
+    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,
