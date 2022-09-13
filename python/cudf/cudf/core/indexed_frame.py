@@ -30,7 +30,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf._typing import ColumnLike, DataFrameOrSeries, NotImplementedType
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -2991,7 +2991,7 @@ class IndexedFrame(Frame):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[cudf.BaseIndex],
     ]:
