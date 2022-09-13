@@ -416,7 +416,9 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):
-            data = (<SpillableBuffer>col.base_data).ptr_raw(spill_lock)
+            data = <void*><uintptr_t>(
+                <SpillableBuffer>col.base_data
+            ).get_ptr(spill_lock=spill_lock)
         else:
             data = <void*><uintptr_t>(col.base_data.ptr)
 
@@ -557,8 +559,8 @@ cdef class Column:
                     # To prevent data_owner getting spilled, we attach an
                     # SpillLock to data. This will make sure that data_owner
                     # is unspillable as long as data is alive.
-                    _, token = data_owner.ptr_restricted()
-                    data.token = token
+                    data.spill_lock = SpillLock()
+                    data_owner.get_ptr(spill_lock=data.spill_lock)
         else:
             data = as_device_buffer_like(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0), exposed=False

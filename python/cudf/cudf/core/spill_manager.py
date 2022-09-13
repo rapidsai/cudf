@@ -64,7 +64,7 @@ class SpillManager:
     def register_spill_on_demand(self):
         # TODO: check if a `FailureCallbackResourceAdaptor` has been
         #       registered already
-        def oom(nbytes: int) -> bool:
+        def oom(nbytes: int, *, retry_on_error=True) -> bool:
             """Try to handle an out-of-memory error by spilling
 
             Warning: in order to avoid deadlock, this function should
@@ -82,10 +82,15 @@ class SpillManager:
             if total_spilled > 0:
                 return True  # Ask RMM to retry the allocation
 
+            if retry_on_error:
+                # Let's collect garbage and try one more time
+                gc.collect()
+                return oom(nbytes, retry_on_error=False)
+
             # TODO: write to log instead of stdout
             print(
-                f"[WARNING] RMM allocation of {nbytes} bytes failed, "
-                "spill-on-demand couldn't find any device memory to "
+                f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
+                "failed, spill-on-demand couldn't find any device memory to "
                 f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
             )
             if self._expose_statistics is None:

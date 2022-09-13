@@ -32,13 +32,12 @@ cdef shared_ptr[void] create_expose_counter():
 
 
 cdef class SpillLock:
-    """Disable spilling temporarily for specify buffers"""
+    """Disable spilling temporarily for specific buffers"""
 
     cdef add(self, shared_ptr[void] expose_counter):
         self._expose_counters.push_back(expose_counter)
 
 
-# TODO: this is not support by PyTorch
 class DelayedPointerTuple(collections.abc.Sequence):
     """
     A delayed version of the "data" field in __cuda_array_interface__.
@@ -48,6 +47,11 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
     For instance, in many cases __cuda_array_interface__ is accessed
     only to determine whether an object is a CUDA object or not.
+
+    TODO: this doesn't support libraries such as PyTorch that declare
+    the tuple of __cuda_array_interface__["data"] in Cython. In such
+    cases, Cython will raise an error because DelayedPointerTuple
+    isn't a "real" tuple.
     """
 
     def __init__(self, buffer) -> None:
@@ -65,7 +69,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
 
 cdef class SpillableBuffer:
-    """A spillable buffer that represents device memory.
+    """A spillable buffer that implements DeviceBufferLike.
 
     This buffer supports spilling the represented data to host memory.
     Spilling can be done manually by calling `.__spill__(target="cpu")`
@@ -80,8 +84,8 @@ cdef class SpillableBuffer:
     to host.
 
     A buffer can be exposed permanently at creation or by accessing the `.ptr`
-    property. To avoid this, one can use `.ptr_raw()` or `.ptr_restricted()`
-    instead, which only exposes the buffer temporarily.
+    property. To avoid this, one can use `.get_ptr()` instead, which support
+    exposing the buffer temporarily.
 
     Parameters
     ----------
@@ -158,7 +162,8 @@ cdef class SpillableBuffer:
             self._ptr, self._size
         )
         if base is not None:
-            # Since this is a view, we expose the buffer permanently.
+            # Since this is a view, we expose the buffer permanently by
+            # accessing `.ptr`
             base.ptr
         elif self._exposed:
             # Since the buffer has been exposed permanently, we add it to
@@ -232,7 +237,7 @@ cdef class SpillableBuffer:
         Notice, this will mark the buffer as "exposed" and make
         it unspillable permanently.
 
-        Consider using `ptr_raw() or `.restricted_ptr()` instead.
+        Consider using `.get_ptr()` instead.
         """
         if self._view_desc:
             return self._view_desc["base"].ptr + self._view_desc["offset"]
@@ -245,9 +250,26 @@ cdef class SpillableBuffer:
             self._last_accessed = time.monotonic()
             return self._ptr
 
-    cdef void* ptr_raw(self, SpillLock spill_lock) except *:
+    def get_ptr(self, SpillLock spill_lock=None) -> int:
+        """Get a device pointer to the memory of the buffer
+
+        If spill_lock is not None, a reference to this buffer is added
+        to spill_lock, which disable spilling of this buffer while
+        spill_lock is alive.
+
+        Parameters
+        ----------
+        spill_lock : SpillLock, optional
+            Adding a reference of this buffer to the spill lock.
+
+        Return
+        ------
+        int
+            The device pointer as an integer
+        """
+
         if spill_lock is None:
-            return <void*><uintptr_t> self.ptr
+            return self.ptr  # expose the buffer permanently
 
         # Get base buffer
         cdef SpillableBuffer base
@@ -263,25 +285,7 @@ cdef class SpillableBuffer:
             base.__spill__(target="gpu")
             base._last_accessed = time.monotonic()
             spill_lock.add(base._expose_counter)
-            return <void*><uintptr_t> (base._ptr+offset)
-
-    def ptr_restricted(self) -> Tuple[int, SpillLock]:
-        # Get base buffer
-        cdef SpillableBuffer base
-        cdef size_t offset
-        if self._view_desc is None:
-            base = self
-            offset = 0
-        else:
-            base = self._view_desc["base"]
-            offset = self._view_desc["offset"]
-
-        with base._lock:
-            base.__spill__(target="gpu")
-            base._last_accessed = time.monotonic()
-            spill_lock = SpillLock()
-            spill_lock.add(base._expose_counter)
-            return base._ptr+offset, spill_lock
+            return base._ptr+offset
 
     @property
     def owner(self) -> Any:
@@ -377,7 +381,8 @@ cdef class SpillableBuffer:
             if self.is_spilled:
                 frames = [self.memoryview()]
             else:
-                ptr, spill_lock = self.ptr_restricted()
+                spill_lock = SpillLock()
+                ptr = self.get_ptr(spill_lock=spill_lock)
                 frames = [
                     Buffer(
                         data=ptr,

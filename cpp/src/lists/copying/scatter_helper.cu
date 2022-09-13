@@ -203,6 +203,8 @@ struct list_child_constructor {
         return actual_list_row.template element<T>(intra_index);
       });
 
+    child_column->set_null_count(child_null_mask.second);
+
     return child_column;
   }
 

@@ -152,6 +152,13 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
             echo "Running GoogleTest $test_name"
             ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
+
+        # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+            gt="$WORKSPACE/cpp/build/gtests/$test_name"
+            echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+            LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        done
     fi
 else
     #Project Flash
@@ -182,8 +189,16 @@ else
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
+        test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+    done
+
+    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
+        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
@@ -235,7 +250,7 @@ cd "$WORKSPACE/python/cudf/cudf"
 gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
-gpuci_logger "Python py.tests for cuDF with spelling (CUDF_SPILL_DEVICE_LIMIT=1)"
+gpuci_logger "Python py.tests for cuDF with spilling (CUDF_SPILL_DEVICE_LIMIT=1)"
 # Due to time concerns, we only run a limited set of tests
 CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -v -n 8 tests/test_binops.py tests/test_dataframe.py tests/test_buffer.py tests/test_onehot.py tests/test_reshape.py
 

@@ -557,6 +557,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/traits.cpp
   src/utilities/type_checks.cpp
 )
 
@@ -709,7 +710,11 @@ target_compile_options(
                       "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 
-target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
+target_link_libraries(
+  cudftestutil
+  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
 
 target_include_directories(
   cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
@@ -746,6 +751,11 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
   rapids_cpm_nvbench()
   add_subdirectory(benchmarks)
+endif()
+
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
 endif()
 
 # ##################################################################################################
