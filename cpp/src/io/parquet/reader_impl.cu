@@ -247,13 +247,15 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
 
-inline void decompress_check(device_span<decompress_status const> stats,
+inline void decompress_check(device_span<compression_result const> results,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
+                              results.begin(),
+                              results.end(),
+                              [] __device__(auto const& res) {
+                                return res.status == compression_status::SUCCESS;
+                              }),
                "Error during decompression");
 }
 }  // namespace
@@ -1149,11 +1151,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
-  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, _stream);
   thrust::fill(rmm::exec_policy(_stream),
-               comp_stats.begin(),
-               comp_stats.end(),
-               decompress_status{0, static_cast<uint32_t>(-1000), 0});
+               comp_res.begin(),
+               comp_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
@@ -1177,31 +1179,30 @@ rmm::device_buffer reader::impl::decompress_page_data(
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
     auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, _stream);
-    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
-                                                     codec.num_pages);
+    device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
       case parquet::GZIP:
-        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, _stream);
+        gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, _stream);
         break;
       case parquet::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      d_comp_in,
                                      d_comp_out,
-                                     d_comp_stats_view,
+                                     d_comp_res_view,
                                      codec.max_decompressed_size,
                                      codec.total_decomp_size,
                                      _stream);
         } else {
-          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, _stream);
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_res_view, _stream);
         }
         break;
       case parquet::ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    d_comp_in,
                                    d_comp_out,
-                                   d_comp_stats_view,
+                                   d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
                                    _stream);
@@ -1209,7 +1210,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       case parquet::BROTLI:
         gpu_debrotli(d_comp_in,
                      d_comp_out,
-                     d_comp_stats_view,
+                     d_comp_res_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
                      _stream);
@@ -1219,7 +1220,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
     start_pos += codec.num_pages;
   }
 
-  decompress_check(comp_stats, _stream);
+  decompress_check(comp_res, _stream);
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
