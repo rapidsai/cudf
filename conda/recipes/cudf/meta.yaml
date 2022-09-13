@@ -54,7 +54,6 @@ requirements:
     - numpy
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
     - libcudf {{ version }}
-    - strings_udf ={{ version }}
     - fastavro >=0.22.0
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec>=0.6.0
