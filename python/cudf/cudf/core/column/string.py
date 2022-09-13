@@ -32,9 +32,10 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.core.column.column import ColumnBase
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
 
@@ -135,7 +136,7 @@ class StringMethods(ColumnMethods):
     def htoi(self) -> SeriesOrIndex:
         """
         Returns integer value represented by each hex string.
-        String is interpretted to have hex (base-16) characters.
+        String is interpreted to have hex (base-16) characters.
 
         Returns
         -------
@@ -159,7 +160,7 @@ class StringMethods(ColumnMethods):
 
     hex_to_int = htoi
 
-    def ip2int(self) -> ParentType:
+    def ip2int(self) -> SeriesOrIndex:
         """
         This converts ip strings to integers
 
@@ -630,11 +631,11 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, index = libstrings.extract(self._column, pat, flags)
+        data, _ = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
             data = next(iter(data.values()))
         else:
-            data = cudf.core.frame.Frame(data, index)
+            data = data
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -782,6 +783,75 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
+    def like(self, pat: str, esc: str = None) -> SeriesOrIndex:
+        """
+        Test if a like pattern matches a string of a Series or Index.
+
+        Return boolean Series or Index based on whether a given pattern
+        matches strings in a Series or Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern for matching. Use '%' for any number of any character
+            including no characters. Use '_' for any single character.
+
+        esc : str
+            Character to use if escape is necessary to match '%' or '_'
+            literals.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+            A Series/Index of boolean dtype indicating whether the given
+            pattern matches the string of each element of the Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'a', 'b' ,'ddbc', '%bb'])
+        >>> s.str.like('%b_')
+        0   False
+        1   False
+        2   False
+        3   True
+        4   True
+        dtype: boolean
+
+        Parameter `esc` can be used to match a wildcard literal.
+
+        >>> s.str.like('/%b_', esc='/' )
+        0   False
+        1   False
+        2   False
+        3   False
+        4   True
+        dtype: boolean
+        """
+        if not isinstance(pat, str):
+            raise TypeError(
+                f"expected a string object, not {type(pat).__name__}"
+            )
+
+        if esc is None:
+            esc = ""
+
+        if not isinstance(esc, str):
+            raise TypeError(
+                f"expected a string object, not {type(esc).__name__}"
+            )
+
+        if len(esc) > 1:
+            raise ValueError(
+                "expected esc to contain less than or equal to 1 characters"
+            )
+
+        result_col = libstrings.like(
+            self._column, cudf.Scalar(pat, "str"), cudf.Scalar(esc, "str")
+        )
+
+        return self._return_or_inplace(result_col)
+
     def repeat(
         self,
         repeats: Union[int, Sequence],
@@ -882,7 +952,6 @@ class StringMethods(ColumnMethods):
 
         Examples
         --------
-
         >>> import cudf
         >>> s = cudf.Series(['foo', 'fuz', None])
         >>> s
@@ -1013,7 +1082,7 @@ class StringMethods(ColumnMethods):
             Series or Index from sliced substring from
             original string object.
 
-        See also
+        See Also
         --------
         slice_replace
             Replace a slice with a string.
@@ -1076,7 +1145,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1138,7 +1207,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isdecimal
             Check whether all characters are decimal.
@@ -1205,7 +1274,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1274,7 +1343,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1338,7 +1407,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the
             same length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalpha
             Check whether all characters are alphabetic.
@@ -1407,7 +1476,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same length
             as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1466,7 +1535,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1529,7 +1598,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1600,7 +1669,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1659,7 +1728,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -1739,7 +1808,7 @@ class StringMethods(ColumnMethods):
         Series or Index of object
             A copy of the object with all strings converted to lowercase.
 
-        See also
+        See Also
         --------
         upper
             Converts all characters to uppercase.
@@ -1780,7 +1849,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -1859,7 +1928,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -1907,7 +1976,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of object
 
-        See also
+        See Also
         --------
         lower
             Converts all characters to lowercase.
@@ -2076,7 +2145,7 @@ class StringMethods(ColumnMethods):
             A new string with the specified section of the string
             replaced with `repl` string.
 
-        See also
+        See Also
         --------
         slice
             Just slicing without replacement.
@@ -2236,16 +2305,38 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(libstrings.get(self._column, i))
 
-    def get_json_object(self, json_path):
+    def get_json_object(
+        self,
+        json_path,
+        *,
+        allow_single_quotes=False,
+        strip_quotes_from_single_strings=True,
+        missing_fields_as_nulls=False,
+    ):
         r"""
         Applies a JSONPath string to an input strings column
         where each row in the column is a valid json string
 
         Parameters
         ----------
-        json_path: str
+        json_path : str
             The JSONPath string to be applied to each row
             of the input column
+        allow_single_quotes : bool, default False
+            If True, representing strings with single
+            quotes is allowed.
+            If False, strings must only be represented
+            with double quotes.
+        strip_quotes_from_single_strings : bool, default True
+            If True, strip the quotes from the return value of
+            a given row if it is a string.
+            If False, values returned for a given row include
+            quotes if they are strings.
+        missing_fields_as_nulls : bool, default False
+            If True, when an object is queried for a field
+            it does not contain, "null" is returned.
+            If False, when an object is queried for a field
+            it does not contain, None is returned.
 
         Returns
         -------
@@ -2286,9 +2377,16 @@ class StringMethods(ColumnMethods):
         """
 
         try:
+            options = libstrings.GetJsonObjectOptions(
+                allow_single_quotes=allow_single_quotes,
+                strip_quotes_from_single_strings=(
+                    strip_quotes_from_single_strings
+                ),
+                missing_fields_as_nulls=missing_fields_as_nulls,
+            )
             res = self._return_or_inplace(
                 libstrings.get_json_object(
-                    self._column, cudf.Scalar(json_path, "str")
+                    self._column, cudf.Scalar(json_path, "str"), options
                 )
             )
         except RuntimeError as e:
@@ -2344,7 +2442,7 @@ class StringMethods(ColumnMethods):
         Series, Index, DataFrame or MultiIndex
             Type matches caller unless ``expand=True`` (see Notes).
 
-        See also
+        See Also
         --------
         rsplit
             Splits string around given separator/delimiter, starting from
@@ -2448,18 +2546,18 @@ class StringMethods(ColumnMethods):
 
         if expand:
             if self._column.null_count == len(self._column):
-                result_table = cudf.core.frame.Frame({0: self._column.copy()})
+                result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, index = libstrings.split_re(self._column, pat, n)
+                    data, _ = libstrings.split_re(self._column, pat, n)
                 else:
-                    data, index = libstrings.split(
+                    data, _ = libstrings.split(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
-                    result_table = cudf.core.frame.Frame({})
+                    result_table = {}
                 else:
-                    result_table = cudf.core.frame.Frame(data, index)
+                    result_table = data
         else:
             if regex is True:
                 result_table = libstrings.split_record_re(self._column, pat, n)
@@ -2511,7 +2609,7 @@ class StringMethods(ColumnMethods):
         Series, Index, DataFrame or MultiIndex
             Type matches caller unless ``expand=True`` (see Notes).
 
-        See also
+        See Also
         --------
         split
             Split strings around given separator/delimiter.
@@ -2621,18 +2719,18 @@ class StringMethods(ColumnMethods):
 
         if expand:
             if self._column.null_count == len(self._column):
-                result_table = cudf.core.frame.Frame({0: self._column.copy()})
+                result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, index = libstrings.rsplit_re(self._column, pat, n)
+                    data, _ = libstrings.rsplit_re(self._column, pat, n)
                 else:
-                    data, index = libstrings.rsplit(
+                    data, _ = libstrings.rsplit(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
-                    result_table = cudf.core.frame.Frame({})
+                    result_table = {}
                 else:
-                    result_table = cudf.core.frame.Frame(data, index)
+                    result_table = data
         else:
             if regex is True:
                 result_table = libstrings.rsplit_record_re(
@@ -2671,7 +2769,7 @@ class StringMethods(ColumnMethods):
         The parameter `expand` is not yet supported and will raise a
         `NotImplementedError` if anything other than the default value is set.
 
-        See also
+        See Also
         --------
         rpartition
             Split the string at the last occurrence of sep.
@@ -2722,9 +2820,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            cudf.core.frame.Frame(
-                *libstrings.partition(self._column, cudf.Scalar(sep, "str"))
-            ),
+            libstrings.partition(self._column, cudf.Scalar(sep, "str"))[0],
             expand=expand,
         )
 
@@ -2789,9 +2885,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            cudf.core.frame.Frame(
-                *libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))
-            ),
+            libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))[0],
             expand=expand,
         )
 
@@ -2820,7 +2914,7 @@ class StringMethods(ColumnMethods):
             Returns Series or Index with minimum number
             of char in object.
 
-        See also
+        See Also
         --------
         rjust
             Fills the left side of strings with an arbitrary character.
@@ -2831,7 +2925,7 @@ class StringMethods(ColumnMethods):
             Equivalent to ``Series.str.pad(side='right')``.
 
         center
-            Fills boths sides of strings with an arbitrary character.
+            Fills both sides of strings with an arbitrary character.
             Equivalent to ``Series.str.pad(side='both')``.
 
         zfill
@@ -2872,7 +2966,7 @@ class StringMethods(ColumnMethods):
             raise TypeError(msg)
 
         try:
-            side = libstrings.PadSide[side.upper()]
+            side = libstrings.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {‘left’, ‘right’, ‘both’}"
@@ -2891,6 +2985,9 @@ class StringMethods(ColumnMethods):
         width. Strings in the Series/Index with length greater
         or equal to width are unchanged.
 
+        The sign character is preserved if it appears in the first
+        position of the string.
+
         Parameters
         ----------
         width : int
@@ -2903,7 +3000,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index with prepended ‘0’ characters.
 
-        See also
+        See Also
         --------
         rjust
             Fills the left side of strings with an arbitrary character.
@@ -2915,13 +3012,7 @@ class StringMethods(ColumnMethods):
             Fills the specified sides of strings with an arbitrary character.
 
         center
-            Fills boths sides of strings with an arbitrary character.
-
-        Notes
-        -----
-        Differs from `str.zfill()
-        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
-        which has special handling for ‘+’/’-‘ in the string.
+            Fills both sides of strings with an arbitrary character.
 
         Examples
         --------
@@ -2935,15 +3026,11 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         Note that ``None`` is not string, therefore it is converted
-        to ``None``. The minus sign in ``'-1'`` is treated as a
-        regular character and the zero is added to the left
-        of it (`str.zfill()
-        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
-        would have moved it to the left). ``1000`` remains unchanged as
+        to ``None``. ``1000`` remains unchanged as
         it is longer than width.
 
         >>> s.str.zfill(3)
-        0     0-1
+        0     -01
         1     001
         2    1000
         3    <NA>
@@ -3156,7 +3243,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index.
 
-        See also
+        See Also
         --------
         lstrip
             Remove leading characters in Series/Index.
@@ -3215,7 +3302,7 @@ class StringMethods(ColumnMethods):
         -------
             Series or Index of object
 
-        See also
+        See Also
         --------
         strip
             Remove leading and trailing characters in Series/Index.
@@ -3264,7 +3351,7 @@ class StringMethods(ColumnMethods):
         Series/Index of str dtype
             Returns Series or Index.
 
-        See also
+        See Also
         --------
         strip
             Remove leading and trailing characters in Series/Index.
@@ -3460,9 +3547,7 @@ class StringMethods(ColumnMethods):
             libstrings.count_re(self._column, pat, flags)
         )
 
-    def findall(
-        self, pat: str, flags: int = 0, expand: bool = True
-    ) -> SeriesOrIndex:
+    def findall(self, pat: str, flags: int = 0) -> SeriesOrIndex:
         """
         Find all occurrences of pattern or regular expression in the
         Series/Index.
@@ -3493,38 +3578,38 @@ class StringMethods(ColumnMethods):
         The search for the pattern ‘Monkey’ returns one match:
 
         >>> s.str.findall('Monkey')
-                0
-        0    <NA>
-        1  Monkey
-        2    <NA>
+        0          []
+        1    [Monkey]
+        2          []
+        dtype: list
 
         When the pattern matches more than one string
         in the Series, all matches are returned:
 
         >>> s.str.findall('on')
-              0
-        0    on
-        1    on
-        2  <NA>
+        0    [on]
+        1    [on]
+        2      []
+        dtype: list
 
         Regular expressions are supported too. For instance,
         the search for all the strings ending with
         the word ‘on’ is shown next:
 
         >>> s.str.findall('on$')
-              0
-        0    on
-        1  <NA>
-        2  <NA>
+        0    [on]
+        1      []
+        2      []
+        dtype: list
 
         If the pattern is found more than once in the same
-        string, then multiple strings are returned as columns:
+        string, then multiple strings are returned:
 
         >>> s.str.findall('b')
-              0     1
-        0  <NA>  <NA>
-        1  <NA>  <NA>
-        2     b     b
+        0        []
+        1        []
+        2    [b, b]
+        dtype: list
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -3534,19 +3619,8 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        if expand:
-            warnings.warn(
-                "The expand parameter is deprecated and will be removed in a "
-                "future version. Set expand=False to match future behavior.",
-                FutureWarning,
-            )
-            data, index = libstrings.findall(self._column, pat, flags)
-            return self._return_or_inplace(
-                cudf.core.frame.Frame(data, index), expand=expand
-            )
-        else:
-            data = libstrings.findall_record(self._column, pat, flags)
-            return self._return_or_inplace(data, expand=expand)
+        data = libstrings.findall(self._column, pat, flags)
+        return self._return_or_inplace(data)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -3570,7 +3644,12 @@ class StringMethods(ColumnMethods):
         4    False
         dtype: bool
         """
-        return self._return_or_inplace((self._column == "").fillna(False))
+        return self._return_or_inplace(
+            # mypy can't deduce that the return value of
+            # StringColumn.__eq__ is ColumnBase because the binops are
+            # dynamically added by a mixin class
+            cast(ColumnBase, self._column == "").fillna(False)
+        )
 
     def isspace(self) -> SeriesOrIndex:
         r"""
@@ -3589,7 +3668,7 @@ class StringMethods(ColumnMethods):
             Series or Index of boolean values with the same length as
             the original Series/Index.
 
-        See also
+        See Also
         --------
         isalnum
             Check whether all characters are alphanumeric.
@@ -3708,7 +3787,7 @@ class StringMethods(ColumnMethods):
             A Series of booleans indicating whether the given
             pattern matches the start of each string element.
 
-        See also
+        See Also
         --------
         endswith
             Same as startswith, but tests the end of string.
@@ -3827,7 +3906,7 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of int
 
-        See also
+        See Also
         --------
         find
             Return lowest indexes in each strings.
@@ -4463,7 +4542,6 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-
         delimiter : str or list of strs, Default is whitespace.
             The characters or strings used to locate the
             split points of each string.
@@ -4518,7 +4596,6 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book
@@ -4951,7 +5028,7 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance(self._column, targets_column)
         )
 
-    def edit_distance_matrix(self) -> ParentType:
+    def edit_distance_matrix(self) -> SeriesOrIndex:
         """Computes the edit distance between strings in the series.
 
         The series to compute the matrix should have more than 2 strings and
@@ -5029,7 +5106,7 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
-    mask : Buffer
+    mask : DeviceBufferLike
         The validity mask
     offset : int
         Data offset
@@ -5063,7 +5140,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,

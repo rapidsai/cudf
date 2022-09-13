@@ -1,13 +1,16 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import warnings
+from collections import abc
 from io import BytesIO, StringIO
 
+import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
+from cudf.utils.dtypes import _maybe_convert_to_default_type
 
 
 @ioutils.doc_read_json()
@@ -27,7 +30,7 @@ def read_json(
         raise ValueError("cudf engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-    if engine == "cudf":
+    if engine == "cudf" or engine == "cudf_experimental":
         # Multiple sources are passed as a list. If a single source is passed,
         # wrap it in a list for unified processing downstream.
         if not is_list_like(path_or_buf):
@@ -42,10 +45,11 @@ def read_json(
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
 
-            tmp_source, compression = ioutils.get_filepath_or_buffer(
+            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
                 path_or_data=source,
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
+                allow_raw_text_input=True,
                 **kwargs,
             )
             if isinstance(tmp_source, list):
@@ -53,10 +57,13 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        return cudf.DataFrame._from_data(
-            *libjson.read_json(
-                filepaths_or_buffers, dtype, lines, compression, byte_range
-            )
+        df = libjson.read_json(
+            filepaths_or_buffers,
+            dtype,
+            lines,
+            compression,
+            byte_range,
+            engine == "cudf_experimental",
         )
     else:
         warnings.warn(
@@ -73,10 +80,11 @@ def read_json(
                 "multiple files via pandas"
             )
 
-        path_or_buf, compression = ioutils.get_filepath_or_buffer(
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
             compression=compression,
             iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
             **kwargs,
         )
 
@@ -98,6 +106,26 @@ def read_json(
                 **kwargs,
             )
         df = cudf.from_pandas(pd_value)
+
+    if dtype is True or isinstance(dtype, abc.Mapping):
+        # There exists some dtypes in the result columns that is inferred.
+        # Find them and map them to the default dtypes.
+        dtype = {} if dtype is True else dtype
+        unspecified_dtypes = {
+            name: df._dtypes[name]
+            for name in df._column_names
+            if name not in dtype
+        }
+        default_dtypes = {}
+
+        for name, dt in unspecified_dtypes.items():
+            if dt == np.dtype("i1"):
+                # csv reader reads all null column as int8.
+                # The dtype should remain int8.
+                default_dtypes[name] = dt
+            else:
+                default_dtypes[name] = _maybe_convert_to_default_type(dt)
+        df = df.astype(default_dtypes)
 
     return df
 

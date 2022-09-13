@@ -188,7 +188,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # we reconstruct self._data with the names as keys.
             # If they are not unique, the keys of self._data
             # and self._names will be different, which can lead
-            # to unexpected behaviour in some cases. This is
+            # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
             self._data = self._data.__class__._create_unsafe(
@@ -343,7 +343,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
-        name : object, optional (defulat None)
+        name : object, optional (default None)
             To keep consistent with `Index.copy`, should not be used.
 
         Returns
@@ -1131,7 +1131,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             [4, 2],
             [5, 1]])
         >>> type(midx.values)
-        <class 'cupy._core.core.ndarray'>
+        <class 'cupy...ndarray'>
         """
         return self.to_frame(index=False).values
 
@@ -1303,6 +1303,57 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return popped
 
     @_cudf_nvtx_annotate
+    def swaplevel(self, i=-2, j=-1):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level of index to be swapped.
+        j : int or str, default -1
+            Second level of index to be swapped.
+
+        Returns
+        -------
+        MultiIndex
+            A new MultiIndex.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> mi = cudf.MultiIndex(levels=[['a', 'b'], ['bb', 'aa']],
+        ...                    codes=[[0, 0, 1, 1], [0, 1, 0, 1]])
+        >>> mi
+        MultiIndex([('a', 'bb'),
+            ('a', 'aa'),
+            ('b', 'bb'),
+            ('b', 'aa')],
+           )
+        >>> mi.swaplevel(0, 1)
+        MultiIndex([('bb', 'a'),
+            ('aa', 'a'),
+            ('bb', 'b'),
+            ('aa', 'b')],
+           )
+        """
+        name_i = self._data.names[i] if isinstance(i, int) else i
+        name_j = self._data.names[j] if isinstance(j, int) else j
+        new_data = {}
+        for k, v in self._data.items():
+            if k not in (name_i, name_j):
+                new_data[k] = v
+            elif k == name_i:
+                new_data[name_j] = self._data[name_j]
+            elif k == name_j:
+                new_data[name_i] = self._data[name_i]
+        midx = MultiIndex._from_data(new_data)
+        if all(n is None for n in self.names):
+            midx = midx.set_names(self.names)
+        return midx
+
+    @_cudf_nvtx_annotate
     def droplevel(self, level=-1):
         """
         Removes the specified levels from the MultiIndex.
@@ -1407,7 +1458,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         return cls.from_frame(df, names=multiindex.names)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_unique(self):
         return len(self) == len(self.unique())
@@ -1803,10 +1854,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> Frame:
-        res = super()._copy_type_metadata(other, include_index=include_index)
+    def _copy_type_metadata(self: MultiIndex, other: MultiIndex) -> MultiIndex:
+        res = super()._copy_type_metadata(other)
         res._names = other._names
         return res
 

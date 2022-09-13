@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -84,7 +85,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                      : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, rmm::cuda_stream_default, mr);
+    source_table, gather_map, bounds_policy, index_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

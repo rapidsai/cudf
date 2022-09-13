@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ struct range_window_bounds {
    * @brief Factory method to construct a bounded window boundary.
    *
    * @param boundary Finite window boundary
-   *
+   * @return A bounded window boundary object
    */
   static range_window_bounds get(scalar const& boundary);
 
@@ -47,6 +47,7 @@ struct range_window_bounds {
    * @brief Factory method to construct an unbounded window boundary.
    *
    * @param type type The datatype of the window boundary
+   * @return  An unbounded window boundary object
    */
   static range_window_bounds unbounded(data_type type);
 
@@ -60,11 +61,12 @@ struct range_window_bounds {
 
   /**
    * @brief Returns the underlying scalar value for the bounds
+   *
+   * @return  The underlying scalar value for the bounds
    */
   [[nodiscard]] scalar const& range_scalar() const { return *_range_scalar; }
 
-  range_window_bounds(range_window_bounds const&) =
-    default;                        // Required to return (by copy) from functions.
+  range_window_bounds(range_window_bounds const&) = default;  ///< Copy constructor
   range_window_bounds() = default;  // Required for use as return types from dispatch functors.
 
  private:

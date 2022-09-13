@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
+
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf::detail {
 

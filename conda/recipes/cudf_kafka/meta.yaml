@@ -17,26 +17,26 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: py{{ py_version_numeric }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - CC
-    - CXX
-    - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
 
 requirements:
   build:
     - cmake >=3.20.1,!=3.23.0
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python
     - cython >=0.29,<0.30
-    - cudf {{ version }}
-    - libcudf_kafka {{ version }}
+    - cudf ={{ version }}
+    - libcudf_kafka ={{ version }}
     - setuptools
   run:
     - python
-    - libcudf_kafka {{ version }}
+    - libcudf_kafka ={{ version }}
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf {{ version }}
+    - cudf ={{ version }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]
@@ -45,8 +45,8 @@ test:                                   # [linux64]
     - cudf_kafka                        # [linux64]
 
 about:
-  home: http://rapids.ai/
+  home: https://rapids.ai/
   license: Apache-2.0
-  license_family: Apache
+  license_family: APACHE
   license_file: LICENSE
   summary: libcudf_kafka library

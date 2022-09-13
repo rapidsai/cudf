@@ -20,6 +20,8 @@ THE SOFTWARE.
 #ifndef CXXOPTS_HPP_INCLUDED
 #define CXXOPTS_HPP_INCLUDED
 
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
+
 #include <cctype>
 #include <cstring>
 #include <exception>
@@ -1498,4 +1500,5 @@ inline const HelpGroupDetails& Options::group_help(const std::string& group) con
 
 }  // namespace cxxopts
 
+#endif  // DOXYGEN_SHOULD_SKIP_THIS
 #endif  // CXXOPTS_HPP_INCLUDED

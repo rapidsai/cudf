@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -56,13 +57,13 @@ std::unique_ptr<column> reverse(column_view const& source_column,
 std::unique_ptr<table> reverse(table_view const& source_table, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_table, rmm::cuda_stream_default, mr);
+  return detail::reverse(source_table, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_column, rmm::cuda_stream_default, mr);
+  return detail::reverse(source_column, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

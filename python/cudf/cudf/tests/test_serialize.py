@@ -356,8 +356,8 @@ def test_serialize_sliced_string():
     # because both should be identical
     for i in range(3):
         assert_eq(
-            serialized_gd_series[1][i].to_host_array(),
-            serialized_sliced[1][i].to_host_array(),
+            serialized_gd_series[1][i].memoryview(),
+            serialized_sliced[1][i].memoryview(),
         )
 
     recreated = cudf.Series.deserialize(*sliced.serialize())

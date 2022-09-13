@@ -34,7 +34,7 @@ conduct. More information can be found at:
    describes your planned work. For example, `fix-documentation`.
 5. Write code to address the issue or implement the feature.
 6. Add unit tests and unit benchmarks.
-7. [Create your pull request](https://github.com/rapidsai/cudf/compare).
+7. [Create your pull request](https://github.com/rapidsai/cudf/compare). To run continuous integration (CI) tests without requesting review, open a draft pull request.
 8. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
    Fix if needed.
 9. Wait for other developers to review your code and update code as needed.
@@ -339,6 +339,12 @@ python3 ./cpp/scripts/run-clang-format.py -inplace
 Additionally, many editors have plugins or extensions that you can set up to automatically run
 `clang-format` either manually or on file save.
 
+[`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
+In order to run doxygen as linter on C++/CUDA code, run
+```bash
+./ci/checks/doxygen.sh
+```
+
 ### Python / Pre-commit hooks
 
 cuDF uses [pre-commit](https://pre-commit.com/) to execute code linters and formatters such as
@@ -373,6 +379,13 @@ pre-commit install
 Now code linters and formatters will be run each time you commit changes.
 
 You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
+
+## Developer Guidelines
+
+The [C++ Developer Guide](cpp/docs/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
+
+The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
+
 
 ## Attribution
 

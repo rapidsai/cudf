@@ -20,6 +20,7 @@
 
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class StringCase : public cudf::benchmark {
 };
@@ -27,11 +28,11 @@ class StringCase : public cudf::benchmark {
 static void BM_case(benchmark::State& state)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
-  cudf::strings_column_view input(table->view().column(0));
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows});
+  cudf::strings_column_view input(column->view());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::strings::to_lower(input);
   }
 

@@ -19,10 +19,10 @@
  * @brief cuDF-IO CSV reader class implementation
  */
 
-#include "csv_common.h"
-#include "csv_gpu.h"
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 
-#include <io/comp/io_uncomp.h>
+#include <io/comp/io_uncomp.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>
@@ -43,6 +43,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <iostream>
@@ -419,11 +420,13 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
       reinterpret_cast<const char*>(buffer->data()),
       buffer->size());
 
-    std::vector<char> h_uncomp_data_owner;
+    std::vector<uint8_t> h_uncomp_data_owner;
 
     if (reader_opts.get_compression() != compression_type::NONE) {
-      h_uncomp_data_owner = get_uncompressed_data(h_data, reader_opts.get_compression());
-      h_data              = h_uncomp_data_owner;
+      h_uncomp_data_owner =
+        decompress(reader_opts.get_compression(), {buffer->data(), buffer->size()});
+      h_data = {reinterpret_cast<char const*>(h_uncomp_data_owner.data()),
+                h_uncomp_data_owner.size()};
     }
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
@@ -696,37 +699,62 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
     column_flags.resize(num_actual_columns, column_parse::enabled | column_parse::inferred);
 
+    std::vector<size_t> col_loop_order(column_names.size());
+    auto unnamed_it = std::copy_if(
+      thrust::make_counting_iterator<size_t>(0),
+      thrust::make_counting_iterator<size_t>(column_names.size()),
+      col_loop_order.begin(),
+      [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
     // Rename empty column names to "Unnamed: col_index"
-    for (size_t col_idx = 0; col_idx < column_names.size(); ++col_idx) {
-      if (column_names[col_idx].empty()) {
-        column_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
-      }
-    }
+    std::copy_if(thrust::make_counting_iterator<size_t>(0),
+                 thrust::make_counting_iterator<size_t>(column_names.size()),
+                 unnamed_it,
+                 [&column_names](auto col_idx) -> bool {
+                   auto is_empty = column_names[col_idx].empty();
+                   if (is_empty)
+                     column_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
+                   return is_empty;
+                 });
 
     // Looking for duplicates
-    std::unordered_map<string, int> col_names_histogram;
-    for (auto& col_name : column_names) {
-      // Operator [] inserts a default-initialized value if the given key is not
-      // present
-      if (++col_names_histogram[col_name] > 1) {
-        if (reader_opts.is_enabled_mangle_dupe_cols()) {
-          // Rename duplicates of column X as X.1, X.2, ...; First appearance
-          // stays as X
-          do {
-            col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
-          } while (col_names_histogram[col_name]++);
-        } else {
+    std::unordered_map<string, int> col_names_counts;
+    if (!reader_opts.is_enabled_mangle_dupe_cols()) {
+      for (auto& col_name : column_names) {
+        if (++col_names_counts[col_name] > 1) {
           // All duplicate columns will be ignored; First appearance is parsed
           const auto idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
         }
       }
+    } else {
+      // For constant/linear search.
+      std::unordered_multiset<std::string> header(column_names.begin(), column_names.end());
+      for (auto const col_idx : col_loop_order) {
+        auto col       = column_names[col_idx];
+        auto cur_count = col_names_counts[col];
+        if (cur_count > 0) {
+          auto const old_col = col;
+          // Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
+          while (cur_count > 0) {
+            col_names_counts[old_col] = cur_count + 1;
+            col                       = old_col + "." + std::to_string(cur_count);
+            if (header.find(col) != header.end()) {
+              cur_count++;
+            } else {
+              cur_count = col_names_counts[col];
+            }
+          }
+          if (auto pos = header.find(old_col); pos != header.end()) { header.erase(pos); }
+          header.insert(col);
+          column_names[col_idx] = col;
+        }
+        col_names_counts[col] = cur_count + 1;
+      }
     }
 
-    // Update the number of columns to be processed, if some might have been
-    // removed
+    // Update the number of columns to be processed, if some might have been removed
     if (!reader_opts.is_enabled_mangle_dupe_cols()) {
-      num_active_columns = col_names_histogram.size();
+      num_active_columns = col_names_counts.size();
     }
   }
 
@@ -818,7 +846,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr));
       } else {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream, mr));
       }
     }
   } else {

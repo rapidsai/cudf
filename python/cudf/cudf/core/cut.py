@@ -49,7 +49,7 @@ def cut(
     labels : array or False, default None
         Specifies the labels for the returned bins. Must be the same
         length as the resulting bins. If False, returns only integer
-        indicators of thebins. If True,raises an error. When ordered=False,
+        indicators of the bins. If True,raises an error. When ordered=False,
         labels must be provided.
     retbins : bool, default False
         Whether to return the bins or not.

@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import Dtype, NotImplementedType, ScalarLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -302,7 +302,7 @@ class SingleColumnFrame(Frame, NotIterable):
         **kwargs,
     ) -> Union[
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-        Type[NotImplemented],
+        NotImplementedType,
     ]:
         """Generate the dictionary of operands used for a binary operation.
 
@@ -395,3 +395,32 @@ class SingleColumnFrame(Frame, NotIterable):
             if is_bool_dtype(arg.dtype):
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
+
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        from cudf.core._internals.where import (
+            _check_and_cast_columns_with_other,
+            _make_categorical_like,
+        )
+
+        if isinstance(other, cudf.DataFrame):
+            raise NotImplementedError(
+                "cannot align with a higher dimensional Frame"
+            )
+        cond = as_column(cond)
+        if len(cond) != len(self):
+            raise ValueError(
+                """Array conditional must be same shape as self"""
+            )
+
+        if not cudf.api.types.is_scalar(other):
+            other = cudf.core.column.as_column(other)
+
+        self_column = self._column
+        input_col, other = _check_and_cast_columns_with_other(
+            source_col=self_column, other=other, inplace=inplace
+        )
+
+        result = cudf._lib.copying.copy_if_else(input_col, other, cond)
+
+        return _make_categorical_like(result, self_column)

@@ -31,10 +31,11 @@ from cudf._typing import (
 from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
+    is_integer,
     is_integer_dtype,
     is_number,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -64,10 +65,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     Parameters
     ----------
-    data : Buffer
+    data : DeviceBufferLike
     dtype : np.dtype
-        The dtype associated with the data Buffer
-    mask : Buffer, optional
+        The dtype associated with the data DeviceBufferLike
+    mask : DeviceBufferLike, optional
     """
 
     _nan_count: Optional[int]
@@ -75,9 +76,9 @@ class NumericalColumn(NumericalBaseColumn):
 
     def __init__(
         self,
-        data: Buffer,
+        data: DeviceBufferLike,
         dtype: DtypeObj,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int = None,
@@ -85,7 +86,9 @@ class NumericalColumn(NumericalBaseColumn):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
+            raise ValueError(
+                "DeviceBufferLike size must be divisible by element size"
+            )
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         self._nan_count = None
@@ -219,7 +222,15 @@ class NumericalColumn(NumericalBaseColumn):
             if is_bool_dtype(self.dtype) or is_bool_dtype(other):
                 out_dtype = "bool"
 
+        if (
+            op == "__pow__"
+            and is_integer_dtype(self.dtype)
+            and (is_integer(other) or is_integer_dtype(other.dtype))
+        ):
+            op = "INT_POW"
+
         lhs, rhs = (other, self) if reflect else (self, other)
+
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
@@ -257,7 +268,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
-                    data=Buffer(ary),
+                    data=as_device_buffer_like(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )

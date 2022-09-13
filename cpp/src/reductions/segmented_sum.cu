@@ -21,12 +21,14 @@
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::column> segmented_sum(column_view const& col,
-                                            device_span<size_type const> offsets,
-                                            cudf::data_type const output_dtype,
-                                            null_policy null_handling,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> segmented_sum(
+  column_view const& col,
+  device_span<size_type const> offsets,
+  cudf::data_type const output_dtype,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher(col.type(),
                                simple::detail::column_type_dispatcher<cudf::reduction::op::sum>{},
@@ -34,6 +36,7 @@ std::unique_ptr<cudf::column> segmented_sum(column_view const& col,
                                offsets,
                                output_dtype,
                                null_handling,
+                               init,
                                stream,
                                mr);
 }

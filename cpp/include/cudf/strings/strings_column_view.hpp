@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,15 +35,30 @@ namespace cudf {
  */
 class strings_column_view : private column_view {
  public:
+  /**
+   * @brief Construct a new strings column view object from a column view.s
+   *
+   * @param strings_column The column view to wrap.
+   */
   strings_column_view(column_view strings_column);
-  strings_column_view(strings_column_view&& strings_view)      = default;
-  strings_column_view(const strings_column_view& strings_view) = default;
-  ~strings_column_view()                                       = default;
+  strings_column_view(strings_column_view&&)      = default;  ///< Move constructor
+  strings_column_view(strings_column_view const&) = default;  ///< Copy constructor
+  ~strings_column_view()                          = default;
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this instance
+   */
   strings_column_view& operator=(strings_column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this instance (after transferring ownership)
+   */
   strings_column_view& operator=(strings_column_view&&) = default;
 
-  static constexpr size_type offsets_column_index{0};
-  static constexpr size_type chars_column_index{1};
+  static constexpr size_type offsets_column_index{0};  ///< Child index of the offsets column
+  static constexpr size_type chars_column_index{1};    ///< Child index of the characters column
 
   using column_view::has_nulls;
   using column_view::is_empty;
@@ -52,11 +67,13 @@ class strings_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
-  using offset_iterator = offset_type const*;
-  using chars_iterator  = char const*;
+  using offset_iterator = offset_type const*;  ///< offsets iterator type
+  using chars_iterator  = char const*;         ///< character iterator type
 
   /**
    * @brief Returns the parent column.
+   *
+   * @return The parents column
    */
   [[nodiscard]] column_view parent() const;
 
@@ -64,6 +81,7 @@ class strings_column_view : private column_view {
    * @brief Returns the internal column of offsets
    *
    * @throw cudf::logic error if this is an empty column
+   * @return The offsets column
    */
   [[nodiscard]] column_view offsets() const;
 
@@ -89,6 +107,7 @@ class strings_column_view : private column_view {
    * @brief Returns the internal column of chars
    *
    * @throw cudf::logic error if this is an empty column
+   * @return The chars column
    */
   [[nodiscard]] column_view chars() const;
 
@@ -97,6 +116,8 @@ class strings_column_view : private column_view {
    *
    * This accounts for empty columns but does not reflect a sliced parent column
    * view  (i.e.: non-zero offset or reduced row count).
+   *
+   * @return Number of bytes in the chars child column
    */
   [[nodiscard]] size_type chars_size() const noexcept;
 

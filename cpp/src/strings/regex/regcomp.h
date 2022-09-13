@@ -48,13 +48,22 @@ enum InstType {
 };
 
 /**
+ * @brief Range used for literals in reclass classes.
+ */
+struct reclass_range {
+  char32_t first{};  /// first character in span
+  char32_t last{};   /// last character in span (inclusive)
+};
+
+/**
  * @brief Class type for regex compiler instruction.
  */
 struct reclass {
-  int32_t builtins{0};      // bit mask identifying builtin classes
-  std::u32string literals;  // ranges as pairs of utf-8 characters
+  int32_t builtins{0};  // bit mask identifying builtin classes
+  std::vector<reclass_range> literals;
   reclass() {}
   reclass(int m) : builtins(m) {}
+  reclass(int m, std::vector<reclass_range>&& l) : builtins(m), literals(std::move(l)) {}
 };
 
 constexpr int32_t CCLASS_W{1 << 0};   // [a-z], [A-Z], [0-9], and '_'
@@ -99,24 +108,25 @@ class reprog {
    * of this object
    *
    * @param pattern Regex pattern encoded as UTF-8
-   * @param flags For interpretting certain `pattern` characters
+   * @param flags For interpreting certain `pattern` characters
    * @return Instance of reprog
    */
   static reprog create_from(std::string_view pattern, regex_flags const flags);
 
   int32_t add_inst(int32_t type);
-  int32_t add_inst(reinst inst);
-  int32_t add_class(reclass cls);
+  int32_t add_inst(reinst const& inst);
+  int32_t add_class(reclass const& cls);
 
   void set_groups_count(int32_t groups);
   [[nodiscard]] int32_t groups_count() const;
 
-  [[nodiscard]] const reinst* insts_data() const;
   [[nodiscard]] int32_t insts_count() const;
-  reinst& inst_at(int32_t id);
+  [[nodiscard]] reinst& inst_at(int32_t id);
+  [[nodiscard]] reinst const* insts_data() const;
 
-  reclass& class_at(int32_t id);
   [[nodiscard]] int32_t classes_count() const;
+  [[nodiscard]] reclass& class_at(int32_t id);
+  [[nodiscard]] reclass const* classes_data() const;
 
   [[nodiscard]] const int32_t* starts_data() const;
   [[nodiscard]] int32_t starts_count() const;
@@ -124,8 +134,7 @@ class reprog {
   void set_start_inst(int32_t id);
   [[nodiscard]] int32_t get_start_inst() const;
 
-  void optimize1();
-  void optimize2();
+  void finalize();
   void check_for_errors();
 #ifndef NDEBUG
   void print(regex_flags const flags);
@@ -139,6 +148,8 @@ class reprog {
   int32_t _num_capturing_groups{};
 
   reprog() = default;
+  void collapse_nops();
+  void build_start_ids();
   void check_for_errors(int32_t id, int32_t next_id);
 };
 

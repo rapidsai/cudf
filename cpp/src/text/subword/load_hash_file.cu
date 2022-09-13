@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -283,7 +284,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_vocabulary_file(filename_hashed_vocabulary, rmm::cuda_stream_default, mr);
+  return detail::load_vocabulary_file(filename_hashed_vocabulary, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -33,7 +34,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -45,7 +46,7 @@ void set_null_mask(bitmask_type* bitmask,
                    size_type begin_bit,
                    size_type end_bit,
                    bool valid,
-                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                   rmm::cuda_stream_view stream = cudf::default_stream_value);
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in the range
@@ -226,13 +227,13 @@ rmm::device_buffer copy_bitmask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc bitmask_and(host_span<bitmask_type const *> const, host_span<size_type> const,
+ * @copydoc bitmask_and(host_span<bitmask_type const* const>, host_span<size_type> const,
  * size_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 std::pair<rmm::device_buffer, size_type> bitmask_and(
-  host_span<bitmask_type const*> masks,
+  host_span<bitmask_type const* const> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
@@ -267,16 +268,13 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @param masks_begin_bits The bit offsets from which each mask is to be ANDed
  * @param mask_size_bits The number of bits to be ANDed in each mask
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned device_buffer
  * @return Count of set bits
  */
-cudf::size_type inplace_bitmask_and(
-  device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const*> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
+                                    host_span<bitmask_type const* const> masks,
+                                    host_span<size_type const> masks_begin_bits,
+                                    size_type mask_size_bits,
+                                    rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

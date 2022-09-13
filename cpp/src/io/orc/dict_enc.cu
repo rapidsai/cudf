@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 #include <cudf/table/table_device_view.cuh>
 #include <io/utilities/block_utils.cuh>
@@ -78,7 +78,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s* s,
     uint32_t is_valid, nz_pos;
     if (t < block_size / 32) {
       if (!valid_map) {
-        s->scratch_red[t] = 0xffffffffu;
+        s->scratch_red[t] = 0xffff'ffffu;
       } else {
         uint32_t const row   = s->chunk.start_row + i + t * 32;
         auto const chunk_end = s->chunk.start_row + s->chunk.num_rows;
@@ -198,13 +198,13 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t sum23   = count23 + (count23 << 16);
     uint32_t sum45   = count45 + (count45 << 16);
     uint32_t sum67   = count67 + (count67 << 16);
-    sum23 += (sum01 >> 16) * 0x10001;
-    sum45 += (sum23 >> 16) * 0x10001;
-    sum67 += (sum45 >> 16) * 0x10001;
+    sum23 += (sum01 >> 16) * 0x1'0001;
+    sum45 += (sum23 >> 16) * 0x1'0001;
+    sum67 += (sum45 >> 16) * 0x1'0001;
     uint32_t sum_w = sum67 >> 16;
     block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
     __syncthreads();
-    sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
+    sum_w                 = (sum_w - (sum67 >> 16)) * 0x1'0001;
     s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
     s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
     s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
@@ -306,7 +306,7 @@ __global__ void __launch_bounds__(block_size, 2)
  * @param[in] num_columns Number of columns
  */
 // blockDim {1024,1,1}
-extern "C" __global__ void __launch_bounds__(1024)
+__global__ void __launch_bounds__(1024)
   gpuCompactChunkDictionaries(device_2dspan<StripeDictionary> stripes,
                               device_2dspan<DictionaryChunk const> chunks)
 {

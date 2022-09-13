@@ -54,15 +54,12 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
 
   cudf::size_type const num_rows = state.get_int64("NumRows");
 
-  data_profile profile;
-  profile.set_null_frequency(0.01);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.01).distribution(
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
-  auto source_table =
-    create_random_table(cycle_dtypes({cudf::type_to_id<Type>()}, 1), row_count{num_rows}, profile);
+  auto source_column = create_random_column(cudf::type_to_id<Type>(), row_count{num_rows}, profile);
 
-  auto input_column = cudf::column_view(source_table->get_column(0));
+  auto input_column = source_column->view();
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

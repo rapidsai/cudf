@@ -56,6 +56,8 @@ def _write_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     partitions_info=None,
     **kwargs,
 ):
@@ -82,6 +84,8 @@ def _write_parquet(
         "int96_timestamps": int96_timestamps,
         "row_group_size_bytes": row_group_size_bytes,
         "row_group_size_rows": row_group_size_rows,
+        "max_page_size_bytes": max_page_size_bytes,
+        "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
@@ -307,7 +311,7 @@ def _process_dataset(
             path = file_fragment.path
 
             # Extract hive-partition keys, and make sure they
-            # are orederd the same as they are in `partition_categories`
+            # are ordered the same as they are in `partition_categories`
             if partition_categories:
                 raw_keys = ds._get_partition_keys(
                     file_fragment.partition_expression
@@ -359,8 +363,6 @@ def read_parquet(
     columns=None,
     filters=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
@@ -435,7 +437,7 @@ def read_parquet(
             fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
-        tmp_source, compression = ioutils.get_filepath_or_buffer(
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
@@ -473,8 +475,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        skiprows=skiprows,
-        num_rows=num_rows,
         strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
@@ -563,8 +563,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
@@ -577,8 +575,6 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            skiprows=skiprows,
-            num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
@@ -606,6 +602,8 @@ def to_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     *args,
     **kwargs,
 ):
@@ -635,6 +633,8 @@ def to_parquet(
                     "int96_timestamps": int96_timestamps,
                     "row_group_size_bytes": row_group_size_bytes,
                     "row_group_size_rows": row_group_size_rows,
+                    "max_page_size_bytes": max_page_size_bytes,
+                    "max_page_size_rows": max_page_size_rows,
                 }
             )
             return write_to_dataset(
@@ -664,6 +664,8 @@ def to_parquet(
             int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
             row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
             **kwargs,
         )
 
@@ -859,7 +861,7 @@ class ParquetDatasetWriter:
         index(es) other than RangeIndex will be saved as columns.
     compression : {'snappy', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
-    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
     max_file_size : int or str, default None
         A file size that cannot be exceeded by the writer.

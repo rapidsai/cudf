@@ -33,6 +33,11 @@ class temp_directory {
   std::string _path;
 
  public:
+  /**
+   * @brief Construct a new temp directory object
+   *
+   * @param base_name The base name of the temporary directory
+   */
   temp_directory(const std::string& base_name)
   {
     std::string dir_template{std::filesystem::temp_directory_path().string()};
@@ -47,8 +52,13 @@ class temp_directory {
 
   temp_directory& operator=(temp_directory const&) = delete;
   temp_directory(temp_directory const&)            = delete;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object
+   */
   temp_directory& operator=(temp_directory&&) = default;
-  temp_directory(temp_directory&&)            = default;
+  temp_directory(temp_directory&&)            = default;  ///< Move constructor
 
   ~temp_directory() { std::filesystem::remove_all(std::filesystem::path{_path}); }
 

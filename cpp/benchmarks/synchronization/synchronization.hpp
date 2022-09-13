@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,14 @@
  * (RAII). In the following we show a minimal example of how to use this class.
 
     #include <benchmark/benchmark.h>
+    #include <cudf/utilities/default_stream.hpp>
 
     static void sample_cuda_benchmark(benchmark::State& state) {
 
       for (auto _ : state){
 
-        rmm::cuda_stream_view stream{}; // default stream, could be another stream
+        // default stream, could be another stream
+        rmm::cuda_stream_view stream{cudf::default_stream_value};
 
         // Create (Construct) an object of this class. You HAVE to pass in the
         // benchmark::State object you are using. It measures the time from its
@@ -63,6 +65,7 @@
 #include <benchmark/benchmark.h>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -82,7 +85,7 @@ class cuda_event_timer {
    */
   cuda_event_timer(benchmark::State& state,
                    bool flush_l2_cache,
-                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                   rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   // The user must provide a benchmark::State object to set
   // the timer so we disable the default c'tor.

@@ -25,6 +25,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
 
@@ -37,18 +38,17 @@ static void BM_replace(benchmark::State& state, replace_type rt)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
-  cudf::strings_column_view input(table->view().column(0));
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+  cudf::strings_column_view input(column->view());
   cudf::string_scalar target("+");
   cudf::string_scalar repl("");
   cudf::test::strings_column_wrapper targets({"+", "-"});
   cudf::test::strings_column_wrapper repls({"", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (rt) {
       case scalar: cudf::strings::replace(input, target, repl); break;
       case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;

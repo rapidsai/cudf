@@ -417,7 +417,7 @@ _reflected_ops = [
 @pytest.mark.parametrize(
     "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
 )
-def test_reflected_ops_scalar(func, dtype, obj_class):
+def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
     random_series = utils.gen_rand(dtype, 100, low=10)
@@ -440,6 +440,19 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
 
     # verify
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+)
+def test_cudf_scalar_reflected_ops_scalar(func, dtype):
+    value = 42
+    scalar = cudf.Scalar(42)
+
+    expected = func(value)
+    actual = func(scalar).value
+
+    assert np.isclose(expected, actual)
 
 
 _cudf_scalar_reflected_ops = [
@@ -483,7 +496,7 @@ _cudf_scalar_reflected_ops = [
         )
     ),
 )
-def test_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
+def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
@@ -592,6 +605,14 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
     utils.assert_eq(cd_frame, pd_frame)
+
+    pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
+    pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2)
+    pd_frame = binop(pdf1, pdf2)
+    cd_frame = binop(gdf1, gdf2)
+    utils.assert_eq(pd_frame, cd_frame)
 
 
 @pytest.mark.parametrize(
@@ -2961,4 +2982,93 @@ def test_binops_dot(df, other):
     expected = pdf @ host_other
     got = df @ other
 
+    utils.assert_eq(expected, got)
+
+
+def test_binop_series_with_repeated_index():
+    # GH: #11094
+    psr1 = pd.Series([1, 1], index=["a", "a"])
+    psr2 = pd.Series([1], index=["a"])
+    gsr1 = cudf.from_pandas(psr1)
+    gsr2 = cudf.from_pandas(psr2)
+    expected = psr1 - psr2
+    got = gsr1 - gsr2
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_series():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_base = gs_base.to_pandas()
+    ps_exponent = gs_exponent.to_pandas()
+    expected = ps_base**ps_exponent
+    got = gs_base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_scalar():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = cudf.Scalar(1)
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent.value
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_int():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = 1
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_series():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base.value**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_scalar():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = cudf.Scalar(1)
+    expected = base.value**exponent.value
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_int():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = 1
+    expected = base.value**exponent
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_series():
+    # GH: #10178
+    base = 3
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_scalar():
+    # GH: #10178
+    base = 3
+    exponent = cudf.Scalar(1)
+    expected = base**exponent.value
+    got = base**exponent
     utils.assert_eq(expected, got)

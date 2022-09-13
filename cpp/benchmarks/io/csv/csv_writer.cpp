@@ -63,6 +63,7 @@ void BM_csv_write_varying_options(benchmark::State& state)
                                              int32_t(type_group_id::FLOATING_POINT),
                                              int32_t(type_group_id::FIXED_POINT),
                                              int32_t(type_group_id::TIMESTAMP),
+                                             int32_t(type_group_id::DURATION),
                                              int32_t(cudf::type_id::STRING)});
 
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
@@ -98,6 +99,7 @@ WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, integral, type_group_id::
 WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, durations, type_group_id::DURATION);
 WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
 
 BENCHMARK_DEFINE_F(CsvWrite, writer_options)

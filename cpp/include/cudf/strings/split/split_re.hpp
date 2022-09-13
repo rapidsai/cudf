@@ -19,6 +19,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace strings {
 /**
@@ -71,7 +73,7 @@ namespace strings {
  */
 std::unique_ptr<table> split_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -121,7 +123,7 @@ std::unique_ptr<table> split_re(
  */
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -173,7 +175,7 @@ std::unique_ptr<table> rsplit_re(
  */
 std::unique_ptr<column> split_record_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -227,7 +229,7 @@ std::unique_ptr<column> split_record_re(
  */
 std::unique_ptr<column> rsplit_record_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

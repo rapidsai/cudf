@@ -101,7 +101,7 @@ Since the PTDS option is for each compilation unit, it should be done at the sam
 whole codebase. To enable PTDS, first build cuDF:
 ```shell script
 cd src/cudf/cpp/build
-cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DPER_THREAD_DEFAULT_STREAM=ON
+cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
 make -j`nproc`
 make install
 ```
@@ -109,7 +109,7 @@ make install
 then build the jar:
 ```shell script
 cd src/cudf/java
-mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
+mvn clean install -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
 ```
 
 ## GPUDirect Storage (GDS)

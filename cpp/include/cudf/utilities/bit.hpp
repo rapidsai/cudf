@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 namespace cudf {
 namespace detail {
+// @cond
 // Work around a bug in NVRTC that fails to compile assert() in constexpr
 // functions (fixed after CUDA 11.0)
 #if defined __GNUC__
@@ -40,7 +41,14 @@ namespace detail {
 #else
 #define constexpr_assert(CHECK) (LIKELY(CHECK) ? void(0) : [] { assert(!#CHECK); }())
 #endif
+// @endcond
 
+/**
+ * @brief Returns the number of bits the given type can hold.
+ *
+ * @tparam T The type to query
+ * @return `sizeof(T)` in bits
+ */
 template <typename T>
 constexpr CUDF_HOST_DEVICE inline std::size_t size_in_bits()
 {
@@ -57,6 +65,9 @@ constexpr CUDF_HOST_DEVICE inline std::size_t size_in_bits()
 
 /**
  * @brief Returns the index of the word containing the specified bit.
+ *
+ * @param bit_index The index of the bit to query
+ * @return The index of the word containing the specified bit
  */
 constexpr CUDF_HOST_DEVICE inline size_type word_index(size_type bit_index)
 {
@@ -65,6 +76,9 @@ constexpr CUDF_HOST_DEVICE inline size_type word_index(size_type bit_index)
 
 /**
  * @brief Returns the position within a word of the specified bit.
+ *
+ * @param bit_index The index of the bit to query
+ * @return The position within a word of the specified bit
  */
 constexpr CUDF_HOST_DEVICE inline size_type intra_word_index(size_type bit_index)
 {
