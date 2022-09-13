@@ -38,7 +38,6 @@ cdef class SpillLock:
         self._expose_counters.push_back(expose_counter)
 
 
-# TODO: this is not support by PyTorch
 class DelayedPointerTuple(collections.abc.Sequence):
     """
     A delayed version of the "data" field in __cuda_array_interface__.
@@ -48,6 +47,11 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
     For instance, in many cases __cuda_array_interface__ is accessed
     only to determine whether an object is a CUDA object or not.
+
+    TODO: this doesn't support libraries such as PyTorch that declare
+    the tuple of __cuda_array_interface__["data"] in Cython. In such
+    cases, Cython will raise an error because DelayedPointerTuple
+    isn't a "real" tuple.
     """
 
     def __init__(self, buffer) -> None:
