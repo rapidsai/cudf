@@ -27,11 +27,7 @@ rapids_cuda_init_architectures(STRINGS_UDF)
 project(
   strings-udf-cpp
   VERSION ${strings_udf_version}
-  LANGUAGES # TODO: Building Python extension modules via the python_extension_module requires the C
-            # language to be enabled here. The test project that is built in scikit-build to verify
-            # various linking options for the python library is hardcoded to build with C, so until
-            # that is fixed we need to keep C.
-            CUDA
+  LANGUAGES CUDA
 )
 
 rapids_find_package(
@@ -44,7 +40,9 @@ include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
 rapids_cpm_libcudacxx(BUILD_EXPORT_SET strings-udf-exports INSTALL_EXPORT_SET strings-udf-exports)
 
 add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
-target_include_directories(cudf_strings_udf PUBLIC include)
+target_include_directories(
+  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${strings-udf-cpp_SOURCE_DIR}/include>"
+)
 
 set_target_properties(
   cudf_strings_udf
