@@ -2568,3 +2568,23 @@ def test_parquet_nested_struct_list():
     actual = cudf.read_parquet(buffer)
     assert_eq(expected, actual)
     assert_eq(actual.a.dtype, df.a.dtype)
+
+
+def test_parquet_writer_zstd():
+    size = 12345
+    expected = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="float64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+
+    buff = BytesIO()
+    try:
+        expected.to_orc(buff, compression="ZSTD")
+    except RuntimeError:
+        pytest.mark.xfail(reason="Newer nvCOMP version is required")
+    else:
+        got = pd.read_orc(buff)
+        assert_eq(expected, got)

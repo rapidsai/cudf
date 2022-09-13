@@ -23,8 +23,10 @@ target_compile_options(
 )
 
 target_link_libraries(
-  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
+  cudf_datagen
+  PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main benchmark::benchmark
+         nvbench::nvbench Threads::Threads cudf cudftestutil
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
@@ -41,7 +43,7 @@ add_library(
   cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
                                synchronization/synchronization.cpp io/cuio_common.cpp
 )
-target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
+target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -68,6 +70,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -96,6 +99,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}

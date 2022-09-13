@@ -584,9 +584,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(
-            grouped_key_cols, name=self.grouping.keys.name
-        )
+        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        if isinstance(self.grouping.keys, cudf.MultiIndex):
+            grouped_keys.names = self.grouping.keys.names
+        else:
+            grouped_keys.name = self.grouping.keys.name
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
@@ -777,12 +779,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             else:
                 result = cudf.concat(chunk_results)
                 if self._group_keys:
-                    result.index = cudf.MultiIndex._from_data(
-                        {
-                            group_keys.name: group_keys._column,
-                            None: grouped_values.index._column,
-                        }
-                    )
+                    index_data = group_keys._data.copy(deep=True)
+                    index_data[None] = grouped_values.index._column
+                    result.index = cudf.MultiIndex._from_data(index_data)
 
         if self._sort:
             result = result.sort_index()
