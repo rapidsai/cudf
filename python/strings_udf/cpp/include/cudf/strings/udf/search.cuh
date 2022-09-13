@@ -48,7 +48,7 @@ __device__ inline cudf::size_type count(string_view const source,
   while (pos != cudf::string_view::npos) {
     pos = source.find(target, pos, end - pos);
     if (pos != cudf::string_view::npos) {
-      count++;
+      ++count;
       pos += tgt_length;
     }
   }
