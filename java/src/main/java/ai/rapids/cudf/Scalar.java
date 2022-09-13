@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -754,6 +754,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_NANOSECONDS:
     case DECIMAL64:
       return getLong() == other.getLong();
+    case DECIMAL128:
+      return getBigDecimal().equals(other.getBigDecimal());
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
     case LIST:

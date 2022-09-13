@@ -4006,8 +4006,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-
-
   @Test
   void testWindowingMin() {
     try (Table unsorted = new Table.TestBuilder()
@@ -4964,8 +4962,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  // Test Decimal OBY column with Range queries.
-
   @Test
   void testWindowingWithoutGroupByColumns() {
     try (Table unsorted = new Table.TestBuilder().column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
@@ -5806,7 +5802,7 @@ public class TableTest extends CudfTestBase {
     {
       case 2: return Scalar.fromDecimal(scale, unscaledValue);
       case 3: return Scalar.fromDecimal(scale, Long.valueOf(unscaledValue));
-      case 4: return Scalar.fromDecimal(scale, new BigInteger("" + unscaledValue));
+      case 4: return Scalar.fromDecimal(scale, big(unscaledValue));
       default: 
         throw new IllegalStateException("Unexpected order by column index: " 
                                         + orderby_col_idx);
