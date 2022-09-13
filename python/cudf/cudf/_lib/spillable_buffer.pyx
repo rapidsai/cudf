@@ -32,7 +32,7 @@ cdef shared_ptr[void] create_expose_counter():
 
 
 cdef class SpillLock:
-    """Disable spilling temporarily for specify buffers"""
+    """Disable spilling temporarily for specific buffers"""
 
     cdef add(self, shared_ptr[void] expose_counter):
         self._expose_counters.push_back(expose_counter)
