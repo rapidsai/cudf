@@ -3484,31 +3484,48 @@ class IndexedFrame(Frame):
             idx = None if ignore_index else self._index.copy(deep=True)
             return self.__class__._from_data(data, index=idx)
 
-        explode_column_num = self._column_names.index(explode_column)
+        column_index = self._column_names.index(explode_column)
         if not ignore_index and self._index is not None:
-            explode_column_num += self._index.nlevels
+            index_offset = self._index.nlevels
+        else:
+            index_offset = 0
 
         exploded = libcudf.lists.explode_outer(
             [
                 *(self._index._data.columns if not ignore_index else ()),
                 *self._columns,
             ],
-            explode_column_num,
+            column_index + index_offset,
         )
-        # dtype of exploded column is the element dtype of the list
-        # column that was exploded, this needs to be copied over so
-        # that nested struct dtypes maintain the key names.
-        element_type = cast(
-            ListDtype, self._data[explode_column].dtype
+        # Sui generis implementation of _from_columns_like_self that
+        # copies type metadata from self for all columns except the
+        # exploded column (for which we use the inner dtype of the
+        # exploded list column). This latter dtype needs to be copied
+        # over so that nested struct dtypes maintain the key names.
+        # Should this pattern become more common elsewhere, it would
+        # make sense to implement something like
+        # _from_columns_with_dtypes uniformly.
+        exploded_dtype = cast(
+            ListDtype, self._columns[column_index].dtype
         ).element_type
-        exploded[explode_column_num] = exploded[
-            explode_column_num
-        ]._with_type_metadata(element_type)
-        return self._from_columns_like_self(
+        frame = self.__class__._from_columns(
             exploded,
             self._column_names,
             self._index_names if not ignore_index else None,
         )
+        for i, (name, old_column, new_column) in enumerate(
+            zip(self._column_names, self._columns, exploded[index_offset:])
+        ):
+            frame._data.set_by_label(
+                name,
+                new_column._with_type_metadata(
+                    exploded_dtype if i == column_index else old_column.dtype
+                ),
+                validate=False,
+            )
+        if not ignore_index:
+            frame._copy_index_metadata(self)
+        return frame
 
     @_cudf_nvtx_annotate
     def tile(self, count):
