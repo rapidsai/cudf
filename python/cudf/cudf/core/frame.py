@@ -1120,8 +1120,8 @@ class Frame(BinaryOperand, Scannable):
                 # In case of list column, there is a possibility of nested
                 # list columns to have struct or decimal columns inside them.
 
-                # All of these cases are handled by calling the _with_type_metadata
-                # method on the column.
+                # All of these cases are handled by calling the
+                # _with_type_metadata method on the column.
                 result[name] = result[name]._with_type_metadata(
                     cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
                 )
