@@ -39,7 +39,7 @@ requirements:
     - setuptools
     - numba >=0.54
     - libcudf ={{ version }}
-    - cudf = {{ version }}
+    - cudf ={{ version }}
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
