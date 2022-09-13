@@ -911,7 +911,7 @@ class ParquetDatasetWriter:
         path,
         partition_cols,
         index=None,
-        compression=None,
+        compression="snappy",
         statistics="ROWGROUP",
         max_file_size=None,
         file_name_prefix=None,
