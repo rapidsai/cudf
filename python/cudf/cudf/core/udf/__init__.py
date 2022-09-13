@@ -10,6 +10,7 @@ from cudf.core.udf import api
 from cudf.core.udf import utils
 from cudf.core.udf import row_function
 from cudf.core.dtypes import dtype
+from cudf.utils.dtypes import STRING_TYPES
 import numpy as np
 
 units = ["ns", "ms", "us", "s"]
@@ -49,6 +50,7 @@ try:
         supported_masked_types |= {strings_typing.string_view}
         utils.launch_arg_getters[dtype("O")] = to_string_view_array
         utils.masked_array_types[dtype("O")] = string_view
+        utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
         utils.files.append(ptxpath)
         utils.arg_handlers.append(str_view_arg_handler)
         row_function.itemsizes[dtype("O")] = string_view.size_bytes

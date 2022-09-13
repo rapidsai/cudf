@@ -18,17 +18,12 @@ from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    STRING_TYPES,
     TIMEDELTA_TYPES,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES
-    | BOOL_TYPES
-    | DATETIME_TYPES
-    | TIMEDELTA_TYPES
-    | STRING_TYPES
+    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
 )
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
@@ -152,6 +147,7 @@ def _construct_signature(frame, return_type, args):
     return_type = Tuple((return_type[::1], boolean[::1]))
     offsets = []
     sig = [return_type, int64]
+    breakpoint()
     for col in _supported_cols_from_frame(frame).values():
         sig.append(_masked_array_type_from_col(col))
         offsets.append(int64)
