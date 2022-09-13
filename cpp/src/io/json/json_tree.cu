@@ -372,9 +372,10 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
             "gpu.parent_node_ids");
   print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
+  rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
   auto out_pid = thrust::make_zip_iterator(scatter_indices.data(),
                                            //  d_tree.node_levels.data(),
-                                           d_tree.parent_node_ids.data(),
+                                           parent_node_ids.data(),
                                            node_type.data());
   //  d_tree.node_categories.data());
   // TODO: use cub radix sort.
@@ -388,25 +389,17 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
   *thrust::device_pointer_cast(parent_indices.data()) = -1;
   thrust::gather(rmm::exec_policy(stream),
-                 d_tree.parent_node_ids.begin() + 1,  // first node's parent is -1
-                 d_tree.parent_node_ids.end(),
+                 parent_node_ids.begin() + 1,  // first node's parent is -1
+                 parent_node_ids.end(),
                  gather_indices.begin(),
                  parent_indices.begin() + 1);
   printf("\n");
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.parent_node_ids, stream),
-            "gpu.parent_node_ids");
+  print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream), "gpu.parent_node_ids");
   print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
   print_vec(cudf::detail::make_std_vector_async(gather_indices, stream), "new_home");
   print_vec(cudf::detail::make_std_vector_async(parent_indices, stream), "parent_indices");
-  // XXX: restore parent_node_ids order using scatter. (check if this order is right?)
-  rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream);  // Used later for row_offsets
-  thrust::scatter(rmm::exec_policy(stream),
-                  d_tree.parent_node_ids.begin(),
-                  d_tree.parent_node_ids.end(),
-                  scatter_indices.begin(),
-                  parent_node_ids.begin());
   print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream),
             "parent_node_ids (restored)");
   // 2. Find level boundaries.
@@ -639,7 +632,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     thrust::make_counting_iterator<size_type>(num_nodes),
     row_offsets.begin(),
     [node_categories = d_tree.node_categories.data(),
-     parent_node_ids = parent_node_ids.begin(),
+     parent_node_ids = d_tree.parent_node_ids.begin(),
      row_offsets     = row_offsets.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
       while (node_categories[parent_node_id] != node_t::NC_LIST &&
@@ -651,14 +644,13 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
       return row_offsets[node_id];
     },
     [node_categories = d_tree.node_categories.data(),
-     parent_node_ids = parent_node_ids.begin()] __device__(size_type node_id) {
+     parent_node_ids = d_tree.parent_node_ids.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
       return parent_node_id != -1 and
              !(node_categories[parent_node_id] ==
                node_t::NC_LIST);  // Parent is not a list, or sentinel/root (might be different
                                   // condition for JSON_lines)
     });
-  d_tree.parent_node_ids = std::move(parent_node_ids);  // TODO do it inplace itself.
   print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
   // TODO check if d_tree is back to original order.
   // return col_id, row_offset of each node.
