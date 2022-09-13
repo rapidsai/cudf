@@ -19,7 +19,8 @@ def check_groupby_result(ddf):
     """Assert that groupby result is using dask-cudf's codepath"""
 
     try:
-        hlg_layer(ddf.dask, "groupby_agg")
+        hlg_layer(ddf.dask, "cudf-aggregate-chunk")
+        hlg_layer(ddf.dask, "cudf-aggregate-agg")
     except KeyError:
         raise AssertionError(
             "Dask dataframe does not contain dask-cudf groupby layer"
