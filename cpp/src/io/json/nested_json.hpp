@@ -24,7 +24,9 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
+#include <map>
 #include <vector>
 
 namespace cudf::io::json {
@@ -308,6 +310,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
  * @param tokens Vector of token types in the json string
  * @param token_indices The indices within the input string corresponding to each token
  * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
  * level, begin index, and end index in the input JSON string
  */
