@@ -2,6 +2,7 @@
 
 import datetime
 import decimal
+import filecmp
 import os
 import random
 from io import BytesIO
@@ -1871,3 +1872,16 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
 
     assert_eq(negative_timestamp_df, pd.read_orc(buffer))
     assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
+
+
+def test_orc_writer_default_compression(datadir, tmpdir):
+    path = datadir / "TestOrcFile.test1.orc"
+    df = cudf.read_orc(path)
+
+    default_comp_fname = tmpdir / "default_comp_arg.orc"
+    df.to_orc(default_comp_fname)
+
+    snappy_comp_fname = tmpdir / "snappy_arg.orc"
+    df.to_orc(snappy_comp_fname, compression="snappy")
+
+    assert filecmp.cmp(default_comp_fname, snappy_comp_fname, shallow=False)
