@@ -249,8 +249,29 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
 
+# This helper function runs the strings_udf tests but ensures that we do not
+# return a nonzero exit code in the case where no tests are run because that
+# will always happen when the local CUDA version is not 11.5. We need to
+# suppress the exit code because this script is run with set -e and we're
+# already setting a trap that we don't want to override here.
+function run_strings_udf_test() {
+    py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
+
+    local err=$?;
+    if [ ${err} -eq 5 ]; then
+        STRING_UDF_TEST_RUN=0;
+        return 0;
+    else
+        STRING_UDF_TEST_RUN=1;
+        return ${err};
+    fi
+}
+run_strings_udf_test
+
+if [ ${STRING_UDF_TEST_RUN} -eq 0 ]; then
+    echo "No strings UDF tests were run, but this script will continue to execute."
+fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
