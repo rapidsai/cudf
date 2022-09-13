@@ -1097,8 +1097,8 @@ class Frame(BinaryOperand, Scannable):
                 # which needs to be type-casted to 'category' dtype.
                 dtype = "category"
             elif (
-                pandas_dtypes.get(name, "") == "empty"
-                and np_dtypes.get(name, "") == "object"
+                pandas_dtypes.get(name) == "empty"
+                and np_dtypes.get(name) == "object"
             ):
                 # When a string column has all null values, pandas_dtype is
                 # is specified as 'empty' and np_dtypes as 'object',
