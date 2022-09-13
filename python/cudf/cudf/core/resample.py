@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+import cudf.core.index
 import cudf._lib.labeling
 from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
@@ -40,7 +41,7 @@ class _Resampler(GroupBy):
     def agg(self, func):
         result = super().agg(func)
         if len(self.grouping.bin_labels) != len(result):
-            index = cudf.Index(
+            index = cudf.core.index.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
             )
             return result._align_to_index(
@@ -92,7 +93,7 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 class _ResampleGrouping(_Grouping):
 
-    bin_labels: cudf.Index
+    bin_labels: cudf.core.index.Index
 
     def _handle_frequency_grouper(self, by):
         # if `by` is a time frequency grouper, we bin the key column
