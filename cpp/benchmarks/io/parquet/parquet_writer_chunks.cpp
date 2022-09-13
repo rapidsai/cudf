@@ -37,12 +37,12 @@ void PQ_write(nvbench::state& state)
 
   cudf::size_type const num_cols = state.get_int64("num_cols");
 
-  auto tbl              = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
-                                 table_size_bytes{data_size});
-  cudf::table_view view = tbl->view();
+  auto const tbl  = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
+                                       table_size_bytes{data_size});
+  auto const view = tbl->view();
 
   std::size_t encoded_file_size = 0;
-  auto mem_stats_logger         = cudf::memory_stats_logger();
+  auto const mem_stats_logger   = cudf::memory_stats_logger();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
@@ -78,7 +78,7 @@ void PQ_write_chunked(nvbench::state& state)
                                          table_size_bytes{size_t(data_size / num_tables)}));
   }
 
-  auto mem_stats_logger         = cudf::memory_stats_logger();
+  auto const mem_stats_logger   = cudf::memory_stats_logger();
   std::size_t encoded_file_size = 0;
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
