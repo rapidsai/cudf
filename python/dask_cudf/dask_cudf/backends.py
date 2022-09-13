@@ -440,12 +440,6 @@ try:
             # that data-dispatch functions are registered
             pass
 
-        def make_timeseries(self, *args, df_backend=None, **kwargs):
-            with config.set({"dataframe.backend.library": "pandas"}):
-                return dd.io.demo.make_timeseries(
-                    *args, df_backend="cudf", **kwargs
-                )
-
         def read_parquet(self, *args, engine=None, **kwargs):
             from .io.parquet import CudfEngine
 
