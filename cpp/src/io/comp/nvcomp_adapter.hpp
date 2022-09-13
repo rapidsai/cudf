@@ -18,6 +18,7 @@
 
 #include "gpuinflate.hpp"
 
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -27,12 +28,22 @@ namespace cudf::io::nvcomp {
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 
 /**
+ * @brief Whether the given compression type is enabled through nvCOMP.
+ *
+ * Result depends on nvCOMP version and environment variables.
+ *
+ * @param compression Compression type
+ * @returns true if nvCOMP use is enabled; false otherwise
+ */
+[[nodiscard]] bool is_compression_enabled(compression_type compression);
+
+/**
  * @brief Device batch decompression of given type.
  *
  * @param[in] compression Compression type
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
- * @param[out] statuses List of output status structures
+ * @param[out] results List of output status structures
  * @param[in] max_uncomp_chunk_size maximum size of uncompressed chunk
  * @param[in] max_total_uncomp_size maximum total size of uncompressed data
  * @param[in] stream CUDA stream to use
@@ -40,7 +51,7 @@ enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
-                        device_span<decompress_status> statuses,
+                        device_span<compression_result> results,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
@@ -51,8 +62,32 @@ void batched_decompress(compression_type compression,
  * @param compression Compression type
  * @param max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
  */
-size_t batched_compress_get_max_output_chunk_size(compression_type compression,
-                                                  uint32_t max_uncomp_chunk_size);
+[[nodiscard]] size_t compress_max_output_chunk_size(compression_type compression,
+                                                    uint32_t max_uncomp_chunk_size);
+
+/**
+ * @brief Gets input alignment requirements for the given compression type.
+ *
+ * @param compression Compression type
+ * @returns required alignment, in bits
+ */
+[[nodiscard]] size_t compress_input_alignment_bits(compression_type compression);
+
+/**
+ * @brief Gets output alignment requirements for the given compression type.
+ *
+ * @param compression Compression type
+ * @returns required alignment, in bits
+ */
+[[nodiscard]] size_t compress_output_alignment_bits(compression_type compression);
+
+/**
+ * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP.
+ *
+ * @param compression Compression type
+ * @returns maximum chunk size
+ */
+[[nodiscard]] std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression);
 
 /**
  * @brief Device batch compression of given type.
@@ -60,15 +95,13 @@ size_t batched_compress_get_max_output_chunk_size(compression_type compression,
  * @param[in] compression Compression type
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
- * @param[out] statuses List of output status structures
- * @param[in] max_uncomp_chunk_size Size of the largest uncompressed chunk in the batch
+ * @param[out] results List of output status structures
  * @param[in] stream CUDA stream to use
  */
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<decompress_status> statuses,
-                      uint32_t max_uncomp_chunk_size,
+                      device_span<compression_result> results,
                       rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::nvcomp

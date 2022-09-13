@@ -135,6 +135,19 @@ struct PageInfo {
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
+  // for nested types, we run a preprocess step in order to determine output
+  // column sizes. Because of this, we can jump directly to the position in the
+  // input data to start decoding instead of reading all of the data and discarding
+  // rows we don't care about.
+  //
+  // NOTE: for flat hierarchies we do not do the preprocess step, so skipped_values and
+  // skipped_leaf_values will always be 0.
+  //
+  // # of values skipped in the repetition/definition level stream
+  int skipped_values;
+  // # of values skipped in the actual data stream.
+  int skipped_leaf_values;
+
   // nesting information (input/output) for each page
   int num_nesting_levels;
   PageNestingInfo* nesting;
@@ -309,15 +322,6 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   return idx;
 }
 
-/**
- * @brief Return worst-case compressed size of compressed data given the uncompressed size
- */
-inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
-                                                          uint32_t num_pages = 1)
-{
-  return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
-}
-
 struct EncPage;
 
 /**
@@ -376,7 +380,7 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  decompress_status* comp_stat;  //!< Ptr to compression status
+  compression_result* comp_res;  //!< Ptr to compression result
 };
 
 /**
@@ -416,6 +420,9 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * @param input_columns Input column information
  * @param output_columns Output column information
  * @param num_rows Maximum number of rows to read
+ * @param min_rows crop all rows below min_row
+ * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+ * bounds
  * @param stream Cuda stream
  */
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
@@ -423,6 +430,8 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           std::vector<input_column_info>& input_columns,
                           std::vector<cudf::io::detail::column_buffer>& output_columns,
                           size_t num_rows,
+                          size_t min_row,
+                          bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
@@ -435,11 +444,13 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecodePageData(hostdevice_vector<PageInfo>& pages,
                     hostdevice_vector<ColumnChunkDesc> const& chunks,
                     size_t num_rows,
+                    size_t min_row,
                     rmm::cuda_stream_view stream);
 
 /**
@@ -524,6 +535,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
  * @param[in] page_grstats Setup for page-level stats
+ * @param[in] page_align Required alignment for uncompressed pages
  * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use, default 0
@@ -536,6 +548,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
+                      uint32_t page_align,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream);
@@ -546,13 +559,13 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param[in,out] pages Device array of EncPages (unordered)
  * @param[out] comp_in Compressor input buffers
  * @param[out] comp_in Compressor output buffers
- * @param[out] comp_stats Compressor statuses
+ * @param[out] comp_stats Compressor results
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats,
+                 device_span<compression_result> comp_res,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -573,7 +586,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stats,
+                       device_span<compression_result const> comp_res,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream);
