@@ -57,31 +57,69 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
           std::move(output_data_sizes)};
 }
 
-void convert_status(std::optional<device_span<nvcompStatus_t const>> nvcomp_stats,
-                    device_span<size_t const> actual_uncompressed_sizes,
-                    device_span<decompress_status> cudf_stats,
-                    rmm::cuda_stream_view stream)
+void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
+                                device_span<size_t const> actual_output_sizes,
+                                device_span<compression_result> results,
+                                rmm::cuda_stream_view stream)
 {
-  if (nvcomp_stats.has_value()) {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      nvcomp_stats->begin(),
-      nvcomp_stats->end(),
-      actual_uncompressed_sizes.begin(),
-      cudf_stats.begin(),
-      [] __device__(auto const& status, auto const& size) {
-        return decompress_status{size, status == nvcompStatus_t::nvcompSuccess ? 0u : 1u};
-      });
-  } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      actual_uncompressed_sizes.begin(),
-                      actual_uncompressed_sizes.end(),
-                      cudf_stats.begin(),
-                      [] __device__(size_t size) {
-                        decompress_status status{};
-                        status.bytes_written = size;
-                        return status;
-                      });
-  }
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    nvcomp_stats.begin(),
+    nvcomp_stats.end(),
+    actual_output_sizes.begin(),
+    results.begin(),
+    results.begin(),
+    [] __device__(auto const& nvcomp_status, auto const& size) {
+      return compression_result{size,
+                                nvcomp_status == nvcompStatus_t::nvcompSuccess
+                                  ? compression_status::SUCCESS
+                                  : compression_status::FAILURE};
+    },
+    [] __device__(auto const& cudf_status) {
+      return cudf_status.status != compression_status::SKIPPED;
+    });
 }
+
+void update_compression_results(device_span<size_t const> actual_output_sizes,
+                                device_span<compression_result> results,
+                                rmm::cuda_stream_view stream)
+{
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    actual_output_sizes.begin(),
+    actual_output_sizes.end(),
+    results.begin(),
+    results.begin(),
+    [] __device__(auto const& size) { return compression_result{size}; },
+    [] __device__(auto const& results) { return results.status != compression_status::SKIPPED; });
+}
+
+size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
+                               device_span<compression_result> results,
+                               std::optional<size_t> max_valid_input_size,
+                               rmm::cuda_stream_view stream)
+{
+  if (max_valid_input_size.has_value()) {
+    auto status_size_it = thrust::make_zip_iterator(input_sizes.begin(), results.begin());
+    thrust::transform_if(
+      rmm::exec_policy(stream),
+      results.begin(),
+      results.end(),
+      input_sizes.begin(),
+      status_size_it,
+      [] __device__(auto const& status) {
+        return thrust::pair{0, compression_result{0, compression_status::SKIPPED}};
+      },
+      [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
+        return input_size > max_size;
+      });
+  }
+
+  return thrust::reduce(rmm::exec_policy(stream),
+                        input_sizes.begin(),
+                        input_sizes.end(),
+                        0ul,
+                        thrust::maximum<size_t>());
+}
+
 }  // namespace cudf::io::nvcomp

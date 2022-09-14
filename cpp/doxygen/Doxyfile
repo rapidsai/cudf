@@ -739,7 +739,7 @@ FILE_VERSION_FILTER    =
 # DoxygenLayout.xml, doxygen will parse it automatically even if the LAYOUT_FILE
 # tag is left empty.
 
-LAYOUT_FILE            =
+LAYOUT_FILE            = DoxygenLayout.xml
 
 # The CITE_BIB_FILES tag can be used to specify one or more bib files containing
 # the reference definitions. This must be a list of .bib files. The .bib
@@ -830,6 +830,10 @@ WARN_LOGFILE           =
 INPUT                  = main_page.md \
                          regex.md \
                          unicode.md \
+                         developer_guide/BENCHMARKING.md \
+                         developer_guide/DOCUMENTATION.md \
+                         developer_guide/DEVELOPER_GUIDE.md \
+                         developer_guide/TESTING.md \
                          ../include \
                          ../include/cudf_test/column_wrapper.hpp \
                          ../include/cudf_test/column_utilities.hpp \
@@ -975,7 +979,7 @@ INPUT_FILTER           =
 # need to set EXTENSION_MAPPING for the extension otherwise the files are not
 # properly processed by doxygen.
 
-FILTER_PATTERNS        =
+FILTER_PATTERNS        = *.md=./modify_fences.sh
 
 # If the FILTER_SOURCE_FILES tag is set to YES, the input filter (if set using
 # INPUT_FILTER) will also be used to filter the input files that are used for

@@ -6012,7 +6012,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, compression=None, *args, **kwargs):
+    def to_orc(self, fname, compression="snappy", *args, **kwargs):
         """{docstring}"""
         from cudf.io import orc
 
