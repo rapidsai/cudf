@@ -13,10 +13,10 @@
 # limitations under the License.
 #
 
-import datetime
-import re
 import argparse
+import datetime
 import os
+import re
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.expanduser(__file__)))
@@ -34,13 +34,14 @@ FilesToCheck = [
     re.compile(r"CMakeLists_standalone[.]txt$"),
     re.compile(r"setup[.]cfg$"),
     re.compile(r"[.]flake8[.]cython$"),
-    re.compile(r"meta[.]yaml$")
+    re.compile(r"meta[.]yaml$"),
 ]
 ExemptFiles = ["cpp/include/cudf_test/cxxopts.hpp"]
 
 # this will break starting at year 10000, which is probably OK :)
 CheckSimple = re.compile(
-    r"Copyright *(?:\(c\))? *(\d{4}),? *NVIDIA C(?:ORPORATION|orporation)")
+    r"Copyright *(?:\(c\))? *(\d{4}),? *NVIDIA C(?:ORPORATION|orporation)"
+)
 CheckDouble = re.compile(
     r"Copyright *(?:\(c\))? *(\d{4})-(\d{4}),? *NVIDIA C(?:ORPORATION|orporation)"  # noqa: E501
 )
@@ -75,8 +76,9 @@ def replaceCurrentYear(line, start, end):
     # first turn a simple regex into double (if applicable). then update years
     res = CheckSimple.sub(r"Copyright (c) \1-\1, NVIDIA CORPORATION", line)
     res = CheckDouble.sub(
-        r"Copyright (c) {:04d}-{:04d}, NVIDIA CORPORATION".format(start, end),
-        res)
+        fr"Copyright (c) {start:04d}-{end:04d}, NVIDIA CORPORATION",
+        res,
+    )
     return res
 
 
@@ -89,7 +91,7 @@ def checkCopyright(f, update_current_year):
     lineNum = 0
     crFound = False
     yearMatched = False
-    with open(f, "r", encoding="utf-8") as fp:
+    with open(f, encoding="utf-8") as fp:
         lines = fp.readlines()
     for line in lines:
         lineNum += 1
@@ -103,16 +105,15 @@ def checkCopyright(f, update_current_year):
                 lineNum,
                 "First year after second year in the copyright "
                 "header (manual fix required)",
-                None
+                None,
             ]
             errs.append(e)
         if thisYear < start or thisYear > end:
             e = [
                 f,
                 lineNum,
-                "Current year not included in the "
-                "copyright header",
-                None
+                "Current year not included in the copyright header",
+                None,
             ]
             if thisYear < start:
                 e[-1] = replaceCurrentYear(line, thisYear, end)
@@ -129,7 +130,7 @@ def checkCopyright(f, update_current_year):
             0,
             "Copyright header missing or formatted incorrectly "
             "(manual fix required)",
-            None
+            None,
         ]
         errs.append(e)
     # even if the year matches a copyright header, make the check pass
@@ -139,8 +140,11 @@ def checkCopyright(f, update_current_year):
     if update_current_year:
         errs_update = [x for x in errs if x[-1] is not None]
         if len(errs_update) > 0:
-            print("File: {}. Changing line(s) {}".format(
-                f, ', '.join(str(x[1]) for x in errs if x[-1] is not None)))
+            print(
+                "File: {}. Changing line(s) {}".format(
+                    f, ", ".join(str(x[1]) for x in errs if x[-1] is not None)
+                )
+            )
             for _, lineNum, __, replacement in errs_update:
                 lines[lineNum - 1] = replacement
             with open(f, "w", encoding="utf-8") as out_file:
@@ -171,21 +175,26 @@ def checkCopyright_main():
     global ExemptFiles
 
     argparser = argparse.ArgumentParser(
-        "Checks for a consistent copyright header in git's modified files")
-    argparser.add_argument("--update-current-year",
-                           dest='update_current_year',
-                           action="store_true",
-                           required=False,
-                           help="If set, "
-                           "update the current year if a header is already "
-                           "present and well formatted.")
-    argparser.add_argument("--git-modified-only",
-                           dest='git_modified_only',
-                           action="store_true",
-                           required=False,
-                           help="If set, "
-                           "only files seen as modified by git will be "
-                           "processed.")
+        "Checks for a consistent copyright header in git's modified files"
+    )
+    argparser.add_argument(
+        "--update-current-year",
+        dest="update_current_year",
+        action="store_true",
+        required=False,
+        help="If set, "
+        "update the current year if a header is already "
+        "present and well formatted.",
+    )
+    argparser.add_argument(
+        "--git-modified-only",
+        dest="git_modified_only",
+        action="store_true",
+        required=False,
+        help="If set, "
+        "only files seen as modified by git will be "
+        "processed.",
+    )
 
     (args, dirs) = argparser.parse_known_args()
     try:
@@ -215,11 +224,15 @@ def checkCopyright_main():
         print("")
         n_fixable = sum(1 for e in errors if e[-1] is not None)
         path_parts = os.path.abspath(__file__).split(os.sep)
-        file_from_repo = os.sep.join(path_parts[path_parts.index("ci"):])
+        file_from_repo = os.sep.join(path_parts[path_parts.index("ci") :])
         if n_fixable > 0:
-            print(("You can run `python {} --git-modified-only "
-                   "--update-current-year` to fix {} of these "
-                   "errors.\n").format(file_from_repo, n_fixable))
+            print(
+                (
+                    "You can run `python {} --git-modified-only "
+                    "--update-current-year` to fix {} of these "
+                    "errors.\n"
+                ).format(file_from_repo, n_fixable)
+            )
         retVal = 1
     else:
         print("Copyright check passed")
@@ -229,4 +242,5 @@ def checkCopyright_main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(checkCopyright_main())
