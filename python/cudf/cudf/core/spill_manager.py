@@ -111,8 +111,8 @@ class SpillManager:
                 self._id_counter += 1
 
     def add_other(self, buffer: DeviceBufferLike) -> None:
-        with self._lock:
-            if buffer.size > 0:
+        if buffer.size > 0:
+            with self._lock:
                 self._other_buffers[self._id_counter] = buffer
                 self._id_counter += 1
 
