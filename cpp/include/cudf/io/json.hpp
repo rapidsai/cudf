@@ -211,7 +211,7 @@ class json_reader_options {
    *
    * @returns true if the experimental reader should keep quotes, false otherwise
    */
-  bool is_keeping_quotes() const { return _keep_quotes; }
+  bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
    * @brief Set data types for columns to be read.
@@ -275,7 +275,7 @@ class json_reader_options {
    * @param val Boolean value to indicate whether the experimental reader should keep quotes
    * of string values
    */
-  void keep_quotes(bool val) { _keep_quotes = val; }
+  void enable_keep_quotes(bool val) { _keep_quotes = val; }
 };
 
 /**
