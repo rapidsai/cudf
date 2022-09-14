@@ -20,15 +20,6 @@ import os
 import re
 import sys
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.expanduser(__file__)))
-
-# Add the scripts dir for gitutils
-sys.path.append(os.path.normpath(SCRIPT_DIR))
-
-# Now import gitutils. Ignore flake8 error here since there is no other way to
-# set up imports
-import gitutils  # noqa: E402
-
 FilesToCheck = [
     re.compile(r"[.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx)$"),
     re.compile(r"CMakeLists[.]txt$"),
@@ -238,6 +229,7 @@ def checkCopyright_main():
             if not (os.path.isdir(d)):
                 raise ValueError(f"{d} is not a directory.")
             files += getAllFilesUnderDir(d, pathFilter=checkThisFile)
+        # TODO: This is broken?
 
     errors = []
     for f in files:

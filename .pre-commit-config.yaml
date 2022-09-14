@@ -82,7 +82,6 @@ repos:
                 entry: python ./ci/checks/copyright.py --git-modified-only --update-current-year
                 language: python
                 pass_filenames: false
-                verbose: true
                 additional_dependencies: [gitpython]
               - id: doxygen-check
                 name: doxygen-check
