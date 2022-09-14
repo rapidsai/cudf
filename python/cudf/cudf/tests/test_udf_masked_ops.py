@@ -728,7 +728,7 @@ def test_masked_udf_caching():
 @string_udf_test
 def test_string_udf_len(str_udf_data):
     def func(row):
-        len(row["str_col"])
+        return len(row["str_col"])
 
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
