@@ -584,7 +584,7 @@ def test_groupby_categorical_key():
 
 
 @pytest.mark.parametrize("as_index", [True, False])
-@pytest.mark.parametrize("split_out", [None, 1, 2])
+@pytest.mark.parametrize("split_out", [1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
 def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
