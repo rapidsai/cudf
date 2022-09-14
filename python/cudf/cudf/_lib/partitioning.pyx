@@ -11,7 +11,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.partitioning cimport partition as cpp_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.spillable_buffer cimport SpillLock
+from cudf._lib.spillable_buffer import SpillLock
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
@@ -25,7 +25,7 @@ def partition(list source_columns, Column partition_map,
         num_partitions = cpp_distinct_count(partition_map, ignore_nulls=True)
     cdef int c_num_partitions = num_partitions
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef table_view c_source_view = table_view_from_columns(
         source_columns, spill_lock=slock
     )

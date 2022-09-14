@@ -6,7 +6,6 @@ from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column cimport column_view
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.spillable_buffer cimport SpillLock
 
 
 cdef vector[column_view] make_column_views(object columns) except*
@@ -15,11 +14,9 @@ cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=*)
 cdef data_from_table_view(
     table_view tv, object owner, object column_names, object index_names=*)
-cdef table_view table_view_from_columns(
-    columns, SpillLock spill_lock=*
-) except *
+cdef table_view table_view_from_columns(columns, spill_lock=*) except *
 cdef table_view table_view_from_table(
-    tbl, ignore_index=*, SpillLock spill_lock=*
+    tbl, ignore_index=*, spill_lock=*
 ) except*
 cdef columns_from_unique_ptr(unique_ptr[table] c_tbl)
 cdef columns_from_table_view(table_view tv, object owners)

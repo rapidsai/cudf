@@ -30,8 +30,8 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
 )
-from cudf._lib.spillable_buffer cimport SpillableBuffer
 
+from cudf._lib.spillable_buffer import SpillableBuffer, SpillLock
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
@@ -342,7 +342,7 @@ cdef class Column:
             return other_col
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        cdef SpillLock slock = SpillLock()
+        slock = SpillLock()
         return self._view(libcudf_types.UNKNOWN_NULL_COUNT, slock).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
@@ -390,7 +390,7 @@ cdef class Column:
             offset,
             children)
 
-    cdef column_view view(self, SpillLock spill_lock=None) except *:
+    cdef column_view view(self, spill_lock=None) except *:
         null_count = self.null_count
         if null_count is None:
             null_count = libcudf_types.UNKNOWN_NULL_COUNT
@@ -400,7 +400,7 @@ cdef class Column:
     cdef column_view _view(
         self,
         libcudf_types.size_type null_count,
-        SpillLock spill_lock
+        spill_lock
     ) except *:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
@@ -416,9 +416,9 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):
-            data = <void*><uintptr_t>(
-                <SpillableBuffer>col.base_data
-            ).get_ptr(spill_lock=spill_lock)
+            data = <void*><uintptr_t>(col.base_data).get_ptr(
+                spill_lock=spill_lock
+            )
         else:
             data = <void*><uintptr_t>(col.base_data.ptr)
 

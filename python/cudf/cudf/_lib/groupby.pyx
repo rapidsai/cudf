@@ -26,7 +26,7 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.spillable_buffer cimport SpillLock
+from cudf._lib.spillable_buffer import SpillLock
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_unique_ptr,

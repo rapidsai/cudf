@@ -37,7 +37,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.spillable_buffer cimport SpillLock
+from cudf._lib.spillable_buffer import SpillLock
 from cudf._lib.utils cimport (
     columns_from_table_view,
     columns_from_unique_ptr,
@@ -81,7 +81,7 @@ def copy_column(Column input_column):
     Deep copied column
     """
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view input_column_view = input_column.view(slock)
     cdef unique_ptr[column] c_result
     with nogil:
@@ -96,7 +96,7 @@ def _copy_range_in_place(Column input_column,
                          size_type input_end,
                          size_type target_begin):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view input_column_view = input_column.view(slock)
     cdef mutable_column_view target_column_view = target_column.mutable_view()
     cdef size_type c_input_begin = input_begin
@@ -118,7 +118,7 @@ def _copy_range(Column input_column,
                 size_type input_end,
                 size_type target_begin):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view input_column_view = input_column.view(slock)
     cdef column_view target_column_view = target_column.view(slock)
     cdef size_type c_input_begin = input_begin
@@ -172,7 +172,7 @@ def copy_range(Column input_column,
 
 
 def gather(list columns, Column gather_map, bool nullify=False):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view = table_view_from_columns(
         columns,
@@ -227,7 +227,7 @@ cdef scatter_column(list source_columns,
                     column_view scatter_map,
                     table_view target_table,
                     bool bounds_check):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef table_view c_source = table_view_from_columns(
         source_columns,
         spill_lock=slock
@@ -262,7 +262,7 @@ def scatter(list sources, Column scatter_map, list target_columns,
     if len(sources) == 0:
         return []
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view scatter_map_view = scatter_map.view(slock)
     cdef table_view target_table_view = table_view_from_columns(
         target_columns,
@@ -282,7 +282,7 @@ def scatter(list sources, Column scatter_map, list target_columns,
 
 def column_empty_like(Column input_column):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view input_column_view = input_column.view(slock)
     cdef unique_ptr[column] c_result
 
@@ -294,7 +294,7 @@ def column_empty_like(Column input_column):
 
 def column_allocate_like(Column input_column, size=None):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef size_type c_size = 0
     cdef column_view input_column_view = input_column.view(slock)
     cdef unique_ptr[column] c_result
@@ -321,7 +321,7 @@ def column_allocate_like(Column input_column, size=None):
 
 
 def columns_empty_like(list input_columns):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef table_view input_table_view = table_view_from_columns(
         input_columns,
         spill_lock=slock
@@ -336,7 +336,7 @@ def columns_empty_like(list input_columns):
 
 def column_slice(Column input_column, object indices):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view input_column_view = input_column.view(slock)
     cdef vector[size_type] c_indices
     c_indices.reserve(len(indices))
@@ -372,7 +372,7 @@ def columns_slice(list input_columns, list indices):
     `len(indices) / 2`. The `i`th item in return is a list of columns sliced
     from ``input_columns`` with `slice(indices[i*2], indices[i*2 + 1])`.
     """
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef table_view input_table_view = table_view_from_columns(
         input_columns, slock
     )
@@ -393,7 +393,7 @@ def columns_slice(list input_columns, list indices):
 
 def column_split(Column input_column, object splits):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view input_column_view = input_column.view(slock)
     cdef vector[size_type] c_splits
     c_splits.reserve(len(splits))
@@ -425,7 +425,7 @@ def column_split(Column input_column, object splits):
 
 def columns_split(list input_columns, object splits):
 
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef table_view input_table_view = table_view_from_columns(
         input_columns, spill_lock=slock
     )

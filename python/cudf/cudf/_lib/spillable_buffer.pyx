@@ -3,6 +3,7 @@
 import collections.abc
 import pickle
 import time
+import weakref
 from threading import RLock
 from typing import Any, Tuple, Union
 
@@ -24,18 +25,8 @@ from libcpp.memory cimport make_shared, shared_ptr, static_pointer_cast
 from libcpp.vector cimport vector
 
 
-cdef shared_ptr[void] create_expose_counter():
-    """Create an expose counter"""
-    return static_pointer_cast[void, int](
-        make_shared[int](42)
-    )
-
-
-cdef class SpillLock:
-    """Disable spilling temporarily for specific buffers"""
-
-    cdef add(self, shared_ptr[void] expose_counter):
-        self._expose_counters.push_back(expose_counter)
+class SpillLock:
+    pass
 
 
 class DelayedPointerTuple(collections.abc.Sequence):
@@ -68,7 +59,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
         raise IndexError("tuple index out of range")
 
 
-cdef class SpillableBuffer:
+class SpillableBuffer:
     """A spillable buffer that implements DeviceBufferLike.
 
     This buffer supports spilling the represented data to host memory.
@@ -105,7 +96,7 @@ cdef class SpillableBuffer:
         object manager,
     ):
         self._lock = RLock()
-        self._expose_counter = create_expose_counter()
+        self._spill_locks = weakref.WeakSet()
         self._exposed = exposed
         self._last_accessed = time.monotonic()
         self._view_desc = (
@@ -250,7 +241,18 @@ cdef class SpillableBuffer:
             self._last_accessed = time.monotonic()
             return self._ptr
 
-    def get_ptr(self, SpillLock spill_lock=None) -> int:
+    def spill_lock(self, spill_lock: SpillLock = None) -> SpillLock:
+        if self._view_desc:
+            return self._view_desc["base"].spill_lock(spill_lock)
+
+        if spill_lock is None:
+            spill_lock = SpillLock()
+        with self._lock:
+            self.__spill__(target="gpu")
+            self._spill_locks.add(spill_lock)
+        return spill_lock
+
+    def get_ptr(self, spill_lock: SpillLock = None) -> int:
         """Get a device pointer to the memory of the buffer
 
         If spill_lock is not None, a reference to this buffer is added
@@ -268,24 +270,18 @@ cdef class SpillableBuffer:
             The device pointer as an integer
         """
 
+        if self._view_desc:
+            return (
+                self._view_desc["base"].get_ptr(spill_lock) +
+                self._view_desc["offset"]
+            )
+
         if spill_lock is None:
             return self.ptr  # expose the buffer permanently
 
-        # Get base buffer
-        cdef SpillableBuffer base
-        cdef size_t offset
-        if self._view_desc is None:
-            base = self
-            offset = 0
-        else:
-            base = self._view_desc["base"]
-            offset = self._view_desc["offset"]
-
-        with base._lock:
-            base.__spill__(target="gpu")
-            base._last_accessed = time.monotonic()
-            spill_lock.add(base._expose_counter)
-            return base._ptr+offset
+        self.spill_lock(spill_lock)
+        self._last_accessed = time.monotonic()
+        return self._ptr
 
     @property
     def owner(self) -> Any:
@@ -301,13 +297,13 @@ cdef class SpillableBuffer:
     def expose_counter(self) -> int:
         if self._view_desc:
             return self._view_desc["base"].expose_counter
-        return self._expose_counter.use_count()
+        return len(self._spill_locks) + 1
 
     @property
     def spillable(self) -> bool:
         if self._view_desc:
             return self._view_desc["base"].spillable
-        return not self._exposed and self._expose_counter.use_count() == 1
+        return not self._exposed and len(self._spill_locks) == 0
 
     @property
     def size(self) -> int:
@@ -335,7 +331,6 @@ cdef class SpillableBuffer:
 
     def memoryview(self) -> memoryview:
         # Get base buffer
-        cdef SpillableBuffer base
         cdef size_t offset
         if self._view_desc is None:
             base = self
@@ -358,7 +353,7 @@ cdef class SpillableBuffer:
                 )
                 return ret
 
-    def __getitem__(self, slice key) -> SpillableBuffer:
+    def __getitem__(self, slice key) -> "SpillableBuffer":
         start, stop, step = key.indices(self.size)
         if step != 1:
             raise ValueError("slice must be C-contiguous")
@@ -368,7 +363,6 @@ cdef class SpillableBuffer:
 
     def serialize(self) -> Tuple[dict, list]:
         # Get base buffer
-        cdef SpillableBuffer base
         if self._view_desc is None:
             base = self
         else:
@@ -393,7 +387,7 @@ cdef class SpillableBuffer:
             return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
+    def deserialize(cls, header: dict, frames: list) -> "SpillableBuffer":
         from cudf.core.spill_manager import global_manager
 
         if header["frame_count"] != 1:
@@ -428,12 +422,13 @@ cdef class SpillableBuffer:
         return (
             f"<SpillableBuffer size={format_bytes(self._size)} "
             f"spillable={self.spillable} exposed={self.exposed} "
-            f"expose_counter={self._expose_counter.use_count()} "
+            f"expose_counter={len(self._spill_locks)} "
             f"ptr={ptr_info} owner={repr(self._owner)}"
         )
 
+
 # TODO: use a subclass instead
-cdef SpillableBuffer create_view(SpillableBuffer buffer, size, offset):
+def create_view(buffer, size, offset) -> "SpillableBuffer":
     if size < 0:
         raise ValueError("size cannot be negative")
 
@@ -445,7 +440,7 @@ cdef SpillableBuffer create_view(SpillableBuffer buffer, size, offset):
         base = buffer._view_desc["base"]
         base_offset = buffer._view_desc["offset"]
 
-    cdef SpillableBuffer ret = SpillableBuffer.__new__(SpillableBuffer)
+    ret = SpillableBuffer.__new__(SpillableBuffer)
     ret._lock = None
     ret._size = size
     ret._owner = base

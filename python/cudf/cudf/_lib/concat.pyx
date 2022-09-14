@@ -15,7 +15,7 @@ from cudf._lib.cpp.concatenate cimport (
     concatenate_tables as libcudf_concatenate_tables,
 )
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.spillable_buffer cimport SpillLock
+from cudf._lib.spillable_buffer import SpillLock
 from cudf._lib.utils cimport (
     data_from_unique_ptr,
     make_column_views,
@@ -50,7 +50,7 @@ cpdef concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
     c_views.reserve(len(tables))
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     for tbl in tables:
         c_views.push_back(
             table_view_from_table(tbl, ignore_index, spill_lock=slock)
