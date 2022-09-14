@@ -6,31 +6,36 @@ on:
       - 'pull-request/[0-9]+'
 
 jobs:
-  libcudf-wheel:
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
-    with:
-      package-name: libcudf
-      package-dir: cpp
-      python-version: "3.8"
-      cibw-before-all: "apt-get install -y libzstd-dev liblz4-dev libboost-regex-dev libboost-system-dev libboost-filesystem-dev libsnappy-dev libprotobuf-dev libprotoc-dev protobuf-compiler"
-      cibw-before-build: "pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      skbuild-configure-options: '-DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DCUDF_ENABLE_ARROW_S3=OFF -DCUDF_ENABLE_ARROW_ORC=ON -DCUDF_ENABLE_ARROW_PYTHON=ON -DCUDF_ENABLE_ARROW_PARQUET=ON'
-      auditwheel-skip-repair: "true"
-      gpu-smoketest-before-amd64: "apt-get install -y libprotobuf-dev"
-      gpu-smoketest-before-arm64: "apt-get install -y libprotobuf-dev"
-      wheel-pattern-override: "py3-none-linux"
-      cibw-test-command: "for gt in _venv_placeholder/bin/gtests/libcudf*/*; do ${gt}; done"
-    secrets: inherit
+  # libcudf-wheel:
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
+  #   with:
+  #     package-name: libcudf
+  #     package-dir: cpp
+  #     python-version: "3.8"
+  #     cibw-before-all: "apt-get install -y libzstd-dev liblz4-dev libboost-regex-dev libboost-system-dev libboost-filesystem-dev libsnappy-dev libprotobuf-dev libprotoc-dev protobuf-compiler"
+  #     cibw-before-build: "pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+  #     skbuild-configure-options: '-DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DCUDF_ENABLE_ARROW_S3=OFF -DCUDF_ENABLE_ARROW_ORC=ON -DCUDF_ENABLE_ARROW_PYTHON=ON -DCUDF_ENABLE_ARROW_PARQUET=ON'
+  #     auditwheel-skip-repair: "true"
+  #     gpu-smoketest-before-amd64: "apt-get install -y libprotobuf-dev"
+  #     gpu-smoketest-before-arm64: "apt-get install -y libprotobuf-dev"
+  #     wheel-pattern-override: "py3-none-linux"
+  #     cibw-test-command: "for gt in _venv_placeholder/bin/gtests/libcudf*/*; do ${gt}; done"
+  #   secrets: inherit
   cudf-wheel:
-    needs: libcudf-wheel
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
+    uses: trxcllnt/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
     with:
       package-name: cudf
       package-dir: python/cudf
       python-version: "3.8 3.9"
-      cibw-before-all: "apt-get install -y protobuf-compiler && git clone https://github.com/dmlc/dlpack -b v0.5 /opt/dlpack && cp -r /opt/dlpack/include/dlpack /usr/include/dlpack && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-before-build: "protoc --proto_path={package}/cudf/utils/metadata --python_out={package}/cudf/utils/metadata {package}/cudf/utils/metadata/orc_column_statistics.proto && pip install rmm-cu11 libcudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      skbuild-configure-options: "-DFIND_CUDF_CPP=ON"
+      cibw-before-all: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+      cibw-environment: |
+        "CUDF_BUILD_WHEELS=1"
+        "PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
+      skbuild-configure-options: |
+        "--log-level=DEBUG"
+        "-DCUDF_BUILD_WHEELS=ON"
+        "-DDETECT_CONDA_ENV=OFF"
+        "-DCMAKE_CUDA_ARCHITECTURES=ALL"
       cibw-test-extras:  "test"
       gpu-smoketest-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       gpu-smoketest-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
@@ -39,10 +44,12 @@ jobs:
     secrets: inherit
   dask_cudf-wheel:
     needs: cudf-wheel
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions
+    uses: trxcllnt/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions
     with:
       package-name: dask_cudf
       package-dir: python/dask_cudf
+      cibw-environment: |
+        "PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
       gpu-smoketest-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       cibw-test-extras:  "test"
       cibw-test-command: "pytest -v ./python/dask_cudf/dask_cudf/tests"
