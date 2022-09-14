@@ -28,6 +28,11 @@
 
 #include <cuda_runtime.h>
 
+namespace cudf {
+namespace strings {
+namespace udf {
+namespace detail {
+
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input,
                                                          rmm::cuda_stream_view stream)
 {
@@ -37,7 +42,13 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
                 .release()));
 }
 
+}  // namespace detail
+
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {
-  return to_string_view_array(input, rmm::cuda_stream_default);
+  return detail::to_string_view_array(input, rmm::cuda_stream_default);
 }
+
+}  // namespace udf
+}  // namespace strings
+}  // namespace cudf

@@ -22,6 +22,10 @@
 
 #include <memory>
 
+namespace cudf {
+namespace strings {
+namespace udf {
+
 /**
  * @brief Return a cudf::string_view array for the given strings column
  *
@@ -29,3 +33,7 @@
  * @throw cudf::logic_error if input is not a strings column.
  */
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input);
+
+}  // namespace udf
+}  // namespace strings
+}  // namespace cudf
