@@ -79,11 +79,11 @@ def modifiedFiles():
 def getCopyrightYears(line):
     res = CheckSimple.search(line)
     if res:
-        return (int(res.group(1)), int(res.group(1)))
+        return int(res.group(1)), int(res.group(1))
     res = CheckDouble.search(line)
     if res:
-        return (int(res.group(1)), int(res.group(2)))
-    return (None, None)
+        return int(res.group(1)), int(res.group(2))
+    return None, None
 
 
 def replaceCurrentYear(line, start, end):
@@ -174,7 +174,7 @@ def checkCopyright(f, update_current_year):
 
 def getAllFilesUnderDir(root, pathFilter=None):
     retList = []
-    for (dirpath, dirnames, filenames) in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
         for fn in filenames:
             filePath = os.path.join(dirpath, fn)
             if pathFilter(filePath):
@@ -213,7 +213,7 @@ def checkCopyright_main():
         "processed.",
     )
 
-    (args, dirs) = argparser.parse_known_args()
+    args, dirs = argparser.parse_known_args()
     try:
         ExemptFiles = [re.compile(file) for file in ExemptFiles]
     except re.error as reException:
@@ -226,10 +226,9 @@ def checkCopyright_main():
     else:
         files = []
         for d in [os.path.abspath(d) for d in dirs]:
-            if not (os.path.isdir(d)):
+            if not os.path.isdir(d):
                 raise ValueError(f"{d} is not a directory.")
             files += getAllFilesUnderDir(d, pathFilter=checkThisFile)
-        # TODO: This is broken?
 
     errors = []
     for f in files:
@@ -246,11 +245,9 @@ def checkCopyright_main():
         file_from_repo = os.sep.join(path_parts[path_parts.index("ci") :])
         if n_fixable > 0:
             print(
-                (
-                    "You can run `python {} --git-modified-only "
-                    "--update-current-year` and stage the results in git to "
-                    "fix {} of these errors.\n"
-                ).format(file_from_repo, n_fixable)
+                f"You can run `python {file_from_repo} --git-modified-only "
+                "--update-current-year` and stage the results in git to "
+                f"fix {n_fixable} of these errors.\n"
             )
         retVal = 1
 
@@ -258,6 +255,4 @@ def checkCopyright_main():
 
 
 if __name__ == "__main__":
-    import sys
-
     sys.exit(checkCopyright_main())
