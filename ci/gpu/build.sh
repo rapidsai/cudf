@@ -75,6 +75,9 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
+gpuci_logger "Install required Numba and ptxcompiler"
+gpuci_mamba_retry install gmarkall::cubinlinker numba::numba=0.56.2
+
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
