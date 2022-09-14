@@ -140,23 +140,32 @@ register_stringview_binaryop(operator.contains, types.boolean)
 
 def create_binary_attr(attrname, retty):
     class StringViewBinaryAttr(AbstractTemplate):
-        key = attrname
+        key = f"StringView.{attrname}"
 
         def generic(self, args, kws):
             return nb_signature(retty, string_view, recvr=self.this)
 
-    return StringViewBinaryAttr
+    def attr(self, mod):
+        return types.BoundFunction(
+            StringViewBinaryAttr,
+            string_view
+        )
+    return attr
 
 
 def create_identifier_attr(attrname):
     class StringViewIdentifierAttr(AbstractTemplate):
-        key = attrname
+        key = f"StringView.{attrname}"
 
         def generic(self, args, kws):
             return nb_signature(types.boolean, recvr=self.this)
 
-    return StringViewIdentifierAttr
-
+    def attr(self, mod):
+        return types.BoundFunction(
+            StringViewIdentifierAttr,
+            string_view
+        )
+    return attr
 
 class StringViewCount(AbstractTemplate):
     key = "StringView.count"
@@ -169,67 +178,21 @@ class StringViewCount(AbstractTemplate):
 class StringViewAttrs(AttributeTemplate):
     key = string_view
 
-    def resolve_startswith(self, mod):
-        return types.BoundFunction(
-            create_binary_attr("StringView.startswith", types.boolean),
-            string_view,
-        )
-
-    def resolve_endswith(self, mod):
-        return types.BoundFunction(
-            create_binary_attr("StringView.endswith", types.boolean),
-            string_view,
-        )
-
-    def resolve_find(self, mod):
-        return types.BoundFunction(
-            create_binary_attr("StringView.find", size_type), string_view
-        )
-
-    def resolve_rfind(self, mod):
-        return types.BoundFunction(
-            create_binary_attr("StringView.rfind", size_type), string_view
-        )
-
-    def resolve_isalnum(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isalnum"), string_view
-        )
-
-    def resolve_isalpha(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isalpha"), string_view
-        )
-
-    def resolve_isdecimal(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isdecimal"), string_view
-        )
-
-    def resolve_isdigit(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isdigit"), string_view
-        )
-
-    def resolve_isnumeric(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isnumeric"), string_view
-        )
-
-    def resolve_islower(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.islower"), string_view
-        )
-
-    def resolve_isupper(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isupper"), string_view
-        )
-
-    def resolve_isspace(self, mod):
-        return types.BoundFunction(
-            create_identifier_attr("StringView.isspace"), string_view
-        )
-
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
+
+# Build attributes for `MaskedType(string_view)`
+bool_binary_funcs = ['startswith', 'endswith']
+int_binary_funcs = ['find', 'rfind']
+id_unary_funcs = ['isalpha', 'isalnum', 'isdecimal', 'isdigit', 'isupper', 'islower', 'isspace', 'isnumeric']
+
+for func in bool_binary_funcs:
+    setattr(StringViewAttrs, f"resolve_{func}", create_binary_attr(func, types.boolean))
+
+for func in int_binary_funcs:
+    setattr(StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type))
+
+for func in id_unary_funcs:
+    setattr(StringViewAttrs, f"resolve_{func}", create_identifier_attr(func))
+
+cuda_decl_registry.register_attr(StringViewAttrs)

@@ -27,12 +27,9 @@ def register_string_function(func):
     def deco(generic):
         class MaskedStringFunction(AbstractTemplate):
             pass
-
         MaskedStringFunction.generic = generic
         cuda_decl_registry.register_global(func)(MaskedStringFunction)
-
     return deco
-
 
 @register_string_function(len)
 def len_typing(self, args, kws):
@@ -41,33 +38,7 @@ def len_typing(self, args, kws):
     ):
         return nb_signature(MaskedType(size_type), args[0])
     elif isinstance(args[0], types.StringLiteral) and len(args) == 1:
-        # literal is always valid
         return nb_signature(size_type, args[0])
-
-
-def create_masked_binary_attr(attrname, retty):
-    class MaskedStringViewBinaryAttr(AbstractTemplate):
-        key = f"MaskedType.{attrname}"
-
-        def generic(self, args, kws):
-            return nb_signature(
-                MaskedType(retty), MaskedType(string_view), recvr=self.this
-            )
-
-    return types.BoundFunction(
-        MaskedStringViewBinaryAttr,
-        MaskedType(string_view),
-    )
-
-
-def create_masked_identifier_attr(attrname):
-    class MaskedStringViewIdentifierAttr(AbstractTemplate):
-        key = attrname
-
-        def generic(self, args, kws):
-            return nb_signature(MaskedType(types.boolean), recvr=self.this)
-
-    return MaskedStringViewIdentifierAttr
 
 
 @register_string_function(operator.contains)
@@ -78,7 +49,6 @@ def contains_typing(self, args, kws):
             MaskedType(string_view),
             MaskedType(string_view),
         )
-
 
 class MaskedStringViewCmpOp(AbstractTemplate):
     """
@@ -95,6 +65,35 @@ class MaskedStringViewCmpOp(AbstractTemplate):
                 MaskedType(string_view),
             )
 
+def create_masked_binary_attr(attrname, retty):
+    class MaskedStringViewBinaryAttr(AbstractTemplate):
+        key = attrname
+
+        def generic(self, args, kws):
+            return nb_signature(
+                MaskedType(retty), MaskedType(string_view), recvr=self.this
+            )
+
+    def attr(self, mod):
+        return types.BoundFunction(
+                MaskedStringViewBinaryAttr,
+                MaskedType(string_view),
+            )
+    return attr
+
+def create_masked_identifier_attr(attrname):
+    class MaskedStringViewIdentifierAttr(AbstractTemplate):
+        key = attrname
+
+        def generic(self, args, kws):
+            return nb_signature(MaskedType(types.boolean), recvr=self.this)
+
+    def attr(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewIdentifierAttr,
+            MaskedType(string_view),
+        )
+    return attr
 
 class MaskedStringViewCount(AbstractTemplate):
     key = "MaskedType.count"
@@ -120,46 +119,21 @@ class MaskedStringViewAttrs(AttributeTemplate):
         return types.boolean
 
 
-identifier_functions = [
-    "isupper",
-    "islower",
-    "isdecimal",
-    "isdigit",
-    "isspace",
-    "isalnum",
-    "isalpha",
-    "isalnum",
-]
+# Build attributes for `MaskedType(string_view)`
+bool_binary_funcs = ['startswith', 'endswith']
+int_binary_funcs = ['find', 'rfind']
+id_unary_funcs = ['isalpha', 'isalnum', 'isdecimal', 'isdigit', 'isupper', 'islower', 'isspace', 'isnumeric']
 
-binary_bool_funcs = ["startswith", "endswith"]
-integer_bool_funcs = ["find", "rfind"]
+for func in bool_binary_funcs:
+    setattr(MaskedStringViewAttrs, f"resolve_{func}", create_masked_binary_attr(f"MaskedType.{func}", types.boolean))
 
-for func in identifier_functions:
-    setattr(
-        MaskedStringViewAttrs,
-        f"resolve_{func}",
-        types.BoundFunction(
-            create_masked_identifier_attr(func),
-            MaskedType(string_view),
-        ),
-    )
+for func in int_binary_funcs:
+    setattr(MaskedStringViewAttrs, f"resolve_{func}", create_masked_binary_attr(f"MaskedType.{func}", size_type))
 
-for func in binary_bool_funcs:
-    setattr(
-        MaskedStringViewAttrs,
-        f"resolve_{func}",
-        create_masked_binary_attr(func, types.boolean),
-    )
+for func in id_unary_funcs:
+    setattr(MaskedStringViewAttrs, f"resolve_{func}", create_masked_identifier_attr(f"MaskedType.{func}"))
 
-for func in integer_bool_funcs:
-    setattr(
-        MaskedStringViewAttrs,
-        f"resolve_{func}",
-        create_masked_binary_attr(func, size_type),
-    )
+cuda_decl_registry.register_attr(MaskedStringViewAttrs)
 
 for op in comparison_ops:
     cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
-
-
-cuda_decl_registry.register_attr(MaskedStringViewAttrs)
