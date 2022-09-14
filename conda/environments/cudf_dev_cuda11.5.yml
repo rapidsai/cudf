@@ -7,6 +7,7 @@ channels:
   - rapidsai-nightly
   - dask/label/dev
   - conda-forge
+  - gmarkall
 dependencies:
   - c-compiler
   - cxx-compiler
@@ -82,7 +83,7 @@ dependencies:
   - pip:
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc
-  - ptxcompiler  # [linux64]
+  - cubinlinker  # [linux64]
   - gcc_linux-64=9.* # [linux64]
   - sysroot_linux-64==2.17 # [linux64]
   - nvcc_linux-64=11.5

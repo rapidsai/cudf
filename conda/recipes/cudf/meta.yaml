@@ -61,7 +61,7 @@ requirements:
     - nvtx >=0.2.1
     - packaging
     - cachetools
-    - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
+    - cubinlinker  # [linux64]  # CUDA enhanced compatibility.
     - cuda-python >=11.5,<11.7.1
 test:                                   # [linux64]
   requires:                             # [linux64]
