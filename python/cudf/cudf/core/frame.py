@@ -1086,7 +1086,6 @@ class Frame(BinaryOperand, Scannable):
         # There are some special cases that need to be handled
         # based on metadata.
         for name in result:
-            dtype = None
             if (
                 len(result[name]) == 0
                 and pandas_dtypes.get(name) == "categorical"
@@ -1095,7 +1094,7 @@ class Frame(BinaryOperand, Scannable):
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
-                dtype = "category"
+                result[name] = result[name].as_categorical_column("category")
             elif (
                 pandas_dtypes.get(name) == "empty"
                 and np_dtypes.get(name) == "object"
@@ -1104,7 +1103,7 @@ class Frame(BinaryOperand, Scannable):
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
                 # float column to str column.
-                dtype = "object"
+                result[name] = result[name].as_string_column(cudf.dtype("str"))
             elif name in data.column_names and isinstance(
                 data[name].type,
                 (pa.StructType, pa.ListType, pa.Decimal128Type),
@@ -1125,9 +1124,6 @@ class Frame(BinaryOperand, Scannable):
                 result[name] = result[name]._with_type_metadata(
                     cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
                 )
-
-            if dtype is not None:
-                result[name] = result[name].astype(dtype)
 
         return cls._from_data({name: result[name] for name in column_names})
 
