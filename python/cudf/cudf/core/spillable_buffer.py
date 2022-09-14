@@ -7,14 +7,17 @@ import pickle
 import time
 import weakref
 from threading import RLock
-from typing import Any, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy
 
 import rmm
 
-from cudf.core.buffer import Buffer, get_ptr_and_size
+from cudf.core.buffer import Buffer, Frame, get_ptr_and_size
 from cudf.utils.string import format_bytes
+
+if TYPE_CHECKING:
+    from cudf.core.spill_manager import SpillManager
 
 
 class SpillLock:
@@ -82,17 +85,19 @@ class SpillableBuffer:
         The manager overseeing this buffer.
     """
 
+    _ptr_desc: Dict[str, Any]
+    _spill_locks: weakref.WeakSet
+
     def __init__(
         self,
-        data,
-        exposed,
-        manager,
+        data: Any,
+        exposed: bool,
+        manager: SpillManager,
     ):
         self._lock = RLock()
         self._spill_locks = weakref.WeakSet()
         self._exposed = exposed
         self._last_accessed = time.monotonic()
-        self._view_desc = None  # TODO: maybe make a view its own subclass?
 
         # First, we extract the memory pointer, size, and owner.
         # If it points to host memory we either:
@@ -157,14 +162,10 @@ class SpillableBuffer:
 
     @property
     def lock(self) -> RLock:
-        if self._view_desc:
-            raise ValueError("views does not have a lock")
         return self._lock
 
     @property
     def is_spilled(self) -> bool:
-        if self._view_desc:
-            return self._view_desc["base"].is_spilled
         return self._ptr_desc["type"] != "gpu"
 
     def __spill__(self, target: str = "cpu") -> None:
@@ -176,7 +177,6 @@ class SpillableBuffer:
             The target of the spilling.
         """
 
-        assert self._view_desc is None
         with self._lock:
             ptr_type = self._ptr_desc["type"]
             if ptr_type == target:
@@ -219,8 +219,7 @@ class SpillableBuffer:
 
         Consider using `.get_ptr()` instead.
         """
-        if self._view_desc:
-            return self._view_desc["base"].ptr + self._view_desc["offset"]
+
         self._manager.spill_to_device_limit()
         with self._lock:
             if not self._exposed:
@@ -231,9 +230,6 @@ class SpillableBuffer:
             return self._ptr
 
     def spill_lock(self, spill_lock: SpillLock = None) -> SpillLock:
-        if self._view_desc:
-            return self._view_desc["base"].spill_lock(spill_lock)
-
         if spill_lock is None:
             spill_lock = SpillLock()
         with self._lock:
@@ -259,12 +255,6 @@ class SpillableBuffer:
             The device pointer as an integer
         """
 
-        if self._view_desc:
-            return (
-                self._view_desc["base"].get_ptr(spill_lock)
-                + self._view_desc["offset"]
-            )
-
         if spill_lock is None:
             return self.ptr  # expose the buffer permanently
 
@@ -278,20 +268,14 @@ class SpillableBuffer:
 
     @property
     def exposed(self) -> bool:
-        if self._view_desc:
-            return self._view_desc["base"].exposed
         return self._exposed
 
     @property
     def expose_counter(self) -> int:
-        if self._view_desc:
-            return self._view_desc["base"].expose_counter
         return len(self._spill_locks) + 1
 
     @property
     def spillable(self) -> bool:
-        if self._view_desc:
-            return self._view_desc["base"].spillable
         return not self._exposed and len(self._spill_locks) == 0
 
     @property
@@ -304,8 +288,6 @@ class SpillableBuffer:
 
     @property
     def last_accessed(self) -> float:
-        if self._view_desc:
-            return self._view_desc["base"]._last_accessed
         return self._last_accessed
 
     @property
@@ -318,45 +300,31 @@ class SpillableBuffer:
             "version": 0,
         }
 
-    def memoryview(self) -> memoryview:
-        # Get base buffer
-        if self._view_desc is None:
-            base = self
-            offset = 0
-        else:
-            base = self._view_desc["base"]
-            offset = self._view_desc["offset"]
-
-        with base._lock:
-            if base.spillable:
-                base.__spill__(target="cpu")
-                return base._ptr_desc["memoryview"][
-                    offset : offset + self.size
-                ]
+    def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+        size = self._size if size is None else size
+        with self._lock:
+            if self.spillable:
+                self.__spill__(target="cpu")
+                return self._ptr_desc["memoryview"][offset : offset + size]
             else:
-                assert base._ptr_desc["type"] == "gpu"
-                ret = memoryview(bytearray(self.size))
+                assert self._ptr_desc["type"] == "gpu"
+                ret = memoryview(bytearray(size))
                 rmm._lib.device_buffer.copy_ptr_to_host(
-                    base._ptr + offset, ret
+                    self._ptr + offset, ret
                 )
                 return ret
 
-    def __getitem__(self, key) -> SpillableBuffer:
+    def __getitem__(self, key: slice) -> SpillableBufferView:
         start, stop, step = key.indices(self.size)
         if step != 1:
             raise ValueError("slice must be C-contiguous")
 
-        # TODO: use a subclass
-        return create_view(self, size=stop - start, offset=start)
+        return SpillableBufferView(base=self, offset=start, size=stop - start)
 
-    def serialize(self) -> Tuple[dict, list]:
-        # Get base buffer
-        if self._view_desc is None:
-            base = self
-        else:
-            base = self._view_desc["base"]
-
-        with base._lock:
+    def serialize(self) -> Tuple[dict, List[Frame]]:
+        header: Dict[Any, Any]
+        frames: List[Frame]
+        with self._lock:
             header = {}
             header["type-serialized"] = pickle.dumps(self.__class__)
             header["frame_count"] = 1
@@ -398,11 +366,6 @@ class SpillableBuffer:
             )
 
     def __repr__(self) -> str:
-        if self._view_desc is not None:
-            return (
-                f"<SpillableBuffer size={format_bytes(self._size)} "
-                f"view={self._view_desc}"
-            )
         if self._ptr_desc["type"] != "gpu":
             ptr_info = str(self._ptr_desc)
         else:
@@ -415,22 +378,84 @@ class SpillableBuffer:
         )
 
 
-# TODO: use a subclass instead
-def create_view(buffer, size, offset) -> SpillableBuffer:
-    if size < 0:
-        raise ValueError("size cannot be negative")
+class SpillableBufferView(SpillableBuffer):
+    """A view of a spillable buffer
 
-    # Get base buffer
-    if buffer._view_desc is None:
-        base = buffer
-        base_offset = 0
-    else:
-        base = buffer._view_desc["base"]
-        base_offset = buffer._view_desc["offset"]
+    This buffer deligates must operations to its base buffer.
 
-    ret = SpillableBuffer.__new__(SpillableBuffer)
-    ret._lock = None
-    ret._size = size
-    ret._owner = base
-    ret._view_desc = {"base": base, "offset": base_offset + offset}
-    return ret
+    Parameters
+    ----------
+    base : SpillableBuffer
+        The base of the view
+    offset : int
+        Memory offset into the base buffer
+    size : int
+        Size of the view (in bytes)
+    """
+
+    def __init__(self, base: SpillableBuffer, offset: int, size: int) -> None:
+        if size < 0:
+            raise ValueError("size cannot be negative")
+        if offset < 0:
+            raise ValueError("offset cannot be negative")
+        if offset + size > base.size:
+            raise ValueError(
+                "offset+size cannot be greater than the size of base"
+            )
+        self._base = base
+        self._offset = offset
+        self._size = size
+        self._owner = base
+        self._lock = base.lock
+
+    @property
+    def ptr(self) -> int:
+        return self._base.ptr + self._offset
+
+    def get_ptr(self, spill_lock: SpillLock = None) -> int:
+        return self._base.get_ptr(spill_lock=spill_lock) + self._offset
+
+    def __getitem__(self, key: slice) -> SpillableBufferView:
+        start, stop, step = key.indices(self.size)
+        if step != 1:
+            raise ValueError("slice must be C-contiguous")
+
+        return SpillableBufferView(
+            base=self._base, offset=start + self._offset, size=stop - start
+        )
+
+    def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+        return self._base.memoryview(offset=self._offset + offset, size=size)
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
+        return SpillableBuffer.deserialize(header, frames)
+
+    def __repr__(self) -> str:
+        return (
+            f"<SpillableBufferView size={format_bytes(self._size)} "
+            f"offset={format_bytes(self._offset)} of {self._base} "
+        )
+
+    # The rest of the methods deligate to the base buffer.
+    def __spill__(self, target: str = "cpu") -> None:
+        return self._base.__spill__(target=target)
+
+    @property
+    def is_spilled(self) -> bool:
+        return self._base.is_spilled
+
+    @property
+    def exposed(self) -> bool:
+        return self._base.exposed
+
+    @property
+    def expose_counter(self) -> int:
+        return self._base.expose_counter
+
+    @property
+    def spillable(self) -> bool:
+        return self._base.spillable
+
+    def spill_lock(self, spill_lock: SpillLock = None) -> SpillLock:
+        return self._base.spill_lock(spill_lock=spill_lock)

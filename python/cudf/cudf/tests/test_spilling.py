@@ -74,6 +74,33 @@ def test_spillable_buffer(manager: SpillManager):
     assert not buf.spillable
 
 
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        "ptr",
+        "get_ptr",
+        "memoryview",
+        "__spill__",
+        "is_spilled",
+        "exposed",
+        "expose_counter",
+        "spillable",
+        "spill_lock",
+    ],
+)
+def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
+    base = SpillableBuffer(
+        data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+    )
+    view = base[:]
+    attr_base = getattr(base, attribute)
+    attr_view = getattr(view, attribute)
+    if callable(attr_view):
+        pass
+    else:
+        assert attr_base == attr_view
+
+
 def test_from_pandas(manager: SpillManager):
     pdf1 = pandas.DataFrame({"x": [1, 2, 3]})
     df = cudf.from_pandas(pdf1)
