@@ -622,8 +622,8 @@ def test_json_nested_lines(data):
 
 def test_json_nested_data():
     json_str = (
-        R'[{"0":{},"1":[],"2":{}},{"1":[[""],[]],"2":{"2":""}},'
-        R'{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
+        '[{"0":{},"2":{}},{"1":[[""],[]],"2":{"2":""}},'
+        '{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
     )
     df = cudf.read_json(
         StringIO(json_str), engine="cudf_experimental", orient="records"
