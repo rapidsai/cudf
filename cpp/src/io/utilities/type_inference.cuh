@@ -124,7 +124,8 @@ __global__ void infer_column_type_kernel(OptionsView options,
     }
 
     // Handling strings
-    if (*field_begin == options.quote_char && field_begin[field_len - 1] == options.quote_char) {
+    if (field_len >= 2 and *field_begin == options.quote_char and
+        field_begin[field_len - 1] == options.quote_char) {
       ++string_count;
       continue;
     }
