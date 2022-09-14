@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 
 import cudf
-import cudf.core.index
 import cudf._lib.labeling
+import cudf.core.index
 from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
