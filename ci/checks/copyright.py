@@ -15,6 +15,7 @@
 
 import argparse
 import datetime
+import git
 import os
 import re
 import sys
@@ -49,9 +50,7 @@ CheckDouble = re.compile(
 
 def checkThisFile(f):
     # This check covers things like symlinks which point to files that DNE
-    if not (os.path.exists(f)):
-        return False
-    if gitutils and gitutils.isFileEmpty(f):
+    if not os.path.exists(f) or os.stat(f).st_size == 0:
         return False
     for exempt in ExemptFiles:
         if exempt.search(f):
@@ -60,6 +59,23 @@ def checkThisFile(f):
         if checker.search(f):
             return True
     return False
+
+
+def modifiedFiles():
+    repo = git.Repo(".")
+    # TARGET_BRANCH is defined in CI
+    target_branch = os.environ.get("TARGET_BRANCH")
+    if target_branch is None:
+        # Fall back to the closest branch if not on CI
+        target_branch = repo.git.describe(
+            all=True, tags=True, match="branch-*", abbrev=0
+        ).lstrip("heads/")
+    upstream_target_branch = repo.heads[target_branch].tracking_branch()
+    diff = repo.index.diff(upstream_target_branch.commit)
+    changed_files = {f.b_path for f in diff if f.b_path is not None}
+    print(f"Target branch: {target_branch}")
+    print(f"Modified files: {changed_files}")
+    return changed_files
 
 
 def getCopyrightYears(line):
@@ -76,7 +92,7 @@ def replaceCurrentYear(line, start, end):
     # first turn a simple regex into double (if applicable). then update years
     res = CheckSimple.sub(r"Copyright (c) \1-\1, NVIDIA CORPORATION", line)
     res = CheckDouble.sub(
-        fr"Copyright (c) {start:04d}-{end:04d}, NVIDIA CORPORATION",
+        rf"Copyright (c) {start:04d}-{end:04d}, NVIDIA CORPORATION",
         res,
     )
     return res
@@ -205,7 +221,9 @@ def checkCopyright_main():
         return 1
 
     if args.git_modified_only:
-        files = gitutils.modifiedFiles(pathFilter=checkThisFile)
+        files = {f for f in modifiedFiles() if checkThisFile(f)}
+        print(f"Checking files: {files}")
+        # files = gitutils.modifiedFiles(pathFilter=checkThisFile)
     else:
         files = []
         for d in [os.path.abspath(d) for d in dirs]:
