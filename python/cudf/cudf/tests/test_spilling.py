@@ -80,12 +80,11 @@ def test_spillable_buffer(manager: SpillManager):
         "ptr",
         "get_ptr",
         "memoryview",
-        "__spill__",
         "is_spilled",
         "exposed",
-        "expose_counter",
         "spillable",
         "spill_lock",
+        "__spill__",
     ],
 )
 def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
@@ -124,7 +123,7 @@ def test_spillable_df_groupby(manager: SpillManager):
     gb = df.groupby("x")
     # `gb` holds a reference to the device memory, which makes
     # the buffer unspillable
-    assert df._data._data["x"].data.expose_counter == 2
+    assert len(df._data._data["x"].data._spill_locks) == 1
     assert not df._data._data["x"].data.spillable
     del gb
     assert df._data._data["x"].data.spillable
@@ -335,21 +334,20 @@ def test_ptr_restricted(manager: SpillManager):
         data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
     )
     assert buf.spillable
-    assert buf.expose_counter == 1
+    assert len(buf._spill_locks) == 0
     slock1 = SpillLock()
     buf.get_ptr(spill_lock=slock1)
     assert not buf.spillable
-    assert buf.expose_counter == 2
+    assert len(buf._spill_locks) == 1
     slock2 = buf.spill_lock()
     buf.get_ptr(spill_lock=slock2)
     assert not buf.spillable
-    assert buf.expose_counter == 3
+    assert len(buf._spill_locks) == 2
     del slock1
-    assert buf.expose_counter == 2
+    assert len(buf._spill_locks) == 1
     del slock2
-    assert buf.expose_counter == 1
+    assert len(buf._spill_locks) == 0
     assert buf.spillable
-    assert buf.expose_counter == 1
 
 
 def test_expose_statistics(manager: SpillManager):
@@ -411,9 +409,9 @@ def test_serialize_device(manager, target):
     assert len(frames) == 1
     if target == "gpu":
         assert isinstance(frames[0], Buffer)
-        assert gen_df.buffer(df1).expose_counter == 2
+        assert len(gen_df.buffer(df1)._spill_locks) == 1
     else:
-        assert gen_df.buffer(df1).expose_counter == 1
+        assert len(gen_df.buffer(df1)._spill_locks) == 0
         assert isinstance(frames[0], memoryview)
 
     df2 = Serializable.device_deserialize(header, frames)
@@ -463,7 +461,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
         df1, serializers=("cuda",), on_error="raise"
     )
     buf: SpillableBuffer = gen_df.buffer(df1)
-    assert buf.expose_counter == 2
+    assert len(buf._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
     assert frames[0].ptr == buf.ptr

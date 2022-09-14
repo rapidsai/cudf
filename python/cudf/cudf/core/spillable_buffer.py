@@ -271,10 +271,6 @@ class SpillableBuffer(Buffer):
         return self._exposed
 
     @property
-    def expose_counter(self) -> int:
-        return len(self._spill_locks) + 1
-
-    @property
     def spillable(self) -> bool:
         return not self._exposed and len(self._spill_locks) == 0
 
@@ -373,7 +369,7 @@ class SpillableBuffer(Buffer):
         return (
             f"<SpillableBuffer size={format_bytes(self._size)} "
             f"spillable={self.spillable} exposed={self.exposed} "
-            f"expose_counter={len(self._spill_locks)} "
+            f"num-spill-locks={len(self._spill_locks)} "
             f"ptr={ptr_info} owner={repr(self._owner)}"
         )
 
@@ -448,10 +444,6 @@ class SpillableBufferView(SpillableBuffer):
     @property
     def exposed(self) -> bool:
         return self._base.exposed
-
-    @property
-    def expose_counter(self) -> int:
-        return self._base.expose_counter
 
     @property
     def spillable(self) -> bool:
