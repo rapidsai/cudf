@@ -128,7 +128,7 @@ def checkCopyright(f, update_current_year):
                 None,
             ]
             errs.append(e)
-        if thisYear < start or thisYear > end:
+        elif thisYear < start or thisYear > end:
             e = [
                 path,
                 lineNum,
@@ -240,7 +240,7 @@ def checkCopyright_main():
         n_fixable = sum(1 for e in errors if e[-1] is not None)
         path_parts = os.path.abspath(__file__).split(os.sep)
         file_from_repo = os.sep.join(path_parts[path_parts.index("ci") :])
-        if n_fixable > 0:
+        if n_fixable > 0 and not args.update_current_year:
             print(
                 f"You can run `python {file_from_repo} --git-modified-only "
                 "--update-current-year` and stage the results in git to "
