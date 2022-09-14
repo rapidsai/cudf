@@ -66,10 +66,16 @@ def modifiedFiles():
     # TARGET_BRANCH is defined in CI
     target_branch = os.environ.get("TARGET_BRANCH")
     if target_branch is None:
+        print("Getting target branch from local repo")
         # Fall back to the closest branch if not on CI
         target_branch = repo.git.describe(
             all=True, tags=True, match="branch-*", abbrev=0
         ).lstrip("heads/")
+    else:
+        print("Getting target branch from environment variable")
+    print(f"Target branch: {target_branch}")
+    print("REPO HEADS:")
+    print(repo.heads)
     upstream_target_branch = repo.heads[target_branch].tracking_branch()
     merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
