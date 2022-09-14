@@ -62,6 +62,11 @@ def checkThisFile(f):
 
 
 def modifiedFiles():
+    """Get a set of all modified files.
+
+    The files returned have been modified in git since the merge base of HEAD
+    and the upstream of the target branch.
+    """
     repo = git.Repo(".")
     # TARGET_BRANCH is defined in CI
     target_branch = os.environ.get("TARGET_BRANCH")
@@ -71,9 +76,12 @@ def modifiedFiles():
             all=True, tags=True, match="branch-*", abbrev=0
         ).lstrip("heads/")
     upstream_target_branch = repo.heads[target_branch].tracking_branch()
-    diff = repo.index.diff(upstream_target_branch.commit)
+    merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
+    diff = repo.index.diff(merge_base)
     changed_files = {f.b_path for f in diff if f.b_path is not None}
     print(f"Target branch: {target_branch}")
+    print(f"Upstream target branch: {upstream_target_branch}")
+    print(f"Merge base: {merge_base}")
     print(f"Modified files: {changed_files}")
     return changed_files
 
