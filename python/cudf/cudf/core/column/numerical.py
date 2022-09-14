@@ -134,7 +134,7 @@ class NumericalColumn(NumericalBaseColumn):
         Set the value of ``self[key]`` to ``value``.
 
         If ``value`` and ``self`` are of different types, ``value`` is coerced
-        to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
+        to ``self.dtype``.
         """
 
         # Normalize value to scalar/column
