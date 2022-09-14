@@ -840,7 +840,6 @@ def test_string_udf_isspace(str_udf_data):
 
 
 @string_udf_test
-@pytest.mark.parametrize("substr", ["c", "cu", "2", "abc", ""])
 def test_string_udf_count(str_udf_data, substr):
     def func(row):
         return row["str_col"].count(substr)
