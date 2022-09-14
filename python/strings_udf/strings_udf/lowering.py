@@ -126,6 +126,12 @@ def len_impl(context, builder, sig, args):
 
 
 def create_binary_string_func(binary_func, retty):
+    """
+    Provide a wrapper around numba's low-level extension API which
+    produces the boilerplate needed to implement a binary function
+    of two strings.
+    """
+
     def deco(cuda_func):
         @cuda_lower(binary_func, string_view, string_view)
         def binary_func_impl(context, builder, sig, args):
@@ -209,6 +215,12 @@ def rfind_impl(sv, substr):
 
 
 def create_unary_identifier_func(id_func):
+    """
+    Provide a wrapper around numba's low-level extension API which
+    produces the boilerplate needed to implement a unary function
+    of a string.
+    """
+
     def deco(cuda_func):
         @cuda_lower(id_func, string_view)
         def id_func_impl(context, builder, sig, args):

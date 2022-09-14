@@ -119,6 +119,12 @@ class StringLength(AbstractTemplate):
 
 
 def register_stringview_binaryop(op, retty):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to associate a signature with a function or
+    operator expecting a string.
+    """
+
     class StringViewBinaryOp(AbstractTemplate):
         def generic(self, args, kws):
             if isinstance(args[0], any_string_ty) and isinstance(
@@ -139,6 +145,12 @@ register_stringview_binaryop(operator.contains, types.boolean)
 
 
 def create_binary_attr(attrname, retty):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to register a binary function of two string
+    objects as an attribute of one, e.g. `string.func(other)`.
+    """
+
     class StringViewBinaryAttr(AbstractTemplate):
         key = f"StringView.{attrname}"
 
@@ -152,6 +164,12 @@ def create_binary_attr(attrname, retty):
 
 
 def create_identifier_attr(attrname):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to register a unary function of a string
+    object as an attribute, e.g. `string.func()`.
+    """
+
     class StringViewIdentifierAttr(AbstractTemplate):
         key = f"StringView.{attrname}"
 

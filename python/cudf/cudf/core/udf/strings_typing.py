@@ -31,6 +31,12 @@ def _is_valid_string_arg(ty):
 
 
 def register_string_function(func):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to associate a signature with a function or
+    operator to be overloaded.
+    """
+
     def deco(generic):
         class MaskedStringFunction(AbstractTemplate):
             pass
@@ -77,7 +83,17 @@ class MaskedStringViewCmpOp(AbstractTemplate):
             )
 
 
+for op in comparison_ops:
+    cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
+
+
 def create_masked_binary_attr(attrname, retty):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to register a binary function of two masked
+    string objects as an attribute of one, e.g. `string.func(other)`.
+    """
+
     class MaskedStringViewBinaryAttr(AbstractTemplate):
         key = attrname
 
@@ -96,6 +112,12 @@ def create_masked_binary_attr(attrname, retty):
 
 
 def create_masked_identifier_attr(attrname):
+    """
+    Helper function wrapping numba's low level extension API. Provides
+    the boilerplate needed to register a unary function of a masked
+    string object as an attribute, e.g. `string.func()`.
+    """
+
     class MaskedStringViewIdentifierAttr(AbstractTemplate):
         key = attrname
 
@@ -158,6 +180,3 @@ for func in id_unary_funcs:
     )
 
 cuda_decl_registry.register_attr(MaskedStringViewAttrs)
-
-for op in comparison_ops:
-    cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)

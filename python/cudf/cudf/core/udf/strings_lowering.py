@@ -45,6 +45,12 @@ def masked_len_impl(context, builder, sig, args):
 
 
 def create_binary_string_func(op, cuda_func, retty):
+    """
+    Provide a wrapper around numba's low-level extension API which
+    produces the boilerplate needed to implement a binary function
+    of two masked strings.
+    """
+
     def masked_binary_func_impl(context, builder, sig, args):
         ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
 
@@ -85,6 +91,12 @@ create_binary_string_func(operator.contains, contains_impl, types.boolean)
 
 
 def create_masked_unary_identifier_func(op, cuda_func):
+    """
+    Provide a wrapper around numba's low-level extension API which
+    produces the boilerplate needed to implement a unary function
+    of a masked string.
+    """
+
     def masked_unary_func_impl(context, builder, sig, args):
         ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
         masked_str = cgutils.create_struct_proxy(sig.args[0])(
