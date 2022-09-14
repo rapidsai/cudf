@@ -3520,7 +3520,7 @@ class IndexedFrame(Frame):
             self._index_names if not ignore_index else None,
             override_dtypes=(
                 exploded_dtype if i == column_index else None
-                for i, _ in enumerate(self._columns)
+                for i in range(len(self._columns))
             ),
         )
 
