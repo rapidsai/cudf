@@ -27,9 +27,12 @@ def register_string_function(func):
     def deco(generic):
         class MaskedStringFunction(AbstractTemplate):
             pass
+
         MaskedStringFunction.generic = generic
         cuda_decl_registry.register_global(func)(MaskedStringFunction)
+
     return deco
+
 
 @register_string_function(len)
 def len_typing(self, args, kws):
@@ -50,6 +53,7 @@ def contains_typing(self, args, kws):
             MaskedType(string_view),
         )
 
+
 class MaskedStringViewCmpOp(AbstractTemplate):
     """
     return the boolean result of `cmpop` between to strings
@@ -65,6 +69,7 @@ class MaskedStringViewCmpOp(AbstractTemplate):
                 MaskedType(string_view),
             )
 
+
 def create_masked_binary_attr(attrname, retty):
     class MaskedStringViewBinaryAttr(AbstractTemplate):
         key = attrname
@@ -76,10 +81,12 @@ def create_masked_binary_attr(attrname, retty):
 
     def attr(self, mod):
         return types.BoundFunction(
-                MaskedStringViewBinaryAttr,
-                MaskedType(string_view),
-            )
+            MaskedStringViewBinaryAttr,
+            MaskedType(string_view),
+        )
+
     return attr
+
 
 def create_masked_identifier_attr(attrname):
     class MaskedStringViewIdentifierAttr(AbstractTemplate):
@@ -93,7 +100,9 @@ def create_masked_identifier_attr(attrname):
             MaskedStringViewIdentifierAttr,
             MaskedType(string_view),
         )
+
     return attr
+
 
 class MaskedStringViewCount(AbstractTemplate):
     key = "MaskedType.count"
@@ -120,18 +129,39 @@ class MaskedStringViewAttrs(AttributeTemplate):
 
 
 # Build attributes for `MaskedType(string_view)`
-bool_binary_funcs = ['startswith', 'endswith']
-int_binary_funcs = ['find', 'rfind']
-id_unary_funcs = ['isalpha', 'isalnum', 'isdecimal', 'isdigit', 'isupper', 'islower', 'isspace', 'isnumeric']
+bool_binary_funcs = ["startswith", "endswith"]
+int_binary_funcs = ["find", "rfind"]
+id_unary_funcs = [
+    "isalpha",
+    "isalnum",
+    "isdecimal",
+    "isdigit",
+    "isupper",
+    "islower",
+    "isspace",
+    "isnumeric",
+]
 
 for func in bool_binary_funcs:
-    setattr(MaskedStringViewAttrs, f"resolve_{func}", create_masked_binary_attr(f"MaskedType.{func}", types.boolean))
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", types.boolean),
+    )
 
 for func in int_binary_funcs:
-    setattr(MaskedStringViewAttrs, f"resolve_{func}", create_masked_binary_attr(f"MaskedType.{func}", size_type))
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", size_type),
+    )
 
 for func in id_unary_funcs:
-    setattr(MaskedStringViewAttrs, f"resolve_{func}", create_masked_identifier_attr(f"MaskedType.{func}"))
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_identifier_attr(f"MaskedType.{func}"),
+    )
 
 cuda_decl_registry.register_attr(MaskedStringViewAttrs)
 

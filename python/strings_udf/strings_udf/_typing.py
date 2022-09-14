@@ -146,10 +146,8 @@ def create_binary_attr(attrname, retty):
             return nb_signature(retty, string_view, recvr=self.this)
 
     def attr(self, mod):
-        return types.BoundFunction(
-            StringViewBinaryAttr,
-            string_view
-        )
+        return types.BoundFunction(StringViewBinaryAttr, string_view)
+
     return attr
 
 
@@ -161,11 +159,10 @@ def create_identifier_attr(attrname):
             return nb_signature(types.boolean, recvr=self.this)
 
     def attr(self, mod):
-        return types.BoundFunction(
-            StringViewIdentifierAttr,
-            string_view
-        )
+        return types.BoundFunction(StringViewIdentifierAttr, string_view)
+
     return attr
+
 
 class StringViewCount(AbstractTemplate):
     key = "StringView.count"
@@ -181,16 +178,32 @@ class StringViewAttrs(AttributeTemplate):
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
 
+
 # Build attributes for `MaskedType(string_view)`
-bool_binary_funcs = ['startswith', 'endswith']
-int_binary_funcs = ['find', 'rfind']
-id_unary_funcs = ['isalpha', 'isalnum', 'isdecimal', 'isdigit', 'isupper', 'islower', 'isspace', 'isnumeric']
+bool_binary_funcs = ["startswith", "endswith"]
+int_binary_funcs = ["find", "rfind"]
+id_unary_funcs = [
+    "isalpha",
+    "isalnum",
+    "isdecimal",
+    "isdigit",
+    "isupper",
+    "islower",
+    "isspace",
+    "isnumeric",
+]
 
 for func in bool_binary_funcs:
-    setattr(StringViewAttrs, f"resolve_{func}", create_binary_attr(func, types.boolean))
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attr(func, types.boolean),
+    )
 
 for func in int_binary_funcs:
-    setattr(StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type))
+    setattr(
+        StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type)
+    )
 
 for func in id_unary_funcs:
     setattr(StringViewAttrs, f"resolve_{func}", create_identifier_attr(func))
