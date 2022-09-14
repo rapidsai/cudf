@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
@@ -33,7 +34,8 @@ namespace detail {
  * @param input Strings column to convert to a string_view array.
  * @throw cudf::logic_error if input is not a strings column.
  */
-std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input);
+std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input,
+                                                         rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace udf
