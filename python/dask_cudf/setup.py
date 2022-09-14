@@ -14,6 +14,7 @@ install_requires = [
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
+    f"cudf{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
 ]
 
 extras_require = {
