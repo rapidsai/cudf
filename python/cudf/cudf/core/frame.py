@@ -1179,16 +1179,13 @@ class Frame(BinaryOperand, Scannable):
 
         See `ColumnBase._with_type_metadata` for more information.
         """
-        for (name, col), dtype in zip(
-            self._data.items(),
-            (
-                dtype or col.dtype
-                for (dtype, col) in zip(
-                    override_dtypes or itertools.repeat(None),
-                    other._data.values(),
-                )
-            ),
-        ):
+        if override_dtypes is None:
+            override_dtypes = itertools.repeat(None)
+        dtypes = (
+            dtype if dtype is not None else col.dtype
+            for (dtype, col) in zip(override_dtypes, other._data.values())
+        )
+        for (name, col), dtype in zip(self._data.items(), dtypes):
             self._data.set_by_label(
                 name, col._with_type_metadata(dtype), validate=False
             )
