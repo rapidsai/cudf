@@ -49,6 +49,8 @@ CheckDouble = re.compile(
 
 
 def checkThisFile(f):
+    if isinstance(f, git.Diff):
+        f = f.b_path
     # This check covers things like symlinks which point to files that DNE
     if not os.path.exists(f) or os.stat(f).st_size == 0:
         return False
@@ -62,10 +64,11 @@ def checkThisFile(f):
 
 
 def modifiedFiles():
-    """Get a set of all modified files.
+    """Get a set of all modified files, as Diff objects.
 
     The files returned have been modified in git since the merge base of HEAD
-    and the upstream of the target branch.
+    and the upstream of the target branch. We return the Diff objects so that
+    we can read only the staged changes.
     """
     repo = git.Repo(".")
     # TARGET_BRANCH is defined in CI
@@ -77,8 +80,8 @@ def modifiedFiles():
         ).lstrip("heads/")
     upstream_target_branch = repo.heads[target_branch].tracking_branch()
     merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
-    diff = repo.index.diff(merge_base)
-    changed_files = {f.b_path for f in diff if f.b_path is not None}
+    diff = merge_base.diff()
+    changed_files = {f for f in diff if f.b_path is not None}
     print(f"Target branch: {target_branch}")
     print(f"Upstream target branch: {upstream_target_branch}")
     print(f"Merge base: {merge_base}")
@@ -115,8 +118,13 @@ def checkCopyright(f, update_current_year):
     lineNum = 0
     crFound = False
     yearMatched = False
-    with open(f, encoding="utf-8") as fp:
-        lines = fp.readlines()
+    if isinstance(f, git.Diff):
+        path = f.b_path
+        lines = f.b_blob.data_stream.read().decode().splitlines(keepends=True)
+    else:
+        path = f
+        with open(f, encoding="utf-8") as fp:
+            lines = fp.readlines()
     for line in lines:
         lineNum += 1
         start, end = getCopyrightYears(line)
@@ -125,7 +133,7 @@ def checkCopyright(f, update_current_year):
         crFound = True
         if start > end:
             e = [
-                f,
+                path,
                 lineNum,
                 "First year after second year in the copyright "
                 "header (manual fix required)",
@@ -134,7 +142,7 @@ def checkCopyright(f, update_current_year):
             errs.append(e)
         if thisYear < start or thisYear > end:
             e = [
-                f,
+                path,
                 lineNum,
                 "Current year not included in the copyright header",
                 None,
@@ -146,11 +154,10 @@ def checkCopyright(f, update_current_year):
             errs.append(e)
         else:
             yearMatched = True
-    fp.close()
     # copyright header itself not found
     if not crFound:
         e = [
-            f,
+            path,
             0,
             "Copyright header missing or formatted incorrectly "
             "(manual fix required)",
@@ -166,15 +173,14 @@ def checkCopyright(f, update_current_year):
         if len(errs_update) > 0:
             print(
                 "File: {}. Changing line(s) {}".format(
-                    f, ", ".join(str(x[1]) for x in errs if x[-1] is not None)
+                    path, ", ".join(str(x[1]) for x in errs if x[-1] is not None)
                 )
             )
             for _, lineNum, __, replacement in errs_update:
                 lines[lineNum - 1] = replacement
-            with open(f, "w", encoding="utf-8") as out_file:
+            with open(path, "w", encoding="utf-8") as out_file:
                 for new_line in lines:
                     out_file.write(new_line)
-        errs = [x for x in errs if x[-1] is None]
 
     return errs
 
@@ -244,7 +250,8 @@ def checkCopyright_main():
         errors += checkCopyright(f, args.update_current_year)
 
     if len(errors) > 0:
-        print("Copyright headers incomplete in some of the files!")
+        if any(e[-1] is None for e in errors):
+            print("Copyright headers incomplete in some of the files!")
         for e in errors:
             print("  %s:%d Issue: %s" % (e[0], e[1], e[2]))
         print("")
@@ -255,13 +262,11 @@ def checkCopyright_main():
             print(
                 (
                     "You can run `python {} --git-modified-only "
-                    "--update-current-year` to fix {} of these "
-                    "errors.\n"
+                    "--update-current-year` and stage the results in git to "
+                    "fix {} of these errors.\n"
                 ).format(file_from_repo, n_fixable)
             )
         retVal = 1
-    else:
-        print("Copyright check passed")
 
     return retVal
 
