@@ -19,14 +19,15 @@
 #pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wsizeof-array-div"
 
+#include "multistate.hpp"
+#include "tile_state.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
-#include <cudf/io/text/detail/multistate.hpp>
-#include <cudf/io/text/detail/tile_state.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
@@ -43,6 +44,7 @@
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
+#include <cub/warp/warp_reduce.cuh>
 
 #pragma GCC diagnostic pop
 
@@ -133,6 +135,7 @@ struct PatternScan {
 
   struct _TempStorage {
     typename BlockScan::TempStorage scan;
+    typename BlockScanCallback::TempStorage callback;
   };
 
   _TempStorage& _temp_storage;
@@ -153,7 +156,7 @@ struct PatternScan {
       thread_multistate = transition(thread_data[i], thread_multistate, delim);
     }
 
-    auto prefix_callback = BlockScanCallback(tile_state, tile_idx);
+    auto prefix_callback = BlockScanCallback(tile_state, _temp_storage.callback, tile_idx);
 
     BlockScan(_temp_storage.scan)
       .ExclusiveSum(thread_multistate, thread_multistate, prefix_callback);
@@ -217,9 +220,9 @@ __global__ void multibyte_split_seed_kernel(
   cutoff_offset tile_output_offset)
 {
   auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (thread_idx == 0) {
-    tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
-    tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
+  if (thread_idx < 32) {
+    tile_multistates.set_inclusive_prefix(thread_idx - 32, tile_multistate_seed);
+    tile_output_offsets.set_inclusive_prefix(thread_idx - 32, tile_output_offset);
   }
 }
 
@@ -242,7 +245,10 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   __shared__ union {
     typename InputLoad::TempStorage input_load;
     typename PatternScan::TempStorage pattern_scan;
-    typename OffsetScan::TempStorage offset_scan;
+    struct {
+      typename OffsetScan::TempStorage storage;
+      typename OffsetScanCallback::TempStorage callback;
+    } offset_scan;
   } temp_storage;
 
   int32_t const tile_idx            = base_tile_idx + blockIdx.x;
@@ -284,10 +290,12 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
 
   // STEP 4: Scan flags to determine absolute thread output offset
 
-  auto prefix_callback = OffsetScanCallback(tile_output_offsets, tile_idx);
-
   __syncthreads();  // required before temp_memory re-use
-  OffsetScan(temp_storage.offset_scan).ExclusiveSum(thread_offset, thread_offset, prefix_callback);
+  auto prefix_callback =
+    OffsetScanCallback(tile_output_offsets, temp_storage.offset_scan.callback, tile_idx);
+
+  OffsetScan(temp_storage.offset_scan.storage)
+    .ExclusiveSum(thread_offset, thread_offset, prefix_callback);
 
   // Step 5: Assign outputs from each thread using match offsets.
 
@@ -319,7 +327,10 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
 
   __shared__ union {
     typename InputLoad::TempStorage input_load;
-    typename OffsetScan::TempStorage offset_scan;
+    struct {
+      typename OffsetScan::TempStorage storage;
+      typename OffsetScanCallback::TempStorage callback;
+    } offset_scan;
   } temp_storage;
 
   int32_t const tile_idx            = base_tile_idx + blockIdx.x;
@@ -351,10 +362,12 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
 
   // STEP 3: Scan flags to determine absolute thread output offset
 
-  auto prefix_callback = OffsetScanCallback(tile_output_offsets, tile_idx);
-
   __syncthreads();  // required before temp_memory re-use
-  OffsetScan(temp_storage.offset_scan).ExclusiveSum(thread_offset, thread_offset, prefix_callback);
+  auto prefix_callback =
+    OffsetScanCallback(tile_output_offsets, temp_storage.offset_scan.callback, tile_idx);
+
+  OffsetScan(temp_storage.offset_scan.storage)
+    .ExclusiveSum(thread_offset, thread_offset, prefix_callback);
 
   // Step 4: Assign outputs from each thread using match offsets.
 
@@ -613,7 +626,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
   auto tile_offsets     = scan_tile_state<cutoff_offset>(num_tile_states, stream);
 
-  multibyte_split_init_kernel<<<TILES_PER_CHUNK,
+  multibyte_split_init_kernel<<<cudf::util::div_rounding_up_safe(TILES_PER_CHUNK, THREADS_PER_TILE),
                                 THREADS_PER_TILE,
                                 0,
                                 stream.value()>>>(  //
@@ -629,7 +642,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // Seeding the tile state with an identity value allows the 0th tile to follow the same logic as
   // the Nth tile, assuming it can look up an inclusive prefix. Without this seed, the 0th block
   // would have to follow separate logic.
-  multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
+  multibyte_split_seed_kernel<<<1, 32, 0, stream.value()>>>(  //
     tile_multistates,
     tile_offsets,
     multistate_seed,
@@ -671,7 +684,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     auto offset_output = offset_storage.next_output(scan_stream);
 
     // reset the next chunk of tile state
-    multibyte_split_init_kernel<<<tiles_in_launch,
+    multibyte_split_init_kernel<<<cudf::util::div_rounding_up_safe<std::size_t>(tiles_in_launch,
+                                                                                THREADS_PER_TILE),
                                   THREADS_PER_TILE,
                                   0,
                                   scan_stream.value()>>>(  //
@@ -739,7 +753,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     cudaEventRecord(last_launch_event, scan_stream.value());
 
     std::swap(read_stream, scan_stream);
-    base_tile_idx += TILES_PER_CHUNK;
+    base_tile_idx += tiles_in_launch;
     chunk_offset += chunk->size();
     chunk = std::move(next_chunk);
   }

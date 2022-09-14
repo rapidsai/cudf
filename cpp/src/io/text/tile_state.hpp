@@ -17,8 +17,13 @@
 #pragma once
 
 #include <cub/block/block_scan.cuh>
+#include <cub/warp/warp_reduce.cuh>
 
 #include <cuda/atomic>
+
+#include <rmm/device_uvector.hpp>
+
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace io {
@@ -59,7 +64,7 @@ struct scan_tile_state_view {
     tile_status[offset].store(scan_tile_status::inclusive);
   }
 
-  __device__ inline T get_prefix(cudf::size_type tile_idx, scan_tile_status& status)
+  __device__ inline T wait_for_prefix(cudf::size_type tile_idx, scan_tile_status& status)
   {
     auto const offset = (tile_idx + num_tiles) % num_tiles;
 
@@ -107,33 +112,59 @@ struct scan_tile_state {
 
 template <typename T>
 struct scan_tile_state_callback {
+  // Parameterized warp reduce
+  typedef cub::WarpReduce<T, CUB_PTX_WARP_THREADS, CUB_PTX_ARCH> WarpReduceT;
+
+  // Temporary storage type
+  struct _TempStorage {
+    typename WarpReduceT::TempStorage warp_reduce;
+  };
+
+  // Alias wrapper allowing temporary storage to be unioned
+  struct TempStorage : cub::Uninitialized<_TempStorage> {
+  };
+
   __device__ inline scan_tile_state_callback(scan_tile_state_view<T>& tile_state,
+                                             TempStorage& temp_storage,
                                              cudf::size_type tile_idx)
-    : _tile_state(tile_state), _tile_idx(tile_idx)
+    : _tile_state(tile_state), _temp_storage(temp_storage.Alias()), _tile_idx(tile_idx)
   {
+  }
+
+  __device__ inline T process_window(cudf::size_type predecessor_idx,
+                                     scan_tile_status& predecessor_status)
+  {
+    auto local_aggregate = _tile_state.wait_for_prefix(predecessor_idx, predecessor_status);
+    auto is_tail         = predecessor_status == scan_tile_status::inclusive;
+    auto window_aggregate =
+      WarpReduceT(_temp_storage.warp_reduce)
+        .TailSegmentedReduce(local_aggregate, is_tail, [] __device__(T a, T b) { return b + a; });
+    return window_aggregate;
   }
 
   __device__ inline T operator()(T const& block_aggregate)
   {
     T exclusive_prefix;
 
-    if (threadIdx.x == 0) {
-      _tile_state.set_partial_prefix(_tile_idx, block_aggregate);
+    if (threadIdx.x < 32) {
+      if (threadIdx.x == 0) { _tile_state.set_partial_prefix(_tile_idx, block_aggregate); }
 
-      auto predecessor_idx    = _tile_idx - 1;
+      auto predecessor_idx    = _tile_idx - static_cast<cudf::size_type>(threadIdx.x) - 1;
       auto predecessor_status = scan_tile_status::invalid;
 
       // scan partials to form prefix
 
-      auto window_partial = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-      while (predecessor_status != scan_tile_status::inclusive) {
-        predecessor_idx--;
-        auto predecessor_prefix = _tile_state.get_prefix(predecessor_idx, predecessor_status);
-        window_partial          = predecessor_prefix + window_partial;
-      }
-      exclusive_prefix = window_partial;
+      exclusive_prefix = process_window(predecessor_idx, predecessor_status);
 
-      _tile_state.set_inclusive_prefix(_tile_idx, exclusive_prefix + block_aggregate);
+      while (__all_sync(0xFFFF'FFFF, predecessor_status != scan_tile_status::inclusive)) {
+        predecessor_idx -= 32;
+        auto window_aggregate = process_window(predecessor_idx, predecessor_status);
+        exclusive_prefix      = window_aggregate + exclusive_prefix;
+      }
+
+      if (threadIdx.x == 0) {
+        _tile_state.set_inclusive_prefix(_tile_idx, exclusive_prefix + block_aggregate);
+      }
     }
 
     return exclusive_prefix;
@@ -141,6 +172,7 @@ struct scan_tile_state_callback {
 
   scan_tile_state_view<T>& _tile_state;
   cudf::size_type _tile_idx;
+  _TempStorage& _temp_storage;
 };
 
 }  // namespace detail
