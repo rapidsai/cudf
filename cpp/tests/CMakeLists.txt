@@ -346,6 +346,7 @@ ConfigureTest(
   ROLLING_TEST
   rolling/collect_ops_test.cpp
   rolling/empty_input_test.cpp
+  rolling/grouped_rolling_range_test.cpp
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp
