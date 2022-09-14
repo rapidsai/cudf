@@ -25,6 +25,10 @@ namespace udf {
  * @brief Returns the number of times that the target string appears
  * in the source string.
  *
+ * If `start <= 0` the search begins at the beginning of the `source` string.
+ * If `end <=0` or `end` is greater the length of the `source` string,
+ * the search stops at the end of the string.
+ *
  * @param source Source string to search
  * @param target String to match within source
  * @param start First character position within source to start the search
