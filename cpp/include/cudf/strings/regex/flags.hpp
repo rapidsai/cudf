@@ -75,9 +75,9 @@ constexpr bool is_ascii(regex_flags const f)
 /**
  * @brief Capture groups setting
  *
+ * For processing a regex pattern containing capture groups.
  * These can be used to optimize the generated regex instructions
- * which includes capture groups but does not require extracting
- * the matched groups.
+ * where the capture groups do not require extracting the groups.
  */
 enum capture_groups : uint32_t {
   EXTRACT,     ///< Capture groups processed normally for extract
