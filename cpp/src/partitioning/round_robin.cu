@@ -157,9 +157,6 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto nrows = input.num_rows();
-  if (nrows == 0) {
-    return std::pair(empty_like(input), std::vector<size_type>(num_partitions + 1, 0));
-  }
 
   CUDF_EXPECTS(num_partitions > 0, "Incorrect number of partitions. Must be greater than 0.");
   CUDF_EXPECTS(start_partition < num_partitions,
