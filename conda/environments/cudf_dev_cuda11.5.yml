@@ -7,7 +7,6 @@ channels:
   - rapidsai-nightly
   - dask/label/dev
   - conda-forge
-  - gmarkall
   - numba
 dependencies:
   - c-compiler

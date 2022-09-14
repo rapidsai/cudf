@@ -51,7 +51,6 @@ if [ "$SOURCE_BRANCH" = "main" ]; then
   conda config --system --remove channels dask/label/dev
 fi
 
-conda config --env --add channels gmarkall
 conda config --env --add channels numba
 
 gpuci_logger "Check compiler versions"
