@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -204,7 +205,7 @@ struct json_column {
       type = row_type;
     }
     // If, at some point within a column, we encounter a nested type (list or struct),
-    // we change that columns type to that respective nested type and invalidate all previous rows
+    // we change that column's type to that respective nested type and invalidate all previous rows
     else if (type == json_col_t::StringColumn &&
              (row_type == json_col_t::ListColumn || row_type == json_col_t::StructColumn)) {
       // Change the column type
@@ -214,6 +215,12 @@ struct json_column {
       // converted
       std::fill_n(validity.begin(), validity.size(), 0);
       valid_count = 0U;
+    }
+    // If this is a nested column but we're trying to insert either (a) a list node into a struct
+    // column or (b) a struct node into a list column, we fail
+    else if ((type == json_col_t::ListColumn && row_type == json_col_t::StructColumn) ||
+             (type == json_col_t::StructColumn && row_type == json_col_t::ListColumn)) {
+      CUDF_FAIL("A mix of lists and structs within the same column is not supported");
     }
 
     // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
