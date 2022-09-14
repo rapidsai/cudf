@@ -164,6 +164,7 @@ setup(
     cmake_args=cmake_args,
     cmake_process_manifest_hook=exclude_libcxx_symlink,
     packages=find_packages(include=["cudf", "cudf.*"]),
+    include_package_data=True,
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
