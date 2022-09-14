@@ -72,7 +72,7 @@ TEST_F(HashPartition, ZeroPartitions)
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{2}, offsets.size());
+  EXPECT_EQ(std::size_t{1}, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroRows)
@@ -90,7 +90,7 @@ TEST_F(HashPartition, ZeroRows)
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{2}, offsets.size());
+  EXPECT_EQ(std::size_t{4}, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroColumns)
@@ -105,7 +105,7 @@ TEST_F(HashPartition, ZeroColumns)
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{2}, offsets.size());
+  EXPECT_EQ(std::size_t{4}, offsets.size());
 }
 
 TEST_F(HashPartition, MixedColumnTypes)
