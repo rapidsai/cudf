@@ -1501,13 +1501,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
 
       // Convert strings to the inferred data type
-      auto col = cudf::io::json::experimental::detail::parse_data(string_spans_it,
-                                                                  col_size,
-                                                                  target_type,
-                                                                  make_validity(json_col).first,
-                                                                  parsing_options(options).view(),
-                                                                  stream,
-                                                                  mr);
+      auto col = experimental::detail::parse_data(string_spans_it,
+                                                  col_size,
+                                                  target_type,
+                                                  make_validity(json_col).first,
+                                                  parsing_options(options).view(),
+                                                  stream,
+                                                  mr);
 
       // Reset nullable if we do not have nulls
       if (col->null_count() == 0) { col->set_null_mask({}); }
@@ -1516,7 +1516,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       if (target_type.id() == type_id::STRING) {
         return {std::move(col), {{"offsets"}, {"chars"}}};
       }
-      // Non-string columns do not have child columns in the schema
+      // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {
         return {std::move(col), {}};
       }
