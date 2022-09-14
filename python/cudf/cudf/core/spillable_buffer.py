@@ -54,7 +54,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
         raise IndexError("tuple index out of range")
 
 
-class SpillableBuffer:
+class SpillableBuffer(Buffer):
     """A spillable buffer that implements DeviceBufferLike.
 
     This buffer supports spilling the represented data to host memory.

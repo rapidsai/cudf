@@ -38,9 +38,7 @@ class _ProtocolMeta(Protocol.__class__):  # type: ignore
     """
 
     def __instancecheck__(cls, instance):
-        from cudf.core.spillable_buffer import SpillableBuffer
-
-        if isinstance(instance, (Buffer, SpillableBuffer)):
+        if isinstance(instance, Buffer):
             return True
         return super().__instancecheck__(instance)
 
