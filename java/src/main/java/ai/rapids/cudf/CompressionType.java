@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,11 +44,21 @@ public enum CompressionType {
   ZIP(6),
 
   /** XZ format using LZMA(2) algorithm */
-  XZ(7);
+  XZ(7),
+
+  /** ZLIB format, using DEFLATE algorithm */
+  ZLIB(8),
+
+  /** LZ4 format, using LZ77 */
+  LZ4(9),
+
+  /** Lempel–Ziv–Oberhumer format */
+  LZO(10),
+
+  /** Zstandard format */
+  ZSTD(11);
 
   final int nativeId;
 
-  CompressionType(int nativeId) {
-    this.nativeId = nativeId;
-  }
+  CompressionType(int nativeId) { this.nativeId = nativeId; }
 }

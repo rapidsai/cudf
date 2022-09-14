@@ -487,7 +487,7 @@ cdef class ParquetWriter:
     cdef size_type max_page_size_rows
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
-                  object compression=None, str statistics="ROWGROUP",
+                  object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=134217728,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
@@ -670,6 +670,8 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         return cudf_io_types.compression_type.NONE
     elif compression == "snappy":
         return cudf_io_types.compression_type.SNAPPY
+    elif compression == "ZSTD":
+        return cudf_io_types.compression_type.ZSTD
     else:
         raise ValueError("Unsupported `compression` type")
 

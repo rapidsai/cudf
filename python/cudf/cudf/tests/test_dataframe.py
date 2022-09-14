@@ -18,6 +18,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from numba import cuda
+from packaging import version
 
 import cudf
 from cudf.core._compat import (
@@ -2021,8 +2022,26 @@ def gdf(pdf):
             "y": [np.nan, np.nan, np.nan],
             "z": [np.nan, np.nan, np.nan],
         },
-        {"x": [], "y": [], "z": []},
-        {"x": []},
+        pytest.param(
+            {"x": [], "y": [], "z": []},
+            marks=pytest.mark.xfail(
+                condition=version.parse("11")
+                <= version.parse(cupy.__version__)
+                < version.parse("11.1"),
+                reason="Zero-sized array passed to cupy reduction, "
+                "https://github.com/cupy/cupy/issues/6937",
+            ),
+        ),
+        pytest.param(
+            {"x": []},
+            marks=pytest.mark.xfail(
+                condition=version.parse("11")
+                <= version.parse(cupy.__version__)
+                < version.parse("11.1"),
+                reason="Zero-sized array passed to cupy reduction, "
+                "https://github.com/cupy/cupy/issues/6937",
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
@@ -9528,5 +9547,25 @@ def test_non_string_column_name_to_arrow(data):
 
     expected = df.to_arrow()
     actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)
+
+
+def test_complex_types_from_arrow():
+
+    expected = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3]),
+            pa.array([10, 20, 30]),
+            pa.array([{"a": 9}, {"b": 10}, {"c": 11}]),
+            pa.array([[{"a": 1}], [{"b": 2}], [{"c": 3}]]),
+            pa.array([10, 11, 12]).cast(pa.decimal128(21, 2)),
+            pa.array([{"a": 9}, {"b": 10, "c": {"g": 43}}, {"c": {"a": 10}}]),
+        ],
+        names=["a", "b", "c", "d", "e", "f"],
+    )
+
+    df = cudf.DataFrame.from_arrow(expected)
+    actual = df.to_arrow()
 
     assert expected.equals(actual)

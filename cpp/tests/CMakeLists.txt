@@ -31,7 +31,10 @@ function(ConfigureTest CMAKE_TEST_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
 
-  target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
+  target_link_libraries(
+    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
+                               $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
   install(
     TARGETS ${CMAKE_TEST_NAME}
@@ -344,6 +347,7 @@ ConfigureTest(
   ROLLING_TEST
   rolling/collect_ops_test.cpp
   rolling/empty_input_test.cpp
+  rolling/grouped_rolling_range_test.cpp
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp

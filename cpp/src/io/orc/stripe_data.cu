@@ -745,17 +745,21 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
             uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
             if constexpr (sizeof(T) <= 4) {
-              uint32_t baseval, mask;
+              uint32_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask                = (1 << (bw * 8 - 1)) - 1;
-              rle->baseval.u32[r] = (baseval > mask) ? (-(int32_t)(baseval & mask)) : baseval;
+              uint32_t const mask = (1u << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u32[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int32_t>(baseval & mask)
+                                      : baseval;
             } else {
-              uint64_t baseval, mask;
+              uint64_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask = 1;
-              mask <<= (bw * 8) - 1;
-              mask -= 1;
-              rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
+              uint64_t const mask = (1ul << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u64[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int64_t>(baseval & mask)
+                                      : baseval;
             }
             rle->m2_pw_byte3[r] = (pw << 8) | byte3;
             pos += bw;
@@ -1758,12 +1762,15 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              uint64_t nanos  = secondary_val;
+              int64_t nanos   = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               if (!tz_table.ttimes.empty()) {
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
-              if (seconds < 0 && nanos != 0) { seconds -= 1; }
+              // Adjust seconds only for negative timestamps with positive nanoseconds.
+              // Alternative way to represent negative timestamps is with negative nanoseconds
+              // in which case the adjustment in not needed.
+              if (seconds < 0 && nanos > 0) { seconds -= 1; }
 
               duration_ns d_ns{nanos};
               duration_s d_s{seconds};
