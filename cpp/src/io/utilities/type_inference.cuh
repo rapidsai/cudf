@@ -212,8 +212,7 @@ __global__ void infer_column_type_kernel(OptionsView options,
   if (threadIdx.x == 0) {
     atomicAdd(&column_info->null_count, block_type_histogram.null_count);
     atomicAdd(&column_info->float_count, block_type_histogram.float_count);
-    // Date can be ignored for now since all dates are treated as strings
-    // atomicAdd(&column_info->datetime_count, block_type_histogram.datetime_count);
+    atomicAdd(&column_info->datetime_count, block_type_histogram.datetime_count);
     atomicAdd(&column_info->string_count, block_type_histogram.string_count);
     atomicAdd(&column_info->negative_small_int_count,
               block_type_histogram.negative_small_int_count);
