@@ -226,6 +226,10 @@ def create_unary_identifier_func(id_func):
         def id_func_impl(context, builder, sig, args):
             str_ptr = builder.alloca(args[0].type)
             builder.store(args[0], str_ptr)
+
+            # Lookup table required for conversion functions
+            # must be resolved at runtime after context initialization,
+            # therefore cannot be a global variable
             tbl_ptr = context.get_constant(
                 types.int64, character_flags_table_ptr
             )
