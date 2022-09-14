@@ -404,7 +404,7 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
 
   // Default parsing options
   cudf::io::json_reader_options options{};
-  options.keep_quotes(true);
+  options.enable_keep_quotes(true);
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
   // Get the JSON's tree representation
@@ -434,7 +434,7 @@ TEST_F(JsonTest, ExpectFailMixStructAndList)
 
   // Default parsing options
   cudf::io::json_reader_options options{};
-  options.keep_quotes(true);
+  options.enable_keep_quotes(true);
 
   std::vector<std::string> const inputs{
     R"( [{"a":[123], "b":1.0}, {"b":1.1}, {"b":2.1, "a":{"0":123}}] )",
