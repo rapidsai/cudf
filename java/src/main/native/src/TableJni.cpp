@@ -2637,11 +2637,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
     auto [partitioned_table, partition_offsets] =
         cudf::partition(*n_input_table, *n_part_column, number_of_partitions);
 
-    // for what ever reason partition returns the length of the result at then
-    // end and hash partition/round robin do not, so skip the last entry for
-    // consistency
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
-    std::copy(partition_offsets.begin(), partition_offsets.end() - 1, n_output_offsets.begin());
+    // When row number is 0, the size of partition_offsets will be 0.
+    // Then "partition_offsets.end() - 1" will point to an invalid address,
+    // leading to a crash when copying. So need to check its size before setting the
+    // output_offsets
+    if (partition_offsets.empty()) {
+      // row number is 0. Then fill the output with 0.
+      std::fill(n_output_offsets.begin(), n_output_offsets.end(), 0);
+    } else {
+      // for what ever reason partition returns the length of the result at then
+      // end and hash partition/round robin do not, so skip the last entry for
+      // consistency
+      std::copy(partition_offsets.begin(), partition_offsets.end() - 1, n_output_offsets.begin());
+    }
 
     return convert_table_for_return(env, partitioned_table);
   }

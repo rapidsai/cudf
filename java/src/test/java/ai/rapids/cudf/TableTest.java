@@ -2957,6 +2957,15 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testPartitionEmptyTable() {
+    try (Table t = new Table.TestBuilder().timestampDayColumn().build();
+         ColumnVector parts = ColumnVector.fromInts();
+         PartitionedTable pt = t.partition(parts, 3)) {
+      assertArrayEquals(new int[]{0, 0, 0}, pt.getPartitions());
+    }
+  }
+
+  @Test
   void testIdentityHashPartition() {
     final int count = 1024 * 1024;
     try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
