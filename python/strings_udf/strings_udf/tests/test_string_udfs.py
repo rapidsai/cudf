@@ -54,7 +54,7 @@ def run_udf_test(data, func, dtype):
     comparing it with the equivalent pandas result
     """
     dtype = np.dtype(dtype)
-    cudf_column = cudf.Series(data)._column
+    cudf_column = cudf.core.column.as_column(data)
     str_view_ary = to_string_view_array(cudf_column)
 
     output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
