@@ -82,10 +82,6 @@ def modifiedFiles():
     merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
     changed_files = {f for f in diff if f.b_path is not None}
-    print(f"Target branch: {target_branch}")
-    print(f"Upstream target branch: {upstream_target_branch}")
-    print(f"Merge base: {merge_base}")
-    print(f"Modified files: {changed_files}")
     return changed_files
 
 
@@ -236,8 +232,6 @@ def checkCopyright_main():
 
     if args.git_modified_only:
         files = {f for f in modifiedFiles() if checkThisFile(f)}
-        print(f"Checking files: {files}")
-        # files = gitutils.modifiedFiles(pathFilter=checkThisFile)
     else:
         files = []
         for d in [os.path.abspath(d) for d in dirs]:
