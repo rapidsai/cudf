@@ -615,9 +615,13 @@ def test_json_nested_lines(data):
     )
     bytes.seek(0)
     pdf = pd.read_json(bytes, orient="records", lines=True)
-    # In the second test-case:
-    # Pandas omits "f1" in first row, so we have to enforce a common schema
-    assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
+    # In the second test-case we need to take a detour via pyarrow
+    # Pandas omits "f1" in first row, so we have to enforce a common schema,
+    # such that pandas would have the f1 member with null
+    # Also, pyarrow chooses to select different ordering of a nested column 
+    # children though key-value pairs are correct.
+    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    assert df.to_arrow().equals(pa_table_pdf)
 
 
 def test_json_nested_data():
@@ -629,5 +633,6 @@ def test_json_nested_data():
         StringIO(json_str), engine="cudf_experimental", orient="records"
     )
     pdf = pd.read_json(StringIO(json_str), orient="records")
-
-    assert df.to_arrow().equals(pa.Table.from_pandas(pdf))
+    pdf.columns = pdf.columns.astype('str')
+    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    assert df.to_arrow().equals(pa_table_pdf)
