@@ -16,7 +16,6 @@
 import datetime
 import re
 import argparse
-import io
 import os
 import sys
 
@@ -90,7 +89,7 @@ def checkCopyright(f, update_current_year):
     lineNum = 0
     crFound = False
     yearMatched = False
-    with io.open(f, "r", encoding="utf-8") as fp:
+    with open(f, "r", encoding="utf-8") as fp:
         lines = fp.readlines()
     for line in lines:
         lineNum += 1
@@ -144,7 +143,7 @@ def checkCopyright(f, update_current_year):
                 f, ', '.join(str(x[1]) for x in errs if x[-1] is not None)))
             for _, lineNum, __, replacement in errs_update:
                 lines[lineNum - 1] = replacement
-            with io.open(f, "w", encoding="utf-8") as out_file:
+            with open(f, "w", encoding="utf-8") as out_file:
                 for new_line in lines:
                     out_file.write(new_line)
         errs = [x for x in errs if x[-1] is None]
