@@ -1,28 +1,20 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 import collections.abc
 import pickle
 import time
 import weakref
 from threading import RLock
-from typing import Any, Tuple, Union
+from typing import Any, Tuple
 
 import numpy
 
 import rmm
 
-from cudf.core.buffer import (
-    Buffer,
-    DeviceBufferLike,
-    get_ptr_and_size,
-    is_c_contiguous,
-)
+from cudf.core.buffer import Buffer, get_ptr_and_size
 from cudf.utils.string import format_bytes
-
-from cython.operator cimport dereference
-from libc.stdint cimport uintptr_t
-from libcpp.memory cimport make_shared, shared_ptr, static_pointer_cast
-from libcpp.vector cimport vector
 
 
 class SpillLock:
@@ -89,19 +81,18 @@ class SpillableBuffer:
     manager : SpillManager
         The manager overseeing this buffer.
     """
+
     def __init__(
         self,
-        object data,
-        bint exposed,
-        object manager,
+        data,
+        exposed,
+        manager,
     ):
         self._lock = RLock()
         self._spill_locks = weakref.WeakSet()
         self._exposed = exposed
         self._last_accessed = time.monotonic()
-        self._view_desc = (
-            None  # TODO: maybe make a view its own subclass?
-        )
+        self._view_desc = None  # TODO: maybe make a view its own subclass?
 
         # First, we extract the memory pointer, size, and owner.
         # If it points to host memory we either:
@@ -149,9 +140,7 @@ class SpillableBuffer:
         # Then, we inform the spilling manager about this new buffer if it is
         # not already known to the spilling manager.
         self._manager = manager
-        base = self._manager.lookup_address_range(
-            self._ptr, self._size
-        )
+        base = self._manager.lookup_address_range(self._ptr, self._size)
         if base is not None:
             # Since this is a view, we expose the base buffer permanently by
             # accessing `.ptr`
@@ -272,8 +261,8 @@ class SpillableBuffer:
 
         if self._view_desc:
             return (
-                self._view_desc["base"].get_ptr(spill_lock) +
-                self._view_desc["offset"]
+                self._view_desc["base"].get_ptr(spill_lock)
+                + self._view_desc["offset"]
             )
 
         if spill_lock is None:
@@ -331,7 +320,6 @@ class SpillableBuffer:
 
     def memoryview(self) -> memoryview:
         # Get base buffer
-        cdef size_t offset
         if self._view_desc is None:
             base = self
             offset = 0
@@ -353,13 +341,13 @@ class SpillableBuffer:
                 )
                 return ret
 
-    def __getitem__(self, slice key) -> "SpillableBuffer":
+    def __getitem__(self, key) -> SpillableBuffer:
         start, stop, step = key.indices(self.size)
         if step != 1:
             raise ValueError("slice must be C-contiguous")
 
         # TODO: use a subclass
-        return create_view(self, size=stop-start, offset=start)
+        return create_view(self, size=stop - start, offset=start)
 
     def serialize(self) -> Tuple[dict, list]:
         # Get base buffer
@@ -381,20 +369,20 @@ class SpillableBuffer:
                     Buffer(
                         data=ptr,
                         size=self.size,
-                        owner=(self._owner, spill_lock)
+                        owner=(self._owner, spill_lock),
                     )
                 ]
             return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> "SpillableBuffer":
+    def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
         from cudf.core.spill_manager import global_manager
 
         if header["frame_count"] != 1:
             raise ValueError(
                 "Deserializing a SpillableBuffer expect a single frame"
             )
-        frame, = frames
+        (frame,) = frames
         if isinstance(frame, SpillableBuffer):
             ret = frame
         else:
@@ -404,9 +392,9 @@ class SpillableBuffer:
     def is_overlapping(self, ptr: int, size: int):
         with self._lock:
             return (
-                not self.is_spilled and
-                (ptr + size) > self._ptr and
-                (self._ptr + self._size) > ptr
+                not self.is_spilled
+                and (ptr + size) > self._ptr
+                and (self._ptr + self._size) > ptr
             )
 
     def __repr__(self) -> str:
@@ -428,7 +416,7 @@ class SpillableBuffer:
 
 
 # TODO: use a subclass instead
-def create_view(buffer, size, offset) -> "SpillableBuffer":
+def create_view(buffer, size, offset) -> SpillableBuffer:
     if size < 0:
         raise ValueError("size cannot be negative")
 

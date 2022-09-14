@@ -13,7 +13,6 @@ from cudf._lib.column cimport Column
 
 from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.spillable_buffer import SpillLock
 
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -26,6 +25,7 @@ from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
 from cudf.api.types import is_scalar, is_string_dtype
+from cudf.core.spillable_buffer import SpillLock
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator

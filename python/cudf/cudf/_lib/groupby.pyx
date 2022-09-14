@@ -15,6 +15,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
+from cudf.core.spillable_buffer import SpillLock
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -26,7 +27,6 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.spillable_buffer import SpillLock
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_unique_ptr,

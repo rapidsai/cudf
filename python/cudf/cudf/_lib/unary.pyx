@@ -26,7 +26,7 @@ from cudf._lib.column import (
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.unary cimport unary_operator, underlying_type_t_unary_op
-from cudf._lib.spillable_buffer import SpillLock
+from cudf.core.spillable_buffer import SpillLock
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
 

@@ -38,7 +38,7 @@ class _ProtocolMeta(Protocol.__class__):  # type: ignore
     """
 
     def __instancecheck__(cls, instance):
-        from cudf._lib.spillable_buffer import SpillableBuffer
+        from cudf.core.spillable_buffer import SpillableBuffer
 
         if isinstance(instance, (Buffer, SpillableBuffer)):
             return True
@@ -140,8 +140,8 @@ def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
         A device-buffer-like instance that represents the device memory
         of `obj`.
     """
-    from cudf._lib.spillable_buffer import SpillableBuffer
     from cudf.core.spill_manager import global_manager
+    from cudf.core.spillable_buffer import SpillableBuffer
 
     if isinstance(obj, DeviceBufferLike):
         return obj

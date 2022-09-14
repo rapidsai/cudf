@@ -12,7 +12,6 @@ import pytest
 import rmm
 
 import cudf
-from cudf._lib.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.spill_manager import (
@@ -21,6 +20,7 @@ from cudf.core.spill_manager import (
     global_manager,
     mark_columns_as_read_only_inplace,
 )
+from cudf.core.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.testing._utils import assert_eq
 
 

@@ -10,6 +10,7 @@ import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.spillable_buffer import SpillableBuffer, SpillLock
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -31,7 +32,6 @@ from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
 )
 
-from cudf._lib.spillable_buffer import SpillableBuffer, SpillLock
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,

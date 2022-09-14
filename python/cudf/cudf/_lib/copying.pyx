@@ -37,7 +37,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.spillable_buffer import SpillLock
+from cudf.core.spillable_buffer import SpillLock
 from cudf._lib.utils cimport (
     columns_from_table_view,
     columns_from_unique_ptr,

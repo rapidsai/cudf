@@ -15,7 +15,6 @@ from cudf._lib.cpp.concatenate cimport (
     concatenate_tables as libcudf_concatenate_tables,
 )
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.spillable_buffer import SpillLock
 from cudf._lib.utils cimport (
     data_from_unique_ptr,
     make_column_views,
@@ -23,6 +22,7 @@ from cudf._lib.utils cimport (
 )
 
 from cudf.core.buffer import as_device_buffer_like
+from cudf.core.spillable_buffer import SpillLock
 
 
 cpdef concat_masks(object columns):
