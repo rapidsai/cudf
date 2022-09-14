@@ -9,10 +9,7 @@ from skbuild import setup
 
 import versioneer
 
-install_requires = [
-    "numba>=0.53.1",
-    "numpy",
-]
+install_requires = ["numba>=0.53.1", "numpy", "cudf"]
 
 extras_require = {
     "test": [

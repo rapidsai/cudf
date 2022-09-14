@@ -55,7 +55,7 @@ from cudf.core.udf.utils import (
     _compile_or_get,
     _get_input_args_from_frame,
     _post_process_output_col,
-    _return_col_from_dtype,
+    _return_arr_from_dtype,
 )
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
@@ -1804,7 +1804,7 @@ class IndexedFrame(Frame):
             ) from e
 
         # Mask and data column preallocated
-        ans_col = _return_col_from_dtype(retty, len(self))
+        ans_col = _return_arr_from_dtype(retty, len(self))
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)

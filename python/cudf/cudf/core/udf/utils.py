@@ -30,7 +30,7 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 arg_handlers: List[Any] = []
-files: List[Any] = []
+ptx_files: List[Any] = []
 
 
 @_cudf_nvtx_annotate
@@ -225,7 +225,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=files, extensions=arg_handlers)(_kernel)
+    kernel = cuda.jit(sig, link=ptx_files, extensions=arg_handlers)(_kernel)
 
     return kernel
 
@@ -253,7 +253,7 @@ def _get_input_args_from_frame(fr):
     return args + offsets
 
 
-def _return_col_from_dtype(dt, size):
+def _return_arr_from_dtype(dt, size):
     return cp.empty(size, dtype=dt)
 
 

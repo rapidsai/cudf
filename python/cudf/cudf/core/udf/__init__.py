@@ -13,16 +13,16 @@ from cudf.core.dtypes import dtype
 from cudf.utils.dtypes import STRING_TYPES
 import numpy as np
 
-units = ["ns", "ms", "us", "s"]
-datetime_cases = {types.NPDatetime(u) for u in units}
-timedelta_cases = {types.NPTimedelta(u) for u in units}
+_units = ["ns", "ms", "us", "s"]
+_datetime_cases = {types.NPDatetime(u) for u in _units}
+_timedelta_cases = {types.NPTimedelta(u) for u in _units}
 
 
-supported_masked_types = (
+_supported_masked_types = (
     types.integer_domain
     | types.real_domain
-    | datetime_cases
-    | timedelta_cases
+    | _datetime_cases
+    | _timedelta_cases
     | {types.boolean}
 )
 
@@ -47,11 +47,11 @@ try:
             masked_lowering.pack_return_scalar_impl
         )
 
-        supported_masked_types |= {strings_typing.string_view}
+        _supported_masked_types |= {strings_typing.string_view}
         utils.launch_arg_getters[dtype("O")] = to_string_view_array
         utils.masked_array_types[dtype("O")] = string_view
         utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
-        utils.files.append(ptxpath)
+        utils.ptx_files.append(ptxpath)
         utils.arg_handlers.append(str_view_arg_handler)
         row_function.itemsizes[dtype("O")] = string_view.size_bytes
 
@@ -63,4 +63,4 @@ except ImportError as e:
     # allow cuDF to work without strings_udf
     pass
 
-masked_typing.register_masked_constructor(supported_masked_types)
+masked_typing.register_masked_constructor(_supported_masked_types)
