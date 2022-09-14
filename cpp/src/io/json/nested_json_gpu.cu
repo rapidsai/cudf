@@ -1429,12 +1429,18 @@ void make_json_column(json_column& root_column,
   root_column.level_child_cols_recursively(root_column.current_offset);
 }
 
-auto casting_options(cudf::io::json_reader_options const& options)
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ */
+auto parsing_options(cudf::io::json_reader_options const& options)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
   auto const stream     = cudf::default_stream_value;
-  parse_opts.keepquotes = options.is_keeping_quotes();
+  parse_opts.keepquotes = options.is_enabled_keep_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -1492,14 +1498,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // Infer column type
       auto target_type = cudf::io::detail::infer_data_type(
-        casting_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
+        parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
 
       // Convert strings to the inferred data type
       auto col = cudf::io::json::experimental::detail::parse_data(string_spans_it,
                                                                   col_size,
                                                                   target_type,
                                                                   make_validity(json_col).first,
-                                                                  casting_options(options).view(),
+                                                                  parsing_options(options).view(),
                                                                   stream,
                                                                   mr);
 
