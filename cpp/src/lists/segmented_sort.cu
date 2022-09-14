@@ -163,7 +163,8 @@ struct SegmentedSortColumn {
     // the average list size at which to prefer radixsort:
     constexpr cudf::size_type MIN_AVG_LIST_SIZE_FOR_RADIXSORT{100};
 
-    if ((child.size() / offsets.size()) < MIN_AVG_LIST_SIZE_FOR_RADIXSORT) {
+    if (std::is_floating_point_v<T> ||
+        ((child.size() / offsets.size()) < MIN_AVG_LIST_SIZE_FOR_RADIXSORT)) {
       auto child_table = segmented_sort_by_key(table_view{{child}},
                                                table_view{{child}},
                                                offsets,
