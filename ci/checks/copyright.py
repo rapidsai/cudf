@@ -15,10 +15,11 @@
 
 import argparse
 import datetime
-import git
 import os
 import re
 import sys
+
+import git
 
 FilesToCheck = [
     re.compile(r"[.](cmake|cpp|cu|cuh|h|hpp|sh|pxd|py|pyx)$"),
@@ -97,14 +98,13 @@ def replaceCurrentYear(line, start, end):
 
 
 def checkCopyright(f, update_current_year):
-    """
-    Checks for copyright headers and their years
-    """
+    """Checks for copyright headers and their years."""
     errs = []
     thisYear = datetime.datetime.now().year
     lineNum = 0
     crFound = False
     yearMatched = False
+
     if isinstance(f, git.Diff):
         path = f.b_path
         lines = f.b_blob.data_stream.read().decode().splitlines(keepends=True)
@@ -112,6 +112,7 @@ def checkCopyright(f, update_current_year):
         path = f
         with open(f, encoding="utf-8") as fp:
             lines = fp.readlines()
+
     for line in lines:
         lineNum += 1
         start, end = getCopyrightYears(line)
@@ -158,16 +159,12 @@ def checkCopyright(f, update_current_year):
     if update_current_year:
         errs_update = [x for x in errs if x[-1] is not None]
         if len(errs_update) > 0:
-            print(
-                "File: {}. Changing line(s) {}".format(
-                    path, ", ".join(str(x[1]) for x in errs if x[-1] is not None)
-                )
-            )
+            lines_changed = ", ".join(str(x[1]) for x in errs_update)
+            print(f"File: {path}. Changing line(s) {lines_changed}")
             for _, lineNum, __, replacement in errs_update:
                 lines[lineNum - 1] = replacement
             with open(path, "w", encoding="utf-8") as out_file:
-                for new_line in lines:
-                    out_file.write(new_line)
+                out_file.writelines(lines)
 
     return errs
 
