@@ -61,6 +61,14 @@ else()
   set(CPM_DOWNLOAD_spdlog ${CUDF_BUILD_WHEELS})
   set(CUDA_STATIC_RUNTIME ${CUDF_BUILD_WHEELS})
 
+  if(CUDF_BUILD_WHEELS)
+    # Wheels have to build with the old ABI because pyarrow's `libarrow.so`
+    # is compiled for manylinux2014 (centos7 toolchain) which uses the old ABI.
+    list(APPEND CMAKE_C_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
+    list(APPEND CMAKE_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
+    list(APPEND CMAKE_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
+  endif()
+
   # Need to set this so all the nvcomp targets are global, not only nvcomp::nvcomp
   # https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_PACKAGE_TARGETS_GLOBAL.html#variable:CMAKE_FIND_PACKAGE_TARGETS_GLOBAL
   set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ${CUDF_BUILD_WHEELS})
