@@ -7,7 +7,14 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 
-from strings_udf._typing import StringView, size_type, string_view
+from strings_udf._typing import (
+    StringView,
+    bool_binary_funcs,
+    id_unary_funcs,
+    int_binary_funcs,
+    size_type,
+    string_view,
+)
 
 from cudf.core.udf import masked_typing
 from cudf.core.udf._ops import comparison_ops
@@ -129,19 +136,6 @@ class MaskedStringViewAttrs(AttributeTemplate):
 
 
 # Build attributes for `MaskedType(string_view)`
-bool_binary_funcs = ["startswith", "endswith"]
-int_binary_funcs = ["find", "rfind"]
-id_unary_funcs = [
-    "isalpha",
-    "isalnum",
-    "isdecimal",
-    "isdigit",
-    "isupper",
-    "islower",
-    "isspace",
-    "isnumeric",
-]
-
 for func in bool_binary_funcs:
     setattr(
         MaskedStringViewAttrs,
