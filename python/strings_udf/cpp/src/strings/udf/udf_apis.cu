@@ -19,14 +19,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-
-#include <cuda_runtime.h>
 
 namespace cudf {
 namespace strings {
