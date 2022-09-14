@@ -683,6 +683,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     cudaStreamWaitEvent(scan_stream.value(), last_launch_event);
 
     if (delimiter.size() == 1) {
+      // the single-byte case allows for a much more efficient kernel, so we special-case it
       byte_split_kernel<<<tiles_in_launch,
                           THREADS_PER_TILE,
                           0,
