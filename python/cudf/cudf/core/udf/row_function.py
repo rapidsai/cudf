@@ -47,8 +47,7 @@ def _get_frame_row_type(dtype):
     offset = 0
 
     sizes = [
-        itemsizes.get(val[0], val[0].itemsize)
-        for val in dtype.fields.values()
+        itemsizes.get(val[0], val[0].itemsize) for val in dtype.fields.values()
     ]
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
