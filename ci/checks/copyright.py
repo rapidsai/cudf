@@ -29,7 +29,10 @@ FilesToCheck = [
     re.compile(r"[.]flake8[.]cython$"),
     re.compile(r"meta[.]yaml$"),
 ]
-ExemptFiles = ["cpp/include/cudf_test/cxxopts.hpp"]
+ExemptFiles = [
+    re.compile(r"cpp/include/cudf_test/cxxopts.hpp"),
+    re.compile(r"versioneer[.]py"),
+]
 
 # this will break starting at year 10000, which is probably OK :)
 CheckSimple = re.compile(
@@ -194,7 +197,6 @@ def checkCopyright_main():
     it compares between branches "$PR_TARGET_BRANCH" and "current-pr-branch"
     """
     retVal = 0
-    global ExemptFiles
 
     argparser = argparse.ArgumentParser(
         "Checks for a consistent copyright header in git's modified files"
@@ -219,12 +221,6 @@ def checkCopyright_main():
     )
 
     args, dirs = argparser.parse_known_args()
-    try:
-        ExemptFiles = [re.compile(file) for file in ExemptFiles]
-    except re.error as reException:
-        print("Regular expression error:")
-        print(reException)
-        return 1
 
     if args.git_modified_only:
         files = [f for f in modifiedFiles() if checkThisFile(f)]
