@@ -310,12 +310,8 @@ class SpillableBuffer(Buffer):
                 )
                 return ret
 
-    def __getitem__(self, key: slice) -> SpillableBufferView:
-        start, stop, step = key.indices(self.size)
-        if step != 1:
-            raise ValueError("slice must be C-contiguous")
-
-        return SpillableBufferView(base=self, offset=start, size=stop - start)
+    def getitem(self, offset: int, size: int) -> Buffer:
+        return SpillableBufferView(base=self, offset=offset, size=size)
 
     def serialize(self) -> Tuple[dict, List[Frame]]:
         header: Dict[Any, Any]
@@ -411,13 +407,9 @@ class SpillableBufferView(SpillableBuffer):
     def get_ptr(self, spill_lock: SpillLock = None) -> int:
         return self._base.get_ptr(spill_lock=spill_lock) + self._offset
 
-    def __getitem__(self, key: slice) -> SpillableBufferView:
-        start, stop, step = key.indices(self.size)
-        if step != 1:
-            raise ValueError("slice must be C-contiguous")
-
+    def getitem(self, offset: int, size: int) -> Buffer:
         return SpillableBufferView(
-            base=self._base, offset=start + self._offset, size=stop - start
+            base=self._base, offset=offset + self._offset, size=size
         )
 
     def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:

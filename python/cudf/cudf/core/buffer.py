@@ -223,6 +223,15 @@ class Buffer(Serializable):
         if global_manager.enabled:
             global_manager.get().add_other(self)
 
+    def getitem(self, offset: int, size: int) -> Buffer:
+        """
+        Sub-classes can overwrite this to implement __getitem__
+        without having to handle non-slice inputs.
+        """
+        return self.__class__(
+            data=self.ptr + offset, size=size, owner=self.owner
+        )
+
     def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
             raise TypeError(
@@ -232,9 +241,7 @@ class Buffer(Serializable):
         start, stop, step = key.indices(self.size)
         if step != 1:
             raise ValueError("slice must be C-contiguous")
-        return self.__class__(
-            data=self.ptr + start, size=stop - start, owner=self.owner
-        )
+        return self.getitem(offset=start, size=stop - start)
 
     @property
     def size(self) -> int:
