@@ -80,8 +80,13 @@ def modifiedFiles():
     print(repo.remotes)
     print("REPO REMOTE REFS:")
     print(repo.remote().refs)
-    upstream_target_branch = repo.heads[target_branch].tracking_branch()
-    merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
+    try:
+        # Use the tracking branch of the local reference if it exists
+        upstream_target_branch = repo.heads[target_branch].tracking_branch()
+    except IndexError:
+        # Fall back to the remote reference
+        upstream_target_branch = repo.remote().refs[target_branch]
+    merge_base = repo.merge_base("current-pr-branch", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
     changed_files = {f for f in diff if f.b_path is not None}
     return changed_files
