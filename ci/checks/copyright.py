@@ -42,9 +42,11 @@ CheckDouble = re.compile(
 
 def checkThisFile(f):
     if isinstance(f, git.Diff):
+        if f.deleted_file or f.b_blob.size == 0:
+            return False
         f = f.b_path
-    # This check covers things like symlinks which point to files that DNE
-    if not os.path.exists(f) or os.stat(f).st_size == 0:
+    elif not os.path.exists(f) or os.stat(f).st_size == 0:
+        # This check covers things like symlinks which point to files that DNE
         return False
     for exempt in ExemptFiles:
         if exempt.search(f):
