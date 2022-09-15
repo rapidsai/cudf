@@ -542,12 +542,18 @@ cdef class Column:
                     exposed=False
                 )
             elif (
+                # This is an optimizaion to avoid creating a new
+                # SpillableBuffer that represent the same memory
+                # as the owner.
                 column_owner and
-                data_owner._ptr == data_ptr and
+                isinstance(data_owner, SpillableBuffer) and
+                # We have to make sure that `data_owner` is already spill
+                # locked and that its pointer is the same as `data_ptr`
+                # _without_ exposing the buffer permanently.
+                not data_owner.spillable and
+                data_owner.get_ptr(spill_lock=SpillLock()) == data_ptr and
                 data_owner.size == base_nbytes
             ):
-                # No need to create a new Buffer that represent
-                # the same memory as the owner.
                 data = data_owner
             else:
                 data = Buffer(
