@@ -1187,6 +1187,7 @@ void make_json_column(json_column& root_column,
         if (current_data_path.top().column->child_columns.size() == 0) {
           current_data_path.top().column->child_columns.emplace(std::string{list_child_name},
                                                                 json_column{json_col_t::Unknown});
+          current_data_path.top().column->column_order.push_back(list_child_name);
         }
         current_data_path.top().current_selected_col =
           &current_data_path.top().column->child_columns.begin()->second;
@@ -1226,6 +1227,7 @@ void make_json_column(json_column& root_column,
 
     // The field name's column does not exist yet, so we have to append the child column to the
     // struct column
+    struct_col->column_order.push_back(field_name);
     return &struct_col->child_columns.emplace(field_name, json_column{}).first->second;
   };
 
@@ -1469,9 +1471,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       std::vector<column_name_info> column_names{};
       size_type num_rows{json_col.current_offset};
       // Create children columns
-      for (auto const& col : json_col.child_columns) {
-        column_names.emplace_back(col.first);
-        auto const& child_col      = col.second;
+      for (auto const& col_name : json_col.column_order) {
+        auto const& col = json_col.child_columns.find(col_name);
+        column_names.emplace_back(col->first);
+        auto const& child_col      = col->second;
         auto [child_column, names] = json_column_to_cudf_column(child_col, d_input, stream, mr);
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
@@ -1570,7 +1573,8 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   std::vector<column_name_info> out_column_names;
 
   // Iterate over the struct's child columns and convert to cudf column
-  for (auto const& [col_name, json_col] : root_struct_col.child_columns) {
+  for (auto const& col_name : root_struct_col.column_order) {
+    auto const& json_col = root_struct_col.child_columns.find(col_name)->second;
     // Insert this columns name into the schema
     out_column_names.emplace_back(col_name);
 
