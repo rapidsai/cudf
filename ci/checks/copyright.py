@@ -64,7 +64,7 @@ def modifiedFiles():
     and the upstream of the target branch. We return the Diff objects so that
     we can read only the staged changes.
     """
-    repo = git.Repo(".")
+    repo = git.Repo()
     # TARGET_BRANCH is defined in CI
     target_branch = os.environ.get("TARGET_BRANCH")
     if target_branch is None:
@@ -227,7 +227,7 @@ def checkCopyright_main():
         return 1
 
     if args.git_modified_only:
-        files = {f for f in modifiedFiles() if checkThisFile(f)}
+        files = [f for f in modifiedFiles() if checkThisFile(f)]
     else:
         files = []
         for d in [os.path.abspath(d) for d in dirs]:
