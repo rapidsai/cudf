@@ -27,7 +27,7 @@ jobs:
       package-name: cudf
       package-dir: python/cudf
       python-version: "3.8 3.9"
-      cibw-before-all: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+      cibw-before-all: "apt update && apt install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
       skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
       cibw-test-extras:  "test"
