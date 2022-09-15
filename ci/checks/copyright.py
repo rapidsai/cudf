@@ -76,6 +76,10 @@ def modifiedFiles():
     print(f"Target branch: {target_branch}")
     print("REPO HEADS:")
     print(repo.heads)
+    print("REPO REMOTES:")
+    print(repo.remotes)
+    print("REPO REMOTE REFS:")
+    print(repo.remote().refs)
     upstream_target_branch = repo.heads[target_branch].tracking_branch()
     merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
