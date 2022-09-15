@@ -22,7 +22,7 @@ jobs:
   #     cibw-test-command: "for gt in _venv_placeholder/bin/gtests/libcudf*/*; do ${gt}; done"
   #   secrets: inherit
   cudf-wheel:
-    uses: trxcllnt/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions-ptaylor
     with:
       package-name: cudf
       package-dir: python/cudf
@@ -44,7 +44,7 @@ jobs:
     secrets: inherit
   dask_cudf-wheel:
     needs: cudf-wheel
-    uses: trxcllnt/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions
     with:
       package-name: dask_cudf
       package-dir: python/dask_cudf
