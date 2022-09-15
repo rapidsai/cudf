@@ -84,48 +84,7 @@ install_requires.append(
 )
 
 
-class build_ext_and_proto(build_ext):
-    def run(self):
-        # Get protoc
-        protoc = None
-        if "PROTOC" in os.environ and os.path.exists(os.environ["PROTOC"]):
-            protoc = os.environ["PROTOC"]
-        else:
-            protoc = find_executable("protoc")
-        if protoc is None:
-            sys.stderr.write("protoc not found")
-            sys.exit(1)
-
-        # Build .proto file
-        for source in ["cudf/utils/metadata/orc_column_statistics.proto"]:
-            output = source.replace(".proto", "_pb2.py")
-
-            if not os.path.exists(output) or (
-                os.path.getmtime(source) > os.path.getmtime(output)
-            ):
-                with open(output, "a") as src:
-                    src.write("# flake8: noqa" + os.linesep)
-                    src.write("# fmt: off" + os.linesep)
-                subprocess.check_call([protoc, "--python_out=.", source])
-                with open(output, "r+") as src:
-                    new_src_content = (
-                        "# flake8: noqa"
-                        + os.linesep
-                        + "# fmt: off"
-                        + os.linesep
-                        + src.read()
-                        + "# fmt: on"
-                        + os.linesep
-                    )
-                    src.seek(0)
-                    src.write(new_src_content)
-
-        # Run original Cython build_ext command
-        super().run()
-
-
 cmdclass = versioneer.get_cmdclass()
-cmdclass["build_ext"] = build_ext_and_proto
 
 setup(
     name="cudf",
