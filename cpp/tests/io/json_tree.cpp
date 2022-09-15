@@ -395,7 +395,7 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
           std::move(node_range_end)};
 }
 
-std::tuple<std::vector<size_type>, std::vector<size_type>> records_orient_tree_traversal_cpu(
+std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_traversal_cpu(
   host_span<SymbolT const> input, tree_meta_t2 const& tree, rmm::cuda_stream_view stream)
 {
   // // move tree representation to cpu
@@ -413,7 +413,7 @@ std::tuple<std::vector<size_type>, std::vector<size_type>> records_orient_tree_t
     cudf::io::json::test::print_vec(cpu, name, to_int);
   };
 
-  std::vector<int> node_ids(tree.parent_node_ids.size());
+  std::vector<NodeIndexT> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
   print_vec(node_ids, "cpu.node_ids");
   // print_vec(tree.parent_node_ids, "tree.parent_node_ids (before)");
@@ -756,9 +756,10 @@ TEST_F(JsonTest, TreeTraversal2)
   printf("AFTER  traversal (gpu_tree):\n");
   cudf::io::json::test::print_tree(gpu_tree);
   auto translate_col_id = [](auto col_id) {
-    std::unordered_map<int, int> col_id_map;
-    std::vector<int> new_col_ids(col_id.size());
-    int unique_id = 0;
+    using value_type = typename decltype(col_id)::value_type;
+    std::unordered_map<value_type, value_type> col_id_map;
+    std::vector<value_type> new_col_ids(col_id.size());
+    value_type unique_id = 0;
     for (auto id : col_id) {
       if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
     }

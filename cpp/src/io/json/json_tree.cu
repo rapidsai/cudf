@@ -286,7 +286,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
 // JSON tree traversal for record orient. (list of structs)
 // returns col_id of each node, and row_offset(TODO)
-std::tuple<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t& d_tree,
                               rmm::cuda_stream_view stream,
@@ -458,7 +458,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   //     c. scan sum of unique {parent_col_id, type}
   // cross check outputs.
   // Calculate row offsets too.
-  rmm::device_uvector<size_type> col_id(num_nodes, stream);
+  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream);
   rmm::device_uvector<size_type> parent_col_id(num_nodes, stream);
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              parent_col_id.begin(),

@@ -317,7 +317,7 @@ tree_meta_t get_tree_representation(
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::tuple<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
+std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(
   device_span<SymbolT const> d_input,
   tree_meta_t& d_tree,
