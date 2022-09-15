@@ -29,11 +29,7 @@ jobs:
       python-version: "3.8 3.9"
       cibw-before-all: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
-      skbuild-configure-options: |
-        "--log-level=DEBUG"
-        "-DCUDF_BUILD_WHEELS=ON"
-        "-DDETECT_CONDA_ENV=OFF"
-        "-DCMAKE_CUDA_ARCHITECTURES=ALL"
+      skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
       cibw-test-extras:  "test"
       gpu-smoketest-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       gpu-smoketest-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
