@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 GIT_DESCRIBE_TAG=`git describe --tags`
 MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
