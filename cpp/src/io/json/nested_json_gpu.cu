@@ -133,9 +133,9 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const trans
 // Translation table (i.e., for each transition, what are the symbols that we output)
 std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const translation_table{
   {/* IN_STATE         {      [      }      ]      "      \    OTHER */
-   /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {'x'}, {'x'}, {'x'}}},
-   /* TT_STR    */ {{{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}},
-   /* TT_ESC    */ {{{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}}}};
+   /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}}},
+   /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {}}},
+   /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {}}}}};
 
 // The DFA's starting state
 constexpr auto start_state = static_cast<StateT>(TT_OOS);
@@ -958,10 +958,13 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   to_stack_op::start_state,
                                   stream);
 
+  // Copy back to actual number of stack operations
+  num_stack_ops.device_to_host(stream, true);
+
   // stack operations with indices are converted to top of the stack for each character in the input
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
     stack_ops.data(),
-    device_span<SymbolOffsetT>{stack_op_indices.data(), stack_op_indices.size()},
+    device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops[0]},
     JSONToStackOp{},
     d_top_of_stack,
     root_symbol,
