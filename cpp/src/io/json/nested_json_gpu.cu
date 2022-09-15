@@ -18,7 +18,6 @@
 
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/type_inference.cuh>
 
@@ -33,6 +32,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -931,7 +931,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  hostdevice_vector<SymbolOffsetT> num_stack_ops(single_item, stream);
+  rmm::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
 
   // Sequence of stack symbols and their position in the original input (sparse representation)
   rmm::device_uvector<StackSymbolT> stack_ops{json_in.size(), stream};
@@ -954,17 +954,17 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  num_stack_ops.device_ptr(),
+                                  d_num_stack_ops.data(),
                                   to_stack_op::start_state,
                                   stream);
 
   // Copy back to actual number of stack operations
-  num_stack_ops.device_to_host(stream, true);
+  auto const num_stack_ops = d_num_stack_ops.value(stream);
 
   // stack operations with indices are converted to top of the stack for each character in the input
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
     stack_ops.data(),
-    device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops[0]},
+    device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops},
     JSONToStackOp{},
     d_top_of_stack,
     root_symbol,
