@@ -38,10 +38,11 @@ jobs:
     secrets: inherit
   dask_cudf-wheel:
     needs: cudf-wheel
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions-ptaylor
     with:
       package-name: dask_cudf
       package-dir: python/dask_cudf
+      python-package-cuda-suffix: "-cu11"
       gpu-smoketest-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       cibw-test-extras:  "test"
       cibw-test-command: "pytest -v ./python/dask_cudf/dask_cudf/tests"
