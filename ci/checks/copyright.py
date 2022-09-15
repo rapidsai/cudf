@@ -66,27 +66,18 @@ def modifiedFiles():
     # TARGET_BRANCH is defined in CI
     target_branch = os.environ.get("TARGET_BRANCH")
     if target_branch is None:
-        print("Getting target branch from local repo")
         # Fall back to the closest branch if not on CI
         target_branch = repo.git.describe(
             all=True, tags=True, match="branch-*", abbrev=0
         ).lstrip("heads/")
-    else:
-        print("Getting target branch from environment variable")
-    print(f"Target branch: {target_branch}")
-    print("REPO HEADS:")
-    print(repo.heads)
-    print("REPO REMOTES:")
-    print(repo.remotes)
-    print("REPO REMOTE REFS:")
-    print(repo.remote().refs)
     try:
         # Use the tracking branch of the local reference if it exists
         upstream_target_branch = repo.heads[target_branch].tracking_branch()
     except IndexError:
-        # Fall back to the remote reference
+        # Fall back to the remote reference (this happens on CI because the
+        # only local branch reference is current-pr-branch)
         upstream_target_branch = repo.remote().refs[target_branch]
-    merge_base = repo.merge_base("current-pr-branch", upstream_target_branch.commit)[0]
+    merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
     changed_files = {f for f in diff if f.b_path is not None}
     return changed_files
