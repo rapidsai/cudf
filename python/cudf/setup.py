@@ -18,7 +18,7 @@ install_requires = [
     "cuda-python>=11.5,<11.7.1",
     "fsspec>=0.6.0",
     "numba>=0.54",
-    "numpy",
+    "numpy<1.23",
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=1.0,<1.6.0dev0",
