@@ -434,16 +434,25 @@ TEST_F(JsonTest, ExpectFailMixStructAndList)
   cudf::io::json_reader_options options{};
   options.enable_keep_quotes(true);
 
-  std::vector<std::string> const inputs{
+  std::vector<std::string> const inputs_fail{
     R"( [{"a":[123], "b":1.0}, {"b":1.1}, {"b":2.1, "a":{"0":123}}] )",
     R"( [{"a":{"0":"foo"}, "b":1.0}, {"b":1.1}, {"b":2.1, "a":[123]}] )",
     R"( [{"a":{"0":null}, "b":1.0}, {"b":1.1}, {"b":2.1, "a":[123]}] )"};
 
-  for (auto const& input : inputs) {
-    // Get the JSON's tree representation
+  std::vector<std::string> const inputs_succeed{
+    R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}] )",
+    R"( [{"a":[123, "123"], "b":1.0}, {"b":1.1}, {"b":2.1}] )"};
+
+  for (auto const& input : inputs_fail) {
     CUDF_EXPECT_THROW_MESSAGE(
       auto const cudf_table = cuio_json::detail::parse_nested_json(
         cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream),
       "A mix of lists and structs within the same column is not supported");
+  }
+
+  for (auto const& input : inputs_succeed) {
+    CUDF_EXPECT_NO_THROW(
+      auto const cudf_table = cuio_json::detail::parse_nested_json(
+        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream));
   }
 }
