@@ -33,12 +33,13 @@ extras_require = {
         "pytest-benchmark",
         "pytest-xdist",
         "hypothesis",
-        "mimesis",
+        "mimesis<4.1",
         "fastavro>=0.22.9",
         "python-snappy>=0.6.0",
         "pyorc",
         "msgpack",
         "transformers<=4.10.3",
+        "tzdata",
     ]
 }
 
