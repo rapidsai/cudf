@@ -164,7 +164,7 @@ struct json_column {
    * the offsets
    */
   void append_row(uint32_t row_index,
-                  json_col_t const& row_type,
+                  json_col_t row_type,
                   uint32_t string_offset,
                   uint32_t string_end,
                   uint32_t child_count);

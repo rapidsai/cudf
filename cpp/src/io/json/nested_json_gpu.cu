@@ -948,7 +948,7 @@ void json_column::level_child_cols_recursively(row_offset_t min_row_count)
 };
 
 void json_column::append_row(uint32_t row_index,
-                             json_col_t const& row_type,
+                             json_col_t row_type,
                              uint32_t string_offset,
                              uint32_t string_end,
                              uint32_t child_count)
