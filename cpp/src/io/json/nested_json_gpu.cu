@@ -923,8 +923,6 @@ void get_stack_context(device_span<SymbolT const> json_in,
   // -> Logical stack to infer the stack context
   CUDF_FUNC_RANGE();
 
-  constexpr std::size_t single_item = 1;
-
   // Symbol representing the JSON-root (i.e., we're at nesting level '0')
   constexpr StackSymbolT root_symbol = '_';
   // This can be any stack symbol from the stack alphabet that does not push onto stack
