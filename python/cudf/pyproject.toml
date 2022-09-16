@@ -9,7 +9,7 @@ requires = [
     "scikit-build>=0.13.1",
     "cmake>=3.20.1,!=3.23.0",
     "ninja",
-    "numpy",
+    "numpy<1.23",
     "pyarrow==9.0.0",
     "protoc-wheel"
 ]
