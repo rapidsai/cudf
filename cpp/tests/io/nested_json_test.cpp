@@ -411,17 +411,15 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
   auto const cudf_table = cuio_json::detail::parse_nested_json(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream);
 
-  auto constexpr expected_col_count  = 2;
-  auto constexpr first_column_index  = 0;
-  auto constexpr second_column_index = 1;
+  auto constexpr expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 
   auto expected_col1 =
     cudf::test::strings_column_wrapper({R"("0.0")", R"()", R"("2.0")"}, {true, false, true});
   auto expected_col2            = cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 2.1});
-  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
+  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
-  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
+  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
 }
 
