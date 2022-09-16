@@ -44,7 +44,7 @@ jobs:
       package-name: dask_cudf
       package-dir: python/dask_cudf
       python-package-cuda-suffix: "-cu11"
-      gpu-smoketest-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+      gpu-smoketest-before: "export LD_LIBRARY_PATH=/usr/lib/$(uname -p)-linux-gnu:$LD_LIBRARY_PATH && pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       cibw-test-extras:  "test"
       cibw-test-command: "LD_LIBRARY_PATH=/usr/lib/$(uname -p)-linux-gnu:$LD_LIBRARY_PATH pytest -v ./python/dask_cudf/dask_cudf/tests"
       gpu-smoketest: "import dask_cudf; print(dask_cudf)"
