@@ -62,6 +62,13 @@ if os.getenv("CUDF_BUILD_WHEELS", "") != "":
         f"-DCUDF_PYARROW_WHEEL_DIR={pa.__path__[0]}",
     ]
 
+cupy_requirement = []
+
+if platform.machine() == "x86_64":
+    cupy_requirement = [
+        f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0,<12.0.0a0"
+    ]
+
 setup(
     name="cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
     version=versioneer.get_version(),
@@ -101,9 +108,7 @@ setup(
         "typing_extensions",
         "pyarrow==9.0.0",
         f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-    ] + ([
-        f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0,<12.0.0a0"
-    ] if platform.machine() is "x86_64" else []),
+    ] + cupy_requirement,
     extras_require={
         "test": [
             "pytest",
