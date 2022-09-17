@@ -317,6 +317,17 @@ tree_meta_t get_tree_representation(
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Traverse the tree representation of the JSON input in records orient format and populate
+ * the output columns indices and row offsets within that column.
+ *
+ * @param d_input The JSON input
+ * @param d_tree A tree representation of the input JSON string as vectors of node type, parent
+ * index, level, begin index, and end index in the input JSON string
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return A tuple of the output column indices and the row offsets within each column for each node
+ */
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(
   device_span<SymbolT const> d_input,
