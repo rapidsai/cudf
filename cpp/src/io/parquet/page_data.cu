@@ -258,7 +258,7 @@ __device__ void gpuDecodeStream(
     }
     if (t < batch_len) {
       int idx                                  = value_count + t;
-      output[idx & (non_zero_buffer_size - 1)] = level_val;
+      output[rolling_index(idx)] = level_val;
     }
     batch_coded_count += batch_len;
     value_count += batch_len;
@@ -353,7 +353,7 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_p
           dict_idx &= (1 << dict_bits) - 1;
         }
       }
-      s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx;
+      s->dict_idx[rolling_index(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -416,7 +416,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
       } else {
         dict_idx = s->dict_val;
       }
-      s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx;
+      s->dict_idx[rolling_index(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -450,8 +450,8 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s* s, int target_po
       } else {
         len = 0;
       }
-      s->dict_idx[pos & (non_zero_buffer_size - 1)] = k;
-      s->str_len[pos & (non_zero_buffer_size - 1)]  = len;
+      s->dict_idx[rolling_index(pos)] = k;
+      s->str_len[rolling_index(pos)]  = len;
       k += len;
       pos++;
     }
@@ -474,7 +474,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
 
   if (s->dict_base) {
     // String dictionary
-    uint32_t dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] *
+    uint32_t dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] *
                                                sizeof(string_index_pair)
                                            : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
@@ -484,10 +484,10 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
     }
   } else {
     // Plain encoding
-    uint32_t dict_pos = s->dict_idx[src_pos & (non_zero_buffer_size - 1)];
+    uint32_t dict_pos = s->dict_idx[rolling_index(src_pos)];
     if (dict_pos <= (uint32_t)s->dict_size) {
       ptr = reinterpret_cast<const char*>(s->data_start + dict_pos);
-      len = s->str_len[src_pos & (non_zero_buffer_size - 1)];
+      len = s->str_len[rolling_index(src_pos)];
     }
   }
   if (s->dtype_len == 4) {
@@ -513,7 +513,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
  */
 inline __device__ void gpuOutputBoolean(volatile page_state_s* s, int src_pos, uint8_t* dst)
 {
-  *dst = s->dict_idx[src_pos & (non_zero_buffer_size - 1)];
+  *dst = s->dict_idx[rolling_index(src_pos)];
 }
 
 /**
@@ -592,7 +592,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     src8     = s->dict_base;
   } else {
     // Plain
@@ -660,7 +660,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     src8     = s->dict_base;
   } else {
     // Plain
@@ -713,7 +713,7 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s, int sr
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
   uint32_t const pos =
-    (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0)
+    (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0)
                   : src_pos) *
     dtype_len_in;
   uint32_t const dict_size = s->dict_size;
@@ -747,7 +747,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s, int src_pos, T* d
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     dict     = s->dict_base;
   } else {
     // Plain
@@ -776,7 +776,7 @@ static __device__ void gpuOutputGeneric(volatile page_state_s* s,
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     dict     = s->dict_base;
   } else {
     // Plain
