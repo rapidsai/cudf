@@ -1012,8 +1012,8 @@ class Frame(BinaryOperand, Scannable):
             )
 
         column_names = data.column_names
-        pandas_dtypes = None
-        np_dtypes = None
+        pandas_dtypes = {}
+        np_dtypes = {}
         if isinstance(data.schema.pandas_metadata, dict):
             metadata = data.schema.pandas_metadata
             pandas_dtypes = {
@@ -1085,42 +1085,45 @@ class Frame(BinaryOperand, Scannable):
 
         # There are some special cases that need to be handled
         # based on metadata.
-        if pandas_dtypes:
-            for name in result:
-                dtype = None
-                if (
-                    len(result[name]) == 0
-                    and pandas_dtypes[name] == "categorical"
-                ):
-                    # When pandas_dtype is a categorical column and the size
-                    # of column is 0(i.e., empty) then we will have an
-                    # int8 column in result._data[name] returned by libcudf,
-                    # which needs to be type-casted to 'category' dtype.
-                    dtype = "category"
-                elif (
-                    pandas_dtypes[name] == "empty"
-                    and np_dtypes[name] == "object"
-                ):
-                    # When a string column has all null values, pandas_dtype is
-                    # is specified as 'empty' and np_dtypes as 'object',
-                    # hence handling this special case to type-cast the empty
-                    # float column to str column.
-                    dtype = np_dtypes[name]
-                elif pandas_dtypes[
-                    name
-                ] == "object" and cudf.api.types.is_struct_dtype(
-                    np_dtypes[name]
-                ):
-                    # Incase of struct column, libcudf is not aware of names of
-                    # struct fields, hence renaming the struct fields is
-                    # necessary by extracting the field names from arrow
-                    # struct types.
-                    result[name] = result[name]._rename_fields(
-                        [field.name for field in data[name].type]
-                    )
+        for name in result:
+            if (
+                len(result[name]) == 0
+                and pandas_dtypes.get(name) == "categorical"
+            ):
+                # When pandas_dtype is a categorical column and the size
+                # of column is 0 (i.e., empty) then we will have an
+                # int8 column in result._data[name] returned by libcudf,
+                # which needs to be type-casted to 'category' dtype.
+                result[name] = result[name].as_categorical_column("category")
+            elif (
+                pandas_dtypes.get(name) == "empty"
+                and np_dtypes.get(name) == "object"
+            ):
+                # When a string column has all null values, pandas_dtype is
+                # is specified as 'empty' and np_dtypes as 'object',
+                # hence handling this special case to type-cast the empty
+                # float column to str column.
+                result[name] = result[name].as_string_column(cudf.dtype("str"))
+            elif name in data.column_names and isinstance(
+                data[name].type,
+                (pa.StructType, pa.ListType, pa.Decimal128Type),
+            ):
+                # In case of struct column, libcudf is not aware of names of
+                # struct fields, hence renaming the struct fields is
+                # necessary by extracting the field names from arrow
+                # struct types.
 
-                if dtype is not None:
-                    result[name] = result[name].astype(dtype)
+                # In case of decimal column, libcudf is not aware of the
+                # decimal precision.
+
+                # In case of list column, there is a possibility of nested
+                # list columns to have struct or decimal columns inside them.
+
+                # All of these cases are handled by calling the
+                # _with_type_metadata method on the column.
+                result[name] = result[name]._with_type_metadata(
+                    cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
+                )
 
         return cls._from_data({name: result[name] for name in column_names})
 
