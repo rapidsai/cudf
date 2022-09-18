@@ -570,12 +570,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
     ... })
     >>> df
-        id            datetimes
-    0    0  2018-10-07 12:00:00
-    1    1  2018-10-07 12:00:01
-    2    2  2018-10-07 12:00:02
-    3    3  2018-10-07 12:00:03
-    4    4  2018-10-07 12:00:04
+       id                   datetimes
+    0   0  2018-10-07 12:00:00.000000
+    1   1  2018-10-07 12:00:01.000000
+    2   2  2018-10-07 12:00:02.000000
+    3   3  2018-10-07 12:00:03.000000
+    4   4  2018-10-07 12:00:04.000000
 
     Build DataFrame via list of rows as tuples:
 
@@ -1048,8 +1048,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...                    'datetime': [pd.Timestamp('20180310')],
         ...                    'string': ['foo']})
         >>> df
-           float  int   datetime string
-        0    1.0    1 2018-03-10    foo
+           float  int                    datetime string
+        0    1.0    1  2018-03-10 00:00:00.000000    foo
         >>> df.dtypes
         float              float64
         int                  int64
@@ -1754,6 +1754,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             width, _ = console.get_console_size()
         else:
             width = None
+        
+        for col_name, col in output._data.items():
+            if isinstance(col, (cudf.core.column.timedelta.TimeDeltaColumn, cudf.core.column.datetime.DatetimeColumn)):
+                output._data[col_name] = output._data[col_name].astype('str')
+            else:
+                output._data[col_name] = output._data[col_name]
 
         output = output.to_pandas().to_string(
             max_rows=max_rows,
@@ -3900,8 +3906,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['datetimes'] = data
         >>> search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
         >>> df.query('datetimes==@search_date')
-           datetimes
-        1 2018-10-08
+                     datetimes
+        1  2018-10-08 00:00:00
 
         Using local_dict:
 

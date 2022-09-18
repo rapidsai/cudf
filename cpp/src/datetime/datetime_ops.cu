@@ -495,6 +495,15 @@ std::unique_ptr<column> extract_second(column_view const& column,
     cudf::type_id::INT16>(column, stream, mr);
 }
 
+std::unique_ptr<column> extract_milli_second(column_view const& column,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return detail::apply_datetime_op<
+    detail::extract_component_operator<detail::datetime_component::MILLISECOND>,
+    cudf::type_id::INT64>(column, stream, mr);
+}
+
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
@@ -605,6 +614,13 @@ std::unique_ptr<column> extract_second(column_view const& column,
 {
   CUDF_FUNC_RANGE();
   return detail::extract_second(column, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> extract_milli_second(column_view const& column,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_milli_second(column, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,

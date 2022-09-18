@@ -49,6 +49,8 @@ def extract_datetime_component(Column col, object field):
             c_result = move(libcudf_datetime.extract_minute(col_view))
         elif field == "second":
             c_result = move(libcudf_datetime.extract_second(col_view))
+        elif field == "milli_second":
+            c_result = move(libcudf_datetime.extract_milli_second(col_view))
         elif field == "day_of_year":
             c_result = move(libcudf_datetime.day_of_year(col_view))
         else:

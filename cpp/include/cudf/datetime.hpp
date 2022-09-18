@@ -133,6 +133,12 @@ std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+
+std::unique_ptr<cudf::column> extract_milli_second(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+
 /** @} */  // end of group
 /**
  * @addtogroup datetime_compute

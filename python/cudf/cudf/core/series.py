@@ -1206,7 +1206,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             and not is_decimal_dtype(preprocess.dtype)
             and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
-            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
+            preprocess._column, (cudf.core.column.timedelta.TimeDeltaColumn, cudf.core.column.datetime.DatetimeColumn)
         ):
             output = repr(
                 preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()

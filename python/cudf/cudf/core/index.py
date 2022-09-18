@@ -1237,7 +1237,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 output = repr(preprocess.to_pandas())
 
             output = output.replace("nan", cudf._NA_REP)
-        elif preprocess._values.nullable:
+        elif preprocess._values.nullable or isinstance(preprocess, (DatetimeIndex, TimedeltaIndex)):
             output = repr(self._clean_nulls_from_index().to_pandas())
 
             if not isinstance(self, StringIndex):
@@ -2097,6 +2097,20 @@ class DatetimeIndex(GenericIndex):
 
     def is_boolean(self):
         return False
+    
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        return cudf.Index(
+            self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+        )
 
     @_cudf_nvtx_annotate
     def ceil(self, freq):
@@ -2345,6 +2359,20 @@ class TimedeltaIndex(GenericIndex):
 
     def is_boolean(self):
         return False
+    
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        return cudf.Index(
+            self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+        )
 
 
 class CategoricalIndex(GenericIndex):
