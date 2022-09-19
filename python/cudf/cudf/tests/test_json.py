@@ -656,8 +656,6 @@ def test_json_types_data():
     )
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
-    print(pdf)
-    print(df)
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False
     )
