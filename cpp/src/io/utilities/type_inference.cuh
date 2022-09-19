@@ -193,7 +193,7 @@ __global__ void infer_column_type_kernel(OptionsView options,
       auto const is_negative = (*field_begin == '-');
       char const* data_begin = field_begin + (is_negative || (*field_begin == '+'));
       cudf::size_type* ptr   = cudf::io::gpu::infer_integral_field_counter(
-          data_begin, data_begin + digit_count, is_negative, thread_type_histogram);
+        data_begin, data_begin + digit_count, is_negative, thread_type_histogram);
       ++*ptr;
     } else if (is_like_float(
                  field_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {

@@ -542,10 +542,10 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                     0,
                                     stream);
   auto repl   = make_strings_column(cudf::detail::make_device_uvector_async(repl_chars, stream),
-                                    cudf::detail::make_device_uvector_async(repl_offsets, stream),
-                                    {},
-                                    0,
-                                    stream);
+                                  cudf::detail::make_device_uvector_async(repl_offsets, stream),
+                                  {},
+                                  0,
+                                  stream);
 
   auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
   std::vector<std::unique_ptr<column>> out_columns;
