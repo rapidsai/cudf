@@ -976,7 +976,7 @@ void json_column::append_row(uint32_t row_index,
                "A mix of lists and structs within the same column is not supported");
 
   // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
-  // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
+  CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
 
   // Fill all the omitted rows with "empty"/null rows (if needed)
   null_fill(row_index);
