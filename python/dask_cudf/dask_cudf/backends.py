@@ -432,9 +432,9 @@ def sizeof_cudf_series_index(obj):
 
 try:
     # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.backends import DaskBackendEntrypoint
+    from dask.dataframe.backends import DaskDataFrameBackendEntrypoint
 
-    class CudfBackendEntrypoint(DaskBackendEntrypoint):
+    class CudfBackendEntrypoint(DaskDataFrameBackendEntrypoint):
         def __init__(self):
             # Importing this class will already guarentee
             # that data-dispatch functions are registered
