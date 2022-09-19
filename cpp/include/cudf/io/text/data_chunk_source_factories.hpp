@@ -27,23 +27,41 @@ namespace cudf::io::text {
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the given string.
+ * @param data the host data to be exposed as a data chunk source. Its lifetime must be at least as
+ *             long as the lifetime of the returned data_chunk_source.
+ * @return the data chunk source for the provided host data. It copies data from the host to the
+ *         device.
  */
 std::unique_ptr<data_chunk_source> make_source(host_span<const char> data);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the file
+ * @param data the filename of the file to be exposed as a data chunk source.
+ * @return the data chunk source for the provided filename. It reads data from the file and copies
+ *         it to the device.
  */
 std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& filename);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of a BGZIP compressed
- * file
+ *        file.
+ * @param data the filename of the BGZIP-compressed file to be exposed as a data chunk source.
+ * @return the data chunk source for the provided filename. It reads data from the file and copies
+ *         it to the device, where it will be decompressed.
  */
 std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const& filename);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of a BGZIP compressed
  *        file with virtual record offsets.
+ * @param data the filename of the BGZIP-compressed file to be exposed as a data chunk source.
+ * @param virtual_begin the virtual (Tabix) offset of the first byte to be read. Its upper 48 bits
+ *                      describe the offset into the compressed file, its lower 16 bits describe the
+ *                      block-local offset.
+ * @param virtual_end the virtual (Tabix) offset one past the last byte to be read.
+ * @return the data chunk source for the provided filename. It reads data from the file and copies
+ *         it to the device, where it will be decompressed. The chunk source only returns data
+ *         between the virtual offsets `virtual_begin` and `virtual_end`.
  */
 std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const& filename,
                                                                uint64_t virtual_begin,
@@ -51,6 +69,9 @@ std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const
 
 /**
  * @brief Creates a data source capable of producing views of the given device string scalar
+ * @param data the device data to be exposed as a data chunk source. Its lifetime must be at least
+ *             as long as the lifetime of the returned data_chunk_source.
+ * @return the data chunk source for the provided host data. It does not create any copies.
  */
 std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data);
 
