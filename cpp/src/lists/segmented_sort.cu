@@ -163,6 +163,9 @@ struct SegmentedSortColumn {
     // the average list size at which to prefer radixsort:
     constexpr cudf::size_type MIN_AVG_LIST_SIZE_FOR_RADIXSORT{100};
 
+    // Floating point types are disqualified from radix sort because the
+    // bit-sorting algorithm in CUB places -NaN away from NaN which is
+    // not expected in cudf (issue 11703)
     if (std::is_floating_point_v<T> ||
         ((child.size() / offsets.size()) < MIN_AVG_LIST_SIZE_FOR_RADIXSORT)) {
       auto child_table = segmented_sort_by_key(table_view{{child}},
