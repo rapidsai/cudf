@@ -536,11 +536,11 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                       });
     // std::cout << level << ".before scan\n";
     // includes previous level last col_id to continue the index.
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream),
-      col_id.data() + level_boundaries[level - 1],  // FIXME: This is where the bug is.
-      col_id.data() + level_boundaries[level] + 1,  // TODO: +1 only for not-last-levels.
-      col_id.data() + level_boundaries[level - 1]);
+    thrust::inclusive_scan(rmm::exec_policy(stream),
+                           col_id.data() + level_boundaries[level - 1],
+                           col_id.data() + level_boundaries[level] +
+                             (level != num_levels - 1),  // +1 only for not-last-levels.
+                           col_id.data() + level_boundaries[level - 1]);
     // std::cout << level << ".after scan\n";
     // PRINT_LEVEL_DATA(level);
     // TODO scatter/gather to restore original order. (scatter will be faster.)
