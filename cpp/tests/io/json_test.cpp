@@ -290,7 +290,7 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
       .dtypes({dtype<float>()})
       .lines(true)
       .experimental(test_experimental);
-  ;
+
   cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
