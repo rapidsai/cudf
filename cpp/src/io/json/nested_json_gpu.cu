@@ -971,10 +971,9 @@ void json_column::append_row(uint32_t row_index,
   }
   // If this is a nested column but we're trying to insert either (a) a list node into a struct
   // column or (b) a struct node into a list column, we fail
-  else if ((type == json_col_t::ListColumn && row_type == json_col_t::StructColumn) ||
-           (type == json_col_t::StructColumn && row_type == json_col_t::ListColumn)) {
-    CUDF_FAIL("A mix of lists and structs within the same column is not supported");
-  }
+  CUDF_EXPECTS(not((type == json_col_t::ListColumn and row_type == json_col_t::StructColumn) or
+                   (type == json_col_t::StructColumn and row_type == json_col_t::ListColumn)),
+               "A mix of lists and structs within the same column is not supported");
 
   // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
   // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
