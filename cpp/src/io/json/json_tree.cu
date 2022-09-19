@@ -35,6 +35,7 @@
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
+#include <thrust/fill.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -415,12 +416,14 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
 
   rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
-  *thrust::device_pointer_cast(parent_indices.data()) = -1;
-  thrust::gather(rmm::exec_policy(stream),
-                 parent_node_ids.begin() + 1,  // first node's parent is -1
-                 parent_node_ids.end(),
-                 gather_indices.begin(),
-                 parent_indices.begin() + 1);
+  // gather, except parent sentinels
+  thrust::transform(rmm::exec_policy(stream),
+                    parent_node_ids.begin(),  // first node's parent is -1
+                    parent_node_ids.end(),
+                    parent_indices.begin(),
+                    [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
+                      return (parent_node_id == -1) ? -1 : gather_indices[parent_node_id];
+                    });
 #ifdef NJP_DEBUG_PRINT
   printf("\n");
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
@@ -512,11 +515,15 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              parent_col_id.end(),
                              0);  // XXX: is this needed?
   // fill with 1, useful for scan later
+  // TODO: Could initialize to 0 and scatter 1 to level_boundaries alone
   thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
-  // TODO: Could initialize to 0 and scatter to level_boundaries
-  thrust::device_pointer_cast(col_id.data())[0] = 0;  // Initialize First node col_id to 0
-  thrust::device_pointer_cast(parent_col_id.data())[0] =
-    -1;  // Initialize First node parent_col_id to -1 sentinel
+  // Initialize First level node's node col_id to 0
+  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
+  // Initialize First level node's parent_col_id to -1 sentinel
+  thrust::fill(rmm::exec_policy(stream),
+               parent_col_id.begin(),
+               parent_col_id.begin() + level_boundaries[0],
+               -1);
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     PRINT_LEVEL_DATA(level, ".before gather");
     thrust::gather(rmm::exec_policy(stream),
@@ -637,8 +644,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
      parent_node_ids = d_tree.parent_node_ids.begin(),
      row_offsets     = row_offsets.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
-      while (node_categories[parent_node_id] != node_t::NC_LIST &&
-             parent_node_id != -1) {  // TODO replace -1 with sentinel
+      // TODO replace -1 with sentinel
+      while (parent_node_id != -1 and node_categories[parent_node_id] != node_t::NC_LIST) {
         node_id        = parent_node_id;
         parent_node_id = parent_node_ids[parent_node_id];
       }
