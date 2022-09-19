@@ -321,12 +321,10 @@ cdef class Column:
     def has_a_weakref(self):
         weakref_count = weakref.getweakrefcount(self.base_data)
 
-        if weakref_count == 0:
-            return False
-        elif weakref_count == 1:
+        if weakref_count == 1:
             return not (weakref.getweakrefs(self.base_data)[0]() is self.base_data)
         else:
-            return True
+            return weakref_count > 0
 
     def detach_refs(self):
         """

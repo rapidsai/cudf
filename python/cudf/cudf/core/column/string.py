@@ -5189,12 +5189,10 @@ class StringColumn(column.ColumnBase):
     def has_a_weakref(self):
         weakref_count = weakref.getweakrefcount(self)
 
-        if weakref_count == 0:
-            return False
-        elif weakref_count == 1:
+        if weakref_count == 1:
             return not (weakref.getweakrefs(self)[0]() is self)
         else:
-            return True
+            return weakref_count > 0
 
     def copy(self, deep: bool = True):
         """String Columns are immutable, so a deep/shallow copy
