@@ -122,7 +122,7 @@ struct node_ranges {
     if (is_begin_of_section(token)) {
       if ((i + 1) < tokens.size() && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
-        range_end = token_indices[i + 1];
+        range_end = get_token_index(tokens[i + 1], token_indices[i + 1]);
       }
     }
     return thrust::make_tuple(range_begin, range_end);

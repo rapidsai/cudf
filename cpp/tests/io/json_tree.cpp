@@ -352,7 +352,7 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
     if (is_begin_of_section(token)) {
       if ((i + 1) < tokens.size() && end_of_partner(token) == tokens[i + 1]) {
         // Update the range_end for this pair of tokens
-        range_end = token_indices[i + 1];
+        range_end = get_token_index(tokens[i + 1], token_indices[i + 1]);
         // We can skip the subsequent end-of-* token
         i++;
       }
@@ -590,8 +590,8 @@ TEST_F(JsonTest, TreeRepresentation)
 
   // Golden sample of the character-ranges from the original input that each node demarcates
   std::vector<std::size_t> golden_node_range_end = {
-    3,   4,   13,  26,  35,  39,  40,  43,  46,  55,  69,  77,  105, 113, 120, 125, 134,
-    147, 155, 159, 160, 162, 168, 170, 172, 175, 176, 181, 195, 209, 217, 252, 260, 267};
+    3,   4,   13,  27,  35,  39,  40,  43,  46,  55,  70,  77,  106, 113, 120, 125, 134,
+    148, 155, 159, 160, 162, 168, 170, 172, 175, 176, 181, 195, 210, 217, 253, 260, 267};
 
   // Check results against golden samples
   ASSERT_EQ(golden_node_categories.size(), cpu_tree.node_categories.size());
