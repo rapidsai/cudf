@@ -449,7 +449,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 #endif
 
 #ifdef NJP_DEBUG_PRINT
-  auto print_level_data = [stream](auto level,
+  auto print_level_data = [stream](auto stage_text,
+                                   auto level,
                                    auto start,
                                    auto end,
                                    auto const& nodeII,
@@ -458,6 +459,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                    auto const& node_type,
                                    auto const& levels,
                                    auto const& col_id) {
+    std::cout << level << stage_text << "\n";
     auto cls = std::array<const char*, 6>{"S", "L", "F", "R", "V", "E"};
     for (auto n = start; n < end; n++)
       printf("%3d ", nodeII.element(n, stream));
@@ -481,8 +483,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
       printf("%3d ", col_id.element(n, stream));
     printf(" col_id-%ld\n", level);
   };
-#define PRINT_LEVEL_DATA(level)                 \
-  print_level_data(level,                       \
+#define PRINT_LEVEL_DATA(level, text)           \
+  print_level_data(text,                        \
+                   level,                       \
                    level_boundaries[level - 1], \
                    level_boundaries[level],     \
                    scatter_indices,             \
@@ -492,7 +495,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                    d_tree.node_levels,          \
                    col_id);
 #else
-#define PRINT_LEVEL_DATA(level) ;
+#define PRINT_LEVEL_DATA(level, text) ;
 #endif
 
   // 4. Propagate parent node ids for each level.
@@ -514,16 +517,14 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   thrust::device_pointer_cast(parent_col_id.data())[0] =
     -1;  // Initialize First node parent_col_id to -1 sentinel
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
-    // std::cout << level << ".before gather\n";
-    // PRINT_LEVEL_DATA(level);
+    PRINT_LEVEL_DATA(level, ".before gather");
     thrust::gather(rmm::exec_policy(stream),
                    parent_indices.data() +
                      level_boundaries[level - 1],  // FIXME: might be wrong. might be a bug here.
                    parent_indices.data() + level_boundaries[level],
                    col_id.data(),  // + level_boundaries[level - 1],
                    parent_col_id.data() + level_boundaries[level - 1]);
-    // std::cout << level << ".after gather\n";
-    // PRINT_LEVEL_DATA(level);
+    PRINT_LEVEL_DATA(level, ".after gather");
     // TODO probably sort_by_key value should be a gather/scatter index to restore original order.
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream),
@@ -532,8 +533,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
       thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level],
                                 node_type.data() + level_boundaries[level]),
       thrust::make_zip_iterator(scatter_indices.begin() + level_boundaries[level - 1]));
-    // std::cout << level << ".after sort\n";
-    // PRINT_LEVEL_DATA(level);
+    PRINT_LEVEL_DATA(level, ".after sort");
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
@@ -546,31 +546,28 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              rhs = thrust::get<1>(adjacent_pair);
                         return lhs != rhs ? 1 : 0;
                       });
-    // std::cout << level << ".before scan\n";
     // includes previous level last col_id to continue the index.
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            col_id.data() + level_boundaries[level - 1],
                            col_id.data() + level_boundaries[level] +
                              (level != num_levels - 1),  // +1 only for not-last-levels.
                            col_id.data() + level_boundaries[level - 1]);
-    // std::cout << level << ".after scan\n";
-    // PRINT_LEVEL_DATA(level);
-    // TODO scatter/gather to restore original order. (scatter will be faster.)
+    PRINT_LEVEL_DATA(level, ".after scan");
+    // TODO scatter/gather to restore original order. (but scatter_indices is not zero based here)
     thrust::sort_by_key(
       rmm::exec_policy(stream),
       scatter_indices.begin() + level_boundaries[level - 1],
       scatter_indices.begin() + level_boundaries[level],
       thrust::make_zip_iterator(col_id.begin() + level_boundaries[level - 1],
                                 parent_col_id.data() + level_boundaries[level - 1]));
-    // std::cout << level << ".after restore order\n";
-    // PRINT_LEVEL_DATA(level);
+    PRINT_LEVEL_DATA(level, ".after restore order");
   }
   // FIXME: to make parent_col_id of last level correct, do we need a gather here?
   thrust::gather(rmm::exec_policy(stream),
                  parent_indices.begin() +
                    level_boundaries[num_levels - 1],  // FIXME: might be wrong. might be a bug here.
                  parent_indices.end(),
-                 col_id.data(),  // + level_boundaries[level - 1],
+                 col_id.data(),
                  parent_col_id.data() + level_boundaries[num_levels - 1]);
   auto translate_col_id = [](auto col_id) {
     std::unordered_map<int, int> col_id_map;
@@ -606,13 +603,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   print_vec(translate_col_id(cudf::detail::make_std_vector_async(col_id, stream)),
             "col_id (translated)");  // is this required? required to be ordered for the next step?
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
-
-// auto sc = cudf::detail::make_std_vector_async(scatter_indices, stream);
-// for(int i=0; i< int(cpu_tree.node_range_begin.size()); i++) {
-//   printf("%3s ", std::string(input.data() + cpu_tree.node_range_begin[sc[i]],
-//   cpu_tree.node_range_end[sc[i]] - cpu_tree.node_range_begin[sc[i]]).c_str());
-// }
-// printf(" (JSON)\n");
 #endif
 
   // 5. Generate row_offset.
