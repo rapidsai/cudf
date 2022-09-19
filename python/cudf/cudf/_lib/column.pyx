@@ -326,13 +326,7 @@ cdef class Column:
         else:
             return weakref_count > 0
 
-    def detach_refs(self):
-        """
-        Given another column, update the attributes of this column to mimic an
-        inplace operation. This does not modify the memory of Buffers, but
-        instead replaces the Buffers and other attributes underneath the column
-        object with the Buffers and attributes from the other column.
-        """
+    def _detach_refs(self):
         if self.has_a_weakref():
             new_col = self.force_deep_copy()
 
