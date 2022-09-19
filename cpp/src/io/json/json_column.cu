@@ -302,7 +302,7 @@ void make_json_column2(device_span<SymbolT const> input,
       };
       return to_host(d_column_names->view());
     }();
-#if 1
+#ifdef NJP_DEBUG_PRINT
   for (auto& name : column_names)
     std::cout << name << ",";
   std::cout << std::endl;
@@ -672,7 +672,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
   return {};
 }
-#define NJP_DEBUG_PRINT 1
+
 table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
                                        cudf::io::json_reader_options const& options,
                                        rmm::cuda_stream_view stream,
