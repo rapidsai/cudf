@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 from functools import partial
 
 import numpy as np
