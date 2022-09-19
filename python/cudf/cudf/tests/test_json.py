@@ -624,3 +624,39 @@ def test_json_nested_lines(data):
         pdf, schema=df.to_arrow().schema, safe=False
     )
     assert df.to_arrow().equals(pa_table_pdf)
+
+
+def test_json_nested_data():
+    json_str = (
+        '[{"0":{},"2":{}},{"1":[[""],[]],"2":{"2":""}},'
+        '{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
+    )
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
+    pdf = pd.read_json(StringIO(json_str), orient="records")
+    pdf.columns = pdf.columns.astype("str")
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
+
+
+def test_json_types_data():
+    # 0:<0:string,1:float>
+    # 1:list<int>
+    # 2:<0:bool>
+    json_str = (
+        '[{"0":null,"2":{}},'
+        '{"1":[123],"0":{"0":"foo","1":123.4},"2":{"0":false}},'
+        '{"0":{},"1":[],"2":{"0":null}}]'
+    )
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
+    pdf = pd.read_json(StringIO(json_str), orient="records")
+    pdf.columns = pdf.columns.astype("str")
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
