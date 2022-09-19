@@ -27,6 +27,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -1354,4 +1355,45 @@ TEST_F(JsonReaderTest, TestColumnOrder)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_a1, col_a.child(2));
 }
 
+TEST_P(JsonReaderParamTest, JsonDtypeSchema)
+{
+  auto const test_opt          = GetParam();
+  bool const test_experimental = (test_opt == json_test_t::json_experimental_record_orient);
+  std::string row_orient       = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
+  std::string record_orient    = to_records_orient({{{"0", "1"}, {"1", "1.1"}, {"2", R"("aa ")"}},
+                                                 {{"0", "2"}, {"1", "2.2"}, {"2", R"("  bbb")"}}},
+                                                "\n");
+
+  std::string data = (test_opt == json_test_t::json_lines_row_orient) ? row_orient : record_orient;
+
+  std::map<std::string, cudf_io::schema_element> dtype_schema{
+    {"2", {{}, dtype<cudf::string_view>()}},
+    {"0", {{}, dtype<int32_t>()}},
+    {"1", {{}, dtype<double>()}}};
+  cudf_io::json_reader_options in_options =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{data.data(), data.size()})
+      .dtypes(dtype_schema)
+      .lines(true)
+      .experimental(test_experimental);
+
+  cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), 2);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::STRING);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+  EXPECT_EQ(result.metadata.schema_info[2].name, "2");
+
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
+                                 cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
+}
 CUDF_TEST_PROGRAM_MAIN()
