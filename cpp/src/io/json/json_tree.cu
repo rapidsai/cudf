@@ -35,6 +35,7 @@
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
+#include <thrust/fill.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -137,15 +138,15 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 {
   CUDF_FUNC_RANGE();
   // Whether a token does represent a node in the tree representation
-  auto is_node = [] __device__(PdaTokenT const token) -> size_type {
+  auto is_node = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructBegin:
       case token_t::ListBegin:
       case token_t::StringBegin:
       case token_t::ValueBegin:
       case token_t::FieldNameBegin:
-      case token_t::ErrorBegin: return 1;
-      default: return 0;
+      case token_t::ErrorBegin: return true;
+      default: return false;
     };
   };
 
@@ -170,8 +171,10 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   auto num_tokens = tokens.size();
-  auto is_node_it = thrust::make_transform_iterator(tokens.begin(), is_node);
-  auto num_nodes  = thrust::count_if(
+  auto is_node_it = thrust::make_transform_iterator(
+    tokens.begin(),
+    [is_node] __device__(auto t) -> size_type { return static_cast<size_type>(is_node(t)); });
+  auto num_nodes = thrust::count_if(
     rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
 
   // Node categories: copy_if with transform.
@@ -413,12 +416,14 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
 
   rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
-  *thrust::device_pointer_cast(parent_indices.data()) = -1;
-  thrust::gather(rmm::exec_policy(stream),
-                 parent_node_ids.begin() + 1,  // first node's parent is -1
-                 parent_node_ids.end(),
-                 gather_indices.begin(),
-                 parent_indices.begin() + 1);
+  // gather, except parent sentinels
+  thrust::transform(rmm::exec_policy(stream),
+                    parent_node_ids.begin(),  // first node's parent is -1
+                    parent_node_ids.end(),
+                    parent_indices.begin(),
+                    [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
+                      return (parent_node_id == -1) ? -1 : gather_indices[parent_node_id];
+                    });
 #ifdef NJP_DEBUG_PRINT
   printf("\n");
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
@@ -432,14 +437,14 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 #endif
   // 3. Find level boundaries.
   hostdevice_vector<size_type> level_boundaries(num_nodes + 1, stream);
-  auto level_end = thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(1),
-    thrust::make_counting_iterator<size_type>(num_nodes + 1),
-    level_boundaries.d_begin(),
-    [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
-      return index == 0 || index == num_nodes || node_levels[index] != node_levels[index - 1];
-    });
+  auto level_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(1),
+                    thrust::make_counting_iterator<size_type>(num_nodes + 1),
+                    level_boundaries.d_begin(),
+                    [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
+                      return index == num_nodes || node_levels[index] != node_levels[index - 1];
+                    });
   level_boundaries.device_to_host(stream, true);
   auto num_levels = level_end - level_boundaries.d_begin();
 #ifdef NJP_DEBUG_PRINT
@@ -510,11 +515,15 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              parent_col_id.end(),
                              0);  // XXX: is this needed?
   // fill with 1, useful for scan later
+  // TODO: Could initialize to 0 and scatter 1 to level_boundaries alone
   thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
-  // TODO: Could initialize to 0 and scatter to level_boundaries
-  thrust::device_pointer_cast(col_id.data())[0] = 0;  // Initialize First node col_id to 0
-  thrust::device_pointer_cast(parent_col_id.data())[0] =
-    -1;  // Initialize First node parent_col_id to -1 sentinel
+  // Initialize First level node's node col_id to 0
+  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
+  // Initialize First level node's parent_col_id to -1 sentinel
+  thrust::fill(rmm::exec_policy(stream),
+               parent_col_id.begin(),
+               parent_col_id.begin() + level_boundaries[0],
+               -1);
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     PRINT_LEVEL_DATA(level, ".before gather");
     thrust::gather(rmm::exec_policy(stream),
@@ -635,8 +644,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
      parent_node_ids = d_tree.parent_node_ids.begin(),
      row_offsets     = row_offsets.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
-      while (node_categories[parent_node_id] != node_t::NC_LIST &&
-             parent_node_id != -1) {  // TODO replace -1 with sentinel
+      // TODO replace -1 with sentinel
+      while (parent_node_id != -1 and node_categories[parent_node_id] != node_t::NC_LIST) {
         node_id        = parent_node_id;
         parent_node_id = parent_node_ids[parent_node_id];
       }

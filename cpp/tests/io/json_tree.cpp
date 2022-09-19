@@ -50,7 +50,7 @@ std::string get_node_string(std::size_t const node_id,
                             cuio_json::tree_meta_t2 const& tree_rep,
                             std::string const& json_input)
 {
-  auto node_to_str = [] __host__ __device__(cuio_json::PdaTokenT const token) {
+  auto node_to_str = [](cuio_json::PdaTokenT const token) {
     switch (token) {
       case cuio_json::NC_STRUCT: return "STRUCT";
       case cuio_json::NC_LIST: return "LIST";
@@ -206,6 +206,7 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
 
 tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu,
                                          device_span<SymbolOffsetT const> token_indices_gpu1,
+                                         cudf::io::json_reader_options const& options,
                                          rmm::cuda_stream_view stream)
 {
   constexpr bool include_quote_char = true;
@@ -484,8 +485,10 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
     auto current_col_id = node_ids[i];
     auto parent_col_id  = parent_col_ids[i];
     auto parent_node_id = tree.parent_node_ids[i];
-    if (parent_col_id == top_node) {  // TODO: JSON lines may treat top node as list.
-      row_offsets[current_col_id] = 0;
+    if (parent_col_id == top_node) {
+      // row_offsets[current_col_id] = 0; // JSON lines treats top node as list.
+      col_id_current_offset[current_col_id]++;
+      row_offsets[i] = col_id_current_offset[current_col_id] - 1;
     } else {
       if (tree.node_categories[parent_node_id] == node_t::NC_LIST) {
         col_id_current_offset[current_col_id]++;
@@ -497,11 +500,6 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
     }
   }
   print_vec(row_offsets, "cpu.row_offsets (generated)");
-  // TODO convert this tree into json_t columns!? how?
-  //      validity later. (needed: partial inference on type for generating validity for each value
-  //      type or string type) offsets -> string offsets (range_begin), string length
-  //      (range_end-range_begin).
-  //              -> child offsets (child node count?! how? scan op?)
   return {std::move(node_ids), std::move(row_offsets)};
 }
 
@@ -546,7 +544,7 @@ TEST_F(JsonTest, TreeRepresentation)
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
   auto cpu_tree =
-    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
@@ -633,7 +631,7 @@ TEST_F(JsonTest, TreeRepresentation2)
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // host tree generation
   auto cpu_tree =
-    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
@@ -684,6 +682,36 @@ TEST_F(JsonTest, TreeRepresentation2)
   }
 }
 
+TEST_F(JsonTest, TreeRepresentation3)
+{
+  constexpr auto stream = cudf::default_stream_value;
+  // Test input: Json lines with same TreeRepresentation2 input
+  std::string const input =
+    R"(  {}
+ { "a": { "y" : 6, "z": [] }}
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )";  // Prepare input & output buffers
+  cudf::string_scalar d_scalar(input, true, stream);
+  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                             static_cast<size_t>(d_scalar.size())};
+
+  cudf::io::json_reader_options options{};
+  options.enable_lines(true);
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
+
+  // Get the JSON's tree representation
+  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
+  // host tree generation
+  auto cpu_tree =
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
+  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
+
+  // Print tree representation
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
+}
+
 TEST_F(JsonTest, TreeTraversal)
 {
   auto stream = cudf::default_stream_value;
@@ -704,7 +732,7 @@ TEST_F(JsonTest, TreeTraversal)
     cudf::io::json::detail::get_token_stream(d_input, options, stream);
   // host tree generation
   auto cpu_tree =
-    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   // host tree traversal
   cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
   // gpu tree generation
@@ -742,7 +770,7 @@ TEST_F(JsonTest, TreeTraversal2)
     cudf::io::json::detail::get_token_stream(d_input, options, stream);
   // host tree generation
   auto cpu_tree =
-    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, stream);
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   // host tree traversal
   auto [cpu_col_id, cpu_row_offsets] =
     cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
@@ -773,4 +801,39 @@ TEST_F(JsonTest, TreeTraversal2)
   EXPECT_FALSE(cudf::io::json::test::compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
   EXPECT_FALSE(
     cudf::io::json::test::compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
+}
+
+TEST_F(JsonTest, TreeTraversal3)
+{
+  auto stream = cudf::default_stream_value;
+  cudf::io::json_reader_options options{};
+  options.enable_lines(true);
+
+  // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i}
+  // std::string input = R"([ {}, { "a": { "y" : 6, "z": [] }},
+  // { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10, "z": 11}}])";
+  // Test input: Json lines with same TreeRepresentation2 input
+  std::string const input =
+    R"(  {}
+ { "a": { "y" : 6, "z": [] }}
+ { "a": { "y" : 6, "z": [2, 3, 4, 5] }}
+ { "a": { "z": [4], "y" : 6 }}
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )";  // Prepare input & output buffers
+  std::cout << input << std::endl;
+  cudf::string_scalar d_scalar(input, true, stream);
+  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                             static_cast<size_t>(d_scalar.size())};
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
+  // host tree generation
+  auto cpu_tree =
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
+  // host tree traversal
+  cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
+  // gpu tree generation
+  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
+  // gpu tree traversal
+  cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
 }
