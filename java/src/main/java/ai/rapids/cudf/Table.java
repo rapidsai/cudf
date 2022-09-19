@@ -3922,7 +3922,7 @@ public final class Table implements AutoCloseable {
             break;
           default:
             throw new IllegalArgumentException("Expected range-based window orderBy's " +
-                "type: integral (Boolean-exclusive) and timestamp");
+                "type: integral (Boolean-exclusive), decimal, and timestamp");
         }
 
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
