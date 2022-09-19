@@ -1293,7 +1293,7 @@ class CategoricalColumn(column.ColumnBase):
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
     ) -> Optional[ColumnBase]:
-        out = super()._temp_mimic_inplace(other_col, inplace=inplace)
+        out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col._codes
         return out

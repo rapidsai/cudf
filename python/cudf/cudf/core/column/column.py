@@ -336,7 +336,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return libcudf.filling.fill(self, begin, end, slr.device_value)
 
         if is_string_dtype(self.dtype):
-            return self._temp_mimic_inplace(
+            return self._mimic_inplace(
                 libcudf.filling.fill(self, begin, end, slr.device_value),
                 inplace=True,
             )
@@ -530,7 +530,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             out = self._scatter_by_column(key, value_normalized)
 
         if out:
-            self._temp_mimic_inplace(out, inplace=True)
+            self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
         if other is NA or other is None:

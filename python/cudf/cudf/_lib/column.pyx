@@ -339,7 +339,7 @@ cdef class Column:
             self._weak_ref = None
 
 
-    def _temp_mimic_inplace(self, other_col, inplace=False):
+    def _mimic_inplace(self, other_col, inplace=False):
         """
         Given another column, update the attributes of this column to mimic an
         inplace operation. This does not modify the memory of Buffers, but
@@ -348,18 +348,13 @@ cdef class Column:
         """
 
         if inplace:
-            if other_col.has_a_weakref():
-                new_col = other_col.force_deep_copy()
-            else:
-                new_col = other_col
-
-            self._offset = new_col.offset
-            self._size = new_col.size
-            self._dtype = new_col._dtype
-            self.set_base_data(new_col.base_data)
-            self.set_base_children(new_col.base_children)
-            self.set_base_mask(new_col.base_mask)
+            self._offset = other_col.offset
+            self._size = other_col.size
+            self._dtype = other_col._dtype
             self._weak_ref = other_col._weak_ref
+            self.set_base_data(other_col.base_data)
+            self.set_base_children(other_col.base_children)
+            self.set_base_mask(other_col.base_mask)
         else:
             return other_col
 

@@ -147,7 +147,7 @@ class Frame(BinaryOperand, Scannable):
         if inplace:
             for col in self._data:
                 if col in result._data:
-                    self._data[col]._temp_mimic_inplace(
+                    self._data[col]._mimic_inplace(
                         result._data[col], inplace=True
                     )
             self._data = result._data

@@ -170,7 +170,7 @@ def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     val_col = as_column(value, dtype=to_type)
     old_col = col.astype(to_type)
 
-    col._temp_mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
+    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
 
 
 class _SeriesIlocIndexer(_FrameIndexer):
@@ -228,7 +228,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 )
                 value = value.astype(to_dtype)
                 if self._frame._column.dtype != to_dtype:
-                    self._frame._column._temp_mimic_inplace(
+                    self._frame._column._mimic_inplace(
                         self._frame._column.astype(to_dtype), inplace=True
                     )
 
