@@ -89,8 +89,10 @@ T = TypeVar("T", bound="ColumnBase")
 # method in ColumnBase.
 Slice = TypeVar("Slice", bound=slice)
 
+
 def custom_weakref_callback(ref):
     pass
+
 
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
@@ -363,11 +365,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view
 
-    def custom_deep_copy(self: T) -> T:
-        # print("CUSTOM COPYING")
+    def force_deep_copy(self: T) -> T:
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
-    
+
     def get_weakref(self):
         return weakref.ref(self.base_data, custom_weakref_callback)
 
@@ -377,31 +378,33 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         copies the references of the data and mask.
         """
         if deep:
-            copied_col = cast(
-                T,
-                build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
-                    size=self.size,
-                    offset=self.offset,
-                    children=self.base_children,
-                ),
-            )
-            # result = libcudf.copying.copy_column(self)
-            # return cast(T, result._with_type_metadata(self.dtype))
-            # copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
-            if self._weak_ref is None:
-                self._weak_ref = copied_col.get_weakref()
-                copied_col._weak_ref = self.get_weakref()
-            else:
-                if self.has_a_weakref():
-                    copied_col._weak_ref = self._weak_ref
-                    self._weak_ref = copied_col.get_weakref()
-                else:
+            if cudf.get_option("copy_on_write"):
+                copied_col = cast(
+                    T,
+                    build_column(
+                        self.base_data,
+                        self.dtype,
+                        mask=self.base_mask,
+                        size=self.size,
+                        offset=self.offset,
+                        children=self.base_children,
+                    ),
+                )
+
+                if self._weak_ref is None:
                     self._weak_ref = copied_col.get_weakref()
                     copied_col._weak_ref = self.get_weakref()
-            return copied_col
+                else:
+                    if self.has_a_weakref():
+                        copied_col._weak_ref = self._weak_ref
+                        self._weak_ref = copied_col.get_weakref()
+                    else:
+                        self._weak_ref = copied_col.get_weakref()
+                        copied_col._weak_ref = self.get_weakref()
+                return copied_col
+            else:
+                result = libcudf.copying.copy_column(self)
+                return cast(T, result._with_type_metadata(self.dtype))
         else:
             return cast(
                 T,

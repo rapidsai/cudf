@@ -8641,7 +8641,7 @@ def test_rename_for_level_MultiIndex_dataframe(data, index, level):
 
     expect = pdf.rename(index=index, level=level)
     got = gdf.rename(index=index, level=level)
-    # import pdb;pdb.set_trace()
+
     assert_eq(expect, got)
 
 

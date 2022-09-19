@@ -320,16 +320,12 @@ cdef class Column:
     
     def has_a_weakref(self):
         weakref_count = weakref.getweakrefcount(self.base_data)
-        #print("weakref_count", weakref_count)
+
         if weakref_count == 0:
-            #print("330")
             return False
         elif weakref_count == 1:
-            #print("333", weakref.getweakrefs(self.base_data)[0]() is self.base_data)
             return not (weakref.getweakrefs(self.base_data)[0]() is self.base_data)
-            #return True
         else:
-            #print("336")
             return True
 
     def detach_refs(self):
@@ -339,10 +335,8 @@ cdef class Column:
         instead replaces the Buffers and other attributes underneath the column
         object with the Buffers and attributes from the other column.
         """
-        #print("334")
         if self.has_a_weakref():
-            #print("335")
-            new_col = self.custom_deep_copy()
+            new_col = self.force_deep_copy()
 
             self._offset = new_col.offset
             self._size = new_col.size
@@ -360,13 +354,11 @@ cdef class Column:
         instead replaces the Buffers and other attributes underneath the column
         object with the Buffers and attributes from the other column.
         """
-        #print("369")
+
         if inplace:
             if other_col.has_a_weakref():
-                #print("355")
-                new_col = other_col.custom_deep_copy()
+                new_col = other_col.force_deep_copy()
             else:
-                #print("358")
                 new_col = other_col
 
             self._offset = new_col.offset

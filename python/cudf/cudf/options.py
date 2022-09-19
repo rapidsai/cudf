@@ -163,3 +163,20 @@ _register_option(
     ),
     _make_contains_validator([None, 32, 64]),
 )
+
+_register_option(
+    "copy_on_write",
+    True,
+    textwrap.dedent(
+        """
+        Default behavior of performing deep copies.
+        If set to `False`, each deep copy will perform a true deep copy.
+        If set to `True`, each deep copy will perform a shallow copy
+        with underlying data actually referring to the actual column, in this
+        case a copy is only made when there is a write operation performed on
+        the column.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)

@@ -3550,7 +3550,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # No column from index is transposed with libcudf.
         source_columns = [*self._columns]
-
         source_dtype = source_columns[0].dtype
         if is_categorical_dtype(source_dtype):
             if any(not is_categorical_dtype(c.dtype) for c in source_columns):
@@ -6171,7 +6170,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         col = cudf.core.column.build_struct_column(
             names=field_names,
             children=tuple(
-                [col.custom_deep_copy() for col in self._data.columns]
+                [col.force_deep_copy() for col in self._data.columns]
             ),
             size=len(self),
         )
