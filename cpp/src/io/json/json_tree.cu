@@ -437,14 +437,14 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 #endif
   // 3. Find level boundaries.
   hostdevice_vector<size_type> level_boundaries(num_nodes + 1, stream);
-  auto level_end = thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(1),
-    thrust::make_counting_iterator<size_type>(num_nodes + 1),
-    level_boundaries.d_begin(),
-    [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
-      return index == 0 || index == num_nodes || node_levels[index] != node_levels[index - 1];
-    });
+  auto level_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(1),
+                    thrust::make_counting_iterator<size_type>(num_nodes + 1),
+                    level_boundaries.d_begin(),
+                    [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
+                      return index == num_nodes || node_levels[index] != node_levels[index - 1];
+                    });
   level_boundaries.device_to_host(stream, true);
   auto num_levels = level_end - level_boundaries.d_begin();
 #ifdef NJP_DEBUG_PRINT
