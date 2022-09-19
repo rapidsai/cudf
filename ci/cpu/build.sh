@@ -83,9 +83,10 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
 
   # BUILD_LIBCUDF == 1 means this job is being run on the cpu_build jobs
   # that is where we must also build the strings_udf package
-  gpuci_logger "Build conda pkg for strings_udf"
-  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=$PYTHON
-
+  gpuci_logger "Build conda pkg for strings_udf (python 3.8)"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.8
+  gpuci_logger "Build conda pkg for strings_udf (python 3.9)"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.9
 
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
