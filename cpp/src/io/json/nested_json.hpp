@@ -233,6 +233,44 @@ struct json_column {
   };
 };
 
+struct d_json_column {
+  // Type used to count number of rows
+  using row_offset_t = size_type;
+
+  // The inferred type of this column (list, struct, or value/string column)
+  json_col_t type = json_col_t::Unknown;
+
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+
+  // Validity bitmap
+  rmm::device_uvector<bitmask_type> validity;  // TODO: use bitmask_type
+  row_offset_t valid_count = 0;
+
+  // Map of child columns, if applicable.
+  // Following "items" as the default child column's name of a list column
+  // Using the struct's field names
+  std::map<std::string, d_json_column> child_columns;
+  std::vector<std::string> column_order;
+  // Counting the current number of items in this column
+  row_offset_t current_offset = 0;  // TODO rename to num_rows
+
+  // Do this for now, FIXME later for device_uvector no-default ctor, no-default copy ctor.
+  d_json_column(rmm::cuda_stream_view stream)
+    : string_offsets(0, stream),
+      string_lengths(0, stream),
+      child_offsets(0, stream),
+      validity(0, stream),
+      child_columns{},
+      column_order{}
+  {
+  }
+  d_json_column() : d_json_column(rmm::cuda_stream_default) {}
+};
+
 /**
  * @brief Tokens emitted while parsing a JSON input
  */
@@ -337,6 +375,28 @@ records_orient_tree_traversal(
   tree_meta_t& d_tree,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::tuple<rmm::device_uvector<NodeIndexT>, tree_meta_t, rmm::device_uvector<size_type>>
+gather_column_info(tree_meta_t& tree,
+                   device_span<NodeIndexT> col_ids,
+                   device_span<size_type> row_offsets,
+                   rmm::cuda_stream_view stream        = cudf::default_stream_value,
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+d_json_column make_json_column2(
+  device_span<SymbolT const> input,
+  tree_meta_t& tree,
+  device_span<NodeIndexT> col_ids,
+  device_span<size_type> row_offsets,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+table_with_metadata parse_nested_json2(
+  host_span<SymbolT const> input,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Parses the given JSON string and generates table from the given input.
  *
