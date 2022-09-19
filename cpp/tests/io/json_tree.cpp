@@ -540,3 +540,33 @@ TEST_F(JsonTest, TreeRepresentation2)
     ASSERT_EQ(golden_node_range_end[i], cpu_tree.node_range_end[i]);
   }
 }
+
+TEST_F(JsonTest, TreeRepresentation3)
+{
+  constexpr auto stream = cudf::default_stream_value;
+  // Test input: Json lines with same TreeRepresentation2 input
+  std::string const input =
+    R"(  {}
+ { "a": { "y" : 6, "z": [] }}
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )";  // Prepare input & output buffers
+  cudf::string_scalar d_scalar(input, true, stream);
+  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
+                                                             static_cast<size_t>(d_scalar.size())};
+
+  cudf::io::json_reader_options options{};
+  options.enable_lines(true);
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
+
+  // Get the JSON's tree representation
+  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
+  // host tree generation
+  auto cpu_tree =
+    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
+  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
+
+  // Print tree representation
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
+}
