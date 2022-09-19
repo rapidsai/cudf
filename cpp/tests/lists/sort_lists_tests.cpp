@@ -257,7 +257,8 @@ TEST_F(SortListsInt, Sliced)
   }
 }
 
-TEST_F(SortListsInt, InfinityAndNaN)
+using SortListsDouble = SortLists<double>;
+TEST_F(SortListsDouble, InfinityAndNaN)
 {
   auto constexpr NaN = std::numeric_limits<double>::quiet_NaN();
   auto constexpr Inf = std::numeric_limits<double>::infinity();
@@ -271,6 +272,8 @@ TEST_F(SortListsInt, InfinityAndNaN)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(stable_sorted_lists->view(), expected);
   }
+  // This data includes a row with over 200 elements to test the
+  // MIN_AVG_LIST_SIZE_FOR_RADIXSORT logic path in segmented_sort.
   {
     // clang-format off
     LCW input{0.0, -0.0, -NaN, -NaN, NaN, Inf, -Inf,
