@@ -79,7 +79,7 @@ constexpr bool is_ascii(regex_flags const f)
  * These can be used to optimize the generated regex instructions
  * where the capture groups do not require extracting the groups.
  */
-enum capture_groups : uint32_t {
+enum class capture_groups : uint32_t {
   EXTRACT,     ///< Capture groups processed normally for extract
   NON_CAPTURE  ///< Convert all capture groups to non-capture groups
 };
