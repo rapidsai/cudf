@@ -248,7 +248,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                 token_levels.data(),
                                 token_levels.data() + token_levels.size(),
                                 parent_token_ids.data(),
-                                parent_token_ids.data(),  // size_type{-1},
+                                parent_token_ids.data(),
                                 thrust::equal_to<size_type>{},
                                 thrust::maximum<size_type>{});
   // Reusing token_levels memory & use scatter to restore the original order.
@@ -384,20 +384,24 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                      else
                        return static_cast<size_type>(node_categories[node_id]);
                    });
-  // TODO delete hash_map after node_type creation
+// TODO delete hash_map after node_type creation
+#ifdef NJP_DEBUG_PRINT
   print_vec(cudf::detail::make_std_vector_async(node_type, stream), "node_type");
+#endif
   // 2. Preprocessing: Translate parent node ids after sorting by level.
   //   a. sort by level
   //   b. get gather map of sorted indices
   //   c. translate parent_node_ids to sorted indices
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
+#ifdef NJP_DEBUG_PRINT
   printf("\n");
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
   print_vec(cudf::detail::make_std_vector_async(d_tree.parent_node_ids, stream),
             "gpu.parent_node_ids");
   print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
+#endif
   rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
   auto out_pid =
     thrust::make_zip_iterator(scatter_indices.data(), parent_node_ids.data(), node_type.data());
@@ -416,6 +420,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                  parent_node_ids.end(),
                  gather_indices.begin(),
                  parent_indices.begin() + 1);
+#ifdef NJP_DEBUG_PRINT
   printf("\n");
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
   print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream), "gpu.parent_node_ids");
@@ -425,6 +430,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   print_vec(cudf::detail::make_std_vector_async(parent_indices, stream), "parent_indices");
   print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream),
             "parent_node_ids (restored)");
+#endif
   // 3. Find level boundaries.
   hostdevice_vector<size_type> level_boundaries(num_nodes + 1, stream);
   auto level_end = thrust::copy_if(
@@ -436,10 +442,13 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
       return index == 0 || index == num_nodes || node_levels[index] != node_levels[index - 1];
     });
   level_boundaries.device_to_host(stream, true);
-  print_vec(level_boundaries, "level_boundaries");
   auto num_levels = level_end - level_boundaries.d_begin();
+#ifdef NJP_DEBUG_PRINT
+  print_vec(level_boundaries, "level_boundaries");
   std::cout << "num_levels: " << num_levels << std::endl;
+#endif
 
+#ifdef NJP_DEBUG_PRINT
   auto print_level_data = [stream](auto level,
                                    auto start,
                                    auto end,
@@ -482,6 +491,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                    node_type,                   \
                    d_tree.node_levels,          \
                    col_id);
+#else
+#define PRINT_LEVEL_DATA(level) ;
+#endif
 
   // 4. Propagate parent node ids for each level.
   // For each level,
@@ -582,6 +594,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                                 parent_col_id.begin(),
                                                 col_id.begin(),
                                                 d_tree.node_levels.begin()));
+#ifdef NJP_DEBUG_PRINT
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
   print_vec(cudf::detail::make_std_vector_async(parent_indices, stream),
             "gpu.parent_indices");  // once original order is restored, is this required?
@@ -594,12 +607,13 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
             "col_id (translated)");  // is this required? required to be ordered for the next step?
   print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
 
-  // auto sc = cudf::detail::make_std_vector_async(scatter_indices, stream);
-  // for(int i=0; i< int(cpu_tree.node_range_begin.size()); i++) {
-  //   printf("%3s ", std::string(input.data() + cpu_tree.node_range_begin[sc[i]],
-  //   cpu_tree.node_range_end[sc[i]] - cpu_tree.node_range_begin[sc[i]]).c_str());
-  // }
-  // printf(" (JSON)\n");
+// auto sc = cudf::detail::make_std_vector_async(scatter_indices, stream);
+// for(int i=0; i< int(cpu_tree.node_range_begin.size()); i++) {
+//   printf("%3s ", std::string(input.data() + cpu_tree.node_range_begin[sc[i]],
+//   cpu_tree.node_range_end[sc[i]] - cpu_tree.node_range_begin[sc[i]]).c_str());
+// }
+// printf(" (JSON)\n");
+#endif
 
   // 5. Generate row_offset.
   //   a. stable_sort by parent_col_id.
@@ -615,8 +629,10 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     parent_col_id.end(),
     thrust::make_constant_iterator<size_type>(1),
     row_offsets.begin());
+#ifdef NJP_DEBUG_PRINT
   print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream), "parent_col_id");
   print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
+#endif
   thrust::sort_by_key(rmm::exec_policy(stream),
                       scatter_indices.begin(),
                       scatter_indices.end(),
@@ -646,7 +662,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                node_t::NC_LIST);  // Parent is not a list, or sentinel/root (might be different
                                   // condition for JSON_lines)
     });
-  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
+#ifdef NJP_DEBUG_PRINT
+  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (ordered)");
+#endif
   return std::tuple{std::move(col_id), std::move(row_offsets)};
 }
 
