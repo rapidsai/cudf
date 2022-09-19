@@ -105,6 +105,7 @@ cdef extern from "cudf/io/types.hpp" \
         source_info(const vector[string] &filepaths) except +
         source_info(const vector[host_buffer] &host_buffers) except +
         source_info(datasource *source) except +
+        source_info(const vector[datasource*] &datasources) except +
 
     cdef cppclass sink_info:
         io_type type

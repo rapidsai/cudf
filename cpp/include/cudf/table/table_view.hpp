@@ -166,6 +166,14 @@ class table_view_base {
    */
   table_view_base& operator=(table_view_base&&) = default;
 };
+
+/**
+ * @brief Determine if any nested columns exist in a given table.
+ *
+ * @param table The input table
+ * @return Whether nested columns exist in the input table
+ */
+bool has_nested_columns(table_view const& table);
 }  // namespace detail
 
 /**

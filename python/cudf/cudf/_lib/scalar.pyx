@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+cimport cython
+
 import decimal
 
 import numpy as np
@@ -19,6 +21,8 @@ from libc.stdint cimport (
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
+from rmm._lib.memory_resource cimport get_current_device_resource
 
 import cudf
 from cudf._lib.types import (
@@ -73,7 +77,15 @@ from cudf._lib.utils cimport (
 )
 
 
+# The DeviceMemoryResource attribute could be released prematurely
+# by the gc if the DeviceScalar is in a reference cycle. Removing
+# the tp_clear function with the no_gc_clear decoration prevents that.
+# See https://github.com/rapidsai/rmm/pull/931 for details.
+@cython.no_gc_clear
 cdef class DeviceScalar:
+
+    def __cinit__(self, *args, **kwargs):
+        self.mr = get_current_device_resource()
 
     def __init__(self, value, dtype):
         """
@@ -384,7 +396,7 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
         children=tuple(columns),
         size=1,
     )
-    table = to_arrow([struct_col], {"None": dtype})
+    table = to_arrow([struct_col], [("None", dtype)])
     python_dict = table.to_pydict()["None"][0]
     return {k: _nested_na_replace([python_dict[k]])[0] for k in python_dict}
 
@@ -416,14 +428,7 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column element_col = Column.from_column_view(list_col_view, None)
 
-    arrow_obj = to_arrow(
-        [element_col],
-        {
-            "None": dtype.element_type
-            if isinstance(element_col, cudf.core.column.StructColumn)
-            else dtype
-        }
-    )["None"]
+    arrow_obj = to_arrow([element_col], [("None", dtype.element_type)])["None"]
 
     result = arrow_obj.to_pylist()
     return _nested_na_replace(result)

@@ -574,21 +574,17 @@ def test_groupby_categorical_key():
     gddf["name"] = gddf["name"].astype("category")
     ddf = gddf.to_dask_dataframe()
 
-    got = (
-        gddf.groupby("name", sort=True)
-        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
+    got = gddf.groupby("name", sort=True).agg(
+        {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
-    expect = (
-        ddf.groupby("name", sort=True)
-        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
-        .compute()
+    expect = ddf.groupby("name", sort=True).agg(
+        {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
     dd.assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("as_index", [True, False])
-@pytest.mark.parametrize("split_out", [None, 1, 2])
+@pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
 def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
@@ -606,14 +602,17 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         "c": ["mean", "std", "var"],
     }
 
+    split_kwargs = {"split_every": split_every, "split_out": split_out}
+    if split_out == "use_dask_default":
+        split_kwargs.pop("split_out")
+
     # Check `sort=True` behavior
     if split_out == 1:
         gf = (
             ddf.groupby(["name", "a"], sort=True, as_index=as_index)
             .aggregate(
                 agg_dict,
-                split_every=split_every,
-                split_out=split_out,
+                **split_kwargs,
             )
             .compute()
         )
@@ -634,13 +633,11 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     # Full check (`sort=False`)
     gr = ddf.groupby(["name", "a"], sort=False, as_index=as_index).aggregate(
         agg_dict,
-        split_every=split_every,
-        split_out=split_out,
+        **split_kwargs,
     )
     pr = pddf.groupby(["name", "a"], sort=False).agg(
         agg_dict,
-        split_every=split_every,
-        split_out=split_out,
+        **split_kwargs,
     )
 
     # Test `as_index` argument
@@ -652,7 +649,9 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         assert ("name", "") in gr.columns and ("a", "") in gr.columns
 
     # Check `split_out` argument
-    assert gr.npartitions == (split_out or 1)
+    assert gr.npartitions == (
+        1 if split_out == "use_dask_default" else split_out
+    )
 
     # Compute for easier multiindex handling
     gf = gr.compute()

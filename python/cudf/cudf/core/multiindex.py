@@ -1131,7 +1131,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             [4, 2],
             [5, 1]])
         >>> type(midx.values)
-        <class 'cupy._core.core.ndarray'>
+        <class 'cupy...ndarray'>
         """
         return self.to_frame(index=False).values
 
@@ -1458,7 +1458,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         return cls.from_frame(df, names=multiindex.names)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_unique(self):
         return len(self) == len(self.unique())

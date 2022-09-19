@@ -34,6 +34,7 @@ from cudf.api.types import (
 )
 from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import column, datetime
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
@@ -2924,7 +2925,7 @@ class StringMethods(ColumnMethods):
             Equivalent to ``Series.str.pad(side='right')``.
 
         center
-            Fills boths sides of strings with an arbitrary character.
+            Fills both sides of strings with an arbitrary character.
             Equivalent to ``Series.str.pad(side='both')``.
 
         zfill
@@ -2984,6 +2985,9 @@ class StringMethods(ColumnMethods):
         width. Strings in the Series/Index with length greater
         or equal to width are unchanged.
 
+        The sign character is preserved if it appears in the first
+        position of the string.
+
         Parameters
         ----------
         width : int
@@ -3008,13 +3012,7 @@ class StringMethods(ColumnMethods):
             Fills the specified sides of strings with an arbitrary character.
 
         center
-            Fills boths sides of strings with an arbitrary character.
-
-        Notes
-        -----
-        Differs from `str.zfill()
-        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
-        which has special handling for ‘+’/’-‘ in the string.
+            Fills both sides of strings with an arbitrary character.
 
         Examples
         --------
@@ -3028,15 +3026,11 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         Note that ``None`` is not string, therefore it is converted
-        to ``None``. The minus sign in ``'-1'`` is treated as a
-        regular character and the zero is added to the left
-        of it (`str.zfill()
-        <https://docs.python.org/3/library/stdtypes.html#str.zfill>`_
-        would have moved it to the left). ``1000`` remains unchanged as
+        to ``None``. ``1000`` remains unchanged as
         it is longer than width.
 
         >>> s.str.zfill(3)
-        0     0-1
+        0     -01
         1     001
         2    1000
         3    <NA>
@@ -3650,7 +3644,12 @@ class StringMethods(ColumnMethods):
         4    False
         dtype: bool
         """
-        return self._return_or_inplace((self._column == "").fillna(False))
+        return self._return_or_inplace(
+            # mypy can't deduce that the return value of
+            # StringColumn.__eq__ is ColumnBase because the binops are
+            # dynamically added by a mixin class
+            cast(ColumnBase, self._column == "").fillna(False)
+        )
 
     def isspace(self) -> SeriesOrIndex:
         r"""

@@ -30,7 +30,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf._typing import ColumnLike, DataFrameOrSeries, NotImplementedType
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -2985,7 +2985,7 @@ class IndexedFrame(Frame):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[cudf.BaseIndex],
     ]:
@@ -3529,18 +3529,13 @@ class IndexedFrame(Frame):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
     ):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
 
         if squeeze is not False:
             raise NotImplementedError(
@@ -3556,6 +3551,8 @@ class IndexedFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be specified."
             )
+        if group_keys is None:
+            group_keys = False
 
         return (
             self.__class__._resampler(self, by=by)
@@ -3567,6 +3564,7 @@ class IndexedFrame(Frame):
                 as_index=as_index,
                 dropna=dropna,
                 sort=sort,
+                group_keys=group_keys,
             )
         )
 
