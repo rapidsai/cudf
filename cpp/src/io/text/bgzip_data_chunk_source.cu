@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "io/comp/nvcomp_adapter.hpp"
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -104,9 +105,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   {
     std::array<char, 12> buffer{};
     CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(buffer)), "read failed");
-    uint8_t magic_expected_2 = 139;
-    CUDF_EXPECTS(buffer[0] == 31 && buffer[1] == reinterpret_cast<const char&>(magic_expected_2) &&
-                   buffer[2] == 8 && buffer[3] == 4,
+    uint8_t constexpr magic_expected_2 = 139;
+    std::array<char, 4> expected_header{{31, -1, 8, 4}};
+    std::memcpy(&expected_header[1], &magic_expected_2, sizeof(char));
+    CUDF_EXPECTS(buffer[0] == expected_header[0] && buffer[1] == expected_header[1] &&
+                   buffer[2] == expected_header[2] && buffer[3] == expected_header[3],
                  "malformed BGZIP header");
     auto extra_length = read_int<uint16_t>(&buffer[10]);
     uint16_t extra_offset{};
@@ -128,7 +131,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         extra_offset += subfield_size;
       }
     }
-    CUDF_EXPECTS(false, "missing BGZIP size extra subfield");
+    CUDF_FAIL("missing BGZIP size extra subfield");
   }
 
   struct bgzip_footer {
