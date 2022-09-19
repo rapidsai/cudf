@@ -112,15 +112,15 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 {
   CUDF_FUNC_RANGE();
   // Whether a token does represent a node in the tree representation
-  auto is_node = [] __device__(PdaTokenT const token) -> size_type {
+  auto is_node = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructBegin:
       case token_t::ListBegin:
       case token_t::StringBegin:
       case token_t::ValueBegin:
       case token_t::FieldNameBegin:
-      case token_t::ErrorBegin: return 1;
-      default: return 0;
+      case token_t::ErrorBegin: return true;
+      default: return false;
     };
   };
 
@@ -145,8 +145,10 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   auto num_tokens = tokens.size();
-  auto is_node_it = thrust::make_transform_iterator(tokens.begin(), is_node);
-  auto num_nodes  = thrust::count_if(
+  auto is_node_it = thrust::make_transform_iterator(
+    tokens.begin(),
+    [is_node] __device__(auto t) -> size_type { return static_cast<size_type>(is_node(t)); });
+  auto num_nodes = thrust::count_if(
     rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
 
   // Node categories: copy_if with transform.
