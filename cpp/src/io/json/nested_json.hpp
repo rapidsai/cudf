@@ -24,7 +24,9 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
+#include <map>
 #include <vector>
 
 namespace cudf::io::json {
@@ -67,11 +69,11 @@ using TreeDepthT = StackLevelT;
  * @brief Struct that encapsulate all information of a columnar tree representation.
  */
 struct tree_meta_t {
-  std::vector<NodeT> node_categories;
-  std::vector<NodeIndexT> parent_node_ids;
-  std::vector<TreeDepthT> node_levels;
-  std::vector<SymbolOffsetT> node_range_begin;
-  std::vector<SymbolOffsetT> node_range_end;
+  rmm::device_uvector<NodeT> node_categories;
+  rmm::device_uvector<NodeIndexT> parent_node_ids;
+  rmm::device_uvector<TreeDepthT> node_levels;
+  rmm::device_uvector<SymbolOffsetT> node_range_begin;
+  rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
 constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
@@ -243,6 +245,10 @@ enum token_t : PdaTokenT {
   ListBegin,
   /// End-of-list token (on encounter of semantic ']')
   ListEnd,
+  // Beginning-of-struct-member token
+  StructMemberBegin,
+  // End-of-struct-member token
+  StructMemberEnd,
   /// Beginning-of-field-name token (on encounter of first quote)
   FieldNameBegin,
   /// End-of-field-name token (on encounter of a field name's second quote)
@@ -296,6 +302,22 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Parses the given JSON string and generates a tree representation of the given input.
+ *
+ * @param tokens Vector of token types in the json string
+ * @param token_indices The indices within the input string corresponding to each token
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return A tree representation of the input JSON string as vectors of node type, parent index,
+ * level, begin index, and end index in the input JSON string
+ */
+tree_meta_t get_tree_representation(
+  device_span<PdaTokenT const> tokens,
+  device_span<SymbolOffsetT const> token_indices,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

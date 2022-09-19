@@ -23,8 +23,10 @@ target_compile_options(
 )
 
 target_link_libraries(
-  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
+  cudf_datagen
+  PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main benchmark::benchmark
+         nvbench::nvbench Threads::Threads cudf cudftestutil
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
@@ -41,7 +43,7 @@ add_library(
   cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
                                synchronization/synchronization.cpp io/cuio_common.cpp
 )
-target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
+target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -68,6 +70,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -96,6 +99,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -165,7 +169,7 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/sort_lists.cpp sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -224,7 +228,9 @@ ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks.cpp)
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_READER_BENCH io/parquet/parquet_reader.cpp)
+ConfigureNVBench(
+  PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
@@ -240,11 +246,7 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
-
-# ##################################################################################################
-# * orc writer chunks benchmark ---------------------------------------------------------------
-ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
+ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
@@ -297,6 +299,7 @@ ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
+ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

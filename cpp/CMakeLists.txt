@@ -328,6 +328,7 @@ add_library(
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
   src/io/json/json_gpu.cu
+  src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
   src/io/json/experimental/read_json.cpp
@@ -507,7 +508,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
@@ -558,6 +558,7 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/traits.cpp
   src/utilities/type_checks.cpp
 )
 
@@ -661,16 +662,6 @@ else()
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
 
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
-
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
   [=[
@@ -720,7 +711,11 @@ target_compile_options(
                       "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 
-target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
+target_link_libraries(
+  cudftestutil
+  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
 
 target_include_directories(
   cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
@@ -757,6 +752,11 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
   rapids_cpm_nvbench()
   add_subdirectory(benchmarks)
+endif()
+
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
 endif()
 
 # ##################################################################################################

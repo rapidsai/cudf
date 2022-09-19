@@ -235,9 +235,8 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
   auto out_col      = detail::allocate_like(views.front(), output_size, policy, stream, mr);
-  out_col->set_null_count(0);  // prevent null count from being materialized
-  auto out_view   = out_col->mutable_view();
-  auto d_out_view = mutable_column_device_view::create(out_view, stream);
+  auto out_view     = out_col->mutable_view();
+  auto d_out_view   = mutable_column_device_view::create(out_view, stream);
 
   rmm::device_scalar<size_type> d_valid_count(0, stream);
 
@@ -253,7 +252,11 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
     *d_out_view,
     d_valid_count.data());
 
-  if (has_nulls) { out_col->set_null_count(output_size - d_valid_count.value(stream)); }
+  if (has_nulls) {
+    out_col->set_null_count(output_size - d_valid_count.value(stream));
+  } else {
+    out_col->set_null_count(0);  // prevent null count from being materialized
+  }
 
   return out_col;
 }
@@ -273,8 +276,7 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
   auto col = cudf::detail::allocate_like(views.front(), total_element_count, policy, stream, mr);
 
-  col->set_null_count(0);             // prevent null count from being materialized...
-  auto m_view = col->mutable_view();  // ...when we take a mutable view
+  auto m_view = col->mutable_view();
 
   auto count = 0;
   for (auto& v : views) {
@@ -285,6 +287,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
   // If concatenated column is nullable, proceed to calculate it
   if (has_nulls) {
     cudf::detail::concatenate_masks(views, (col->mutable_view()).null_mask(), stream);
+  } else {
+    col->set_null_count(0);  // prevent null count from being materialized
   }
 
   return col;

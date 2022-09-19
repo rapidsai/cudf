@@ -1564,6 +1564,27 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
     assert_eq(cudf.read_parquet(fname), gdf)
 
 
+def test_parquet_writer_column_index(tmpdir):
+    # Simple test for presence of indices. validity is checked
+    # in libcudf tests.
+    # Write 2 files, one with column index set, one without.
+    # Make sure the former is larger in size.
+
+    size = 20000
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
+
+    fname = tmpdir.join("gdf.parquet")
+    with ParquetWriter(fname, statistics="ROWGROUP") as writer:
+        writer.write_table(gdf)
+    s1 = os.path.getsize(fname)
+
+    fname = tmpdir.join("gdfi.parquet")
+    with ParquetWriter(fname, statistics="COLUMN") as writer:
+        writer.write_table(gdf)
+    s2 = os.path.getsize(fname)
+    assert s2 > s1
+
+
 @pytest.mark.parametrize(
     "max_page_size_kwargs",
     [
@@ -2524,3 +2545,46 @@ def test_parquet_columns_and_index_param(index, columns):
     got = cudf.read_parquet(buffer, columns=columns)
 
     assert_eq(expected, got, check_index_type=True)
+
+
+def test_parquet_nested_struct_list():
+    buffer = BytesIO()
+    data = {
+        "payload": {
+            "Domain": {
+                "Name": "abc",
+                "Id": {"Name": "host", "Value": "127.0.0.8"},
+            },
+            "StreamId": "12345678",
+            "Duration": 10,
+            "Offset": 12,
+            "Resource": [{"Name": "ZoneName", "Value": "RAPIDS"}],
+        }
+    }
+    df = cudf.DataFrame({"a": cudf.Series(data)})
+
+    df.to_parquet(buffer)
+    expected = pd.read_parquet(buffer)
+    actual = cudf.read_parquet(buffer)
+    assert_eq(expected, actual)
+    assert_eq(actual.a.dtype, df.a.dtype)
+
+
+def test_parquet_writer_zstd():
+    size = 12345
+    expected = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="float64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+
+    buff = BytesIO()
+    try:
+        expected.to_orc(buff, compression="ZSTD")
+    except RuntimeError:
+        pytest.mark.xfail(reason="Newer nvCOMP version is required")
+    else:
+        got = pd.read_orc(buff)
+        assert_eq(expected, got)

@@ -454,7 +454,7 @@ cdef class ParquetWriter:
         index(es) other than RangeIndex will be saved as columns.
     compression : {'snappy', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
-    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
     row_group_size_bytes: int, default 134217728
         Maximum size of each stripe of the output.
@@ -487,7 +487,7 @@ cdef class ParquetWriter:
     cdef size_type max_page_size_rows
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
-                  object compression=None, str statistics="ROWGROUP",
+                  object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=134217728,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
@@ -659,6 +659,8 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
         return cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
     elif statistics == "PAGE":
         return cudf_io_types.statistics_freq.STATISTICS_PAGE
+    elif statistics == "COLUMN":
+        return cudf_io_types.statistics_freq.STATISTICS_COLUMN
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 
@@ -668,6 +670,8 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         return cudf_io_types.compression_type.NONE
     elif compression == "snappy":
         return cudf_io_types.compression_type.SNAPPY
+    elif compression == "ZSTD":
+        return cudf_io_types.compression_type.ZSTD
     else:
         raise ValueError("Unsupported `compression` type")
 

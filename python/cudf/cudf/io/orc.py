@@ -407,7 +407,7 @@ def read_orc(
 def to_orc(
     df,
     fname,
-    compression=None,
+    compression="snappy",
     statistics="ROWGROUP",
     stripe_size_bytes=None,
     stripe_size_rows=None,
