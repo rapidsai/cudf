@@ -351,9 +351,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                          node_range_end[node_id2] - node_range_begin[node_id2]);
     return field_name1 == field_name2;
   };
-  auto is_field_node = [node_categories = d_tree.node_categories.data()] __device__(auto node_id) {
-    return node_categories[node_id] == node_t::NC_FN;
-  };
+  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
+                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
   auto iter = cudf::detail::make_counting_transform_iterator(
@@ -362,7 +361,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   key_map.insert_if(iter,
                     iter + num_nodes,
                     thrust::counting_iterator<size_type>(0),  // stencil
-                    is_field_node,
+                    is_field_name_node,
                     d_hasher,
                     d_equal,
                     stream.value());
@@ -377,9 +376,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                    node_type.begin(),
                    node_type.end(),
                    [node_categories = d_tree.node_categories.data(),
-                    is_field_node,
+                    is_field_name_node,
                     get_hash_value] __device__(auto node_id) -> size_type {
-                     if (is_field_node(node_id))
+                     if (is_field_name_node(node_id))
                        return static_cast<size_type>(NUM_NODE_CLASSES) + get_hash_value(node_id);
                      else
                        return static_cast<size_type>(node_categories[node_id]);
