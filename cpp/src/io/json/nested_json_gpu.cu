@@ -1602,7 +1602,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                                   mr);
 
       // Reset nullable if we do not have nulls
-      if (col->null_count() == 0) { col->set_null_mask({}); }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
