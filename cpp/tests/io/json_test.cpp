@@ -1396,4 +1396,58 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
+
+TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
+{
+  std::string json_string = R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}])";
+
+  std::map<std::string, cudf_io::schema_element> dtype_schema{
+    {"a",
+     {{{"element", {{{"0", {{}, dtype<float>()}}}, data_type{cudf::type_id::STRUCT}}}},
+      data_type{cudf::type_id::LIST}}},
+    {"b", {{}, dtype<int32_t>()}},
+  };
+
+  cudf_io::json_reader_options in_options =
+    cudf_io::json_reader_options::builder(
+      cudf_io::source_info{json_string.data(), json_string.size()})
+      .dtypes(dtype_schema)
+      .lines(false)
+      .experimental(true);
+
+  cudf_io::table_with_metadata result = cudf_io::read_json(in_options);
+
+  // Make sure we have columns "a" and "b"
+  ASSERT_EQ(result.tbl->num_columns(), 2);
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+  // Make sure column "a" is a list column (offsets and elements)
+  ASSERT_EQ(result.tbl->get_column(0).num_children(), 2);
+  ASSERT_EQ(result.metadata.schema_info[0].children.size(), 2);
+  // Make sure column "b" is a leaf column
+  ASSERT_EQ(result.tbl->get_column(1).num_children(), 0);
+  ASSERT_EQ(result.metadata.schema_info[1].children.size(), 0);
+  // Offsets child with no other child columns
+  ASSERT_EQ(result.tbl->get_column(0).child(0).num_children(), 0);
+  ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 0);
+  EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "offsets");
+  // Elements is the struct column with a single child column "0"
+  ASSERT_EQ(result.tbl->get_column(0).child(1).num_children(), 1);
+  ASSERT_EQ(result.metadata.schema_info[0].children[1].children.size(), 1);
+  EXPECT_EQ(result.metadata.schema_info[0].children[1].name, "element");
+
+  // Verify column "a" being a list column
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::LIST);
+  // Verify column "a->element->0" is a float column
+  EXPECT_EQ(result.tbl->get_column(0).child(1).child(0).type().id(), cudf::type_id::FLOAT32);
+  // Verify column "b" is an int column
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT32);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(1).child(0),
+                                 float_wrapper{{0.0, 123.0}, {false, true}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 int_wrapper{{1, 1, 2}, {true, true, true}});
+}
+
 CUDF_TEST_PROGRAM_MAIN()
