@@ -710,7 +710,11 @@ target_compile_options(
                       "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 
-target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
+target_link_libraries(
+  cudftestutil
+  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
 
 target_include_directories(
   cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"

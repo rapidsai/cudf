@@ -406,24 +406,56 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
 
   // Default parsing options
   cudf::io::json_reader_options options{};
-  options.keep_quotes(true);
+  options.enable_keep_quotes(true);
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
   // Get the JSON's tree representation
   auto const cudf_table = cuio_json::detail::parse_nested_json(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream);
 
-  auto constexpr expected_col_count  = 2;
-  auto constexpr first_column_index  = 0;
-  auto constexpr second_column_index = 1;
+  auto constexpr expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 
   auto expected_col1 =
     cudf::test::strings_column_wrapper({R"("0.0")", R"()", R"("2.0")"}, {true, false, true});
   auto expected_col2 =
     cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 2.1}, {true, true, true});
-  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
+  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
-  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
+  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
+}
+
+TEST_F(JsonTest, ExpectFailMixStructAndList)
+{
+  using cuio_json::SymbolT;
+
+  // Prepare cuda stream for data transfers & kernels
+  constexpr auto stream = cudf::default_stream_value;
+
+  // Default parsing options
+  cudf::io::json_reader_options options{};
+  options.enable_keep_quotes(true);
+
+  std::vector<std::string> const inputs_fail{
+    R"( [{"a":[123], "b":1.0}, {"b":1.1}, {"b":2.1, "a":{"0":123}}] )",
+    R"( [{"a":{"0":"foo"}, "b":1.0}, {"b":1.1}, {"b":2.1, "a":[123]}] )",
+    R"( [{"a":{"0":null}, "b":1.0}, {"b":1.1}, {"b":2.1, "a":[123]}] )"};
+
+  std::vector<std::string> const inputs_succeed{
+    R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}] )",
+    R"( [{"a":[123, "123"], "b":1.0}, {"b":1.1}, {"b":2.1}] )"};
+
+  for (auto const& input : inputs_fail) {
+    CUDF_EXPECT_THROW_MESSAGE(
+      auto const cudf_table = cuio_json::detail::parse_nested_json(
+        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream),
+      "A mix of lists and structs within the same column is not supported");
+  }
+
+  for (auto const& input : inputs_succeed) {
+    CUDF_EXPECT_NO_THROW(
+      auto const cudf_table = cuio_json::detail::parse_nested_json(
+        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream));
+  }
 }

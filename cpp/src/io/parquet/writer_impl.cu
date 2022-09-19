@@ -24,6 +24,7 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
@@ -42,8 +43,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-
-#include <nvcomp/snappy.h>
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
@@ -79,6 +78,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
+    case compression_type::ZSTD: return parquet::Compression::ZSTD;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -907,11 +907,36 @@ void writer::impl::gather_fragment_statistics(
   stream.synchronize();
 }
 
+auto to_nvcomp_compression_type(Compression codec)
+{
+  if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
+  if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  CUDF_FAIL("Unsupported compression type");
+}
+
+auto page_alignment(Compression codec)
+{
+  if (codec == Compression::UNCOMPRESSED or
+      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(codec))) {
+    return 1u;
+  }
+
+  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(codec));
+}
+
+size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
+{
+  if (codec == Compression::UNCOMPRESSED) return 0;
+
+  return compress_max_output_chunk_size(to_nvcomp_compression_type(codec), compression_blocksize);
+}
+
 auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      device_span<gpu::parquet_column_device_view const> col_desc,
                      uint32_t num_columns,
                      size_t max_page_size_bytes,
                      size_type max_page_size_rows,
+                     Compression compression_codec,
                      rmm::cuda_stream_view stream)
 {
   if (chunks.is_empty()) { return hostdevice_vector<size_type>{}; }
@@ -926,6 +951,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         num_columns,
                         max_page_size_bytes,
                         max_page_size_rows,
+                        page_alignment(compression_codec),
                         nullptr,
                         nullptr,
                         stream);
@@ -949,6 +975,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         num_columns,
                         max_page_size_bytes,
                         max_page_size_rows,
+                        page_alignment(compression_codec),
                         nullptr,
                         nullptr,
                         stream);
@@ -956,12 +983,12 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
   // Get per-page max compressed size
   hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
-  std::transform(page_sizes.begin(), page_sizes.end(), comp_page_sizes.begin(), [](auto page_size) {
-    size_t page_comp_max_size = 0;
-    nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-      page_size, nvcompBatchedSnappyDefaultOpts, &page_comp_max_size);
-    return page_comp_max_size;
-  });
+  std::transform(page_sizes.begin(),
+                 page_sizes.end(),
+                 comp_page_sizes.begin(),
+                 [compression_codec](auto page_size) {
+                   return max_compression_output_size(compression_codec, page_size);
+                 });
   comp_page_sizes.host_to_device(stream);
 
   // Use per-page max compressed size to calculate chunk.compressed_size
@@ -973,6 +1000,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         num_columns,
                         max_page_size_bytes,
                         max_page_size_rows,
+                        page_alignment(compression_codec),
                         nullptr,
                         nullptr,
                         stream);
@@ -1091,6 +1119,7 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
+                   page_alignment(compression_),
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    stream);
@@ -1107,83 +1136,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
     }
   }
   stream.synchronize();
-}
-
-void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
-                     device_span<device_span<uint8_t> const> comp_out,
-                     device_span<decompress_status> comp_stats,
-                     size_t max_page_uncomp_data_size,
-                     rmm::cuda_stream_view stream)
-{
-  size_t num_comp_pages = comp_in.size();
-  try {
-    size_t temp_size;
-    nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
-      num_comp_pages, max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &temp_size);
-
-    CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-                 "Error in getting snappy compression scratch size");
-
-    // Not needed now but nvcomp API makes no promises about future
-    rmm::device_buffer scratch(temp_size, stream);
-    // Analogous to comp_in.srcDevice
-    rmm::device_uvector<void const*> uncompressed_data_ptrs(num_comp_pages, stream);
-    // Analogous to comp_in.srcSize
-    rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
-    // Analogous to comp_in.dstDevice
-    rmm::device_uvector<void*> compressed_data_ptrs(num_comp_pages, stream);
-    // Analogous to comp_stat.bytes_written
-    rmm::device_uvector<size_t> compressed_bytes_written(num_comp_pages, stream);
-    // nvcomp does not currently use comp_in.dstSize. Cannot assume that the output will fit in
-    // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
-
-    // Prepare the vectors
-    auto comp_it =
-      thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
-    thrust::transform(
-      rmm::exec_policy(stream),
-      comp_in.begin(),
-      comp_in.end(),
-      comp_it,
-      [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
-
-    thrust::transform(rmm::exec_policy(stream),
-                      comp_out.begin(),
-                      comp_out.end(),
-                      compressed_data_ptrs.begin(),
-                      [] __device__(auto const& out) { return out.data(); });
-    nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
-                                                     uncompressed_data_sizes.data(),
-                                                     max_page_uncomp_data_size,
-                                                     num_comp_pages,
-                                                     scratch.data(),  // Not needed rn but future
-                                                     scratch.size(),
-                                                     compressed_data_ptrs.data(),
-                                                     compressed_bytes_written.data(),
-                                                     nvcompBatchedSnappyDefaultOpts,
-                                                     stream.value());
-    CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in snappy compression");
-
-    // nvcomp also doesn't use comp_out.status . It guarantees that given enough output space,
-    // compression will succeed.
-    // The other `comp_out` field is `reserved` which is for internal cuIO debugging and can be 0.
-    thrust::transform(rmm::exec_policy(stream),
-                      compressed_bytes_written.begin(),
-                      compressed_bytes_written.end(),
-                      comp_stats.begin(),
-                      [] __device__(size_t size) {
-                        decompress_status status{};
-                        status.bytes_written = size;
-                        return status;
-                      });
-    return;
-  } catch (...) {
-    // If we reach this then there was an error in compressing so set an error status for each page
-    thrust::for_each(rmm::exec_policy(stream),
-                     comp_stats.begin(),
-                     comp_stats.end(),
-                     [] __device__(decompress_status & stat) { stat.status = 1; });
-  };
 }
 
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -1209,24 +1161,37 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<decompress_status> comp_stats(max_comp_pages, stream);
+  rmm::device_uvector<compression_result> comp_res(max_comp_pages, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               comp_res.begin(),
+               comp_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
-  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
+  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_res, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      if (nvcomp_integration::is_stable_enabled()) {
-        snappy_compress(comp_in, comp_out, comp_stats, max_page_uncomp_data_size, stream);
+      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
+        nvcomp::batched_compress(
+          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
       } else {
-        gpu_snap(comp_in, comp_out, comp_stats, stream);
+        gpu_snap(comp_in, comp_out, comp_res, stream);
       }
       break;
-    default: break;
+    case parquet::Compression::ZSTD:
+      if (nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
+        nvcomp::batched_compress(
+          nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+      }
+      break;
+    case parquet::Compression::UNCOMPRESSED: break;
+    default: CUDF_FAIL("invalid compression type");
   }
+
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
-  EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, comp_res, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   if (column_stats != nullptr) {
@@ -1274,6 +1239,18 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
+size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
+{
+  if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
+
+  auto const ncomp_type   = to_nvcomp_compression_type(compression);
+  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
+                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
+                              : std::nullopt;
+
+  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+}
+
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
@@ -1281,11 +1258,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    compression_(to_parquet_compression(options.get_compression())),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    max_page_size_bytes(options.get_max_page_size_bytes()),
+    max_page_size_bytes(max_page_bytes(compression_, options.get_max_page_size_bytes())),
     max_page_size_rows(options.get_max_page_size_rows()),
-    compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -1306,11 +1283,11 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    compression_(to_parquet_compression(options.get_compression())),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    max_page_size_bytes(options.get_max_page_size_bytes()),
+    max_page_size_bytes(max_page_bytes(compression_, options.get_max_page_size_bytes())),
     max_page_size_rows(options.get_max_page_size_rows()),
-    compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
@@ -1405,13 +1382,15 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
-  using cudf::io::parquet::gpu::max_page_fragment_size;
+  auto max_page_fragment_size =
+    (cudf::io::parquet::gpu::max_page_fragment_size * max_page_size_bytes) /
+    default_max_page_size_bytes;
 
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
-                 [](auto const& part) {
+                 [max_page_fragment_size](auto const& part) {
                    return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
                  });
 
@@ -1561,8 +1540,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   // Build chunk dictionaries and count pages
-  hostdevice_vector<size_type> comp_page_sizes =
-    init_page_sizes(chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, stream);
+  hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(
+    chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, compression_, stream);
 
   // Get the maximum page size across all chunks
   size_type max_page_uncomp_data_size =

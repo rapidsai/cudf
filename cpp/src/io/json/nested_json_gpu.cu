@@ -18,7 +18,6 @@
 
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/type_inference.cuh>
 
@@ -34,6 +33,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -134,9 +134,9 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const trans
 // Translation table (i.e., for each transition, what are the symbols that we output)
 std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const translation_table{
   {/* IN_STATE         {      [      }      ]      "      \    OTHER */
-   /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {'x'}, {'x'}, {'x'}}},
-   /* TT_STR    */ {{{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}},
-   /* TT_ESC    */ {{{'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}, {'x'}}}}};
+   /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {}}},
+   /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {}}},
+   /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {}}}}};
 
 // The DFA's starting state
 constexpr auto start_state = static_cast<StateT>(TT_OOS);
@@ -913,6 +913,98 @@ struct JSONToStackOp {
   }
 };
 
+void json_column::null_fill(row_offset_t up_to_row_offset)
+{
+  // Fill all the rows up to up_to_row_offset with "empty"/null rows
+  validity.resize(word_index(up_to_row_offset) + 1);
+  std::fill_n(std::back_inserter(string_offsets),
+              up_to_row_offset - string_offsets.size(),
+              (string_offsets.size() > 0) ? string_offsets.back() : 0);
+  std::fill_n(std::back_inserter(string_lengths), up_to_row_offset - string_lengths.size(), 0);
+  std::fill_n(std::back_inserter(child_offsets),
+              up_to_row_offset + 1 - child_offsets.size(),
+              (child_offsets.size() > 0) ? child_offsets.back() : 0);
+  current_offset = up_to_row_offset;
+}
+
+void json_column::level_child_cols_recursively(row_offset_t min_row_count)
+{
+  // Fill this columns with nulls up to the given row count
+  null_fill(min_row_count);
+
+  // If this is a struct column, we need to level all its child columns
+  if (type == json_col_t::StructColumn) {
+    for (auto it = std::begin(child_columns); it != std::end(child_columns); it++) {
+      it->second.level_child_cols_recursively(min_row_count);
+    }
+  }
+  // If this is a list column, we need to make sure that its child column levels its children
+  else if (type == json_col_t::ListColumn) {
+    auto it = std::begin(child_columns);
+    // Make that child column fill its child columns up to its own row count
+    if (it != std::end(child_columns)) {
+      it->second.level_child_cols_recursively(it->second.current_offset);
+    }
+  }
+};
+
+void json_column::append_row(uint32_t row_index,
+                             json_col_t row_type,
+                             uint32_t string_offset,
+                             uint32_t string_end,
+                             uint32_t child_count)
+{
+  // If, thus far, the column's type couldn't be inferred, we infer it to the given type
+  if (type == json_col_t::Unknown) {
+    type = row_type;
+  }
+  // If, at some point within a column, we encounter a nested type (list or struct),
+  // we change that column's type to that respective nested type and invalidate all previous rows
+  else if (type == json_col_t::StringColumn &&
+           (row_type == json_col_t::ListColumn || row_type == json_col_t::StructColumn)) {
+    // Change the column type
+    type = row_type;
+
+    // Invalidate all previous entries, as they were _not_ of the nested type to which we just
+    // converted
+    std::fill_n(validity.begin(), validity.size(), 0);
+    valid_count = 0U;
+  }
+  // If this is a nested column but we're trying to insert either (a) a list node into a struct
+  // column or (b) a struct node into a list column, we fail
+  else if ((type == json_col_t::ListColumn && row_type == json_col_t::StructColumn) ||
+           (type == json_col_t::StructColumn && row_type == json_col_t::ListColumn)) {
+    CUDF_FAIL("A mix of lists and structs within the same column is not supported");
+  }
+
+  // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
+  // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
+
+  // Fill all the omitted rows with "empty"/null rows (if needed)
+  null_fill(row_index);
+
+  // Table listing what we intend to use for a given column type and row type combination
+  // col type | row type  => {valid, FAIL, null}
+  // -----------------------------------------------
+  // List     | List      => valid
+  // List     | Struct    => FAIL
+  // List     | String    => null
+  // Struct   | List      => FAIL
+  // Struct   | Struct    => valid
+  // Struct   | String    => null
+  // String   | List      => valid (we switch col type to list, null'ing all previous rows)
+  // String   | Struct    => valid (we switch col type to list, null'ing all previous rows)
+  // String   | String    => valid
+  bool const is_valid = (type == row_type);
+  if (static_cast<size_type>(validity.size()) < word_index(current_offset)) validity.push_back({});
+  if (is_valid) { set_bit_unsafe(&validity.back(), intra_word_index(current_offset)); }
+  valid_count += (is_valid) ? 1U : 0U;
+  string_offsets.push_back(string_offset);
+  string_lengths.push_back(string_end - string_offset);
+  child_offsets.push_back((child_offsets.size() > 0) ? child_offsets.back() + child_count : 0);
+  current_offset++;
+};
+
 namespace detail {
 
 void get_stack_context(device_span<SymbolT const> json_in,
@@ -924,15 +1016,13 @@ void get_stack_context(device_span<SymbolT const> json_in,
   // -> Logical stack to infer the stack context
   CUDF_FUNC_RANGE();
 
-  constexpr std::size_t single_item = 1;
-
   // Symbol representing the JSON-root (i.e., we're at nesting level '0')
   constexpr StackSymbolT root_symbol = '_';
   // This can be any stack symbol from the stack alphabet that does not push onto stack
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  hostdevice_vector<SymbolOffsetT> num_stack_ops(single_item, stream);
+  rmm::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
 
   // Sequence of stack symbols and their position in the original input (sparse representation)
   rmm::device_uvector<StackSymbolT> stack_ops{json_in.size(), stream};
@@ -955,14 +1045,17 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  num_stack_ops.device_ptr(),
+                                  d_num_stack_ops.data(),
                                   to_stack_op::start_state,
                                   stream);
+
+  // Copy back to actual number of stack operations
+  auto const num_stack_ops = d_num_stack_ops.value(stream);
 
   // stack operations with indices are converted to top of the stack for each character in the input
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(
     stack_ops.data(),
-    device_span<SymbolOffsetT>{stack_op_indices.data(), stack_op_indices.size()},
+    device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops},
     JSONToStackOp{},
     d_top_of_stack,
     root_symbol,
@@ -1043,7 +1136,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
  * @param[in] input The JSON input in host memory
  * @param[in] d_input The JSON input in device memory
  * @param[in] options Parsing options specifying the parsing behaviour
- * @param[in] include_quote_char Whether to include the original quote chars for string values,
+ * @param[in] include_quote_char Whether to include the original quote chars around string values,
  * allowing to distinguish string values from numeric and literal values
  * @param[in] stream The CUDA stream to which kernels are dispatched
  * @param[in] mr Optional, resource with which to allocate
@@ -1430,13 +1523,19 @@ void make_json_column(json_column& root_column,
   root_column.level_child_cols_recursively(root_column.current_offset);
 }
 
-auto casting_options(cudf::io::json_reader_options const& options)
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ */
+auto parsing_options(cudf::io::json_reader_options const& options)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
   auto const stream     = cudf::default_stream_value;
-  parse_opts.keepquotes = options.is_keeping_quotes();
   parse_opts.dayfirst   = options.is_enabled_dayfirst();
+  parse_opts.keepquotes = options.is_enabled_keep_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -1512,17 +1611,17 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Infer column type, if we don't have an explicit type for it
       else {
         target_type = cudf::io::detail::infer_data_type(
-          casting_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
+          parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
       }
 
       // Convert strings to the inferred data type
-      auto col = cudf::io::json::experimental::detail::parse_data(string_spans_it,
-                                                                  col_size,
-                                                                  target_type,
-                                                                  make_validity(json_col).first,
-                                                                  casting_options(options).view(),
-                                                                  stream,
-                                                                  mr);
+      auto col = experimental::detail::parse_data(string_spans_it,
+                                                  col_size,
+                                                  target_type,
+                                                  make_validity(json_col).first,
+                                                  parsing_options(options).view(),
+                                                  stream,
+                                                  mr);
 
       // Reset nullable if we do not have nulls
       if (target_type.id() == type_id::STRING and col->null_count() == 0) {
@@ -1533,7 +1632,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       if (target_type.id() == type_id::STRING) {
         return {std::move(col), {{"offsets"}, {"chars"}}};
       }
-      // Non-string columns do not have child columns in the schema
+      // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {
         return {std::move(col), {}};
       }

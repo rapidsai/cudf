@@ -160,7 +160,7 @@ __global__ void __launch_bounds__(128, 8)
     const uint8_t* cur              = s->info.compressed_data;
     const uint8_t* end              = cur + s->info.compressed_data_size;
     auto dec_out                    = s->info.dec_out_ctl;
-    auto dec_status                 = s->info.decstatus;
+    auto dec_result                 = s->info.dec_res;
     uint8_t* uncompressed_actual    = s->info.uncompressed_data;
     uint8_t* uncompressed_estimated = uncompressed_actual;
     uint32_t num_compressed_blocks  = 0;
@@ -178,13 +178,9 @@ __global__ void __launch_bounds__(128, 8)
         uncompressed_size_actual = block_len;
       } else {
         if (num_compressed_blocks > max_compressed_blocks) { break; }
-        if (shuffle((lane_id == 0) ? dec_status[num_compressed_blocks].status : 0) != 0) {
-          // Decompression failed, not much point in doing anything else
-          break;
-        }
         uint32_t const dst_size      = dec_out[num_compressed_blocks].size();
         uncompressed_size_est        = shuffle((lane_id == 0) ? dst_size : 0);
-        uint32_t const bytes_written = dec_status[num_compressed_blocks].bytes_written;
+        uint32_t const bytes_written = dec_result[num_compressed_blocks].bytes_written;
         uncompressed_size_actual     = shuffle((lane_id == 0) ? bytes_written : 0);
       }
       // In practice, this should never happen with a well-behaved writer, as we would expect the
@@ -383,7 +379,7 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
       const uint8_t* start   = s->strm_info[ci_id].compressed_data;
       const uint8_t* cur     = start;
       const uint8_t* end     = cur + s->strm_info[ci_id].compressed_data_size;
-      auto decstatus         = s->strm_info[ci_id].decstatus.data();
+      auto dec_result        = s->strm_info[ci_id].dec_res.data();
       uint32_t uncomp_offset = 0;
       for (;;) {
         uint32_t block_len;
@@ -400,8 +396,8 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
         if (is_uncompressed) {
           uncomp_offset += block_len;
         } else {
-          uncomp_offset += decstatus->bytes_written;
-          decstatus++;
+          uncomp_offset += dec_result->bytes_written;
+          dec_result++;
         }
       }
       s->rowgroups[t].strm_offset[ci_id] += uncomp_offset;

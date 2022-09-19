@@ -17,6 +17,7 @@
 #include <io/utilities/trie.cuh>
 #include <io/utilities/type_inference.cuh>
 
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -45,10 +46,9 @@ TEST_F(TypeInference, Basic)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = R"json([42,52,5])json";
-  rmm::device_uvector<char> d_data{data.size(), stream};
-  cudaMemcpyAsync(
-    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+  std::string data      = R"json([42,52,5])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
   std::size_t constexpr size = 3;
   auto const string_offset   = std::vector<int32_t>{1, 4, 7};
@@ -59,7 +59,12 @@ TEST_F(TypeInference, Basic)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }
@@ -73,10 +78,9 @@ TEST_F(TypeInference, Null)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = R"json([52,5])json";
-  rmm::device_uvector<char> d_data{data.size(), stream};
-  cudaMemcpyAsync(
-    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+  std::string data      = R"json([52,5])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
   std::size_t constexpr size = 3;
   auto const string_offset   = std::vector<int32_t>{1, 1, 4};
@@ -87,7 +91,12 @@ TEST_F(TypeInference, Null)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
 
   EXPECT_EQ(res_type,
             cudf::data_type{cudf::type_id::FLOAT64});  // FLOAT64 to align with pandas's behavior
@@ -102,10 +111,9 @@ TEST_F(TypeInference, AllNull)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = R"json([null])json";
-  rmm::device_uvector<char> d_data{data.size(), stream};
-  cudaMemcpyAsync(
-    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+  std::string data      = R"json([null])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
   std::size_t constexpr size = 3;
   auto const string_offset   = std::vector<int32_t>{1, 1, 1};
@@ -116,7 +124,12 @@ TEST_F(TypeInference, AllNull)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT8});  // INT8 if all nulls
 }
@@ -130,10 +143,9 @@ TEST_F(TypeInference, String)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = R"json(["1990","8","25"])json";
-  rmm::device_uvector<char> d_data{data.size(), stream};
-  cudaMemcpyAsync(
-    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+  std::string data      = R"json(["1990","8","25"])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
   std::size_t constexpr size = 3;
   auto const string_offset   = std::vector<int32_t>{1, 8, 12};
@@ -144,7 +156,12 @@ TEST_F(TypeInference, String)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
@@ -158,10 +175,9 @@ TEST_F(TypeInference, Bool)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = R"json([true,false,false])json";
-  rmm::device_uvector<char> d_data{data.size(), stream};
-  cudaMemcpyAsync(
-    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+  std::string data      = R"json([true,false,false])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
   std::size_t constexpr size = 3;
   auto const string_offset   = std::vector<int32_t>{1, 6, 12};
@@ -172,7 +188,12 @@ TEST_F(TypeInference, Bool)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::BOOL8});
 }
@@ -186,10 +207,9 @@ TEST_F(TypeInference, Timestamp)
   options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
-  std::string data = R"json([1970/2/5,1970/8/25])json";
-  rmm::device_uvector<char> d_data{data.size(), stream};
-  cudaMemcpyAsync(
-    d_data.data(), data.data(), data.size() * sizeof(char), cudaMemcpyHostToDevice, stream.value());
+  std::string data      = R"json([1970/2/5,1970/8/25])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
   std::size_t constexpr size = 3;
   auto const string_offset   = std::vector<int32_t>{1, 10};
@@ -200,8 +220,46 @@ TEST_F(TypeInference, Timestamp)
   auto d_col_strings =
     thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
-  auto res_type = infer_data_type(options.json_view(), d_data, d_col_strings, size, stream);
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
 
   // All data time (quoted and unquoted) is inferred as string for now
+  EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
+}
+
+TEST_F(TypeInference, InvalidInput)
+{
+  auto const stream = rmm::cuda_stream_default;
+
+  auto options       = parse_options{',', '\n', '\"'};
+  options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  options.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  options.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+
+  std::string data      = R"json([1,2,3,a,5])json";
+  auto d_data           = cudf::make_string_scalar(data);
+  auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
+
+  std::size_t constexpr size = 5;
+  auto const string_offset   = std::vector<int32_t>{1, 3, 5, 7, 9};
+  auto const string_length   = std::vector<std::size_t>{1, 1, 1, 1, 1};
+  rmm::device_vector<int32_t> d_string_offset{string_offset};
+  rmm::device_vector<std::size_t> d_string_length{string_length};
+
+  auto d_col_strings =
+    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+
+  auto res_type =
+    infer_data_type(options.json_view(),
+                    {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
+                    d_col_strings,
+                    size,
+                    stream);
+
+  // Invalid input is inferred as string for now
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
