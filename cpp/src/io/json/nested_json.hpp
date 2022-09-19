@@ -383,11 +383,12 @@ gather_column_info(tree_meta_t& tree,
                    rmm::cuda_stream_view stream        = cudf::default_stream_value,
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-d_json_column make_json_column2(
+void make_json_column2(
   device_span<SymbolT const> input,
   tree_meta_t& tree,
   device_span<NodeIndexT> col_ids,
   device_span<size_type> row_offsets,
+  d_json_column& root,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

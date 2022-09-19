@@ -199,8 +199,8 @@ gather_column_info(tree_meta_t& tree,
      parent_col_ids    = parent_col_ids.begin(),
      max_row_offsets   = max_row_offsets.begin()] __device__(size_type col_id) {
       auto parent_col_id = parent_col_ids[col_id];
-      while (column_categories[parent_col_id] != node_t::NC_LIST &&
-             parent_col_id != -1) {  // TODO replace -1 with sentinel
+      // TODO replace -1 with sentinel
+      while (parent_col_id != -1 and column_categories[parent_col_id] != node_t::NC_LIST) {
         col_id        = parent_col_id;
         parent_col_id = parent_col_ids[parent_col_id];
       }
@@ -237,12 +237,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
 
-d_json_column make_json_column2(device_span<SymbolT const> input,
-                                tree_meta_t& tree,
-                                device_span<NodeIndexT> col_ids,
-                                device_span<size_type> row_offsets,
-                                rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+void make_json_column2(device_span<SymbolT const> input,
+                       tree_meta_t& tree,
+                       device_span<NodeIndexT> col_ids,
+                       device_span<size_type> row_offsets,
+                       d_json_column& root,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   // 1. gather column information.
@@ -356,8 +357,8 @@ d_json_column make_json_column2(device_span<SymbolT const> input,
 
   // 2. generate columns data //TODO -1 is the passed root node. (a list column.)
   // TODO find column_ids which are values, but should be ignored. (if they repeat)
-  d_json_column root;
-  initialize_json_columns(0, root);
+  // d_json_column root;
+  // initialize_json_columns(0, root);
 #ifdef NJP_DEBUG_PRINT
   printf("here1\n");
 #endif
@@ -371,8 +372,9 @@ d_json_column make_json_column2(device_span<SymbolT const> input,
   std::unordered_map<NodeIndexT, std::reference_wrapper<d_json_column>> columns;
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   std::vector<uint8_t> ignore_vals(num_columns, 0);
-  columns.try_emplace(unique_col_ids[0], std::ref(root));
-  for (size_t i = 1; i < unique_col_ids.size(); i++) {
+  columns.try_emplace(-1, std::ref(root));  // TODO use sentinel
+  // columns.try_emplace(unique_col_ids[0], std::ref(root));
+  for (size_t i = 0; i < unique_col_ids.size(); i++) {
     auto const this_col_id = unique_col_ids[i];
     if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
       continue;
@@ -382,15 +384,15 @@ d_json_column make_json_column2(device_span<SymbolT const> input,
     initialize_json_columns(this_col_id, col);
     std::string name   = "";
     auto parent_col_id = column_parent_ids[this_col_id];
-    if (column_categories[parent_col_id] == NC_FN) {
+    if (parent_col_id == NodeIndexT(-1) || column_categories[parent_col_id] == NC_LIST) {
+      name = "element";
+    } else if (column_categories[parent_col_id] == NC_FN) {
       auto field_name_col_id = parent_col_id;
       parent_col_id          = column_parent_ids[parent_col_id];
       name                   = column_names[field_name_col_id];
 #ifdef NJP_DEBUG_PRINT
       std::cout << name << " " << field_name_col_id << " " << parent_col_id << std::endl;
 #endif
-    } else if (column_categories[parent_col_id] == NC_LIST) {
-      name = "element";
     } else {
       CUDF_FAIL("Unexpected parent column category");
     }
@@ -436,6 +438,7 @@ d_json_column make_json_column2(device_span<SymbolT const> input,
   // move columns data to device.
   std::vector<json_column_data> columns_data(num_columns);
   for (auto& [col_id, col_ref] : columns) {
+    if (col_id == NodeIndexT(-1)) continue;
     auto& col = col_ref.get();
 #ifdef NJP_DEBUG_PRINT
     printf("col_id: %d\n", col_id);
@@ -565,7 +568,7 @@ d_json_column make_json_column2(device_span<SymbolT const> input,
   // cudf::test::print(*cudf_col);
   printf("here6\n");
 #endif
-  return root;
+  // return root;
 }
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column2(
@@ -669,6 +672,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
   return {};
 }
+#define NJP_DEBUG_PRINT 1
 table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
                                        cudf::io::json_reader_options const& options,
                                        rmm::cuda_stream_view stream,
@@ -711,9 +715,16 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
     cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
 #endif
 
+  d_json_column root_column;
+  root_column.type = json_col_t::ListColumn;
+  root_column.child_offsets.resize(0 + 2, stream);
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
+                             root_column.child_offsets.begin(),
+                             root_column.child_offsets.end(),
+                             0);
+
   // Get internal JSON column
-  d_json_column root_column =
-    make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, stream);
+  make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream);
 
 #ifdef NJP_DEBUG_PRINT
   printf("make_json_column2:\n");
@@ -724,9 +735,8 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
 #endif
 
   // data_root refers to the root column of the data represented by the given JSON string
-  auto& data_root = new_line_delimited_json
-                      ? root_column
-                      : root_column;  // TODO root_column.child_columns.begin()->second;
+  auto& data_root =
+    new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;
