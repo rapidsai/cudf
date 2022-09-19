@@ -85,7 +85,7 @@ std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_ty
     default: return std::nullopt;
   }
 #endif
-  CUDF_FAIL("GetTempSizeEx is not supported in the current nvCOMP version");
+  return std::nullopt;
 }
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSize
