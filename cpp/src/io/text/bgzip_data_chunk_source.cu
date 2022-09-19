@@ -183,7 +183,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
     rmm::device_uvector<device_span<const uint8_t>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
-    rmm::device_uvector<decompress_status> d_decompressed_status;
+    rmm::device_uvector<compression_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};
     std::size_t max_decompressed_size{};
     // this is usually equal to decompressed_size()
@@ -199,7 +199,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         d_decompressed_offsets(0, cudf::default_stream_value),
         d_compressed_spans(0, cudf::default_stream_value),
         d_decompressed_spans(0, cudf::default_stream_value),
-        d_decompressed_status(0, cudf::default_stream_value)
+        d_decompression_results(0, cudf::default_stream_value)
     {
       CUDF_CUDA_TRY(cudaEventCreate(&event));
       h_compressed_blocks.reserve(default_buffer_alloc);
@@ -218,7 +218,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       d_decompressed_blocks.resize(decompressed_size(), stream);
       d_compressed_spans.resize(num_blocks(), stream);
       d_decompressed_spans.resize(num_blocks(), stream);
-      d_decompressed_status.resize(num_blocks(), stream);
+      d_decompression_results.resize(num_blocks(), stream);
 
       auto offset_it = thrust::make_zip_iterator(d_compressed_offsets.begin(),
                                                  d_compressed_offsets.begin() + 1,
@@ -237,7 +237,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
                                              d_compressed_spans,
                                              d_decompressed_spans,
-                                             d_decompressed_status,
+                                             d_decompression_results,
                                              max_decompressed_size,
                                              decompressed_size(),
                                              stream);
@@ -258,7 +258,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       d_decompressed_offsets.resize(0, stream);
       d_compressed_spans.resize(0, stream);
       d_decompressed_spans.resize(0, stream);
-      d_decompressed_status.resize(0, stream);
+      d_decompression_results.resize(0, stream);
       compressed_size_with_headers = 0;
       max_decompressed_size        = 0;
       available_decompressed_size  = 0;
