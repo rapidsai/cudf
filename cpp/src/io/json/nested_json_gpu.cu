@@ -1603,9 +1603,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       data_type target_type{};
 
       if (schema.has_value()) {
+#ifdef NJP_DEBUG_PRINT
         std::cout << "-> explicit type: "
                   << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
                                          : "n/a");
+#endif
         target_type = schema.value().type;
       }
       // Infer column type, if we don't have an explicit type for it
@@ -1707,8 +1709,6 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
 
   auto const new_line_delimited_json = options.is_enabled_lines();
 
-  std::cout << "Format: " << (new_line_delimited_json ? "ndJSON" : "JSON") << "\n";
-
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
@@ -1772,9 +1772,12 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
           auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
                        ? std::optional<schema_element>{{{}, user_dtypes[column_index]}}
                        : std::optional<schema_element>{};
+#ifdef NJP_DEBUG_PRINT
           std::cout << "Column by index: #" << column_index << ", type id: "
                     << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
+                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
                     << "\n";
+#endif
           return ret;
         },
         [col_name](
@@ -1782,9 +1785,12 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
           auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
                        ? std::optional<schema_element>{{{}, user_dtypes.find(col_name)->second}}
                        : std::optional<schema_element>{};
+#ifdef NJP_DEBUG_PRINT
           std::cout << "Column by flat name: '" << col_name << "', type id: "
                     << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
+                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
                     << "\n";
+#endif
           return ret;
         },
         [col_name](std::map<std::string, schema_element> const& user_dtypes)
@@ -1792,9 +1798,12 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
           auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
                        ? user_dtypes.find(col_name)->second
                        : std::optional<schema_element>{};
+#ifdef NJP_DEBUG_PRINT
           std::cout << "Column by nested name: #" << col_name << ", type id: "
                     << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
+                    << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
                     << "\n";
+#endif
           return ret;
         }},
       options.get_dtypes());
