@@ -50,7 +50,7 @@ std::string get_node_string(std::size_t const node_id,
                             cuio_json::tree_meta_t2 const& tree_rep,
                             std::string const& json_input)
 {
-  auto node_to_str = [] __host__ __device__(cuio_json::PdaTokenT const token) {
+  auto node_to_str = [](cuio_json::PdaTokenT const token) {
     switch (token) {
       case cuio_json::NC_STRUCT: return "STRUCT";
       case cuio_json::NC_LIST: return "LIST";
