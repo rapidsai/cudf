@@ -678,8 +678,8 @@ def _dtype_can_hold_range(rng: range, dtype: np.dtype) -> bool:
     return np.can_cast(rng[0], dtype) and np.can_cast(rng[-1], dtype)
 
 
-def _numeric_can_hold_element(dtype: np.dtype, element):
-    if dtype.kind in ["i", "u"]:
+def _dtype_can_hold_element(dtype: np.dtype, element) -> bool:
+    if dtype.kind in {"i", "u"}:
         if isinstance(element, range):
             if _dtype_can_hold_range(element, dtype):
                 return True
