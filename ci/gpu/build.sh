@@ -121,11 +121,11 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     install_dask
 
     ################################################################################
-    # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
+    # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka strings_udf benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
@@ -183,7 +183,11 @@ else
     gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
     gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
 
-    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
+    # the CUDA component of strings_udf must be built on cuda 11.5 just like libcudf
+    # but because there is no separate python package, we must also build the python on the 11.5 jobs
+    # this means that at this point (on the GPU test jobs) the whole package is already built and has been
+    # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
+    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
     gpuci_logger "GoogleTests"
@@ -257,6 +261,31 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
+
+gpuci_logger "Installing strings_udf"
+gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+
+cd "$WORKSPACE/python/strings_udf/strings_udf"
+gpuci_logger "Python py.test for strings_udf"
+
+# We do not want to exit with a nonzero exit code in the case where no
+# strings_udf tests are run because that will always happen when the local CUDA
+# version is not 11.5. We need to suppress the exit code because this script is
+# run with set -e and we're already setting a trap that we don't want to
+# override here.
+
+STRINGS_UDF_PYTEST_RETCODE=0
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
+
+if [ ${STRINGS_UDF_PYTEST_RETCODE} -eq 5 ]; then
+    echo "No strings UDF tests were run, but this script will continue to execute."
+elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
+    exit ${STRINGS_UDF_PYTEST_RETCODE}
+else
+    cd "$WORKSPACE/python/cudf/cudf"
+    gpuci_logger "Python py.test retest cuDF UDFs"
+    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.

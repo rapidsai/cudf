@@ -91,7 +91,12 @@ class BaseIndex(Serializable):
     def __getitem__(self, key):
         raise NotImplementedError()
 
-    def _copy_type_metadata(self: BaseIndexT, other: BaseIndexT) -> BaseIndexT:
+    def __contains__(self, item):
+        return item in self._values
+
+    def _copy_type_metadata(
+        self: BaseIndexT, other: BaseIndexT, *, override_dtypes=None
+    ) -> BaseIndexT:
         raise NotImplementedError
 
     def get_level_values(self, level):
