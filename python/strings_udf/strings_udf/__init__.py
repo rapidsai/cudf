@@ -1,13 +1,14 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
-from ptxcompiler.patch import CMD
 import glob
 import os
-import sys
-import subprocess
 import re
-from . import _version
+import subprocess
+import sys
 
 from numba import cuda
+from ptxcompiler.patch import CMD
+
+from . import _version
 
 ENABLED = False
 

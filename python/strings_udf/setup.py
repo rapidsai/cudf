@@ -4,10 +4,9 @@ import os
 import re
 import shutil
 
+import versioneer
 from setuptools import find_packages
 from skbuild import setup
-
-import versioneer
 
 install_requires = ["numba>=0.53.1", "numpy", "cudf"]
 
