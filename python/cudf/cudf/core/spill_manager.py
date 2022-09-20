@@ -132,15 +132,6 @@ class SpillManager:
             ret = tuple(self._other_buffers.values())
         return ret
 
-    def spilled_and_unspilled(self) -> Tuple[int, int]:
-        spilled, unspilled = 0, 0
-        for buf in self.base_buffers():
-            if buf.is_spilled:
-                spilled += buf.size
-            else:
-                unspilled += buf.size
-        return spilled, unspilled
-
     def spill_device_memory(self) -> int:
         """Try to spill device memory
 
@@ -168,9 +159,12 @@ class SpillManager:
         )
         if limit is None:
             return 0
+        others = sum(buf.size for buf in self.other_buffers())
         ret = 0
         while True:
-            _, unspilled = self.spilled_and_unspilled()
+            unspilled = others + sum(
+                buf.size for buf in self.base_buffers() if not buf.is_spilled
+            )
             if unspilled < limit:
                 break
             nbytes = self.spill_device_memory()
@@ -221,8 +215,12 @@ class SpillManager:
         return ret
 
     def __repr__(self) -> str:
-        spilled, unspilled = self.spilled_and_unspilled()
-
+        spilled = sum(
+            buf.size for buf in self.base_buffers() if buf.is_spilled
+        )
+        unspilled = sum(
+            buf.size for buf in self.base_buffers() if not buf.is_spilled
+        )
         unspillable = 0
         for buf in self.base_buffers():
             if not (buf.is_spilled or buf.spillable):

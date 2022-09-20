@@ -3,6 +3,7 @@
 
 import gc
 import warnings
+from typing import Tuple
 
 import numpy as np
 import pandas
@@ -35,6 +36,15 @@ gen_df.buffer = lambda df: df._data._data["a"].data
 gen_df.is_spilled = lambda df: gen_df.buffer(df).is_spilled
 gen_df.is_spillable = lambda df: gen_df.buffer(df).spillable
 gen_df.buffer_size = gen_df.buffer(gen_df()).size
+
+
+def spilled_and_unspilled(manager: SpillManager) -> Tuple[int, int]:
+    """Get bytes spilled and unspilled known by the manager"""
+    spilled = sum(buf.size for buf in manager.base_buffers() if buf.is_spilled)
+    unspilled = sum(
+        buf.size for buf in manager.base_buffers() if not buf.is_spilled
+    )
+    return spilled, unspilled
 
 
 @pytest.fixture
@@ -166,11 +176,11 @@ def test_environment_variables(monkeypatch):
 
 def test_spill_device_memory(manager: SpillManager):
     df = gen_df()
-    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size)
+    assert spilled_and_unspilled(manager) == (0, gen_df.buffer_size)
     manager.spill_device_memory()
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size, 0)
     del df
-    assert manager.spilled_and_unspilled() == (0, 0)
+    assert spilled_and_unspilled(manager) == (0, 0)
     df1 = gen_df()
     df2 = gen_df()
     manager.spill_device_memory()
@@ -197,12 +207,12 @@ def test_spill_device_memory(manager: SpillManager):
 def test_spill_to_device_limit(manager: SpillManager):
     df1 = gen_df()
     df2 = gen_df()
-    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size * 2)
+    assert spilled_and_unspilled(manager) == (0, gen_df.buffer_size * 2)
     manager.spill_to_device_limit(device_limit=0)
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
     df3 = df1 + df2
     manager.spill_to_device_limit(device_limit=0)
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 3, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 3, 0)
     assert gen_df.is_spilled(df1)
     assert gen_df.is_spilled(df2)
     assert gen_df.is_spilled(df3)
@@ -215,12 +225,12 @@ def test_zero_device_limit(manager: SpillManager):
     assert manager._device_memory_limit == 0
     df1 = gen_df()
     df2 = gen_df()
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
     df1 + df2
     # Notice, while performing the addintion both df1 and df2 are unspillable
-    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size * 2)
+    assert spilled_and_unspilled(manager) == (0, gen_df.buffer_size * 2)
     manager.spill_to_device_limit()
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
 
 
 def test_lookup_address_range(manager: SpillManager):
