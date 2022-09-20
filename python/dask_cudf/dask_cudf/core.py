@@ -333,7 +333,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if (
             shuffle == "explicit-comms"
             or dask.config.get("explicit-comms", False)
-        ) and (kwargs.get("npartitions", self.npartitions) > self.npartitions):
+        ) and (kwargs.get("npartitions", self.npartitions) < self.npartitions):
             # Explicit-comms shuffle handles `npartitions` kwarg
             # better than upstream `dd.shuffle` (repartitions on worker)
             try:
