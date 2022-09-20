@@ -835,8 +835,6 @@ def test_groupby_all_columns(func):
     dd.assert_eq(expect, actual)
 
 
-# @pytest.mark.parametrize("sort", [True, False])
-# @pytest.mark.parametrize("split_out", [1, 2])
 def test_groupby_shuffle():
     df = cudf.datasets.randomdata(
         nrows=640, dtypes={"a": str, "b": int, "c": int}
