@@ -21,12 +21,3 @@ wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
 # Run pre-commit checks
 pre-commit run --hook-stage manual --all-files
-PRE_COMMIT_RETVAL=$?
-
-RETVALS=(
-  $PRE_COMMIT_RETVAL
-)
-IFS=$'\n'
-RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
-
-exit $RETVAL
