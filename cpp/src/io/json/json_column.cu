@@ -583,7 +583,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     // if (json_col.current_offset == json_col.valid_count) { return {rmm::device_buffer{}, 0}; }
     auto null_count =
       cudf::detail::null_count(json_col.validity.data(), 0, json_col.current_offset, stream);
-    if (null_count == 0) { return {rmm::device_buffer{}, 0}; }
+    // if (null_count == 0) { return {rmm::device_buffer{}, 0}; }
     return {json_col.validity.release(), null_count};  // resuse the memory
     //         json_col.current_offset - json_col.valid_count};
   };
