@@ -1,17 +1,16 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
-from . import masked_typing, masked_lowering
-from numba import cuda
-from numba import types
+import numpy as np
+from numba import cuda, types
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
 )
-from cudf.core.udf import api
-from cudf.core.udf import utils
-from cudf.core.udf import row_function
+
 from cudf.core.dtypes import dtype
+from cudf.core.udf import api, row_function, utils
 from cudf.utils.dtypes import STRING_TYPES
-import numpy as np
+
+from . import masked_lowering, masked_typing
 
 _units = ["ns", "ms", "us", "s"]
 _datetime_cases = {types.NPDatetime(u) for u in _units}
@@ -31,11 +30,11 @@ try:
     import strings_udf
 
     if strings_udf.ENABLED:
-        from . import strings_typing
-        from . import strings_lowering
         from strings_udf import ptxpath
-        from strings_udf._typing import string_view, str_view_arg_handler
         from strings_udf._lib.cudf_jit_udf import to_string_view_array
+        from strings_udf._typing import str_view_arg_handler, string_view
+
+        from . import strings_lowering, strings_typing
 
         # add an overload of MaskedType.__init__(string_view, bool)
         cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(

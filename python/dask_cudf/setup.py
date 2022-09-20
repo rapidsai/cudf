@@ -4,9 +4,8 @@ import os
 import re
 import shutil
 
-from setuptools import find_packages, setup
-
 import versioneer
+from setuptools import find_packages, setup
 
 install_requires = [
     "cudf",
