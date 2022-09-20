@@ -480,7 +480,6 @@ def _shuffle_aggregate(
     split_every=None,
     split_out=1,
     sort=None,
-    ignore_index=False,
     shuffle="tasks",
 ):
     from numbers import Integral
@@ -529,16 +528,12 @@ def _shuffle_aggregate(
     )
     chunked = chunked.repartition(npartitions=shuffle_npartitions)
 
-    # Handle sort kwarg
-    if sort is not None:
-        aggregate_kwargs = aggregate_kwargs or {}
-        aggregate_kwargs["sort"] = sort
-
     # Perform global sort or shuffle
     if sort and split_out > 1:
         result = chunked.sort_values(
             gb_cols,
             ignore_index=True,
+            # TODO: pass `shuffle=shuffle` after #11576
         ).map_partitions(aggregate, **aggregate_kwargs)
     else:
         result = chunked.shuffle(
@@ -676,6 +671,11 @@ def groupby_agg(
         "aggs_renames": aggs_renames,
     }
 
+    # Use shuffle=True for split_out>1
+    if sort and split_out > 1 and shuffle is None:
+        shuffle = "tasks"
+
+    # Check if we are using the shuffle-based algorithm
     if shuffle:
         try:
             # Shuffle-based aggregation
@@ -697,12 +697,11 @@ def groupby_agg(
 
     # Deal with sort/shuffle defaults
     if split_out > 1 and sort:
-        # NOTE: This can be changed when `shuffle` is not `None`
-        # as soon as the shuffle-based groupby is implemented
         raise ValueError(
             "dask-cudf's groupby algorithm does not yet support "
-            "`sort=True` when `split_out>1`. Please use `split_out=1`, "
-            "or try grouping with `sort=False`."
+            "`sort=True` when `split_out>1`, unless a shuffle-based "
+            "algorithm is used. Please use `split_out=1`, group "
+            "with `sort=False`, or set `shuffle=True`."
         )
 
     return aca(
