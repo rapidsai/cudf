@@ -36,25 +36,9 @@ template <typename T>
 struct SortLists : public cudf::test::BaseFixture {
 };
 
-// TYPED_TEST_SUITE(SortLists, cudf::test::NumericTypes);
 using TypesForTest = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
 TYPED_TEST_SUITE(SortLists, TypesForTest);
 
-/*
-empty case
-  empty list
-  single row with empty list
-  multi row with empty lists
-single case
-  single list with single element
-  single list with multi element
-normal case without nulls
-Null cases
-  null rows
-  null elements in list.
-Error:
-  depth>1
-*/
 TYPED_TEST(SortLists, NoNull)
 {
   using T = TypeParam;
@@ -203,17 +187,15 @@ TEST_F(SortListsInt, NullRows)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
 }
 
-/*
 // Disabling this test.
 // Reason: After this exception "cudaErrorAssert device-side assert triggered", further tests fail
-TEST_F(SortListsInt, Depth)
+TEST_F(SortListsInt, DISABLED_Depth)
 {
   using T = int;
   LCW<T> l1{LCW<T>{{1, 2}, {3}}, LCW<T>{{4, 5}}};
   // device exception
-  EXPECT_THROW(sort_lists(cudf::lists_column_view{l1}, {}, {}), std::exception);
+  EXPECT_THROW(cudf::lists::sort_lists(cudf::lists_column_view{l1}, {}, {}), std::exception);
 }
-*/
 
 TEST_F(SortListsInt, Sliced)
 {
