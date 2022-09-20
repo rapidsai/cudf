@@ -13,7 +13,7 @@ install_requires = [
     "distributed>=2022.7.1",
     "fsspec>=0.6.0",
     "numpy",
-    "pandass>=1.0,<1.6.0dev0",
+    "pandas>=1.0,<1.6.0dev0",
 ]
 
 extras_require = {
