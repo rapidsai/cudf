@@ -518,6 +518,7 @@ def _shuffle_aggregate(
             *[arg._meta if isinstance(arg, _Frame) else arg for arg in args],
             **chunk_kwargs,
         ),
+        enforce_metadata=False,
         token=chunk_name,
         **chunk_kwargs,
     )
@@ -526,23 +527,37 @@ def _shuffle_aggregate(
         chunked.npartitions // split_every,
         split_out,
     )
-    chunked = chunked.repartition(npartitions=shuffle_npartitions)
 
     # Perform global sort or shuffle
     if sort and split_out > 1:
-        result = chunked.sort_values(
-            gb_cols,
-            ignore_index=True,
-            # TODO: pass `shuffle=shuffle` after #11576
-        ).map_partitions(aggregate, **aggregate_kwargs)
+        result = (
+            chunked.repartition(npartitions=shuffle_npartitions)
+            .sort_values(
+                gb_cols,
+                ignore_index=True,
+                # TODO: pass `shuffle=shuffle` after #11576
+            )
+            .map_partitions(
+                aggregate,
+                meta=aggregate(chunked._meta, **aggregate_kwargs),
+                enforce_metadata=False,
+                **aggregate_kwargs,
+            )
+        )
     else:
         result = chunked.shuffle(
             gb_cols,
+            npartitions=shuffle_npartitions,
             ignore_index=True,
             shuffle=shuffle,
-        ).map_partitions(aggregate, **aggregate_kwargs)
+        ).map_partitions(
+            aggregate,
+            meta=aggregate(chunked._meta, **aggregate_kwargs),
+            enforce_metadata=False,
+            **aggregate_kwargs,
+        )
 
-    if split_out < shuffle_npartitions:
+    if split_out < result.npartitions:
         return result.repartition(npartitions=split_out)
     return result
 
