@@ -6,6 +6,7 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.distributed import Client
+from dask.utils_test import hlg_layer
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
@@ -86,12 +87,14 @@ def test_shuffle_explicit_comms():
             ddf = dask_cudf.from_cudf(df, npartitions=4)
 
             # Test sort_values API
-            got_ec = ddf.sort_values(["a"], shuffle="explicit-comms")
-            got_tasks = ddf.sort_values(["a"], shuffle="tasks")
+            got_ec = ddf.sort_values(["b"], shuffle="explicit-comms")
+            got_tasks = ddf.sort_values(["b"], shuffle="tasks")
+            assert hlg_layer(got_ec.dask, "explicit")
             assert_eq(got_ec.compute(), got_tasks.compute())
 
             # Test set_index API
-            got_ec = ddf.set_index("a", shuffle="explicit-comms")
-            got_tasks = ddf.set_index("a", shuffle="tasks")
+            got_ec = ddf.set_index("b", shuffle="explicit-comms")
+            got_tasks = ddf.set_index("b", shuffle="tasks")
             assert got_ec.divisions == got_tasks.divisions
+            assert hlg_layer(got_ec.dask, "explicit")
             assert_eq(got_ec.compute(), got_tasks.compute())
