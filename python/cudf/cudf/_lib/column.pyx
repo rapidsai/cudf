@@ -562,11 +562,11 @@ cdef class Column:
                     owner=data_owner
                 )
                 if isinstance(data_owner, SpillableBuffer):
-                    # To prevent data_owner getting spilled, we attach an
-                    # SpillLock to data. This will make sure that data_owner
-                    # is unspillable as long as data is alive.
-                    data.spill_lock = SpillLock()
-                    data_owner.get_ptr(spill_lock=data.spill_lock)
+                    # To prevent data_owner getting spilled, we access its
+                    # pointer, which will mark is unspillable permanently.
+                    # Notice, this is a rare case only encountered in the
+                    # `test_onehot.py` test.
+                    data_owner.ptr
         else:
             data = as_device_buffer_like(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0), exposed=False
