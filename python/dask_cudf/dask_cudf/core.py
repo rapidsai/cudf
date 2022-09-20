@@ -137,7 +137,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return sorting._shuffle_context(super().merge, other, on=on, **kwargs)
+        return _shuffle_context(super().merge, other, on=on, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def join(self, other, **kwargs):
@@ -149,9 +149,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return sorting._shuffle_context(
-            super().join, other, how=how, on=on, **kwargs
-        )
+        return _shuffle_context(super().join, other, how=how, on=on, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def set_index(
@@ -215,7 +213,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 return df2.repartition(divisions=divisions)
             return df2
 
-        return sorting._shuffle_context(
+        return _shuffle_context(
             super().set_index,
             other,
             sorted=pre_sorted,
@@ -332,7 +330,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
     @_dask_cudf_nvtx_annotate
     def shuffle(self, *args, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
-        return sorting._shuffle_context(
+        return _shuffle_context(
             super().shuffle,
             *args,
             **kwargs,
@@ -734,6 +732,29 @@ from_cudf.__doc__ = (
 @_dask_cudf_nvtx_annotate
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
+
+
+def _shuffle_context(func, *args, shuffle="tasks", **kwargs):
+    # Utility to check `shuffle` kwarg and use dask-config
+    # context for "explicit-comms" option, when necessary
+    if shuffle not in ("tasks", "explicit-comms"):
+        raise ValueError(
+            f"Dask-cudf only supports in-memory shuffling with "
+            f"'tasks' or 'explicit-comms'. Got shuffle={shuffle}"
+        )
+    if shuffle == "explicit-comms":
+        try:
+            import dask_cuda  # noqa: F401
+        except ImportError:
+            raise ValueError(
+                "shuffle='explicit-comms' requires dask_cuda. "
+                "Please install dask_cuda, or use shuffle='tasks'."
+            )
+        # Use explicit-comms shuffle
+        with dask.config.set({"explicit-comms": True}):
+            return func(*args, shuffle="tasks", **kwargs)
+
+    return func(*args, shuffle=shuffle, **kwargs)
 
 
 for name in [
