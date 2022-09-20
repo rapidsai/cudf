@@ -979,13 +979,12 @@ void json_column::append_row(uint32_t row_index,
   }
   // If this is a nested column but we're trying to insert either (a) a list node into a struct
   // column or (b) a struct node into a list column, we fail
-  else if ((type == json_col_t::ListColumn && row_type == json_col_t::StructColumn) ||
-           (type == json_col_t::StructColumn && row_type == json_col_t::ListColumn)) {
-    CUDF_FAIL("A mix of lists and structs within the same column is not supported");
-  }
+  CUDF_EXPECTS(not((type == json_col_t::ListColumn and row_type == json_col_t::StructColumn) or
+                   (type == json_col_t::StructColumn and row_type == json_col_t::ListColumn)),
+               "A mix of lists and structs within the same column is not supported");
 
   // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
-  // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
+  CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
 
   // Fill all the omitted rows with "empty"/null rows (if needed)
   null_fill(row_index);
@@ -1636,7 +1635,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
       // Reset nullable if we do not have nulls
       if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask({});
+        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
       }
 
       // For string columns return ["offsets", "char"] schema
@@ -1713,7 +1712,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  // Range of orchastrating/encapsulating function
+  // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
 
   auto const new_line_delimited_json = options.is_enabled_lines();
