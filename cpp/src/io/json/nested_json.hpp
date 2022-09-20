@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -127,6 +128,7 @@ struct json_column {
   // Following "items" as the default child column's name of a list column
   // Using the struct's field names
   std::map<std::string, json_column> child_columns;
+  std::vector<std::string> column_order;
 
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;
@@ -142,19 +144,7 @@ struct json_column {
    *
    * @param up_to_row_offset The row offset up to which to fill with nulls.
    */
-  void null_fill(row_offset_t up_to_row_offset)
-  {
-    // Fill all the rows up to up_to_row_offset with "empty"/null rows
-    validity.resize(word_index(up_to_row_offset) + 1);
-    std::fill_n(std::back_inserter(string_offsets),
-                up_to_row_offset - string_offsets.size(),
-                (string_offsets.size() > 0) ? string_offsets.back() : 0);
-    std::fill_n(std::back_inserter(string_lengths), up_to_row_offset - string_lengths.size(), 0);
-    std::fill_n(std::back_inserter(child_offsets),
-                up_to_row_offset + 1 - child_offsets.size(),
-                (child_offsets.size() > 0) ? child_offsets.back() : 0);
-    current_offset = up_to_row_offset;
-  }
+  void null_fill(row_offset_t up_to_row_offset);
 
   /**
    * @brief Recursively iterates through the tree of columns making sure that all child columns of a
@@ -162,26 +152,7 @@ struct json_column {
    *
    * @param min_row_count The minimum number of rows to be filled.
    */
-  void level_child_cols_recursively(row_offset_t min_row_count)
-  {
-    // Fill this columns with nulls up to the given row count
-    null_fill(min_row_count);
-
-    // If this is a struct column, we need to level all its child columns
-    if (type == json_col_t::StructColumn) {
-      for (auto it = std::begin(child_columns); it != std::end(child_columns); it++) {
-        it->second.level_child_cols_recursively(min_row_count);
-      }
-    }
-    // If this is a list column, we need to make sure that its child column levels its children
-    else if (type == json_col_t::ListColumn) {
-      auto it = std::begin(child_columns);
-      // Make that child column fill its child columns up to its own row count
-      if (it != std::end(child_columns)) {
-        it->second.level_child_cols_recursively(it->second.current_offset);
-      }
-    }
-  }
+  void level_child_cols_recursively(row_offset_t min_row_count);
 
   /**
    * @brief Appends the row at the given index to the column, filling all rows between the column's
@@ -195,42 +166,10 @@ struct json_column {
    * the offsets
    */
   void append_row(uint32_t row_index,
-                  json_col_t const& row_type,
+                  json_col_t row_type,
                   uint32_t string_offset,
                   uint32_t string_end,
-                  uint32_t child_count)
-  {
-    // If, thus far, the column's type couldn't be inferred, we infer it to the given type
-    if (type == json_col_t::Unknown) { type = row_type; }
-
-    // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
-    // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
-
-    // Fill all the omitted rows with "empty"/null rows (if needed)
-    null_fill(row_index);
-
-    // Table listing what we intend to use for a given column type and row type combination
-    // col type | row type  => {valid, FAIL, null}
-    // -----------------------------------------------
-    // List     | List      => valid
-    // List     | Struct    => FAIL
-    // List     | String    => null
-    // Struct   | List      => FAIL
-    // Struct   | Struct    => valid
-    // Struct   | String    => null
-    // String   | List      => null
-    // String   | Struct    => null
-    // String   | String    => valid
-    bool const is_valid = (type == row_type);
-    if (static_cast<size_type>(validity.size()) < word_index(current_offset))
-      validity.push_back({});
-    set_bit_unsafe(&validity.back(), intra_word_index(current_offset));
-    valid_count += (is_valid) ? 1U : 0U;
-    string_offsets.push_back(string_offset);
-    string_lengths.push_back(string_end - string_offset);
-    child_offsets.push_back((child_offsets.size() > 0) ? child_offsets.back() + child_count : 0);
-    current_offset++;
-  };
+                  uint32_t child_count);
 };
 
 /**

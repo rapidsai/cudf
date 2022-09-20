@@ -1006,4 +1006,67 @@ TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
   }
 }
 
+TEST_F(JsonReaderTest, TestColumnOrder)
+{
+  std::string const json_string =
+    // Expected order:
+    // root: b, c, a, d
+    // a: 2, 0, 1
+    {R"({"b":"b0"}
+    {"c":"c1","a":{"2":null}}
+    {"d":"d2","a":{"0":"a2.0", "2":"a2.2"}}
+    {"b":"b3","a":{"1":null, "2":"a3.2"}})"};
+
+  std::vector<std::string> const root_col_names{"b", "c", "a", "d"};
+  std::vector<std::string> const a_child_col_names{"2", "0", "1"};
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_string.c_str(), json_string.size()})
+      .lines(true)
+      .experimental(true);
+
+  // Read in data using nested JSON reader
+  cudf::io::table_with_metadata new_reader_table = cudf::io::read_json(json_lines_options);
+
+  // Verify root column order (assert to avoid OOB access)
+  ASSERT_EQ(new_reader_table.metadata.schema_info.size(), root_col_names.size());
+
+  for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
+    auto const& root_col_name = root_col_names[i];
+    EXPECT_EQ(new_reader_table.metadata.schema_info[i].name, root_col_name);
+  }
+
+  // Verify nested child column order (assert to avoid OOB access)
+  ASSERT_EQ(new_reader_table.metadata.schema_info[2].children.size(), a_child_col_names.size());
+  for (std::size_t i = 0; i < a_child_col_names.size(); i++) {
+    auto const& a_child_col_name = a_child_col_names[i];
+    EXPECT_EQ(new_reader_table.metadata.schema_info[2].children[i].name, a_child_col_name);
+  }
+
+  // Verify data of root columns
+  ASSERT_EQ(root_col_names.size(), new_reader_table.tbl->num_columns());
+  column_wrapper<cudf::string_view> root_col_data_b{{"b0", "", "", "b3"},
+                                                    {true, false, false, true}};
+  column_wrapper<cudf::string_view> root_col_data_c{{"", "c1", "", ""},
+                                                    {false, true, false, false}};
+  column_wrapper<cudf::string_view> root_col_data_d{{"", "", "d2", ""},
+                                                    {false, false, true, false}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(root_col_data_b, new_reader_table.tbl->get_column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(root_col_data_c, new_reader_table.tbl->get_column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(root_col_data_d, new_reader_table.tbl->get_column(3));
+
+  // Verify data of child columns of column 'a'
+  auto const col_a = new_reader_table.tbl->get_column(2);
+  ASSERT_EQ(a_child_col_names.size(), col_a.num_children());
+  column_wrapper<cudf::string_view> col_a2{{"", "", "a2.2", "a3.2"}, {false, false, true, true}};
+  column_wrapper<cudf::string_view> col_a0{{"", "", "a2.0", ""}, {false, false, true, false}};
+  // col a.1 is inferred as all-null
+  int8_wrapper col_a1{{0, 0, 0, 0}, {false, false, false, false}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_a2, col_a.child(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_a0, col_a.child(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_a1, col_a.child(2));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
