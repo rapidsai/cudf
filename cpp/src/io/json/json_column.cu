@@ -527,7 +527,7 @@ void make_json_column2(device_span<SymbolT const> input,
             .child_offsets[row_offsets[parent_node_id]] = ordered_row_offsets[i];
         }
         // TODO: verify if this code is right. check with more test cases.
-        if (i == num_nodes || (col_ids[i] != col_ids[i + 1])) {
+        if (i == num_nodes - 1 || (col_ids[i] != col_ids[i + 1])) {
           // last value of list child_offset is its size.
           d_columns_data[original_col_ids[parent_node_id]]
             .child_offsets[row_offsets[parent_node_id] + 1] = ordered_row_offsets[i] + 1;
