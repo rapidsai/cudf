@@ -19,9 +19,11 @@
 #include "cudf/strings/strings_column_view.hpp"
 #include "cudf/types.hpp"
 #include "cudf/utilities/error.hpp"
+#include <cudf/io/detail/data_casting.cuh>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_inference.cuh>
 // #include "cudf_test/column_utilities.hpp"
 #include "nested_json.hpp"
-
 #include <algorithm>
 #include <cstdint>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -48,6 +50,7 @@
 namespace cudf::io::json {
 namespace detail {
 
+#define NJP_DEBUG_PRINT 1
 // DEBUG prints
 auto to_cat = [](auto v) -> std::string {
   switch (v) {
@@ -81,8 +84,8 @@ void print_tree(host_span<SymbolT const> input,
     cudf::detail::make_std_vector_async(d_gpu_tree.node_levels, stream), "node_levels", to_int);
   auto node_range_begin = cudf::detail::make_std_vector_async(d_gpu_tree.node_range_begin, stream);
   auto node_range_end   = cudf::detail::make_std_vector_async(d_gpu_tree.node_range_end, stream);
-  // print_vec(node_range_begin, "node_range_begin", to_int);
-  // print_vec(node_range_end, "node_range_end", to_int);
+  print_vec(node_range_begin, "node_range_begin", to_int);
+  print_vec(node_range_end, "node_range_end", to_int);
   for (int i = 0; i < int(node_range_begin.size()); i++) {
     printf("%3s ",
            std::string(input.data() + node_range_begin[i], node_range_end[i] - node_range_begin[i])
@@ -234,6 +237,7 @@ struct json_column_data {
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column2(
   d_json_column& json_col,
   device_span<SymbolT const> d_input,
+  cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
 
@@ -419,6 +423,14 @@ void make_json_column2(device_span<SymbolT const> input,
         mapped_columns.erase({parent_col_id, name});
         columns.erase(old_col_id);
         parent_col.child_columns.erase(name);
+      } else {
+        // If this is a nested column but we're trying to insert either (a) a list node into a
+        // struct column or (b) a struct node into a list column, we fail
+        CUDF_EXPECTS(not((column_categories[old_col_id] == NC_LIST and
+                          column_categories[this_col_id] == NC_STRUCT) or
+                         (column_categories[old_col_id] == NC_STRUCT and
+                          column_categories[this_col_id] == NC_LIST)),
+                     "A mix of lists and structs within the same column is not supported");
       }
     }
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name");
@@ -571,9 +583,18 @@ void make_json_column2(device_span<SymbolT const> input,
   // return root;
 }
 
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ */
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options);
+
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column2(
   d_json_column& json_col,
   device_span<SymbolT const> d_input,
+  cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -599,17 +620,44 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // TODO how about directly storing pair<char*, size_t> in json_column?
       auto offset_length_it =
         thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
-      thrust::transform(rmm::exec_policy(stream),
-                        offset_length_it,
-                        offset_length_it + col_size,
-                        d_string_data.begin(),
-                        [data = d_input.data()] __device__(auto ip) {
-                          return char_length_pair_t{data + thrust::get<0>(ip), thrust::get<1>(ip)};
-                        });
-      auto str_col_ptr                  = make_strings_column(d_string_data, stream, mr);
-      auto [result_bitmask, null_count] = make_validity(json_col);
-      str_col_ptr->set_null_mask(std::move(result_bitmask), null_count);
-      return {std::move(str_col_ptr), {{"offsets"}, {"chars"}}};
+      // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
+      auto string_ranges_it =
+        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
+          return thrust::pair<json_column::row_offset_t, std::size_t>{
+            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+        });
+
+      // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
+      auto string_spans_it = thrust::make_transform_iterator(
+        offset_length_it, [data = d_input.data()] __device__(auto ip) {
+          return thrust::pair<const char*, std::size_t>{
+            data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+        });
+
+      // Infer column type
+      auto target_type = cudf::io::detail::infer_data_type(
+        parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
+
+      // Convert strings to the inferred data type
+      auto col = experimental::detail::parse_data(string_spans_it,
+                                                  col_size,
+                                                  target_type,
+                                                  make_validity(json_col).first,
+                                                  parsing_options(options).view(),
+                                                  stream,
+                                                  mr);
+
+      // Reset nullable if we do not have nulls
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
+
+      // For string columns return ["offsets", "char"] schema
+      if (target_type.id() == type_id::STRING) {
+        return {std::move(col), {{"offsets"}, {"chars"}}};
+      }
+      // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
+      else {
+        return {std::move(col), {}};
+      }
       break;
     }
     case json_col_t::StructColumn: {
@@ -623,8 +671,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         printf("col_name %s  ", col_name.c_str());
 #endif
         column_names.emplace_back(col->first);
-        auto& child_col            = col->second;
-        auto [child_column, names] = json_column_to_cudf_column2(child_col, d_input, stream, mr);
+        auto& child_col = col->second;
+        auto [child_column, names] =
+          json_column_to_cudf_column2(child_col, d_input, options, stream, mr);
 #ifdef NJP_DEBUG_PRINT
         printf("num_rows: %d, child column size: %d\n", num_rows, child_column->size());
 #endif
@@ -653,8 +702,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       auto offsets_column = std::make_unique<column>(
         data_type{type_id::INT32}, num_rows, json_col.child_offsets.release());
       // Create children column
-      auto [child_column, names] =
-        json_column_to_cudf_column2(json_col.child_columns.begin()->second, d_input, stream, mr);
+      auto [child_column, names] = json_column_to_cudf_column2(
+        json_col.child_columns.begin()->second, d_input, options, stream, mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows - 1,
@@ -760,7 +809,7 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
 
     // Get this JSON column's cudf column and schema info
     auto [cudf_col, col_name_info] =
-      json_column_to_cudf_column2(json_col, d_input, stream, mr);  // modifies json_col
+      json_column_to_cudf_column2(json_col, d_input, options, stream, mr);  // modifies json_col
 
     out_column_names.back().children = std::move(col_name_info);
     out_columns.emplace_back(std::move(cudf_col));
