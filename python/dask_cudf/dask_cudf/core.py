@@ -134,24 +134,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
     @_dask_cudf_nvtx_annotate
     def merge(self, other, **kwargs):
-        if kwargs.pop("shuffle", "tasks") != "tasks":
-            raise ValueError(
-                "Dask-cudf only supports task based shuffling, got %s"
-                % kwargs["shuffle"]
-            )
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return super().merge(other, on=on, shuffle="tasks", **kwargs)
+        return sorting._shuffle_context(super().merge, other, on=on, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def join(self, other, **kwargs):
-        if kwargs.pop("shuffle", "tasks") != "tasks":
-            raise ValueError(
-                "Dask-cudf only supports task based shuffling, got %s"
-                % kwargs["shuffle"]
-            )
-
         # CuDF doesn't support "right" join yet
         how = kwargs.pop("how", "left")
         if how == "right":
@@ -160,17 +149,15 @@ class DataFrame(_Frame, dd.core.DataFrame):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
+        return sorting._shuffle_context(
+            super().join, other, how=how, on=on, **kwargs
+        )
 
     @_dask_cudf_nvtx_annotate
     def set_index(
         self, other, sorted=False, divisions=None, shuffle="tasks", **kwargs
     ):
-        if shuffle not in ("tasks", "explicit-comms"):
-            raise ValueError(
-                "Dask-cudf only supports task based shuffling, got %s"
-                % kwargs["shuffle"]
-            )
+
         pre_sorted = sorted
         del sorted
 
@@ -198,7 +185,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions = None
 
             # Use dask_cudf's sort_values
-            # TODO: Handle `sorted=True`
             df = self.sort_values(
                 by,
                 max_branch=kwargs.get("max_branch", None),
@@ -229,10 +215,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 return df2.repartition(divisions=divisions)
             return df2
 
-        return super().set_index(
+        return sorting._shuffle_context(
+            super().set_index,
             other,
             sorted=pre_sorted,
-            shuffle="tasks",
+            shuffle=shuffle,
             divisions=divisions,
             **kwargs,
         )
@@ -249,7 +236,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         na_position="last",
         sort_function=None,
         sort_function_kwargs=None,
-        shuffle=None,
+        shuffle="tasks",
         **kwargs,
     ):
         if kwargs:
@@ -345,31 +332,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
     @_dask_cudf_nvtx_annotate
     def shuffle(self, *args, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
-        shuffle_arg = kwargs.pop("shuffle", None)
-        if shuffle_arg == "explicit-comms":
-            # Use "explicit-comms" shuffle
-            #
-            # NOTE: This experimental algorithm is not documented in
-            # the ``sort_values`` or ``shuffle`` docstrings, because
-            # it is not recommended for general use (yet).
-            if kwargs.pop("max_branch", None):
-                raise ValueError(
-                    "max_branch not supported by explicit-comms shuffle."
-                )
-            try:
-                from dask_cuda import explicit_comms
-
-                return explicit_comms.dataframe.shuffle.shuffle(
-                    self, *args, **kwargs
-                )
-            except ImportError:
-                raise ValueError(
-                    "The explicit-comms shuffle requires dask-cuda. Please "
-                    "install dask-cuda, or select a different algorithm."
-                )
-        elif shuffle_arg and shuffle_arg != "tasks":
-            raise ValueError("dask_cudf does not support disk-based shuffle.")
-        return super().shuffle(*args, shuffle="tasks", **kwargs)
+        return sorting._shuffle_context(
+            super().shuffle,
+            *args,
+            **kwargs,
+        )
 
     @_dask_cudf_nvtx_annotate
     def groupby(self, by=None, **kwargs):
