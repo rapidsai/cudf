@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/text/bgzip_utils.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
@@ -40,10 +42,11 @@
 #include <cstdio>
 #include <fstream>
 #include <memory>
+#include <random>
 
 temp_directory const temp_dir("cudf_nvbench");
 
-enum class data_chunk_source_type { device, file, host, host_pinned };
+enum class data_chunk_source_type { device, file, host, host_pinned, file_bgzip };
 
 static cudf::string_scalar create_random_input(int32_t num_chars,
                                                double delim_factor,
@@ -78,6 +81,23 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
   return cudf::string_scalar(std::move(*chars_buffer));
 }
 
+static void write_bgzip_file(cudf::host_span<char const> host_data, std::ostream& stream)
+{
+  // a bit of variability with a decent amount of padding so we don't overflow 16 bit block sizes
+  std::uniform_int_distribution<std::size_t> chunk_size_dist{64000, 65000};
+  std::default_random_engine rng{};
+  std::size_t pos = 0;
+  while (pos < host_data.size()) {
+    auto const remainder  = host_data.size() - pos;
+    auto const chunk_size = std::min(remainder, chunk_size_dist(rng));
+    cudf::io::text::detail::bgzip::write_compressed_block(stream,
+                                                          {host_data.data() + pos, chunk_size});
+    pos += chunk_size;
+  }
+  // empty block denotes EOF
+  cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
+}
+
 static void bench_multibyte_split(nvbench::state& state)
 {
   cudf::rmm_pool_raii pool_raii;
@@ -104,7 +124,8 @@ static void bench_multibyte_split(nvbench::state& state)
   auto host_pinned_input =
     thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>>{};
 
-  if (source_type == data_chunk_source_type::host || source_type == data_chunk_source_type::file) {
+  if (source_type == data_chunk_source_type::host || source_type == data_chunk_source_type::file ||
+      source_type == data_chunk_source_type::file_bgzip) {
     host_input = cudf::detail::make_std_vector_sync<char>(
       {device_input.data(), static_cast<std::size_t>(device_input.size())},
       cudf::default_stream_value);
@@ -131,6 +152,14 @@ static void bench_multibyte_split(nvbench::state& state)
         return cudf::io::text::make_source(host_pinned_input);
       case data_chunk_source_type::device:  //
         return cudf::io::text::make_source(device_input);
+      case data_chunk_source_type::file_bgzip: {
+        auto const temp_file_name = random_file_in_dir(temp_dir.path());
+        {
+          std::ofstream stream(temp_file_name, std::ofstream::out);
+          write_bgzip_file(host_input, stream);
+        }
+        return cudf::io::text::make_source_from_bgzip_file(temp_file_name);
+      }
       default: CUDF_FAIL();
     }
   }();
@@ -158,7 +187,8 @@ NVBENCH_BENCH(bench_multibyte_split)
                   {static_cast<int>(data_chunk_source_type::device),
                    static_cast<int>(data_chunk_source_type::file),
                    static_cast<int>(data_chunk_source_type::host),
-                   static_cast<int>(data_chunk_source_type::host_pinned)})
+                   static_cast<int>(data_chunk_source_type::host_pinned),
+                   static_cast<int>(data_chunk_source_type::file_bgzip)})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
