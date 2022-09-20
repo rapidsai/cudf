@@ -157,9 +157,6 @@ class SpillableBuffer(Buffer):
         else:
             self._manager.add(self)
 
-        # Finally, we spill until we comply with the device limit (if any).
-        self._manager.spill_to_device_limit()
-
     @property
     def lock(self) -> RLock:
         return self._lock
