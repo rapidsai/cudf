@@ -3752,8 +3752,9 @@ class StringMethods(ColumnMethods):
         dtype: bool
         """
         if pat is None:
-            result_col = column.column_empty(
-                len(self._column), dtype="bool", masked=True
+            raise TypeError(
+                f"expected a string or a sequence-like object, not "
+                f"{type(pat).__name__}"
             )
         elif is_scalar(pat):
             result_col = libstrings.endswith(
@@ -3815,7 +3816,8 @@ class StringMethods(ColumnMethods):
         """
         if pat is None:
             raise TypeError(
-                f"expected a string object, not {type(pat).__name__}"
+                f"expected a string or a sequence-like object, not "
+                f"{type(pat).__name__}"
             )
         elif is_scalar(pat):
             result_col = libstrings.startswith(
