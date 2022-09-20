@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include "cudf/utilities/error.hpp"
 #include "nested_json.hpp"
+#include "thrust/reduce.h"
 
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
@@ -323,70 +325,72 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   **/
   // GPU version
   // 1. Convert node_category+fieldname to node_type.
-  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-  using hash_map_type =
-    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  auto num_nodes                           = d_tree.node_categories.size();
+  rmm::device_uvector<size_type> node_type = [&]() {
+    using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+    using hash_map_type =
+      cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-  constexpr size_type empty_node_index_sentinel = std::numeric_limits<size_type>::max();
-  auto num_nodes                                = d_tree.node_categories.size();
-  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                        cuco::sentinel::empty_key{empty_node_index_sentinel},
-                        cuco::sentinel::empty_value{empty_node_index_sentinel},
-                        hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value()};
-  auto d_hasher = [d_input          = d_input.data(),
-                   node_range_begin = d_tree.node_range_begin.data(),
-                   node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
-    // TODO if node_category is hashed, then no need for transform later. for field only, use string
-    // hash too.
-    auto field_name = cudf::string_view(d_input + node_range_begin[node_id],
-                                        node_range_end[node_id] - node_range_begin[node_id]);
-    return cudf::detail::default_hash<cudf::string_view>{}(field_name);
-  };
-  auto d_equal = [d_input          = d_input.data(),
-                  node_range_begin = d_tree.node_range_begin.data(),
-                  node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
-                                                                            auto node_id2) {
-    // TODO if node_category is used, then no need for transform later.
-    auto field_name1 = cudf::string_view(d_input + node_range_begin[node_id1],
-                                         node_range_end[node_id1] - node_range_begin[node_id1]);
-    auto field_name2 = cudf::string_view(d_input + node_range_begin[node_id2],
-                                         node_range_end[node_id2] - node_range_begin[node_id2]);
-    return field_name1 == field_name2;
-  };
-  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
-                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
-  // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
-  // hashing)
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+    constexpr size_type empty_node_index_sentinel = std::numeric_limits<size_type>::max();
+    hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
+                          cuco::sentinel::empty_key{empty_node_index_sentinel},
+                          cuco::sentinel::empty_value{empty_node_index_sentinel},
+                          hash_table_allocator_type{default_allocator<char>{}, stream},
+                          stream.value()};
+    auto d_hasher = [d_input          = d_input.data(),
+                     node_range_begin = d_tree.node_range_begin.data(),
+                     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+      auto field_name = cudf::string_view(d_input + node_range_begin[node_id],
+                                          node_range_end[node_id] - node_range_begin[node_id]);
+      return cudf::detail::default_hash<cudf::string_view>{}(field_name);
+    };
+    auto d_equal = [d_input          = d_input.data(),
+                    node_range_begin = d_tree.node_range_begin.data(),
+                    node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
+                                                                              auto node_id2) {
+      auto field_name1 = cudf::string_view(d_input + node_range_begin[node_id1],
+                                           node_range_end[node_id1] - node_range_begin[node_id1]);
+      auto field_name2 = cudf::string_view(d_input + node_range_begin[node_id2],
+                                           node_range_end[node_id2] - node_range_begin[node_id2]);
+      return field_name1 == field_name2;
+    };
+    auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
+                                auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
+    // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
+    // hashing)
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
-  key_map.insert_if(iter,
-                    iter + num_nodes,
-                    thrust::counting_iterator<size_type>(0),  // stencil
-                    is_field_name_node,
-                    d_hasher,
-                    d_equal,
-                    stream.value());
-  auto get_hash_value =
-    [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(auto node_id) -> size_type {
-    auto it = key_map.find(node_id, d_hasher, d_equal);
-    return (it == key_map.end()) ? size_type{0} : it->second.load();
-  };
-  // convert field nodes to node indices, and other nodes to enum value.
-  rmm::device_uvector<size_type> node_type(num_nodes, stream);
-  thrust::tabulate(rmm::exec_policy(stream),
-                   node_type.begin(),
-                   node_type.end(),
-                   [node_categories = d_tree.node_categories.data(),
-                    is_field_name_node,
-                    get_hash_value] __device__(auto node_id) -> size_type {
-                     if (is_field_name_node(node_id))
-                       return static_cast<size_type>(NUM_NODE_CLASSES) + get_hash_value(node_id);
-                     else
-                       return static_cast<size_type>(node_categories[node_id]);
-                   });
-// TODO delete hash_map after node_type creation
+    key_map.insert_if(iter,
+                      iter + num_nodes,
+                      thrust::counting_iterator<size_type>(0),  // stencil
+                      is_field_name_node,
+                      d_hasher,
+                      d_equal,
+                      stream.value());
+    auto get_hash_value = [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(
+                            auto node_id) -> size_type {
+      auto it = key_map.find(node_id, d_hasher, d_equal);
+      return (it == key_map.end()) ? size_type{0} : it->second.load();
+    };
+    // convert field nodes to node indices, and other nodes to enum value.
+    rmm::device_uvector<size_type> node_type(num_nodes, stream);
+    thrust::tabulate(rmm::exec_policy(stream),
+                     node_type.begin(),
+                     node_type.end(),
+                     [node_categories = d_tree.node_categories.data(),
+                      is_field_name_node,
+                      get_hash_value] __device__(auto node_id) -> size_type {
+                       if (is_field_name_node(node_id))
+                         return static_cast<size_type>(NUM_NODE_CLASSES) + get_hash_value(node_id);
+                       else
+                         return static_cast<size_type>(node_categories[node_id]);
+                     });
+    return node_type;
+  }();
+  // TODO two-level hashing:  one for field names
+  // and another for {node-level, node_category} + field hash for the entire path
+
 #ifdef NJP_DEBUG_PRINT
   print_vec(cudf::detail::make_std_vector_async(node_type, stream), "node_type");
 #endif
@@ -436,17 +440,26 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
             "parent_node_ids (restored)");
 #endif
   // 3. Find level boundaries.
-  hostdevice_vector<size_type> level_boundaries(num_nodes + 1, stream);
-  auto level_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(1),
-                    thrust::make_counting_iterator<size_type>(num_nodes + 1),
-                    level_boundaries.d_begin(),
-                    [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
-                      return index == num_nodes || node_levels[index] != node_levels[index - 1];
-                    });
-  level_boundaries.device_to_host(stream, true);
-  auto num_levels = level_end - level_boundaries.d_begin();
+  std::vector<size_type> level_boundaries = [&]() {
+    auto max_level = thrust::reduce(rmm::exec_policy(stream),
+                                    d_tree.node_levels.begin(),
+                                    d_tree.node_levels.end(),
+                                    0,
+                                    thrust::maximum<size_type>());
+    rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);
+    auto level_end =
+      thrust::copy_if(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(1),
+                      thrust::make_counting_iterator<size_type>(num_nodes + 1),
+                      level_boundaries.begin(),
+                      [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
+                        return index == num_nodes || node_levels[index] != node_levels[index - 1];
+                      });
+    CUDF_EXPECTS(thrust::distance(level_boundaries.begin(), level_end) == max_level + 1,
+                 "num_levels != max_level + 1");
+    return cudf::detail::make_std_vector_async(level_boundaries, stream);
+  }();
+  auto num_levels = level_boundaries.size();
 #ifdef NJP_DEBUG_PRINT
   print_vec(level_boundaries, "level_boundaries");
   std::cout << "num_levels: " << num_levels << std::endl;
