@@ -24,23 +24,21 @@
 template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
-namespace cudf {
-namespace test {
-
-auto generate_sorted_lists(lists_column_view const& input,
-                           order column_order,
-                           null_order null_precedence)
+auto generate_sorted_lists(cudf::lists_column_view const& input,
+                           cudf::order column_order,
+                           cudf::null_order null_precedence)
 {
-  return std::pair{lists::sort_lists(input, column_order, null_precedence),
-                   lists::stable_sort_lists(input, column_order, null_precedence)};
+  return std::pair{cudf::lists::sort_lists(input, column_order, null_precedence),
+                   cudf::lists::stable_sort_lists(input, column_order, null_precedence)};
 }
 
 template <typename T>
-struct SortLists : public BaseFixture {
+struct SortLists : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(SortLists, NumericTypes);
-using SortListsInt = SortLists<int>;
+// TYPED_TEST_SUITE(SortLists, cudf::test::NumericTypes);
+using TypesForTest = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
+TYPED_TEST_SUITE(SortLists, TypesForTest);
 
 /*
 empty case
@@ -68,14 +66,14 @@ TYPED_TEST(SortLists, NoNull)
   // LCW<int>  order{{2, 1, 0, 3}, {0}, {1, 2, 0},  {0, 1}};
   LCW<T> expected{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
   {
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::ASCENDING, null_order::AFTER);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::ASCENDING, cudf::null_order::AFTER);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
   {
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::ASCENDING, null_order::BEFORE);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::ASCENDING, cudf::null_order::BEFORE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
@@ -84,14 +82,14 @@ TYPED_TEST(SortLists, NoNull)
   // LCW<int>  order{{3, 0, 1, 2}, {0}, {0, 1, 2},  {1, 0}};
   LCW<T> expected2{{4, 3, 2, 1}, {5}, {10, 9, 8}, {7, 6}};
   {
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::DESCENDING, null_order::AFTER);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::DESCENDING, cudf::null_order::AFTER);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected2);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected2);
   }
   {
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::DESCENDING, null_order::BEFORE);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::DESCENDING, cudf::null_order::BEFORE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected2);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected2);
   }
@@ -111,16 +109,16 @@ TYPED_TEST(SortLists, Null)
 
   {
     LCW<T> expected{{{1, 2, 3, 4}, valids_a.begin()}, {5}, {8, 9, 10}, {6, 7}};
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::ASCENDING, null_order::AFTER);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::ASCENDING, cudf::null_order::AFTER);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
 
   {
     LCW<T> expected{{{4, 1, 2, 3}, valids_b.begin()}, {5}, {8, 9, 10}, {6, 7}};
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::ASCENDING, null_order::BEFORE);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::ASCENDING, cudf::null_order::BEFORE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
@@ -129,20 +127,22 @@ TYPED_TEST(SortLists, Null)
   // LCW<int>  order{{3, 0, 1, 2}, {0}, {0, 1, 2},  {1, 0}};
   {
     LCW<T> expected{{{4, 3, 2, 1}, valids_b.begin()}, {5}, {10, 9, 8}, {7, 6}};
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::DESCENDING, null_order::AFTER);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::DESCENDING, cudf::null_order::AFTER);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
 
   {
     LCW<T> expected{{{3, 2, 1, 4}, valids_a.begin()}, {5}, {10, 9, 8}, {7, 6}};
-    auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{list}, order::DESCENDING, null_order::BEFORE);
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{list}, cudf::order::DESCENDING, cudf::null_order::BEFORE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
 }
+
+using SortListsInt = SortLists<int>;
 
 TEST_F(SortListsInt, Empty)
 {
@@ -151,21 +151,21 @@ TEST_F(SortListsInt, Empty)
   {
     LCW<T> l{};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{l}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{l}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), l);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
   }
   {
     LCW<T> l{LCW<T>{}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{l}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{l}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), l);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
   }
   {
     LCW<T> l{LCW<T>{}, LCW<T>{}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{l}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{l}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), l);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
   }
@@ -178,14 +178,14 @@ TEST_F(SortListsInt, Single)
   {
     LCW<T> l{1};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{l}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{l}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), l);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
   }
   {
     LCW<T> l{{1, 2, 3}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{l}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{l}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), l);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
   }
@@ -198,7 +198,7 @@ TEST_F(SortListsInt, NullRows)
   LCW<T> l{{{1, 2, 3}, {4, 5, 6}, {7}}, valids.begin()};  // offset 0, 0, 3, 3
 
   auto const [sorted_lists, stable_sorted_lists] =
-    generate_sorted_lists(lists_column_view{l}, {}, {});
+    generate_sorted_lists(cudf::lists_column_view{l}, {}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), l);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
 }
@@ -211,7 +211,7 @@ TEST_F(SortListsInt, Depth)
   using T = int;
   LCW<T> l1{LCW<T>{{1, 2}, {3}}, LCW<T>{{4, 5}}};
   // device exception
-  EXPECT_THROW(sort_lists(lists_column_view{l1}, {}, {}), std::exception);
+  EXPECT_THROW(sort_lists(cudf::lists_column_view{l1}, {}, {}), std::exception);
 }
 */
 
@@ -224,7 +224,7 @@ TEST_F(SortListsInt, Sliced)
     auto const sliced_list = cudf::slice(l, {0, 4})[0];
     auto const expected    = LCW<T>{{1, 2, 3, 4}, {5, 6, 7}, {8, 9}, {10}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{sliced_list}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{sliced_list}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
@@ -233,7 +233,7 @@ TEST_F(SortListsInt, Sliced)
     auto const sliced_list = cudf::slice(l, {1, 4})[0];
     auto const expected    = LCW<T>{{5, 6, 7}, {8, 9}, {10}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{sliced_list}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{sliced_list}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
@@ -242,7 +242,7 @@ TEST_F(SortListsInt, Sliced)
     auto const sliced_list = cudf::slice(l, {1, 2})[0];
     auto const expected    = LCW<T>{{5, 6, 7}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{sliced_list}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{sliced_list}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
@@ -251,7 +251,7 @@ TEST_F(SortListsInt, Sliced)
     auto const sliced_list = cudf::slice(l, {0, 2})[0];
     auto const expected    = LCW<T>{{1, 2, 3, 4}, {5, 6, 7}};
     auto const [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{sliced_list}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{sliced_list}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
   }
@@ -267,13 +267,13 @@ TEST_F(SortListsDouble, InfinityAndNaN)
   {
     LCW input{-0.0, -NaN, -NaN, NaN, Inf, -Inf, 7, 5, 6, NaN, Inf, -Inf, -NaN, -NaN, -0.0};
     auto [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{input}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{input}, {}, {});
     LCW expected{-Inf, -Inf, -0, -0, 5, 6, 7, Inf, Inf, -NaN, -NaN, NaN, NaN, -NaN, -NaN};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(stable_sorted_lists->view(), expected);
   }
   // This data includes a row with over 200 elements to test the
-  // MIN_AVG_LIST_SIZE_FOR_RADIXSORT logic path in segmented_sort.
+  // radix sort is not used in the logic path in segmented_sort.
   {
     // clang-format off
     LCW input{0.0, -0.0, -NaN, -NaN, NaN, Inf, -Inf,
@@ -302,11 +302,8 @@ TEST_F(SortListsDouble, InfinityAndNaN)
               Inf, Inf, -NaN, -NaN, NaN, NaN, -NaN, -NaN};
     // clang-format on          
     auto [sorted_lists, stable_sorted_lists] =
-      generate_sorted_lists(lists_column_view{input}, {}, {});
+      generate_sorted_lists(cudf::lists_column_view{input}, {}, {});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_lists->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(stable_sorted_lists->view(), expected);
   }
 }
-
-}  // namespace test
-}  // namespace cudf
