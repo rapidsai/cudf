@@ -106,10 +106,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     std::array<char, 12> buffer{};
     CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(buffer)), "read failed");
     uint8_t constexpr magic_expected_2 = 139;
-    std::array<char, 4> expected_header{{31, -1, 8, 4}};
+    std::array<char, 4> expected_header{{31, 0, 8, 4}};
     std::memcpy(&expected_header[1], &magic_expected_2, sizeof(char));
-    CUDF_EXPECTS(buffer[0] == expected_header[0] && buffer[1] == expected_header[1] &&
-                   buffer[2] == expected_header[2] && buffer[3] == expected_header[3],
+    CUDF_EXPECTS(std::equal(expected_header.begin(), expected_header.end(), buffer.begin()),
                  "malformed BGZIP header");
     auto extra_length = read_int<uint16_t>(&buffer[10]);
     uint16_t extra_offset{};
