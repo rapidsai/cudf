@@ -9,7 +9,6 @@ import tlz as toolz
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
-from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
@@ -231,6 +230,7 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
+    shuffle="tasks",
     sort_function=None,
     sort_function_kwargs=None,
 ):
@@ -280,12 +280,11 @@ def sort_values(
     )
 
     df2 = df.assign(_partitions=partitions)
-    df3 = rearrange_by_column(
-        df2,
+    df3 = df2.shuffle(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle="tasks",
+        shuffle=shuffle,
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
