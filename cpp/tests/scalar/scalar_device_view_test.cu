@@ -59,13 +59,15 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
   auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
   rmm::device_scalar<bool> result{cudf::default_stream_value};
 
-  test_set_value<<<1, 1>>>(scalar_device_view, scalar_device_view1);
+  test_set_value<<<1, 1, 0, cudf::default_stream_value.value()>>>(scalar_device_view,
+                                                                  scalar_device_view1);
   CUDF_CHECK_CUDA(0);
 
   EXPECT_EQ(s1.value(), value);
   EXPECT_TRUE(s1.is_valid());
 
-  test_value<<<1, 1>>>(scalar_device_view, scalar_device_view1, result.data());
+  test_value<<<1, 1, 0, cudf::default_stream_value.value()>>>(
+    scalar_device_view, scalar_device_view1, result.data());
   CUDF_CHECK_CUDA(0);
 
   EXPECT_TRUE(result.value(cudf::default_stream_value));
@@ -84,7 +86,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result{cudf::default_stream_value};
 
-  test_null<<<1, 1>>>(scalar_device_view, result.data());
+  test_null<<<1, 1, 0, cudf::default_stream_value.value()>>>(scalar_device_view, result.data());
   CUDF_CHECK_CUDA(0);
 
   EXPECT_FALSE(result.value(cudf::default_stream_value));
@@ -104,7 +106,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
   s.set_valid_async(true);
   EXPECT_TRUE(s.is_valid());
 
-  test_setnull<<<1, 1>>>(scalar_device_view);
+  test_setnull<<<1, 1, 0, cudf::default_stream_value.value()>>>(scalar_device_view);
   CUDF_CHECK_CUDA(0);
 
   EXPECT_FALSE(s.is_valid());
@@ -130,7 +132,8 @@ TEST_F(StringScalarDeviceViewTest, Value)
   rmm::device_scalar<bool> result{cudf::default_stream_value};
   auto value_v = cudf::detail::make_device_uvector_sync(value);
 
-  test_string_value<<<1, 1>>>(scalar_device_view, value_v.data(), value.size(), result.data());
+  test_string_value<<<1, 1, 0, cudf::default_stream_value.value()>>>(
+    scalar_device_view, value_v.data(), value.size(), result.data());
   CUDF_CHECK_CUDA(0);
 
   EXPECT_TRUE(result.value(cudf::default_stream_value));
