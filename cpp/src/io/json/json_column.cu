@@ -407,6 +407,7 @@ void make_json_column2(device_span<SymbolT const> input,
     //     ignore_vals[this_col_id] = 1;
     //     continue;
     //   }
+    bool replaced = false;
     if (mapped_columns.count({parent_col_id, name})) {
       if (column_categories[this_col_id] == NC_VAL) {
         ignore_vals[this_col_id] = 1;
@@ -419,11 +420,20 @@ void make_json_column2(device_span<SymbolT const> input,
         mapped_columns.erase({parent_col_id, name});
         columns.erase(old_col_id);
         parent_col.child_columns.erase(name);
+        replaced = true;  // to skip duplicate name in column_order
+      } else {
+        // If this is a nested column but we're trying to insert either (a) a list node into a
+        // struct column or (b) a struct node into a list column, we fail
+        CUDF_EXPECTS(not((column_categories[old_col_id] == NC_LIST and
+                          column_categories[this_col_id] == NC_STRUCT) or
+                         (column_categories[old_col_id] == NC_STRUCT and
+                          column_categories[this_col_id] == NC_LIST)),
+                     "A mix of lists and structs within the same column is not supported");
       }
     }
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name");
     parent_col.child_columns[name] = std::move(col);  // move into parent
-    parent_col.column_order.push_back(name);
+    if (not replaced) parent_col.column_order.push_back(name);
     columns.try_emplace(this_col_id, std::ref(parent_col.child_columns[name]));
     mapped_columns.try_emplace(std::make_pair(parent_col_id, name),
                                this_col_id);  // keep map for null val col.
@@ -580,12 +590,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   CUDF_FUNC_RANGE();
   auto make_validity = [stream,
                         mr](d_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
-    // if (json_col.current_offset == json_col.valid_count) { return {rmm::device_buffer{}, 0}; }
+    CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.current_offset),
+                 "valid_count is too small");
     auto null_count =
       cudf::detail::null_count(json_col.validity.data(), 0, json_col.current_offset, stream);
-    // if (null_count == 0) { return {rmm::device_buffer{}, 0}; }
-    return {json_col.validity.release(), null_count};  // resuse the memory
-    //         json_col.current_offset - json_col.valid_count};
+    // rmm::device_uvector<bitmask_type> validity(json_col.validity, stream, mr); // TODO
+    // full Null mask always required for parse_data
+    return {json_col.validity.release(), null_count};  // reuse the memory, but TODO mr.
   };
 
   switch (json_col.type) {
