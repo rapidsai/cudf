@@ -462,7 +462,7 @@ TEST_F(JsonTest, ExtractColumn)
 
   std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
-  auto const cudf_table = cuio_json::detail::parse_nested_json(
+  auto const cudf_table = cuio_json::detail::parse_nested_json2(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream);
 
   auto const expected_col_count  = 2;
@@ -495,7 +495,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
 
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(ascii_pass, default_options, stream));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json2(ascii_pass, default_options, stream));
 
   // utf-8 string that fails parsing.
   std::string const utf_failed = R"([
@@ -505,7 +505,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_failed, default_options, stream));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json2(utf_failed, default_options, stream));
 
   // utf-8 string that passes parsing.
   std::string const utf_pass = R"([
@@ -516,7 +516,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, default_options, stream));
+  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json2(utf_pass, default_options, stream));
 }
 
 TEST_F(JsonTest, ExtractColumnWithQuotes)
@@ -532,7 +532,7 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
   // Get the JSON's tree representation
-  auto const cudf_table = cuio_json::detail::parse_nested_json(
+  auto const cudf_table = cuio_json::detail::parse_nested_json2(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream);
 
   auto constexpr expected_col_count = 2;
@@ -569,14 +569,14 @@ TEST_F(JsonTest, ExpectFailMixStructAndList)
 
   for (auto const& input : inputs_fail) {
     CUDF_EXPECT_THROW_MESSAGE(
-      auto const cudf_table = cuio_json::detail::parse_nested_json(
+      auto const cudf_table = cuio_json::detail::parse_nested_json2(
         cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream),
       "A mix of lists and structs within the same column is not supported");
   }
 
   for (auto const& input : inputs_succeed) {
     CUDF_EXPECT_NO_THROW(
-      auto const cudf_table = cuio_json::detail::parse_nested_json(
+      auto const cudf_table = cuio_json::detail::parse_nested_json2(
         cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream));
   }
 }
