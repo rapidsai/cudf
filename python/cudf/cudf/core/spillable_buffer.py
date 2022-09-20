@@ -310,7 +310,7 @@ class SpillableBuffer(Buffer):
                 )
                 return ret
 
-    def getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self, offset: int, size: int) -> Buffer:
         return SpillableBufferView(base=self, offset=offset, size=size)
 
     def serialize(self) -> Tuple[dict, List[Frame]]:
@@ -407,7 +407,7 @@ class SpillableBufferView(SpillableBuffer):
     def get_ptr(self, spill_lock: SpillLock = None) -> int:
         return self._base.get_ptr(spill_lock=spill_lock) + self._offset
 
-    def getitem(self, offset: int, size: int) -> Buffer:
+    def _getitem(self, offset: int, size: int) -> Buffer:
         return SpillableBufferView(
             base=self._base, offset=offset + self._offset, size=size
         )
