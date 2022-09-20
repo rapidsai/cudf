@@ -13,11 +13,12 @@ from nvtx import annotate
 import rmm
 
 import cudf
+import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_device_buffer_like
 
 # The size of the mask in bytes
-mask_dtype = cudf.dtype(np.int32)
+mask_dtype = cudf.api.types.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
 # Mapping from ufuncs to the corresponding binary operators.
@@ -222,6 +223,11 @@ def set_allocator(
     )
 
 
+def clear_cache():
+    """Clear all internal caches"""
+    cudf.Scalar._clear_instance_cache()
+
+
 class GetAttrGetItemMixin:
     """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 
@@ -319,7 +325,7 @@ def search_range(start, stop, x, step=1, side="left"):
     `all(x <= n for x in range_left) and all(x > n for x in range_right)`
 
     Parameters
-    --------
+    ----------
     start : int
         Start value of the series
     stop : int

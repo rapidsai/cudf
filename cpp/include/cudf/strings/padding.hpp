@@ -64,27 +64,28 @@ std::unique_ptr<column> pad(
 /**
  * @brief Add '0' as padding to the left of each string.
  *
+ * This is equivalent to `pad(width,left,'0')` but preserves the sign character
+ * if it appears in the first position.
+ *
  * If the string is already width or more characters, no padding is performed.
  * No strings are truncated.
  *
- * This equivalent to `pad(width,left,'0')` but is more optimized for this special case.
- *
- * Null string entries result in null entries in the output column.
+ * Null rows in the input result in corresponding null rows in the output column.
  *
  * @code{.pseudo}
  * Example:
- * s = ['1234','-9876','+0.34','-342567']
+ * s = ['1234','-9876','+0.34','-342567', '2+2']
  * r = zfill(s,6)
- * r is now ['001234','0-9876','0+0.34','-342567']
+ * r is now ['001234','-09876','+00.34','-342567', '0002+2']
  * @endcode
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation.
  * @param width The minimum number of characters for each string.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of strings.
  */
 std::unique_ptr<column> zfill(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   size_type width,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

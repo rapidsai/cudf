@@ -26,6 +26,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -80,6 +81,8 @@ void BM_FST_JSON(nvbench::state& state)
   // TODO: to be replaced by nvbench fixture once it's ready
   cudf::rmm_pool_raii rmm_pool;
 
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+               "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
@@ -116,6 +119,8 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
   // TODO: to be replaced by nvbench fixture once it's ready
   cudf::rmm_pool_raii rmm_pool;
 
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+               "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
@@ -152,6 +157,8 @@ void BM_FST_JSON_no_out(nvbench::state& state)
   // TODO: to be replaced by nvbench fixture once it's ready
   cudf::rmm_pool_raii rmm_pool;
 
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+               "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
@@ -186,6 +193,8 @@ void BM_FST_JSON_no_str(nvbench::state& state)
   // TODO: to be replaced by nvbench fixture once it's ready
   cudf::rmm_pool_raii rmm_pool;
 
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+               "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
@@ -218,18 +227,18 @@ void BM_FST_JSON_no_str(nvbench::state& state)
 
 NVBENCH_BENCH(BM_FST_JSON)
   .set_name("FST_JSON")
-  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
 NVBENCH_BENCH(BM_FST_JSON_no_outidx)
   .set_name("FST_JSON_no_outidx")
-  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
 NVBENCH_BENCH(BM_FST_JSON_no_out)
   .set_name("FST_JSON_no_out")
-  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
 NVBENCH_BENCH(BM_FST_JSON_no_str)
   .set_name("FST_JSON_no_str")
-  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
 }  // namespace cudf

@@ -55,6 +55,12 @@ using ::cudf::detail::device_2dspan;
 
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
+// do not truncate statistics
+constexpr int32_t NO_TRUNC_STATS = 0;
+
+// minimum scratch space required for encoding statistics
+constexpr size_t MIN_STATS_SCRATCH_SIZE = sizeof(__int128_t);
+
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
@@ -222,7 +228,8 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group* chunk_grstats,
                int32_t num_columns,
                size_t max_page_size_bytes,
-               size_type max_page_size_rows)
+               size_type max_page_size_rows,
+               uint32_t page_align)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -278,7 +285,8 @@ __global__ void __launch_bounds__(128)
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
-        page_offset += page_g.max_hdr_size + page_g.max_data_size;
+        page_offset +=
+          util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
         if (not comp_page_sizes.empty()) {
           comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
         }
@@ -354,7 +362,8 @@ __global__ void __launch_bounds__(128)
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+          page_g.max_hdr_size = util::round_up_unsafe(page_g.max_hdr_size, page_align);
+          page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
           }
@@ -378,7 +387,8 @@ __global__ void __launch_bounds__(128)
 
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
-          page_offset += page_g.max_hdr_size + page_g.max_data_size;
+          page_offset +=
+            util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
           if (not comp_page_sizes.empty()) {
             comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page + num_pages];
           }
@@ -416,7 +426,7 @@ __global__ void __launch_bounds__(128)
     __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
-        uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
+        uint32_t ck_stat_size = util::round_up_unsafe(48 + 2 * ck_max_stats_len, page_align);
         page_offset += ck_stat_size;
         comp_page_offset += ck_stat_size;
         ck_g.ck_stat_size = ck_stat_size;
@@ -860,7 +870,7 @@ __global__ void __launch_bounds__(128, 8)
   gpuEncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats)
+                 device_span<compression_result> comp_results)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1207,18 +1217,17 @@ __global__ void __launch_bounds__(128, 8)
     }
   }
   if (t == 0) {
-    uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
-    auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
-    uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
-    s->page.max_data_size        = actual_data_size;
+    uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
+    auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, compressed_bfr_size};
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // size is unused
     }
     pages[blockIdx.x] = s->page;
-    if (not comp_stats.empty()) {
-      comp_stats[blockIdx.x]      = {0, ~0u};
-      pages[blockIdx.x].comp_stat = &comp_stats[blockIdx.x];
+    if (not comp_results.empty()) {
+      comp_results[blockIdx.x]   = {0, compression_status::FAILURE};
+      pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
     }
   }
 }
@@ -1251,10 +1260,10 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
       auto& curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
-      if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
+      if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
         has_compression = true;
-        compressed_data_size += comp_status->bytes_written;
-        if (comp_status->status != 0) { atomicAdd(&error_count, 1); }
+        compressed_data_size += comp_res->bytes_written;
+        if (comp_res->status != compression_status::SUCCESS) { atomicAdd(&error_count, 1); }
       }
     }
     uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
@@ -1417,9 +1426,11 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
+namespace {
+
 // byteswap 128 bit integer, placing result in dst in network byte order.
 // dst must point to at least 16 bytes of memory.
-static __device__ void byte_reverse128(__int128_t v, void* dst)
+__device__ void byte_reverse128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   auto const d_char_ptr = static_cast<unsigned char*>(dst);
@@ -1429,50 +1440,222 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
                d_char_ptr);
 }
 
-__device__ void get_extremum(const statistics_val* stats_val,
-                             statistics_dtype dtype,
-                             void* scratch,
-                             const void** val,
-                             uint32_t* len)
+/**
+ * @brief Test to see if a span contains all valid UTF-8 characters.
+ *
+ * @param span device_span to test.
+ * @return true if the span contains all valid UTF-8 characters.
+ */
+__device__ bool is_valid_utf8(device_span<unsigned char const> span)
 {
-  uint8_t dtype_len;
+  auto idx = 0;
+  while (idx < span.size_bytes()) {
+    // UTF-8 character should start with valid beginning bit pattern
+    if (not strings::detail::is_valid_begin_utf8_char(span[idx])) { return false; }
+    // subsequent elements of the character should be continuation chars
+    auto const width = strings::detail::bytes_in_utf8_byte(span[idx++]);
+    for (size_type i = 1; i < width && idx < span.size_bytes(); i++, idx++) {
+      if (not strings::detail::is_utf8_continuation_char(span[idx])) { return false; }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @brief Increment part of a UTF-8 character.
+ *
+ * Attempt to increment the char pointed to by ptr, which is assumed to be part of a valid UTF-8
+ * character. Returns true if successful, false if the increment caused an overflow, in which case
+ * the data at ptr will be set to the lowest valid UTF-8 bit pattern (start or continuation).
+ * Will halt execution if passed invalid UTF-8.
+ */
+__device__ bool increment_utf8_at(unsigned char* ptr)
+{
+  unsigned char elem = *ptr;
+  // elem is one of (no 5 or 6 byte chars allowed):
+  //  0b0vvvvvvv a 1 byte character
+  //  0b10vvvvvv a continuation byte
+  //  0b110vvvvv start of a 2 byte characther
+  //  0b1110vvvv start of a 3 byte characther
+  //  0b11110vvv start of a 4 byte characther
+
+  // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
+  uint8_t mask  = 0xF8;
+  uint8_t valid = 0xF0;
+
+  while (mask != 0) {
+    if ((elem & mask) == valid) {
+      elem++;
+      if ((elem & mask) != mask) {  // no overflow
+        *ptr = elem;
+        return true;
+      }
+      *ptr = valid;
+      return false;
+    }
+    mask <<= 1;
+    valid <<= 1;
+  }
+
+  // should not reach here since we test for valid UTF-8 higher up the call chain
+  CUDF_UNREACHABLE("Trying to increment non-utf8");
+}
+
+/**
+ * @brief Attempt to truncate a span of UTF-8 characters to at most truncate_length_bytes.
+ *
+ * If is_min is false, then the final character (or characters if there is overflow) will be
+ * incremented so that the resultant UTF-8 will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the span cannot be
+ * truncated, leave it untouched and return the original length.
+ *
+ * @return Pair object containing a pointer to the truncated data and its length.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
+                                                          bool is_min,
+                                                          void* scratch,
+                                                          size_type truncate_length)
+{
+  // we know at this point that truncate_length < size_bytes, so
+  // there is data at [len]. work backwards until we find
+  // the start of a UTF-8 encoded character, since UTF-8 characters may be multi-byte.
+  auto len = truncate_length;
+  while (not strings::detail::is_begin_utf8_char(span[len]) && len > 0) {
+    len--;
+  }
+
+  if (len != 0) {
+    if (is_min) { return {span.data(), len}; }
+    memcpy(scratch, span.data(), len);
+    // increment last byte, working backwards if the byte overflows
+    auto const ptr = static_cast<unsigned char*>(scratch);
+    for (int32_t i = len - 1; i >= 0; i--) {
+      if (increment_utf8_at(&ptr[i])) {  // true if no overflow
+        return {scratch, len};
+      }
+    }
+    // cannot increment, so fall through
+  }
+
+  // couldn't truncate, return original value
+  return {span.data(), span.size_bytes()};
+}
+
+/**
+ * @brief Attempt to truncate a span of binary data to at most truncate_length bytes.
+ *
+ * If is_min is false, then the final byte (or bytes if there is overflow) will be
+ * incremented so that the resultant binary will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the span cannot be
+ * truncated, leave it untouched and return the original length.
+ *
+ * @return Pair object containing a pointer to the truncated data and its length.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+                                                            bool is_min,
+                                                            void* scratch,
+                                                            size_type truncate_length)
+{
+  if (is_min) { return {arr.data(), truncate_length}; }
+  memcpy(scratch, arr.data(), truncate_length);
+  // increment last byte, working backwards if the byte overflows
+  auto const ptr = static_cast<uint8_t*>(scratch);
+  for (int32_t i = truncate_length - 1; i >= 0; i--) {
+    ptr[i]++;
+    if (ptr[i] != 0) {  // no overflow
+      return {scratch, i + 1};
+    }
+  }
+
+  // couldn't truncate, return original value
+  return {arr.data(), arr.size_bytes()};
+}
+
+// TODO (ets): the assumption here is that string columns might have UTF-8 or plain binary,
+// while binary columns are assumed to be binary and will be treated as such.  If this assumption
+// is incorrect, then truncate_byte_array() and truncate_string() should just be combined into
+// a single function.
+/**
+ * @brief Attempt to truncate a UTF-8 string to at most truncate_length bytes.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
+                                                            bool is_min,
+                                                            void* scratch,
+                                                            size_type truncate_length)
+{
+  if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
+    return {str.data(), str.size_bytes()};
+  }
+
+  // convert char to unsigned since UTF-8 is just bytes, not chars.  can't use std::byte because
+  // that can't be incremented.
+  auto const span = device_span<unsigned char const>(
+    reinterpret_cast<unsigned char const*>(str.data()), str.size_bytes());
+
+  // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
+  if (str.size_bytes() != str.length() and is_valid_utf8(span.first(truncate_length))) {
+    return truncate_utf8(span, is_min, scratch, truncate_length);
+  }
+  return truncate_binary(span, is_min, scratch, truncate_length);
+}
+
+/**
+ * @brief Attempt to truncate a binary array to at most truncate_length bytes.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_byte_array(
+  const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
+{
+  if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
+    return {arr.data(), arr.size_bytes()};
+  }
+
+  // convert std::byte to uint8_t since bytes can't be incremented
+  device_span<uint8_t const> const span{reinterpret_cast<uint8_t const*>(arr.data()),
+                                        arr.size_bytes()};
+  return truncate_binary(span, is_min, scratch, truncate_length);
+}
+
+/**
+ * @brief Find a min or max value of the proper form to be included in Parquet statistics
+ * structures.
+ *
+ * Given a statistics_val union and a data type, perform any transformations needed to produce a
+ * valid min or max binary value.  String and byte array types will be truncated if they exceed
+ * truncate_length.
+ */
+__device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
+                                                         statistics_dtype dtype,
+                                                         void* scratch,
+                                                         bool is_min,
+                                                         size_type truncate_length)
+{
   switch (dtype) {
-    case dtype_bool: dtype_len = 1; break;
+    case dtype_bool: return {stats_val, sizeof(bool)};
     case dtype_int8:
     case dtype_int16:
     case dtype_int32:
-    case dtype_date32:
-    case dtype_float32: dtype_len = 4; break;
+    case dtype_date32: return {stats_val, sizeof(int32_t)};
+    case dtype_float32: {
+      auto const fp_scratch = static_cast<float*>(scratch);
+      fp_scratch[0]         = stats_val->fp_val;
+      return {scratch, sizeof(float)};
+    }
     case dtype_int64:
     case dtype_timestamp64:
     case dtype_float64:
-    case dtype_decimal64: dtype_len = 8; break;
-    case dtype_decimal128: dtype_len = 16; break;
-    case dtype_string:
-    case dtype_byte_array:
-    default: dtype_len = 0; break;
-  }
-
-  if (dtype == dtype_string) {
-    *len = stats_val->str_val.length;
-    *val = stats_val->str_val.ptr;
-  } else if (dtype == dtype_byte_array) {
-    *len = stats_val->byte_val.length;
-    *val = stats_val->byte_val.ptr;
-  } else {
-    *len = dtype_len;
-    if (dtype == dtype_float32) {  // Convert from double to float32
-      auto const fp_scratch = static_cast<float*>(scratch);
-      fp_scratch[0]         = stats_val->fp_val;
-      *val                  = scratch;
-    } else if (dtype == dtype_decimal128) {
+    case dtype_decimal64: return {stats_val, sizeof(int64_t)};
+    case dtype_decimal128:
       byte_reverse128(stats_val->d128_val, scratch);
-      *val = scratch;
-    } else {
-      *val = stats_val;
-    }
+      return {scratch, sizeof(__int128_t)};
+    case dtype_string: return truncate_string(stats_val->str_val, is_min, scratch, truncate_length);
+    case dtype_byte_array:
+      return truncate_byte_array(stats_val->byte_val, is_min, scratch, truncate_length);
+    default: CUDF_UNREACHABLE("Invalid statistics data type");
   }
 }
+
+}  // namespace
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
@@ -1483,13 +1666,12 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
-    const void *vmin, *vmax;
-    uint32_t lmin, lmax;
-
-    get_extremum(&s->max_value, dtype, scratch, &vmax, &lmax);
-    encoder.field_binary(5, vmax, lmax);
-    get_extremum(&s->min_value, dtype, scratch, &vmin, &lmin);
-    encoder.field_binary(6, vmin, lmin);
+    auto const [max_ptr, max_size] =
+      get_extremum(&s->max_value, dtype, scratch, false, NO_TRUNC_STATS);
+    encoder.field_binary(5, max_ptr, max_size);
+    auto const [min_ptr, min_size] =
+      get_extremum(&s->min_value, dtype, scratch, true, NO_TRUNC_STATS);
+    encoder.field_binary(6, min_ptr, min_size);
   }
   encoder.end(&end);
   return end;
@@ -1498,7 +1680,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stat,
+                       device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats)
 {
@@ -1506,7 +1688,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) unsigned char scratch[16];
+  __shared__ __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
 
   uint32_t t = threadIdx.x;
 
@@ -1527,7 +1709,7 @@ __global__ void __launch_bounds__(128)
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_stat[blockIdx.x].bytes_written;
+      compressed_page_size = (uint32_t)comp_results[blockIdx.x].bytes_written;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
@@ -1630,11 +1812,13 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
+namespace {
+
 /**
  * @brief Tests if statistics are comparable given the column's
  * physical and converted types
  */
-static __device__ bool is_comparable(Type ptype, ConvertedType ctype)
+__device__ bool is_comparable(Type ptype, ConvertedType ctype)
 {
   switch (ptype) {
     case Type::BOOLEAN:
@@ -1664,10 +1848,10 @@ constexpr __device__ int32_t compare(T& v1, T& v2)
  * @brief Compares two statistics_val structs.
  * @return < 0 if v1 < v2, 0 if v1 == v2, > 0 if v1 > v2
  */
-static __device__ int32_t compare_values(Type ptype,
-                                         ConvertedType ctype,
-                                         const statistics_val& v1,
-                                         const statistics_val& v2)
+__device__ int32_t compare_values(Type ptype,
+                                  ConvertedType ctype,
+                                  const statistics_val& v1,
+                                  const statistics_val& v2)
 {
   switch (ptype) {
     case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
@@ -1695,10 +1879,10 @@ static __device__ int32_t compare_values(Type ptype,
 /**
  * @brief Determine if a set of statstistics are in ascending order.
  */
-static __device__ bool is_ascending(const statistics_chunk* s,
-                                    Type ptype,
-                                    ConvertedType ctype,
-                                    uint32_t num_pages)
+__device__ bool is_ascending(const statistics_chunk* s,
+                             Type ptype,
+                             ConvertedType ctype,
+                             uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
@@ -1712,10 +1896,10 @@ static __device__ bool is_ascending(const statistics_chunk* s,
 /**
  * @brief Determine if a set of statstistics are in descending order.
  */
-static __device__ bool is_descending(const statistics_chunk* s,
-                                     Type ptype,
-                                     ConvertedType ctype,
-                                     uint32_t num_pages)
+__device__ bool is_descending(const statistics_chunk* s,
+                              Type ptype,
+                              ConvertedType ctype,
+                              uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
@@ -1729,10 +1913,10 @@ static __device__ bool is_descending(const statistics_chunk* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
-                                                   Type ptype,
-                                                   ConvertedType ctype,
-                                                   uint32_t num_pages)
+__device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+                                            Type ptype,
+                                            ConvertedType ctype,
+                                            uint32_t num_pages)
 {
   if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
   if (is_ascending(s, ptype, ctype, num_pages)) {
@@ -1743,15 +1927,24 @@ static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
   return BoundaryOrder::UNORDERED;
 }
 
+// align ptr to an 8-byte boundary. address returned will be <= ptr.
+constexpr __device__ void* align8(void* ptr)
+{
+  // it's ok to round down because we have an extra 7 bytes in the buffer
+  auto algn = 3 & reinterpret_cast<std::uintptr_t>(ptr);
+  return static_cast<char*>(ptr) - algn;
+}
+
+}  // namespace
+
 // blockDim(1, 1, 1)
 __global__ void __launch_bounds__(1)
   gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
-                         device_span<statistics_chunk const> column_stats)
+                         device_span<statistics_chunk const> column_stats,
+                         size_type column_index_truncate_length)
 {
-  const void *vmin, *vmax;
-  uint32_t lmin, lmax;
+  __align__(8) unsigned char s_scratch[MIN_STATS_SCRATCH_SIZE];
   uint8_t* col_idx_end;
-  unsigned char scratch[16];
 
   if (column_stats.empty()) { return; }
 
@@ -1763,6 +1956,14 @@ __global__ void __launch_bounds__(1)
 
   header_encoder encoder(ck_g->column_index_blob);
 
+  // make sure scratch is aligned properly. here column_index_size indicates
+  // how much scratch space is available for this chunk, including space for
+  // truncation scratch + padding for alignment.
+  void* scratch =
+    column_index_truncate_length < MIN_STATS_SCRATCH_SIZE
+      ? s_scratch
+      : align8(ck_g->column_index_blob + ck_g->column_index_size - column_index_truncate_length);
+
   // null_pages
   encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
@@ -1772,15 +1973,23 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page].min_value, col_g.stats_dtype, scratch, &vmin, &lmin);
-    encoder.put_binary(vmin, lmin);
+    auto const [min_ptr, min_size] = get_extremum(&column_stats[pageidx + page].min_value,
+                                                  col_g.stats_dtype,
+                                                  scratch,
+                                                  true,
+                                                  column_index_truncate_length);
+    encoder.put_binary(min_ptr, min_size);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page].max_value, col_g.stats_dtype, scratch, &vmax, &lmax);
-    encoder.put_binary(vmax, lmax);
+    auto const [max_ptr, max_size] = get_extremum(&column_stats[pageidx + page].max_value,
+                                                  col_g.stats_dtype,
+                                                  scratch,
+                                                  false,
+                                                  column_index_truncate_length);
+    encoder.put_binary(max_ptr, max_size);
   }
   encoder.field_list_end(3);
   // boundary_order
@@ -1797,6 +2006,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_end(5);
   encoder.end(&col_idx_end, false);
 
+  // now reset column_index_size to the actual size of the encoded column index blob
   ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
 }
 
@@ -1834,6 +2044,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
+                      uint32_t page_align,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
@@ -1849,19 +2060,21 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      chunk_grstats,
                                                      num_columns,
                                                      max_page_size_bytes,
-                                                     max_page_size_rows);
+                                                     max_page_size_rows,
+                                                     page_align);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats,
+                 device_span<compression_result> comp_results,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, comp_stats);
+  gpuEncodePages<128>
+    <<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, comp_results);
 }
 
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -1870,7 +2083,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stats,
+                       device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)
@@ -1878,7 +2091,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
   // threads to coop load structs
   gpuEncodePageHeaders<<<pages.size(), 128, 0, stream.value()>>>(
-    pages, comp_stats, page_stats, chunk_stats);
+    pages, comp_results, page_stats, chunk_stats);
 }
 
 void GatherPages(device_span<EncColumnChunk> chunks,
@@ -1890,9 +2103,11 @@ void GatherPages(device_span<EncColumnChunk> chunks,
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
+                         size_type column_index_truncate_length,
                          rmm::cuda_stream_view stream)
 {
-  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats);
+  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(
+    chunks, column_stats, column_index_truncate_length);
 }
 
 }  // namespace gpu

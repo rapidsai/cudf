@@ -233,7 +233,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], [["None"]],)[
+        return libcudf.interop.to_arrow([self], [("None", self.dtype)])[
             "None"
         ].chunk(0)
 
@@ -793,6 +793,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
         of given label.
+
         Parameters
         ----------
         label : Scalar
@@ -1027,7 +1028,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self) -> ColumnBase:
+    def unique(self, preserve_order=False) -> ColumnBase:
         """
         Get unique values in the data
         """
@@ -1036,6 +1037,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # Few things to note before we can do this optimization is
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
+        if preserve_order:
+            ind = as_column(cupy.arange(0, len(self)))
+
+            # dedup based on the column of data only
+            ind, col = drop_duplicates([ind, self], keys=[1])
+
+            # sort col based on ind
+            map = ind.argsort()
+            return col.take(map)
 
         return drop_duplicates([self], keep="first")[0]
 
@@ -1474,7 +1484,7 @@ def build_categorical_column(
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-    ordered: bool = None,
+    ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
@@ -1490,7 +1500,7 @@ def build_categorical_column(
         Null mask
     size : int, optional
     offset : int, optional
-    ordered : bool
+    ordered : bool, default False
         Indicates whether the categories are ordered
     """
     codes_dtype = min_unsigned_type(len(categories))

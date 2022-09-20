@@ -54,17 +54,25 @@ auto self_comparison(cudf::table_view input,
   rmm::cuda_stream_view stream{cudf::default_stream_value};
 
   auto const table_comparator = lexicographic::self_comparator{input, column_order, {}, stream};
-  auto const less_comparator  = table_comparator.less(cudf::nullate::NO{}, comparator);
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(input.num_rows()),
-                    thrust::make_counting_iterator(0),
-                    output->mutable_view().data<bool>(),
-                    less_comparator);
+  if (cudf::detail::has_nested_columns(input)) {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(input.num_rows()),
+                      thrust::make_counting_iterator(0),
+                      output->mutable_view().data<bool>(),
+                      table_comparator.less<true>(cudf::nullate::NO{}, comparator));
+  } else {
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(input.num_rows()),
+                      thrust::make_counting_iterator(0),
+                      output->mutable_view().data<bool>(),
+                      table_comparator.less<false>(cudf::nullate::NO{}, comparator));
+  }
   return output;
 }
 
@@ -78,19 +86,27 @@ auto two_table_comparison(cudf::table_view lhs,
 
   auto const table_comparator =
     lexicographic::two_table_comparator{lhs, rhs, column_order, {}, stream};
-  auto const less_comparator = table_comparator.less(cudf::nullate::NO{}, comparator);
-  auto const lhs_it          = cudf::experimental::row::lhs_iterator(0);
-  auto const rhs_it          = cudf::experimental::row::rhs_iterator(0);
+  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
+  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), lhs.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    lhs_it,
-                    lhs_it + lhs.num_rows(),
-                    rhs_it,
-                    output->mutable_view().data<bool>(),
-                    less_comparator);
+  if (cudf::detail::has_nested_columns(lhs) || cudf::detail::has_nested_columns(rhs)) {
+    thrust::transform(rmm::exec_policy(stream),
+                      lhs_it,
+                      lhs_it + lhs.num_rows(),
+                      rhs_it,
+                      output->mutable_view().data<bool>(),
+                      table_comparator.less<true>(cudf::nullate::NO{}, comparator));
+  } else {
+    thrust::transform(rmm::exec_policy(stream),
+                      lhs_it,
+                      lhs_it + lhs.num_rows(),
+                      rhs_it,
+                      output->mutable_view().data<bool>(),
+                      table_comparator.less<false>(cudf::nullate::NO{}, comparator));
+  }
   return output;
 }
 

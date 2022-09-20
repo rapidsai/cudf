@@ -298,9 +298,6 @@ class regex_parser {
     if (!is_quoted && chr == '^') {
       type                     = NCCLASS;
       std::tie(is_quoted, chr) = next_char();
-      // negated classes also don't match '\n'
-      literals.push_back('\n');
-      literals.push_back('\n');
     }
 
     // parse class into a set of spans
@@ -354,12 +351,25 @@ class regex_parser {
         }
       }
       if (!is_quoted && chr == ']' && count_char > 1) { break; }  // done
-      if (!is_quoted && chr == '-') {
-        if (literals.empty()) { return 0; }  // malformed '[]'
-        std::tie(is_quoted, chr) = next_char();
-        if ((!is_quoted && chr == ']') || chr == 0) { return 0; }  // malformed '[]'
-        literals.back() = chr;
+
+      // A hyphen '-' here signifies a range of characters in a '[]' class definition.
+      // The logic here also gracefully handles a dangling '-' appearing unquoted
+      // at the beginning '[-x]' or at the end '[x-]' or by itself '[-]'
+      // and treats the '-' as a literal value in this cclass in this case.
+      if (!is_quoted && chr == '-' && !literals.empty()) {
+        auto [q, n_chr] = next_char();
+        if (n_chr == 0) { return 0; }  // malformed: '[x-'
+
+        if (!q && n_chr == ']') {  // handles: '[x-]'
+          literals.push_back(chr);
+          literals.push_back(chr);  // add '-' as literal
+          break;
+        }
+        // normal case: '[a-z]'
+        // update end-range character
+        literals.back() = n_chr;
       } else {
+        // add single literal
         literals.push_back(chr);
         literals.push_back(chr);
       }
@@ -546,6 +556,9 @@ class regex_parser {
     // are treated as regex expressions and sometimes they are not.
     if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
 
+    // handle alternation instruction
+    if (chr == '|') return OR;
+
     // Check that the previous item can be used with quantifiers.
     // If the previous item is a capture group, we need to check items inside the
     // capture group can be used with quantifiers too.
@@ -666,7 +679,6 @@ class regex_parser {
         // otherwise, fixed counted quantifier
         return COUNTED;
       }
-      case '|': return OR;
     }
     _chr = chr;
     return CHAR;

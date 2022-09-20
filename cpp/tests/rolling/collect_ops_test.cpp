@@ -2275,10 +2275,23 @@ TEST_F(CollectSetTest, ListTypeRollingWindow)
   auto const prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 2, 2};
   auto const foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 0};
 
-  EXPECT_THROW(rolling_collect_set(input_column,
-                                   prev_column,
-                                   foll_column,
-                                   1,
-                                   *make_collect_set_aggregation<rolling_aggregation>()),
-               cudf::logic_error);
+  auto const expected = [] {
+    auto data = fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 1, 2, 3, 4,  5, 6, 4, 5,
+                                                    6, 7, 8, 9, 6, 7, 8, 9, 10, 7, 8, 9, 10};
+    auto inner_offsets =
+      fixed_width_column_wrapper<int32_t>{0, 3, 5, 8, 10, 11, 13, 14, 17, 18, 21, 22, 25, 26};
+    auto outer_offsets = fixed_width_column_wrapper<size_type>{0, 2, 5, 8, 11, 13};
+
+    auto inner_list = cudf::make_lists_column(13, inner_offsets.release(), data.release(), 0, {});
+
+    return cudf::make_lists_column(5, outer_offsets.release(), std::move(inner_list), 0, {});
+  }();
+
+  auto const result = rolling_collect_set(input_column,
+                                          prev_column,
+                                          foll_column,
+                                          1,
+                                          *make_collect_set_aggregation<rolling_aggregation>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
 }
