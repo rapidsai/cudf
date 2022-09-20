@@ -1558,7 +1558,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // Range of orchastrating/encapsulating function
+  // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
 
   auto make_validity =
