@@ -9549,3 +9549,23 @@ def test_non_string_column_name_to_arrow(data):
     actual = pa.Table.from_pandas(df.to_pandas())
 
     assert expected.equals(actual)
+
+
+def test_complex_types_from_arrow():
+
+    expected = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3]),
+            pa.array([10, 20, 30]),
+            pa.array([{"a": 9}, {"b": 10}, {"c": 11}]),
+            pa.array([[{"a": 1}], [{"b": 2}], [{"c": 3}]]),
+            pa.array([10, 11, 12]).cast(pa.decimal128(21, 2)),
+            pa.array([{"a": 9}, {"b": 10, "c": {"g": 43}}, {"c": {"a": 10}}]),
+        ],
+        names=["a", "b", "c", "d", "e", "f"],
+    )
+
+    df = cudf.DataFrame.from_arrow(expected)
+    actual = df.to_arrow()
+
+    assert expected.equals(actual)
