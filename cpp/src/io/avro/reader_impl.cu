@@ -43,6 +43,7 @@
 
 #include <nvcomp/snappy.h>
 
+#include <algorithm>
 #include <memory>
 #include <numeric>
 #include <string>
