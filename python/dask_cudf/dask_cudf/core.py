@@ -328,11 +328,28 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().repartition(*args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
-    def shuffle(self, *args, **kwargs):
+    def shuffle(self, *args, shuffle="tasks", **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
+        if (
+            shuffle == "explicit-comms"
+            or dask.config.get("explicit-comms", False)
+        ) and (kwargs.get("npartitions", self.npartitions) > self.npartitions):
+            # Explicit-comms shuffle handles `npartitions` kwarg
+            # better than upstream `dd.shuffle` (repartitions on worker)
+            try:
+                from dask_cuda.explicit_comms.dataframe.shuffle import (
+                    shuffle as ec_shuffle,
+                )
+
+                return ec_shuffle(self, *args, **kwargs)
+            except ImportError:
+                pass
+
+        # Use upstream shuffle
         return _shuffle_context(
             super().shuffle,
             *args,
+            shuffle=shuffle,
             **kwargs,
         )
 
