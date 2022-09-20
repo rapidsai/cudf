@@ -71,7 +71,7 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
                                      mr);
   if (input.is_empty()) { return results; }
 
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
 
   auto d_results       = results->mutable_view().data<bool>();
   auto const d_strings = column_device_view::create(input.parent(), stream);
@@ -114,7 +114,7 @@ std::unique_ptr<column> count_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 

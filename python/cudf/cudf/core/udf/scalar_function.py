@@ -4,12 +4,12 @@ from numba import cuda
 from numba.np import numpy_support
 
 from cudf.core.udf.api import Masked, pack_return
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.templates import (
     masked_input_initializer_template,
     scalar_kernel_template,
     unmasked_input_initializer_template,
 )
-from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     _construct_signature,
     _get_kernel,
