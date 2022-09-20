@@ -542,7 +542,7 @@ cdef class Column:
                     exposed=False
                 )
             elif (
-                # This is an optimizaion to avoid creating a new
+                # This is an optimization to avoid creating a new
                 # SpillableBuffer that represent the same memory
                 # as the owner.
                 column_owner and
