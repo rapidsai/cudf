@@ -9,7 +9,6 @@ repos:
                 # project can specify its own first/third-party packages.
                 args: ["--config-root=python/", "--resolve-all-configs"]
                 files: python/.*
-                exclude: (__init__.py|setup.py)$
                 types_or: [python, cython, pyi]
       - repo: https://github.com/psf/black
         rev: 22.3.0
@@ -45,9 +44,8 @@ repos:
         rev: v11.1.0
         hooks:
               - id: clang-format
-                files: \.(cu|cuh|h|hpp|cpp|inl)$
-                types_or: [file]
-                args: ['-fallback-style=none', '-style=file', '-i']
+                types_or: [c, c++, cuda]
+                args: ["-fallback-style=none", "-style=file", "-i"]
       - repo: local
         hooks:
               - id: no-deprecationwarning

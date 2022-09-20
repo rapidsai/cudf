@@ -41,8 +41,8 @@ function(find_and_configure_thrust VERSION)
     CPM_ARGS
     GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
     GIT_TAG ${VERSION}
-    GIT_SHALLOW TRUE ${cpm_thrust_disconnect_update} PATCH_COMMAND patch --reject-file=- -p1 -N <
-                ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true
+    GIT_SHALLOW TRUE ${cpm_thrust_disconnect_update}
+    PATCH_COMMAND patch --reject-file=- -p1 -N < ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true
     OPTIONS "THRUST_INSTALL TRUE"
   )
 
@@ -80,6 +80,6 @@ function(find_and_configure_thrust VERSION)
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_Thrust 1.17.0)
+set(CUDF_MIN_VERSION_Thrust 1.17.2)
 
 find_and_configure_thrust(${CUDF_MIN_VERSION_Thrust})

@@ -23,6 +23,7 @@ import pyarrow as pa
 from numba import cuda
 
 import cudf
+import cudf.api.types
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
@@ -58,47 +59,47 @@ if TYPE_CHECKING:
 
 
 _str_to_numeric_typecast_functions = {
-    cudf.dtype("int8"): str_cast.stoi8,
-    cudf.dtype("int16"): str_cast.stoi16,
-    cudf.dtype("int32"): str_cast.stoi,
-    cudf.dtype("int64"): str_cast.stol,
-    cudf.dtype("uint8"): str_cast.stoui8,
-    cudf.dtype("uint16"): str_cast.stoui16,
-    cudf.dtype("uint32"): str_cast.stoui,
-    cudf.dtype("uint64"): str_cast.stoul,
-    cudf.dtype("float32"): str_cast.stof,
-    cudf.dtype("float64"): str_cast.stod,
-    cudf.dtype("bool"): str_to_boolean,
+    cudf.api.types.dtype("int8"): str_cast.stoi8,
+    cudf.api.types.dtype("int16"): str_cast.stoi16,
+    cudf.api.types.dtype("int32"): str_cast.stoi,
+    cudf.api.types.dtype("int64"): str_cast.stol,
+    cudf.api.types.dtype("uint8"): str_cast.stoui8,
+    cudf.api.types.dtype("uint16"): str_cast.stoui16,
+    cudf.api.types.dtype("uint32"): str_cast.stoui,
+    cudf.api.types.dtype("uint64"): str_cast.stoul,
+    cudf.api.types.dtype("float32"): str_cast.stof,
+    cudf.api.types.dtype("float64"): str_cast.stod,
+    cudf.api.types.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
-    cudf.dtype("int8"): str_cast.i8tos,
-    cudf.dtype("int16"): str_cast.i16tos,
-    cudf.dtype("int32"): str_cast.itos,
-    cudf.dtype("int64"): str_cast.ltos,
-    cudf.dtype("uint8"): str_cast.ui8tos,
-    cudf.dtype("uint16"): str_cast.ui16tos,
-    cudf.dtype("uint32"): str_cast.uitos,
-    cudf.dtype("uint64"): str_cast.ultos,
-    cudf.dtype("float32"): str_cast.ftos,
-    cudf.dtype("float64"): str_cast.dtos,
-    cudf.dtype("bool"): str_cast.from_booleans,
+    cudf.api.types.dtype("int8"): str_cast.i8tos,
+    cudf.api.types.dtype("int16"): str_cast.i16tos,
+    cudf.api.types.dtype("int32"): str_cast.itos,
+    cudf.api.types.dtype("int64"): str_cast.ltos,
+    cudf.api.types.dtype("uint8"): str_cast.ui8tos,
+    cudf.api.types.dtype("uint16"): str_cast.ui16tos,
+    cudf.api.types.dtype("uint32"): str_cast.uitos,
+    cudf.api.types.dtype("uint64"): str_cast.ultos,
+    cudf.api.types.dtype("float32"): str_cast.ftos,
+    cudf.api.types.dtype("float64"): str_cast.dtos,
+    cudf.api.types.dtype("bool"): str_cast.from_booleans,
 }
 
 _datetime_to_str_typecast_functions = {
     # TODO: support Date32 UNIX days
-    # cudf.dtype("datetime64[D]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[s]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[ms]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[us]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    # cudf.api.types.dtype("datetime64[D]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[s]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[us]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 _timedelta_to_str_typecast_functions = {
-    cudf.dtype("timedelta64[s]"): str_cast.int2timedelta,
-    cudf.dtype("timedelta64[ms]"): str_cast.int2timedelta,
-    cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
-    cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -5146,7 +5147,7 @@ class StringColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        dtype = cudf.dtype("object")
+        dtype = cudf.api.types.dtype("object")
 
         if size is None:
             for child in children:
@@ -5304,7 +5305,7 @@ class StringColumn(column.ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.api.types.dtype(dtype)
         string_col = self
         if out_dtype.kind in {"i", "u"}:
             if not libstrings.is_integer(string_col).all():
@@ -5346,7 +5347,7 @@ class StringColumn(column.ColumnBase):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.api.types.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
@@ -5370,7 +5371,7 @@ class StringColumn(column.ColumnBase):
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.api.types.dtype(dtype)
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
@@ -5412,7 +5413,7 @@ class StringColumn(column.ColumnBase):
         return pd_series
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = cudf.dtype(to_dtype)
+        to_dtype = cudf.api.types.dtype(to_dtype)
 
         if self.dtype == to_dtype:
             return True
@@ -5585,7 +5586,7 @@ class StringColumn(column.ColumnBase):
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = cudf.dtype(dtype)
+        dtype = cudf.api.types.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size
