@@ -416,16 +416,6 @@ def test_write_parquet(s3_base, s3so, pdf, partition_cols):
 def test_read_json(s3_base, s3so):
     fname = "test_json_reader.json"
     bucket = "json"
-    # TODO: After following bug is fixed switch
-    # back to using bytes:
-    # https://github.com/pandas-dev/pandas/issues/46935
-
-    # buffer = (
-    #     b'{"amount": 100, "name": "Alice"}\n'
-    #     b'{"amount": 200, "name": "Bob"}\n'
-    #     b'{"amount": 300, "name": "Charlie"}\n'
-    #     b'{"amount": 400, "name": "Dennis"}\n'
-    # )
     buffer = (
         '{"amount": 100, "name": "Alice"}\n'
         '{"amount": 200, "name": "Bob"}\n'
