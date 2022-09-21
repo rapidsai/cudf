@@ -3955,6 +3955,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
+        Support for use of string data within UDFs is provided through the
+        ``strings_udf`` rapids library. Supported operations on strings include
+        the subset of functions and string methods that expect an input string
+        but do not return a string. Refer to caveats in the ``guide-to-udfs``
+        notebook referenced above.
+
         Parameters
         ----------
         func : function
@@ -4078,6 +4084,44 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1     4.8
         2     5.0
         dtype: float64
+
+        String data is allowed, so long as its use does not modify or create
+        a new string. The following UDF is allowed:
+
+        >>> def f(row):
+        ...     st = row['str_col']
+        ...     scale = row['scale']
+        ...     if len(st) == 0:
+        ...             return -1
+        ...     elif st.startswith('a'):
+        ...             return 1 - scale
+        ...     elif 'example' in st:
+        ...             return 1 + scale
+        ...     else:
+        ...             return 42
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'str_col': ['', 'abc', 'some_example'],
+        ...     'scale': [1, 2, 3]
+        ... })
+        >>> df.apply(f, axis=1)
+        0   -1
+        1   -1
+        2    4
+        dtype: int64
+
+        However the following UDF is not allowed, because it includes an
+        operation that requires the creation of a new string, namely the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
+
+        >>> def f(row):
+        ...     st = row['str_col'].upper()
+        ...     return 'ABC' in st
+        >>> df.apply(f, axis=1) # AttributeError
+
+        For a complete list of supported functions and methods that may be used
+        to manipulate string data, see the ``guide-to-udfs`` IPython notebook.
         """
         if axis != 1:
             raise ValueError(
