@@ -14,36 +14,39 @@
  * limitations under the License.
  */
 
-#include "cudf/column/column_factories.hpp"
-#include "cudf/detail/null_mask.hpp"
-#include "cudf/strings/strings_column_view.hpp"
-#include "cudf/types.hpp"
-#include "cudf/utilities/error.hpp"
-// #include "cudf_test/column_utilities.hpp"
 #include "nested_json.hpp"
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_inference.cuh>
 
-#include <algorithm>
-#include <cstdint>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/data_casting.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include "thrust/count.h"
-#include "thrust/for_each.h"
-#include "thrust/functional.h"
-#include "thrust/iterator/counting_iterator.h"
-#include "thrust/iterator/permutation_iterator.h"
-#include "thrust/iterator/zip_iterator.h"
-#include "thrust/transform.h"
+#include <thrust/count.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 #include <thrust/unique.h>
+
+#include <algorithm>
+#include <cstdint>
 
 namespace cudf::io::json {
 namespace detail {
@@ -155,10 +158,7 @@ gather_column_info(tree_meta_t& tree,
       else
         return NC_ERR;
     });
-  // TODO: copy Field col_id names to host? Also retain order of Field names.
-  // TODO: stable_order for col_id to retain first field name.
-  // TODO: parent_col_id as well.
-  rmm::device_uvector<TreeDepthT> column_levels(num_columns, stream);
+  rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
   rmm::device_uvector<SymbolOffsetT> col_range_begin(num_columns, stream);  // Field names
   rmm::device_uvector<SymbolOffsetT> col_range_end(num_columns, stream);
@@ -168,12 +168,13 @@ gather_column_info(tree_meta_t& tree,
     col_ids.end(),
     thrust::make_zip_iterator(
       thrust::make_permutation_iterator(tree.parent_node_ids.begin(), node_ids.begin()),
-      thrust::make_permutation_iterator(tree.node_levels.begin(), node_ids.begin()),
+      // thrust::make_permutation_iterator(tree.node_levels.begin(), node_ids.begin()), // FIXME:
+      // not required
       thrust::make_permutation_iterator(tree.node_range_begin.begin(), node_ids.begin()),
       thrust::make_permutation_iterator(tree.node_range_end.begin(), node_ids.begin())),
     thrust::make_discard_iterator(),
     thrust::make_zip_iterator(parent_col_ids.begin(),
-                              column_levels.begin(),
+                              // column_levels.begin(),
                               col_range_begin.begin(),
                               col_range_end.begin()));
   // Restore the order
@@ -255,11 +256,9 @@ void make_json_column2(device_span<SymbolT const> input,
     cudf::detail::make_std_vector_async(d_column_tree.node_categories, stream);
   auto column_parent_ids =
     cudf::detail::make_std_vector_async(d_column_tree.parent_node_ids, stream);
-  auto column_levels = cudf::detail::make_std_vector_async(d_column_tree.node_levels, stream);
   auto column_range_beg =
     cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
-  auto column_range_end = cudf::detail::make_std_vector_async(d_column_tree.node_range_end, stream);
-  auto max_row_offsets  = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
+  auto max_row_offsets = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
   thrust::host_vector<std::string> column_names =
     [input,
      stream,
@@ -709,17 +708,6 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
 
 #ifdef NJP_DEBUG_PRINT
   printf("records_orient_tree_traversal:\n");
-  print_tree(input, gpu_tree, stream);
-  print_vec(cudf::detail::make_std_vector_async(gpu_col_id, stream), "gpu_col_id", to_int);
-  print_vec(
-    cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
-#endif
-
-  auto [unique_col_ids, col_tree, max_row_offsets] =
-    gather_column_info(gpu_tree, gpu_col_id, gpu_row_offsets, stream);
-
-#ifdef NJP_DEBUG_PRINT
-  printf("gather_column_info:\n");
   print_tree(input, gpu_tree, stream);
   print_vec(cudf::detail::make_std_vector_async(gpu_col_id, stream), "gpu_col_id", to_int);
   print_vec(
