@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-#include <cstdio>
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
-#include <stdlib.h>
 
 // clang-format off
 /*
