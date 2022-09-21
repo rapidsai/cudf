@@ -1571,9 +1571,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   };
 
   auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
-    if (schema.has_value() &&
-        (schema.value().child_types.find(child_name) != std::end(schema.value().child_types))) {
-      return schema.value().child_types.find(child_name)->second;
+    if (schema.has_value()) {
+      auto const result = schema.value().child_types.find(child_name);
+      if (result != std::end(schema.value().child_types)) { return result->second; }
     }
     return {};
   };
