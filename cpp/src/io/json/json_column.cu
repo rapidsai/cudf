@@ -51,7 +51,6 @@
 namespace cudf::io::json {
 namespace detail {
 
-#define NJP_DEBUG_PRINT 1
 // DEBUG prints
 auto to_cat = [](auto v) -> std::string {
   switch (v) {
