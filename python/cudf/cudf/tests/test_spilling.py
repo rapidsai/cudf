@@ -19,6 +19,7 @@ from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.spill_manager import (
     SpillManager,
     get_columns,
+    get_rmm_memory_resource_stack,
     global_manager,
     mark_columns_as_read_only_inplace,
 )
@@ -481,3 +482,26 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
     assert_eq(df1, df2)
+
+
+def test_get_rmm_memory_resource_stack():
+    mr1 = rmm.mr.get_current_device_resource()
+    assert all(
+        not isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
+        for m in get_rmm_memory_resource_stack(mr1)
+    )
+
+    mr2 = rmm.mr.FailureCallbackResourceAdaptor(mr1, lambda x: False)
+    assert get_rmm_memory_resource_stack(mr2)[0] is mr2
+    assert get_rmm_memory_resource_stack(mr2)[1] is mr1
+
+    mr3 = rmm.mr.FixedSizeMemoryResource(mr2)
+    assert get_rmm_memory_resource_stack(mr3)[0] is mr3
+    assert get_rmm_memory_resource_stack(mr3)[1] is mr2
+    assert get_rmm_memory_resource_stack(mr3)[2] is mr1
+
+    mr4 = rmm.mr.FailureCallbackResourceAdaptor(mr3, lambda x: False)
+    assert get_rmm_memory_resource_stack(mr4)[0] is mr4
+    assert get_rmm_memory_resource_stack(mr4)[1] is mr3
+    assert get_rmm_memory_resource_stack(mr4)[2] is mr2
+    assert get_rmm_memory_resource_stack(mr4)[3] is mr1

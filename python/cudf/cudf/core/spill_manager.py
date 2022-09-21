@@ -31,6 +31,14 @@ def get_traceback() -> str:
         return f.read()
 
 
+def get_rmm_memory_resource_stack(
+    mr: rmm.mr.DeviceMemoryResource,
+) -> List[rmm.mr.DeviceMemoryResource]:
+    if hasattr(mr, "upstream_mr"):
+        return [mr] + get_rmm_memory_resource_stack(mr.upstream_mr)
+    return [mr]
+
+
 @dataclass
 class ExposeStatistic:
     traceback: str
@@ -62,8 +70,6 @@ class SpillManager:
         self._expose_statistics = {} if expose_statistics else None
 
     def register_spill_on_demand(self):
-        # TODO: check if a `FailureCallbackResourceAdaptor` has been
-        #       registered already
         def oom(nbytes: int, *, retry_on_error=True) -> bool:
             """Try to handle an out-of-memory error by spilling
 
@@ -100,9 +106,15 @@ class SpillManager:
 
             return False  # Since we didn't find anything to spill, we give up
 
-        current_mr = rmm.mr.get_current_device_resource()
-        mr = rmm.mr.FailureCallbackResourceAdaptor(current_mr, oom)
-        rmm.mr.set_current_device_resource(mr)
+        # Set the oom handle if not already set
+        mr = rmm.mr.get_current_device_resource()
+        if all(
+            not isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
+            for m in get_rmm_memory_resource_stack(mr)
+        ):
+            rmm.mr.set_current_device_resource(
+                rmm.mr.FailureCallbackResourceAdaptor(mr, oom)
+            )
 
     def add(self, buffer: SpillableBuffer) -> None:
         if buffer.size > 0 and not buffer.exposed:
