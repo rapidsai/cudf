@@ -1634,6 +1634,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                                   mr);
 
       // Reset nullable if we do not have nulls
+      // This is to match the existing JSON reader's behaviour:
+      // - Non-string columns will always be returned as nullable
+      // - String columns will be returned as nullable, iff there's at least one null entry
       if (target_type.id() == type_id::STRING and col->null_count() == 0) {
         col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
       }
