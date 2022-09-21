@@ -7,6 +7,7 @@ import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import as_device_buffer_like
+from cudf.core.spillable_buffer import SpillLock
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -27,7 +28,6 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 from cudf._lib.expressions cimport Expression
-from cudf._lib.spillable_buffer cimport SpillLock
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
@@ -77,7 +77,7 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
 
 
 def nans_to_nulls(Column input):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef pair[unique_ptr[device_buffer], size_type] c_output
     cdef unique_ptr[device_buffer] c_buffer

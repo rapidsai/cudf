@@ -10,6 +10,7 @@ import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.spillable_buffer import SpillableBuffer, SpillLock
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -30,7 +31,6 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
 )
-from cudf._lib.spillable_buffer cimport SpillableBuffer
 
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
@@ -342,7 +342,7 @@ cdef class Column:
             return other_col
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        cdef SpillLock slock = SpillLock()
+        slock = SpillLock()
         return self._view(libcudf_types.UNKNOWN_NULL_COUNT, slock).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
@@ -390,7 +390,7 @@ cdef class Column:
             offset,
             children)
 
-    cdef column_view view(self, SpillLock spill_lock=None) except *:
+    cdef column_view view(self, spill_lock=None) except *:
         null_count = self.null_count
         if null_count is None:
             null_count = libcudf_types.UNKNOWN_NULL_COUNT
@@ -400,7 +400,7 @@ cdef class Column:
     cdef column_view _view(
         self,
         libcudf_types.size_type null_count,
-        SpillLock spill_lock
+        spill_lock
     ) except *:
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
@@ -416,9 +416,9 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):
-            data = <void*><uintptr_t>(
-                <SpillableBuffer>col.base_data
-            ).get_ptr(spill_lock=spill_lock)
+            data = <void*><uintptr_t>(col.base_data).get_ptr(
+                spill_lock=spill_lock
+            )
         else:
             data = <void*><uintptr_t>(col.base_data.ptr)
 
@@ -542,12 +542,18 @@ cdef class Column:
                     exposed=False
                 )
             elif (
+                # This is an optimization to avoid creating a new
+                # SpillableBuffer that represent the same memory
+                # as the owner.
                 column_owner and
-                data_owner._ptr == data_ptr and
+                isinstance(data_owner, SpillableBuffer) and
+                # We have to make sure that `data_owner` is already spill
+                # locked and that its pointer is the same as `data_ptr`
+                # _without_ exposing the buffer permanently.
+                not data_owner.spillable and
+                data_owner.get_ptr(spill_lock=SpillLock()) == data_ptr and
                 data_owner.size == base_nbytes
             ):
-                # No need to create a new Buffer that represent
-                # the same memory as the owner.
                 data = data_owner
             else:
                 data = Buffer(
@@ -556,11 +562,11 @@ cdef class Column:
                     owner=data_owner
                 )
                 if isinstance(data_owner, SpillableBuffer):
-                    # To prevent data_owner getting spilled, we attach an
-                    # SpillLock to data. This will make sure that data_owner
-                    # is unspillable as long as data is alive.
-                    data.spill_lock = SpillLock()
-                    data_owner.get_ptr(spill_lock=data.spill_lock)
+                    # To prevent data_owner getting spilled, we access its
+                    # pointer, which will mark is unspillable permanently.
+                    # Notice, this is a rare case only encountered in the
+                    # `test_onehot.py` test.
+                    data_owner.ptr
         else:
             data = as_device_buffer_like(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0), exposed=False

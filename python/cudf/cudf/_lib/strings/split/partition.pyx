@@ -4,6 +4,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
+from cudf.core.spillable_buffer import SpillLock
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -16,7 +18,6 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.spillable_buffer cimport SpillLock
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
@@ -29,7 +30,7 @@ def partition(Column source_strings, object py_delimiter):
     cdef DeviceScalar delimiter = py_delimiter.device_value
 
     cdef unique_ptr[table] c_result
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view source_view = source_strings.view(slock)
     cdef const string_scalar* scalar_str = <const string_scalar*>(
         delimiter.get_raw_ptr()
@@ -53,7 +54,7 @@ def rpartition(Column source_strings, object py_delimiter):
     cdef DeviceScalar delimiter = py_delimiter.device_value
 
     cdef unique_ptr[table] c_result
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view source_view = source_strings.view(slock)
     cdef const string_scalar* scalar_str = <const string_scalar*>(
         delimiter.get_raw_ptr()

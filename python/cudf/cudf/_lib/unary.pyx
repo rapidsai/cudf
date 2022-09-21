@@ -26,7 +26,7 @@ from cudf._lib.column import (
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.unary cimport unary_operator, underlying_type_t_unary_op
-from cudf._lib.spillable_buffer cimport SpillLock
+from cudf.core.spillable_buffer import SpillLock
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
 
@@ -56,7 +56,7 @@ class UnaryOp(IntEnum):
 
 
 def unary_operation(Column input, object op):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef unary_operator c_op = <unary_operator>(
         <underlying_type_t_unary_op> op
@@ -72,7 +72,7 @@ def unary_operation(Column input, object op):
 
 
 def is_null(Column input):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
@@ -83,7 +83,7 @@ def is_null(Column input):
 
 
 def is_valid(Column input):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
@@ -94,7 +94,7 @@ def is_valid(Column input):
 
 
 def cast(Column input, object dtype=np.float64):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef data_type c_dtype = dtype_to_data_type(dtype)
 
@@ -110,7 +110,7 @@ def cast(Column input, object dtype=np.float64):
 
 
 def is_nan(Column input):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 
@@ -121,7 +121,7 @@ def is_nan(Column input):
 
 
 def is_non_nan(Column input):
-    cdef SpillLock slock = SpillLock()
+    slock = SpillLock()
     cdef column_view c_input = input.view(slock)
     cdef unique_ptr[column] c_result
 

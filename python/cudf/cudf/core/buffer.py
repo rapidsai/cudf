@@ -38,9 +38,7 @@ class _ProtocolMeta(Protocol.__class__):  # type: ignore
     """
 
     def __instancecheck__(cls, instance):
-        from cudf._lib.spillable_buffer import SpillableBuffer
-
-        if isinstance(instance, (Buffer, SpillableBuffer)):
+        if isinstance(instance, Buffer):
             return True
         return super().__instancecheck__(instance)
 
@@ -140,8 +138,8 @@ def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
         A device-buffer-like instance that represents the device memory
         of `obj`.
     """
-    from cudf._lib.spillable_buffer import SpillableBuffer
     from cudf.core.spill_manager import global_manager
+    from cudf.core.spillable_buffer import SpillableBuffer
 
     if isinstance(obj, DeviceBufferLike):
         return obj
@@ -225,6 +223,15 @@ class Buffer(Serializable):
         if global_manager.enabled:
             global_manager.get().add_other(self)
 
+    def _getitem(self, offset: int, size: int) -> Buffer:
+        """
+        Sub-classes can overwrite this to implement __getitem__
+        without having to handle non-slice inputs.
+        """
+        return self.__class__(
+            data=self.ptr + offset, size=size, owner=self.owner
+        )
+
     def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
             raise TypeError(
@@ -234,9 +241,7 @@ class Buffer(Serializable):
         start, stop, step = key.indices(self.size)
         if step != 1:
             raise ValueError("slice must be C-contiguous")
-        return self.__class__(
-            data=self.ptr + start, size=stop - start, owner=self.owner
-        )
+        return self._getitem(offset=start, size=stop - start)
 
     @property
     def size(self) -> int:

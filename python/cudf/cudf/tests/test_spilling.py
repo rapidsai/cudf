@@ -3,7 +3,9 @@
 
 import gc
 import warnings
+from typing import Tuple
 
+import cupy
 import numpy as np
 import pandas
 import pandas.testing
@@ -12,15 +14,16 @@ import pytest
 import rmm
 
 import cudf
-from cudf._lib.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.spill_manager import (
     SpillManager,
     get_columns,
+    get_rmm_memory_resource_stack,
     global_manager,
     mark_columns_as_read_only_inplace,
 )
+from cudf.core.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.testing._utils import assert_eq
 
 
@@ -35,6 +38,15 @@ gen_df.buffer = lambda df: df._data._data["a"].data
 gen_df.is_spilled = lambda df: gen_df.buffer(df).is_spilled
 gen_df.is_spillable = lambda df: gen_df.buffer(df).spillable
 gen_df.buffer_size = gen_df.buffer(gen_df()).size
+
+
+def spilled_and_unspilled(manager: SpillManager) -> Tuple[int, int]:
+    """Get bytes spilled and unspilled known by the manager"""
+    spilled = sum(buf.size for buf in manager.base_buffers() if buf.is_spilled)
+    unspilled = sum(
+        buf.size for buf in manager.base_buffers() if not buf.is_spilled
+    )
+    return spilled, unspilled
 
 
 @pytest.fixture
@@ -74,6 +86,32 @@ def test_spillable_buffer(manager: SpillManager):
     assert not buf.spillable
 
 
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        "ptr",
+        "get_ptr",
+        "memoryview",
+        "is_spilled",
+        "exposed",
+        "spillable",
+        "spill_lock",
+        "__spill__",
+    ],
+)
+def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
+    base = SpillableBuffer(
+        data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+    )
+    view = base[:]
+    attr_base = getattr(base, attribute)
+    attr_view = getattr(view, attribute)
+    if callable(attr_view):
+        pass
+    else:
+        assert attr_base == attr_view
+
+
 def test_from_pandas(manager: SpillManager):
     pdf1 = pandas.DataFrame({"x": [1, 2, 3]})
     df = cudf.from_pandas(pdf1)
@@ -97,7 +135,7 @@ def test_spillable_df_groupby(manager: SpillManager):
     gb = df.groupby("x")
     # `gb` holds a reference to the device memory, which makes
     # the buffer unspillable
-    assert df._data._data["x"].data.expose_counter == 2
+    assert len(df._data._data["x"].data._spill_locks) == 1
     assert not df._data._data["x"].data.spillable
     del gb
     assert df._data._data["x"].data.spillable
@@ -140,11 +178,11 @@ def test_environment_variables(monkeypatch):
 
 def test_spill_device_memory(manager: SpillManager):
     df = gen_df()
-    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size)
+    assert spilled_and_unspilled(manager) == (0, gen_df.buffer_size)
     manager.spill_device_memory()
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size, 0)
     del df
-    assert manager.spilled_and_unspilled() == (0, 0)
+    assert spilled_and_unspilled(manager) == (0, 0)
     df1 = gen_df()
     df2 = gen_df()
     manager.spill_device_memory()
@@ -171,12 +209,12 @@ def test_spill_device_memory(manager: SpillManager):
 def test_spill_to_device_limit(manager: SpillManager):
     df1 = gen_df()
     df2 = gen_df()
-    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size * 2)
+    assert spilled_and_unspilled(manager) == (0, gen_df.buffer_size * 2)
     manager.spill_to_device_limit(device_limit=0)
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
     df3 = df1 + df2
     manager.spill_to_device_limit(device_limit=0)
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 3, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 3, 0)
     assert gen_df.is_spilled(df1)
     assert gen_df.is_spilled(df2)
     assert gen_df.is_spilled(df3)
@@ -189,12 +227,12 @@ def test_zero_device_limit(manager: SpillManager):
     assert manager._device_memory_limit == 0
     df1 = gen_df()
     df2 = gen_df()
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
     df1 + df2
     # Notice, while performing the addintion both df1 and df2 are unspillable
-    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size * 2)
+    assert spilled_and_unspilled(manager) == (0, gen_df.buffer_size * 2)
     manager.spill_to_device_limit()
-    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
 
 
 def test_lookup_address_range(manager: SpillManager):
@@ -204,13 +242,13 @@ def test_lookup_address_range(manager: SpillManager):
     assert len(buffers) == 1
     (buf,) = buffers
     assert gen_df.buffer(df) is buf
-    assert manager.lookup_address_range(buf.ptr, buf.size) is buf
-    assert manager.lookup_address_range(buf.ptr + 1, buf.size - 1) is buf
-    assert manager.lookup_address_range(buf.ptr + 1, buf.size + 1) is buf
-    assert manager.lookup_address_range(buf.ptr - 1, buf.size - 1) is buf
-    assert manager.lookup_address_range(buf.ptr - 1, buf.size + 1) is buf
-    assert manager.lookup_address_range(buf.ptr + buf.size, buf.size) is None
-    assert manager.lookup_address_range(buf.ptr - buf.size, buf.size) is None
+    assert manager.lookup_address_range(buf.ptr, buf.size)[0] is buf
+    assert manager.lookup_address_range(buf.ptr + 1, buf.size - 1)[0] is buf
+    assert manager.lookup_address_range(buf.ptr + 1, buf.size + 1)[0] is buf
+    assert manager.lookup_address_range(buf.ptr - 1, buf.size - 1)[0] is buf
+    assert manager.lookup_address_range(buf.ptr - 1, buf.size + 1)[0] is buf
+    assert not manager.lookup_address_range(buf.ptr + buf.size, buf.size)
+    assert not manager.lookup_address_range(buf.ptr - buf.size, buf.size)
 
 
 def test_external_memory_never_spills(manager):
@@ -219,10 +257,9 @@ def test_external_memory_never_spills(manager):
     is never spilled
     """
 
-    cp = pytest.importorskip("cupy")
-    cp.cuda.set_allocator()  # uses default allocator
+    cupy.cuda.set_allocator()  # uses default allocator
 
-    a = cp.asarray([1, 2, 3])
+    a = cupy.asarray([1, 2, 3])
     s = cudf.Series(a)
     assert len(manager.base_buffers()) == 0
     assert not s._data[None].data.spillable
@@ -308,17 +345,20 @@ def test_ptr_restricted(manager: SpillManager):
         data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
     )
     assert buf.spillable
-    assert buf.expose_counter == 1
-    spill_lock = SpillLock()
-    buf.get_ptr(spill_lock=spill_lock)
+    assert len(buf._spill_locks) == 0
+    slock1 = SpillLock()
+    buf.get_ptr(spill_lock=slock1)
     assert not buf.spillable
-    assert buf.expose_counter == 2
-    buf.get_ptr(spill_lock=spill_lock)
+    assert len(buf._spill_locks) == 1
+    slock2 = buf.spill_lock()
+    buf.get_ptr(spill_lock=slock2)
     assert not buf.spillable
-    assert buf.expose_counter == 3
-    del spill_lock
+    assert len(buf._spill_locks) == 2
+    del slock1
+    assert len(buf._spill_locks) == 1
+    del slock2
+    assert len(buf._spill_locks) == 0
     assert buf.spillable
-    assert buf.expose_counter == 1
 
 
 def test_expose_statistics(manager: SpillManager):
@@ -380,10 +420,12 @@ def test_serialize_device(manager, target):
     assert len(frames) == 1
     if target == "gpu":
         assert isinstance(frames[0], Buffer)
-        assert gen_df.buffer(df1).expose_counter == 2
+        assert len(gen_df.buffer(df1)._spill_locks) == 1
+        frames[0] = cupy.array(frames[0], copy=True)
     else:
-        assert gen_df.buffer(df1).expose_counter == 1
         assert isinstance(frames[0], memoryview)
+        assert len(gen_df.buffer(df1)._spill_locks) == 0
+        assert gen_df.is_spilled(df1)
 
     df2 = Serializable.device_deserialize(header, frames)
     assert_eq(df1, df2)
@@ -432,11 +474,34 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
         df1, serializers=("cuda",), on_error="raise"
     )
     buf: SpillableBuffer = gen_df.buffer(df1)
-    assert buf.expose_counter == 2
+    assert len(buf._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
     assert frames[0].ptr == buf.ptr
 
+    frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
-    assert buf.ptr == gen_df.buffer(df2).ptr
     assert_eq(df1, df2)
+
+
+def test_get_rmm_memory_resource_stack():
+    mr1 = rmm.mr.get_current_device_resource()
+    assert all(
+        not isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
+        for m in get_rmm_memory_resource_stack(mr1)
+    )
+
+    mr2 = rmm.mr.FailureCallbackResourceAdaptor(mr1, lambda x: False)
+    assert get_rmm_memory_resource_stack(mr2)[0] is mr2
+    assert get_rmm_memory_resource_stack(mr2)[1] is mr1
+
+    mr3 = rmm.mr.FixedSizeMemoryResource(mr2)
+    assert get_rmm_memory_resource_stack(mr3)[0] is mr3
+    assert get_rmm_memory_resource_stack(mr3)[1] is mr2
+    assert get_rmm_memory_resource_stack(mr3)[2] is mr1
+
+    mr4 = rmm.mr.FailureCallbackResourceAdaptor(mr3, lambda x: False)
+    assert get_rmm_memory_resource_stack(mr4)[0] is mr4
+    assert get_rmm_memory_resource_stack(mr4)[1] is mr3
+    assert get_rmm_memory_resource_stack(mr4)[2] is mr2
+    assert get_rmm_memory_resource_stack(mr4)[3] is mr1
