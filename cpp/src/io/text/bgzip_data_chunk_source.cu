@@ -104,7 +104,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   bgzip_header read_header()
   {
     std::array<char, 12> buffer{};
-    CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(buffer)), "read failed");
+    _stream->read(buffer.data(), sizeof(buffer));
     uint8_t constexpr magic_expected_2 = 139;
     std::array<char, 4> expected_header{{31, 0, 8, 4}};
     std::memcpy(&expected_header[1], &magic_expected_2, sizeof(char));
@@ -116,17 +116,17 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     while (extra_offset < extra_length) {
       auto const remaining_size = extra_length - extra_offset;
       CUDF_EXPECTS(remaining_size >= 4, "invalid extra field length");
-      CUDF_EXPECTS(_stream->read(buffer.data(), 4), "read failed");
+      _stream->read(buffer.data(), 4);
       extra_offset += 4;
       auto subfield_size = read_int<uint16_t>(&buffer[2]);
       if (buffer[0] == 66 && buffer[1] == 67) {
         CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
-        CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(uint16_t)), "read failed");
-        CUDF_EXPECTS(_stream->seekg(remaining_size - 6, std::ios_base::cur), "seek failed");
+        _stream->read(buffer.data(), sizeof(uint16_t));
+        _stream->seekg(remaining_size - 6, std::ios_base::cur);
         auto block_size = read_int<uint16_t>(&buffer[0]);
         return {block_size + 1, extra_length};
       } else {
-        CUDF_EXPECTS(_stream->seekg(subfield_size, std::ios_base::cur), "seek failed");
+        _stream->seekg(subfield_size, std::ios_base::cur);
         extra_offset += subfield_size;
       }
     }
@@ -140,7 +140,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   bgzip_footer read_footer()
   {
     std::array<char, 8> buffer{};
-    CUDF_EXPECTS(_stream->read(buffer.data(), sizeof(buffer)), "read failed");
+    _stream->read(buffer.data(), sizeof(buffer));
     return {read_int<uint32_t>(&buffer[4])};
   }
 
@@ -279,8 +279,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     void read_block(bgzip_header header, std::istream& stream)
     {
       h_compressed_blocks.resize(h_compressed_blocks.size() + header.data_size());
-      CUDF_EXPECTS(stream.read(h_compressed_blocks.data() + compressed_size(), header.data_size()),
-                   "read failed");
+      stream.read(h_compressed_blocks.data() + compressed_size(), header.data_size());
     }
 
     void add_block_offsets(bgzip_header header, bgzip_footer footer)
@@ -338,6 +337,8 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       _compressed_pos{virtual_begin >> 16},
       _compressed_end{virtual_end >> 16}
   {
+    // set failbit to throw on IO failures
+    input_stream->exceptions(input_stream->exceptions() | std::istream::failbit);
     // seek to the beginning of the provided compressed offset
     _stream->seekg(_compressed_pos, std::ios_base::cur);
     // read the first blocks
