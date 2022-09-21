@@ -55,22 +55,27 @@ void init()
 __host__ void print_trace()
 {
 #ifdef __GNUC__
+  // Try to get the stack trace.
   constexpr int kMaxStackDepth = 64;
   void* stack[kMaxStackDepth];
   auto depth   = backtrace(stack, kMaxStackDepth);
   auto strings = backtrace_symbols(stack, depth);
+
   if (strings == nullptr) {
     std::cout << "No stack trace could be found!" << std::endl;
   } else {
+    // If we were able to extract a trace, parse it, demangle symbols, and
+    // print a readable output.
+
     // allocate string which will be filled with the demangled function name
     size_t funcnamesize = 256;
     char* funcname      = (char*)malloc(funcnamesize);
 
     // Start at frame 1 to skip print_trace itself.
     for (int i = 1; i < depth; ++i) {
-      char* begin_name   = 0;
-      char* begin_offset = 0;
-      char* end_offset   = 0;
+      char* begin_name   = nullptr;
+      char* begin_offset = nullptr;
+      char* end_offset   = nullptr;
 
       // find parentheses and +address offset surrounding the mangled name:
       // ./module(function+0x15c) [0x8048a6d]
@@ -90,19 +95,17 @@ __host__ void print_trace()
         *begin_offset++ = '\0';
         *end_offset     = '\0';
 
-        // mangled name is now in [begin_name, begin_offset) and caller
-        // offset in [begin_offset, end_offset). now apply
-        // __cxa_demangle():
+        // mangled name is now in [begin_name, begin_offset) and caller offset
+        // in [begin_offset, end_offset). now apply __cxa_demangle():
 
         int status;
         char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
         if (status == 0) {
-          funcname = ret;  // use possibly realloc()-ed string
+          funcname = ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
           std::cout << "#" << i << " in " << strings[i] << " : " << funcname << "+" << begin_offset
                     << std::endl;
         } else {
-          // demangling failed. Output function name as a C function with
-          // no arguments.
+          // demangling failed. Output function name as a C function with no arguments.
           std::cout << "#" << i << " in " << strings[i] << " : " << begin_name << "()+"
                     << begin_offset << std::endl;
         }
