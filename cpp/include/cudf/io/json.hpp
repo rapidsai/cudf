@@ -44,14 +44,14 @@ class json_reader_options_builder;
  */
 struct schema_element {
   /**
-   * @brief Allows specifying this column's child columns target type
-   */
-  std::map<std::string, schema_element> child_types;
-
-  /**
    * @brief The type that this column should be converted to
    */
   data_type type;
+
+  /**
+   * @brief Allows specifying this column's child columns target type
+   */
+  std::map<std::string, schema_element> child_types;
 };
 
 /**
