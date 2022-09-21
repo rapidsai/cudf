@@ -51,7 +51,7 @@ void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enu
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   auto const compression            = cudf::io::compression_type::SNAPPY;
-  auto const sink_type              = io_type::FILEPATH;
+  auto const sink_type              = io_type::VOID;
 
   auto const tbl =
     create_random_table(cycle_dtypes(data_types, num_cols),
