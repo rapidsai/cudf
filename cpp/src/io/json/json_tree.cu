@@ -54,6 +54,7 @@ namespace cudf::io::json {
 namespace detail {
 
 // DEBUG print
+namespace {
 template <typename T>
 void print_vec(T const& cpu, std::string const name)
 {
@@ -61,6 +62,7 @@ void print_vec(T const& cpu, std::string const name)
     printf("%3d,", int(v));
   std::cout << name << std::endl;
 }
+}  // namespace
 
 // The node that a token represents
 struct token_to_node {
@@ -478,11 +480,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   std::vector<size_type> level_boundaries = [&]() {
     // Already node_levels is sorted
     auto max_level = d_tree.node_levels.back_element(stream);
-    // auto max_level = thrust::reduce(rmm::exec_policy(stream),
-    //                                 d_tree.node_levels.begin(),
-    //                                 d_tree.node_levels.end(),
-    //                                 0,
-    //                                 thrust::maximum<size_type>());
     rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);
     // TODO try reduce_by_key
     auto level_end =
@@ -588,7 +585,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                    col_id.data(),
                    parent_col_id.data() + level_boundaries[level - 1]);
     PRINT_LEVEL_DATA(level, ".after gather");
-    // TODO probably sort_by_key value should be a gather/scatter index to restore original order.
     nvtxRangePop();
     nvtxRangePushA("stable_sort_by_key");
     thrust::stable_sort_by_key(
@@ -635,7 +631,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   nvtxRangePop();
   nvtxRangePushA("restore");
   // restore original order of col_id., and used d_tree members
-  // TODO can we do this with scatter instead of sort?
+  // TODO would scatter be faster than radix-sort here for 3 values?
   thrust::sort_by_key(rmm::exec_policy(stream),
                       scatter_indices.begin(),
                       scatter_indices.end(),
@@ -698,14 +694,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                   row_offsets.begin(),
                   row_offsets.end(),
                   scatter_indices.begin(),
-                  parent_col_id.begin());
+                  parent_col_id.begin());  // reuse parent_col_id as temp storage
   thrust::copy(
     rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), row_offsets.begin());
-  // thrust::sort_by_key(rmm::exec_policy(stream),
-  //                     scatter_indices.begin(),
-  //                     scatter_indices.end(),
-  //                     row_offsets.begin());
-  //                     // thrust::make_zip_iterator(parent_col_id.begin(), row_offsets.begin()));
   thrust::transform_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
