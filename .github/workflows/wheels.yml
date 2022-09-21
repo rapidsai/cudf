@@ -6,42 +6,27 @@ on:
       - 'pull-request/[0-9]+'
 
 jobs:
-  cudf-wheel-x86_64:
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-amd64.yml@feat/wheel-ci-actions-2
+  cudf-wheels:
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions-2
     with:
       package-name: cudf
       package-dir: python/cudf
       python-version: "3.8 3.9"
-      cibw-before-all: "yum update -y && yum install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+      cibw-before-all-amd64: "yum update -y && yum install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+      cibw-before-all-arm64: "apt update -y && apt install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+      manylinux-container-amd64: "manylinux2014"
+      manylinux-container-arm64: "manylinux_2_31"
       cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
       skbuild-build-options: "-v"
       skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
-      manylinux-container: "manylinux2014"
-      manylinux-test-container: "manylinux_2_27"
       cibw-test-extras:  "test"
-      gpu-smoketest-before: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      cibw-test-command: "pytest -v ./python/cudf/cudf/tests"
-      gpu-smoketest: "import cudf, requests, numpy; from io import StringIO; url = 'https://github.com/plotly/datasets/raw/master/tips.csv'; content = requests.get(url).content.decode('utf-8'); tips_df = cudf.read_csv(StringIO(content)); tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100; mean_tips = tips_df.groupby('size').tip_percentage.mean(); print(mean_tips); print(mean_tips.iloc[0]); assert numpy.isclose(mean_tips.iloc[0], 15.622920); import pyarrow as pa; n_legs = pa.array([2, 4, 5, 100]); animals = pa.array(['Flamingo', 'Horse', 'Brittle stars', 'Centipede']); names = ['n_legs', 'animals']; print(animals); foo = pa.table([n_legs, animals], names=names); print(foo); import cudf; df = cudf.DataFrame.from_arrow(foo); print(df); print(df.loc[df['animals'] == 'Centipede']['n_legs']); assert df.loc[df['animals'] == 'Centipede']['n_legs'].iloc[0] == 100"
-    secrets: inherit
-  cudf-wheel-aarch64:
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-arm64.yml@feat/wheel-ci-actions-2
-    with:
-      package-name: cudf
-      package-dir: python/cudf
-      python-version: "3.8 3.9"
-      cibw-before-all: "apt update -y && apt install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
-      skbuild-build-options: "-v"
-      skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
-      manylinux-container: "manylinux_2_31"
-      manylinux-test-container: "manylinux_2_31"
-      cibw-test-extras:  "test"
-      gpu-smoketest-before: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      gpu-smoketest-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+      gpu-smoketest-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
       cibw-test-command: "pytest -v ./python/cudf/cudf/tests"
       gpu-smoketest: "import cudf, requests, numpy; from io import StringIO; url = 'https://github.com/plotly/datasets/raw/master/tips.csv'; content = requests.get(url).content.decode('utf-8'); tips_df = cudf.read_csv(StringIO(content)); tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100; mean_tips = tips_df.groupby('size').tip_percentage.mean(); print(mean_tips); print(mean_tips.iloc[0]); assert numpy.isclose(mean_tips.iloc[0], 15.622920); import pyarrow as pa; n_legs = pa.array([2, 4, 5, 100]); animals = pa.array(['Flamingo', 'Horse', 'Brittle stars', 'Centipede']); names = ['n_legs', 'animals']; print(animals); foo = pa.table([n_legs, animals], names=names); print(foo); import cudf; df = cudf.DataFrame.from_arrow(foo); print(df); print(df.loc[df['animals'] == 'Centipede']['n_legs']); assert df.loc[df['animals'] == 'Centipede']['n_legs'].iloc[0] == 100"
     secrets: inherit
   dask_cudf-wheel:
-    needs: [cudf-wheel-x86_64, cudf-wheel-aarch64]
+    needs: cudf-wheels
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions-2
     with:
       package-name: dask_cudf
