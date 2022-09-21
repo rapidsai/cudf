@@ -148,8 +148,7 @@ gather_column_info(tree_meta_t& tree,
       // *+*=*, v+v=v
       if (type_a == type_b) return type_a;
       // v+*=*, s+v=s
-      //  STR/VAL + STRUCT/LIST = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR
-      //  = STR
+      //  STR/VAL + STRUCT/LIST = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
       else if (is_a_leaf)
         return type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b);
       else if (is_b_leaf)
@@ -168,15 +167,11 @@ gather_column_info(tree_meta_t& tree,
     col_ids.end(),
     thrust::make_zip_iterator(
       thrust::make_permutation_iterator(tree.parent_node_ids.begin(), node_ids.begin()),
-      // thrust::make_permutation_iterator(tree.node_levels.begin(), node_ids.begin()), // FIXME:
-      // not required
       thrust::make_permutation_iterator(tree.node_range_begin.begin(), node_ids.begin()),
       thrust::make_permutation_iterator(tree.node_range_end.begin(), node_ids.begin())),
     thrust::make_discard_iterator(),
-    thrust::make_zip_iterator(parent_col_ids.begin(),
-                              // column_levels.begin(),
-                              col_range_begin.begin(),
-                              col_range_end.begin()));
+    thrust::make_zip_iterator(
+      parent_col_ids.begin(), col_range_begin.begin(), col_range_end.begin()));
   // Restore the order
   thrust::sort_by_key(rmm::exec_policy(stream),
                       node_ids.begin(),
@@ -188,7 +183,8 @@ gather_column_info(tree_meta_t& tree,
                     parent_col_ids.end(),
                     parent_col_ids.begin(),
                     [col_ids = col_ids.begin()] __device__(auto parent_node_id) -> size_type {
-                      return parent_node_id == -1 ? -1 : col_ids[parent_node_id];
+                      return parent_node_id == parent_node_sentinel ? parent_node_sentinel
+                                                                    : col_ids[parent_node_id];
                     });
   // copy lists' max_row_offsets to children.
   thrust::transform_if(
@@ -200,19 +196,19 @@ gather_column_info(tree_meta_t& tree,
      parent_col_ids    = parent_col_ids.begin(),
      max_row_offsets   = max_row_offsets.begin()] __device__(size_type col_id) {
       auto parent_col_id = parent_col_ids[col_id];
-      // TODO replace -1 with sentinel
-      while (parent_col_id != -1 and column_categories[parent_col_id] != node_t::NC_LIST) {
+      while (parent_col_id != parent_node_sentinel and
+             column_categories[parent_col_id] != node_t::NC_LIST) {
         col_id        = parent_col_id;
         parent_col_id = parent_col_ids[parent_col_id];
       }
-      // return -1;
       return max_row_offsets[col_id];
     },
     [column_categories = column_categories.begin(),
      parent_col_ids    = parent_col_ids.begin()] __device__(size_type col_id) {
       auto parent_col_id = parent_col_ids[col_id];
-      return parent_col_id != -1 and (column_categories[parent_col_id] != node_t::NC_LIST);
-      // Parent is not a list, or sentinel/root (might be different condition for JSON_lines)
+      return parent_col_id != parent_node_sentinel and
+             (column_categories[parent_col_id] != node_t::NC_LIST);
+      // Parent is not a list, or sentinel/root
     });
 
   return std::tuple{std::move(unique_col_ids),
@@ -274,9 +270,9 @@ void make_json_column2(device_span<SymbolT const> input,
                         string_views.begin(),
                         [input] __device__(auto const& offsets) {
                           // TODO empty string for non-field columns
-                          return thrust::make_pair(
-                            input.data() + thrust::get<0>(offsets),
-                            size_type{thrust::get<1>(offsets) - thrust::get<0>(offsets)});
+                          return thrust::make_pair(input.data() + thrust::get<0>(offsets),
+                                                   static_cast<size_type>(thrust::get<1>(offsets) -
+                                                                          thrust::get<0>(offsets)));
                         });
       auto d_column_names = cudf::make_strings_column(string_views, stream);
       auto to_host        = [](auto const& col) {
@@ -355,10 +351,7 @@ void make_json_column2(device_span<SymbolT const> input,
     col.type = to_json_col_type(column_categories[i]);
   };
 
-  // 2. generate columns data //TODO -1 is the passed root node. (a list column.)
-  // TODO find column_ids which are values, but should be ignored. (if they repeat)
-  // d_json_column root;
-  // initialize_json_columns(0, root);
+  // 2. generate columns data
 #ifdef NJP_DEBUG_PRINT
   printf("here1\n");
 #endif
@@ -371,11 +364,10 @@ void make_json_column2(device_span<SymbolT const> input,
   // use hash map because we may skip field name col_ids
   std::unordered_map<NodeIndexT, std::reference_wrapper<d_json_column>> columns;
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
+  // find column_ids which are values, but should be ignored. (if they repeat)
   std::vector<uint8_t> ignore_vals(num_columns, 0);
-  columns.try_emplace(-1, std::ref(root));  // TODO use sentinel
-  // columns.try_emplace(unique_col_ids[0], std::ref(root));
-  for (size_t i = 0; i < unique_col_ids.size(); i++) {
-    auto const this_col_id = unique_col_ids[i];
+  columns.try_emplace(parent_node_sentinel, std::ref(root));
+  for (auto const this_col_id : unique_col_ids) {
     if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
       continue;
     }
@@ -384,7 +376,7 @@ void make_json_column2(device_span<SymbolT const> input,
     initialize_json_columns(this_col_id, col);
     std::string name   = "";
     auto parent_col_id = column_parent_ids[this_col_id];
-    if (parent_col_id == NodeIndexT(-1) || column_categories[parent_col_id] == NC_LIST) {
+    if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
       name = "element";
     } else if (column_categories[parent_col_id] == NC_FN) {
       auto field_name_col_id = parent_col_id;
@@ -402,11 +394,6 @@ void make_json_column2(device_span<SymbolT const> input,
 #ifdef NJP_DEBUG_PRINT
     std::cout << "name: " << name << std::endl;
 #endif
-    // if(columns.find(parent_col_id)->second.get().child_columns.count(name) and
-    // column_categories[this_col_id] == NC_VAL) {
-    //     ignore_vals[this_col_id] = 1;
-    //     continue;
-    //   }
     bool replaced = false;
     if (mapped_columns.count({parent_col_id, name})) {
       if (column_categories[this_col_id] == NC_VAL) {
@@ -448,7 +435,7 @@ void make_json_column2(device_span<SymbolT const> input,
   // move columns data to device.
   std::vector<json_column_data> columns_data(num_columns);
   for (auto& [col_id, col_ref] : columns) {
-    if (col_id == NodeIndexT(-1)) continue;
+    if (col_id == parent_node_sentinel) continue;
     auto& col = col_ref.get();
 #ifdef NJP_DEBUG_PRINT
     printf("col_id: %d\n", col_id);
@@ -528,7 +515,7 @@ void make_json_column2(device_span<SymbolT const> input,
      node_categories  = tree.node_categories.begin(),
      d_columns_data   = d_columns_data.begin()] __device__(size_type i) {
       auto parent_node_id = ordered_parent_node_ids[i];
-      if (parent_node_id != -1 and node_categories[parent_node_id] == NC_LIST) {
+      if (parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST) {
         // unique item
         if (i == 0 ||
             (col_ids[i - 1] != col_ids[i] or ordered_parent_node_ids[i - 1] != parent_node_id)) {
