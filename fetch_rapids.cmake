@@ -12,8 +12,10 @@
 # the License.
 # =============================================================================
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
-  file(DOWNLOAD https://raw.githubusercontent.com/robertmaynard/rapids-cmake/fea/update_to_nvcomp_2.4/RAPIDS.cmake
-       ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
+  file(
+    DOWNLOAD
+    https://raw.githubusercontent.com/robertmaynard/rapids-cmake/fea/update_to_nvcomp_2.4/RAPIDS.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
   )
 endif()
 include(${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
