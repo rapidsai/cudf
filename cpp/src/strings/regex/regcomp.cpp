@@ -36,7 +36,7 @@ namespace detail {
 namespace {
 // Bitmask of all operators
 #define OPERATOR_MASK 0200
-enum OperatorType {
+enum OperatorType : int32_t {
   START        = 0200,  // Start, used for marker on stack
   LBRA_NC      = 0203,  // non-capturing group
   CAT          = 0205,  // Concatentation, implicit operator
@@ -176,6 +176,7 @@ class regex_parser {
   char32_t const* _expr_ptr;
   bool _lex_done{false};
   regex_flags const _flags;
+  capture_groups const _capture;
 
   int32_t _id_cclass_w{-1};  // alphanumeric [a-zA-Z0-9_]
   int32_t _id_cclass_W{-1};  // not alphanumeric plus '\n'
@@ -528,7 +529,8 @@ class regex_parser {
           _expr_ptr += 2;
           return LBRA_NC;
         }
-        return LBRA;
+        return (_capture == capture_groups::NON_CAPTURE) ? static_cast<int32_t>(LBRA_NC)
+                                                         : static_cast<int32_t>(LBRA);
       case ')': return RBRA;
       case '^': {
         _chr = chr;
@@ -752,8 +754,11 @@ class regex_parser {
   }
 
  public:
-  regex_parser(const char32_t* pattern, regex_flags const flags, reprog& prog)
-    : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern), _flags(flags)
+  regex_parser(const char32_t* pattern,
+               regex_flags const flags,
+               capture_groups const capture,
+               reprog& prog)
+    : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern), _flags(flags), _capture(capture)
   {
     auto const dot_type = is_dotall(_flags) ? ANYNL : ANY;
 
@@ -956,11 +961,14 @@ class regex_compiler {
   }
 
  public:
-  regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
+  regex_compiler(const char32_t* pattern,
+                 regex_flags const flags,
+                 capture_groups const capture,
+                 reprog& prog)
     : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
   {
     // Parse pattern into items
-    auto const items = regex_parser(pattern, _flags, _prog).get_items();
+    auto const items = regex_parser(pattern, _flags, capture, _prog).get_items();
 
     int cur_subid{};
     int push_subid{};
@@ -995,28 +1003,29 @@ class regex_compiler {
     CUDF_EXPECTS(_bracket_count == 0, "unmatched left parenthesis");
 
     _prog.set_start_inst(_and_stack.top().id_first);
-    _prog.finalize();
+    _prog.optimize();
     _prog.check_for_errors();
+    _prog.finalize();
     _prog.set_groups_count(cur_subid);
   }
 };
 
 // Convert pattern into program
-reprog reprog::create_from(std::string_view pattern, regex_flags const flags)
+reprog reprog::create_from(std::string_view pattern,
+                           regex_flags const flags,
+                           capture_groups const capture)
 {
   reprog rtn;
   auto pattern32 = string_to_char32_vector(pattern);
-  regex_compiler compiler(pattern32.data(), flags, rtn);
+  regex_compiler compiler(pattern32.data(), flags, capture, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
 }
 
-void reprog::finalize()
-{
-  collapse_nops();
-  build_start_ids();
-}
+void reprog::optimize() { collapse_nops(); }
+
+void reprog::finalize() { build_start_ids(); }
 
 void reprog::collapse_nops()
 {

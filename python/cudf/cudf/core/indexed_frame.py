@@ -57,7 +57,12 @@ from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
-from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.core.udf.utils import (
+    _compile_or_get,
+    _get_input_args_from_frame,
+    _post_process_output_col,
+    _return_arr_from_dtype,
+)
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -1819,30 +1824,19 @@ class IndexedFrame(Frame):
             ) from e
 
         # Mask and data column preallocated
-        ans_col = cp.empty(len(self), dtype=retty)
+        ans_col = _return_arr_from_dtype(retty, len(self))
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask), len(self)]
-        offsets = []
-
-        # if _compile_or_get succeeds, it is safe to create a kernel that only
-        # consumes the columns that are of supported dtype
-        for col in _supported_cols_from_frame(self).values():
-            data = col.data
-            mask = col.mask
-            if mask is None:
-                launch_args.append(data)
-            else:
-                launch_args.append((data, mask))
-            offsets.append(col.offset)
-        launch_args += offsets
-        launch_args += list(args)
+        output_args = [(ans_col, ans_mask), len(self)]
+        input_args = _get_input_args_from_frame(self)
+        launch_args = output_args + input_args + list(args)
 
         try:
             kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = cudf.core.column.as_column(ans_col)
+        col = _post_process_output_col(ans_col, retty)
+
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
         result = cudf.Series._from_data({None: col}, self._index)
 
