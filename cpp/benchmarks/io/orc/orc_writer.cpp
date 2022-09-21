@@ -26,6 +26,18 @@
 
 #include <nvbench/nvbench.cuh>
 
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  cudf::io::statistics_freq,
+  [](auto value) {
+    switch (value) {
+      case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
+      case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "ORC_STATISTICS_STRIPE";
+      case cudf::io::statistics_freq::STATISTICS_PAGE: return "ORC_STATISTICS_ROW_GROUP";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 

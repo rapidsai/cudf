@@ -27,6 +27,18 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  cudf::io::statistics_freq,
+  [](auto value) {
+    switch (value) {
+      case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
+      case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "STATISTICS_ROWGROUP";
+      case cudf::io::statistics_freq::STATISTICS_PAGE: return "STATISTICS_PAGE";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
