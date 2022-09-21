@@ -175,11 +175,12 @@ class SpillManager:
 
     def lookup_address_range(
         self, ptr: int, size: int
-    ) -> Optional[SpillableBuffer]:
+    ) -> List[SpillableBuffer]:
+        ret = []
         for buf in self.base_buffers():
             if buf.is_overlapping(ptr, size):
-                return buf
-        return None
+                ret.append(buf)
+        return ret
 
     def log_expose(self, buf: SpillableBuffer) -> None:
         if self._expose_statistics is None:

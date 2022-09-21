@@ -5,6 +5,7 @@ import gc
 import warnings
 from typing import Tuple
 
+import cupy
 import numpy as np
 import pandas
 import pandas.testing
@@ -240,13 +241,13 @@ def test_lookup_address_range(manager: SpillManager):
     assert len(buffers) == 1
     (buf,) = buffers
     assert gen_df.buffer(df) is buf
-    assert manager.lookup_address_range(buf.ptr, buf.size) is buf
-    assert manager.lookup_address_range(buf.ptr + 1, buf.size - 1) is buf
-    assert manager.lookup_address_range(buf.ptr + 1, buf.size + 1) is buf
-    assert manager.lookup_address_range(buf.ptr - 1, buf.size - 1) is buf
-    assert manager.lookup_address_range(buf.ptr - 1, buf.size + 1) is buf
-    assert manager.lookup_address_range(buf.ptr + buf.size, buf.size) is None
-    assert manager.lookup_address_range(buf.ptr - buf.size, buf.size) is None
+    assert manager.lookup_address_range(buf.ptr, buf.size)[0] is buf
+    assert manager.lookup_address_range(buf.ptr + 1, buf.size - 1)[0] is buf
+    assert manager.lookup_address_range(buf.ptr + 1, buf.size + 1)[0] is buf
+    assert manager.lookup_address_range(buf.ptr - 1, buf.size - 1)[0] is buf
+    assert manager.lookup_address_range(buf.ptr - 1, buf.size + 1)[0] is buf
+    assert not manager.lookup_address_range(buf.ptr + buf.size, buf.size)
+    assert not manager.lookup_address_range(buf.ptr - buf.size, buf.size)
 
 
 def test_external_memory_never_spills(manager):
@@ -255,10 +256,9 @@ def test_external_memory_never_spills(manager):
     is never spilled
     """
 
-    cp = pytest.importorskip("cupy")
-    cp.cuda.set_allocator()  # uses default allocator
+    cupy.cuda.set_allocator()  # uses default allocator
 
-    a = cp.asarray([1, 2, 3])
+    a = cupy.asarray([1, 2, 3])
     s = cudf.Series(a)
     assert len(manager.base_buffers()) == 0
     assert not s._data[None].data.spillable
@@ -420,9 +420,11 @@ def test_serialize_device(manager, target):
     if target == "gpu":
         assert isinstance(frames[0], Buffer)
         assert len(gen_df.buffer(df1)._spill_locks) == 1
+        frames[0] = cupy.array(frames[0], copy=True)
     else:
-        assert len(gen_df.buffer(df1)._spill_locks) == 0
         assert isinstance(frames[0], memoryview)
+        assert len(gen_df.buffer(df1)._spill_locks) == 0
+        assert gen_df.is_spilled(df1)
 
     df2 = Serializable.device_deserialize(header, frames)
     assert_eq(df1, df2)
@@ -476,6 +478,6 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert isinstance(frames[0], Buffer)
     assert frames[0].ptr == buf.ptr
 
+    frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
-    assert buf.ptr == gen_df.buffer(df2).ptr
     assert_eq(df1, df2)

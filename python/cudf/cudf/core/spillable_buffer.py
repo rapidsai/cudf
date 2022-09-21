@@ -76,7 +76,8 @@ class SpillableBuffer(Buffer):
     Parameters
     ----------
     data : buffer-like
-        An buffer-like object representing device or host memory.
+        An buffer-like object representing device or host memory. `data` Cannot
+        be SpillableBuffer, use `data[:]` to create a view instead.
     exposed : bool, optional
         Whether or not a raw pointer (integer or C pointer) has
         been exposed to the outside world. If this is the case,
@@ -142,15 +143,21 @@ class SpillableBuffer(Buffer):
                 self._size = data.nbytes
                 self._owner = None
 
-        # Then, we inform the spilling manager about this new buffer if it is
-        # not already known to the spilling manager.
+        if self._ptr:
+            # TODO: run the following asserts in "debug mode" or not at all.
+            # Assert that any buffers `data` may refer to has been exposed
+            # already. If this is not the case, it means that somewhere we
+            # are accessing a buffer's device pointer without marking it as
+            # exposed, which would be bug.
+            bases = manager.lookup_address_range(self._ptr, self._size)
+            assert all(b.exposed for b in bases)
+            # Assert that if `data` refers to any existing base buffers, it
+            # must itself be exposed.
+            assert len(bases) == 0 or exposed
+
+        # Finally, we inform the spilling manager about this new buffer
         self._manager = manager
-        base = self._manager.lookup_address_range(self._ptr, self._size)
-        if base is not None:
-            # Since this is a view, we expose the base buffer permanently by
-            # accessing `.ptr`
-            base.ptr
-        elif self._exposed:
+        if self._exposed:
             # Since the buffer has been exposed permanently, we add it to
             # "others".
             self._manager.add_other(self)
@@ -311,6 +318,25 @@ class SpillableBuffer(Buffer):
         return SpillableBufferView(base=self, offset=offset, size=size)
 
     def serialize(self) -> Tuple[dict, List[Frame]]:
+        """Serialize the Buffer
+
+        Normally, we would use `[self]` as the frames. This would work but
+        also mean that `self` becomes exposed permanently if the frames are
+        later accessed through `__cuda_array_interface__`, which is exactly
+        what libraries like Dask+UCX would do when communicating!
+
+        The sound solution is to modify Dask et al. so that they access the
+        frames through `. get_ptr()` and holds on to the `spill_lock` until
+        the frame has been transferred. However, until this adaptation we
+        use a hack where the frame is a `Buffer` with a `spill_lock` as the
+        owner, which makes `self` unspillable while the frame is alive but
+        doesn’t expose `self` when `__cuda_array_interface__` is accessed.
+
+        Finally, this hack means that the returned frame must be copied before
+        given to `. deserialize()` otherwise we would have a `Buffer` pointing
+        to memory already owned by an existing `SpillableBuffer`.
+        """
+
         header: Dict[Any, Any]
         frames: List[Frame]
         with self._lock:
@@ -320,6 +346,7 @@ class SpillableBuffer(Buffer):
             if self.is_spilled:
                 frames = [self.memoryview()]
             else:
+                # TODO: Use `[self]` as the frame, see doc above.
                 spill_lock = SpillLock()
                 ptr = self.get_ptr(spill_lock=spill_lock)
                 frames = [
@@ -341,10 +368,8 @@ class SpillableBuffer(Buffer):
             )
         (frame,) = frames
         if isinstance(frame, SpillableBuffer):
-            ret = frame
-        else:
-            ret = cls(frame, exposed=False, manager=global_manager.get())
-        return ret
+            return frame
+        return cls(frame, exposed=False, manager=global_manager.get())
 
     def is_overlapping(self, ptr: int, size: int):
         with self._lock:
@@ -411,10 +436,6 @@ class SpillableBufferView(SpillableBuffer):
 
     def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
         return self._base.memoryview(offset=self._offset + offset, size=size)
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
-        return SpillableBuffer.deserialize(header, frames)
 
     def __repr__(self) -> str:
         return (
