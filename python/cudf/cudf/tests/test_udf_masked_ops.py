@@ -57,7 +57,8 @@ def str_udf_data():
                 "cuda",
                 "gpu",
                 "This Is A Title",
-                "This is Not a Title" "Neither is This a Title",
+                "This is Not a Title",
+                "Neither is This a Title",
                 "NoT a TiTlE",
             ]
         }
