@@ -437,7 +437,7 @@ We recommend installing Doxygen using conda (`conda install doxygen`) or a Linux
 Alternatively you can [build and install doxygen from source](https://www.doxygen.nl/manual/install.html).
 
 To build the libcudf HTML documentation simply run the `doxygen` command from the `cpp/doxygen` directory containing the `Doxyfile`.
-The libcudf documentation can also be built using `make docs_cudf` from the cmake build directory (e.g. `cpp/build`).
+The libcudf documentation can also be built using `cmake --build . --target docs_cudf` from the cmake build directory (e.g. `cpp/build`).
 Doxygen reads and processes all appropriate source files under the `cpp/include/` directory.
 The output is generated in the `cpp/doxygen/html/` directory.
 You can load the local `index.html` file generated there into any web browser to view the result.
