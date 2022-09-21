@@ -1367,9 +1367,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
   std::string data = (test_opt == json_test_t::json_lines_row_orient) ? row_orient : record_orient;
 
   std::map<std::string, cudf_io::schema_element> dtype_schema{
-    {"2", {{}, dtype<cudf::string_view>()}},
-    {"0", {{}, dtype<int32_t>()}},
-    {"1", {{}, dtype<double>()}}};
+    {"2", {dtype<cudf::string_view>()}}, {"0", {dtype<int32_t>()}}, {"1", {dtype<double>()}}};
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{data.data(), data.size()})
       .dtypes(dtype_schema)
@@ -1403,9 +1401,11 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
 
   std::map<std::string, cudf_io::schema_element> dtype_schema{
     {"a",
-     {{{"element", {{{"0", {{}, dtype<float>()}}}, data_type{cudf::type_id::STRUCT}}}},
-      data_type{cudf::type_id::LIST}}},
-    {"b", {{}, dtype<int32_t>()}},
+     {
+       data_type{cudf::type_id::LIST},
+       {{"element", {data_type{cudf::type_id::STRUCT}, {{"0", {dtype<float>()}}}}}},
+     }},
+    {"b", {dtype<int32_t>()}},
   };
 
   cudf_io::json_reader_options in_options =

@@ -1781,7 +1781,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
       cudf::detail::visitor_overload{
         [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
           auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                       ? std::optional<schema_element>{{{}, user_dtypes[column_index]}}
+                       ? std::optional<schema_element>{{user_dtypes[column_index]}}
                        : std::optional<schema_element>{};
 #ifdef NJP_DEBUG_PRINT
           std::cout << "Column by index: #" << column_index << ", type id: "
@@ -1794,7 +1794,7 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
         [col_name](
           std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
           auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? std::optional<schema_element>{{{}, user_dtypes.find(col_name)->second}}
+                       ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
                        : std::optional<schema_element>{};
 #ifdef NJP_DEBUG_PRINT
           std::cout << "Column by flat name: '" << col_name << "', type id: "
