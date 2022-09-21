@@ -83,6 +83,9 @@ class json_reader_options {
   // Whether to use the experimental reader
   bool _experimental = false;
 
+  // Whether to keep the quote characters of string values
+  bool _keep_quotes = false;
+
   /**
    * @brief Constructor from source info.
    *
@@ -204,6 +207,13 @@ class json_reader_options {
   bool is_enabled_experimental() const { return _experimental; }
 
   /**
+   * @brief Whether the experimental reader should keep quotes of string values.
+   *
+   * @returns true if the experimental reader should keep quotes, false otherwise
+   */
+  bool is_enabled_keep_quotes() const { return _keep_quotes; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -258,6 +268,14 @@ class json_reader_options {
    * @param val Boolean value to enable/disable the experimental reader
    */
   void enable_experimental(bool val) { _experimental = val; }
+
+  /**
+   * @brief Set whether the experimental reader should keep quotes of string values.
+   *
+   * @param val Boolean value to indicate whether the experimental reader should keep quotes
+   * of string values
+   */
+  void enable_keep_quotes(bool val) { _keep_quotes = val; }
 };
 
 /**
@@ -374,6 +392,19 @@ class json_reader_options_builder {
   json_reader_options_builder& experimental(bool val)
   {
     options._experimental = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the experimental reader should keep quotes of string values.
+   *
+   * @param val Boolean value to indicate whether the experimental reader should keep quotes
+   * of string values
+   * @return this for chaining
+   */
+  json_reader_options_builder& keep_quotes(bool val)
+  {
+    options._keep_quotes = val;
     return *this;
   }
 

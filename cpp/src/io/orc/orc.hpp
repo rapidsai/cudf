@@ -38,12 +38,12 @@ namespace cudf {
 namespace io {
 namespace orc {
 struct PostScript {
-  uint64_t footerLength         = 0;           // the length of the footer section in bytes
-  CompressionKind compression   = NONE;        // the kind of generic compression used
-  uint32_t compressionBlockSize = 256 * 1024;  // the maximum size of each compression chunk
-  std::vector<uint32_t> version;               // the version of the writer [major, minor]
-  uint64_t metadataLength = 0;                 // the length of the metadata section in bytes
-  std::string magic       = "";                // the fixed string "ORC"
+  uint64_t footerLength       = 0;     // the length of the footer section in bytes
+  CompressionKind compression = NONE;  // the kind of generic compression used
+  uint32_t compressionBlockSize{};     // the maximum size of each compression chunk
+  std::vector<uint32_t> version;       // the version of the writer [major, minor]
+  uint64_t metadataLength = 0;         // the length of the metadata section in bytes
+  std::string magic       = "";        // the fixed string "ORC"
 };
 
 struct StripeInformation {

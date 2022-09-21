@@ -2019,6 +2019,18 @@ def test_string_starts_ends(data, pat):
             rfunc=gs.str.startswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+        assert_exceptions_equal(
+            lfunc=ps.str.endswith,
+            rfunc=gs.str.endswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
         )
     else:
         assert_eq(

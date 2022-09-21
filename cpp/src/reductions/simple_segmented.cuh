@@ -113,11 +113,11 @@ std::unique_ptr<column> simple_segmented_reduction(
   }
 
   // Compute the output null mask
-  auto const bitmask                               = col.null_mask();
-  auto const first_bit_indices_begin               = offsets.begin();
-  auto const first_bit_indices_end                 = offsets.end() - 1;
-  auto const last_bit_indices_begin                = first_bit_indices_begin + 1;
-  auto const [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
+  auto const bitmask                         = col.null_mask();
+  auto const first_bit_indices_begin         = offsets.begin();
+  auto const first_bit_indices_end           = offsets.end() - 1;
+  auto const last_bit_indices_begin          = first_bit_indices_begin + 1;
+  auto [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
     bitmask,
     first_bit_indices_begin,
     first_bit_indices_end,
@@ -126,7 +126,7 @@ std::unique_ptr<column> simple_segmented_reduction(
     init.has_value() ? std::optional(init.value().get().is_valid()) : std::nullopt,
     stream,
     mr);
-  result->set_null_mask(output_null_mask, output_null_count, stream);
+  result->set_null_mask(std::move(output_null_mask), output_null_count);
 
   return result;
 }
@@ -187,7 +187,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                stream,
                                                mr)
                             ->release()[0]);
-  auto const [segmented_null_mask, segmented_null_count] =
+  auto [segmented_null_mask, segmented_null_count] =
     cudf::detail::segmented_null_mask_reduction(col.null_mask(),
                                                 offsets.begin(),
                                                 offsets.end() - 1,
@@ -202,7 +202,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   if (segmented_null_count > 0) {
     if (result->null_count() == 0) {
       // The result has no nulls. Use the segmented null mask.
-      result->set_null_mask(segmented_null_mask, segmented_null_count, stream);
+      result->set_null_mask(std::move(segmented_null_mask), segmented_null_count);
     } else {
       // Compute the logical AND of the segmented output null mask and the
       // result null mask to update the result null mask and null count.

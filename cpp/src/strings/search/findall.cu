@@ -103,7 +103,7 @@ std::unique_ptr<column> findall(
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // compile regex into device object
-  auto const d_prog = reprog_device::create(pattern, flags, stream);
+  auto const d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
 
   // Create lists offsets column
   auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);

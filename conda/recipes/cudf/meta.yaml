@@ -48,8 +48,8 @@ requirements:
     - protobuf>=3.20.1,<3.21.0a0
     - python
     - typing_extensions
-    - pandas =1.5.0rc0
-    - cupy >=9.5.0,<11.0.0a0
+    - pandas >=1.0,<1.6.0dev0
+    - cupy >=9.5.0,<12.0.0a0
     - numba >=0.54
     - numpy
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
