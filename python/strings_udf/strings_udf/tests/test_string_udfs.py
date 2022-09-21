@@ -233,7 +233,7 @@ def test_string_udf_isupper(data):
 
 def test_string_udf_istitle(data):
     def func(st):
-        return st.title()
+        return st.istitle()
 
     run_udf_test(data, func, "bool")
 
