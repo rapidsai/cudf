@@ -61,7 +61,7 @@ using NodeT = char;
 
 /// Type used to index into the nodes within the tree of structs, lists, field names, and value
 /// nodes
-using NodeIndexT = uint32_t;
+using NodeIndexT = size_type;
 
 /// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
 using TreeDepthT = StackLevelT;
@@ -77,7 +77,7 @@ struct tree_meta_t {
   rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
-constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
+constexpr NodeIndexT parent_node_sentinel = -1;
 
 /**
  * @brief Class of a node (or a node "category") within the tree representation

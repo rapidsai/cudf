@@ -74,7 +74,7 @@ void print_tree_representation(std::string const& json_input,
                                cuio_json::tree_meta_t2 const& tree_rep)
 {
   for (std::size_t i = 0; i < tree_rep.node_categories.size(); i++) {
-    std::size_t parent_id = tree_rep.parent_node_ids[i];
+    auto parent_id = tree_rep.parent_node_ids[i];
     std::stack<std::size_t> path;
     path.push(i);
     while (parent_id != cuio_json::parent_node_sentinel) {
@@ -512,7 +512,7 @@ struct JsonTest : public cudf::test::BaseFixture {
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Test input
   std::string const input = R"(  [{)"
@@ -609,7 +609,7 @@ TEST_F(JsonTest, TreeRepresentation)
 
 TEST_F(JsonTest, TreeRepresentation2)
 {
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
   // Test input: value end with comma, space, close-brace ", }"
   std::string const input =
     // 0         1         2         3         4         5         6         7         8         9
@@ -684,7 +684,7 @@ TEST_F(JsonTest, TreeRepresentation2)
 
 TEST_F(JsonTest, TreeRepresentation3)
 {
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
   // Test input: Json lines with same TreeRepresentation2 input
   std::string const input =
     R"(  {}

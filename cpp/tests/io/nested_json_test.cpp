@@ -139,7 +139,7 @@ TEST_F(JsonTest, StackContext)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Test input
   std::string const input = R"(  [{)"
@@ -200,7 +200,7 @@ TEST_F(JsonTest, StackContextUtf8)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Test input
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
@@ -251,7 +251,7 @@ TEST_F(JsonTest, TokenStream)
                             R"("price": 8.95)"
                             R"(}] )";
 
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -387,7 +387,7 @@ TEST_F(JsonTest, TokenStream2)
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11)"
     "\n}}]";
 
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -455,7 +455,7 @@ TEST_F(JsonTest, ExtractColumn)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -481,7 +481,7 @@ TEST_F(JsonTest, ExtractColumn)
 TEST_F(JsonTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -524,7 +524,7 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options options{};
@@ -552,7 +552,7 @@ TEST_F(JsonTest, ExpectFailMixStructAndList)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options options{};
