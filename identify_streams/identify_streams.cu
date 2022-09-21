@@ -125,7 +125,8 @@ __host__ void print_trace()
 __host__ cudaError_t cudaLaunchKernel(
   const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
 {
-  if (stream == static_cast<cudaStream_t>(0)) {
+  if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||
+      (stream == cudaStreamPerThread)) {
     std::cout << "Found unexpected default stream!" << std::endl;
     print_trace();
     std::cout << std::endl;
