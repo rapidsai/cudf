@@ -79,7 +79,6 @@ gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
 conda list --show-channel-urls
-
 gpuci_logger "Check compiler versions"
 python --version
 
@@ -251,6 +250,8 @@ fi
 
 cd "$WORKSPACE/python/cudf/cudf"
 # It is essential to cd into $WORKSPACE/python/cudf/cudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
+gpuci_logger "Check conda packages"
+conda list
 gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
