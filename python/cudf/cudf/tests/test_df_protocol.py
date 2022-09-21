@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_LT_150
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.buffer import Buffer
 from cudf.core.column import build_column
 from cudf.core.df_protocol import (
@@ -241,7 +241,7 @@ def test_NA_mixed_dtype():
 
 
 @pytest.mark.skipif(
-    PANDAS_LT_150,
+    not PANDAS_GE_150,
     reason="Pandas versions < 1.5.0 do not support interchange protocol",
 )
 def test_from_cpu_df(pandas_df):
