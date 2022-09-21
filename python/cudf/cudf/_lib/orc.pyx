@@ -242,7 +242,7 @@ cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
 
 cpdef write_orc(table,
                 object path_or_buf,
-                object compression=None,
+                object compression="snappy",
                 object statistics="ROWGROUP",
                 object stripe_size_bytes=None,
                 object stripe_size_rows=None,
@@ -381,7 +381,7 @@ cdef class ORCWriter:
     def __cinit__(self,
                   object path,
                   object index=None,
-                  object compression=None,
+                  object compression="snappy",
                   object statistics="ROWGROUP",
                   object cols_as_map_type=None):
 

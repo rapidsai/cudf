@@ -7,11 +7,10 @@ import subprocess
 import sys
 from distutils.spawn import find_executable
 
+import versioneer
 from setuptools import find_packages
 from skbuild import setup
 from skbuild.command.build_ext import build_ext
-
-import versioneer
 
 install_requires = [
     "cachetools",
@@ -21,7 +20,7 @@ install_requires = [
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=1.0,<1.5.0dev0",
+    "pandas>=1.0,<1.6.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
 ]
