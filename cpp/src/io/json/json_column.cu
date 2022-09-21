@@ -95,14 +95,14 @@ void print_tree(host_span<SymbolT const> input,
   printf(" (JSON)\n");
 }
 
-// input tree, col_id, row_offset.
-// output list of json_column. (order?)
-std::tuple<rmm::device_uvector<NodeIndexT>, tree_meta_t, rmm::device_uvector<size_type>>
-gather_column_info(tree_meta_t& tree,
-                   device_span<NodeIndexT> col_ids,
-                   device_span<size_type> row_offsets,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+// input node tree, col_id, row_offset of nodes.
+// output column tree, col_id, max_row_offset of columns.
+std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+reduce_to_column_tree(tree_meta_t& tree,
+                      device_span<NodeIndexT> col_ids,
+                      device_span<size_type> row_offsets,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   //   1. sort_by_key {col_id}, {row_offset} //stable?
@@ -130,8 +130,6 @@ gather_column_info(tree_meta_t& tree,
                         max_row_offsets.begin(),
                         thrust::equal_to<size_type>(),
                         thrust::maximum<size_type>());
-  // FIXME: all structs should have same size.
-  // TODO  use nested structure to infer the size? or process here itself?
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::reduce_by_key(
@@ -188,6 +186,7 @@ gather_column_info(tree_meta_t& tree,
                                                                     : col_ids[parent_node_id];
                     });
   // copy lists' max_row_offsets to children.
+  // all structs should have same size.
   thrust::transform_if(
     rmm::exec_policy(stream),
     unique_col_ids.begin(),
@@ -212,15 +211,19 @@ gather_column_info(tree_meta_t& tree,
       // Parent is not a list, or sentinel/root
     });
 
-  return std::tuple{std::move(unique_col_ids),
-                    tree_meta_t{std::move(column_categories),
+  return std::tuple{tree_meta_t{std::move(column_categories),
                                 std::move(parent_col_ids),
                                 std::move(column_levels),
                                 std::move(col_range_begin),
                                 std::move(col_range_end)},
+                    std::move(unique_col_ids),
                     std::move(max_row_offsets)};
 }
 
+/**
+ * @brief Structure with pointers to data containined in `d_json_column`
+ *
+ */
 struct json_column_data {
   using row_offset_t = json_column::row_offset_t;
   row_offset_t* string_offsets;
@@ -228,13 +231,6 @@ struct json_column_data {
   row_offset_t* child_offsets;
   bitmask_type* validity;
 };
-
-std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column2(
-  d_json_column& json_col,
-  device_span<SymbolT const> d_input,
-  cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
 
 void make_json_column2(device_span<SymbolT const> input,
                        tree_meta_t& tree,
@@ -246,8 +242,8 @@ void make_json_column2(device_span<SymbolT const> input,
 {
   CUDF_FUNC_RANGE();
   // 1. gather column information.
-  auto [d_unique_col_ids, d_column_tree, d_max_row_offsets] =
-    gather_column_info(tree, col_ids, row_offsets, stream, mr);
+  auto [d_column_tree, d_unique_col_ids, d_max_row_offsets] =
+    reduce_to_column_tree(tree, col_ids, row_offsets, stream);
   auto num_columns    = d_unique_col_ids.size();
   auto unique_col_ids = cudf::detail::make_std_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -270,7 +266,7 @@ void make_json_column2(device_span<SymbolT const> input,
                         d_offset_pairs + num_columns,
                         string_views.begin(),
                         [input] __device__(auto const& offsets) {
-                          // TODO empty string for non-field columns
+                          // Note: first character for non-field columns
                           return thrust::make_pair(input.data() + thrust::get<0>(offsets),
                                                    static_cast<size_type>(thrust::get<1>(offsets) -
                                                                           thrust::get<0>(offsets)));
@@ -344,18 +340,13 @@ void make_json_column2(device_span<SymbolT const> input,
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       init_to_zero(col.child_offsets);
     }
-    col.current_offset = max_row_offsets[i] + 1;  // TODO use name num_rows
-    // col.validity.resize(max_row_offsets[i] + 1, stream);
-    col.validity.resize(bitmask_allocation_size_bytes(max_row_offsets[i] + 1),
-                        stream);  // TODO check correct size.
+    col.num_rows = max_row_offsets[i] + 1;
+    col.validity.resize(bitmask_allocation_size_bytes(max_row_offsets[i] + 1), stream);
     init_to_zero(col.validity);
     col.type = to_json_col_type(column_categories[i]);
   };
 
-  // 2. generate columns data
-#ifdef NJP_DEBUG_PRINT
-  printf("here1\n");
-#endif
+  // 2. generate nested columns tree and its device_memory
   // reorder unique_col_ids w.r.t. column_range_begin for order of column to be in field order.
   auto h_range_col_id_it =
     thrust::make_zip_iterator(column_range_beg.begin(), unique_col_ids.begin());
@@ -364,8 +355,9 @@ void make_json_column2(device_span<SymbolT const> input,
   });
   // use hash map because we may skip field name col_ids
   std::unordered_map<NodeIndexT, std::reference_wrapper<d_json_column>> columns;
+  // map{parent_col_id, child_col_name}> = child_col_id, used for null value column tracking
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
-  // find column_ids which are values, but should be ignored. (if they repeat)
+  // find column_ids which are values, but should be ignored in validity
   std::vector<uint8_t> ignore_vals(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
   for (auto const this_col_id : unique_col_ids) {
@@ -373,8 +365,6 @@ void make_json_column2(device_span<SymbolT const> input,
       continue;
     }
     // Struct, List, String, Value
-    d_json_column col(stream);
-    initialize_json_columns(this_col_id, col);
     std::string name   = "";
     auto parent_col_id = column_parent_ids[this_col_id];
     if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
@@ -383,19 +373,16 @@ void make_json_column2(device_span<SymbolT const> input,
       auto field_name_col_id = parent_col_id;
       parent_col_id          = column_parent_ids[parent_col_id];
       name                   = column_names[field_name_col_id];
-#ifdef NJP_DEBUG_PRINT
-      std::cout << name << " " << field_name_col_id << " " << parent_col_id << std::endl;
-#endif
     } else {
       CUDF_FAIL("Unexpected parent column category");
     }
+    // If the child is already found,
+    // replace if this column is a nested column and the existing was a value column
+    // ignore this column if this column is a value column and the existing was a nested column
     auto it = columns.find(parent_col_id);
     CUDF_EXPECTS(it != columns.end(), "Parent column not found");
     auto& parent_col = it->second.get();
-#ifdef NJP_DEBUG_PRINT
-    std::cout << "name: " << name << std::endl;
-#endif
-    bool replaced = false;
+    bool replaced    = false;
     if (mapped_columns.count({parent_col_id, name})) {
       if (column_categories[this_col_id] == NC_VAL) {
         ignore_vals[this_col_id] = 1;
@@ -420,41 +407,32 @@ void make_json_column2(device_span<SymbolT const> input,
       }
     }
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name");
-    parent_col.child_columns[name] = std::move(col);  // move into parent
+    // move into parent
+    d_json_column col(stream, mr);
+    initialize_json_columns(this_col_id, col);
+    auto inserted = parent_col.child_columns.try_emplace(name, std::move(col)).second;
+    CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
     if (not replaced) parent_col.column_order.push_back(name);
-    columns.try_emplace(this_col_id, std::ref(parent_col.child_columns[name]));
-    mapped_columns.try_emplace(std::make_pair(parent_col_id, name),
-                               this_col_id);  // keep map for null val col.
+    columns.try_emplace(this_col_id, std::ref(parent_col.child_columns.at(name)));
+    mapped_columns.try_emplace(std::make_pair(parent_col_id, name), this_col_id);
   }
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
     return thrust::get<1>(a) < thrust::get<1>(b);
   });
-#ifdef NJP_DEBUG_PRINT
-  printf("here2\n");
-#endif
   // move columns data to device.
   std::vector<json_column_data> columns_data(num_columns);
   for (auto& [col_id, col_ref] : columns) {
     if (col_id == parent_node_sentinel) continue;
-    auto& col = col_ref.get();
-#ifdef NJP_DEBUG_PRINT
-    printf("col_id: %d\n", col_id);
-#endif
+    auto& col            = col_ref.get();
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
                                             col.validity.data()};
   }
-#ifdef NJP_DEBUG_PRINT
-  printf("here3\n");
-#endif
   // 3. scatter offsets to respective columns
   auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
   auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
-#ifdef NJP_DEBUG_PRINT
-  printf("here3.1\n");
-#endif
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::counting_iterator<size_type>(0),
@@ -467,29 +445,19 @@ void make_json_column2(device_span<SymbolT const> input,
      d_ignore_vals   = d_ignore_vals.begin(),
      d_columns_data  = d_columns_data.begin()] __device__(size_type i) {
       switch (node_categories[i]) {
-        case NC_STRUCT:
-          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
-          // d_columns_data[col_ids[i]].validity[row_offsets[i]] = 1;  // TODO use bitmask_type
-          break;
-        case NC_LIST:
-          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
-          // d_columns_data[col_ids[i]].validity[row_offsets[i]] = 1;
-          break;
+        case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
+        case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
         case NC_VAL:
           if (d_ignore_vals[col_ids[i]]) break;
         case NC_STR:
           set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
-          // d_columns_data[col_ids[i]].validity[row_offsets[i]]       = 1;
           d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
           break;
         default: break;
       }
     });
-#ifdef NJP_DEBUG_PRINT
-  printf("here4\n");
-#endif
-  // scatter List offset
+  // 4. scatter List offset
   //   sort_by_key {col_id}, {node_id}
   //   unique_copy_by_key {parent_node_id} {row_offset} to
   //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
@@ -532,10 +500,7 @@ void make_json_column2(device_span<SymbolT const> input,
         }
       }
     });
-#ifdef NJP_DEBUG_PRINT
-  printf("here5\n");
-#endif
-  // TODO scan on offsets.
+  // 5. scan on offsets.
   for (auto& [id, col_ref] : columns) {
     auto& col = col_ref.get();
     if (col.type == json_col_t::StringColumn) {
@@ -552,21 +517,9 @@ void make_json_column2(device_span<SymbolT const> input,
                              thrust::maximum<json_column::row_offset_t>{});
     }
   }
-#ifdef NJP_DEBUG_PRINT
-  printf("here5\n");
-#endif
-  thrust::copy(rmm::exec_policy(stream),
-               original_col_ids.begin(),
-               original_col_ids.end(),
-               col_ids.begin());  // restore col_ids
-// XXX: test code: convert string json_columns to cudf columns.
-// auto [cudf_col, name_info] =
-//   json_column_to_cudf_column2(root, input, stream, mr);  // modifies root
-#ifdef NJP_DEBUG_PRINT
-  // cudf::test::print(*cudf_col);
-  printf("here6\n");
-#endif
-  // return root;
+  // restore col_ids, TODO is this required?
+  thrust::copy(
+    rmm::exec_policy(stream), original_col_ids.begin(), original_col_ids.end(), col_ids.begin());
 }
 
 /**
@@ -587,13 +540,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   CUDF_FUNC_RANGE();
   auto make_validity = [stream,
                         mr](d_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
-    CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.current_offset),
+    CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
     auto null_count =
-      cudf::detail::null_count(json_col.validity.data(), 0, json_col.current_offset, stream);
-    // rmm::device_uvector<bitmask_type> validity(json_col.validity, stream, mr); // TODO
-    // full Null mask always required for parse_data
-    return {json_col.validity.release(), null_count};  // reuse the memory, but TODO mr.
+      cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
+    // full null_mask always required for parse_data
+    return {json_col.validity.release(), null_count};
+    // Note: json_col modified here, reuse the memory
   };
 
   switch (json_col.type) {
@@ -650,20 +603,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     case json_col_t::StructColumn: {
       std::vector<std::unique_ptr<column>> child_columns;
       std::vector<column_name_info> column_names{};
-      size_type num_rows{json_col.current_offset};
+      size_type num_rows{json_col.num_rows};
       // Create children columns
       for (auto const& col_name : json_col.column_order) {
         auto const& col = json_col.child_columns.find(col_name);
-#ifdef NJP_DEBUG_PRINT
-        printf("col_name %s  ", col_name.c_str());
-#endif
         column_names.emplace_back(col->first);
         auto& child_col = col->second;
         auto [child_column, names] =
           json_column_to_cudf_column2(child_col, d_input, options, stream, mr);
-#ifdef NJP_DEBUG_PRINT
-        printf("num_rows: %d, child column size: %d\n", num_rows, child_column->size());
-#endif
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));
@@ -678,14 +625,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
     }
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size();
-#ifdef NJP_DEBUG_PRINT
-      printf("num_rows(L): %d\n", num_rows);
-#endif
       std::vector<column_name_info> column_names{};
       column_names.emplace_back("offsets");
       column_names.emplace_back(json_col.child_columns.begin()->first);
 
-      // XXX: json_col modified here
+      // Note: json_col modified here, reuse the memory
       auto offsets_column = std::make_unique<column>(
         data_type{type_id::INT32}, num_rows, json_col.child_offsets.release());
       // Create children column
@@ -740,16 +684,16 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
     cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
 #endif
 
-  d_json_column root_column;
+  d_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
-  root_column.child_offsets.resize(0 + 2, stream);
+  root_column.child_offsets.resize(2, stream);
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              root_column.child_offsets.begin(),
                              root_column.child_offsets.end(),
                              0);
 
   // Get internal JSON column
-  make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream);
+  make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream, mr);
 
 #ifdef NJP_DEBUG_PRINT
   printf("make_json_column2:\n");
@@ -783,9 +727,9 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
     // Insert this columns name into the schema
     out_column_names.emplace_back(col_name);
 
-    // Get this JSON column's cudf column and schema info
+    // Get this JSON column's cudf column and schema info, (modifies json_col)
     auto [cudf_col, col_name_info] =
-      json_column_to_cudf_column2(json_col, d_input, options, stream, mr);  // modifies json_col
+      json_column_to_cudf_column2(json_col, d_input, options, stream, mr);
 
     out_column_names.back().children = std::move(col_name_info);
     out_columns.emplace_back(std::move(cudf_col));
