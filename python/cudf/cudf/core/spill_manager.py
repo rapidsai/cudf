@@ -65,56 +65,73 @@ class SpillManager:
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
-        if self._spill_on_demand:
-            self.register_spill_on_demand()
         self._expose_statistics = {} if expose_statistics else None
 
-    def register_spill_on_demand(self):
-        def oom(nbytes: int, *, retry_on_error=True) -> bool:
-            """Try to handle an out-of-memory error by spilling
+        if self._spill_on_demand:
+            # Set the RMM out-of-memory handle if not already set
+            mr = rmm.mr.get_current_device_resource()
+            if all(
+                not isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
+                for m in get_rmm_memory_resource_stack(mr)
+            ):
+                rmm.mr.set_current_device_resource(
+                    rmm.mr.FailureCallbackResourceAdaptor(
+                        mr, self._out_of_memory_handle
+                    )
+                )
 
-            Warning: in order to avoid deadlock, this function should
-            not lock already locked buffers.
-            """
+    def _out_of_memory_handle(self, nbytes: int, *, retry_once=True) -> bool:
+        """Try to handle an out-of-memory error by spilling
 
-            # Keep spilling until `nbytes` been spilled
-            total_spilled = 0
-            while total_spilled < nbytes:
-                spilled = self.spill_device_memory()
-                if spilled == 0:
-                    break  # No more to spill!
-                total_spilled += spilled
+        This can by used as the callback function to RMM's
+        `FailureCallbackResourceAdaptor`
 
-            if total_spilled > 0:
-                return True  # Ask RMM to retry the allocation
+        Parameters
+        ----------
+        nbytes : int
+            Number of bytes to try to spill.
+        retry_once : bool, optional
+            If True, call `gc.collect()` and retry once.
 
-            if retry_on_error:
-                # Let's collect garbage and try one more time
-                gc.collect()
-                return oom(nbytes, retry_on_error=False)
+        Return
+        ------
+        bool
+            True if any buffers were freed otherwise False.
 
-            # TODO: write to log instead of stdout
-            print(
-                f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
-                "failed, spill-on-demand couldn't find any device memory to "
-                f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
-            )
-            if self._expose_statistics is None:
-                print("Set `CUDF_SPILL_STAT_EXPOSE=on` for expose statistics")
-            else:
-                print(self.pprint_expose_statistics())
+        Warning
+        -------
+        In order to avoid deadlock, this function should not lock
+        already locked buffers.
+        """
 
-            return False  # Since we didn't find anything to spill, we give up
+        # Keep spilling until `nbytes` been spilled
+        total_spilled = 0
+        while total_spilled < nbytes:
+            spilled = self.spill_device_memory()
+            if spilled == 0:
+                break  # No more to spill!
+            total_spilled += spilled
 
-        # Set the oom handle if not already set
-        mr = rmm.mr.get_current_device_resource()
-        if all(
-            not isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
-            for m in get_rmm_memory_resource_stack(mr)
-        ):
-            rmm.mr.set_current_device_resource(
-                rmm.mr.FailureCallbackResourceAdaptor(mr, oom)
-            )
+        if total_spilled > 0:
+            return True  # Ask RMM to retry the allocation
+
+        if retry_once:
+            # Let's collect garbage and try one more time
+            gc.collect()
+            return self._out_of_memory_handle(nbytes, retry_once=False)
+
+        # TODO: write to log instead of stdout
+        print(
+            f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
+            "failed, spill-on-demand couldn't find any device memory to "
+            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
+        )
+        if self._expose_statistics is None:
+            print("Set `CUDF_SPILL_STAT_EXPOSE=on` for expose statistics")
+        else:
+            print(self.pprint_expose_statistics())
+
+        return False  # Since we didn't find anything to spill, we give up
 
     def add(self, buffer: SpillableBuffer) -> None:
         if buffer.size > 0 and not buffer.exposed:
