@@ -243,28 +243,28 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
   for (int i = 0; i < 24; i++) {
     input = input + input;
   }
-  std::string garbage{"garbage"};
+  std::string padding_garbage{"garbage"};
   for (int i = 0; i < 10; i++) {
-    garbage = garbage + garbage;
+    padding_garbage = padding_garbage + padding_garbage;
   }
-  std::string garbage2{"GARBAGE"};
+  std::string data_garbage{"GARBAGE"};
   std::string begininput{"begin of bananarama"};
   std::string endinput{"end of bananarama"};
   std::size_t begin_compressed_offset{};
   std::size_t end_compressed_offset{};
-  std::size_t begin_local_offset{garbage2.size()};
+  std::size_t begin_local_offset{data_garbage.size()};
   std::size_t end_local_offset{endinput.size()};
   {
     std::ofstream stream{filename};
-    stream.write(garbage.data(), garbage.size());
+    stream.write(padding_garbage.data(), padding_garbage.size());
     std::default_random_engine rng{};
     begin_compressed_offset = stream.tellp();
-    write_bgzip_block(stream, garbage2 + begininput, false, false);
+    write_bgzip_block(stream, data_garbage + begininput, false, false);
     write_bgzip(stream, input, rng, false);
     end_compressed_offset = stream.tellp();
-    write_bgzip_block(stream, endinput + garbage2 + garbage2, false, false);
+    write_bgzip_block(stream, endinput + data_garbage + data_garbage, false, false);
     write_bgzip_block(stream, {}, false, false);
-    stream.write(garbage.data(), garbage.size());
+    stream.write(padding_garbage.data(), padding_garbage.size());
   }
   input = begininput + input + endinput;
 
@@ -280,15 +280,15 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleGZipBlock)
 {
   auto filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"collection unit brings"};
-  std::string garbage{"garbage"};
-  std::string garbage2{"GARBAGE"};
+  std::string head_garbage{"garbage"};
+  std::string tail_garbage{"GARBAGE"};
   std::size_t begin_compressed_offset{};
   std::size_t end_compressed_offset{};
-  std::size_t begin_local_offset{garbage.size()};
-  std::size_t end_local_offset{garbage.size() + input.size()};
+  std::size_t begin_local_offset{head_garbage.size()};
+  std::size_t end_local_offset{head_garbage.size() + input.size()};
   {
     std::ofstream stream{filename};
-    write_bgzip_block(stream, garbage + input + garbage2, false, false);
+    write_bgzip_block(stream, head_garbage + input + tail_garbage, false, false);
     write_bgzip_block(stream, {}, false, false);
   }
 
@@ -304,17 +304,17 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleChunk)
 {
   auto filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"collection unit brings"};
-  std::string garbage{"garbage"};
-  std::string garbage2{"GARBAGE"};
+  std::string head_garbage{"garbage"};
+  std::string tail_garbage{"GARBAGE"};
   std::size_t begin_compressed_offset{};
   std::size_t end_compressed_offset{};
-  std::size_t begin_local_offset{garbage.size()};
+  std::size_t begin_local_offset{head_garbage.size()};
   std::size_t end_local_offset{input.size() - 10};
   {
     std::ofstream stream{filename};
-    write_bgzip_block(stream, garbage + input.substr(0, 10), false, false);
+    write_bgzip_block(stream, head_garbage + input.substr(0, 10), false, false);
     end_compressed_offset = stream.tellp();
-    write_bgzip_block(stream, input.substr(10) + garbage2, false, false);
+    write_bgzip_block(stream, input.substr(10) + tail_garbage, false, false);
     write_bgzip_block(stream, {}, false, false);
   }
 
