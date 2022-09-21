@@ -384,12 +384,12 @@ void make_json_column2(device_span<SymbolT const> input,
     auto& parent_col = it->second.get();
     bool replaced    = false;
     if (mapped_columns.count({parent_col_id, name})) {
-      if (column_categories[this_col_id] == NC_VAL) {
+      if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
         ignore_vals[this_col_id] = 1;
         continue;
       }
       auto old_col_id = mapped_columns[{parent_col_id, name}];
-      if (column_categories[old_col_id] == NC_VAL) {
+      if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
         // remap
         ignore_vals[old_col_id] = 1;
         mapped_columns.erase({parent_col_id, name});
@@ -448,8 +448,8 @@ void make_json_column2(device_span<SymbolT const> input,
         case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
         case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
         case NC_VAL:
-          if (d_ignore_vals[col_ids[i]]) break;
         case NC_STR:
+          if (d_ignore_vals[col_ids[i]]) break;
           set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
           d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
@@ -750,7 +750,7 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
   // Initialize meta data to be populated while recursing through the tree of columns
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
-  
+
 #ifdef NJP_DEBUG_PRINT
   auto debug_schema_print = [](auto ret) {
     std::cout << ", type id: "
