@@ -16,6 +16,7 @@ jobs:
       cibw-before-all-arm64: "apt update -y && apt install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       manylinux-container-amd64: "manylinux2014"
       manylinux-container-arm64: "manylinux_2_31"
+      manylinux-test-container-arm64: "manylinux_2_31"
       cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
       skbuild-build-options: "-v"
       skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
