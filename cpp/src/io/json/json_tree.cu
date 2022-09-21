@@ -250,6 +250,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids.end(),
                    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
                      return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
+                     // XXX: How is this algorithm working for JSON lines?
                    });
   nvtxRangePop();
 
@@ -357,7 +358,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     using hash_map_type =
       cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-    constexpr size_type empty_node_index_sentinel = std::numeric_limits<size_type>::max();
+    constexpr size_type empty_node_index_sentinel = -1;
     hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
                           cuco::sentinel::empty_key{empty_node_index_sentinel},
                           cuco::sentinel::empty_value{empty_node_index_sentinel},
@@ -452,11 +453,13 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
   // gather, except parent sentinels
   thrust::transform(rmm::exec_policy(stream),
-                    parent_node_ids.begin(),  // first node's parent is -1
+                    parent_node_ids.begin(),
                     parent_node_ids.end(),
                     parent_indices.begin(),
                     [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
-                      return (parent_node_id == -1) ? -1 : gather_indices[parent_node_id];
+                      return (parent_node_id == parent_node_sentinel)
+                               ? parent_node_sentinel
+                               : gather_indices[parent_node_id];
                     });
   nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
@@ -569,21 +572,20 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
   // Initialize First level node's node col_id to 0
   thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
-  // Initialize First level node's parent_col_id to -1 sentinel
+  // Initialize First level node's parent_col_id to parent_node_sentinel sentinel
   thrust::fill(rmm::exec_policy(stream),
                parent_col_id.begin(),
                parent_col_id.begin() + level_boundaries[0],
-               -1);
+               parent_node_sentinel);
   nvtxRangePop();
   nvtxRangePushA("level");
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     PRINT_LEVEL_DATA(level, ".before gather");
     nvtxRangePushA("gather");
     thrust::gather(rmm::exec_policy(stream),
-                   parent_indices.data() +
-                     level_boundaries[level - 1],  // FIXME: might be wrong. might be a bug here.
+                   parent_indices.data() + level_boundaries[level - 1],
                    parent_indices.data() + level_boundaries[level],
-                   col_id.data(),  // + level_boundaries[level - 1],
+                   col_id.data(),
                    parent_col_id.data() + level_boundaries[level - 1]);
     PRINT_LEVEL_DATA(level, ".after gather");
     // TODO probably sort_by_key value should be a gather/scatter index to restore original order.
@@ -616,8 +618,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     // includes previous level last col_id to continue the index.
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            col_id.data() + level_boundaries[level - 1],
-                           col_id.data() + level_boundaries[level] +
-                             (level != num_levels - 1),  // +1 only for not-last-levels.
+                           col_id.data() + level_boundaries[level] + (level != num_levels - 1),
+                           // +1 only for not-last-levels, for next level start col_id
                            col_id.data() + level_boundaries[level - 1]);
     PRINT_LEVEL_DATA(level, ".after scan");
     // TODO scatter/gather to restore original order. (but scatter_indices is not zero based here)
@@ -631,18 +633,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     nvtxRangePop();
   }
   nvtxRangePop();
-  auto translate_col_id = [](auto col_id) {
-    std::unordered_map<int, int> col_id_map;
-    std::vector<int> new_col_ids(col_id.size());
-    int unique_id = 0;
-    for (auto id : col_id) {
-      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
-    }
-    for (size_t i = 0; i < col_id.size(); i++) {
-      new_col_ids[i] = col_id_map[col_id[i]];
-    }
-    return new_col_ids;
-  };
   nvtxRangePushA("restore");
   // restore original order of col_id., and used d_tree members
   // TODO can we do this with scatter instead of sort?
@@ -658,6 +648,18 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                         col_id.begin(),
                         d_tree.node_levels.begin()));
 #ifdef NJP_DEBUG_PRINT
+  auto translate_col_id = [](auto col_id) {
+    std::unordered_map<int, int> col_id_map;
+    std::vector<int> new_col_ids(col_id.size());
+    int unique_id = 0;
+    for (auto id : col_id) {
+      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
+    }
+    for (size_t i = 0; i < col_id.size(); i++) {
+      new_col_ids[i] = col_id_map[col_id[i]];
+    }
+    return new_col_ids;
+  };
   print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
   print_vec(cudf::detail::make_std_vector_async(parent_indices, stream),
             "gpu.parent_indices");  // once original order is restored, is this required?
@@ -713,21 +715,18 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
      parent_node_ids = d_tree.parent_node_ids.begin(),
      row_offsets     = row_offsets.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
-      // TODO replace -1 with sentinel
-      while (parent_node_id != -1 and node_categories[parent_node_id] != node_t::NC_LIST) {
+      while (parent_node_id != parent_node_sentinel and
+             node_categories[parent_node_id] != node_t::NC_LIST) {
         node_id        = parent_node_id;
         parent_node_id = parent_node_ids[parent_node_id];
       }
-      // return -1;
       return row_offsets[node_id];
     },
     [node_categories = d_tree.node_categories.data(),
      parent_node_ids = d_tree.parent_node_ids.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
-      return parent_node_id != -1 and
-             !(node_categories[parent_node_id] ==
-               node_t::NC_LIST);  // Parent is not a list, or sentinel/root (might be different
-                                  // condition for JSON_lines)
+      return parent_node_id != parent_node_sentinel and
+             !(node_categories[parent_node_id] == node_t::NC_LIST);
     });
   nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
