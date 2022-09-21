@@ -40,7 +40,7 @@ std::unique_ptr<data_chunk_source> make_source(host_span<const char> data);
  * @return the data chunk source for the provided filename. It reads data from the file and copies
  *         it to the device.
  */
-std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& filename);
+std::unique_ptr<data_chunk_source> make_source_from_file(std::string_view filename);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of a BGZIP compressed
@@ -49,7 +49,7 @@ std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& file
  * @return the data chunk source for the provided filename. It reads data from the file and copies
  *         it to the device, where it will be decompressed.
  */
-std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const& filename);
+std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view filename);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of a BGZIP compressed
@@ -63,7 +63,7 @@ std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const
  *         it to the device, where it will be decompressed. The chunk source only returns data
  *         between the virtual offsets `virtual_begin` and `virtual_end`.
  */
-std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const& filename,
+std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view filename,
                                                                uint64_t virtual_begin,
                                                                uint64_t virtual_end);
 

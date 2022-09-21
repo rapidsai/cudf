@@ -110,21 +110,25 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     std::memcpy(&expected_header[1], &magic_expected_2, sizeof(char));
     CUDF_EXPECTS(std::equal(expected_header.begin(), expected_header.end(), buffer.begin()),
                  "malformed BGZIP header");
+    // we ignore the remaining bytes of the fixed header, since they don't matter to us
     auto extra_length = read_int<uint16_t>(&buffer[10]);
     uint16_t extra_offset{};
     // read all the extra subfields
     while (extra_offset < extra_length) {
       auto const remaining_size = extra_length - extra_offset;
       CUDF_EXPECTS(remaining_size >= 4, "invalid extra field length");
+      // a subfield consists of 2 identifier bytes and a uint16 length
+      // 66/67 identifies a BGZIP block size field, we skip all other fields
       _stream->read(buffer.data(), 4);
       extra_offset += 4;
       auto subfield_size = read_int<uint16_t>(&buffer[2]);
       if (buffer[0] == 66 && buffer[1] == 67) {
+        // the block size subfield contains a single uint16 value, which is block_size - 1
         CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
         _stream->read(buffer.data(), sizeof(uint16_t));
         _stream->seekg(remaining_size - 6, std::ios_base::cur);
-        auto block_size = read_int<uint16_t>(&buffer[0]);
-        return {block_size + 1, extra_length};
+        auto block_size_minus_one = read_int<uint16_t>(&buffer[0]);
+        return {block_size_minus_one + 1, extra_length};
       } else {
         _stream->seekg(subfield_size, std::ios_base::cur);
         extra_offset += subfield_size;
@@ -191,14 +195,14 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     std::size_t read_pos{};
     bool decompressed{};
 
-    compressed_blocks()
-      : d_compressed_blocks(0, cudf::default_stream_value),
-        d_decompressed_blocks(0, cudf::default_stream_value),
-        d_compressed_offsets(0, cudf::default_stream_value),
-        d_decompressed_offsets(0, cudf::default_stream_value),
-        d_compressed_spans(0, cudf::default_stream_value),
-        d_decompressed_spans(0, cudf::default_stream_value),
-        d_decompression_results(0, cudf::default_stream_value)
+    compressed_blocks(rmm::cuda_stream_view init_stream)
+      : d_compressed_blocks(0, init_stream),
+        d_decompressed_blocks(0, init_stream),
+        d_compressed_offsets(0, init_stream),
+        d_decompressed_offsets(0, init_stream),
+        d_compressed_spans(0, init_stream),
+        d_decompressed_spans(0, init_stream),
+        d_decompression_results(0, init_stream)
     {
       CUDF_CUDA_TRY(cudaEventCreate(&event));
       h_compressed_blocks.reserve(default_buffer_alloc);
@@ -230,7 +234,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         offset_it,
         offset_it + num_blocks(),
         span_it,
-        bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t*>(d_compressed_blocks.data()),
+        bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
                                        reinterpret_cast<uint8_t*>(d_decompressed_blocks.begin())});
       if (decompressed_size() > 0) {
         cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
@@ -307,6 +311,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     _curr_block.reset();
     // read chunks until we have enough decompressed data
     while (_curr_block.decompressed_size() < requested_size) {
+      // calling peek on an already EOF stream causes it to fail, we need to avoid that
+      if (_stream->eof()) { break; }
+      // peek is necessary if we are already at the end, but didn't try to read another byte
       _stream->peek();
       if (_stream->eof() || _compressed_pos > _compressed_end) { break; }
       auto header = read_header();
@@ -333,12 +340,14 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                           uint64_t virtual_begin,
                           uint64_t virtual_end)
     : _stream(std::move(input_stream)),
+      _prev_block{cudf::default_stream_value},  // here we can use the default stream because
+      _curr_block{cudf::default_stream_value},  // we only initialize empty device_uvectors
       _local_end{virtual_end & 0xFFFFu},
       _compressed_pos{virtual_begin >> 16},
       _compressed_end{virtual_end >> 16}
   {
     // set failbit to throw on IO failures
-    input_stream->exceptions(input_stream->exceptions() | std::istream::failbit);
+    _stream->exceptions(std::istream::failbit);
     // seek to the beginning of the provided compressed offset
     _stream->seekg(_compressed_pos, std::ios_base::cur);
     // read the first blocks
@@ -359,6 +368,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       read_size -= _curr_block.remaining_size();
       _curr_block.consume_bytes(_curr_block.remaining_size());
       read_next_compressed_chunk(chunk_load_size);
+      // calling peek on an already EOF stream causes it to fail, we need to avoid that
+      if (_stream->eof()) { break; }
+      // peek is necessary if we are already at the end, but didn't try to read another byte
       _stream->peek();
       if (_stream->eof() || _compressed_pos > _compressed_end) { break; }
     }
@@ -418,10 +430,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
 
 class bgzip_data_chunk_source : public data_chunk_source {
  public:
-  bgzip_data_chunk_source(std::string filename, uint64_t virtual_begin, uint64_t virtual_end)
-    : _filename{std::move(filename)}, _virtual_begin{virtual_begin}, _virtual_end{virtual_end}
+  bgzip_data_chunk_source(std::string_view filename, uint64_t virtual_begin, uint64_t virtual_end)
+    : _filename{filename}, _virtual_begin{virtual_begin}, _virtual_end{virtual_end}
   {
   }
+
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<bgzip_data_chunk_reader>(
@@ -436,14 +449,14 @@ class bgzip_data_chunk_source : public data_chunk_source {
 
 }  // namespace
 
-std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const& filename,
+std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view filename,
                                                                uint64_t virtual_begin,
                                                                uint64_t virtual_end)
 {
   return std::make_unique<bgzip_data_chunk_source>(filename, virtual_begin, virtual_end);
 }
 
-std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string const& filename)
+std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view filename)
 {
   return std::make_unique<bgzip_data_chunk_source>(
     filename, 0, std::numeric_limits<uint64_t>::max());

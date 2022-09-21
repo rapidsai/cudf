@@ -57,6 +57,16 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
     ASSERT_EQ(chunk_to_host(*chunk), content.substr(4));
   }
   {
+    // reading multiple chunks, starting with a small one
+    auto reader = source.create_reader();
+    auto chunk1 = reader->get_next_chunk(5, rmm::cuda_stream_default);
+    auto chunk2 = reader->get_next_chunk(content.size() - 5, rmm::cuda_stream_default);
+    ASSERT_EQ(chunk1->size(), 5);
+    ASSERT_EQ(chunk2->size(), content.size() - 5);
+    ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, 5));
+    ASSERT_EQ(chunk_to_host(*chunk2), content.substr(5));
+  }
+  {
     // reading multiple chunks
     auto reader = source.create_reader();
     auto chunk1 = reader->get_next_chunk(content.size() / 2, rmm::cuda_stream_default);

@@ -207,7 +207,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  */
 class file_data_chunk_source : public data_chunk_source {
  public:
-  file_data_chunk_source(std::string filename) : _filename(std::move(filename)) {}
+  file_data_chunk_source(std::string_view filename) : _filename(filename) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<istream_data_chunk_reader>(
@@ -255,7 +255,7 @@ std::unique_ptr<data_chunk_source> make_source(host_span<const char> data)
   return std::make_unique<host_span_data_chunk_source>(data);
 }
 
-std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& filename)
+std::unique_ptr<data_chunk_source> make_source_from_file(std::string_view filename)
 {
   return std::make_unique<file_data_chunk_source>(filename);
 }

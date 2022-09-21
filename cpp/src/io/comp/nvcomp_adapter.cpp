@@ -139,14 +139,12 @@ size_t batched_decompress_temp_size(compression_type compression,
                                     size_t max_uncomp_chunk_size,
                                     size_t max_total_uncomp_size)
 {
-  size_t temp_size         = 0;
-  auto const nvcomp_status = [&]() {
-    auto maybe_result = batched_decompress_get_temp_size_ex(
-      compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
-    if (maybe_result.has_value()) { return *maybe_result; }
-    return batched_decompress_get_temp_size(
-      compression, num_chunks, max_uncomp_chunk_size, &temp_size);
-  }();
+  size_t temp_size = 0;
+  auto const nvcomp_status =
+    batched_decompress_get_temp_size_ex(
+      compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size)
+      .value_or(batched_decompress_get_temp_size(
+        compression, num_chunks, max_uncomp_chunk_size, &temp_size));
 
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "Unable to get scratch size for decompression");
