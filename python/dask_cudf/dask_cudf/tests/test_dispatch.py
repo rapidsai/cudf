@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 import pandas as pd
 
 from dask.dataframe.methods import is_categorical_dtype

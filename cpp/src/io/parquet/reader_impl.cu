@@ -247,13 +247,15 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
 
-inline void decompress_check(device_span<decompress_status const> stats,
+inline void decompress_check(device_span<compression_result const> results,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
+                              results.begin(),
+                              results.end(),
+                              [] __device__(auto const& res) {
+                                return res.status == compression_status::SUCCESS;
+                              }),
                "Error during decompression");
 }
 }  // namespace
@@ -540,14 +542,15 @@ class aggregate_reader_metadata {
    * @brief Filters and reduces down to a selection of row groups
    *
    * @param row_groups Lists of row groups to read, one per source
+   * @param row_start Starting row of the selection
+   * @param row_count Total number of rows selected
    *
-   * @return List of row group info structs and the total number of rows
+   * @return List of row group indexes and its starting row
    */
-  [[nodiscard]] std::pair<std::vector<row_group_info>, size_type> select_row_groups(
-    std::vector<std::vector<size_type>> const& row_groups) const
+  [[nodiscard]] auto select_row_groups(std::vector<std::vector<size_type>> const& row_groups,
+                                       size_type& row_start,
+                                       size_type& row_count) const
   {
-    size_type row_count = 0;
-
     if (!row_groups.empty()) {
       std::vector<row_group_info> selection;
       CUDF_EXPECTS(row_groups.size() == per_file_metadata.size(),
@@ -564,12 +567,17 @@ class aggregate_reader_metadata {
           row_count += get_row_group(rowgroup_idx, src_idx).num_rows;
         }
       }
-      return {selection, row_count};
+      return selection;
     }
 
-    row_count = static_cast<size_type>(
-      std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
+    row_start = std::max(row_start, 0);
+    if (row_count < 0) {
+      row_count = static_cast<size_type>(
+        std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
+    }
+    row_count = min(row_count, get_num_rows() - row_start);
     CUDF_EXPECTS(row_count >= 0, "Invalid row count");
+    CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
     std::vector<row_group_info> selection;
     size_type count = 0;
@@ -577,12 +585,14 @@ class aggregate_reader_metadata {
       for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
         auto const chunk_start_row = count;
         count += get_row_group(rg_idx, src_idx).num_rows;
-        selection.emplace_back(rg_idx, chunk_start_row, src_idx);
-        if (count >= row_count) { break; }
+        if (count > row_start || count == 0) {
+          selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+        }
+        if (count >= row_start + row_count) { break; }
       }
     }
 
-    return {selection, row_count};
+    return selection;
   }
 
   /**
@@ -1141,11 +1151,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
-  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, _stream);
   thrust::fill(rmm::exec_policy(_stream),
-               comp_stats.begin(),
-               comp_stats.end(),
-               decompress_status{0, static_cast<uint32_t>(-1000), 0});
+               comp_res.begin(),
+               comp_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
@@ -1169,31 +1179,30 @@ rmm::device_buffer reader::impl::decompress_page_data(
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
     auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, _stream);
-    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
-                                                     codec.num_pages);
+    device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
       case parquet::GZIP:
-        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, _stream);
+        gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, _stream);
         break;
       case parquet::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      d_comp_in,
                                      d_comp_out,
-                                     d_comp_stats_view,
+                                     d_comp_res_view,
                                      codec.max_decompressed_size,
                                      codec.total_decomp_size,
                                      _stream);
         } else {
-          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, _stream);
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_res_view, _stream);
         }
         break;
       case parquet::ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    d_comp_in,
                                    d_comp_out,
-                                   d_comp_stats_view,
+                                   d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
                                    _stream);
@@ -1201,7 +1210,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       case parquet::BROTLI:
         gpu_debrotli(d_comp_in,
                      d_comp_out,
-                     d_comp_stats_view,
+                     d_comp_res_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
                      _stream);
@@ -1211,7 +1220,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
     start_pos += codec.num_pages;
   }
 
-  decompress_check(comp_stats, _stream);
+  decompress_check(comp_res, _stream);
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
@@ -1342,7 +1351,9 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
  */
 void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                       hostdevice_vector<gpu::PageInfo>& pages,
-                                      size_t num_rows,
+                                      size_t min_row,
+                                      size_t total_rows,
+                                      bool uses_custom_row_bounds,
                                       bool has_lists)
 {
   // TODO : we should be selectively preprocessing only columns that have
@@ -1355,15 +1366,22 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
       [&](std::vector<column_buffer>& cols) {
         for (size_t idx = 0; idx < cols.size(); idx++) {
           auto& col = cols[idx];
-          col.create(num_rows, _stream, _mr);
+          col.create(total_rows, _stream, _mr);
           create_columns(col.children);
         }
       };
     create_columns(_output_columns);
   } else {
     // preprocess per-nesting level sizes by page
-    gpu::PreprocessColumnData(
-      pages, chunks, _input_columns, _output_columns, num_rows, _stream, _mr);
+    gpu::PreprocessColumnData(pages,
+                              chunks,
+                              _input_columns,
+                              _output_columns,
+                              total_rows,
+                              min_row,
+                              uses_custom_row_bounds,
+                              _stream,
+                              _mr);
     _stream.synchronize();
   }
 }
@@ -1374,6 +1392,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
+                                    size_t min_row,
                                     size_t total_rows)
 {
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
@@ -1495,7 +1514,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
     gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), _stream);
   }
 
-  gpu::DecodePageData(pages, chunks, total_rows, _stream);
+  gpu::DecodePageData(pages, chunks, total_rows, min_row, _stream);
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
   _stream.synchronize();
@@ -1587,10 +1606,14 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
-table_with_metadata reader::impl::read(std::vector<std::vector<size_type>> const& row_group_list)
+table_with_metadata reader::impl::read(size_type skip_rows,
+                                       size_type num_rows,
+                                       bool uses_custom_row_bounds,
+                                       std::vector<std::vector<size_type>> const& row_group_list)
 {
   // Select only row groups required
-  const auto [selected_row_groups, num_rows] = _metadata->select_row_groups(row_group_list);
+  const auto selected_row_groups =
+    _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
   table_metadata out_metadata;
 
@@ -1732,10 +1755,10 @@ table_with_metadata reader::impl::read(std::vector<std::vector<size_type>> const
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, num_rows, has_lists);
+      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, has_lists);
 
       // decoding of column data itself
-      decode_page_data(chunks, pages, page_nesting_info, num_rows);
+      decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
 
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
@@ -1786,7 +1809,12 @@ reader::~reader() = default;
 // Forward to implementation
 table_with_metadata reader::read(parquet_reader_options const& options)
 {
-  return _impl->read(options.get_row_groups());
+  // if the user has specified custom row bounds
+  bool const uses_custom_row_bounds = options.get_num_rows() >= 0 || options.get_skip_rows() != 0;
+  return _impl->read(options.get_skip_rows(),
+                     options.get_num_rows(),
+                     uses_custom_row_bounds,
+                     options.get_row_groups());
 }
 
 }  // namespace parquet

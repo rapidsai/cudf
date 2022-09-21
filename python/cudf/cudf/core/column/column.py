@@ -233,7 +233,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], {"None": self.dtype})[
+        return libcudf.interop.to_arrow([self], [("None", self.dtype)])[
             "None"
         ].chunk(0)
 
@@ -1719,7 +1719,8 @@ def as_column(
         data = arbitrary._column
         if dtype is not None:
             data = data.astype(dtype)
-    elif isinstance(arbitrary, cudf.GenericIndex):
+
+    elif isinstance(arbitrary, cudf.BaseIndex):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
