@@ -34,8 +34,6 @@ void BM_csv_read_varying_options(
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto constexpr num_chunks = 1;
-
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),
@@ -45,6 +43,7 @@ void BM_csv_read_varying_options(
                                                    static_cast<int32_t>(data_type::STRING)}),
                                 ColSelection);
   auto const cols_to_read = select_column_indexes(data_types.size(), ColSelection);
+  auto const num_chunks   = state.get_int64("num_chunks");
 
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -123,11 +122,13 @@ NVBENCH_BENCH_TYPES(BM_csv_read_varying_options,
                     NVBENCH_TYPE_AXES(col_selections, nvbench::enum_type_list<row_selection::ALL>))
   .set_name("csv_read_column_selection")
   .set_type_axes_names({"column_selection", "row_selection"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  .add_int64_axis("num_chunks", {1});
 
 NVBENCH_BENCH_TYPES(BM_csv_read_varying_options,
                     NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
                                       row_selections))
   .set_name("csv_read_row_selection")
   .set_type_axes_names({"column_selection", "row_selection"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  .add_int64_axis("num_chunks", {1, 8});
