@@ -33,7 +33,6 @@
 #include <string>
 
 namespace cuio_json = cudf::io::json;
-
 namespace cudf::io::json {
 // Host copy of tree_meta_t
 struct tree_meta_t2 {
@@ -139,21 +138,31 @@ void print_tree(tree_meta_t const& d_gpu_tree)
 
 template <typename T>
 bool compare_vector(std::vector<T> const& cpu_vec,
-                    rmm::device_uvector<T> const& d_vec,
+                    std::vector<T> const& gpu_vec,
                     std::string const& name)
 {
-  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::default_stream_value);
-  print_vec(cpu_vec, name + "(cpu)", to_int);
-  print_vec(gpu_vec, name + "(gpu)", to_int);
+  EXPECT_EQ(cpu_vec.size(), gpu_vec.size());
   bool mismatch = false;
   if (!std::equal(cpu_vec.begin(), cpu_vec.end(), gpu_vec.begin())) {
+    print_vec(cpu_vec, name + "(cpu)", to_int);
+    print_vec(gpu_vec, name + "(gpu)", to_int);
     for (auto i = 0lu; i < cpu_vec.size(); i++) {
       mismatch |= (cpu_vec[i] != gpu_vec[i]);
       printf("%3s,", (cpu_vec[i] == gpu_vec[i] ? " " : "x"));
     }
     printf("\n");
   }
+  EXPECT_FALSE(mismatch);
   return mismatch;
+}
+
+template <typename T>
+bool compare_vector(std::vector<T> const& cpu_vec,
+                    rmm::device_uvector<T> const& d_vec,
+                    std::string const& name)
+{
+  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::default_stream_value);
+  return compare_vector(cpu_vec, gpu_vec, name);
 }
 
 void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, bool print = false)
@@ -202,6 +211,22 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
   }
 #undef PRINT_VEC
 #undef PRINT_COMPARISON
+}
+
+template <typename T>
+auto translate_col_id(T const& col_id)
+{
+  using value_type = typename T::value_type;
+  std::unordered_map<value_type, value_type> col_id_map;
+  std::vector<value_type> new_col_ids(col_id.size());
+  value_type unique_id = 0;
+  for (auto id : col_id) {
+    if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
+  }
+  for (size_t i = 0; i < col_id.size(); i++) {
+    new_col_ids[i] = col_id_map[col_id[i]];
+  }
+  return new_col_ids;
 }
 
 tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu,
@@ -401,22 +426,21 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
 {
   // // move tree representation to cpu
   // tree_meta_t2 tree = to_cpu_tree(d_tree, stream);
-
-  for (int i = 0; i < int(tree.node_range_begin.size()); i++) {
-    printf("%3s ",
-           std::string(input.data() + tree.node_range_begin[i],
-                       tree.node_range_end[i] - tree.node_range_begin[i])
-             .c_str());
-  }
-  printf(" (JSON)\n");
-  print_vec(tree.node_categories, "node_categories", to_cat);
-  auto print_vec = [](const auto& cpu, const auto name) {  // local lambda
-    cudf::io::json::test::print_vec(cpu, name, to_int);
-  };
-
   std::vector<NodeIndexT> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
-  print_vec(node_ids, "cpu.node_ids");
+
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    for (int i = 0; i < int(tree.node_range_begin.size()); i++) {
+      printf("%3s ",
+             std::string(input.data() + tree.node_range_begin[i],
+                         tree.node_range_end[i] - tree.node_range_begin[i])
+               .c_str());
+    }
+    printf(" (JSON)\n");
+    print_vec(tree.node_categories, "node_categories", to_cat);
+    print_vec(node_ids, "cpu.node_ids", to_int);
+  }
+
   // print_vec(tree.parent_node_ids, "tree.parent_node_ids (before)");
   constexpr NodeIndexT top_node = -1;  // TODO FIXME: uint32_t so, -1 is not legal.
   // CPU version of the algorithm
@@ -476,8 +500,10 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
   for (auto& parent_node_id : parent_col_ids) {
     if (parent_node_id != top_node) parent_node_id = node_ids[parent_node_id];
   }
-  print_vec(node_ids, "cpu.node_ids (after)");
-  print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)");
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    print_vec(node_ids, "cpu.node_ids (after)", to_int);
+    print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)", to_int);
+  }
   // row_offsets
   std::vector<int> row_offsets(tree.parent_node_ids.size(), 0);
   std::unordered_map<int, int> col_id_current_offset;
@@ -499,12 +525,16 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
       }
     }
   }
-  print_vec(row_offsets, "cpu.row_offsets (generated)");
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    print_vec(row_offsets, "cpu.row_offsets (generated)", to_int);
+  }
   return {std::move(node_ids), std::move(row_offsets)};
 }
 
 }  // namespace test
 }  // namespace cudf::io::json
+
+namespace json_test = cudf::io::json::test;
 
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {
@@ -545,7 +575,7 @@ TEST_F(JsonTest, TreeRepresentation)
   // host tree generation
   auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
+  json_test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
   if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
@@ -632,7 +662,7 @@ TEST_F(JsonTest, TreeRepresentation2)
   // host tree generation
   auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
+  json_test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
   if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
@@ -706,61 +736,66 @@ TEST_F(JsonTest, TreeRepresentation3)
   // host tree generation
   auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  cudf::io::json::test::compare_trees(cpu_tree, gpu_tree);
+  json_test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
   if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 }
 
-TEST_F(JsonTest, TreeTraversal)
-{
-  auto stream = cudf::default_stream_value;
-  cudf::io::json_reader_options const options{};
+/**
+ * @brief Test fixture for parametrized JSON tree traversal tests
+ */
+struct JsonTreeTraversalTest : public cudf::test::BaseFixture,
+                               public testing::WithParamInterface<std::tuple<bool, std::string>> {
+};
 
-  // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i}
-  std::string input =
-    R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10, "z": 11}}])";
-  // std::string input = R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x", "y"}, "b" : {"x",
-  // "z"}}])";
-  std::cout << input << std::endl;
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
-
-  // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] =
-    cudf::io::json::detail::get_token_stream(d_input, options, stream);
-  // host tree generation
-  auto cpu_tree =
-    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  // host tree traversal
-  cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
-  // gpu tree generation
-  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
-  // gpu tree traversal
-  cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
-}
-
-TEST_F(JsonTest, TreeTraversal2)
-{
-  auto stream = cudf::default_stream_value;
-  cudf::io::json_reader_options const options{};
-
-  // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i}
-  std::string input =
-    R"([ {}, { "a": { "y" : 1, "z": [] }},
+//
+std::vector<std::string> json_list = {
+  "value",
+  "\"string\"",
+  "[1, 2, 3]",
+  R"({"a": 1, "b": 2, "c": 3})",
+  // input a: {x:i, y:i, z:[]}, b: {x:i, z:i}
+  R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10, "z": 11}}])",
+  // input a: {x:i, y:i, z:[]}, b: {x:i, z: {p: i, q: i}}
+  R"([ {}, { "a": { "y" : 1, "z": [] }},
              { "a": { "x" : 2, "y": 3}, "b" : {"x": 4, "z": [ {"p": 1, "q": 2}]}},
              { "a": { "y" : 6, "z": [7, 8, 9]}, "b": {"x": 10, "z": [{}, {"q": 3}, {"p": 4}]}},
              { "a": { "z": [12, 13, 14, 15]}},
              { "a": { "z": [16], "x": 2}}
-        ])";
-  // row offset a a.x a.y a.z   b b.x b.z
+        ])"
+  //^row offset a a.x a.y a.z   b b.x b.z
   //            1       1   1
   //            2   2   2       2   2   2                     b.z[] 0        b.z.p 0, b.z.q 0
   //            3       3   3   3   3   3   a.z[] 0, 1, 2     b.z[] 1, 2, 3  b.z.q 2, b.z.p 3
   //            4           4               a.z[] 3, 4, 5, 6
   //            5   5       5               a.z[] 7
-  std::cout << input << std::endl;
+};
+
+std::vector<std::string> json_lines_list = {
+  // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i} with JSON-lines
+  R"(  {}
+ { "a": { "y" : 6, "z": [] }}
+ { "a": { "y" : 6, "z": [2, 3, 4, 5] }}
+ { "a": { "z": [4], "y" : 6 }}
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )"};
+INSTANTIATE_TEST_SUITE_P(Mixed_And_Records,
+                         JsonTreeTraversalTest,
+                         ::testing::Combine(::testing::Values(false),
+                                            ::testing::ValuesIn(json_list)));
+INSTANTIATE_TEST_SUITE_P(JsonLines,
+                         JsonTreeTraversalTest,
+                         ::testing::Combine(::testing::Values(true),
+                                            ::testing::ValuesIn(json_lines_list)));
+
+TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
+{
+  auto [json_lines, input] = GetParam();
+  auto stream              = cudf::default_stream_value;
+  cudf::io::json_reader_options options{};
+  options.enable_lines(json_lines);
+
+  // std::cout << json_lines << input << std::endl;
   cudf::string_scalar d_scalar(input, true, stream);
   auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
                                                              static_cast<size_t>(d_scalar.size())};
@@ -773,67 +808,26 @@ TEST_F(JsonTest, TreeTraversal2)
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   // host tree traversal
   auto [cpu_col_id, cpu_row_offsets] =
-    cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
+    cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, stream);
   // gpu tree generation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
+  // Print tree representation
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    printf("BEFORE traversal (gpu_tree):\n");
+    json_test::print_tree(gpu_tree);
+  }
   // gpu tree traversal
-  printf("BEFORE traversal (gpu_tree):\n");
-  cudf::io::json::test::print_tree(gpu_tree);
   auto [gpu_col_id, gpu_row_offsets] =
-    cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
-  printf("AFTER  traversal (gpu_tree):\n");
-  cudf::io::json::test::print_tree(gpu_tree);
-  auto translate_col_id = [](auto col_id) {
-    using value_type = typename decltype(col_id)::value_type;
-    std::unordered_map<value_type, value_type> col_id_map;
-    std::vector<value_type> new_col_ids(col_id.size());
-    value_type unique_id = 0;
-    for (auto id : col_id) {
-      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
-    }
-    for (size_t i = 0; i < col_id.size(); i++) {
-      new_col_ids[i] = col_id_map[col_id[i]];
-    }
-    return new_col_ids;
-  };
-  auto gpu_col_id2 = cudf::detail::make_device_uvector_async(
-    translate_col_id(cudf::detail::make_std_vector_async(gpu_col_id, stream)), stream);
-  EXPECT_FALSE(cudf::io::json::test::compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
-  EXPECT_FALSE(
-    cudf::io::json::test::compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
-}
+    cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, stream);
+  // Print tree representation
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    printf("AFTER  traversal (gpu_tree):\n");
+    json_test::print_tree(gpu_tree);
+  }
 
-TEST_F(JsonTest, TreeTraversal3)
-{
-  auto stream = cudf::default_stream_value;
-  cudf::io::json_reader_options options{};
-  options.enable_lines(true);
-
-  // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i}
-  // std::string input = R"([ {}, { "a": { "y" : 6, "z": [] }},
-  // { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10, "z": 11}}])";
-  // Test input: Json lines with same TreeRepresentation2 input
-  std::string const input =
-    R"(  {}
- { "a": { "y" : 6, "z": [] }}
- { "a": { "y" : 6, "z": [2, 3, 4, 5] }}
- { "a": { "z": [4], "y" : 6 }}
- { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )";  // Prepare input & output buffers
-  std::cout << input << std::endl;
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
-
-  // Parse the JSON and get the token stream
-  const auto [tokens_gpu, token_indices_gpu] =
-    cudf::io::json::detail::get_token_stream(d_input, options, stream);
-  // host tree generation
-  auto cpu_tree =
-    cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
-  // host tree traversal
-  cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, cudf::default_stream_value);
-  // gpu tree generation
-  auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
-  // gpu tree traversal
-  cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, cudf::default_stream_value);
+  // convert to sequence because gpu col id might be have random id
+  auto gpu_col_id2 =
+    json_test::translate_col_id(cudf::detail::make_std_vector_async(gpu_col_id, stream));
+  EXPECT_FALSE(json_test::compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
+  EXPECT_FALSE(json_test::compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
 }
