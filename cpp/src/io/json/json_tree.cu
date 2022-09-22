@@ -317,6 +317,34 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
           std::move(node_range_end)};
 }
 
+/**
+@note
+This algorithm assigns a unique column id to each node in the tree.
+The row offset is the row index of the node in that column id.
+Algorithm:
+1. Convert node_category+fieldname to node_type.
+  a. Create a hashmap to hash field name and assign unique node id as values.
+  b. Convert the node categories to node types.
+     Node type is defined as node category enum value if it is not a field node,
+     otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
+2. Preprocessing: Translate parent node ids after sorting by level.
+  a. sort by level
+  b. get gather map of sorted indices
+  c. translate parent_node_ids to new sorted indices
+3. Find level boundaries.
+   copy_if index of first unique values of sorted levels.
+4. Per-Level Processing: Propagate parent node ids for each level.
+  For each level,
+    a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
+    b. stable sort by {parent_col_id, node_type}
+    c. scan sum of unique {parent_col_id, node_type}
+    d. scatter the col_id back to stable node_level order (using scatter_indices)
+  Restore original node_id order
+5. Generate row_offset.
+  a. stable_sort by parent_col_id.
+  b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
+  c. propagate to non-list leaves from parent list node by recursion
+**/
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t& d_tree,
@@ -324,34 +352,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  /**
-  This algorithm assigns a unique column id to each node in the tree.
-  The row offset is the row index of the node in that column id.
-  Algorithm:
-  1. Convert node_category+fieldname to node_type.
-    a. Create a hashmap to hash field name and assign unique node id as values.
-    b. Convert the node categories to node types.
-       Node type is defined as node category enum value if it is not a field node,
-       otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
-  2. Preprocessing: Translate parent node ids after sorting by level.
-    a. sort by level
-    b. get gather map of sorted indices
-    c. translate parent_node_ids to new sorted indices
-  3. Find level boundaries.
-     copy_if index of first unique values of sorted levels.
-  4. Per-Level Processing: Propagate parent node ids for each level.
-    For each level,
-      a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
-      b. stable sort by {parent_col_id, node_type}
-      c. scan sum of unique {parent_col_id, node_type}
-      d. scatter the col_id back to stable node_level order (using scatter_indices)
-    Restore original node_id order
-  5. Generate row_offset.
-    a. stable_sort by parent_col_id.
-    b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
-    c. propagate to non-list leaves from parent list node by recursion
-  **/
-  // GPU version
   // 1. Convert node_category+fieldname to node_type.
   nvtxRangePushA("node_type");
   auto num_nodes                           = d_tree.node_categories.size();
@@ -369,18 +369,20 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     auto d_hasher = [d_input          = d_input.data(),
                      node_range_begin = d_tree.node_range_begin.data(),
                      node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
-      auto field_name = cudf::string_view(d_input + node_range_begin[node_id],
-                                          node_range_end[node_id] - node_range_begin[node_id]);
+      auto const field_name = cudf::string_view(
+        d_input + node_range_begin[node_id], node_range_end[node_id] - node_range_begin[node_id]);
       return cudf::detail::default_hash<cudf::string_view>{}(field_name);
     };
     auto d_equal = [d_input          = d_input.data(),
                     node_range_begin = d_tree.node_range_begin.data(),
                     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
                                                                               auto node_id2) {
-      auto field_name1 = cudf::string_view(d_input + node_range_begin[node_id1],
-                                           node_range_end[node_id1] - node_range_begin[node_id1]);
-      auto field_name2 = cudf::string_view(d_input + node_range_begin[node_id2],
-                                           node_range_end[node_id2] - node_range_begin[node_id2]);
+      auto const field_name1 =
+        cudf::string_view(d_input + node_range_begin[node_id1],
+                          node_range_end[node_id1] - node_range_begin[node_id1]);
+      auto const field_name2 =
+        cudf::string_view(d_input + node_range_begin[node_id2],
+                          node_range_end[node_id2] - node_range_begin[node_id2]);
       return field_name1 == field_name2;
     };
     auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
@@ -558,7 +560,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   //     c. scan sum of unique {parent_col_id, node_type}
   //     d. scatter the col_id back to stable node_level order (using scatter_indices)
   nvtxRangePushA("pre-level");
-  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream);
+  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
   rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              parent_col_id.begin(),
@@ -579,6 +581,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   for (decltype(num_levels) level = 1; level < num_levels; level++) {
     PRINT_LEVEL_DATA(level, ".before gather");
     nvtxRangePushA("gather");
+    // Gather the each node's parent's column id for the nodes of the current level
     thrust::gather(rmm::exec_policy(stream),
                    parent_indices.data() + level_boundaries[level - 1],
                    parent_indices.data() + level_boundaries[level],
@@ -677,7 +680,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   //   c. propagate to non-list leaves from parent list node by recursion
   thrust::stable_sort_by_key(
     rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
-  rmm::device_uvector<size_type> row_offsets(num_nodes, stream);
+  rmm::device_uvector<size_type> row_offsets(num_nodes, stream, mr);
   // TODO is it possible to generate list child_offsets too here?
   thrust::exclusive_scan_by_key(
     rmm::exec_policy(stream),
