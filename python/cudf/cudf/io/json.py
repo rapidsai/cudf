@@ -28,6 +28,7 @@ def read_json(
     """{docstring}"""
 
     if not isinstance(dtype, (abc.Mapping, bool)):
+        raise TypeError("hi")
         warnings.warn(
             "passing 'dtype' as list is deprecated, "
             "in future versions 'dtype' can only be a dict or bool",

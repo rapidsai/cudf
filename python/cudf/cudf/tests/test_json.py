@@ -274,11 +274,10 @@ def test_json_lines_byte_range(json_input):
     assert df.shape == (1, 3)
 
 
-@pytest.mark.parametrize(
-    "dtype", [["float", "int", "short"], {1: "int", 2: "short", 0: "float"}]
-)
-def test_json_lines_dtypes(json_input, dtype):
-    df = cudf.read_json(json_input, lines=True, dtype=dtype)
+def test_json_lines_dtypes(json_input):
+    df = cudf.read_json(
+        json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
+    )
     assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
@@ -348,7 +347,9 @@ def test_json_bool_values():
     # boolean values should be converted to 0/1
     np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
-    cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
+    cu_df = cudf.read_json(
+        buffer, lines=True, dtype={"0": "bool", "1": "long"}
+    )
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
