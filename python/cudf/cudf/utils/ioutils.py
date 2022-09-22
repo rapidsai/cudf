@@ -559,6 +559,10 @@ byte_range : list or tuple, default None
     size in bytes. Set the size to zero to read all data after the offset
     location. Reads the row that starts before or at the end of the range,
     even if it ends after the end of the range.
+keep_quotes : bool, default False
+    This parameter is only supported in ``cudf_experimental`` engine.
+    If `True`, the quotes characters of string values are preserved.
+    If `False`, the quotes characters of string values are not preserved.
 
 Returns
 -------

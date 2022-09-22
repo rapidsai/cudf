@@ -89,7 +89,7 @@ cpdef read_json(object filepaths_or_buffers,
         elif isinstance(dtype, abc.Collection):
             is_list_like_dtypes = True
             c_dtypes_list.reserve(len(dtype))
-            for idx, col_dtype in enumerate(dtype):
+            for col_dtype in dtype:
                 c_dtypes_list.push_back(
                     _get_cudf_data_type_from_dtype(
                         col_dtype))
