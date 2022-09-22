@@ -79,8 +79,7 @@ struct find_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter = thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream) and
-                                                     // thrust::cuda::par.on(stream)
+    auto iter        = thrust::equal_range(rmm::exec_policy(cudf::default_stream_value),
                                     keys_view->begin<Element>(),
                                     keys_view->end<Element>(),
                                     find_key);
