@@ -29,6 +29,7 @@
 
 #include <cuco/static_map.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
@@ -46,7 +47,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/uninitialized_fill.h>
 
 #include <limits>
 
@@ -61,6 +61,18 @@ void print_vec(T const& cpu, std::string const name)
   for (auto const& v : cpu)
     printf("%3d,", int(v));
   std::cout << name << std::endl;
+}
+template <typename T>
+void print_vec(rmm::device_uvector<T> const& gpu,
+               rmm::cuda_stream_view stream,
+               std::string const name)
+{
+  print_vec(cudf::detail::make_std_vector_async(device_span<T const>{gpu}, stream), name);
+}
+template <typename T>
+void print_vec(device_span<T> gpu, rmm::cuda_stream_view stream, std::string const name)
+{
+  print_vec(cudf::detail::make_std_vector_async(device_span<T const>{gpu}, stream), name);
 }
 }  // namespace
 
@@ -252,7 +264,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids.end(),
                    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
                      return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
-                     // XXX: How is this algorithm working for JSON lines?
+                     // -1, not sentinel used here because of max operation below
                    });
   nvtxRangePop();
 
@@ -298,7 +310,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   auto parent_node_ids_it = thrust::make_transform_iterator(
     parent_token_ids.begin(),
     [node_ids_gpu = node_ids_gpu.begin()] __device__(size_type const pid) -> NodeIndexT {
-      return pid < 0 ? pid : node_ids_gpu[pid];
+      return pid < 0 ? parent_node_sentinel : node_ids_gpu[pid];
     });
   auto parent_node_ids_end = thrust::copy_if(rmm::exec_policy(stream),
                                              parent_node_ids_it,
@@ -317,139 +329,92 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
           std::move(node_range_end)};
 }
 
-std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
-records_orient_tree_traversal(device_span<SymbolT const> d_input,
-                              tree_meta_t& d_tree,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<SymbolT const> d_input,
+                                                              tree_meta_t const& d_tree,
+                                                              rmm::cuda_stream_view stream)
 {
+  // pre-condition:
+  // d_tree.node_range_begin, d_tree.node_range_end, d_tree.node_category are in node_id order.
+  // post-condition: returned node_type is in node_id order, no inputs are modified.
   CUDF_FUNC_RANGE();
-  /**
-  This algorithm assigns a unique column id to each node in the tree.
-  The row offset is the row index of the node in that column id.
-  Algorithm:
-  1. Convert node_category+fieldname to node_type.
-    a. Create a hashmap to hash field name and assign unique node id as values.
-    b. Convert the node categories to node types.
-       Node type is defined as node category enum value if it is not a field node,
-       otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
-  2. Preprocessing: Translate parent node ids after sorting by level.
-    a. sort by level
-    b. get gather map of sorted indices
-    c. translate parent_node_ids to new sorted indices
-  3. Find level boundaries.
-     copy_if index of first unique values of sorted levels.
-  4. Per-Level Processing: Propagate parent node ids for each level.
-    For each level,
-      a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
-      b. stable sort by {parent_col_id, node_type}
-      c. scan sum of unique {parent_col_id, node_type}
-      d. scatter the col_id back to stable node_level order (using scatter_indices)
-    Restore original node_id order
-  5. Generate row_offset.
-    a. stable_sort by parent_col_id.
-    b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
-    c. propagate to non-list leaves from parent list node by recursion
-  **/
-  // GPU version
-  // 1. Convert node_category+fieldname to node_type.
-  nvtxRangePushA("node_type");
-  auto num_nodes                           = d_tree.node_categories.size();
-  rmm::device_uvector<size_type> node_type = [&]() {
-    using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-    using hash_map_type =
-      cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+  using hash_map_type =
+    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  auto num_nodes = d_tree.node_categories.size();
 
-    constexpr size_type empty_node_index_sentinel = -1;
-    hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                          cuco::sentinel::empty_key{empty_node_index_sentinel},
-                          cuco::sentinel::empty_value{empty_node_index_sentinel},
-                          hash_table_allocator_type{default_allocator<char>{}, stream},
-                          stream.value()};
-    auto d_hasher = [d_input          = d_input.data(),
-                     node_range_begin = d_tree.node_range_begin.data(),
-                     node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
-      auto field_name = cudf::string_view(d_input + node_range_begin[node_id],
-                                          node_range_end[node_id] - node_range_begin[node_id]);
-      return cudf::detail::default_hash<cudf::string_view>{}(field_name);
-    };
-    auto d_equal = [d_input          = d_input.data(),
-                    node_range_begin = d_tree.node_range_begin.data(),
-                    node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
-                                                                              auto node_id2) {
-      auto field_name1 = cudf::string_view(d_input + node_range_begin[node_id1],
-                                           node_range_end[node_id1] - node_range_begin[node_id1]);
-      auto field_name2 = cudf::string_view(d_input + node_range_begin[node_id2],
-                                           node_range_end[node_id2] - node_range_begin[node_id2]);
-      return field_name1 == field_name2;
-    };
-    auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
-                                auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
-    // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
-    // hashing)
-    auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+  constexpr size_type empty_node_index_sentinel = -1;
+  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
+                        cuco::sentinel::empty_key{empty_node_index_sentinel},
+                        cuco::sentinel::empty_value{empty_node_index_sentinel},
+                        hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value()};
+  auto d_hasher = [d_input          = d_input.data(),
+                   node_range_begin = d_tree.node_range_begin.data(),
+                   node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+    auto const field_name = cudf::string_view(d_input + node_range_begin[node_id],
+                                              node_range_end[node_id] - node_range_begin[node_id]);
+    return cudf::detail::default_hash<cudf::string_view>{}(field_name);
+  };
+  auto d_equal = [d_input          = d_input.data(),
+                  node_range_begin = d_tree.node_range_begin.data(),
+                  node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
+                                                                            auto node_id2) {
+    auto const field_name1 = cudf::string_view(
+      d_input + node_range_begin[node_id1], node_range_end[node_id1] - node_range_begin[node_id1]);
+    auto const field_name2 = cudf::string_view(
+      d_input + node_range_begin[node_id2], node_range_end[node_id2] - node_range_begin[node_id2]);
+    return field_name1 == field_name2;
+  };
+  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
+                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
+  // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
+  // hashing)
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
-    key_map.insert_if(iter,
-                      iter + num_nodes,
-                      thrust::counting_iterator<size_type>(0),  // stencil
-                      is_field_name_node,
-                      d_hasher,
-                      d_equal,
-                      stream.value());
-    auto get_hash_value = [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(
-                            auto node_id) -> size_type {
-      auto it = key_map.find(node_id, d_hasher, d_equal);
-      return (it == key_map.end()) ? size_type{0} : it->second.load();
-    };
-    // convert field nodes to node indices, and other nodes to enum value.
-    rmm::device_uvector<size_type> node_type(num_nodes, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     node_type.begin(),
-                     node_type.end(),
-                     [node_categories = d_tree.node_categories.data(),
-                      is_field_name_node,
-                      get_hash_value] __device__(auto node_id) -> size_type {
-                       if (is_field_name_node(node_id))
-                         return static_cast<size_type>(NUM_NODE_CLASSES) + get_hash_value(node_id);
-                       else
-                         return static_cast<size_type>(node_categories[node_id]);
-                     });
-    return node_type;
-  }();
-  nvtxRangePop();
+  key_map.insert_if(iter,
+                    iter + num_nodes,
+                    thrust::counting_iterator<size_type>(0),  // stencil
+                    is_field_name_node,
+                    d_hasher,
+                    d_equal,
+                    stream.value());
+  auto get_hash_value =
+    [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(auto node_id) -> size_type {
+    auto it = key_map.find(node_id, d_hasher, d_equal);
+    return (it == key_map.end()) ? size_type{0} : it->second.load();
+  };
+  // convert field nodes to node indices, and other nodes to enum value.
+  rmm::device_uvector<size_type> node_type(num_nodes, stream);
+  thrust::tabulate(rmm::exec_policy(stream),
+                   node_type.begin(),
+                   node_type.end(),
+                   [node_categories = d_tree.node_categories.data(),
+                    is_field_name_node,
+                    get_hash_value] __device__(auto node_id) -> size_type {
+                     if (is_field_name_node(node_id))
+                       return static_cast<size_type>(NUM_NODE_CLASSES) + get_hash_value(node_id);
+                     else
+                       return static_cast<size_type>(node_categories[node_id]);
+                   });
+  return node_type;
+}
 
-  // TODO two-level hashing:  one for field names
-  // and another for {node-level, node_category} + field hash for the entire path
-
-#ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "node_type");
-#endif
-  // 2. Preprocessing: Translate parent node ids after sorting by level.
-  //   a. sort by level
-  //   b. get gather map of sorted indices
-  //   c. translate parent_node_ids to sorted indices
-
-  nvtxRangePushA("parent_indices");
-  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-#ifdef NJP_DEBUG_PRINT
-  printf("\n");
-  print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.parent_node_ids, stream),
-            "gpu.parent_node_ids");
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
-#endif
-  rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
-  auto out_pid =
-    thrust::make_zip_iterator(scatter_indices.data(), parent_node_ids.data(), node_type.data());
-  // Uses cub radix sort.
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                             d_tree.node_levels.data(),
-                             d_tree.node_levels.data() + num_nodes,
-                             out_pid);
-  auto gather_indices = cudf::detail::scatter_to_gather(
+/**
+ * @brief Translates sorted parent_node_ids to parent_indices with indices from scatter_indices
+ *
+ * @param scatter_indices The sorted order of parent_node_ids
+ * @param parent_node_ids The sorted parent_node_ids
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Translated parent_indices pointing to sorted node_ids positions
+ */
+rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
+  device_span<size_type const> scatter_indices,
+  device_span<NodeIndexT const> parent_node_ids,
+  rmm::cuda_stream_view stream)
+{
+  auto const num_nodes = scatter_indices.size();
+  auto gather_indices  = cudf::detail::scatter_to_gather(
     scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
 
   rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
@@ -463,44 +428,38 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                ? parent_node_sentinel
                                : gather_indices[parent_node_id];
                     });
-  nvtxRangePop();
-#ifdef NJP_DEBUG_PRINT
-  printf("\n");
-  print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream), "gpu.parent_node_ids");
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
-  print_vec(cudf::detail::make_std_vector_async(gather_indices, stream), "new_home");
-  print_vec(cudf::detail::make_std_vector_async(parent_indices, stream), "parent_indices");
-  print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream),
-            "parent_node_ids (restored)");
-#endif
-  // 3. Find level boundaries.
-  nvtxRangePushA("level_boundaries");
-  std::vector<size_type> level_boundaries = [&]() {
-    // Already node_levels is sorted
-    auto max_level = d_tree.node_levels.back_element(stream);
-    rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);
-    // TODO try reduce_by_key
-    auto level_end =
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(1),
-                      thrust::make_counting_iterator<size_type>(num_nodes + 1),
-                      level_boundaries.begin(),
-                      [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
-                        return index == num_nodes || node_levels[index] != node_levels[index - 1];
-                      });
-    CUDF_EXPECTS(thrust::distance(level_boundaries.begin(), level_end) == max_level + 1,
-                 "num_levels != max_level + 1");
-    return cudf::detail::make_std_vector_async(level_boundaries, stream);
-  }();
-  nvtxRangePop();
-  auto num_levels = level_boundaries.size();
-#ifdef NJP_DEBUG_PRINT
-  print_vec(level_boundaries, "level_boundaries");
-  std::cout << "num_levels: " << num_levels << std::endl;
-#endif
+  return parent_indices;
+};
 
+std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
+  device_span<size_type> node_type,        // level sorted
+  device_span<NodeIndexT> parent_indices,  // level sorted
+  device_span<size_type> scatter_indices,  // level sorted
+  host_span<size_type const> level_boundaries,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  // pre-condition: node_type is level stable sorted. (stable in node_id order)
+  // parent_indices is level stable sorted.
+  // scatter_indices is level stable sorted.
+  // post-condition: returned column_id, parent_col_id are level sorted, scatter_indices holds the
+  // order.
+  CUDF_FUNC_RANGE();
+  nvtxRangePushA("pre-level");
+  auto const num_nodes = node_type.size();
+  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
+  rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
+  // fill with 1, useful for scan later
+  // TODO: Could initialize to 0 and scatter 1 to level_boundaries alone
+  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
+  // Initialize First level node's node col_id to 0
+  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
+  // Initialize First level node's parent_col_id to parent_node_sentinel sentinel
+  thrust::fill(rmm::exec_policy(stream),
+               parent_col_id.begin(),
+               parent_col_id.begin() + level_boundaries[0],
+               parent_node_sentinel);
+  nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
   auto print_level_data = [stream](auto stage_text,
                                    auto level,
@@ -510,28 +469,25 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                    auto const& parent_node_idx,
                                    auto const& parent_col_id,
                                    auto const& node_type,
-                                   auto const& levels,
                                    auto const& col_id) {
     std::cout << level << stage_text << "\n";
-    auto cls = std::array<const char*, 6>{"S", "L", "F", "R", "V", "E"};
+    auto cls  = std::array<const char*, 6>{"S", "L", "F", "R", "V", "E"};
+    auto dget = [](auto const& v, auto i) { return int(thrust::device_pointer_cast(v.data())[i]); };
     for (auto n = start; n < end; n++)
-      printf("%3d ", nodeII.element(n, stream));
+      printf("%3d ", dget(nodeII, n));
     printf(" nodeII-%ld\n", level);
     for (auto n = start; n < end; n++)
-      printf("%3d ", parent_node_idx.element(n, stream));
+      printf("%3d ", dget(parent_node_idx, n));
     printf(" parent_node_idx-%ld\n", level);
     for (auto n = start; n < end; n++)
       printf("%3d ", parent_col_id.element(n, stream));
     printf(" parent_col_id-%ld\n", level);
     for (auto n = start; n < end; n++) {
-      auto nt = node_type.element(n, stream);
+      auto nt = dget(node_type, n);
       printf("%3s ",
              nt >= NUM_NODE_CLASSES ? std::to_string(nt - NUM_NODE_CLASSES).c_str() : cls[nt]);
     }
     printf(" node_type-%ld\n", level);
-    for (auto n = start; n < end; n++)
-      printf("%3d ", levels.element(n, stream));
-    printf(" levels-%ld\n", level);
     for (auto n = start; n < end; n++)
       printf("%3d ", col_id.element(n, stream));
     printf(" col_id-%ld\n", level);
@@ -545,7 +501,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                    parent_indices,              \
                    parent_col_id,               \
                    node_type,                   \
-                   d_tree.node_levels,          \
                    col_id);
 #else
 #define PRINT_LEVEL_DATA(level, text) ;
@@ -557,28 +512,12 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   //     b. stable sort by {parent_col_id, node_type}
   //     c. scan sum of unique {parent_col_id, node_type}
   //     d. scatter the col_id back to stable node_level order (using scatter_indices)
-  nvtxRangePushA("pre-level");
-  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream);
-  rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             parent_col_id.begin(),
-                             parent_col_id.end(),
-                             0);  // XXX: is this needed?
-  // fill with 1, useful for scan later
-  // TODO: Could initialize to 0 and scatter 1 to level_boundaries alone
-  thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
-  // Initialize First level node's node col_id to 0
-  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
-  // Initialize First level node's parent_col_id to parent_node_sentinel sentinel
-  thrust::fill(rmm::exec_policy(stream),
-               parent_col_id.begin(),
-               parent_col_id.begin() + level_boundaries[0],
-               parent_node_sentinel);
-  nvtxRangePop();
   nvtxRangePushA("level");
-  for (decltype(num_levels) level = 1; level < num_levels; level++) {
+  auto const num_levels = level_boundaries.size();
+  for (size_t level = 1; level < num_levels; level++) {
     PRINT_LEVEL_DATA(level, ".before gather");
     nvtxRangePushA("gather");
+    // Gather the each node's parent's column id for the nodes of the current level
     thrust::gather(rmm::exec_policy(stream),
                    parent_indices.data() + level_boundaries[level - 1],
                    parent_indices.data() + level_boundaries[level],
@@ -587,19 +526,31 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     PRINT_LEVEL_DATA(level, ".after gather");
     nvtxRangePop();
     nvtxRangePushA("stable_sort_by_key");
+    // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
+    // we need to split to 2 Radix sorts.
+    // Secondary sort on node_type
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream),
+      node_type.data() + level_boundaries[level - 1],
+      node_type.data() + level_boundaries[level],
       thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
-                                node_type.data() + level_boundaries[level - 1]),
-      thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level],
-                                node_type.data() + level_boundaries[level]),
-      thrust::make_zip_iterator(scatter_indices.begin() + level_boundaries[level - 1]));
+                                scatter_indices.begin() + level_boundaries[level - 1]));
+    // Primary sort on parent_col_id
+    thrust::stable_sort_by_key(
+      rmm::exec_policy(stream),
+      parent_col_id.begin() + level_boundaries[level - 1],
+      parent_col_id.begin() + level_boundaries[level],
+      thrust::make_zip_iterator(node_type.data() + level_boundaries[level - 1],
+                                scatter_indices.begin() + level_boundaries[level - 1]));
     PRINT_LEVEL_DATA(level, ".after sort");
     nvtxRangePop();
     nvtxRangePushA("transform");
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
+    // Compares two adjacent items, beginning with the first and second item from the current level.
+    // Writes flags to the index of the rhs item.
+    // First index holds next col_id from previous level.
     thrust::transform(rmm::exec_policy(stream),
                       adjacent_pair_it + 1,
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
@@ -629,55 +580,30 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     nvtxRangePop();
   }
   nvtxRangePop();
-  nvtxRangePushA("restore");
-  // restore original order of col_id., and used d_tree members
-  // TODO would scatter be faster than radix-sort here for 3 values?
-  thrust::sort_by_key(rmm::exec_policy(stream),
-                      scatter_indices.begin(),
-                      scatter_indices.end(),
-                      thrust::make_zip_iterator(
-#ifdef NJP_DEBUG_PRINT
-                        parent_indices.begin(),  // only needed for debug prints
-                        node_type.begin(),
-#endif
-                        parent_col_id.begin(),
-                        col_id.begin(),
-                        d_tree.node_levels.begin()));
-#ifdef NJP_DEBUG_PRINT
-  auto translate_col_id = [](auto col_id) {
-    std::unordered_map<int, int> col_id_map;
-    std::vector<int> new_col_ids(col_id.size());
-    int unique_id = 0;
-    for (auto id : col_id) {
-      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
-    }
-    for (size_t i = 0; i < col_id.size(); i++) {
-      new_col_ids[i] = col_id_map[col_id[i]];
-    }
-    return new_col_ids;
-  };
-  print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(parent_indices, stream),
-            "gpu.parent_indices");  // once original order is restored, is this required?
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream),
-            "gpu.node_type");  // is this needed?
-  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream),
-            "parent_col_id");                                                // is this needed?
-  print_vec(cudf::detail::make_std_vector_async(col_id, stream), "col_id");  // required.
-  print_vec(translate_col_id(cudf::detail::make_std_vector_async(col_id, stream)),
-            "col_id (translated)");  // is this required? required to be ordered for the next step?
-  print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
-#endif
+  return {std::move(col_id), std::move(parent_col_id)};
+}
 
-  nvtxRangePop();
-  nvtxRangePushA("rowoffset");
+rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatter_indices,
+                                                   device_span<NodeIndexT> parent_col_id,
+                                                   tree_meta_t& d_tree,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
+{
+  // pre-condition: scatter_indices is a sequence, representing node_id.
+  // d_tree.node_categories, d_tree.parent_node_ids, parent_col_id are in order of node_id.
+  // post-condition: row_offsets is in order of node_id.
+  // parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
+  CUDF_FUNC_RANGE();
+
   // 5. Generate row_offset.
   //   a. stable_sort by parent_col_id.
   //   b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
   //   c. propagate to non-list leaves from parent list node by recursion
+  auto const num_nodes = d_tree.node_categories.size();
+  // TODO generate scatter_indices sequences here itself
   thrust::stable_sort_by_key(
     rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
-  rmm::device_uvector<size_type> row_offsets(num_nodes, stream);
+  rmm::device_uvector<size_type> row_offsets(num_nodes, stream, mr);
   // TODO is it possible to generate list child_offsets too here?
   thrust::exclusive_scan_by_key(
     rmm::exec_policy(stream),
@@ -686,17 +612,18 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     thrust::make_constant_iterator<size_type>(1),
     row_offsets.begin());
 #ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream), "parent_col_id");
-  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
+  print_vec(parent_col_id, stream, "parent_col_id");
+  print_vec(row_offsets, stream, "row_offsets (generated)");
 #endif
   // Using scatter instead of sort.
+  auto& temp_storage = parent_col_id;  // reuse parent_col_id as temp storage
   thrust::scatter(rmm::exec_policy(stream),
                   row_offsets.begin(),
                   row_offsets.end(),
                   scatter_indices.begin(),
-                  parent_col_id.begin());  // reuse parent_col_id as temp storage
+                  temp_storage.begin());
   thrust::copy(
-    rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), row_offsets.begin());
+    rmm::exec_policy(stream), temp_storage.begin(), temp_storage.end(), row_offsets.begin());
   thrust::transform_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -719,10 +646,157 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
       return parent_node_id != parent_node_sentinel and
              !(node_categories[parent_node_id] == node_t::NC_LIST);
     });
+#ifdef NJP_DEBUG_PRINT
+  print_vec(row_offsets, stream, "row_offsets (ordered)");
+#endif
+  return row_offsets;
+}
+
+/**
+@note
+This algorithm assigns a unique column id to each node in the tree.
+The row offset is the row index of the node in that column id.
+Algorithm:
+1. Convert node_category+fieldname to node_type.
+  a. Create a hashmap to hash field name and assign unique node id as values.
+  b. Convert the node categories to node types.
+     Node type is defined as node category enum value if it is not a field node,
+     otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
+2. Preprocessing: Translate parent node ids after sorting by level.
+  a. sort by level
+  b. get gather map of sorted indices
+  c. translate parent_node_ids to new sorted indices
+3. Find level boundaries.
+   copy_if index of first unique values of sorted levels.
+4. Per-Level Processing: Propagate parent node ids for each level.
+  For each level,
+    a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
+    b. stable sort by {parent_col_id, node_type}
+    c. scan sum of unique {parent_col_id, node_type}
+    d. scatter the col_id back to stable node_level order (using scatter_indices)
+  Restore original node_id order
+5. Generate row_offset.
+  a. stable_sort by parent_col_id.
+  b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
+  c. propagate to non-list leaves from parent list node by recursion
+**/
+std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+records_orient_tree_traversal(device_span<SymbolT const> d_input,
+                              tree_meta_t& d_tree,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  // 1. Convert node_category+fieldname to node_type.
+  nvtxRangePushA("node_type");
+  auto num_nodes = d_tree.node_categories.size();
+  rmm::device_uvector<size_type> node_type =
+    hash_node_type_with_field_name(d_input, d_tree, stream);
+  nvtxRangePop();
+
+  // TODO two-level hashing:  one for field names
+  // and another for {node-level, node_category} + field hash for the entire path
+
+#ifdef NJP_DEBUG_PRINT
+  print_vec(node_type, stream, "node_type");
+#endif
+
+  // 2. Preprocessing: Translate parent node ids after sorting by level.
+  //   a. sort by level
+  //   b. get gather map of sorted indices
+  //   c. translate parent_node_ids to sorted indices
+
+  nvtxRangePushA("parent_indices");
+  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
+  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
+#ifdef NJP_DEBUG_PRINT
+  printf("\n");
+  print_vec(scatter_indices, stream, "gpu.node_id");
+  print_vec(d_tree.parent_node_ids, stream, "gpu.parent_node_ids");
+  print_vec(node_type, stream, "gpu.node_type");
+  print_vec(d_tree.node_levels, stream, "gpu.node_levels");
+#endif
+  rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
+  auto out_pid =
+    thrust::make_zip_iterator(scatter_indices.data(), parent_node_ids.data(), node_type.data());
+  // Uses cub radix sort.
+  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                             d_tree.node_levels.data(),
+                             d_tree.node_levels.data() + num_nodes,
+                             out_pid);
+
+  rmm::device_uvector<NodeIndexT> parent_indices =
+    translate_sorted_parent_node_indices(scatter_indices, parent_node_ids, stream);
   nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (ordered)");
+  printf("\n");
+  print_vec(scatter_indices, stream, "gpu.node_id");
+  print_vec(parent_node_ids, stream, "gpu.parent_node_ids");
+  print_vec(node_type, stream, "gpu.node_type");
+  print_vec(d_tree.node_levels, stream, "gpu.node_levels");
+  print_vec(parent_indices, stream, "parent_indices");
 #endif
+  // 3. Find level boundaries.
+  nvtxRangePushA("level_boundaries");
+  std::vector<size_type> level_boundaries = [&]() {
+    // Already node_levels is sorted
+    auto max_level = d_tree.node_levels.back_element(stream);
+    rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);
+    // TODO try reduce_by_key
+    auto level_end =
+      thrust::copy_if(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(1),
+                      thrust::make_counting_iterator<size_type>(num_nodes + 1),
+                      level_boundaries.begin(),
+                      [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
+                        return index == num_nodes || node_levels[index] != node_levels[index - 1];
+                      });
+    CUDF_EXPECTS(thrust::distance(level_boundaries.begin(), level_end) == max_level + 1,
+                 "num_levels != max_level + 1");
+    return cudf::detail::make_std_vector_async(level_boundaries, stream);
+  }();
+  nvtxRangePop();
+#ifdef NJP_DEBUG_PRINT
+  print_vec(level_boundaries, "level_boundaries");
+  std::cout << "num_levels: " << level_boundaries.size() << std::endl;
+#endif
+  auto [col_id, parent_col_id] = generate_column_id(node_type,        // level sorted
+                                                    parent_indices,   // level sorted
+                                                    scatter_indices,  // level sorted
+                                                    level_boundaries,
+                                                    stream,
+                                                    mr);
+
+  nvtxRangePushA("restore");
+  // restore original order of col_id., and used d_tree members
+  // TODO would scatter be faster than radix-sort here for 3 values?
+  thrust::sort_by_key(
+    rmm::exec_policy(stream),
+    scatter_indices.begin(),
+    scatter_indices.end(),
+    thrust::make_zip_iterator(parent_col_id.begin(), col_id.begin(), d_tree.node_levels.begin()));
+  nvtxRangePop();
+#ifdef NJP_DEBUG_PRINT
+  auto translate_col_id = [](auto col_id) {
+    std::unordered_map<int, int> col_id_map;
+    std::vector<int> new_col_ids(col_id.size());
+    int unique_id = 0;
+    for (auto id : col_id) {
+      if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
+    }
+    for (size_t i = 0; i < col_id.size(); i++) {
+      new_col_ids[i] = col_id_map[col_id[i]];
+    }
+    return new_col_ids;
+  };
+  print_vec(scatter_indices, stream, "gpu.node_id");
+  print_vec(parent_col_id, stream, "parent_col_id");
+  print_vec(col_id, stream, "col_id");  // required.
+  print_vec(translate_col_id(cudf::detail::make_std_vector_async(col_id, stream)),
+            "col_id (translated)");
+  print_vec(d_tree.node_levels, stream, "gpu.node_levels");
+#endif
+  auto row_offsets = compute_row_offsets(scatter_indices, parent_col_id, d_tree, stream, mr);
   return std::tuple{std::move(col_id), std::move(row_offsets)};
 }
 

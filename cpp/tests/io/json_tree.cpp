@@ -442,19 +442,14 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
   }
 
   // print_vec(tree.parent_node_ids, "tree.parent_node_ids (before)");
-  constexpr NodeIndexT top_node = -1;  // TODO FIXME: uint32_t so, -1 is not legal.
+  constexpr NodeIndexT top_node = -1;
   // CPU version of the algorithm
   // Calculate row offsets too.
   auto hash_path = [&](auto node_id) {
     size_t seed = 0;
     while (node_id != top_node) {
-      seed = cudf::detail::hash_combine(
-        seed,
-        std::hash<std::decay_t<decltype(tree.node_levels.front())>>{}(tree.node_levels[node_id]));
-      seed = cudf::detail::hash_combine(
-        seed,
-        std::hash<std::decay_t<decltype(tree.node_categories.front())>>{}(
-          tree.node_categories[node_id]));
+      seed = cudf::detail::hash_combine(seed, std::hash<TreeDepthT>{}(tree.node_levels[node_id]));
+      seed = cudf::detail::hash_combine(seed, std::hash<NodeT>{}(tree.node_categories[node_id]));
       if (tree.node_categories[node_id] == node_t::NC_FN) {
         auto field_name =
           std::string_view(input.data() + tree.node_range_begin[node_id],
