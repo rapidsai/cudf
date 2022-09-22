@@ -78,19 +78,10 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   */
 
   template <typename IntType>
-  static bool is_little_endian()
-  {
-    IntType i = 0x0100;
-    std::array<char, sizeof(i)> bytes;
-    std::memcpy(&bytes[0], &i, sizeof(i));
-    return bytes[0] == 0;
-  }
-
-  template <typename IntType>
   static IntType read_int(char* data)
   {
     IntType result{};
-    if (not is_little_endian<IntType>()) { std::reverse(data, data + sizeof(result)); }
+    // we assume little-endian
     std::memcpy(&result, &data[0], sizeof(result));
     return result;
   }

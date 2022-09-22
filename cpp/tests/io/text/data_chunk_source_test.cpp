@@ -128,14 +128,9 @@ TEST_F(DataChunkSourceTest, Host)
 template <typename T>
 void write_int(std::ostream& stream, T val)
 {
-  // endianness check
-  auto const i = static_cast<T>(0x0100);
   std::array<char, sizeof(T)> bytes;
-  std::memcpy(&bytes[0], &i, sizeof(T));
-  auto const little_endian = bytes[0] == 0;
-  // write
+  // we assume little-endian
   std::memcpy(&bytes[0], &val, sizeof(T));
-  if (not little_endian) { std::reverse(bytes.begin(), bytes.end()); }
   stream.write(bytes.data(), bytes.size());
 }
 
