@@ -55,12 +55,16 @@ def run_udf_test(data, func, dtype):
     """
     dtype = np.dtype(dtype)
     cudf_column = cudf.core.column.as_column(data)
+    print("one")
     str_view_ary = to_string_view_array(cudf_column)
 
     output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
 
+    print("two")
     kernel = get_kernel(func, dtype)
+    print("three")    
     kernel.forall(len(data))(str_view_ary, output_ary)
+    print("four")    
     got = cudf.Series(output_ary, dtype=dtype)
     expect = pd.Series(data).apply(func)
     assert_eq(expect, got, check_dtype=False)
