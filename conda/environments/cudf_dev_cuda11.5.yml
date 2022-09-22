@@ -2,7 +2,6 @@
 
 name: cudf_dev
 channels:
-  - conda-forge/label/pandas_rc
   - rapidsai
   - nvidia
   - rapidsai-nightly
