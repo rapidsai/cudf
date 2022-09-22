@@ -590,13 +590,22 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     PRINT_LEVEL_DATA(level, ".after gather");
     nvtxRangePop();
     nvtxRangePushA("stable_sort_by_key");
+    // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
+    // we need to split to 2 Radix sorts.
+    // Secondary sort on node_type
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream),
+      node_type.data() + level_boundaries[level - 1],
+      node_type.data() + level_boundaries[level],
       thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
-                                node_type.data() + level_boundaries[level - 1]),
-      thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level],
-                                node_type.data() + level_boundaries[level]),
-      thrust::make_zip_iterator(scatter_indices.begin() + level_boundaries[level - 1]));
+                                scatter_indices.begin() + level_boundaries[level - 1]));
+    // Primary sort on parent_col_id
+    thrust::stable_sort_by_key(
+      rmm::exec_policy(stream),
+      parent_col_id.begin() + level_boundaries[level - 1],
+      parent_col_id.begin() + level_boundaries[level],
+      thrust::make_zip_iterator(node_type.data() + level_boundaries[level - 1],
+                                scatter_indices.begin() + level_boundaries[level - 1]));
     PRINT_LEVEL_DATA(level, ".after sort");
     nvtxRangePop();
     nvtxRangePushA("transform");
