@@ -1082,10 +1082,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
-  rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream, mr]() {
-    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream, mr};
+  rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream]() {
+    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
     // Memory holding the top-of-stack stack context for the input
-    rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream, mr};
+    rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
 
     // Identify what is the stack context for each input character (JSON-root, struct, or list)
     get_stack_context(json_in, stack_op_indices.data(), stream);
@@ -1117,7 +1117,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                        stream};
 
   // Perform a PDA-transducer pass
-  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream, mr};
+  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
   rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
   json_to_tokens_fst.Transduce(pda_sgids.begin(),
