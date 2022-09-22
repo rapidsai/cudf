@@ -142,12 +142,12 @@ cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
     s_element.type = lib_type
     if isinstance(dtype, cudf.StructDtype):
         for name, child_type in dtype.fields.items():
-            s_element.child_types[name.decode()] = \
+            s_element.child_types[name.encode()] = \
                 _get_cudf_schema_element_from_dtype(child_type)
     elif isinstance(dtype, cudf.ListDtype):
-        s_element.child_types["offsets".decode()] = \
+        s_element.child_types["offsets".encode()] = \
             _get_cudf_schema_element_from_dtype(cudf.dtype("int32"))
-        s_element.child_types["element".decode()] = \
+        s_element.child_types["element".encode()] = \
             _get_cudf_schema_element_from_dtype(dtype.element_type)
 
     return s_element
