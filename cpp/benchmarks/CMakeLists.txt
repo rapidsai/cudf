@@ -238,7 +238,7 @@ ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reade
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
-ConfigureBench(CSV_READER_BENCH io/csv/csv_reader.cpp)
+ConfigureNVBench(CSV_READER_NVBENCH io/csv/csv_reader_input.cpp io/csv/csv_reader_options.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
