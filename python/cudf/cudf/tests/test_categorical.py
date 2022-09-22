@@ -414,7 +414,7 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
         pytest.param(
             True,
             marks=pytest.mark.skipif(
-                not PANDAS_GE_134,
+                condition=not PANDAS_GE_134,
                 reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
@@ -454,7 +454,7 @@ def test_categorical_reorder_categories(
         pytest.param(
             True,
             marks=pytest.mark.skipif(
-                not PANDAS_GE_134,
+                condition=not PANDAS_GE_134,
                 reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
@@ -491,7 +491,7 @@ def test_categorical_add_categories(pd_str_cat, inplace):
         pytest.param(
             True,
             marks=pytest.mark.skipif(
-                not PANDAS_GE_134,
+                condition=not PANDAS_GE_134,
                 reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),

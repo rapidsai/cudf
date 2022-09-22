@@ -131,5 +131,5 @@ class IntervalColumn(StructColumn):
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
         return pd.Series(
-            pd.IntervalDtype().__from_arrow__(self.to_arrow()), index=index
+            self.dtype.to_pandas().__from_arrow__(self.to_arrow()), index=index
         )

@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_150
 from cudf.testing._utils import assert_eq, set_random_null_mask_inplace
 
 _UFUNCS = [
@@ -84,14 +85,19 @@ def test_ufunc_index(ufunc):
                 assert_eq(g, e, check_exact=False)
         else:
             assert_eq(got, expect, check_exact=False)
-    except AssertionError:
+    except AssertionError as e:
         # TODO: This branch can be removed when
         # https://github.com/rapidsai/cudf/issues/10178 is resolved
         if fname in ("power", "float_power"):
             if (got - expect).abs().max() == 1:
                 pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
         elif fname in ("bitwise_and", "bitwise_or", "bitwise_xor"):
-            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46769")
+            if PANDAS_GE_150:
+                raise e
+            else:
+                pytest.xfail(
+                    "https://github.com/pandas-dev/pandas/issues/46769"
+                )
         raise
 
 

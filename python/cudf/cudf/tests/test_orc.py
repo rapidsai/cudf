@@ -1871,3 +1871,12 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
 
     assert_eq(negative_timestamp_df, pd.read_orc(buffer))
     assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
+
+
+def test_orc_reader_apache_negative_timestamp(datadir):
+    path = datadir / "TestOrcFile.apache_timestamp.orc"
+
+    pdf = pd.read_orc(path)
+    gdf = cudf.read_orc(path)
+
+    assert_eq(pdf, gdf)

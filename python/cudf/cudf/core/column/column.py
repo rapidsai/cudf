@@ -62,6 +62,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.dtypes import (
@@ -82,6 +83,11 @@ from cudf.utils.dtypes import (
     pandas_dtypes_to_np_dtypes,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
+
+if PANDAS_GE_150:
+    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
+else:
+    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 T = TypeVar("T", bound="ColumnBase")
 # TODO: This workaround allows type hints for `slice`, since `slice` is a
@@ -290,9 +296,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(
-            array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
-        ):
+        elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data)[0]
