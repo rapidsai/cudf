@@ -62,6 +62,18 @@ void print_vec(T const& cpu, std::string const name)
     printf("%3d,", int(v));
   std::cout << name << std::endl;
 }
+template <typename T>
+void print_vec(rmm::device_uvector<T> const& gpu,
+               rmm::cuda_stream_view stream,
+               std::string const name)
+{
+  print_vec(cudf::detail::make_std_vector_async(device_span<T const>{gpu}, stream), name);
+}
+template <typename T>
+void print_vec(device_span<T> gpu, rmm::cuda_stream_view stream, std::string const name)
+{
+  print_vec(cudf::detail::make_std_vector_async(device_span<T const>{gpu}, stream), name);
+}
 }  // namespace
 
 // The node that a token represents
@@ -429,28 +441,25 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                                    auto const& parent_node_idx,
                                    auto const& parent_col_id,
                                    auto const& node_type,
-                                   auto const& levels,
                                    auto const& col_id) {
     std::cout << level << stage_text << "\n";
-    auto cls = std::array<const char*, 6>{"S", "L", "F", "R", "V", "E"};
+    auto cls  = std::array<const char*, 6>{"S", "L", "F", "R", "V", "E"};
+    auto dget = [](auto const& v, auto i) { return int(thrust::device_pointer_cast(v.data())[i]); };
     for (auto n = start; n < end; n++)
-      printf("%3d ", nodeII.element(n, stream));
+      printf("%3d ", dget(nodeII, n));
     printf(" nodeII-%ld\n", level);
     for (auto n = start; n < end; n++)
-      printf("%3d ", parent_node_idx.element(n, stream));
+      printf("%3d ", dget(parent_node_idx, n));
     printf(" parent_node_idx-%ld\n", level);
     for (auto n = start; n < end; n++)
       printf("%3d ", parent_col_id.element(n, stream));
     printf(" parent_col_id-%ld\n", level);
     for (auto n = start; n < end; n++) {
-      auto nt = node_type.element(n, stream);
+      auto nt = dget(node_type, n);
       printf("%3s ",
              nt >= NUM_NODE_CLASSES ? std::to_string(nt - NUM_NODE_CLASSES).c_str() : cls[nt]);
     }
     printf(" node_type-%ld\n", level);
-    for (auto n = start; n < end; n++)
-      printf("%3d ", levels.element(n, stream));
-    printf(" levels-%ld\n", level);
     for (auto n = start; n < end; n++)
       printf("%3d ", col_id.element(n, stream));
     printf(" col_id-%ld\n", level);
@@ -464,7 +473,6 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                    parent_indices,              \
                    parent_col_id,               \
                    node_type,                   \
-                   d_tree.node_levels,          \
                    col_id);
 #else
 #define PRINT_LEVEL_DATA(level, text) ;
@@ -512,6 +520,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
+    // first index holds next col_id from previous level.
     thrust::transform(rmm::exec_policy(stream),
                       adjacent_pair_it + 1,
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
@@ -555,11 +564,12 @@ rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatte
   // post-condition: row_offsets is in order of node_id.
   // parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
   CUDF_FUNC_RANGE();
-  auto const num_nodes = d_tree.node_categories.size();
+
   // 5. Generate row_offset.
   //   a. stable_sort by parent_col_id.
   //   b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
   //   c. propagate to non-list leaves from parent list node by recursion
+  auto const num_nodes = d_tree.node_categories.size();
   // TODO generate scatter_indices sequences here itself
   thrust::stable_sort_by_key(
     rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
@@ -572,8 +582,8 @@ rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatte
     thrust::make_constant_iterator<size_type>(1),
     row_offsets.begin());
 #ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream), "parent_col_id");
-  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (generated)");
+  print_vec(parent_col_id, stream, "parent_col_id");
+  print_vec(row_offsets, stream, "row_offsets (generated)");
 #endif
   // Using scatter instead of sort.
   auto& temp_storage = parent_col_id;  // reuse parent_col_id as temp storage
@@ -607,7 +617,7 @@ rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatte
              !(node_categories[parent_node_id] == node_t::NC_LIST);
     });
 #ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(row_offsets, stream), "row_offsets (ordered)");
+  print_vec(row_offsets, stream, "row_offsets (ordered)");
 #endif
   return row_offsets;
 }
@@ -658,7 +668,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   // and another for {node-level, node_category} + field hash for the entire path
 
 #ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "node_type");
+  print_vec(node_type, stream, "node_type");
 #endif
 
   // 2. Preprocessing: Translate parent node ids after sorting by level.
@@ -671,11 +681,10 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
 #ifdef NJP_DEBUG_PRINT
   printf("\n");
-  print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.parent_node_ids, stream),
-            "gpu.parent_node_ids");
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
+  print_vec(scatter_indices, stream, "gpu.node_id");
+  print_vec(d_tree.parent_node_ids, stream, "gpu.parent_node_ids");
+  print_vec(node_type, stream, "gpu.node_type");
+  print_vec(d_tree.node_levels, stream, "gpu.node_levels");
 #endif
   rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
   auto out_pid =
@@ -702,14 +711,13 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
   printf("\n");
-  print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream), "gpu.parent_node_ids");
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream), "gpu.node_type");
-  print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
-  print_vec(cudf::detail::make_std_vector_async(gather_indices, stream), "new_home");
-  print_vec(cudf::detail::make_std_vector_async(parent_indices, stream), "parent_indices");
-  print_vec(cudf::detail::make_std_vector_async(parent_node_ids, stream),
-            "parent_node_ids (restored)");
+  print_vec(scatter_indices, stream, "gpu.node_id");
+  print_vec(parent_node_ids, stream, "gpu.parent_node_ids");
+  print_vec(node_type, stream, "gpu.node_type");
+  print_vec(d_tree.node_levels, stream, "gpu.node_levels");
+  print_vec(gather_indices, stream, "new_home");
+  print_vec(parent_indices, stream, "parent_indices");
+  print_vec(parent_node_ids, stream, "parent_node_ids (restored)");
 #endif
   // 3. Find level boundaries.
   nvtxRangePushA("level_boundaries");
@@ -745,17 +753,12 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   nvtxRangePushA("restore");
   // restore original order of col_id., and used d_tree members
   // TODO would scatter be faster than radix-sort here for 3 values?
-  thrust::sort_by_key(rmm::exec_policy(stream),
-                      scatter_indices.begin(),
-                      scatter_indices.end(),
-                      thrust::make_zip_iterator(
-#ifdef NJP_DEBUG_PRINT
-                        parent_indices.begin(),  // only needed for debug prints
-                        node_type.begin(),
-#endif
-                        parent_col_id.begin(),
-                        col_id.begin(),
-                        d_tree.node_levels.begin()));
+  thrust::sort_by_key(
+    rmm::exec_policy(stream),
+    scatter_indices.begin(),
+    scatter_indices.end(),
+    thrust::make_zip_iterator(parent_col_id.begin(), col_id.begin(), d_tree.node_levels.begin()));
+  nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
   auto translate_col_id = [](auto col_id) {
     std::unordered_map<int, int> col_id_map;
@@ -769,20 +772,13 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     }
     return new_col_ids;
   };
-  print_vec(cudf::detail::make_std_vector_async(scatter_indices, stream), "gpu.node_id");
-  print_vec(cudf::detail::make_std_vector_async(parent_indices, stream),
-            "gpu.parent_indices");  // once original order is restored, is this required?
-  print_vec(cudf::detail::make_std_vector_async(node_type, stream),
-            "gpu.node_type");  // is this needed?
-  print_vec(cudf::detail::make_std_vector_async(parent_col_id, stream),
-            "parent_col_id");                                                // is this needed?
-  print_vec(cudf::detail::make_std_vector_async(col_id, stream), "col_id");  // required.
+  print_vec(scatter_indices, stream, "gpu.node_id");
+  print_vec(parent_col_id, stream, "parent_col_id");
+  print_vec(col_id, stream, "col_id");  // required.
   print_vec(translate_col_id(cudf::detail::make_std_vector_async(col_id, stream)),
-            "col_id (translated)");  // is this required? required to be ordered for the next step?
-  print_vec(cudf::detail::make_std_vector_async(d_tree.node_levels, stream), "gpu.node_levels");
+            "col_id (translated)");
+  print_vec(d_tree.node_levels, stream, "gpu.node_levels");
 #endif
-
-  nvtxRangePop();
   auto row_offsets = compute_row_offsets(scatter_indices, parent_col_id, d_tree, stream, mr);
   return std::tuple{std::move(col_id), std::move(row_offsets)};
 }
