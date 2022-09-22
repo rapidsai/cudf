@@ -563,12 +563,22 @@ __inline__ __device__ T decode_value(char const* begin,
                                      char const* end,
                                      parse_options_view const& opts)
 {
+  // If this is a string value, remove quotes
+  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
 template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
 __inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
 {
+  // If this is a string value, remove quotes
+  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
   return to_duration<T>(begin, end);
 }
 
