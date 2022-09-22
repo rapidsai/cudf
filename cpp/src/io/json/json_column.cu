@@ -112,7 +112,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                              col_ids.begin(),
                              col_ids.end(),
                              thrust::make_zip_iterator(node_ids.begin(), row_offsets.begin()));
-  auto counting_it = thrust::make_counting_iterator<size_type>(0);
   auto num_columns = thrust::unique_count(rmm::exec_policy(stream), col_ids.begin(), col_ids.end());
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
