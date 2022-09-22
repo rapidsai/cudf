@@ -113,12 +113,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                              col_ids.end(),
                              thrust::make_zip_iterator(node_ids.begin(), row_offsets.begin()));
   auto counting_it = thrust::make_counting_iterator<size_type>(0);
-  auto num_columns = thrust::count_if(rmm::exec_policy(stream),
-                                      counting_it,
-                                      counting_it + col_ids.size(),
-                                      [col_ids = col_ids.begin()] __device__(auto i) {
-                                        return i == 0 || col_ids[i] != col_ids[i - 1];
-                                      });
+  auto num_columns = thrust::unique_count(rmm::exec_policy(stream), col_ids.begin(), col_ids.end());
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
