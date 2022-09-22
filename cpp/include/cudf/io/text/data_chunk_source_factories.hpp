@@ -36,7 +36,7 @@ std::unique_ptr<data_chunk_source> make_source(host_span<const char> data);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the file
- * @param data the filename of the file to be exposed as a data chunk source.
+ * @param filename the filename of the file to be exposed as a data chunk source.
  * @return the data chunk source for the provided filename. It reads data from the file and copies
  *         it to the device.
  */
@@ -45,7 +45,7 @@ std::unique_ptr<data_chunk_source> make_source_from_file(std::string_view filena
 /**
  * @brief Creates a data source capable of producing device-buffered views of a BGZIP compressed
  *        file.
- * @param data the filename of the BGZIP-compressed file to be exposed as a data chunk source.
+ * @param filename the filename of the BGZIP-compressed file to be exposed as a data chunk source.
  * @return the data chunk source for the provided filename. It reads data from the file and copies
  *         it to the device, where it will be decompressed.
  */
@@ -54,7 +54,7 @@ std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view 
 /**
  * @brief Creates a data source capable of producing device-buffered views of a BGZIP compressed
  *        file with virtual record offsets.
- * @param data the filename of the BGZIP-compressed file to be exposed as a data chunk source.
+ * @param filename the filename of the BGZIP-compressed file to be exposed as a data chunk source.
  * @param virtual_begin the virtual (Tabix) offset of the first byte to be read. Its upper 48 bits
  *                      describe the offset into the compressed file, its lower 16 bits describe the
  *                      block-local offset.
