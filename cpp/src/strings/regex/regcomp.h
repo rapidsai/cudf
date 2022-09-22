@@ -31,7 +31,7 @@ namespace detail {
  *	03xx are tokens, i.e. operands for operators
  * ```
  */
-enum InstType {
+enum InstType : int32_t {
   CHAR    = 0177,  // Literal character
   RBRA    = 0201,  // Right bracket, )
   LBRA    = 0202,  // Left bracket, (
@@ -109,9 +109,12 @@ class reprog {
    *
    * @param pattern Regex pattern encoded as UTF-8
    * @param flags For interpreting certain `pattern` characters
+   * @param capture For controlling how capture groups are processed
    * @return Instance of reprog
    */
-  static reprog create_from(std::string_view pattern, regex_flags const flags);
+  static reprog create_from(std::string_view pattern,
+                            regex_flags const flags,
+                            capture_groups const capture = capture_groups::EXTRACT);
 
   int32_t add_inst(int32_t type);
   int32_t add_inst(reinst const& inst);
@@ -134,6 +137,7 @@ class reprog {
   void set_start_inst(int32_t id);
   [[nodiscard]] int32_t get_start_inst() const;
 
+  void optimize();
   void finalize();
   void check_for_errors();
 #ifndef NDEBUG

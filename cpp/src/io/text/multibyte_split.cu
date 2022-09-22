@@ -302,6 +302,73 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   }
 }
 
+__global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
+  cudf::size_type base_tile_idx,
+  int64_t base_input_offset,
+  int64_t base_offset_offset,
+  cudf::io::text::detail::scan_tile_state_view<cutoff_offset> tile_output_offsets,
+  char delim,
+  cudf::device_span<char const> chunk_input_chars,
+  int64_t byte_range_end,
+  cudf::split_device_span<int64_t> output_offsets)
+{
+  using InputLoad =
+    cub::BlockLoad<char, THREADS_PER_TILE, ITEMS_PER_THREAD, cub::BLOCK_LOAD_WARP_TRANSPOSE>;
+  using OffsetScan         = cub::BlockScan<cutoff_offset, THREADS_PER_TILE>;
+  using OffsetScanCallback = cudf::io::text::detail::scan_tile_state_callback<cutoff_offset>;
+
+  __shared__ union {
+    typename InputLoad::TempStorage input_load;
+    typename OffsetScan::TempStorage offset_scan;
+  } temp_storage;
+
+  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
+  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
+  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
+  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+
+  // STEP 1: Load inputs
+
+  char thread_chars[ITEMS_PER_THREAD];
+
+  InputLoad(temp_storage.input_load)
+    .Load(chunk_input_chars.data() + tile_input_offset,
+          thread_chars,
+          chunk_input_chars.size() - tile_input_offset);
+
+  // STEP 2: Flag matches
+
+  cutoff_offset thread_offset;
+  uint32_t thread_match_mask[(ITEMS_PER_THREAD + 31) / 32]{};
+
+  for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+    auto const is_match      = i < thread_input_size and thread_chars[i] == delim;
+    auto const match_end     = base_input_offset + thread_input_offset + i + 1;
+    auto const is_past_range = match_end >= byte_range_end;
+    thread_match_mask[i / 32] |= uint32_t{is_match} << (i % 32);
+    thread_offset = thread_offset + cutoff_offset{is_match, is_past_range};
+  }
+
+  // STEP 3: Scan flags to determine absolute thread output offset
+
+  auto prefix_callback = OffsetScanCallback(tile_output_offsets, tile_idx);
+
+  __syncthreads();  // required before temp_memory re-use
+  OffsetScan(temp_storage.offset_scan).ExclusiveSum(thread_offset, thread_offset, prefix_callback);
+
+  // Step 4: Assign outputs from each thread using match offsets.
+
+  for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+    auto const is_match = (thread_match_mask[i / 32] >> (i % 32)) & 1u;
+    if (is_match && !thread_offset.is_past_end()) {
+      auto const match_end     = base_input_offset + thread_input_offset + i + 1;
+      auto const is_past_range = match_end >= byte_range_end;
+      output_offsets[thread_offset.offset() - base_offset_offset] = match_end;
+      thread_offset = thread_offset + cutoff_offset{true, is_past_range};
+    }
+  }
+}
+
 }  // namespace
 
 namespace cudf {
@@ -615,19 +682,35 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
     cudaStreamWaitEvent(scan_stream.value(), last_launch_event);
 
-    multibyte_split_kernel<<<tiles_in_launch,
-                             THREADS_PER_TILE,
-                             0,
-                             scan_stream.value()>>>(  //
-      base_tile_idx,
-      chunk_offset,
-      offset_storage.size(),
-      tile_multistates,
-      tile_offsets,
-      {device_delim.data(), static_cast<std::size_t>(device_delim.size())},
-      *chunk,
-      byte_range_end,
-      offset_output);
+    if (delimiter.size() == 1) {
+      // the single-byte case allows for a much more efficient kernel, so we special-case it
+      byte_split_kernel<<<tiles_in_launch,
+                          THREADS_PER_TILE,
+                          0,
+                          scan_stream.value()>>>(  //
+        base_tile_idx,
+        chunk_offset,
+        offset_storage.size(),
+        tile_offsets,
+        delimiter[0],
+        *chunk,
+        byte_range_end,
+        offset_output);
+    } else {
+      multibyte_split_kernel<<<tiles_in_launch,
+                               THREADS_PER_TILE,
+                               0,
+                               scan_stream.value()>>>(  //
+        base_tile_idx,
+        chunk_offset,
+        offset_storage.size(),
+        tile_multistates,
+        tile_offsets,
+        {device_delim.data(), static_cast<std::size_t>(device_delim.size())},
+        *chunk,
+        byte_range_end,
+        offset_output);
+    }
 
     // load the next chunk
     auto next_chunk = reader->get_next_chunk(ITEMS_PER_CHUNK, read_stream);
