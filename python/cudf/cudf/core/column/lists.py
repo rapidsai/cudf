@@ -46,17 +46,6 @@ class ListColumn(ColumnBase):
         null_count=None,
         children=(),
     ):
-        if size is None:
-            if len(children) == 0:
-                size = 0
-            elif children[0].size == 0:
-                size = 0
-            else:
-                # one less because the last element of offsets is the number of
-                # bytes in the data buffer
-                size = children[0].size - 1
-            size = size - offset
-
         super().__init__(
             None,
             size,
