@@ -1246,7 +1246,7 @@ TEST_F(OrcStatisticsTest, Overflow)
     not_too_small_seq, not_too_small_seq + num_rows, validity);
   table_view tbl({col1, col2, col3, col4});
 
-  auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
+  auto filepath = temp_env->get_temp_filepath("OrcStatsOverflow.orc");
 
   cudf_io::orc_writer_options out_opts =
     cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
@@ -1264,6 +1264,26 @@ TEST_F(OrcStatisticsTest, Overflow)
   check_sum_exist(3, true);
   check_sum_exist(4, true);
 }
+
+TEST_F(OrcStatisticsTest, HasNull)
+{
+  // auto filepath = temp_env->get_temp_filepath("OrcStatsHasNull.orc");
+
+  auto filepath = "/home/devavret/Development/rapids/new3.orc";
+
+  auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
+
+  std::cout << std::boolalpha << stats.file_stats[0].has_null.value() << std::endl;
+  std::cout << std::boolalpha << stats.file_stats[1].has_null.value() << std::endl;
+  std::cout << std::boolalpha << stats.file_stats[2].has_null.value() << std::endl;
+
+  auto args   = cudf::io::orc_reader_options_builder(cudf::io::source_info(filepath)).build();
+  auto result = cudf::io::read_orc(args);
+  cudf::test::print(result.tbl->get_column(0));
+  cudf::test::print(result.tbl->get_column(1));
+  cudf::test::print(result.tbl->get_column(2));
+}
+
 struct OrcWriterTestStripes
   : public OrcWriterTest,
     public ::testing::WithParamInterface<std::tuple<size_t, cudf::size_type>> {
