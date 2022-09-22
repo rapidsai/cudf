@@ -57,7 +57,6 @@ cpdef read_json(object filepaths_or_buffers,
 
     # Setup arguments
     cdef vector[data_type] c_dtypes_list
-    cdef map[string, data_type] c_dtypes_map
     cdef map[string, schema_element] c_dtypes_schema_map
     cdef cudf_io_types.compression_type c_compression
     # Determine byte read offsets if applicable
