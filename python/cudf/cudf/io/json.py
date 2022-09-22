@@ -27,8 +27,12 @@ def read_json(
 ):
     """{docstring}"""
 
-    if isinstance(dtype, abc.Collection):
-        warnings.warn("dtype can only be a dict", FutureWarning)
+    if not isinstance(dtype, (abc.Mapping, bool)):
+        warnings.warn(
+            "passing dtype as list is deprecated, "
+            "in future versions dtype can only be a dict or bool",
+            FutureWarning,
+        )
 
     if engine == "cudf" and not lines:
         raise ValueError("cudf engine only supports JSON Lines format")
