@@ -35,6 +35,8 @@ python/cudf_kafka/*/_lib/**/*.cpp
 python/cudf_kafka/*/_lib/**/*.h
 python/custreamz/*/_lib/**/*.cpp
 python/custreamz/*/_lib/**/*.h
+python/strings_udf/strings_udf/_lib/*.cpp
+python/strings_udf/strings_udf/*.ptx
 .Python
 env/
 develop-eggs/

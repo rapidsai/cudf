@@ -657,7 +657,12 @@ def test_to_datetime_errors(data):
         gd_data = pd_data
 
     assert_exceptions_equal(
-        pd.to_datetime, cudf.to_datetime, ([pd_data],), ([gd_data],)
+        pd.to_datetime,
+        cudf.to_datetime,
+        ([pd_data],),
+        ([gd_data],),
+        compare_error_message=False,
+        expected_error_message="Given date string not likely a datetime.",
     )
 
 

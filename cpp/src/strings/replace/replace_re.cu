@@ -115,7 +115,7 @@ std::unique_ptr<column> replace_re(
   string_view d_repl(replacement.data(), replacement.size());
 
   // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
 
   auto const maxrepl = max_replace_count.value_or(-1);
 
