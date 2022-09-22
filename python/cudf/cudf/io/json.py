@@ -29,8 +29,8 @@ def read_json(
 
     if not isinstance(dtype, (abc.Mapping, bool)):
         warnings.warn(
-            "passing dtype as list is deprecated, "
-            "in future versions dtype can only be a dict or bool",
+            "passing 'dtype' as list is deprecated, "
+            "in future versions 'dtype' can only be a dict or bool",
             FutureWarning,
         )
 
