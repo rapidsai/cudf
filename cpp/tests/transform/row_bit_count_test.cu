@@ -240,13 +240,15 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
   auto ints      = make_numeric_column(data_type{type_id::INT32}, num_rows * 2);
   auto ints_view = ints->mutable_view();
-  thrust::tabulate(
-    thrust::device, ints_view.begin<int32_t>(), ints_view.end<int32_t>(), thrust::identity{});
+  thrust::tabulate(rmm::exec_policy(cudf::default_stream_value),
+                   ints_view.begin<int32_t>(),
+                   ints_view.end<int32_t>(),
+                   thrust::identity{});
 
   // List offsets = {0, 2, 4, 6, 8, ..., num_rows*2};
   auto list_offsets      = make_numeric_column(data_type{type_id::INT32}, num_rows + 1);
   auto list_offsets_view = list_offsets->mutable_view();
-  thrust::tabulate(thrust::device,
+  thrust::tabulate(rmm::exec_policy(cudf::default_stream_value),
                    list_offsets_view.begin<offset_type>(),
                    list_offsets_view.end<offset_type>(),
                    times_2{});
@@ -262,7 +264,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // Compute row_bit_count, and compare.
   auto row_bit_counts          = row_bit_count(table_view{{structs_column->view()}});
   auto expected_row_bit_counts = make_numeric_column(data_type{type_id::INT32}, num_rows);
-  thrust::fill_n(thrust::device,
+  thrust::fill_n(rmm::exec_policy(cudf::default_stream_value),
                  expected_row_bit_counts->mutable_view().begin<int32_t>(),
                  num_rows,
                  CHAR_BIT * (2 * sizeof(int32_t) + sizeof(offset_type)));

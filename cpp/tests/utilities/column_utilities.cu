@@ -865,7 +865,8 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
   }
   auto typed_lhs = static_cast<char const*>(lhs);
   auto typed_rhs = static_cast<char const*>(rhs);
-  EXPECT_TRUE(thrust::equal(thrust::device, typed_lhs, typed_lhs + size_bytes, typed_rhs));
+  EXPECT_TRUE(thrust::equal(
+    rmm::exec_policy(cudf::default_stream_value), typed_lhs, typed_lhs + size_bytes, typed_rhs));
 }
 
 /**
