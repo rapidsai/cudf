@@ -1079,26 +1079,25 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
-  rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
-  rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
-  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream, mr};
-
   auto const new_line_delimited_json = options.is_enabled_lines();
 
-  // Memory holding the top-of-stack stack context for the input
-  rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
-
-  // Identify what is the stack context for each input character (is it: JSON-root, struct, or list)
-  get_stack_context(json_in, stack_op_indices.data(), stream);
-
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
-  rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
-  auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
-  thrust::transform(rmm::exec_policy(stream),
-                    zip_in,
-                    zip_in + json_in.size(),
-                    pda_sgids.data(),
-                    tokenizer_pda::PdaSymbolToSymbolGroupId{});
+  rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids = [json_in, stream]() {
+    rmm::device_uvector<PdaSymbolGroupIdT> pda_sgids{json_in.size(), stream};
+    // Memory holding the top-of-stack stack context for the input
+    rmm::device_uvector<StackSymbolT> stack_op_indices{json_in.size(), stream};
+
+    // Identify what is the stack context for each input character (JSON-root, struct, or list)
+    get_stack_context(json_in, stack_op_indices.data(), stream);
+
+    auto zip_in = thrust::make_zip_iterator(json_in.data(), stack_op_indices.data());
+    thrust::transform(rmm::exec_policy(stream),
+                      zip_in,
+                      zip_in + json_in.size(),
+                      pda_sgids.data(),
+                      tokenizer_pda::PdaSymbolToSymbolGroupId{});
+    return pda_sgids;
+  }();
 
   // PDA transducer alias
   using ToTokenStreamFstT =
@@ -1118,6 +1117,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                        stream};
 
   // Perform a PDA-transducer pass
+  rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
+  rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
   json_to_tokens_fst.Transduce(pda_sgids.begin(),
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data(),
@@ -1126,7 +1128,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                tokenizer_pda::start_state,
                                stream);
 
-  auto num_total_tokens = num_written_tokens.value(stream);
+  auto const num_total_tokens = num_written_tokens.value(stream);
   tokens.resize(num_total_tokens, stream);
   tokens_indices.resize(num_total_tokens, stream);
 
