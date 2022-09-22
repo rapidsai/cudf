@@ -62,9 +62,9 @@ def run_udf_test(data, func, dtype):
 
     print("two")
     kernel = get_kernel(func, dtype)
-    print("three")    
+    print("three")
     kernel.forall(len(data))(str_view_ary, output_ary)
-    print("four")    
+    print("four")
     got = cudf.Series(output_ary, dtype=dtype)
     expect = pd.Series(data).apply(func)
     assert_eq(expect, got, check_dtype=False)
