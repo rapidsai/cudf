@@ -21,14 +21,22 @@ def read_json(
     lines=False,
     compression="infer",
     byte_range=None,
+    keep_quotes=False,
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
     if isinstance(dtype, abc.Collection):
+        warnings.warn("dtype can only be a dict", FutureWarning)
+
     if engine == "cudf" and not lines:
         raise ValueError("cudf engine only supports JSON Lines format")
+    if engine == "cudf_experiment" and keep_quotes:
+        raise ValueError(
+            "keep_quotes='True' is supported only with"
+            " engine='cudf_experimental'"
+        )
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine == "cudf" or engine == "cudf_experimental":
@@ -65,6 +73,7 @@ def read_json(
             compression,
             byte_range,
             engine == "cudf_experimental",
+            keep_quotes,
         )
     else:
         warnings.warn(

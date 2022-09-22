@@ -14,7 +14,7 @@ from cudf._lib.cpp.types cimport data_type, size_type
 
 cdef extern from "cudf/io/json.hpp" \
         namespace "cudf::io" nogil:
-    
+
     cdef struct schema_element:
         data_type type
         map[string, schema_element] child_types
@@ -32,7 +32,6 @@ cdef extern from "cudf/io/json.hpp" \
 
         # setter
         void set_dtypes(vector[data_type] types) except+
-        void set_dtypes(map[string, data_type] types) except+
         void set_dtypes(map[string, schema_element] types) except+
         void set_compression(
             cudf_io_types.compression_type compression
@@ -42,6 +41,7 @@ cdef extern from "cudf/io/json.hpp" \
         void enable_lines(bool val) except+
         void enable_dayfirst(bool val) except+
         void enable_experimental(bool val) except+
+        void enable_keep_quotes(bool val) except+
 
         @staticmethod
         json_reader_options_builder builder(
@@ -58,9 +58,6 @@ cdef extern from "cudf/io/json.hpp" \
         ) except+
         json_reader_options_builder& dtypes(
             vector[data_type] types
-        ) except+
-        json_reader_options_builder& dtypes(
-            map[string, data_type] types
         ) except+
         json_reader_options_builder& dtypes(
             map[string, schema_element] types
@@ -81,6 +78,9 @@ cdef extern from "cudf/io/json.hpp" \
             bool val
         ) except+
         json_reader_options_builder& experimental(
+            bool val
+        ) except+
+        json_reader_options_builder& keep_quotes(
             bool val
         ) except+
 

@@ -33,7 +33,8 @@ cpdef read_json(object filepaths_or_buffers,
                 bool lines,
                 object compression,
                 object byte_range,
-                bool experimental):
+                bool experimental,
+                bool keep_quotes):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -83,8 +84,6 @@ cpdef read_json(object filepaths_or_buffers,
     elif dtype is not True:
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                c_dtypes_map[str(k).encode()] = \
-                    _get_cudf_data_type_from_dtype(v)
                 c_dtypes_schema_map[str(k).encode()] = \
                     _get_cudf_schema_element_from_dtype(v)
         elif isinstance(dtype, abc.Collection):
@@ -106,12 +105,12 @@ cpdef read_json(object filepaths_or_buffers,
         .experimental(experimental)
         .build()
     )
-    #if is_list_like_dtypes:
-    #    opts.set_dtypes(c_dtypes_list)
-    #else:
-    #    opts.set_dtypes(c_dtypes_map)
-    opts.set_dtypes(c_dtypes_schema_map)
+    if is_list_like_dtypes:
+        opts.set_dtypes(c_dtypes_list)
+    else:
+        opts.set_dtypes(c_dtypes_schema_map)
 
+    opts.enable_keep_quotes(keep_quotes)
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
@@ -143,8 +142,14 @@ cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
     s_element.type = lib_type
     if isinstance(dtype, cudf.StructDtype):
         for name, child_type in dtype.fields.items():
-            s_element.child_types[name.decode()] = _get_cudf_schema_element_from_dtype(child_type)
-    
+            s_element.child_types[name.decode()] = \
+                _get_cudf_schema_element_from_dtype(child_type)
+    elif isinstance(dtype, cudf.ListDtype):
+        s_element.child_types["offsets".decode()] = \
+            _get_cudf_schema_element_from_dtype(cudf.dtype("int32"))
+        s_element.child_types["element".decode()] = \
+            _get_cudf_schema_element_from_dtype(dtype.element_type)
+
     return s_element
 
 

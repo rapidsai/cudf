@@ -302,7 +302,10 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     pd_df.to_json(fname, compression=out_comp, lines=True, orient="records")
 
     cu_df = cudf.read_json(
-        str(fname), compression=in_comp, lines=True, dtype=["int32", "int32"]
+        str(fname),
+        compression=in_comp,
+        lines=True,
+        dtype={"col1": "int32", "col2": "int32"},
     )
     assert_eq(pd_df, cu_df)
 
@@ -660,3 +663,48 @@ def test_json_types_data():
         pdf, schema=df.to_arrow().schema, safe=False
     )
     assert df.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "keep_quotes,result",
+    [
+        (
+            True,
+            {
+                "c1": [
+                    {"f1": '"sf11"', "f2": '"sf21"'},
+                    {"f1": '"sf12"', "f2": '"sf22"'},
+                ],
+                "c2": [['"l11"', '"l21"'], ['"l12"', '"l22"']],
+            },
+        ),
+        (
+            False,
+            {
+                "c1": [
+                    {"f1": "sf11", "f2": "sf21"},
+                    {"f1": "sf12", "f2": "sf22"},
+                ],
+                "c2": [["l11", "l21"], ["l12", "l22"]],
+            },
+        ),
+    ],
+)
+def test_json_keep_quotes(tmpdir, keep_quotes, result):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_keep_quotes")
+    data = {
+        "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+        "c2": [["l11", "l21"], ["l12", "l22"]],
+    }
+    pdf = pd.DataFrame(data)
+    pdf.to_json(fname, orient="records")
+
+    actual = cudf.read_json(
+        fname,
+        engine="cudf_experimental",
+        orient="records",
+        keep_quotes=keep_quotes,
+    )
+    expected = pd.DataFrame(result)
+
+    assert_eq(actual, expected)
