@@ -442,7 +442,7 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
   }
 
   // print_vec(tree.parent_node_ids, "tree.parent_node_ids (before)");
-  constexpr NodeIndexT top_node = -1;  // TODO FIXME: uint32_t so, -1 is not legal.
+  constexpr NodeIndexT top_node = -1; 
   // CPU version of the algorithm
   // Calculate row offsets too.
   auto hash_path = [&](auto node_id) {
