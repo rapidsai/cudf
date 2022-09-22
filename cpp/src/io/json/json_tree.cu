@@ -29,6 +29,7 @@
 
 #include <cuco/static_map.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
@@ -336,6 +337,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   // pre-condition:
   // d_tree.node_range_begin, d_tree.node_range_end, d_tree.node_category are in node_id order.
   // post-condition: returned node_type is in node_id order, no inputs are modified.
+  CUDF_FUNC_RANGE();
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
     cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
@@ -398,6 +400,37 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                    });
   return node_type;
 }
+
+/**
+ * @brief Translates sorted parent_node_ids to parent_indices with indices from scatter_indices
+ *
+ * @param scatter_indices The sorted order of parent_node_ids
+ * @param parent_node_ids The sorted parent_node_ids
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Translated parent_indices pointing to sorted node_ids positions
+ */
+rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
+  device_span<size_type const> scatter_indices,
+  device_span<NodeIndexT const> parent_node_ids,
+  rmm::cuda_stream_view stream)
+{
+  auto const num_nodes = scatter_indices.size();
+  auto gather_indices  = cudf::detail::scatter_to_gather(
+    scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
+
+  rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
+  // gather, except parent sentinels
+  thrust::transform(rmm::exec_policy(stream),
+                    parent_node_ids.begin(),
+                    parent_node_ids.end(),
+                    parent_indices.begin(),
+                    [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
+                      return (parent_node_id == parent_node_sentinel)
+                               ? parent_node_sentinel
+                               : gather_indices[parent_node_id];
+                    });
+  return parent_indices;
+};
 
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
   device_span<size_type> node_type,        // level sorted
@@ -694,20 +727,9 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                              d_tree.node_levels.data(),
                              d_tree.node_levels.data() + num_nodes,
                              out_pid);
-  auto gather_indices = cudf::detail::scatter_to_gather(
-    scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
 
-  rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
-  // gather, except parent sentinels
-  thrust::transform(rmm::exec_policy(stream),
-                    parent_node_ids.begin(),
-                    parent_node_ids.end(),
-                    parent_indices.begin(),
-                    [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
-                      return (parent_node_id == parent_node_sentinel)
-                               ? parent_node_sentinel
-                               : gather_indices[parent_node_id];
-                    });
+  rmm::device_uvector<NodeIndexT> parent_indices =
+    translate_sorted_parent_node_indices(scatter_indices, parent_node_ids, stream);
   nvtxRangePop();
 #ifdef NJP_DEBUG_PRINT
   printf("\n");
@@ -715,9 +737,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   print_vec(parent_node_ids, stream, "gpu.parent_node_ids");
   print_vec(node_type, stream, "gpu.node_type");
   print_vec(d_tree.node_levels, stream, "gpu.node_levels");
-  print_vec(gather_indices, stream, "new_home");
   print_vec(parent_indices, stream, "parent_indices");
-  print_vec(parent_node_ids, stream, "parent_node_ids (restored)");
 #endif
   // 3. Find level boundaries.
   nvtxRangePushA("level_boundaries");
