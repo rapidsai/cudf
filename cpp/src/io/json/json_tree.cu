@@ -47,7 +47,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/uninitialized_fill.h>
 
 #include <limits>
 
@@ -265,7 +264,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids.end(),
                    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
                      return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
-                     // XXX: How is this algorithm working for JSON lines?
+                     // -1, not sentinel used here because of max operation below
                    });
   nvtxRangePop();
 
@@ -311,7 +310,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   auto parent_node_ids_it = thrust::make_transform_iterator(
     parent_token_ids.begin(),
     [node_ids_gpu = node_ids_gpu.begin()] __device__(size_type const pid) -> NodeIndexT {
-      return pid < 0 ? pid : node_ids_gpu[pid];
+      return pid < 0 ? parent_node_sentinel : node_ids_gpu[pid];
     });
   auto parent_node_ids_end = thrust::copy_if(rmm::exec_policy(stream),
                                              parent_node_ids_it,
@@ -450,13 +449,9 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   auto const num_nodes = node_type.size();
   rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
   rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             parent_col_id.begin(),
-                             parent_col_id.end(),
-                             0);  // XXX: is this needed?
   // fill with 1, useful for scan later
   // TODO: Could initialize to 0 and scatter 1 to level_boundaries alone
-  thrust::uninitialized_fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
+  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.end(), 1);
   // Initialize First level node's node col_id to 0
   thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
   // Initialize First level node's parent_col_id to parent_node_sentinel sentinel
@@ -553,7 +548,9 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
-    // first index holds next col_id from previous level.
+    // Compares two adjacent items, beginning with the first and second item from the current level.
+    // Writes flags to the index of the rhs item.
+    // First index holds next col_id from previous level.
     thrust::transform(rmm::exec_policy(stream),
                       adjacent_pair_it + 1,
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
