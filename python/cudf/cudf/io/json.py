@@ -26,6 +26,7 @@ def read_json(
 ):
     """{docstring}"""
 
+    if isinstance(dtype, abc.Collection):
     if engine == "cudf" and not lines:
         raise ValueError("cudf engine only supports JSON Lines format")
     if engine == "auto":
