@@ -329,13 +329,21 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
           std::move(node_range_end)};
 }
 
+/**
+ * @brief Generates unique node_type id for each node.
+ * Field nodes with the same name are assigned the same node_type id.
+ * List, Struct, and String nodes are assigned their category values as node_type ids.
+ *
+ * All inputs and outputs are in node_id order.
+ * @param d_input JSON string in device memory
+ * @param d_tree Tree representation of the JSON
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return Vector of node_type ids
+ */
 rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<SymbolT const> d_input,
                                                               tree_meta_t const& d_tree,
                                                               rmm::cuda_stream_view stream)
 {
-  // pre-condition:
-  // d_tree.node_range_begin, d_tree.node_range_end, d_tree.node_category are in node_id order.
-  // post-condition: returned node_type is in node_id order, no inputs are modified.
   CUDF_FUNC_RANGE();
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
@@ -413,8 +421,8 @@ rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
   device_span<NodeIndexT const> parent_node_ids,
   rmm::cuda_stream_view stream)
 {
-  auto const num_nodes = scatter_indices.size();
-  auto gather_indices  = cudf::detail::scatter_to_gather(
+  auto const num_nodes      = scatter_indices.size();
+  auto const gather_indices = cudf::detail::scatter_to_gather(
     scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
 
   rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
@@ -431,6 +439,27 @@ rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
   return parent_indices;
 };
 
+/**
+ * @brief Generates column id and parent column id for each node from the node_level sorted inputs
+ *
+ * 4. Per-Level Processing: Propagate parent node ids for each level.
+ *   For each level,
+ *     a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
+ *     b. stable sort by {parent_col_id, node_type}
+ *     c. scan sum of unique {parent_col_id, node_type}
+ *     d. scatter the col_id back to stable node_level order (using scatter_indices)
+ *
+ * pre-condition: All input arguments are stable sorted by node_level (stable in node_id order)
+ * post-condition: Returned column_id, parent_col_id are level sorted, scatter_indices holds the
+ * order.
+ * @param node_type Unique id to identify node type, field with different name has different id.
+ * @param parent_indices Parent node indices in the sorted node_level order
+ * @param scatter_indices The sorted order of node_level
+ * @param level_boundaries The boundaries of each level in the sorted node_level order
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return column_id, parent_column_id
+ */
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
   device_span<size_type> node_type,        // level sorted
   device_span<NodeIndexT> parent_indices,  // level sorted
@@ -439,11 +468,6 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // pre-condition: node_type is level stable sorted. (stable in node_id order)
-  // parent_indices is level stable sorted.
-  // scatter_indices is level stable sorted.
-  // post-condition: returned column_id, parent_col_id are level sorted, scatter_indices holds the
-  // order.
   CUDF_FUNC_RANGE();
   nvtxRangePushA("pre-level");
   auto const num_nodes = node_type.size();
@@ -583,22 +607,32 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   return {std::move(col_id), std::move(parent_col_id)};
 }
 
+/**
+ * @brief Computes row indices of each node in the hierarchy.
+ * 5. Generate row_offset.
+ *   a. stable_sort by parent_col_id.
+ *   b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
+ *   c. propagate to non-list leaves from parent list node by recursion
+ *
+ * pre-condition:
+ *  scatter_indices is a sequence, representing node_id.
+ *  d_tree.node_categories, d_tree.parent_node_ids, parent_col_id are in order of node_id.
+ * post-condition: row_offsets is in order of node_id.
+ *  parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
+ * @param scatter_indices node_id
+ * @param parent_col_id parent node's column id
+ * @param d_tree Tree representation of the JSON string
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return row_offsets
+ */
 rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatter_indices,
-                                                   device_span<NodeIndexT> parent_col_id,
+                                                   rmm::device_uvector<NodeIndexT>&& parent_col_id,
                                                    tree_meta_t& d_tree,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  // pre-condition: scatter_indices is a sequence, representing node_id.
-  // d_tree.node_categories, d_tree.parent_node_ids, parent_col_id are in order of node_id.
-  // post-condition: row_offsets is in order of node_id.
-  // parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
   CUDF_FUNC_RANGE();
-
-  // 5. Generate row_offset.
-  //   a. stable_sort by parent_col_id.
-  //   b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
-  //   c. propagate to non-list leaves from parent list node by recursion
   auto const num_nodes = d_tree.node_categories.size();
   // TODO generate scatter_indices sequences here itself
   thrust::stable_sort_by_key(
@@ -622,8 +656,7 @@ rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatte
                   row_offsets.end(),
                   scatter_indices.begin(),
                   temp_storage.begin());
-  thrust::copy(
-    rmm::exec_policy(stream), temp_storage.begin(), temp_storage.end(), row_offsets.begin());
+  row_offsets = std::move(temp_storage);
   thrust::transform_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -677,7 +710,7 @@ Algorithm:
   Restore original node_id order
 5. Generate row_offset.
   a. stable_sort by parent_col_id.
-  b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
+  b. scan_by_key {parent_col_id} (required only on nodes whose parent is a list)
   c. propagate to non-list leaves from parent list node by recursion
 **/
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
@@ -796,7 +829,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
             "col_id (translated)");
   print_vec(d_tree.node_levels, stream, "gpu.node_levels");
 #endif
-  auto row_offsets = compute_row_offsets(scatter_indices, parent_col_id, d_tree, stream, mr);
+  auto row_offsets =
+    compute_row_offsets(scatter_indices, std::move(parent_col_id), d_tree, stream, mr);
   return std::tuple{std::move(col_id), std::move(row_offsets)};
 }
 
