@@ -755,7 +755,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
-        if engine == "numba":
+        if engine == "jit":
             chunk_results = jit_groupby_apply(
                 offsets, grouped_values, function, *args, cache=cache
             )
@@ -773,7 +773,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                 grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
             ]
             chunk_results = [function(chk, *args) for chk in chunks]
-
             if not len(chunk_results):
                 return self.obj.head(0)
 
