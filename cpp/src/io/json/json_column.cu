@@ -29,6 +29,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -43,7 +44,6 @@
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
-#include <thrust/uninitialized_fill.h>
 #include <thrust/unique.h>
 
 #include <algorithm>
@@ -95,14 +95,21 @@ void print_tree(host_span<SymbolT const> input,
   printf(" (JSON)\n");
 }
 
-// input node tree, col_id, row_offset of nodes.
-// output column tree, col_id, max_row_offset of columns.
+/**
+ * @brief Reduces node tree representation to column tree representation.
+ *
+ * @param tree Node tree representation of JSON string
+ * @param col_ids Column ids of nodes
+ * @param row_offsets Row offsets of nodes
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A tuple of column tree representation of JSON string, column ids of columns, and
+ * max row offsets of columns
+ */
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> col_ids,
                       device_span<size_type> row_offsets,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   //   1. sort_by_key {col_id}, {row_offset} //stable?
@@ -215,7 +222,59 @@ reduce_to_column_tree(tree_meta_t& tree,
 }
 
 /**
- * @brief Structure with pointers to data containined in `d_json_column`
+ * @brief Copies strings specified by pair of begin, end offsets to host vector of strings.
+ *
+ * @param input String device buffer
+ * @param node_range_begin Begin offset of the strings
+ * @param node_range_end End offset of the strings
+ * @param stream CUDA stream
+ * @return Vector of strings
+ */
+std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
+                                              device_span<SymbolOffsetT const> node_range_begin,
+                                              device_span<SymbolOffsetT const> node_range_end,
+                                              rmm::cuda_stream_view stream)
+{
+  auto const num_strings = node_range_begin.size();
+  rmm::device_uvector<thrust::pair<const char*, size_type>> string_views(num_strings, stream);
+  auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
+  thrust::transform(rmm::exec_policy(stream),
+                    d_offset_pairs,
+                    d_offset_pairs + num_strings,
+                    string_views.begin(),
+                    [input] __device__(auto const& offsets) {
+                      // Note: first character for non-field columns
+                      return thrust::make_pair(
+                        input.data() + thrust::get<0>(offsets),
+                        static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
+                    });
+  auto d_column_names = cudf::make_strings_column(string_views, stream);
+  auto to_host        = [](auto const& col) {
+    auto const scv     = cudf::strings_column_view(col);
+    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
+      cudf::default_stream_value);
+    auto const h_offsets = cudf::detail::make_std_vector_sync(
+      cudf::device_span<cudf::offset_type const>(
+        scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
+      cudf::default_stream_value);
+
+    // build std::string vector from chars and offsets
+    std::vector<std::string> host_data;
+    host_data.reserve(col.size());
+    std::transform(
+      std::begin(h_offsets),
+      std::end(h_offsets) - 1,
+      std::begin(h_offsets) + 1,
+      std::back_inserter(host_data),
+      [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
+    return host_data;
+  };
+  return to_host(d_column_names->view());
+}
+
+/**
+ * @brief Holds member data pointers of `d_json_column`
  *
  */
 struct json_column_data {
@@ -226,6 +285,20 @@ struct json_column_data {
   bitmask_type* validity;
 };
 
+/**
+ * @brief Constructs `d_json_column` from node tree representation
+ * Newly constructed columns are insert into `root`'s children.
+ * `root` must be a list type.
+ *
+ * @param input Input JSON string device data
+ * @param tree Node tree representation of the JSON string
+ * @param col_ids Column ids of the nodes in the tree
+ * @param row_offsets Row offsets of the nodes in the tree
+ * @param root Root node of the `d_json_column` tree
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the device memory
+ * of child_offets and validity members of `d_json_column`
+ */
 void make_json_column2(device_span<SymbolT const> input,
                        tree_meta_t& tree,
                        device_span<NodeIndexT> col_ids,
@@ -247,48 +320,9 @@ void make_json_column2(device_span<SymbolT const> input,
   auto column_range_beg =
     cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
   auto max_row_offsets = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
-  thrust::host_vector<std::string> column_names =
-    [input,
-     stream,
-     num_columns,
-     column_range_begin = d_column_tree.node_range_begin.begin(),
-     column_range_end   = d_column_tree.node_range_end.begin()]() {
-      rmm::device_uvector<thrust::pair<const char*, size_type>> string_views(num_columns, stream);
-      auto d_offset_pairs = thrust::make_zip_iterator(column_range_begin, column_range_end);
-      thrust::transform(rmm::exec_policy(stream),
-                        d_offset_pairs,
-                        d_offset_pairs + num_columns,
-                        string_views.begin(),
-                        [input] __device__(auto const& offsets) {
-                          // Note: first character for non-field columns
-                          return thrust::make_pair(input.data() + thrust::get<0>(offsets),
-                                                   static_cast<size_type>(thrust::get<1>(offsets) -
-                                                                          thrust::get<0>(offsets)));
-                        });
-      auto d_column_names = cudf::make_strings_column(string_views, stream);
-      auto to_host        = [](auto const& col) {
-        auto const scv     = cudf::strings_column_view(col);
-        auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-          cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-          cudf::default_stream_value);
-        auto const h_offsets = cudf::detail::make_std_vector_sync(
-          cudf::device_span<cudf::offset_type const>(
-            scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-          cudf::default_stream_value);
+  std::vector<std::string> column_names = copy_strings_to_host(
+    input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
 
-        // build std::string vector from chars and offsets
-        std::vector<std::string> host_data;
-        host_data.reserve(col.size());
-        std::transform(
-          std::begin(h_offsets),
-          std::end(h_offsets) - 1,
-          std::begin(h_offsets) + 1,
-          std::back_inserter(host_data),
-          [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
-        return host_data;
-      };
-      return to_host(d_column_names->view());
-    }();
   auto to_json_col_type = [](auto category) {
     switch (category) {
       case NC_STRUCT: return json_col_t::StructColumn;
@@ -327,13 +361,15 @@ void make_json_column2(device_span<SymbolT const> input,
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
     return thrust::get<0>(a) < thrust::get<0>(b);
   });
-  // use hash map because we may skip field name col_ids
+
+  // use hash map because we may skip field name's col_ids
   std::unordered_map<NodeIndexT, std::reference_wrapper<d_json_column>> columns;
   // map{parent_col_id, child_col_name}> = child_col_id, used for null value column tracking
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   // find column_ids which are values, but should be ignored in validity
   std::vector<uint8_t> ignore_vals(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
+
   for (auto const this_col_id : unique_col_ids) {
     if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
       continue;
@@ -404,7 +440,8 @@ void make_json_column2(device_span<SymbolT const> input,
                                             col.child_offsets.data(),
                                             col.validity.data()};
   }
-  // 3. scatter offsets to respective columns
+
+  // 3. scatter string offsets to respective columns, set validity bits
   auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
   auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
   thrust::for_each_n(
@@ -431,11 +468,12 @@ void make_json_column2(device_span<SymbolT const> input,
         default: break;
       }
     });
+
   // 4. scatter List offset
   //   sort_by_key {col_id}, {node_id}
   //   unique_copy_by_key {parent_node_id} {row_offset} to
   //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
-  rmm::device_uvector<NodeIndexT> original_col_ids(col_ids.size(), stream);  // make a copy
+  rmm::device_uvector<NodeIndexT> original_col_ids(col_ids, stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), original_col_ids.begin());
   rmm::device_uvector<size_type> node_ids(row_offsets.size(), stream);
   thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
@@ -474,6 +512,7 @@ void make_json_column2(device_span<SymbolT const> input,
         }
       }
     });
+
   // 5. scan on offsets.
   for (auto& [id, col_ref] : columns) {
     auto& col = col_ref.get();
@@ -679,10 +718,10 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
   d_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             root_column.child_offsets.begin(),
-                             root_column.child_offsets.end(),
-                             0);
+  thrust::fill(rmm::exec_policy(stream),
+               root_column.child_offsets.begin(),
+               root_column.child_offsets.end(),
+               0);
 
   // Get internal JSON column
   make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream, mr);

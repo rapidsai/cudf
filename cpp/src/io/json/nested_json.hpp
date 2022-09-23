@@ -332,7 +332,6 @@ records_orient_tree_traversal(
  * @param col_ids column ids of each node (modified in-place, but restored to original state)
  * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
  * @param stream The CUDA stream to which kernels are dispatched
- * @param mr Optional, resource with which to allocate
  * @return A tuple containing the column tree, identifier for each column and the maximum row index
  * in each column
  */
@@ -340,8 +339,7 @@ std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<siz
 reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> col_ids,
                       device_span<size_type> row_offsets,
-                      rmm::cuda_stream_view stream        = cudf::default_stream_value,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                      rmm::cuda_stream_view stream);
 
 // @copydoc parse_nested_json
 table_with_metadata parse_nested_json2(
