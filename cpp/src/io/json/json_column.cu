@@ -289,26 +289,6 @@ void make_json_column2(device_span<SymbolT const> input,
       };
       return to_host(d_column_names->view());
     }();
-#ifdef NJP_DEBUG_PRINT
-  for (auto& name : column_names)
-    std::cout << name << ",";
-  std::cout << std::endl;
-  for (auto& id : unique_col_ids)
-    std::cout << id << ",";
-  std::cout << std::endl;
-  for (auto& cc : column_categories)
-    std::cout << int(cc) << ",";
-  std::cout << std::endl;
-  for (auto& pid : column_parent_ids)
-    std::cout << int(pid) << ",";
-  std::cout << std::endl;
-  for (auto& rng : column_range_beg)
-    std::cout << int(rng) << ",";
-  std::cout << std::endl;
-  for (auto& id : unique_col_ids)
-    std::cout << column_names[id] << ",";
-  std::cout << std::endl;
-#endif
   auto to_json_col_type = [](auto category) {
     switch (category) {
       case NC_STRUCT: return json_col_t::StructColumn;
@@ -692,21 +672,9 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
   const auto [tokens_gpu, token_indices_gpu] = get_token_stream(d_input, options, stream);
   // gpu tree generation
   auto gpu_tree = get_tree_representation(tokens_gpu, token_indices_gpu, stream);
-
-#ifdef NJP_DEBUG_PRINT
-  printf("gpu_tree:\n");
-  print_tree(input, gpu_tree, stream);
-#endif
+  // print_tree(input, gpu_tree, stream);
 
   auto [gpu_col_id, gpu_row_offsets] = records_orient_tree_traversal(d_input, gpu_tree, stream);
-
-#ifdef NJP_DEBUG_PRINT
-  printf("records_orient_tree_traversal:\n");
-  print_tree(input, gpu_tree, stream);
-  print_vec(cudf::detail::make_std_vector_async(gpu_col_id, stream), "gpu_col_id", to_int);
-  print_vec(
-    cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
-#endif
 
   d_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
@@ -718,14 +686,6 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
 
   // Get internal JSON column
   make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream, mr);
-
-#ifdef NJP_DEBUG_PRINT
-  printf("make_json_column2:\n");
-  print_tree(input, gpu_tree, stream);
-  print_vec(cudf::detail::make_std_vector_async(gpu_col_id, stream), "gpu_col_id", to_int);
-  print_vec(
-    cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
-#endif
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =
@@ -745,15 +705,6 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
 
-#ifdef NJP_DEBUG_PRINT
-  auto debug_schema_print = [](auto ret) {
-    std::cout << ", type id: "
-              << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
-              << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
-              << "\n";
-  };
-#endif
-
   // Iterate over the struct's child columns and convert to cudf column
   size_type column_index = 0;
   for (auto const& col_name : root_struct_col.column_order) {
@@ -764,38 +715,43 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
     std::optional<schema_element> child_schema_element = std::visit(
       cudf::detail::visitor_overload{
         [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
-          auto ret = (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                       ? std::optional<schema_element>{{user_dtypes[column_index]}}
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by index: #" << column_index;
-          debug_schema_print(ret);
-#endif
-          return ret;
+          return (static_cast<std::size_t>(column_index) < user_dtypes.size())
+                   ? std::optional<schema_element>{{user_dtypes[column_index]}}
+                   : std::optional<schema_element>{};
         },
         [col_name](
           std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-          auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by flat name: '" << col_name;
-          debug_schema_print(ret);
-#endif
-          return ret;
+          return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                   ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
+                   : std::optional<schema_element>{};
         },
         [col_name](std::map<std::string, schema_element> const& user_dtypes)
           -> std::optional<schema_element> {
-          auto ret = (user_dtypes.find(col_name) != std::end(user_dtypes))
-                       ? user_dtypes.find(col_name)->second
-                       : std::optional<schema_element>{};
-#ifdef NJP_DEBUG_PRINT
-          std::cout << "Column by nested name: #" << col_name;
-          debug_schema_print(ret);
-#endif
-          return ret;
+          return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                   ? user_dtypes.find(col_name)->second
+                   : std::optional<schema_element>{};
         }},
       options.get_dtypes());
+#ifdef NJP_DEBUG_PRINT
+    auto debug_schema_print = [](auto ret) {
+      std::cout << ", type id: "
+                << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
+                << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
+                << "\n";
+    };
+    std::visit(
+      cudf::detail::visitor_overload{[column_index](const std::vector<data_type>&) {
+                                       std::cout << "Column by index: #" << column_index;
+                                     },
+                                     [col_name](std::map<std::string, data_type> const&) {
+                                       std::cout << "Column by flat name: '" << col_name;
+                                     },
+                                     [col_name](std::map<std::string, schema_element> const&) {
+                                       std::cout << "Column by nested name: #" << col_name;
+                                     }},
+      options.get_dtypes());
+    debug_schema_print(child_schema_element);
+#endif
 
     // Get this JSON column's cudf column and schema info, (modifies json_col)
     auto [cudf_col, col_name_info] =
