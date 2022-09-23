@@ -943,7 +943,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 f"to isin(), you passed a {type(values).__name__}"
             )
 
-        return np.isin(self.values_host, values)
+        return np.isin(
+            self.values_host, values
+        )  # return cupy.isin(self.values, cupy.asarray(values))
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
