@@ -1247,11 +1247,47 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   decompress_check(comp_res, _stream);
 
+  // clean up pointers for uncompressed V2 pages
+  fix_v2_page_data(chunks, pages, false);
+
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
   pages.host_to_device(_stream);
 
   return decomp_pages;
+}
+
+/**
+ * @copydoc cudf::io::detail::parquet::fix_v2_page_data
+ */
+void reader::impl::fix_v2_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                                    hostdevice_vector<gpu::PageInfo>& pages,
+                                    bool sync_to_device)
+{
+  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
+    const auto page_stride = chunks[c].max_num_pages;
+    if (chunks[c].codec == Compression::UNCOMPRESSED) {
+      for (int k = 0; k < page_stride; k++) {
+        auto& page        = pages[page_count + k];
+        auto data         = page.page_data;
+        page.rep_lvl_data = nullptr;
+        page.def_lvl_data = nullptr;
+        if (page.hdr_version == 2) {
+          auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+          if (offset) {
+            if (page.rep_lvl_bytes) { page.rep_lvl_data = data; }
+            if (page.def_lvl_bytes) { page.def_lvl_data = data + page.rep_lvl_bytes; };
+          }
+          page.page_data = data + offset;
+        }
+      }
+    }
+    page_count += page_stride;
+  }
+
+  // Update the page information in device memory with the updated value of
+  // page_data; it now points to the uncompressed data buffer
+  if (sync_to_device) { pages.host_to_device(_stream); }
 }
 
 /**
@@ -1749,6 +1785,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         for (size_t c = 0; c < chunks.size(); c++) {
           if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { page_data[c].reset(); }
         }
+      } else {
+        // if not compressed, fix data pointers for V2 pages
+        fix_v2_page_data(chunks, pages, true);
       }
 
       // build output column info
@@ -1771,9 +1810,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       hostdevice_vector<gpu::PageNestingInfo> page_nesting_info;
       allocate_nesting_info(chunks, pages, page_nesting_info);
 
-      // TODO(ets): before preprocess, go through the pages and fix up the
-      // def and rep level pointers.
-      
       // - compute column sizes and allocate output buffers.
       //   important:
       //   for nested schemas, we have to do some further preprocessing to determine:

@@ -130,6 +130,17 @@ class reader::impl {
                                           hostdevice_vector<gpu::PageInfo>& pages);
 
   /**
+   * @brief Fix data poitners for V2 pages.
+   *
+   * @param chunks List of column chunk descriptors
+   * @param pages List of page information
+   * @param sync_to_device If true, copy pages to device
+   */
+  void fix_v2_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                                          hostdevice_vector<gpu::PageInfo>& pages,
+                                          bool sync_to_device);
+
+  /**
    * @brief Allocate nesting information storage for all pages and set pointers
    *        to it.
    *

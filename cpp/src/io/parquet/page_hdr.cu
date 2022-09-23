@@ -310,8 +310,8 @@ struct gpuParseDataPageHeaderV2 {
                                  ParquetFieldInt32(2, bs->page.num_nulls),
                                  ParquetFieldInt32(3, bs->page.num_rows),
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldEnum<Encoding>(5, bs->page.def_lvl_bytes),
-                                 ParquetFieldEnum<Encoding>(6, bs->page.rep_lvl_bytes));
+                                 ParquetFieldInt32(5, bs->page.def_lvl_bytes),
+                                 ParquetFieldInt32(6, bs->page.rep_lvl_bytes));
     return parse_header(op, bs);
   }
 };
@@ -389,7 +389,7 @@ __global__ void __launch_bounds__(128)
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
-              bs->page.version = 1;
+              bs->page.hdr_version = 1;
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
@@ -404,9 +404,10 @@ __global__ void __launch_bounds__(128)
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
-              bs->page.version = 2;
+              bs->page.hdr_version = 2;
               values_found += bs->page.num_input_values;
               bs->page.flags                     = 0;
+              // V2 only uses RLE, so it was removed from the header
               bs->page.definition_level_encoding = Encoding::RLE;
               bs->page.repetition_level_encoding = Encoding::RLE;
               break;

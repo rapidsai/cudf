@@ -146,27 +146,38 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
   } else if (encoding == Encoding::RLE) {
-    if (cur + 4 < end) {
-      uint32_t run;
+    // only need to check for V2 pages here, since V2 only uses RLE encoding
+    if (s->page.hdr_version == 2) {
+      len = 0;
+      cur = lvl == level_type::DEFINITION ? s->page.def_lvl_data
+                                          : s->page.rep_lvl_data;
+      auto lvl_end = cur + (lvl == level_type::DEFINITION ? s->page.def_lvl_bytes
+                                                          : s->page.rep_lvl_bytes);
+      if (cur == nullptr || lvl_end > end) { s->error = 2; }
+      else {
+        end = lvl_end;
+        s->lvl_end = std::max(s->lvl_end, lvl_end);
+      }
+    } else if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
-      run                     = get_vlq32(cur, end);
-      s->initial_rle_run[lvl] = run;
-      if (!(run & 1)) {
-        int v = (cur < end) ? cur[0] : 0;
-        cur++;
-        if (level_bits > 8) {
-          v |= ((cur < end) ? cur[0] : 0) << 8;
-          cur++;
-        }
-        s->initial_rle_value[lvl] = v;
-      }
-      s->lvl_start[lvl] = cur;
-      if (cur > end) { s->error = 2; }
     } else {
-      len      = 0;
       s->error = 2;
+      return 0;
     }
+    uint32_t run            = get_vlq32(cur, end);
+    s->initial_rle_run[lvl] = run;
+    if (!(run & 1)) {
+      int v = (cur < end) ? cur[0] : 0;
+      cur++;
+      if (level_bits > 8) {
+        v |= ((cur < end) ? cur[0] : 0) << 8;
+        cur++;
+      }
+      s->initial_rle_value[lvl] = v;
+    }
+    s->lvl_start[lvl] = cur;
+    if (cur > end) { s->error = 2; }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
@@ -176,7 +187,7 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->error = 3;
     len      = 0;
   }
-  return (uint32_t)len;
+  return static_cast<uint32_t>(len);
 }
 
 /**
@@ -963,6 +974,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       }
       s->first_output_value = 0;
 
+      // for V2 headers need to set lvl_end in InitLevelSection
+      s->lvl_end = nullptr;
       // Find the compressed size of repetition levels
       cur += InitLevelSection(s, cur, end, level_type::REPETITION);
       // Find the compressed size of definition levels
@@ -1000,7 +1013,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
       }
       if (cur > end) { s->error = 1; }
-      s->lvl_end    = cur;
+      if (s->lvl_end == nullptr) { s->lvl_end = cur; }
       s->data_start = cur;
       s->data_end   = end;
     } else {
