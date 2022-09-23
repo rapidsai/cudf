@@ -95,7 +95,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   bgzip_header read_header()
   {
     std::array<char, 12> buffer{};
-    _stream->read(buffer.data(), sizeof(buffer));
+    _data_stream->read(buffer.data(), sizeof(buffer));
     std::array<uint8_t, 4> expected_header{{31, 139, 8, 4}};
     CUDF_EXPECTS(
       std::equal(
@@ -110,18 +110,18 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       CUDF_EXPECTS(remaining_size >= 4, "invalid extra field length");
       // a subfield consists of 2 identifier bytes and a uint16 length
       // 66/67 identifies a BGZIP block size field, we skip all other fields
-      _stream->read(buffer.data(), 4);
+      _data_stream->read(buffer.data(), 4);
       extra_offset += 4;
       auto subfield_size = read_int<uint16_t>(&buffer[2]);
       if (buffer[0] == 66 && buffer[1] == 67) {
         // the block size subfield contains a single uint16 value, which is block_size - 1
         CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
-        _stream->read(buffer.data(), sizeof(uint16_t));
-        _stream->seekg(remaining_size - 6, std::ios_base::cur);
+        _data_stream->read(buffer.data(), sizeof(uint16_t));
+        _data_stream->seekg(remaining_size - 6, std::ios_base::cur);
         auto block_size_minus_one = read_int<uint16_t>(&buffer[0]);
         return {block_size_minus_one + 1, extra_length};
       } else {
-        _stream->seekg(subfield_size, std::ios_base::cur);
+        _data_stream->seekg(subfield_size, std::ios_base::cur);
         extra_offset += subfield_size;
       }
     }
@@ -135,7 +135,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   bgzip_footer read_footer()
   {
     std::array<char, 8> buffer{};
-    _stream->read(buffer.data(), sizeof(buffer));
+    _data_stream->read(buffer.data(), sizeof(buffer));
     return {read_int<uint32_t>(&buffer[4])};
   }
 
@@ -303,12 +303,12 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     // read chunks until we have enough decompressed data
     while (_curr_block.decompressed_size() < requested_size) {
       // calling peek on an already EOF stream causes it to fail, we need to avoid that
-      if (_stream->eof()) { break; }
+      if (_data_stream->eof()) { break; }
       // peek is necessary if we are already at the end, but didn't try to read another byte
-      _stream->peek();
-      if (_stream->eof() || _compressed_pos > _compressed_end) { break; }
+      _data_stream->peek();
+      if (_data_stream->eof() || _compressed_pos > _compressed_end) { break; }
       auto header = read_header();
-      _curr_block.read_block(header, *_stream);
+      _curr_block.read_block(header, *_data_stream);
       auto footer = read_footer();
       _curr_block.add_block_offsets(header, footer);
       // for the last GZIP block, we restrict ourselves to the bytes up to _local_end
@@ -330,7 +330,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   bgzip_data_chunk_reader(std::unique_ptr<std::istream> input_stream,
                           uint64_t virtual_begin,
                           uint64_t virtual_end)
-    : _stream(std::move(input_stream)),
+    : _data_stream(std::move(input_stream)),
       _prev_block{cudf::default_stream_value},  // here we can use the default stream because
       _curr_block{cudf::default_stream_value},  // we only initialize empty device_uvectors
       _local_end{virtual_end & 0xFFFFu},
@@ -338,9 +338,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       _compressed_end{virtual_end >> 16}
   {
     // set failbit to throw on IO failures
-    _stream->exceptions(std::istream::failbit);
+    _data_stream->exceptions(std::istream::failbit);
     // seek to the beginning of the provided compressed offset
-    _stream->seekg(_compressed_pos, std::ios_base::cur);
+    _data_stream->seekg(_compressed_pos, std::ios_base::cur);
     // read the first blocks
     read_next_compressed_chunk(chunk_load_size);
     // seek to the beginning of the provided local offset
@@ -360,50 +360,50 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       _curr_block.consume_bytes(_curr_block.remaining_size());
       read_next_compressed_chunk(chunk_load_size);
       // calling peek on an already EOF stream causes it to fail, we need to avoid that
-      if (_stream->eof()) { break; }
+      if (_data_stream->eof()) { break; }
       // peek is necessary if we are already at the end, but didn't try to read another byte
-      _stream->peek();
-      if (_stream->eof() || _compressed_pos > _compressed_end) { break; }
+      _data_stream->peek();
+      if (_data_stream->eof() || _compressed_pos > _compressed_end) { break; }
     }
     read_size = std::min(read_size, _curr_block.remaining_size());
     _curr_block.consume_bytes(read_size);
   }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
-                                                    rmm::cuda_stream_view cuda_stream) override
+                                                    rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
     if (read_size <= _curr_block.remaining_size()) {
-      _curr_block.decompress(cuda_stream);
-      rmm::device_uvector<char> data(read_size, cuda_stream);
+      _curr_block.decompress(stream);
+      rmm::device_uvector<char> data(read_size, stream);
       CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
                                     _curr_block.d_decompressed_blocks.data() + _curr_block.read_pos,
                                     read_size,
                                     cudaMemcpyDeviceToDevice,
-                                    cuda_stream.value()));
+                                    stream.value()));
       // record the host-to-device copy, decompression and device copy
-      CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, cuda_stream.value()));
+      CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, stream.value()));
       _curr_block.consume_bytes(read_size);
       return std::make_unique<device_uvector_data_chunk>(std::move(data));
     }
     read_next_compressed_chunk(read_size /* - _curr_block.remaining_size()*/);
-    _prev_block.decompress(cuda_stream);
-    _curr_block.decompress(cuda_stream);
+    _prev_block.decompress(stream);
+    _curr_block.decompress(stream);
     read_size = std::min(read_size, _prev_block.remaining_size() + _curr_block.remaining_size());
-    rmm::device_uvector<char> data(read_size, cuda_stream);
+    rmm::device_uvector<char> data(read_size, stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
                                   _prev_block.d_decompressed_blocks.data() + _prev_block.read_pos,
                                   _prev_block.remaining_size(),
                                   cudaMemcpyDeviceToDevice,
-                                  cuda_stream.value()));
+                                  stream.value()));
     CUDF_CUDA_TRY(cudaMemcpyAsync(data.data() + _prev_block.remaining_size(),
                                   _curr_block.d_decompressed_blocks.data() + _curr_block.read_pos,
                                   read_size - _prev_block.remaining_size(),
                                   cudaMemcpyDeviceToDevice,
-                                  cuda_stream.value()));
+                                  stream.value()));
     // record the host-to-device copy, decompression and device copy
-    CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, cuda_stream.value()));
-    CUDF_CUDA_TRY(cudaEventRecord(_prev_block.event, cuda_stream.value()));
+    CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, stream.value()));
+    CUDF_CUDA_TRY(cudaEventRecord(_prev_block.event, stream.value()));
     read_size -= _prev_block.remaining_size();
     _prev_block.consume_bytes(_prev_block.remaining_size());
     _curr_block.consume_bytes(read_size);
@@ -411,7 +411,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   }
 
  private:
-  std::unique_ptr<std::istream> _stream;
+  std::unique_ptr<std::istream> _data_stream;
   compressed_blocks _prev_block;
   compressed_blocks _curr_block;
   std::size_t _local_end;
