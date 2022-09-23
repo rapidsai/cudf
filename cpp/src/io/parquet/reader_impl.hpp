@@ -137,8 +137,8 @@ class reader::impl {
    * @param sync_to_device If true, copy pages to device
    */
   void fix_v2_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                          hostdevice_vector<gpu::PageInfo>& pages,
-                                          bool sync_to_device);
+                        hostdevice_vector<gpu::PageInfo>& pages,
+                        bool sync_to_device);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers

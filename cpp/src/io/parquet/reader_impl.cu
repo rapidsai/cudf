@@ -1165,20 +1165,19 @@ rmm::device_buffer reader::impl::decompress_page_data(
     if (codec.num_pages == 0) { continue; }
 
     for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
-      auto dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
-      auto& page    = pages[page_idx];
+      auto dst_base     = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
+      auto& page        = pages[page_idx];
       page.rep_lvl_data = nullptr;
       page.def_lvl_data = nullptr;
-      if (page.hdr_version == 2) {
+      // only need to modify data pages
+      if (page.hdr_version == 2 && page.flags == 0) {
         // for V2 need copy def and rep level info into place, and then offset the
         // input and output buffers. otherwise we'd have to keep both the compressed
         // and decompressed data. uncompressed and V1 pages will be done on device.
         auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
         if (offset) {
-          thrust::copy(rmm::exec_policy(_stream), 
-                       page.page_data,
-                       page.page_data + offset,
-                       dst_base);
+          thrust::copy(
+            rmm::exec_policy(_stream), page.page_data, page.page_data + offset, dst_base);
           if (page.rep_lvl_bytes) { page.rep_lvl_data = dst_base; }
           if (page.def_lvl_bytes) { page.def_lvl_data = dst_base + page.rep_lvl_bytes; };
         }
@@ -1188,10 +1187,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
         comp_out.emplace_back(dst_base + offset,
                               static_cast<size_t>(page.uncompressed_page_size - offset));
       } else {
-        comp_in.emplace_back(page.page_data,
-                             static_cast<size_t>(page.compressed_page_size));
-        comp_out.emplace_back(dst_base,
-                              static_cast<size_t>(page.uncompressed_page_size));
+        comp_in.emplace_back(page.page_data, static_cast<size_t>(page.compressed_page_size));
+        comp_out.emplace_back(dst_base, static_cast<size_t>(page.uncompressed_page_size));
         page.page_data = dst_base;
       }
 
@@ -1272,7 +1269,7 @@ void reader::impl::fix_v2_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
         auto data         = page.page_data;
         page.rep_lvl_data = nullptr;
         page.def_lvl_data = nullptr;
-        if (page.hdr_version == 2) {
+        if (page.hdr_version == 2 && page.flags == 0) {
           auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
           if (offset) {
             if (page.rep_lvl_bytes) { page.rep_lvl_data = data; }

@@ -149,13 +149,13 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     // only need to check for V2 pages here, since V2 only uses RLE encoding
     if (s->page.hdr_version == 2) {
       len = 0;
-      cur = lvl == level_type::DEFINITION ? s->page.def_lvl_data
-                                          : s->page.rep_lvl_data;
-      auto lvl_end = cur + (lvl == level_type::DEFINITION ? s->page.def_lvl_bytes
-                                                          : s->page.rep_lvl_bytes);
-      if (cur == nullptr || lvl_end > end) { s->error = 2; }
-      else {
-        end = lvl_end;
+      cur = lvl == level_type::DEFINITION ? s->page.def_lvl_data : s->page.rep_lvl_data;
+      auto lvl_end =
+        cur + (lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes);
+      if (cur == nullptr || lvl_end > end) {
+        s->error = 2;
+      } else {
+        end        = lvl_end;
         s->lvl_end = std::max(s->lvl_end, lvl_end);
       }
     } else if (cur + 4 < end) {
