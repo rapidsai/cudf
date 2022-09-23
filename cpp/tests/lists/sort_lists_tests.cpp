@@ -256,6 +256,7 @@ TEST_F(SortListsDouble, InfinityAndNaN)
   }
   // This data includes a row with over 200 elements to test the
   // radix sort is not used in the logic path in segmented_sort.
+  // Technically radix sort is not expected to be used in either case.
   {
     // clang-format off
     LCW input{0.0, -0.0, -NaN, -NaN, NaN, Inf, -Inf,
