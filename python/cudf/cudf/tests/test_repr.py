@@ -1742,19 +1742,20 @@ def test_repr_struct_after_concat():
 
 
 @pytest.mark.parametrize(
-    "ser,expected_repr",
+    "cudf_type,data,expected_repr",
     [
         (
-            cudf.Series(
-                [
+            cudf.Series,
+            {
+                "data": [
                     "1969-12-31 23:59:58.001001",
                     "1839-12-24 03:58:56.000826",
                     "1647-05-20 19:25:03.000638",
                 ],
-                dtype="datetime64[us]",
-                index=["a", "b", "z"],
-                name="hello",
-            ),
+                "dtype": "datetime64[us]",
+                "index": ["a", "b", "z"],
+                "name": "hello",
+            },
             textwrap.dedent(
                 """
             a    1969-12-31 23:59:58.001001
@@ -1765,10 +1766,11 @@ def test_repr_struct_after_concat():
             ),
         ),
         (
-            cudf.Series(
-                ["2499-12-01 01:00:00", "2499-11-01 01:30:00"],
-                dtype="datetime64[s]",
-            ),
+            cudf.Series,
+            {
+                "data": ["2499-12-01 01:00:00", "2499-11-01 01:30:00"],
+                "dtype": "datetime64[s]",
+            },
             textwrap.dedent(
                 """
                 0    2499-12-01 01:00:00
@@ -1777,10 +1779,64 @@ def test_repr_struct_after_concat():
                 """
             ),
         ),
+        (
+            cudf.Index,
+            {
+                "data": ["2499-12-01 01:00:00", "2499-11-01 01:30:00"],
+                "dtype": "datetime64[s]",
+            },
+            textwrap.dedent(
+                """
+                DatetimeIndex(['2499-12-01 01:00:00', '2499-11-01 01:30:00'],
+                dtype='datetime64[s]')
+                """
+            ),
+        ),
+        (
+            cudf.Series,
+            {
+                "data": ["2499-12-01 01:00:00", "2499-11-01 01:30:00"],
+                "dtype": "datetime64[s]",
+                "index": ["2499-12-01 01:00:00", "2499-11-01 01:30:00"],
+            },
+            textwrap.dedent(
+                """
+                2499-12-01 01:00:00    2499-12-01 01:00:00
+                2499-11-01 01:30:00    2499-11-01 01:30:00
+                dtype: datetime64[s]
+                """
+            ),
+        ),
+        (
+            cudf.DataFrame,
+            {
+                "data": {
+                    "a": [
+                        "2499-12-01 01:00:00",
+                        "2499-11-01 01:30:00",
+                        "1647-05-20 19:25:03",
+                    ],
+                    "b": [
+                        "1969-12-31 23:59:58",
+                        "1839-12-24 03:58:56",
+                        "1647-05-20 19:25:03",
+                    ],
+                },
+                "dtype": "datetime64[s]",
+            },
+            textwrap.dedent(
+                """
+                                     a                    b
+                0  2499-12-01 01:00:00  1969-12-31 23:59:58
+                1  2499-11-01 01:30:00  1839-12-24 03:58:56
+                2  1647-05-20 19:25:03  1647-05-20 19:25:03
+                """
+            ),
+        ),
     ],
 )
-def test_datetime_series_repr(ser, expected_repr):
+def test_datetime_overflow_repr(cudf_type, data, expected_repr):
     expected = expected_repr
-    actual = repr(ser)
+    actual = repr(cudf_type(**data))
 
     assert expected.split() == actual.split()
