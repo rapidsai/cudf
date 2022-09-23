@@ -473,7 +473,7 @@ void make_json_column2(device_span<SymbolT const> input,
   //   sort_by_key {col_id}, {node_id}
   //   unique_copy_by_key {parent_node_id} {row_offset} to
   //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
-  rmm::device_uvector<NodeIndexT> original_col_ids(col_ids, stream);  // make a copy
+  rmm::device_uvector<NodeIndexT> original_col_ids(col_ids.size(), stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), original_col_ids.begin());
   rmm::device_uvector<size_type> node_ids(row_offsets.size(), stream);
   thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
