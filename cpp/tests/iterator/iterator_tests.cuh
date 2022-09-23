@@ -54,8 +54,14 @@ struct IteratorTest : public cudf::test::BaseFixture {
 
     // Get temporary storage size
     size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Reduce(
-      nullptr, temp_storage_bytes, d_in, dev_result.begin(), num_items, thrust::minimum{}, init);
+    cub::DeviceReduce::Reduce(nullptr,
+                              temp_storage_bytes,
+                              d_in,
+                              dev_result.begin(),
+                              num_items,
+                              thrust::minimum{},
+                              init,
+                              cudf::default_stream_value.value());
 
     // Allocate temporary storage
     rmm::device_buffer d_temp_storage(temp_storage_bytes, cudf::default_stream_value);
@@ -67,7 +73,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               dev_result.begin(),
                               num_items,
                               thrust::minimum{},
-                              init);
+                              init,
+                              cudf::default_stream_value.value());
 
     evaluate(expected, dev_result, "cub test");
   }
@@ -85,14 +92,16 @@ struct IteratorTest : public cudf::test::BaseFixture {
     // using a temporary vector and calling transform and all_of separately is
     // equivalent to thrust::equal but compiles ~3x faster
     auto dev_results = rmm::device_uvector<bool>(num_items, cudf::default_stream_value);
-    thrust::transform(thrust::device,
+    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                       d_in,
                       d_in_last,
                       dev_expected.begin(),
                       dev_results.begin(),
                       thrust::equal_to{});
-    auto result = thrust::all_of(
-      thrust::device, dev_results.begin(), dev_results.end(), thrust::identity<bool>{});
+    auto result = thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
+                                 dev_results.begin(),
+                                 dev_results.end(),
+                                 thrust::identity<bool>{});
     EXPECT_TRUE(result) << "thrust test";
   }
 

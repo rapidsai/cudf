@@ -699,7 +699,8 @@ def test_advanced_groupby_levels():
         pytest.param(
             lambda df: df.groupby(["x", "y", "z"]).sum(),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/32464"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/32464",
             ),
         ),
         lambda df: df.groupby(["x", "y"]).sum(),
@@ -1578,8 +1579,10 @@ def test_groupby_list_of_structs(list_agg):
     )
     gdf = cudf.from_pandas(pdf)
 
-    with pytest.raises(pd.core.base.DataError):
-        gdf.groupby("a").agg({"b": list_agg}),
+    with pytest.raises(
+        pd.errors.DataError if PANDAS_GE_150 else pd.core.base.DataError
+    ):
+        gdf.groupby("a").agg({"b": list_agg})
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])

@@ -91,15 +91,19 @@ class reprog_device {
     std::string_view pattern, rmm::cuda_stream_view stream);
 
   /**
-   * @brief Create the device program instance from a regex pattern.
+   * @brief Create the device program instance from a regex pattern
    *
-   * @param pattern The regex pattern to compile.
-   * @param re_flags Regex flags for interpreting special characters in the pattern.
+   * @param pattern The regex pattern to compile
+   * @param re_flags Regex flags for interpreting special characters in the pattern
+   * @param capture Control how capture groups are processed
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return The program device object.
+   * @return The program device object
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string_view pattern, regex_flags const re_flags, rmm::cuda_stream_view stream);
+    std::string_view pattern,
+    regex_flags const re_flags,
+    capture_groups const capture,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
