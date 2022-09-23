@@ -589,8 +589,8 @@ inline __device__ void PackLiteralsRoundRobin(
   constexpr uint32_t NUM_BYTES    = (NUM_THREADS * MAX_DICT_BITS) >> 3;
   constexpr uint32_t SCRATCH_SIZE = NUM_BYTES / sizeof(uint32_t);
   __shared__ uint32_t scratch[SCRATCH_SIZE];
-  for (uint32_t i = 0; i < SCRATCH_SIZE; i += NUM_THREADS) {
-    if ((i + t) < SCRATCH_SIZE) { scratch[i + t] = 0; }
+  for (uint32_t i = t; i < SCRATCH_SIZE; i += NUM_THREADS) {
+    scratch[i] = 0;
   }
   __syncthreads();
 
@@ -613,8 +613,8 @@ inline __device__ void PackLiteralsRoundRobin(
   auto available_bytes = (count * w + 7) / 8;
 
   auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
-  for (uint32_t i = 0; i < available_bytes; i += NUM_THREADS) {
-    if ((i + t) < available_bytes) { dst[i + t] = scratch_bytes[i + t]; }
+  for (uint32_t i = t; i < available_bytes; i += NUM_THREADS) {
+    dst[i] = scratch_bytes[i];
   }
   __syncthreads();
 }
