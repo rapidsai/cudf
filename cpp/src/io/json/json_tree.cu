@@ -61,7 +61,7 @@ struct token_to_node {
       case token_t::StructBegin: return NC_STRUCT;
       case token_t::ListBegin: return NC_LIST;
       case token_t::StringBegin: return NC_STR;
-      case token_t::ValueBegin: return NC_VAL;
+      case token_t::ValueBegin: return NC_STR;  // NC_VAL;
       case token_t::FieldNameBegin: return NC_FN;
       default: return NC_ERR;
     };
