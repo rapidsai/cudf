@@ -1173,7 +1173,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       if (page.hdr_version == 2 && page.flags == 0) {
         // for V2 need copy def and rep level info into place, and then offset the
         // input and output buffers. otherwise we'd have to keep both the compressed
-        // and decompressed data. uncompressed and V1 pages will be done on device.
+        // and decompressed data.
         auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
         if (offset) {
           thrust::copy(
@@ -1266,16 +1266,16 @@ void reader::impl::fix_v2_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
     if (chunks[c].codec == Compression::UNCOMPRESSED) {
       for (int k = 0; k < page_stride; k++) {
         auto& page        = pages[page_count + k];
-        auto data         = page.page_data;
         page.rep_lvl_data = nullptr;
         page.def_lvl_data = nullptr;
         if (page.hdr_version == 2 && page.flags == 0) {
           auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
           if (offset) {
+            auto data = page.page_data;
             if (page.rep_lvl_bytes) { page.rep_lvl_data = data; }
             if (page.def_lvl_bytes) { page.def_lvl_data = data + page.rep_lvl_bytes; };
+            page.page_data = data + offset;
           }
-          page.page_data = data + offset;
         }
       }
     }
