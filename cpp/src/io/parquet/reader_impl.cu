@@ -1131,6 +1131,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   for (auto& codec : codecs) {
     for_each_codec_page(codec.compression_type, [&](size_t page) {
+      // for V2 page headers, uncompressed_page_size is uncompressed_data_size +
+      // def_lvl_size + rep_lvl_size
       auto page_uncomp_size = pages[page].uncompressed_page_size;
       total_decomp_size += page_uncomp_size;
       codec.total_decomp_size += page_uncomp_size;
@@ -1162,15 +1164,38 @@ rmm::device_buffer reader::impl::decompress_page_data(
   for (const auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
-    for_each_codec_page(codec.compression_type, [&](size_t page) {
-      auto dst_base = static_cast<uint8_t*>(decomp_pages.data());
-      comp_in.emplace_back(pages[page].page_data,
-                           static_cast<size_t>(pages[page].compressed_page_size));
-      comp_out.emplace_back(dst_base + decomp_offset,
-                            static_cast<size_t>(pages[page].uncompressed_page_size));
+    for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
+      auto dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
+      auto& page    = pages[page_idx];
+      page.rep_lvl_data = nullptr;
+      page.def_lvl_data = nullptr;
+      if (page.hdr_version == 2) {
+        // for V2 need copy def and rep level info into place, and then offset the
+        // input and output buffers. otherwise we'd have to keep both the compressed
+        // and decompressed data. uncompressed and V1 pages will be done on device.
+        auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+        if (offset) {
+          thrust::copy(rmm::exec_policy(_stream), 
+                       page.page_data,
+                       page.page_data + offset,
+                       dst_base);
+          if (page.rep_lvl_bytes) { page.rep_lvl_data = dst_base; }
+          if (page.def_lvl_bytes) { page.def_lvl_data = dst_base + page.rep_lvl_bytes; };
+        }
+        page.page_data = dst_base + offset;
+        comp_in.emplace_back(page.page_data + offset,
+                             static_cast<size_t>(page.compressed_page_size - offset));
+        comp_out.emplace_back(dst_base + offset,
+                              static_cast<size_t>(page.uncompressed_page_size - offset));
+      } else {
+        comp_in.emplace_back(page.page_data,
+                             static_cast<size_t>(page.compressed_page_size));
+        comp_out.emplace_back(dst_base,
+                              static_cast<size_t>(page.uncompressed_page_size));
+        page.page_data = dst_base;
+      }
 
-      pages[page].page_data = static_cast<uint8_t*>(comp_out.back().data());
-      decomp_offset += comp_out.back().size();
+      decomp_offset += page.uncompressed_page_size;
     });
 
     host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
@@ -1746,6 +1771,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       hostdevice_vector<gpu::PageNestingInfo> page_nesting_info;
       allocate_nesting_info(chunks, pages, page_nesting_info);
 
+      // TODO(ets): before preprocess, go through the pages and fix up the
+      // def and rep level pointers.
+      
       // - compute column sizes and allocate output buffers.
       //   important:
       //   for nested schemas, we have to do some further preprocessing to determine:
