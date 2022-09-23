@@ -1959,7 +1959,6 @@ class DatetimeIndex(GenericIndex):
                       dtype='datetime64[ns]')
         >>> datetime_index.millisecond
         Int16Index([0, 1, 2], dtype='int16')
-        Int16Index([0, 1, 2], dtype='int16')
         """
         return self._get_dt_field("milli_second")
 
