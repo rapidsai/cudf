@@ -432,6 +432,18 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                            return it->second;
                          });
           return sorted_dtypes;
+        },
+        [&](const std::map<std::string, schema_element>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(column_names),
+                         std::cend(column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second.type;
+                         });
+          return sorted_dtypes;
         }},
       reader_opts.get_dtypes());
   } else {
