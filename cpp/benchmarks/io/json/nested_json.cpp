@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -71,15 +72,21 @@ void BM_NESTED_JSON(nvbench::state& state)
   state.add_element_count(input.size());
 
   // Run algorithm
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     cudf::io::json::detail::parse_nested_json(input, default_options, cudf::default_stream_value);
   });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(string_size) / time, "bytes_per_second");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(BM_NESTED_JSON)
   .set_name("nested_json_gpu_parser")
-  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
 }  // namespace cudf

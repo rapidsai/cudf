@@ -139,7 +139,7 @@ TEST_F(JsonTest, StackContext)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Test input
   std::string const input = R"(  [{)"
@@ -200,7 +200,7 @@ TEST_F(JsonTest, StackContextUtf8)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Test input
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
@@ -251,7 +251,7 @@ TEST_F(JsonTest, TokenStream)
                             R"("price": 8.95)"
                             R"(}] )";
 
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -387,7 +387,7 @@ TEST_F(JsonTest, TokenStream2)
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11)"
     "\n}}]";
 
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -455,7 +455,7 @@ TEST_F(JsonTest, ExtractColumn)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -470,8 +470,10 @@ TEST_F(JsonTest, ExtractColumn)
   auto const second_column_index = 1;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 
-  auto expected_col1            = cudf::test::fixed_width_column_wrapper<double>({0.0, 0.1, 0.2});
-  auto expected_col2            = cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 1.2});
+  auto expected_col1 =
+    cudf::test::fixed_width_column_wrapper<double>({0.0, 0.1, 0.2}, {true, true, true});
+  auto expected_col2 =
+    cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 1.2}, {true, true, true});
   cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
@@ -481,7 +483,7 @@ TEST_F(JsonTest, ExtractColumn)
 TEST_F(JsonTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -524,7 +526,7 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options options{};
@@ -540,7 +542,8 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
 
   auto expected_col1 =
     cudf::test::strings_column_wrapper({R"("0.0")", R"()", R"("2.0")"}, {true, false, true});
-  auto expected_col2            = cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 2.1});
+  auto expected_col2 =
+    cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 2.1}, {true, true, true});
   cudf::column_view parsed_col1 = cudf_table.tbl->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
   cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);
@@ -552,7 +555,7 @@ TEST_F(JsonTest, ExpectFailMixStructAndList)
   using cuio_json::SymbolT;
 
   // Prepare cuda stream for data transfers & kernels
-  constexpr auto stream = cudf::default_stream_value;
+  auto const stream = cudf::default_stream_value;
 
   // Default parsing options
   cudf::io::json_reader_options options{};

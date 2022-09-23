@@ -13,14 +13,14 @@ dependencies:
   - clang=11.1.0
   - clang-tools=11.1.0
   - cupy>=9.5.0,<12.0.0a0
-  - rmm=22.10.*
+  - rmm=22.12.*
   - cmake>=3.20.1,!=3.23.0
   - cmake_setuptools>=0.1.3
   - scikit-build>=0.13.1
   - python>=3.8,<3.10
   - numba>=0.54
   - numpy
-  - pandas>=1.0,<1.5.0dev0
+  - pandas>=1.0,<1.6.0dev0
   - pyarrow=9
   - fastavro>=0.22.9
   - python-snappy>=0.6.0
@@ -62,7 +62,7 @@ dependencies:
   - sphinx-autobuild
   - myst-nb
   - scipy
-  - dask-cuda=22.10.*
+  - dask-cuda=22.12.*
   - mimesis<4.1
   - packaging
   - protobuf>=3.20.1,<3.21.0a0
