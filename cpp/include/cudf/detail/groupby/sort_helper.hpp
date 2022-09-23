@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,8 +218,6 @@ struct sort_groupby_helper {
   column_ptr _unsorted_keys_labels;  ///< Group labels for unsorted _keys
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
-  table_view _unflattened_keys;      ///< Input keys, unflattened and possibly nested
-  structs::detail::flattened_table _flattened;  ///< Support datastructures for _keys
 
   index_vector_ptr
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups

@@ -94,15 +94,13 @@ namespace sort {
 sort_groupby_helper::sort_groupby_helper(table_view const& keys,
                                          null_policy include_null_keys,
                                          sorted keys_pre_sorted)
-  : _unflattened_keys(keys),
+  : _keys(keys),
     _num_keys(-1),
     _keys_pre_sorted(keys_pre_sorted),
     _include_null_keys(include_null_keys)
 {
   using namespace cudf::structs::detail;
 
-  _flattened                 = flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
-  _keys                      = _flattened;
   auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
   CUDF_EXPECTS(std::all_of(_keys.begin(), _keys.end(), is_supported_key_type),
                "Unsupported groupby key type does not support equality comparison");
@@ -316,7 +314,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
   auto gather_map_it = thrust::make_transform_iterator(
     group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
-  return cudf::detail::gather(_unflattened_keys,
+  return cudf::detail::gather(_keys,
                               gather_map_it,
                               gather_map_it + num_groups(stream),
                               out_of_bounds_policy::DONT_CHECK,
@@ -327,7 +325,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  return cudf::detail::gather(_unflattened_keys,
+  return cudf::detail::gather(_keys,
                               key_sort_order(stream),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
