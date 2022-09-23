@@ -1181,11 +1181,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
           if (page.rep_lvl_bytes) { page.rep_lvl_data = dst_base; }
           if (page.def_lvl_bytes) { page.def_lvl_data = dst_base + page.rep_lvl_bytes; };
         }
-        page.page_data = dst_base + offset;
         comp_in.emplace_back(page.page_data + offset,
                              static_cast<size_t>(page.compressed_page_size - offset));
         comp_out.emplace_back(dst_base + offset,
                               static_cast<size_t>(page.uncompressed_page_size - offset));
+        page.page_data = dst_base + offset;
       } else {
         comp_in.emplace_back(page.page_data, static_cast<size_t>(page.compressed_page_size));
         comp_out.emplace_back(dst_base, static_cast<size_t>(page.uncompressed_page_size));

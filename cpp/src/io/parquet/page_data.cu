@@ -875,6 +875,9 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
     if (s->page.num_input_values > 0) {
       uint8_t* cur = s->page.page_data;
       uint8_t* end = cur + s->page.uncompressed_page_size;
+      if (s->page.hdr_version == 2) {
+        end -= s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
+      }
 
       uint32_t dtype_len_out = s->col.data_type >> 3;
       s->ts_scale            = 0;
