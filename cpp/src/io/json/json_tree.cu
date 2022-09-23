@@ -193,7 +193,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
 
   // Node categories: copy_if with transform.
-  nvtxRangePushA("node_categories");
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
   auto node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
@@ -204,9 +203,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                              is_node);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
                "node category count mismatch");
-  nvtxRangePop();
 
-  nvtxRangePushA("token_levels");
   // Node levels: transform_exclusive_scan, copy_if.
   rmm::device_uvector<size_type> token_levels(num_tokens, stream);
   auto push_pop_it = thrust::make_transform_iterator(
@@ -215,9 +212,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     });
   thrust::exclusive_scan(
     rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
-  nvtxRangePop();
 
-  nvtxRangePushA("node_levels");
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
   auto node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
                                          token_levels.begin(),
@@ -226,9 +221,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                          node_levels.begin(),
                                          is_node);
   CUDF_EXPECTS(node_levels_end - node_levels.begin() == num_nodes, "node level count mismatch");
-  nvtxRangePop();
 
-  nvtxRangePushA("node_range");
   // Node ranges: copy_if with transform.
   rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream, mr);
   rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
@@ -249,15 +242,13 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                       return is_node(tokens_gpu[i]);
                     });
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
-  nvtxRangePop();
 
-  nvtxRangePushA("node_parent_ids");
   // Node parent ids: previous push token_id transform, stable sort, segmented scan with Max,
   // reorder, copy_if. This one is sort of logical stack. But more generalized.
   // TODO: make it own function.
   rmm::device_uvector<size_type> parent_token_ids(num_tokens, stream);
   rmm::device_uvector<size_type> initial_order(num_tokens, stream);
-  nvtxRangePushA("seq, tabulate");
+
   thrust::sequence(rmm::exec_policy(stream), initial_order.begin(), initial_order.end());
   thrust::tabulate(rmm::exec_policy(stream),
                    parent_token_ids.begin(),
@@ -266,18 +257,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                      return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
                      // -1, not sentinel used here because of max operation below
                    });
-  nvtxRangePop();
 
-  nvtxRangePushA("sort-level");
   auto out_pid = thrust::make_zip_iterator(parent_token_ids.data(), initial_order.data());
   // Uses radix sort for builtin types.
   thrust::stable_sort_by_key(rmm::exec_policy(stream),
                              token_levels.data(),
                              token_levels.data() + token_levels.size(),
                              out_pid);
-  nvtxRangePop();
 
-  nvtxRangePushA("scan-level");
   // SegmentedScan Max.
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 token_levels.data(),
@@ -287,9 +274,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                 thrust::equal_to<size_type>{},
                                 thrust::maximum<size_type>{});
   // Reusing token_levels memory & use scatter to restore the original order.
-  nvtxRangePop();
 
-  nvtxRangePushA("scatter");
   std::swap(token_levels, parent_token_ids);
   auto& sorted_parent_token_ids = token_levels;
   thrust::scatter(rmm::exec_policy(stream),
@@ -297,15 +282,11 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                   sorted_parent_token_ids.end(),
                   initial_order.data(),
                   parent_token_ids.data());
-  nvtxRangePop();
 
-  nvtxRangePushA("node_ids-scan");
   rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
   thrust::exclusive_scan(
     rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
-  nvtxRangePop();
 
-  nvtxRangePushA("parent_node_ids-copy_if");
   rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream, mr);
   auto parent_node_ids_it = thrust::make_transform_iterator(
     parent_token_ids.begin(),
@@ -320,8 +301,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                              is_node);
   CUDF_EXPECTS(parent_node_ids_end - parent_node_ids.begin() == num_nodes,
                "parent node id gather mismatch");
-  nvtxRangePop();
-  nvtxRangePop();  // node_parent_ids
+
   return {std::move(node_categories),
           std::move(parent_node_ids),
           std::move(node_levels),
@@ -469,7 +449,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  nvtxRangePushA("pre-level");
+
   auto const num_nodes = node_type.size();
   rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
   rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
@@ -483,7 +463,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                parent_col_id.begin(),
                parent_col_id.begin() + level_boundaries[0],
                parent_node_sentinel);
-  nvtxRangePop();
+
 #ifdef NJP_DEBUG_PRINT
   auto print_level_data = [stream](auto stage_text,
                                    auto level,
@@ -536,11 +516,11 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   //     b. stable sort by {parent_col_id, node_type}
   //     c. scan sum of unique {parent_col_id, node_type}
   //     d. scatter the col_id back to stable node_level order (using scatter_indices)
-  nvtxRangePushA("level");
+
   auto const num_levels = level_boundaries.size();
   for (size_t level = 1; level < num_levels; level++) {
     PRINT_LEVEL_DATA(level, ".before gather");
-    nvtxRangePushA("gather");
+
     // Gather the each node's parent's column id for the nodes of the current level
     thrust::gather(rmm::exec_policy(stream),
                    parent_indices.data() + level_boundaries[level - 1],
@@ -548,8 +528,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                    col_id.data(),
                    parent_col_id.data() + level_boundaries[level - 1]);
     PRINT_LEVEL_DATA(level, ".after gather");
-    nvtxRangePop();
-    nvtxRangePushA("stable_sort_by_key");
+
     // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
     // we need to split to 2 Radix sorts.
     // Secondary sort on node_type
@@ -567,8 +546,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
       thrust::make_zip_iterator(node_type.data() + level_boundaries[level - 1],
                                 scatter_indices.begin() + level_boundaries[level - 1]));
     PRINT_LEVEL_DATA(level, ".after sort");
-    nvtxRangePop();
-    nvtxRangePushA("transform");
+
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
     auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
@@ -584,8 +562,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                              rhs = thrust::get<1>(adjacent_pair);
                         return lhs != rhs ? 1 : 0;
                       });
-    nvtxRangePop();
-    nvtxRangePushA("scan");
+
     // includes previous level last col_id to continue the index.
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            col_id.data() + level_boundaries[level - 1],
@@ -601,9 +578,8 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
       thrust::make_zip_iterator(col_id.begin() + level_boundaries[level - 1],
                                 parent_col_id.data() + level_boundaries[level - 1]));
     PRINT_LEVEL_DATA(level, ".after restore order");
-    nvtxRangePop();
   }
-  nvtxRangePop();
+
   return {std::move(col_id), std::move(parent_col_id)};
 }
 
@@ -721,11 +697,10 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 {
   CUDF_FUNC_RANGE();
   // 1. Convert node_category+fieldname to node_type.
-  nvtxRangePushA("node_type");
+
   auto num_nodes = d_tree.node_categories.size();
   rmm::device_uvector<size_type> node_type =
     hash_node_type_with_field_name(d_input, d_tree, stream);
-  nvtxRangePop();
 
   // TODO two-level hashing:  one for field names
   // and another for {node-level, node_category} + field hash for the entire path
@@ -739,7 +714,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   //   b. get gather map of sorted indices
   //   c. translate parent_node_ids to sorted indices
 
-  nvtxRangePushA("parent_indices");
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
 #ifdef NJP_DEBUG_PRINT
@@ -760,7 +734,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 
   rmm::device_uvector<NodeIndexT> parent_indices =
     translate_sorted_parent_node_indices(scatter_indices, parent_node_ids, stream);
-  nvtxRangePop();
+
 #ifdef NJP_DEBUG_PRINT
   printf("\n");
   print_vec(scatter_indices, stream, "gpu.node_id");
@@ -770,7 +744,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   print_vec(parent_indices, stream, "parent_indices");
 #endif
   // 3. Find level boundaries.
-  nvtxRangePushA("level_boundaries");
+
   std::vector<size_type> level_boundaries = [&]() {
     // Already node_levels is sorted
     auto max_level = d_tree.node_levels.back_element(stream);
@@ -788,7 +762,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                  "num_levels != max_level + 1");
     return cudf::detail::make_std_vector_async(level_boundaries, stream);
   }();
-  nvtxRangePop();
+
 #ifdef NJP_DEBUG_PRINT
   print_vec(level_boundaries, "level_boundaries");
   std::cout << "num_levels: " << level_boundaries.size() << std::endl;
@@ -800,7 +774,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                                                     stream,
                                                     mr);
 
-  nvtxRangePushA("restore");
   // restore original order of col_id., and used d_tree members
   // TODO would scatter be faster than radix-sort here for 3 values?
   thrust::sort_by_key(
@@ -808,7 +781,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     scatter_indices.begin(),
     scatter_indices.end(),
     thrust::make_zip_iterator(parent_col_id.begin(), col_id.begin(), d_tree.node_levels.begin()));
-  nvtxRangePop();
+
 #ifdef NJP_DEBUG_PRINT
   auto translate_col_id = [](auto col_id) {
     std::unordered_map<int, int> col_id_map;
