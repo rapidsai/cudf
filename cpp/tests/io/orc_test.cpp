@@ -1316,6 +1316,9 @@ TEST_F(OrcStatisticsTest, HasNull)
 
   EXPECT_EQ(stats.file_stats[1].has_null, true);
   EXPECT_EQ(stats.file_stats[2].has_null, false);
+
+  EXPECT_EQ(stats.stripes_stats[0][1].has_null, true);
+  EXPECT_EQ(stats.stripes_stats[0][2].has_null, false);
 }
 
 struct OrcWriterTestStripes
