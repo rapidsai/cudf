@@ -424,8 +424,6 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
 std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_traversal_cpu(
   host_span<SymbolT const> input, tree_meta_t2 const& tree, rmm::cuda_stream_view stream)
 {
-  // // move tree representation to cpu
-  // tree_meta_t2 tree = to_cpu_tree(d_tree, stream);
   std::vector<NodeIndexT> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
 
@@ -490,7 +488,7 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
       node_idx = node_id_map[node_idx];
     }
   }
-  // // Translate parent_node_ids
+  // Translate parent_node_ids
   auto parent_col_ids(tree.parent_node_ids);
   for (auto& parent_node_id : parent_col_ids) {
     if (parent_node_id != top_node) parent_node_id = node_ids[parent_node_id];
