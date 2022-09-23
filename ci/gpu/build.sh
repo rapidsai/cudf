@@ -283,7 +283,7 @@ gpuci_logger "Python py.test for strings_udf"
 # override here.
 
 STRINGS_UDF_PYTEST_RETCODE=0
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
+py.test --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
 
 if [ ${STRINGS_UDF_PYTEST_RETCODE} -eq 5 ]; then
     echo "No strings UDF tests were run, but this script will continue to execute."
