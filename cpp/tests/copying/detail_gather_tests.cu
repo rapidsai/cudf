@@ -48,7 +48,8 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
 {
   constexpr cudf::size_type source_size{1000};
   rmm::device_uvector<cudf::size_type> gather_map(source_size, cudf::default_stream_value);
-  thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
+  thrust::sequence(
+    rmm::exec_policy(cudf::default_stream_value), gather_map.begin(), gather_map.end());
 
   auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column(data, data + source_size);
