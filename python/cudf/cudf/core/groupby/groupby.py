@@ -686,7 +686,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function, *args, engine=None, cache=True):
+    def apply(self, function, *args, engine="cudf", cache=True):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -761,7 +761,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
-        else:
+        elif engine == "cudf":
             ngroups = len(offsets) - 1
             if ngroups > self._MAX_GROUPS_BEFORE_WARN:
                 warnings.warn(
@@ -790,6 +790,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                     index_data = group_keys._data.copy(deep=True)
                     index_data[None] = grouped_values.index._column
                     result.index = cudf.MultiIndex._from_data(index_data)
+        else:
+            raise ValueError("Unsupported engine!.")
 
         if self._sort:
             result = result.sort_index()
