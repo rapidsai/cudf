@@ -15,13 +15,13 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     cdef unique_ptr[column] extract_hour(const column_view& column) except +
     cdef unique_ptr[column] extract_minute(const column_view& column) except +
     cdef unique_ptr[column] extract_second(const column_view& column) except +
-    cdef unique_ptr[column] extract_milli_second(
+    cdef unique_ptr[column] extract_millisecond(
         const column_view& column
     ) except +
-    cdef unique_ptr[column] extract_micro_second(
+    cdef unique_ptr[column] extract_microsecond(
         const column_view& column
     ) except +
-    cdef unique_ptr[column] extract_nano_second(
+    cdef unique_ptr[column] extract_nanosecond(
         const column_view& column
     ) except +
 

@@ -95,31 +95,31 @@ std::unique_ptr<cudf::column> extract_second(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::extract_milli_second(cudf::column_view const&, rmm::mr::device_memory_resource *)
+ * @copydoc cudf::extract_millisecond(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_milli_second(
+std::unique_ptr<cudf::column> extract_millisecond(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::extract_micro_second(cudf::column_view const&, rmm::mr::device_memory_resource *)
+ * @copydoc cudf::extract_microsecond(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_micro_second(
+std::unique_ptr<cudf::column> extract_microsecond(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::extract_nano_second(cudf::column_view const&, rmm::mr::device_memory_resource *)
+ * @copydoc cudf::extract_nanosecond(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_nano_second(
+std::unique_ptr<cudf::column> extract_nanosecond(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
