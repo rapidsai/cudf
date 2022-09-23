@@ -113,7 +113,7 @@ def _assert_date_series_repr(ps, gs):
                 new_actual_list.append(" ".join(text.rsplit("  ", 1)))
             else:
                 new_actual_list.append(text)
-    # import pdb;pdb.set_trace()
+
     assert expected_list == new_actual_list
 
 
