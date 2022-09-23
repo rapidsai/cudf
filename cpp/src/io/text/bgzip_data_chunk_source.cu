@@ -15,6 +15,7 @@
  */
 
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
@@ -228,13 +229,21 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
                                        reinterpret_cast<uint8_t*>(d_decompressed_blocks.begin())});
       if (decompressed_size() > 0) {
-        cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
-                                             d_compressed_spans,
-                                             d_decompressed_spans,
-                                             d_decompression_results,
-                                             max_decompressed_size,
-                                             decompressed_size(),
-                                             stream);
+        if (cudf::io::detail::nvcomp_integration::is_all_enabled()) {
+          cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
+                                               d_compressed_spans,
+                                               d_decompressed_spans,
+                                               d_decompression_results,
+                                               max_decompressed_size,
+                                               decompressed_size(),
+                                               stream);
+        } else {
+          gpuinflate(d_compressed_spans,
+                     d_decompressed_spans,
+                     d_decompression_results,
+                     gzip_header_included::NO,
+                     stream);
+        }
       }
       decompressed = true;
     }
