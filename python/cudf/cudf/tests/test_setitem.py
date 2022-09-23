@@ -242,3 +242,51 @@ def test_categorical_setitem_invalid():
             "the categories first",
         ):
             gs[0] = 5
+
+
+def test_series_slice_setitem_list():
+    actual = cudf.Series([[1, 2], [2, 3], [3, 4], [4, 5], [6, 7]])
+    actual[slice(0, 3, 1)] = [10, 11]
+    expected = cudf.Series([[10, 11], [10, 11], [10, 11], [4, 5], [6, 7]])
+    assert_eq(actual, expected)
+
+    actual = cudf.Series([[1, 2], [2, 3], [3, 4], [4, 5], [6, 7]])
+    actual[0:3] = cudf.Scalar([10, 11])
+
+    assert_eq(actual, expected)
+
+
+def test_series_slice_setitem_struct():
+    actual = cudf.Series(
+        [
+            {"a": 10, "b": 11},
+            {"a": 100, "b": 5},
+            {"a": 50, "b": 2},
+            {"a": 1000, "b": 67},
+            {"a": 4000, "b": 1090},
+        ]
+    )
+    actual[slice(0, 3, 1)] = {"a": 5050, "b": 101}
+    expected = cudf.Series(
+        [
+            {"a": 5050, "b": 101},
+            {"a": 5050, "b": 101},
+            {"a": 5050, "b": 101},
+            {"a": 1000, "b": 67},
+            {"a": 4000, "b": 1090},
+        ]
+    )
+    assert_eq(actual, expected)
+
+    actual = cudf.Series(
+        [
+            {"a": 10, "b": 11},
+            {"a": 100, "b": 5},
+            {"a": 50, "b": 2},
+            {"a": 1000, "b": 67},
+            {"a": 4000, "b": 1090},
+        ]
+    )
+    actual[0:3] = cudf.Scalar({"a": 5050, "b": 101})
+
+    assert_eq(actual, expected)
