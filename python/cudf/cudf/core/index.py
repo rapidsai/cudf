@@ -1244,16 +1244,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         elif preprocess._values.nullable or isinstance(
             preprocess, (DatetimeIndex, TimedeltaIndex)
         ):
-            output = repr(self._clean_nulls_from_index().to_pandas())
-            import pdb
+            output = repr(preprocess._clean_nulls_from_index().to_pandas())
 
-            pdb.set_trace()
             if isinstance(self, (DatetimeIndex, TimedeltaIndex)):
                 output = (
                     output[: output.rfind("categories=[")]
                     + output[output.rfind(" dtype=") :]
                 )
-            if not isinstance(self, StringIndex):
+            if not isinstance(
+                self, (StringIndex, DatetimeIndex, TimedeltaIndex)
+            ):
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1285,11 +1285,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             lines[-1] = lines[-1] + ")"
 
         if isinstance(preprocess, (DatetimeIndex, TimedeltaIndex)):
+            replace_spaces = (
+                "   " if isinstance(preprocess, DatetimeIndex) else "  "
+            )
             if len(lines) > 1:
                 lines[1:-1] = [
-                    line.replace("   ", "", 1) for line in lines[1:-1]
+                    line.replace(replace_spaces, "", 1) for line in lines[1:-1]
                 ]
-                lines[-1] = lines[-1].replace("    ", "", 1)
+                lines[-1] = lines[-1].replace(replace_spaces + " ", "", 1)
         return "\n".join(lines)
 
     @_cudf_nvtx_annotate
@@ -2020,9 +2023,9 @@ class DatetimeIndex(GenericIndex):
         ...     "2017-01-08", freq="D"))
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
-                    '2017-01-08'],
-                    dtype='datetime64[ns]')
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                       '2017-01-08'],
+                      dtype='datetime64[ns]')
         >>> datetime_index.day_of_year
         Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
