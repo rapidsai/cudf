@@ -48,11 +48,6 @@ if cp.returncode == 0:
         files = glob.glob(
             os.path.join(os.path.dirname(__file__), "shim_*.ptx")
         )
-        dev = cuda.get_current_device()
-        cc = "".join(str(x) for x in dev.compute_capability)
-        files = glob.glob(
-            os.path.join(os.path.dirname(__file__), "shim_*.ptx")
-        )
         if len(files) == 0:
             raise RuntimeError(
                 "This strings_udf installation is missing the necessary PTX "
@@ -62,6 +57,9 @@ if cp.returncode == 0:
         sms = [
             os.path.basename(f).rstrip(".ptx").lstrip("shim_") for f in files
         ]
+
+        dev = cuda.get_current_device()
+        cc = "".join(str(x) for x in dev.compute_capability)
         selected_sm = max(sm for sm in sms if sm < cc)
         ptxpath = os.path.join(
             os.path.dirname(__file__), f"shim_{selected_sm}.ptx"
