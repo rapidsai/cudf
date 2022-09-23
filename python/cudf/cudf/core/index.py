@@ -908,7 +908,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             The dtype will be based on the type of the Index values.
         """
         return cudf.Series._from_data(
-            self._values,
+            self._data,
             index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
         )
@@ -1651,7 +1651,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             The dtype will be based on the type of the Index values.
         """
         return cudf.Series._from_data(
-            self._values,
+            self._data,
             index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
         )

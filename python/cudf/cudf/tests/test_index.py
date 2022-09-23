@@ -2693,3 +2693,72 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
         dtype=f"int{default_integer_bitwidth}",
     )
     assert_eq(expected, actual)
+
+
+def test_rangeindex_values(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.values
+    expected = pidx.values
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_to_frame(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.to_frame()
+    expected = pidx.to_frame()
+
+    assert_eq(expected, actual, check_dtype=False)
+
+
+def test_rangeindex_to_series(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.to_series()
+    expected = pidx.to_series()
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_any(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.any()
+    expected = pidx.any()
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_append(rangeindex):
+    gidx = rangeindex
+    pidx = gidx.to_pandas()
+
+    actual = gidx.append(other=gidx)
+    expected = pidx.append(other=pidx)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "range, values",
+    [
+        (range(100, 1000, 10), [200, 600, 800]),
+        (range(0, -10, -2), [-2, -6, -10]),
+        (range(0, -10, 2), [5, 9]),
+        (range(0, 10, -2), [-5, 9]),
+    ],
+)
+def test_rangeindex_isin(range, values):
+    gidx = RangeIndex(range)
+    pidx = gidx.to_pandas()
+
+    actual = gidx.isin(values)
+    expected = pidx.isin(values)
+
+    assert_eq(expected, actual)
