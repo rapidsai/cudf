@@ -1057,7 +1057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(self._dtypes)
+        return pd.Series(self._dtypes, dtype="object")
 
     @property
     def ndim(self):
@@ -6977,7 +6977,7 @@ def from_pandas(obj, nan_as_null=None):
 
     Converting a Pandas Series to cuDF Series:
 
-    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple', dtype='str')
     >>> psr
     0    a
     1    b
