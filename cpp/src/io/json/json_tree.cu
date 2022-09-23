@@ -444,70 +444,15 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                parent_col_id.begin() + level_boundaries[0],
                parent_node_sentinel);
 
-#ifdef NJP_DEBUG_PRINT
-  auto print_level_data = [stream](auto stage_text,
-                                   auto level,
-                                   auto start,
-                                   auto end,
-                                   auto const& nodeII,
-                                   auto const& parent_node_idx,
-                                   auto const& parent_col_id,
-                                   auto const& node_type,
-                                   auto const& col_id) {
-    std::cout << level << stage_text << "\n";
-    auto cls  = std::array<const char*, 6>{"S", "L", "F", "R", "V", "E"};
-    auto dget = [](auto const& v, auto i) { return int(thrust::device_pointer_cast(v.data())[i]); };
-    for (auto n = start; n < end; n++)
-      printf("%3d ", dget(nodeII, n));
-    printf(" nodeII-%ld\n", level);
-    for (auto n = start; n < end; n++)
-      printf("%3d ", dget(parent_node_idx, n));
-    printf(" parent_node_idx-%ld\n", level);
-    for (auto n = start; n < end; n++)
-      printf("%3d ", parent_col_id.element(n, stream));
-    printf(" parent_col_id-%ld\n", level);
-    for (auto n = start; n < end; n++) {
-      auto nt = dget(node_type, n);
-      printf("%3s ",
-             nt >= NUM_NODE_CLASSES ? std::to_string(nt - NUM_NODE_CLASSES).c_str() : cls[nt]);
-    }
-    printf(" node_type-%ld\n", level);
-    for (auto n = start; n < end; n++)
-      printf("%3d ", col_id.element(n, stream));
-    printf(" col_id-%ld\n", level);
-  };
-#define PRINT_LEVEL_DATA(level, text)           \
-  print_level_data(text,                        \
-                   level,                       \
-                   level_boundaries[level - 1], \
-                   level_boundaries[level],     \
-                   scatter_indices,             \
-                   parent_indices,              \
-                   parent_col_id,               \
-                   node_type,                   \
-                   col_id);
-#else
-#define PRINT_LEVEL_DATA(level, text) ;
-#endif
-
-  // 4. Propagate parent node ids for each level.
-  // For each level,
-  //     a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
-  //     b. stable sort by {parent_col_id, node_type}
-  //     c. scan sum of unique {parent_col_id, node_type}
-  //     d. scatter the col_id back to stable node_level order (using scatter_indices)
-
+  // Per-level processing
   auto const num_levels = level_boundaries.size();
   for (size_t level = 1; level < num_levels; level++) {
-    PRINT_LEVEL_DATA(level, ".before gather");
-
     // Gather the each node's parent's column id for the nodes of the current level
     thrust::gather(rmm::exec_policy(stream),
                    parent_indices.data() + level_boundaries[level - 1],
                    parent_indices.data() + level_boundaries[level],
                    col_id.data(),
                    parent_col_id.data() + level_boundaries[level - 1]);
-    PRINT_LEVEL_DATA(level, ".after gather");
 
     // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
     // we need to split to 2 Radix sorts.
@@ -525,7 +470,6 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
       parent_col_id.begin() + level_boundaries[level],
       thrust::make_zip_iterator(node_type.data() + level_boundaries[level - 1],
                                 scatter_indices.begin()));
-    PRINT_LEVEL_DATA(level, ".after sort");
 
     auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
                                               node_type.data() + level_boundaries[level - 1]);
@@ -538,8 +482,8 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                       adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
                       col_id.data() + level_boundaries[level - 1] + 1,
                       [] __device__(auto adjacent_pair) -> size_type {
-                        auto lhs = thrust::get<0>(adjacent_pair),
-                             rhs = thrust::get<1>(adjacent_pair);
+                        auto const lhs = thrust::get<0>(adjacent_pair);
+                        auto const rhs = thrust::get<1>(adjacent_pair);
                         return lhs != rhs ? 1 : 0;
                       });
 
@@ -549,10 +493,9 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                            col_id.data() + level_boundaries[level] + (level != num_levels - 1),
                            // +1 only for not-last-levels, for next level start col_id
                            col_id.data() + level_boundaries[level - 1]);
-    PRINT_LEVEL_DATA(level, ".after scan");
     // scatter to restore original order.
+    auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
     {
-      auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
       rmm::device_uvector<NodeIndexT> tmp_col_id(num_nodes_per_level, stream);
       rmm::device_uvector<NodeIndexT> tmp_parent_col_id(num_nodes_per_level, stream);
       thrust::scatter(rmm::exec_policy(stream),
@@ -570,11 +513,10 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                    tmp_parent_col_id.begin(),
                    tmp_parent_col_id.end(),
                    parent_col_id.begin() + level_boundaries[level - 1]);
-      thrust::sequence(rmm::exec_policy(stream),
-                       scatter_indices.begin(),
-                       scatter_indices.begin() + num_nodes_per_level);
     }
-    PRINT_LEVEL_DATA(level, ".after restore order");
+    thrust::sequence(rmm::exec_policy(stream),
+                     scatter_indices.begin(),
+                     scatter_indices.begin() + num_nodes_per_level);
   }
 
   return {std::move(col_id), std::move(parent_col_id)};

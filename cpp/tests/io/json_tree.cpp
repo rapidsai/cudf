@@ -262,7 +262,7 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
       default: return ".";
     }
   };
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     std::cout << "Tokens: \n";
     for (auto i = 0u; i < tokens.size(); i++) {
       std::cout << to_token_str(tokens[i]) << " ";
@@ -427,7 +427,7 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
   std::vector<NodeIndexT> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
 
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     for (int i = 0; i < int(tree.node_range_begin.size()); i++) {
       printf("%3s ",
              std::string(input.data() + tree.node_range_begin[i],
@@ -493,7 +493,7 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
   for (auto& parent_node_id : parent_col_ids) {
     if (parent_node_id != top_node) parent_node_id = node_ids[parent_node_id];
   }
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     print_vec(node_ids, "cpu.node_ids (after)", to_int);
     print_vec(tree.parent_node_ids, "cpu.parent_node_ids (after)", to_int);
   }
@@ -518,7 +518,7 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
       }
     }
   }
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     print_vec(row_offsets, "cpu.row_offsets (generated)", to_int);
   }
   return {std::move(node_ids), std::move(row_offsets)};
@@ -571,7 +571,7 @@ TEST_F(JsonTest, TreeRepresentation)
   json_test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 
   // Golden sample of node categories
   std::vector<cuio_json::node_t> golden_node_categories = {
@@ -658,7 +658,7 @@ TEST_F(JsonTest, TreeRepresentation2)
   json_test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 
   // Golden sample of node categories
   // clang-format off
@@ -732,7 +732,7 @@ TEST_F(JsonTest, TreeRepresentation3)
   json_test::compare_trees(cpu_tree, gpu_tree);
 
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 }
 
 /**
@@ -805,7 +805,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
   // gpu tree generation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     printf("BEFORE traversal (gpu_tree):\n");
     json_test::print_tree(gpu_tree);
   }
@@ -813,7 +813,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
   auto [gpu_col_id, gpu_row_offsets] =
     cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, stream);
   // Print tree representation
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     printf("AFTER  traversal (gpu_tree):\n");
     json_test::print_tree(gpu_tree);
   }
