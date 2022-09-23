@@ -49,7 +49,6 @@ namespace cudf {
  * (exclusive). As a result, if value `j` in `[0, num_partitions)` does not
  * appear in `partition_map`, partition `j` will be empty, i.e.,
  * `offsets[j+1] - offsets[j] == 0`.
- * In the special case that the returned table is empty, this vector will also be empty.
  *
  * Values in `partition_map` must be in the range `[0, num_partitions)`,
  * otherwise behavior is undefined.
@@ -65,8 +64,7 @@ namespace cudf {
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Pair containing the reordered table and vector of `num_partitions +
  * 1` offsets to each partition such that the size of partition `i` is
- * determined by `offset[i+1] - offset[i]`. If the output table is empty, the output offsets vector
- * is also empty.
+ * determined by `offset[i+1] - offset[i]`.
  */
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
@@ -81,7 +79,6 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * value of the columns specified by `columns_to_hash`. Rows partitioned into
  * the same bin are grouped consecutively in the output table. Returns a vector
  * of row offsets to the start of each partition in the output table.
- * In the special case that the returned table is empty, this vector will also be empty.
  *
  * @throw std::out_of_range if index is `columns_to_hash` is invalid
  *
@@ -93,8 +90,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
- * @returns An output table and a vector of row offsets to each partition. If the output table is
- * empty, the output offsets vector is also empty.
+ * @returns An output table and a vector of row offsets to each partition
  */
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -112,8 +108,6 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * a vector of row offsets to the start of each partition in the output table.
  * Rows are assigned partitions based on their row index in the table,
  * in a round robin fashion.
- * In the special case that the returned table is empty, the returned offsets vector will also be
- * empty.
  *
  * @throws cudf::logic_error if `num_partitions <= 1`
  * @throws cudf::logic_error if `start_partition >= num_partitions`
@@ -242,8 +236,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return A std::pair consisting of a unique_ptr to the partitioned table
- * and the partition offsets for each partition within the table. If the output table is
- * empty, the output offsets vector is also empty.
+ * and the partition offsets for each partition within the table.
  */
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
