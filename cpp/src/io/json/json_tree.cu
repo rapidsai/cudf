@@ -494,8 +494,8 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                            // +1 only for not-last-levels, for next level start col_id
                            col_id.data() + level_boundaries[level - 1]);
     // scatter to restore original order.
+    auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
     {
-      auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
       rmm::device_uvector<NodeIndexT> tmp_col_id(num_nodes_per_level, stream);
       rmm::device_uvector<NodeIndexT> tmp_parent_col_id(num_nodes_per_level, stream);
       thrust::scatter(rmm::exec_policy(stream),
@@ -513,10 +513,10 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                    tmp_parent_col_id.begin(),
                    tmp_parent_col_id.end(),
                    parent_col_id.begin() + level_boundaries[level - 1]);
-      thrust::sequence(rmm::exec_policy(stream),
-                       scatter_indices.begin(),
-                       scatter_indices.begin() + num_nodes_per_level);
     }
+    thrust::sequence(rmm::exec_policy(stream),
+                     scatter_indices.begin(),
+                     scatter_indices.begin() + num_nodes_per_level);
   }
 
   return {std::move(col_id), std::move(parent_col_id)};
