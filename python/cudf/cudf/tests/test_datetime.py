@@ -657,7 +657,12 @@ def test_to_datetime_errors(data):
         gd_data = pd_data
 
     assert_exceptions_equal(
-        pd.to_datetime, cudf.to_datetime, ([pd_data],), ([gd_data],)
+        pd.to_datetime,
+        cudf.to_datetime,
+        ([pd_data],),
+        ([gd_data],),
+        compare_error_message=False,
+        expected_error_message="Given date string not likely a datetime.",
     )
 
 
@@ -2007,3 +2012,31 @@ def test_last(idx, offset):
     got = g.last(offset=offset)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-01-31",
+            "2020-02-15",
+            "2020-02-29",
+            "2020-03-15",
+            "2020-03-31",
+            "2020-04-15",
+            "2020-04-30",
+        ],
+        [43534, 43543, 37897, 2000],
+    ],
+)
+@pytest.mark.parametrize("dtype", [None, "datetime64[ns]"])
+def test_datetime_constructor(data, dtype):
+    expected = pd.DatetimeIndex(data=data, dtype=dtype)
+    actual = cudf.DatetimeIndex(data=data, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+    expected = pd.DatetimeIndex(data=pd.Series(data), dtype=dtype)
+    actual = cudf.DatetimeIndex(data=cudf.Series(data), dtype=dtype)
+
+    assert_eq(expected, actual)

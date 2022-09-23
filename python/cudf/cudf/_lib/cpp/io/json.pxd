@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -24,6 +24,7 @@ cdef extern from "cudf/io/json.hpp" \
         size_type get_byte_range_size() except+
         bool is_enabled_lines() except+
         bool is_enabled_dayfirst() except+
+        bool is_enabled_experimental() except+
 
         # setter
         void set_dtypes(vector[data_type] types) except+
@@ -35,6 +36,7 @@ cdef extern from "cudf/io/json.hpp" \
         void set_byte_range_size(size_type size) except+
         void enable_lines(bool val) except+
         void enable_dayfirst(bool val) except+
+        void enable_experimental(bool val) except+
 
         @staticmethod
         json_reader_options_builder builder(
@@ -68,6 +70,9 @@ cdef extern from "cudf/io/json.hpp" \
             bool val
         ) except+
         json_reader_options_builder& dayfirst(
+            bool val
+        ) except+
+        json_reader_options_builder& experimental(
             bool val
         ) except+
 

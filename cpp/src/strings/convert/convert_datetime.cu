@@ -283,7 +283,7 @@ struct parse_datetime {
             std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
-            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size - left));
+            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size + left));
           bytes_read = read_size - left;
           break;
         }
@@ -551,7 +551,7 @@ struct check_datetime_format {
           break;
         }
         case 'S': {
-          auto const cv = check_value(ptr, item.length, 0, 60);
+          auto const cv = check_value(ptr, item.length, 0, 59);  // leap seconds not supported
           result        = cv.first;
           bytes_read -= cv.second;
           break;

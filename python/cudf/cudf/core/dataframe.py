@@ -9,6 +9,7 @@ import numbers
 import pickle
 import re
 import sys
+import textwrap
 import warnings
 from collections import abc, defaultdict
 from typing import (
@@ -20,7 +21,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -39,7 +39,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, Dtype, NotImplementedType
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -66,7 +66,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.groupby.groupby import DataFrameGroupBy
+from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
     BaseIndex,
     Index,
@@ -304,7 +304,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 start = arg[0].start
                 if start is None:
                     start = self._frame.index[0]
-                df.index = as_index(start)
+                df.index = as_index(start, name=self._frame.index.name)
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
@@ -312,7 +312,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         row_selection
                     )
                 else:
-                    df.index = as_index(row_selection)
+                    df.index = as_index(
+                        row_selection, name=self._frame.index.name
+                    )
         # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
@@ -524,21 +526,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ----------
     data : array-like, Iterable, dict, or DataFrame.
         Dict can contain Series, arrays, constants, or list-like objects.
-
     index : Index or array-like
         Index to use for resulting frame. Will default to
         RangeIndex if no indexing information part of input data and
         no index provided.
-
     columns : Index or array-like
         Column labels to use for resulting frame.
         Will default to RangeIndex (0, 1, 2, …, n) if no column
         labels are provided.
-
     dtype : dtype, default None
         Data type to force. Only a single dtype is allowed.
         If None, infer.
-
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -546,7 +544,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     Examples
     --------
-
     Build dataframe with ``__setitem__``:
 
     >>> import cudf
@@ -616,6 +613,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _accessors: Set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
+    _groupby = DataFrameGroupBy
+    _resampler = DataFrameResampler
 
     @_cudf_nvtx_annotate
     def __init__(
@@ -1061,12 +1060,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return pd.Series(self._dtypes)
 
     @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
-
-    @property
     def ndim(self):
         """Dimension of the data. DataFrame ndim is always 2."""
         return 2
@@ -1228,7 +1221,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             else:
                 if arg in self._data:
-                    if len(self) == 0:
+                    if not is_scalar(value) and len(self) == 0:
                         if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
                         elif len(value) > 0:
@@ -1802,7 +1795,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def _get_renderable_dataframe(self):
         """
-        takes rows and columns from pandas settings or estimation from size.
+        Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
         multiindex as well producing an efficient representative string
         for printing with the dataframe.
@@ -1942,7 +1935,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:
@@ -3824,7 +3817,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @_cudf_nvtx_annotate
-    @copy_docstring(DataFrameGroupBy)
+    @docutils.doc_apply(
+        groupby_doc_template.format(
+            ret=textwrap.dedent(
+                """
+                Returns
+                -------
+                DataFrameGroupBy
+                    Returns a DataFrameGroupBy object that contains
+                    information about the groups.
+                """
+            )
+        )
+    )
     def groupby(
         self,
         by=None,
@@ -3832,45 +3837,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
     ):
-        if axis not in (0, "index"):
-            raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
-
-        if observed is not False:
-            raise NotImplementedError(
-                "observed parameter is not yet implemented"
-            )
-
-        if by is None and level is None:
-            raise TypeError(
-                "groupby() requires either by or level to be specified."
-            )
-
-        return (
-            DataFrameResampler(self, by=by)
-            if isinstance(by, cudf.Grouper) and by.freq
-            else DataFrameGroupBy(
-                self,
-                by=by,
-                level=level,
-                as_index=as_index,
-                dropna=dropna,
-                sort=sort,
-            )
+        return super().groupby(
+            by,
+            axis,
+            level,
+            as_index,
+            sort,
+            group_keys,
+            squeeze,
+            observed,
+            dropna,
         )
 
     def query(self, expr, local_dict=None):
@@ -3881,7 +3862,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         expr : str
             A boolean expression. Names in expression refer to columns.
             `index` can be used instead of index name, but this is not
@@ -3897,8 +3877,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-
-        filtered :  DataFrame
+        filtered : DataFrame
 
         Examples
         --------
@@ -3994,7 +3973,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-
         Simple function of a single variable which could be NA:
 
         >>> def f(row):
@@ -4118,7 +4096,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         na_action: Union[str, None] = None,
         **kwargs,
     ) -> DataFrame:
-
         """
         Apply a function to a Dataframe elementwise.
 
@@ -5190,7 +5167,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         axis : int
@@ -5217,12 +5193,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If q is a float, a Series will be returned where the index is
             the columns of self and the values are the quantiles.
 
-        Notes
-        -----
-        One notable difference from Pandas is when DataFrame is of
-        non-numeric types and result is expected to be a Series in case of
-        Pandas. cuDF will return a DataFrame as it doesn't support mixed
-        types under Series.
+        .. pandas-compat::
+            **DataFrame.quantile**
+
+            One notable difference from Pandas is when DataFrame is of
+            non-numeric types and result is expected to be a Series in case of
+            Pandas. cuDF will return a DataFrame as it doesn't support mixed
+            types under Series.
 
         Examples
         --------
@@ -5248,47 +5225,41 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
+        data_df = self
         if numeric_only:
-            data_df = self.select_dtypes(
+            data_df = data_df.select_dtypes(
                 include=[np.number], exclude=["datetime64", "timedelta64"]
             )
-        else:
-            data_df = self
 
         if columns is None:
             columns = data_df._data.names
 
-        result = DataFrame()
-
+        # Ensure that qs is non-scalar so that we always get a column back.
+        qs = [q] if is_scalar(q) else q
+        result = {}
         for k in data_df._data.names:
-
             if k in columns:
-                res = data_df[k].quantile(
-                    q,
+                ser = data_df[k]
+                res = ser.quantile(
+                    qs,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
-                )
-                if (
-                    not isinstance(
-                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
-                    )
-                    and len(res) == 0
-                ):
+                )._column
+                if len(res) == 0:
                     res = column.column_empty_like(
-                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
+                        qs, dtype=ser.dtype, masked=True, newsize=len(qs)
                     )
-                result[k] = column.as_column(res)
+                result[k] = res
 
+        result = DataFrame._from_data(result)
         if isinstance(q, numbers.Number) and numeric_only:
-            result = result.fillna(np.nan)
-            result = result.iloc[0]
+            result = result.fillna(np.nan).iloc[0]
             result.index = data_df._data.to_pandas_index()
             result.name = q
             return result
         else:
-            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
-            result.index = q
+            result.index = list(map(float, qs))
             return result
 
     @_cudf_nvtx_annotate
@@ -5298,7 +5269,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {`lower`, `higher`, `nearest`}
@@ -5308,7 +5278,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-
         DataFrame
         """
         if isinstance(q, numbers.Number):
@@ -5338,7 +5307,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         values : iterable, Series, DataFrame or dict
             The result will only be true at a location if all
             the labels match. If values is a Series, that’s the index.
@@ -6044,7 +6012,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, compression=None, *args, **kwargs):
+    def to_orc(self, fname, compression="snappy", *args, **kwargs):
         """{docstring}"""
         from cudf.io import orc
 
@@ -6568,9 +6536,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns: List[ColumnBase],
         column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
-            columns, column_names, index_names
+            columns,
+            column_names,
+            index_names,
+            override_dtypes=override_dtypes,
         )
         result._set_column_names_like(self)
         return result
@@ -7277,11 +7250,9 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
         ):
             # Combine and de-dupe the categories
-            categories[idx] = (
-                cudf.Series(concat_columns([col.categories for col in cols]))
-                .drop_duplicates(ignore_index=True)
-                ._column
-            )
+            categories[idx] = cudf.Series(
+                concat_columns([col.categories for col in cols])
+            )._column.unique(preserve_order=True)
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))

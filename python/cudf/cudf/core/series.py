@@ -5,10 +5,10 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
-import warnings
+import textwrap
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
 import numpy as np
@@ -19,7 +19,12 @@ from pandas.core.dtypes.common import is_float
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import _is_null_host_scalar
-from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf._typing import (
+    ColumnLike,
+    DataFrameOrSeries,
+    NotImplementedType,
+    ScalarLike,
+)
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -51,7 +56,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.groupby.groupby import SeriesGroupBy
+from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
@@ -60,6 +65,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
 from cudf.utils import docutils
@@ -72,6 +78,88 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+
+
+def _format_percentile_names(percentiles):
+    return [f"{int(x * 100)}%" for x in percentiles]
+
+
+def _describe_numeric(obj, percentiles):
+    # Helper for Series.describe with numerical data.
+    data = {
+        "count": obj.count(),
+        "mean": obj.mean(),
+        "std": obj.std(),
+        "min": obj.min(),
+        **dict(
+            zip(
+                _format_percentile_names(percentiles),
+                obj.quantile(percentiles).to_numpy(na_value=np.nan).tolist(),
+            )
+        ),
+        "max": obj.max(),
+    }
+    return {k: round(v, 6) for k, v in data.items()}
+
+
+def _describe_timetype(obj, percentiles, typ):
+    # Common helper for Series.describe with timedelta/timestamp data.
+    data = {
+        "count": str(obj.count()),
+        "mean": str(typ(obj.mean())),
+        "std": "",
+        "min": str(typ(obj.min())),
+        **dict(
+            zip(
+                _format_percentile_names(percentiles),
+                obj.quantile(percentiles)
+                .astype("str")
+                .to_numpy(na_value=np.nan)
+                .tolist(),
+            )
+        ),
+        "max": str(typ(obj.max())),
+    }
+
+    if typ is pd.Timedelta:
+        data["std"] = str(obj.std())
+    else:
+        data.pop("std")
+    return data
+
+
+def _describe_timedelta(obj, percentiles):
+    # Helper for Series.describe with timedelta data.
+    return _describe_timetype(obj, percentiles, pd.Timedelta)
+
+
+def _describe_timestamp(obj, percentiles):
+    # Helper for Series.describe with timestamp data.
+    return _describe_timetype(obj, percentiles, pd.Timestamp)
+
+
+def _describe_categorical(obj, percentiles):
+    # Helper for Series.describe with categorical data.
+    data = {
+        "count": obj.count(),
+        "unique": len(obj.unique()),
+        "top": None,
+        "freq": None,
+    }
+    if data["count"] > 0:
+        # In case there's a tie, break the tie by sorting the index
+        # and take the top.
+        val_counts = obj.value_counts(ascending=False)
+        tied_val_counts = val_counts[
+            val_counts == val_counts.iloc[0]
+        ].sort_index()
+        data.update(
+            {
+                "top": tied_val_counts.index[0],
+                "freq": tied_val_counts.iloc[0],
+            }
+        )
+    return data
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -281,6 +369,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     _accessors: Set[Any] = set()
     _loc_indexer_type = _SeriesLocIndexer
     _iloc_indexer_type = _SeriesIlocIndexer
+    _groupby = SeriesGroupBy
+    _resampler = SeriesResampler
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -1071,10 +1161,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result.name = self.name
             result.index = self.index
         else:
-            # TODO: switch to `apply`
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=FutureWarning)
-                result = self.applymap(arg)
+            result = self.apply(arg)
         return result
 
     @_cudf_nvtx_annotate
@@ -1207,7 +1294,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:
@@ -1255,7 +1342,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def dtype(self):
-        """dtype of the Series"""
+        """The dtype of the Series."""
         return self._column.dtype
 
     @classmethod
@@ -1744,8 +1831,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         dtype: int64
         >>> series.data
-        <cudf.core.buffer.Buffer object at 0x...>
-        >>> series.data.to_host_array()
+        <cudf.core.buffer.Buffer ...>
+        >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
         """  # noqa: E501
@@ -2160,7 +2247,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ``apply`` relies on Numba to JIT compile ``func``.
         Thus the allowed operations within ``func`` are limited to `those
         supported by the CUDA Python Numba target
-        <https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html>`__.
+        <https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html>`__.
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
@@ -2179,6 +2266,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         **kwargs
             Not supported
 
+        Returns
+        -------
+        result : Series
+            The mask and index are preserved.
+
         Notes
         -----
         UDFs are cached in memory to avoid recompilation. The first
@@ -2189,8 +2281,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Examples
         --------
+        Apply a basic function to a series:
 
-        Apply a basic function to a series
         >>> sr = cudf.Series([1,2,3])
         >>> def f(x):
         ...     return x + 1
@@ -2247,124 +2339,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
         result.name = self.name
         return result
-
-    @_cudf_nvtx_annotate
-    def applymap(self, udf, out_dtype=None):
-        """Apply an elementwise function to transform the values in the Column.
-
-        The user function is expected to take one argument and return the
-        result, which will be stored to the output Series.  The function
-        cannot reference globals except for other simple scalar objects.
-
-        Parameters
-        ----------
-        udf : function
-            Either a callable python function or a python function already
-            decorated by ``numba.cuda.jit`` for call on the GPU as a device
-
-        out_dtype : :class:`numpy.dtype`; optional
-            The dtype for use in the output.
-            Only used for ``numba.cuda.jit`` decorated udf.
-            By default, the result will have the same dtype as the source.
-
-        Returns
-        -------
-        result : Series
-            The mask and index are preserved.
-
-        Notes
-        -----
-        The supported Python features are listed in
-
-          https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
-
-        with these exceptions:
-
-        * Math functions in `cmath` are not supported since `libcudf` does not
-          have complex number support and output of `cmath` functions are most
-          likely complex numbers.
-
-        * These five functions in `math` are not supported since numba
-          generates multiple PTX functions from them
-
-          * math.sin()
-          * math.cos()
-          * math.tan()
-          * math.gamma()
-          * math.lgamma()
-
-        * Series with string dtypes are not supported in `applymap` method.
-
-        * Global variables need to be re-defined explicitly inside
-          the udf, as numba considers them to be compile-time constants
-          and there is no known way to obtain value of the global variable.
-
-        Examples
-        --------
-        Returning a Series of booleans using only a literal pattern.
-
-        >>> import cudf
-        >>> s = cudf.Series([1, 10, -10, 200, 100])
-        >>> s.applymap(lambda x: x)
-        0      1
-        1     10
-        2    -10
-        3    200
-        4    100
-        dtype: int64
-        >>> s.applymap(lambda x: x in [1, 100, 59])
-        0     True
-        1    False
-        2    False
-        3    False
-        4     True
-        dtype: bool
-        >>> s.applymap(lambda x: x ** 2)
-        0        1
-        1      100
-        2      100
-        3    40000
-        4    10000
-        dtype: int64
-        >>> s.applymap(lambda x: (x ** 2) + (x / 2))
-        0        1.5
-        1      105.0
-        2       95.0
-        3    40100.0
-        4    10050.0
-        dtype: float64
-        >>> def cube_function(a):
-        ...     return a ** 3
-        ...
-        >>> s.applymap(cube_function)
-        0          1
-        1       1000
-        2      -1000
-        3    8000000
-        4    1000000
-        dtype: int64
-        >>> def custom_udf(x):
-        ...     if x > 0:
-        ...         return x + 5
-        ...     else:
-        ...         return x - 5
-        ...
-        >>> s.applymap(custom_udf)
-        0      6
-        1     15
-        2    -15
-        3    205
-        4    105
-        dtype: int64
-        """
-        warnings.warn(
-            "Series.applymap is deprecated and will be removed "
-            "in a future cuDF release. Use Series.apply instead.",
-            FutureWarning,
-        )
-        if not callable(udf):
-            raise ValueError("Input UDF must be a callable object.")
-        return self._from_data({self.name: self._unaryop(udf)}, self._index)
 
     #
     # Stats
@@ -2751,7 +2725,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         result : Series containing counts of unique values.
 
-        See also
+        See Also
         --------
         Series.count
             Number of non-NA elements in a Series.
@@ -2866,7 +2840,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Parameters
         ----------
-
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
@@ -2942,151 +2915,42 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ):
         """{docstring}"""
 
-        def _prepare_percentiles(percentiles):
-            percentiles = list(percentiles)
-
+        if percentiles is not None:
             if not all(0 <= x <= 1 for x in percentiles):
                 raise ValueError(
                     "All percentiles must be between 0 and 1, " "inclusive."
                 )
 
             # describe always includes 50th percentile
+            percentiles = list(percentiles)
             if 0.5 not in percentiles:
                 percentiles.append(0.5)
 
             percentiles = np.sort(percentiles)
-            return percentiles
-
-        def _format_percentile_names(percentiles):
-            return [f"{int(x * 100)}%" for x in percentiles]
-
-        def _format_stats_values(stats_data):
-            return map(lambda x: round(x, 6), stats_data)
-
-        def _describe_numeric(self):
-            # mimicking pandas
-            data = {
-                "count": self.count(),
-                "mean": self.mean(),
-                "std": self.std(),
-                "min": self.min(),
-                **dict(
-                    zip(
-                        _format_percentile_names(percentiles),
-                        self.quantile(percentiles)
-                        .to_numpy(na_value=np.nan)
-                        .tolist(),
-                    )
-                ),
-                "max": self.max(),
-            }
-
-            return Series(
-                data=_format_stats_values(data.values()),
-                index=data.keys(),
-                nan_as_null=False,
-                name=self.name,
-            )
-
-        def _describe_timedelta(self):
-            # mimicking pandas
-            data = {
-                "count": str(self.count()),
-                "mean": str(self.mean()),
-                "std": str(self.std()),
-                "min": str(pd.Timedelta(self.min())),
-                **dict(
-                    zip(
-                        _format_percentile_names(percentiles),
-                        self.quantile(percentiles)
-                        .astype("str")
-                        .to_numpy(na_value=np.nan)
-                        .tolist(),
-                    )
-                ),
-                "max": str(pd.Timedelta(self.max())),
-            }
-
-            return Series(
-                data=data.values(),
-                index=data.keys(),
-                dtype="str",
-                nan_as_null=False,
-                name=self.name,
-            )
-
-        def _describe_categorical(self):
-            # blocked by StringColumn/DatetimeColumn support for
-            # value_counts/unique
-            data = {
-                "count": self.count(),
-                "unique": len(self.unique()),
-                "top": None,
-                "freq": None,
-            }
-            if data["count"] > 0:
-                # In case there's a tie, break the tie by sorting the index
-                # and take the top.
-                val_counts = self.value_counts(ascending=False)
-                tied_val_counts = val_counts[
-                    val_counts == val_counts.iloc[0]
-                ].sort_index()
-                data.update(
-                    {
-                        "top": tied_val_counts.index[0],
-                        "freq": tied_val_counts.iloc[0],
-                    }
-                )
-
-            return Series(
-                data=data.values(),
-                dtype="str",
-                index=data.keys(),
-                nan_as_null=False,
-                name=self.name,
-            )
-
-        def _describe_timestamp(self):
-            data = {
-                "count": str(self.count()),
-                "mean": str(pd.Timestamp(self.mean())),
-                "min": str(pd.Timestamp(self.min())),
-                **dict(
-                    zip(
-                        _format_percentile_names(percentiles),
-                        self.quantile(percentiles)
-                        .astype(self.dtype)
-                        .astype("str")
-                        .to_numpy(na_value=np.nan),
-                    )
-                ),
-                "max": str(pd.Timestamp(self.max())),
-            }
-
-            return Series(
-                data=data.values(),
-                dtype="str",
-                index=data.keys(),
-                nan_as_null=False,
-                name=self.name,
-            )
-
-        if percentiles is not None:
-            percentiles = _prepare_percentiles(percentiles)
         else:
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
+        dtype = "str"
         if is_bool_dtype(self.dtype):
-            return _describe_categorical(self)
+            data = _describe_categorical(self, percentiles)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
-            return _describe_numeric(self)
-        elif isinstance(self._column, cudf.core.column.TimeDeltaColumn):
-            return _describe_timedelta(self)
-        elif isinstance(self._column, cudf.core.column.DatetimeColumn):
-            return _describe_timestamp(self)
+            data = _describe_numeric(self, percentiles)
+            dtype = None
+        elif isinstance(self._column, TimeDeltaColumn):
+            data = _describe_timedelta(self, percentiles)
+        elif isinstance(self._column, DatetimeColumn):
+            data = _describe_timestamp(self, percentiles)
         else:
-            return _describe_categorical(self)
+            data = _describe_categorical(self, percentiles)
+
+        return Series(
+            data=data.values(),
+            index=data.keys(),
+            dtype=dtype,
+            nan_as_null=False,
+            name=self.name,
+        )
 
     @_cudf_nvtx_annotate
     def digitize(self, bins, right=False):
@@ -3195,8 +3059,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self - self.shift(periods=periods)
 
-    @copy_docstring(SeriesGroupBy)
     @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        groupby_doc_template.format(
+            ret=textwrap.dedent(
+                """
+                Returns
+                -------
+                SeriesGroupBy
+                    Returns a SeriesGroupBy object that contains
+                    information about the groups.
+                """
+            )
+        )
+    )
     def groupby(
         self,
         by=None,
@@ -3204,42 +3080,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
     ):
-        import cudf.core.resample
-
-        if axis not in (0, "index"):
-            raise NotImplementedError("axis parameter is not yet implemented")
-
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
-
-        if squeeze is not False:
-            raise NotImplementedError(
-                "squeeze parameter is not yet implemented"
-            )
-
-        if observed is not False:
-            raise NotImplementedError(
-                "observed parameter is not yet implemented"
-            )
-
-        if by is None and level is None:
-            raise TypeError(
-                "groupby() requires either by or level to be specified."
-            )
-
-        return (
-            cudf.core.resample.SeriesResampler(self, by=by)
-            if isinstance(by, cudf.Grouper) and by.freq
-            else SeriesGroupBy(
-                self, by=by, level=level, dropna=dropna, sort=sort
-            )
+        return super().groupby(
+            by,
+            axis,
+            level,
+            as_index,
+            sort,
+            group_keys,
+            squeeze,
+            observed,
+            dropna,
         )
 
     @_cudf_nvtx_annotate
@@ -4404,7 +4259,6 @@ class DatetimeProperties:
 
         Notes
         -----
-
         The following date format identifiers are not yet
         supported: ``%c``, ``%x``,``%X``
 

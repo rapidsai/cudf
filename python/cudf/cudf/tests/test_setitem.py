@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_LE_122
+from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150, PANDAS_LE_122
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -220,23 +220,25 @@ def test_column_set_unequal_length_object_by_mask():
 
 
 def test_categorical_setitem_invalid():
-    # ps = pd.Series([1, 2, 3], dtype="category")
+    ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")
 
-    # TODO: After https://github.com/pandas-dev/pandas/issues/46646
-    # is fixed remove the following workaround and
-    # uncomment assert_exceptions_equal
-    # WORKAROUND
-    with pytest.raises(
-        ValueError,
-        match="Cannot setitem on a Categorical with a new category, set the "
-        "categories first",
-    ):
-        gs[0] = 5
-
-    # assert_exceptions_equal(
-    #     lfunc=ps.__setitem__,
-    #     rfunc=gs.__setitem__,
-    #     lfunc_args_and_kwargs=([0, 5], {}),
-    #     rfunc_args_and_kwargs=([0, 5], {}),
-    # )
+    if PANDAS_GE_150:
+        assert_exceptions_equal(
+            lfunc=ps.__setitem__,
+            rfunc=gs.__setitem__,
+            lfunc_args_and_kwargs=([0, 5], {}),
+            rfunc_args_and_kwargs=([0, 5], {}),
+            compare_error_message=False,
+            expected_error_message="Cannot setitem on a Categorical with a "
+            "new category, set the categories first",
+        )
+    else:
+        # Following workaround is needed because:
+        # https://github.com/pandas-dev/pandas/issues/46646
+        with pytest.raises(
+            ValueError,
+            match="Cannot setitem on a Categorical with a new category, set "
+            "the categories first",
+        ):
+            gs[0] = 5

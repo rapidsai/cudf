@@ -19,7 +19,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options() except+
 
         cudf_io_types.source_info get_source() except+
-        vector[string] get_columns() except+
         vector[vector[size_type]] get_stripes() except+
         size_type get_skip_rows() except+
         size_type get_num_rows() except+

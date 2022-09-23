@@ -30,6 +30,7 @@ import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
+import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
@@ -41,12 +42,7 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -54,6 +50,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.function.IntFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -78,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
+  private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
@@ -406,6 +404,30 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadJSONTableWithMeta() {
+    JSONOptions opts = JSONOptions.builder()
+            .build();
+    byte[] data = ("{ \"A\": 1, \"B\": 2, \"C\": \"X\"}\n" +
+            "{ \"A\": 2, \"B\": 4, \"C\": \"Y\"}\n" +
+            "{ \"A\": 3, \"B\": 6, \"C\": \"Z\"}\n" +
+            "{ \"A\": 4, \"B\": 8, \"C\": \"W\"}\n").getBytes(StandardCharsets.UTF_8);
+    final int numBytes = data.length;
+    try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(numBytes)) {
+      hostbuf.setBytes(0, data, 0, numBytes);
+      try (Table expected = new Table.TestBuilder()
+              .column(1L, 2L, 3L, 4L)
+              .column(2L, 4L, 6L, 8L)
+              .column("X", "Y", "Z", "W")
+              .build();
+         TableWithMeta tablemeta = Table.readJSON(opts, hostbuf, 0, numBytes);
+         Table table = tablemeta.releaseTable()) {
+        assertArrayEquals(new String[] { "A", "B", "C" }, tablemeta.getColumnNames());
+        assertTablesAreEqual(expected, table);
+      }
+    }
+  }
+
+  @Test
   void testReadCSVPrune() {
     Schema schema = Schema.builder()
         .column(DType.INT32, "A")
@@ -563,6 +585,65 @@ public class TableTest extends CudfTestBase {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
       assertTableTypes(new DType[]{DType.INT64, DType.INT32, DType.INT32}, table);
+    }
+  }
+
+  @Test
+  void testReadParquetBinary() {
+    ParquetOptions opts = ParquetOptions.builder()
+        .includeColumn("value1", true)
+        .includeColumn("value2", false)
+        .build();
+    try (Table table = Table.readParquet(opts, TEST_PARQUET_FILE_BINARY)) {
+      assertTableTypes(new DType[]{DType.STRING, DType.STRING}, table);
+      ColumnView columnView = table.getColumn(0);
+      assertEquals(DType.STRING, columnView.getType());
+    }
+  }
+
+  List<Byte> asList(String str) {
+    byte[] bytes = str.getBytes(Charsets.UTF_8);
+    List<Byte> ret = new ArrayList<>(bytes.length);
+    for(int i = 0; i < bytes.length; i++) {
+      ret.add(bytes[i]);
+    }
+    return ret;
+  }
+
+  @Test
+  void testParquetWriteToBufferChunkedBinary() {
+    // We create a String table and a Binary table with the same data in them to
+    // avoid trying to read the binary data back in the same way. At least until the
+    // API for that is stable
+    String string1 = "ABC";
+    String string2 = "DEF";
+    List<Byte> bin1 = asList(string1);
+    List<Byte> bin2 = asList(string2);
+
+    try (Table binTable = new Table.TestBuilder()
+        .column(new ListType(true, new BasicType(false, DType.INT8)),
+            bin1, bin2)
+        .build();
+         Table stringTable = new Table.TestBuilder()
+             .column(string1, string2)
+             .build();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withBinaryColumn("_c0", true)
+          .build();
+
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(binTable);
+        writer.write(binTable);
+        writer.write(binTable);
+      }
+      ParquetOptions opts = ParquetOptions.builder()
+          .includeColumn("_c0")
+          .build();
+      try (Table table1 = Table.readParquet(opts, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(stringTable, stringTable, stringTable)) {
+        assertTablesAreEqual(concat, table1);
+      }
     }
   }
 
@@ -5692,6 +5773,124 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * Helper for constructing BigInteger from int
+   * @param x Integer value
+   * @return BigInteger equivalent of x
+   */
+  private static BigInteger big(int x)
+  {
+    return new BigInteger("" + x);
+  }
+
+  /**
+   * Helper to get scalar for preceding == Decimal(value),
+   * with data width depending upon the the order-by
+   * column index:
+   *   orderby_col_idx = 2 -> Decimal32
+   *   orderby_col_idx = 3 -> Decimal64
+   *   orderby_col_idx = 4 -> Decimal128
+   */
+  private static Scalar getDecimalScalarRangeBounds(int scale, int unscaledValue, int orderby_col_idx)
+  {
+    switch(orderby_col_idx)
+    {
+      case 2: return Scalar.fromDecimal(scale, unscaledValue);
+      case 3: return Scalar.fromDecimal(scale, Long.valueOf(unscaledValue));
+      case 4: return Scalar.fromDecimal(scale, big(unscaledValue));
+      default: 
+        throw new IllegalStateException("Unexpected order by column index: " 
+                                        + orderby_col_idx);
+    }
+  }
+
+  @Test
+  void testRangeWindowsWithDecimalOrderBy() {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+        .decimal32Column(-1, 4000, 3000, 2000, 1000, 
+                             4000, 3000, 2000, 1000, 
+                             4000, 3000, 2000, 1000) // Decimal OBY Key
+        .decimal64Column(-1, 4000l, 3000l, 2000l, 1000l, 
+                             4000l, 3000l, 2000l, 1000l, 
+                             4000l, 3000l, 2000l, 1000l) // Decimal OBY Key
+        .decimal128Column(-1, RoundingMode.UNNECESSARY,
+                              big(4000), big(3000), big(2000), big(1000),
+                              big(4000), big(3000), big(2000), big(1000),
+                              big(4000), big(3000), big(2000), big(1000))
+        .column(9, 1, 5, 7, 2, 8, 9, 7, 6, 6, 0, 8) // Agg Column
+        .build()) {
+
+      // Columns 2,3,4 are decimal order-by columns of type DECIMAL32, DECIMAL64, 
+      // and DECIMAL128 respectively, with similarly ordered values.
+      // In the following loop, each decimal type is tested as the order-by column,
+      // producing the same results with similar range bounds.
+      for (int decimal_oby_col_idx = 2; decimal_oby_col_idx <= 4; ++decimal_oby_col_idx) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), 
+                                             OrderByArg.asc(1), 
+                                             OrderByArg.asc(decimal_oby_col_idx));
+            ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(5);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          // Test Window functionality with range window (200 PRECEDING and 100 FOLLOWING)
+          try (Scalar preceding200 = getDecimalScalarRangeBounds(0, 200, decimal_oby_col_idx);
+               Scalar following100 = getDecimalScalarRangeBounds(2, 1, decimal_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .window(preceding200, following100)
+                .orderByColumnIndex(decimal_oby_col_idx)
+                .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                                                .aggregateWindowsOverRanges(RollingAggregation.count()
+                                                                                              .onColumn(5)
+                                                                                              .overWindow(window));
+                ColumnVector expect = ColumnVector.fromBoxedInts(2, 3, 4, 3, 2, 3, 4, 3, 2, 3, 4, 3)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and CURRENT ROW)
+          try (Scalar current_row = getDecimalScalarRangeBounds(0, 0, decimal_oby_col_idx);
+               WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .unboundedPreceding()
+                .following(current_row)
+                .orderByColumnIndex(decimal_oby_col_idx)
+                .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                                                .aggregateWindowsOverRanges(RollingAggregation.count()
+                                                                                              .onColumn(5)
+                                                                                              .overWindow(window));
+                ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+
+          // Test Window functionality with range window (UNBOUNDED PRECEDING and UNBOUNDED FOLLOWING)
+          try (WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .unboundedPreceding()
+                .unboundedFollowing()
+                .orderByColumnIndex(decimal_oby_col_idx)
+                .build()) {
+
+            try (Table windowAggResults = sorted.groupBy(0, 1)
+                                                .aggregateWindowsOverRanges(RollingAggregation.count()
+                                                                                              .onColumn(5)
+                                                                                              .overWindow(window));
+                ColumnVector expect = ColumnVector.fromBoxedInts(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4)) {
+              assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+            }
+          }
+        }
+      }
+    }
+  }
+
   @Test
   void testGroupByCountWithNulls() {
     try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
@@ -6359,9 +6558,31 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * A wrapper for ContiguousTable[] to implement AutoCloseable
+   */
+  static class ContiguousSplitRes implements AutoCloseable {
+    // to be closed
+    private ContiguousTable[] splits;
+
+    public ContiguousSplitRes(ContiguousTable[] splits) {
+      this.splits = splits;
+    }
+
+    public ContiguousTable[] getSplits() {
+      return splits;
+    }
+
+    @Override
+    public void close() throws Exception {
+      if (splits != null) {
+        for (ContiguousTable t : splits) { t.close(); }
+      }
+    }
+  }
+
   @Test
-  void testGroupByContiguousSplitGroups() {
-    ContiguousTable[] splits = null;
+  void testGroupByContiguousSplitGroups() throws Exception {
     try (Table table = new Table.TestBuilder()
         .column(   1,    1,    1,    1,    1,    1)
         .column(   1,    3,    3,    5,    5,    5)
@@ -6383,38 +6604,81 @@ public class TableTest extends CudfTestBase {
               .column(   1,    1,    1)
               .column(   5,    5,    5)
               .column(  17,   16,   18)
-              .column("s4", "s5", "s6").build()) {
-        try {
-          splits = table.groupBy(0, 1).contiguousSplitGroups();
-          assertEquals(3, splits.length);
-          for (ContiguousTable ct : splits) {
+              .column("s4", "s5", "s6").build();
+           Table expected4 = new Table.TestBuilder()
+              .column(   1,    1,    1)
+              .column(   1,    3,    5).build();
+           ContiguousSplitRes splitsRes = new ContiguousSplitRes(
+               table.groupBy(0, 1).contiguousSplitGroups());
+           ContigSplitGroupByResult r =
+               table.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys()) {
+        ContiguousTable[] splits = splitsRes.getSplits();
+        ContiguousTable[] splits2 = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
+        for (ContiguousTable[] currSplits : Arrays.asList(splits, splits2)) {
+          assertEquals(3, currSplits.length);
+          for (ContiguousTable ct : currSplits) {
             if (ct.getRowCount() == 1) {
               assertTablesAreEqual(expected1, ct.getTable());
             } else if (ct.getRowCount() == 2) {
               assertTablesAreEqual(expected2, ct.getTable());
-            } else {
+            } else if (ct.getRowCount() == 3) {
               assertTablesAreEqual(expected3, ct.getTable());
+            } else {
+              throw new RuntimeException("unexpected behavior: contiguousSplitGroups");
             }
           }
-        } finally {
-          if (splits != null) {
-            for (ContiguousTable t : splits) { t.close(); }
-          }
-          splits = null;
         }
+
+        // verify uniq keys table
+        assertTablesAreEqual(expected4, uniqKeys);
       }
 
       // Empty key columns, the whole table is a group.
-      try {
-        splits = table.groupBy().contiguousSplitGroups();
+      try(ContiguousSplitRes splitsRes = new ContiguousSplitRes(
+          table.groupBy().contiguousSplitGroups());
+          ContigSplitGroupByResult r = table.groupBy().contiguousSplitGroupsAndGenUniqKeys()) {
+        ContiguousTable[] splits = splitsRes.getSplits();
+        ContiguousTable[] splits2 = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
         assertEquals(1, splits.length);
         assertTablesAreEqual(table, splits[0].getTable());
-      } finally {
-        if (splits != null) {
-          for (ContiguousTable t : splits) { t.close(); }
-        }
+
+        assertEquals(1, splits2.length);
+        assertTablesAreEqual(table, splits2[0].getTable());
+
+        // Table should contain 1 or more columns,
+        // If group by empty, keys table should be null;
+        assertNull(uniqKeys);
       }
 
+      // Row count is 0
+      try(
+          Table emptyTable = new Table.TestBuilder()
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new Integer[0])
+              .column(new String[0]).build();
+          ContiguousSplitRes splitsRes = new ContiguousSplitRes(
+              emptyTable.groupBy(0, 1).contiguousSplitGroups());
+          ContigSplitGroupByResult r =
+              emptyTable.groupBy(0, 1).contiguousSplitGroupsAndGenUniqKeys()) {
+        ContiguousTable[] splits = splitsRes.getSplits();
+        ContiguousTable[] splits2 = r.getGroups();
+        Table uniqKeys = r.getUniqKeyTable();
+
+        // the first of tmpSplits is empty split
+        assertEquals(0, emptyTable.getRowCount());
+
+        assertEquals(1, splits.length);
+        assertEquals(0, splits[0].getTable().getRowCount());
+
+        assertEquals(1, splits2.length);
+        assertEquals(0, splits2[0].getTable().getRowCount());
+        assertEquals(0, uniqKeys.getRowCount());
+      }
     }
   }
 

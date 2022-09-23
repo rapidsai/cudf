@@ -23,7 +23,7 @@ from cudf._typing import (
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_120
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import DeviceBufferLike
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
@@ -98,11 +98,11 @@ class DatetimeColumn(column.ColumnBase):
 
     Parameters
     ----------
-    data : Buffer
+    data : DeviceBufferLike
         The datetime values
     dtype : np.dtype
         The data type
-    mask : Buffer; optional
+    mask : DeviceBufferLike; optional
         The validity mask
     """
 
@@ -121,9 +121,9 @@ class DatetimeColumn(column.ColumnBase):
 
     def __init__(
         self,
-        data: Buffer,
+        data: DeviceBufferLike,
         dtype: DtypeObj,
-        mask: Buffer = None,
+        mask: DeviceBufferLike = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
@@ -131,7 +131,9 @@ class DatetimeColumn(column.ColumnBase):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
+            raise ValueError(
+                "DeviceBufferLike size must be divisible by element size"
+            )
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset

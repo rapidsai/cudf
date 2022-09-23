@@ -39,9 +39,10 @@ namespace io {
  */
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
-constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
+constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million rows per row group
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
+constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
 
 class parquet_reader_options_builder;
 
@@ -51,7 +52,7 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Path in schema of column to read; empty is all
+  // Path in schema of column to read; `nullopt` is all
   std::optional<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
@@ -67,6 +68,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+
+  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
   /**
    * @brief Constructor from source info.
@@ -119,6 +122,16 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
+   * @brief Returns optional tree of metadata.
+   *
+   * @return vector of reader_column_schema objects.
+   */
+  [[nodiscard]] std::optional<std::vector<reader_column_schema>> get_column_schema() const
+  {
+    return _reader_column_schema;
+  }
+
+  /**
    * @brief Returns number of rows to skip from the start.
    *
    * @return Number of rows to skip from the start
@@ -137,17 +150,14 @@ class parquet_reader_options {
    *
    * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
-  {
-    return _columns;
-  }
+  [[nodiscard]] auto const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read.
    *
    * @return List of individual row groups to be read
    */
-  std::vector<std::vector<size_type>> const& get_row_groups() const { return _row_groups; }
+  [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
 
   /**
    * @brief Returns timestamp type used to cast timestamp columns.
@@ -190,6 +200,17 @@ class parquet_reader_options {
    * @param val Boolean value whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+
+  /**
+   * @brief Sets reader column schema.
+   *
+   * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
+   * Note default is to convert to string columns.
+   */
+  void set_column_schema(std::vector<reader_column_schema> val)
+  {
+    _reader_column_schema = std::move(val);
+  }
 
   /**
    * @brief Sets number of rows to skip.
@@ -293,6 +314,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
     options._use_pandas_metadata = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets reader metadata.
+   *
+   * @param val Tree of metadata information.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& set_column_schema(std::vector<reader_column_schema> val)
+  {
+    options._reader_column_schema = std::move(val);
     return *this;
   }
 
@@ -407,6 +440,8 @@ class parquet_writer_options {
   size_t _max_page_size_bytes = default_max_page_size_bytes;
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
+  // Maximum size of min or max values in column index
+  size_type _column_index_truncate_length = default_column_index_truncate_length;
 
   /**
    * @brief Constructor from sink and table.
@@ -554,6 +589,13 @@ class parquet_writer_options {
   }
 
   /**
+   * @brief Returns maximum length of min or max values in column index, in bytes.
+   *
+   * @return length min/max will be truncated to
+   */
+  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -668,6 +710,17 @@ class parquet_writer_options {
       size_rows >= 5000,
       "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
     _max_page_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the maximum length of min or max values in column index, in bytes.
+   *
+   * @param size_bytes length min/max will be truncated to
+   */
+  void set_column_index_truncate_length(size_type size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
+    _column_index_truncate_length = size_bytes;
   }
 };
 
@@ -831,6 +884,25 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the desired maximum size in bytes for min and max values in the column index.
+   *
+   * Values exceeding this limit will be truncated, but modified such that they will still
+   * be valid lower and upper bounds. This only applies to variable length types, such as string.
+   * Maximum values will not be truncated if there is no suitable truncation that results in
+   * a valid upper bound.
+   *
+   * Default value is 64.
+   *
+   * @param val length min/max will be truncated to, with 0 indicating no truncation
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  {
+    options.set_column_index_truncate_length(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps
@@ -917,6 +989,8 @@ class chunked_parquet_writer_options {
   size_t _max_page_size_bytes = default_max_page_size_bytes;
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
+  // Maximum size of min or max values in column index
+  size_type _column_index_truncate_length = default_column_index_truncate_length;
 
   /**
    * @brief Constructor from sink.
@@ -1020,6 +1094,13 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Returns maximum length of min or max values in column index, in bytes.
+   *
+   * @return length min/max will be truncated to
+   */
+  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1109,6 +1190,17 @@ class chunked_parquet_writer_options {
       size_rows >= 5000,
       "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
     _max_page_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the maximum length of min or max values in column index, in bytes.
+   *
+   * @param size_bytes length min/max will be truncated to
+   */
+  void set_column_index_truncate_length(size_type size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
+    _column_index_truncate_length = size_bytes;
   }
 
   /**
@@ -1257,6 +1349,25 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& max_page_size_rows(size_type val)
   {
     options.set_max_page_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the desired maximum size in bytes for min and max values in the column index.
+   *
+   * Values exceeding this limit will be truncated, but modified such that they will still
+   * be valid lower and upper bounds. This only applies to variable length types, such as string.
+   * Maximum values will not be truncated if there is no suitable truncation that results in
+   * a valid upper bound.
+   *
+   * Default value is 64.
+   *
+   * @param val length min/max will be truncated to, with 0 indicating no truncation
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  {
+    options.set_column_index_truncate_length(val);
     return *this;
   }
 

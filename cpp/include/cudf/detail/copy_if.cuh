@@ -172,7 +172,7 @@ __launch_bounds__(block_size) __global__
         int valid_index = (block_offset / cudf::detail::warp_size) + wid;
 
         // compute the valid mask for this warp
-        uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
+        uint32_t valid_warp = __ballot_sync(0xffff'ffffu, temp_valids[threadIdx.x]);
 
         // Note the atomicOr's below assume that output_valid has been set to
         // all zero before the kernel
@@ -187,7 +187,7 @@ __launch_bounds__(block_size) __global__
 
         // if the block is full and not aligned then we have one more warp to cover
         if ((wid == 0) && (last_warp == num_warps)) {
-          uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[block_size + threadIdx.x]);
+          uint32_t valid_warp = __ballot_sync(0xffff'ffffu, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
             tmp_warp_valid_counts += __popc(valid_warp);
             atomicOr(&output_valid[valid_index + num_warps], valid_warp);
