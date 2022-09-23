@@ -407,7 +407,6 @@ __global__ void __launch_bounds__(128)
               bs->page.flags       = 0;
               bs->page.hdr_version = 2;
               values_found += bs->page.num_input_values;
-              bs->page.flags = 0;
               // V2 only uses RLE, so it was removed from the header
               bs->page.definition_level_encoding = Encoding::RLE;
               bs->page.repetition_level_encoding = Encoding::RLE;

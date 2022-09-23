@@ -163,21 +163,22 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
       cur += 4;
     } else {
       s->error = 2;
-      return 0;
     }
-    uint32_t run            = get_vlq32(cur, end);
-    s->initial_rle_run[lvl] = run;
-    if (!(run & 1)) {
-      int v = (cur < end) ? cur[0] : 0;
-      cur++;
-      if (level_bits > 8) {
-        v |= ((cur < end) ? cur[0] : 0) << 8;
+    if (s->error != 2) {
+      uint32_t run            = get_vlq32(cur, end);
+      s->initial_rle_run[lvl] = run;
+      if (!(run & 1)) {
+        int v = (cur < end) ? cur[0] : 0;
         cur++;
+        if (level_bits > 8) {
+          v |= ((cur < end) ? cur[0] : 0) << 8;
+          cur++;
+        }
+        s->initial_rle_value[lvl] = v;
       }
-      s->initial_rle_value[lvl] = v;
+      s->lvl_start[lvl] = cur;
+      if (cur > end) { s->error = 2; }
     }
-    s->lvl_start[lvl] = cur;
-    if (cur > end) { s->error = 2; }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
