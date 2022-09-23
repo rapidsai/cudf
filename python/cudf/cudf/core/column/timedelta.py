@@ -251,13 +251,13 @@ class TimeDeltaColumn(ColumnBase):
         return self._time_unit
 
     def _preprocess_column_for_repr(self):
-        components = self.components()
-        has_hr = (components.hours > 0).any()
-        has_m = (components.seconds > 0).any()
-        has_s = (components.seconds > 0).any()
-        has_ms = (components.milliseconds > 0).any()
-        has_us = (components.microseconds > 0).any()
-        has_ns = (components.nanoseconds > 0).any()
+        components = self.components() > 0
+        has_hr = components.hours.any()
+        has_m = components.seconds.any()
+        has_s = components.seconds.any()
+        has_ms = components.milliseconds.any()
+        has_us = components.microseconds.any()
+        has_ns = components.nanoseconds.any()
 
         if has_ns:
             preprocess = self.astype("O")

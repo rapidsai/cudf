@@ -1943,6 +1943,71 @@ class DatetimeIndex(GenericIndex):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def millisecond(self):
+        """
+        The milliseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="ms"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00.000', '2000-01-01 00:00:00.001',
+                       '2000-01-01 00:00:00.002'],
+                      dtype='datetime64[ns]')
+        >>> datetime_index.millisecond
+        Int16Index([0, 1, 2], dtype='int16')
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("milli_second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def microsecond(self):
+        """
+        The microseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="us"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00.000000', '2000-01-01 00:00:00.000001',
+                       '2000-01-01 00:00:00.000002'],
+                      dtype='datetime64[ns]')
+        >>> datetime_index.microsecond
+        Int16Index([0, 1, 2], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("micro_second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def nanosecond(self):
+        """
+        The nanoseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="ns"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00.000000000',
+                       '2000-01-01 00:00:00.000000001',
+                       '2000-01-01 00:00:00.000000002'],
+                      dtype='datetime64[ns]')
+        >>> datetime_index.nanosecond
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("nano_second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def weekday(self):
         """
         The day of the week with Monday=0, Sunday=6.

@@ -509,7 +509,7 @@ std::unique_ptr<column> extract_milli_second(column_view const& column,
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MILLISECOND>,
-    cudf::type_id::INT64>(column, stream, mr);
+    cudf::type_id::INT16>(column, stream, mr);
 }
 
 std::unique_ptr<column> extract_micro_second(column_view const& column,
@@ -518,7 +518,7 @@ std::unique_ptr<column> extract_micro_second(column_view const& column,
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MICROSECOND>,
-    cudf::type_id::INT64>(column, stream, mr);
+    cudf::type_id::INT16>(column, stream, mr);
 }
 
 std::unique_ptr<column> extract_nano_second(column_view const& column,
@@ -527,7 +527,7 @@ std::unique_ptr<column> extract_nano_second(column_view const& column,
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::NANOSECOND>,
-    cudf::type_id::INT64>(column, stream, mr);
+    cudf::type_id::INT16>(column, stream, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,

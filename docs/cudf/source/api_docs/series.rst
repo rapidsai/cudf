@@ -266,8 +266,11 @@ Datetime properties
    days_in_month
    day_of_year
    hour
+   microsecond
+   millisecond
    minute
    month
+   nanosecond
    second
    weekday
    year

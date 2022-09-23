@@ -3564,6 +3564,81 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def millisecond(self):
+        """
+        The millisecond of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="ms"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000
+        1    2000-01-01 00:00:00.001
+        2    2000-01-01 00:00:00.002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.millisecond
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
+        return self._get_dt_field("milli_second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def microsecond(self):
+        """
+        The microsecond of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="us"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000000
+        1    2000-01-01 00:00:00.000001
+        2    2000-01-01 00:00:00.000002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.microsecond
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
+        return self._get_dt_field("micro_second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def nanosecond(self):
+        """
+        The nanosecond of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="ns"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000000000
+        1    2000-01-01 00:00:00.000000001
+        2    2000-01-01 00:00:00.000000002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.nanosecond
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
+        return self._get_dt_field("nano_second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def weekday(self):
         """
         The day of the week with Monday=0, Sunday=6.
