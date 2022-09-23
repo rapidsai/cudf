@@ -35,7 +35,7 @@ unset GIT_DESCRIBE_TAG
 export INSTALL_DASK_MAIN=1
 
 # ucx-py version
-export UCX_PY_VERSION='0.28.*'
+export UCX_PY_VERSION='0.29.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
