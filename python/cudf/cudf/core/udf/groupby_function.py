@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import glob
 import math
 import os
 
@@ -188,9 +189,24 @@ my_idxmin_float64 = cuda.declare_device(
     "types.CPointer(types.int64),types.int64)",
 )
 
-# Path to the source containing the foreign function
-basedir = os.path.dirname(os.path.realpath(__file__))
-dev_func_ptx = os.path.join(basedir, "function.ptx")
+# Load the highest compute capability file available that is less than
+# the current device's.
+files = glob.glob(
+    os.path.join(os.path.dirname(os.path.realpath(__file__)), "function_*.ptx")
+)
+if len(files) == 0:
+    raise RuntimeError(
+        "This strings_udf installation is missing the necessary PTX "
+        "files. Please file an issue reporting this error and how you "
+        "installed cudf and strings_udf."
+    )
+dev = cuda.get_current_device()
+cc = "".join(str(x) for x in dev.compute_capability)
+sms = [os.path.basename(f).rstrip(".ptx").lstrip("function_") for f in files]
+selected_sm = max(sm for sm in sms if sm < cc)
+dev_func_ptx = os.path.join(
+    os.path.dirname(__file__), f"function_{selected_sm}.ptx"
+)
 
 
 def call_my_max_int32(data, size):
