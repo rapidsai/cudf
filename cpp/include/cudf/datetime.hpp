@@ -133,11 +133,47 @@ std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-
+/**
+ * @brief  Extracts millisecond from any date time type and returns an int16_t
+ * cudf::column.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t milliseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
 std::unique_ptr<cudf::column> extract_milli_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Extracts microsecond from any date time type and returns an int16_t
+ * cudf::column.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t microseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_micro_second(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Extracts nanosecond from any date time type and returns an int16_t
+ * cudf::column.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t nanoseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_nano_second(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**

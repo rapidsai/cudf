@@ -1241,9 +1241,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 output = repr(preprocess.to_pandas())
 
             output = output.replace("nan", cudf._NA_REP)
-        elif preprocess._values.nullable or isinstance(preprocess, (DatetimeIndex, TimedeltaIndex)):
+        elif preprocess._values.nullable or isinstance(
+            preprocess, (DatetimeIndex, TimedeltaIndex)
+        ):
             output = repr(self._clean_nulls_from_index().to_pandas())
+            import pdb
 
+            pdb.set_trace()
+            if isinstance(self, (DatetimeIndex, TimedeltaIndex)):
+                output = (
+                    output[: output.rfind("categories=[")]
+                    + output[output.rfind(" dtype=") :]
+                )
             if not isinstance(self, StringIndex):
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
@@ -1275,6 +1284,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         else:
             lines[-1] = lines[-1] + ")"
 
+        if isinstance(preprocess, (DatetimeIndex, TimedeltaIndex)):
+            if len(lines) > 1:
+                lines[1:-1] = [
+                    line.replace("   ", "", 1) for line in lines[1:-1]
+                ]
+                lines[-1] = lines[-1].replace("    ", "", 1)
         return "\n".join(lines)
 
     @_cudf_nvtx_annotate
@@ -2101,7 +2116,7 @@ class DatetimeIndex(GenericIndex):
 
     def is_boolean(self):
         return False
-    
+
     def _clean_nulls_from_index(self):
         """
         Convert all na values(if any) in Index object
@@ -2113,7 +2128,10 @@ class DatetimeIndex(GenericIndex):
         of the actual types correctly.
         """
         return cudf.Index(
-            self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+            self._values._preprocess_column_for_repr()
+            .fillna(cudf._NA_REP)
+            .astype("category"),
+            name=self.name,
         )
 
     @_cudf_nvtx_annotate
@@ -2363,7 +2381,7 @@ class TimedeltaIndex(GenericIndex):
 
     def is_boolean(self):
         return False
-    
+
     def _clean_nulls_from_index(self):
         """
         Convert all na values(if any) in Index object
@@ -2375,7 +2393,10 @@ class TimedeltaIndex(GenericIndex):
         of the actual types correctly.
         """
         return cudf.Index(
-            self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+            self._values._preprocess_column_for_repr()
+            .fillna(cudf._NA_REP)
+            .astype("category"),
+            name=self.name,
         )
 
 

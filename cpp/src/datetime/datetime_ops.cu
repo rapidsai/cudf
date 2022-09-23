@@ -76,9 +76,14 @@ struct extract_component_operator {
 
     if (time_since_midnight.count() < 0) { time_since_midnight += days(1); }
 
-    auto hrs_  = duration_cast<hours>(time_since_midnight);
-    auto mins_ = duration_cast<minutes>(time_since_midnight - hrs_);
-    auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
+    auto hrs_       = duration_cast<hours>(time_since_midnight);
+    auto mins_      = duration_cast<minutes>(time_since_midnight - hrs_);
+    auto secs_      = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
+    auto millisecs_ = duration_cast<milliseconds>(time_since_midnight - hrs_ - mins_ - secs_);
+    auto microsecs_ =
+      duration_cast<microseconds>(time_since_midnight - hrs_ - mins_ - secs_ - millisecs_);
+    auto nanoosecs_ = duration_cast<nanoseconds>(time_since_midnight - hrs_ - mins_ - secs_ -
+                                                 millisecs_ - microsecs_);
 
     switch (Component) {
       case datetime_component::YEAR:
@@ -92,6 +97,9 @@ struct extract_component_operator {
       case datetime_component::HOUR: return hrs_.count();
       case datetime_component::MINUTE: return mins_.count();
       case datetime_component::SECOND: return secs_.count();
+      case datetime_component::MILLISECOND: return millisecs_.count();
+      case datetime_component::MICROSECOND: return microsecs_.count();
+      case datetime_component::NANOSECOND: return nanoosecs_.count();
       default: return 0;
     }
   }
@@ -496,11 +504,29 @@ std::unique_ptr<column> extract_second(column_view const& column,
 }
 
 std::unique_ptr<column> extract_milli_second(column_view const& column,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MILLISECOND>,
+    cudf::type_id::INT64>(column, stream, mr);
+}
+
+std::unique_ptr<column> extract_micro_second(column_view const& column,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  return detail::apply_datetime_op<
+    detail::extract_component_operator<detail::datetime_component::MICROSECOND>,
+    cudf::type_id::INT64>(column, stream, mr);
+}
+
+std::unique_ptr<column> extract_nano_second(column_view const& column,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  return detail::apply_datetime_op<
+    detail::extract_component_operator<detail::datetime_component::NANOSECOND>,
     cudf::type_id::INT64>(column, stream, mr);
 }
 
@@ -617,10 +643,24 @@ std::unique_ptr<column> extract_second(column_view const& column,
 }
 
 std::unique_ptr<column> extract_milli_second(column_view const& column,
-                                       rmm::mr::device_memory_resource* mr)
+                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::extract_milli_second(column, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> extract_micro_second(column_view const& column,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_micro_second(column, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> extract_nano_second(column_view const& column,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_nano_second(column, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,

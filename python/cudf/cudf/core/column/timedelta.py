@@ -250,6 +250,34 @@ class TimeDeltaColumn(ColumnBase):
     def time_unit(self) -> str:
         return self._time_unit
 
+    def _preprocess_column_for_repr(self):
+        components = self.components()
+        has_hr = (components.hours > 0).any()
+        has_m = (components.seconds > 0).any()
+        has_s = (components.seconds > 0).any()
+        has_ms = (components.milliseconds > 0).any()
+        has_us = (components.microseconds > 0).any()
+        has_ns = (components.nanoseconds > 0).any()
+
+        if has_ns:
+            preprocess = self.astype("O")
+        elif has_us:
+            preprocess = self.astype(
+                "O", format=_dtype_to_format_conversion.get("timedelta64[us]")
+            )
+        elif has_ms:
+            preprocess = self.astype(
+                "O", format=_dtype_to_format_conversion.get("timedelta64[ms]")
+            )
+        elif has_s or has_m or has_hr:
+            preprocess = self.astype(
+                "O", format=_dtype_to_format_conversion.get("timedelta64[s]")
+            )
+        else:
+            preprocess = self.astype("O", format="%D days")
+
+        return preprocess
+
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> TimeDeltaColumn:

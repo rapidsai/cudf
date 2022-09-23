@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -213,6 +214,34 @@ class DatetimeColumn(column.ColumnBase):
             copy=False,
             index=index,
         )
+
+    def _preprocess_column_for_repr(self):
+        has_hr = (self.get_dt_field("hour") > 0).any()
+        has_m = (self.get_dt_field("minute") > 0).any()
+        has_s = (self.get_dt_field("second") > 0).any()
+        has_ms = (self.get_dt_field("milli_second") > 0).any()
+        has_us = (self.get_dt_field("micro_second") > 0).any()
+        has_ns = (self.get_dt_field("nano_second") > 0).any()
+        has_ns = (self.get_dt_field("nano_second") > 0).any()
+
+        if has_ns:
+            preprocess = self.astype("O")
+        elif has_us:
+            preprocess = self.astype(
+                "O", format=_dtype_to_format_conversion.get("datetime64[us]")
+            )
+        elif has_ms:
+            preprocess = self.astype(
+                "O", format=_dtype_to_format_conversion.get("datetime64[ms]")
+            )
+        elif has_s or has_m or has_hr:
+            preprocess = self.astype(
+                "O", format=_dtype_to_format_conversion.get("datetime64[s]")
+            )
+        else:
+            preprocess = self.astype("O", format="%Y-%m-%d")
+
+        return preprocess
 
     @property
     def values(self):

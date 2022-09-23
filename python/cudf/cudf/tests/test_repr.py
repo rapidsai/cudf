@@ -81,6 +81,7 @@ def test_null_dataframe(ncols):
     assert pdf_repr.split() == repr(gdf).split()
     pd.reset_option("display.max_columns")
 
+
 def _assert_date_series_repr(ps, gs):
     """
     This is a utility function to compare pandas & cudf
@@ -115,6 +116,7 @@ def _assert_date_series_repr(ps, gs):
     # import pdb;pdb.set_trace()
     assert expected_list == new_actual_list
 
+
 @pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [None, 0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
@@ -125,7 +127,7 @@ def test_full_series(nrows, dtype):
     pd.options.display.max_rows = nrows
 
     if cudf.api.types.is_datetime_dtype(dtype):
-        _assert_date_series_repr(ps , sr)
+        _assert_date_series_repr(ps, sr)
     else:
         assert repr(ps) == repr(sr)
     pd.reset_option("display.max_rows")
@@ -134,7 +136,9 @@ def test_full_series(nrows, dtype):
 @pytest.mark.parametrize("nrows", [5, 10, 15])
 @pytest.mark.parametrize("ncols", [5, 10, 15])
 @pytest.mark.parametrize("size", [20, 21])
-@pytest.mark.parametrize("dtype", sorted(list(set(repr_categories) - {"datetime64[ns]"})))
+@pytest.mark.parametrize(
+    "dtype", sorted(list(set(repr_categories) - {"datetime64[ns]"}))
+)
 def test_full_dataframe_20(dtype, size, nrows, ncols):
     pdf = pd.DataFrame(
         {idx: np.random.randint(0, 100, size) for idx in range(size)}
@@ -149,13 +153,15 @@ def test_full_dataframe_20(dtype, size, nrows, ncols):
         assert pdf._repr_latex_() == gdf._repr_latex_()
 
 
-@pytest.mark.parametrize("nrows,ncols,data,expected_repr",[
-    (
-        5,
-        5, 
-    {idx: np.arange(0, 100, 5) for idx in range(20)}, 
-    textwrap.dedent(
-        """
+@pytest.mark.parametrize(
+    "nrows,ncols,data,expected_repr",
+    [
+        (
+            5,
+            5,
+            {idx: np.arange(0, 100, 5) for idx in range(20)},
+            textwrap.dedent(
+                """
                                0                              1   ...  \\
 0   1970-01-01 00:00:00.000000000  1970-01-01 00:00:00.000000000  ...   
 1   1970-01-01 00:00:00.000000005  1970-01-01 00:00:00.000000005  ...   
@@ -172,11 +178,14 @@ def test_full_dataframe_20(dtype, size, nrows, ncols):
 
 [20 rows x 20 columns]
 """
-    )),
-    (5, 15, 
-    {idx: np.arange(0, 100, 5) for idx in range(20)}, 
-    textwrap.dedent(
-        """
+            ),
+        ),
+        (
+            5,
+            15,
+            {idx: np.arange(0, 100, 5) for idx in range(20)},
+            textwrap.dedent(
+                """
                                0                              1   \\
 0   1970-01-01 00:00:00.000000000  1970-01-01 00:00:00.000000000   
 1   1970-01-01 00:00:00.000000005  1970-01-01 00:00:00.000000005   
@@ -228,11 +237,14 @@ def test_full_dataframe_20(dtype, size, nrows, ncols):
 
 [20 rows x 20 columns]
 """
-    )),
-    (15, 15, 
-    {idx: np.arange(0, 100, 5) for idx in range(20)}, 
-    textwrap.dedent(
-        """
+            ),
+        ),
+        (
+            15,
+            15,
+            {idx: np.arange(0, 100, 5) for idx in range(20)},
+            textwrap.dedent(
+                """
                                0                              1   \\
 0   1970-01-01 00:00:00.000000000  1970-01-01 00:00:00.000000000   
 1   1970-01-01 00:00:00.000000005  1970-01-01 00:00:00.000000005   
@@ -326,15 +338,13 @@ def test_full_dataframe_20(dtype, size, nrows, ncols):
 
 [20 rows x 20 columns]
 """
-    ),
-        )
-])
+            ),
+        ),
+    ],
+)
 def test_full_datetime_dataframe(nrows, ncols, data, expected_repr):
-    pdf = pd.DataFrame(
-        data    
-    ).astype('datetime64[ns]')
+    pdf = pd.DataFrame(data).astype("datetime64[ns]")
     gdf = cudf.from_pandas(pdf)
-    
 
     with pd.option_context(
         "display.max_rows", int(nrows), "display.max_columns", int(ncols)
@@ -591,35 +601,33 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ns]")),
-            "DatetimeIndex([1970-01-01 00:00:00.000000010, "
-            "1970-01-01 00:00:00.000000020,"
-            "\n       1970-01-01 00:00:00.000000030, <NA>],\n      "
-            "dtype='datetime64[ns]')",
+            "DatetimeIndex([1970-01-01 00:00:00.000000010, 1970-01-01 00:00:00.000000020,\n"
+            "       1970-01-01 00:00:00.000000030, <NA>],\n"
+            "      dtype='datetime64[ns]')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[s]")),
-            "DatetimeIndex([1970-01-01 00:00:10, "
-            "1970-01-01 00:00:20, 1970-01-01 00:00:30,\n"
-            "       <NA>],\n      dtype='datetime64[s]')",
+            "DatetimeIndex([1970-01-01 00:00:10, 1970-01-01 00:00:20, 1970-01-01 00:00:30,\n"
+            "       <NA>],\n"
+            "      dtype='datetime64[s]')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[us]")),
-            "DatetimeIndex([1970-01-01 00:00:00.000010, "
-            "1970-01-01 00:00:00.000020,\n       "
-            "1970-01-01 00:00:00.000030, <NA>],\n      "
-            "dtype='datetime64[us]')",
+            "DatetimeIndex([1970-01-01 00:00:00.000010, 1970-01-01 00:00:00.000020,\n"
+            "       1970-01-01 00:00:00.000030, <NA>],\n"
+            "      dtype='datetime64[us]')",
         ),
         (
             cudf.Index(np.array([10, 20, 30, None], dtype="datetime64[ms]")),
-            "DatetimeIndex([1970-01-01 00:00:00.010, "
-            "1970-01-01 00:00:00.020,\n       "
-            "1970-01-01 00:00:00.030, <NA>],\n      "
-            "dtype='datetime64[ms]')",
+            "DatetimeIndex([1970-01-01 00:00:00.010, 1970-01-01 00:00:00.020,\n"
+            "       1970-01-01 00:00:00.030, <NA>],\n"
+            "      dtype='datetime64[ms]')",
         ),
         (
             cudf.Index(np.array([None] * 10, dtype="datetime64[ms]")),
-            "DatetimeIndex([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
-            "<NA>,\n       <NA>],\n      dtype='datetime64[ms]')",
+            "DatetimeIndex([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>,\n"
+            "       <NA>],\n"
+            "      dtype='datetime64[ms]')",
         ),
     ],
 )
@@ -1285,8 +1293,8 @@ def test_timedelta_dataframe_repr(df, expected_repr):
     [
         (
             cudf.Index([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
-            "TimedeltaIndex(['0 days 00:16:40', "
-            "'0 days 00:03:20', '0 days 00:50:00'], "
+            "TimedeltaIndex([0 days 00:16:40, "
+            "0 days 00:03:20, 0 days 00:50:00], "
             "dtype='timedelta64[ms]')",
         ),
         (
@@ -1728,11 +1736,16 @@ def test_repr_struct_after_concat():
 
     assert repr(df) == repr(pdf)
 
-@pytest.mark.parametrize("ser,expected_repr",[
+
+@pytest.mark.parametrize(
+    "ser,expected_repr",
+    [
         (
             cudf.Series(
                 [
-                    "1969-12-31 23:59:58.001001", "1839-12-24 03:58:56.000826", "1647-05-20 19:25:03.000638"
+                    "1969-12-31 23:59:58.001001",
+                    "1839-12-24 03:58:56.000826",
+                    "1647-05-20 19:25:03.000638",
                 ],
                 dtype="datetime64[us]",
                 index=["a", "b", "z"],
@@ -1748,15 +1761,18 @@ def test_repr_struct_after_concat():
             ),
         ),
         (
-            cudf.Series(["2499-12-01 01:00:00", "2499-11-01 01:30:00"], dtype="datetime64[s]"),
+            cudf.Series(
+                ["2499-12-01 01:00:00", "2499-11-01 01:30:00"],
+                dtype="datetime64[s]",
+            ),
             textwrap.dedent(
                 """
                 0    2499-12-01 01:00:00
                 1    2499-11-01 01:30:00
                 dtype: datetime64[s]
                 """
-            )
-        )
+            ),
+        ),
     ],
 )
 def test_datetime_series_repr(ser, expected_repr):
