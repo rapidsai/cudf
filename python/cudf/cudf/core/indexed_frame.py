@@ -1621,6 +1621,9 @@ class IndexedFrame(Frame):
         )
 
     def _split(self, splits, keep_index=True):
+        if len(self._index) == 0:
+            return []
+
         columns_split = libcudf.copying.columns_split(
             [
                 *(self._index._data.columns if keep_index else []),
