@@ -26,7 +26,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/strings/string_view.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -49,8 +49,9 @@ namespace {
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
  */
+template <typename ComparatorT>
 struct permuted_row_equality_comparator {
-  cudf::row_equality_comparator<cudf::nullate::DYNAMIC> _comparator;
+  ComparatorT const _comparator;
   cudf::size_type const* _map;
 
   /**
@@ -60,10 +61,8 @@ struct permuted_row_equality_comparator {
    * @param map The permutation map that specifies the effective ordering of
    * `t`. Must be the same size as `t.num_rows()`
    */
-  permuted_row_equality_comparator(cudf::table_device_view const& t,
-                                   cudf::size_type const* map,
-                                   bool nullable = true)
-    : _comparator(cudf::nullate::DYNAMIC{nullable}, t, t, cudf::null_equality::EQUAL), _map{map}
+  permuted_row_equality_comparator(ComparatorT const& comparator, cudf::size_type const* map)
+    : _comparator{comparator}, _map{map}
   {
   }
 
@@ -189,16 +188,19 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
-  auto device_input_table = table_device_view::create(_keys, stream);
-  auto sorted_order       = key_sort_order(stream).data<size_type>();
+  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(_keys, stream);
+  auto const comparator =
+    cudf::experimental::row::equality::self_comparator{std::move(preprocessed_keys)};
+  auto const d_key_equal = comparator.equal_to(
+    cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
+  auto sorted_order = key_sort_order(stream).data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 
-  result_end = thrust::unique_copy(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_keys(stream)),
-    _group_offsets->begin(),
-    permuted_row_equality_comparator(*device_input_table, sorted_order, has_nulls(_keys)));
+  result_end = thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::make_counting_iterator<size_type>(0),
+                                   thrust::make_counting_iterator<size_type>(num_keys(stream)),
+                                   _group_offsets->begin(),
+                                   permuted_row_equality_comparator(d_key_equal, sorted_order));
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
   _group_offsets->set_element(num_groups, num_keys(stream), stream);
