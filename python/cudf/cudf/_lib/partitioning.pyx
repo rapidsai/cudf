@@ -37,8 +37,6 @@ def partition(list source_columns, Column partition_map,
             )
         )
 
-    output_is_not_empty = c_result.first.get()[0].num_rows() > 0
     return (
-        columns_from_unique_ptr(move(c_result.first)),
-        list(c_result.second) if output_is_not_empty else list()
+        columns_from_unique_ptr(move(c_result.first)), list(c_result.second)
     )
