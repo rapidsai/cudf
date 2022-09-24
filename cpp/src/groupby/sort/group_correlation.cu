@@ -29,6 +29,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
@@ -204,6 +206,9 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                     [] __device__(auto const covariance, auto const stddev) {
                       return covariance / thrust::get<0>(stddev) / thrust::get<1>(stddev);
                     });
+
+  result->set_null_count(covariance.null_count());
+
   return result;
 }
 

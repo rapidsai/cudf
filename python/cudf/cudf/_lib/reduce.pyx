@@ -142,7 +142,10 @@ def minmax(Column incol):
     py_result_min = DeviceScalar.from_unique_ptr(move(c_result.first))
     py_result_max = DeviceScalar.from_unique_ptr(move(c_result.second))
 
-    return cudf.Scalar(py_result_min), cudf.Scalar(py_result_max)
+    return (
+        cudf.Scalar.from_device_scalar(py_result_min),
+        cudf.Scalar.from_device_scalar(py_result_max)
+    )
 
 
 def _reduce_precision(dtype, op, nrows):

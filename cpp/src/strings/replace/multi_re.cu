@@ -32,6 +32,7 @@
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
+#include <thrust/find.h>
 #include <thrust/pair.h>
 
 #include <algorithm>
@@ -144,7 +145,7 @@ std::unique_ptr<column> replace_re(
     patterns.size());
   std::transform(
     patterns.begin(), patterns.end(), h_progs.begin(), [flags, stream](auto const& ptn) {
-      return reprog_device::create(ptn, flags, stream);
+      return reprog_device::create(ptn, flags, capture_groups::NON_CAPTURE, stream);
     });
 
   // get the longest regex for the dispatcher

@@ -294,6 +294,18 @@ def read_orc(
     """{docstring}"""
     from cudf import DataFrame
 
+    if skiprows is not None:
+        warnings.warn(
+            "skiprows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
+    if num_rows is not None:
+        warnings.warn(
+            "num_rows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
     if not is_list_like(filepath_or_buffer):
@@ -395,11 +407,12 @@ def read_orc(
 def to_orc(
     df,
     fname,
-    compression=None,
+    compression="snappy",
     statistics="ROWGROUP",
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,
+    cols_as_map_type=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -422,6 +435,9 @@ def to_orc(
             "Categorical columns."
         )
 
+    if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):
+        raise TypeError("cols_as_map_type must be a list of column names.")
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
     )
@@ -436,6 +452,7 @@ def to_orc(
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
+                cols_as_map_type,
             )
     else:
         liborc.write_orc(
@@ -446,6 +463,7 @@ def to_orc(
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,
+            cols_as_map_type,
         )
 
 
