@@ -552,15 +552,15 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto make_validity = [stream,
-                        mr](d_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
+  auto make_validity =
+    [stream](d_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
     CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
     auto null_count =
       cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
-    // full null_mask always required for parse_data
+    // full null_mask is always required for parse_data
     return {json_col.validity.release(), null_count};
-    // Note: json_col modified here, reuse the memory
+    // Note: json_col modified here, moves this memory
   };
 
   auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
@@ -662,14 +662,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       break;
     }
     case json_col_t::ListColumn: {
-      size_type num_rows = json_col.child_offsets.size();
+      size_type num_rows = json_col.child_offsets.size() - 1;
       std::vector<column_name_info> column_names{};
       column_names.emplace_back("offsets");
       column_names.emplace_back(json_col.child_columns.begin()->first);
 
       // Note: json_col modified here, reuse the memory
       auto offsets_column = std::make_unique<column>(
-        data_type{type_id::INT32}, num_rows, json_col.child_offsets.release());
+        data_type{type_id::INT32}, num_rows + 1, json_col.child_offsets.release());
       // Create children column
       auto [child_column, names] =
         json_column_to_cudf_column2(json_col.child_columns.begin()->second,
@@ -680,7 +680,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                     mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {make_lists_column(num_rows - 1,
+      return {make_lists_column(num_rows,
                                 std::move(offsets_column),
                                 std::move(child_column),
                                 null_count,
