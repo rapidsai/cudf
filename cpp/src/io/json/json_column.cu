@@ -144,18 +144,19 @@ reduce_to_column_tree(tree_meta_t& tree,
     [] __device__(NodeT type_a, NodeT type_b) -> NodeT {
       auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
       auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
-      // (v+v=v, *+*=*,  *+v=*, *+#=E)
+      // (v+v=v, *+*=*,  *+v=*, *+#=E, NESTED+VAL=NESTED)
       // *+*=*, v+v=v
-      if (type_a == type_b) return type_a;
-      // v+*=*, s+v=s
-      //  STR/VAL + STRUCT/LIST = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
-      else if (is_a_leaf)
+      if (type_a == type_b) {
+        return type_a;
+      } else if (is_a_leaf) {
+        // *+v=*, N+V=N
+        // STRUCT/LIST + STR/VAL = STRUCT/LIST, STR/VAL + FN = ERR, STR/VAL + STR = STR
         return type_b == NC_FN ? NC_ERR : (is_b_leaf ? NC_STR : type_b);
-      else if (is_b_leaf)
+      } else if (is_b_leaf) {
         return type_a == NC_FN ? NC_ERR : (is_a_leaf ? NC_STR : type_a);
+      }
       // *+#=E
-      else
-        return NC_ERR;
+      return NC_ERR;
     });
   rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);

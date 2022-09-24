@@ -304,7 +304,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 tree_meta_t get_tree_representation(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -341,11 +341,14 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream);
 
-// @copydoc parse_nested_json
+/** @copydoc parse_nested_json
+ * All processing are done in device memory.
+ *
+ */
 table_with_metadata parse_nested_json2(
   host_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -360,7 +363,7 @@ table_with_metadata parse_nested_json2(
 table_with_metadata parse_nested_json(
   host_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
