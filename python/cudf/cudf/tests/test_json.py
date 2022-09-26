@@ -691,17 +691,17 @@ def test_json_types_data():
         ),
     ],
 )
-def test_json_keep_quotes(tmpdir, keep_quotes, result):
-    fname = tmpdir.mkdir("gdf_json").join("tmp_json_keep_quotes")
+def test_json_keep_quotes(keep_quotes, result):
+    bytes_file = BytesIO()
     data = {
         "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
         "c2": [["l11", "l21"], ["l12", "l22"]],
     }
     pdf = pd.DataFrame(data)
-    pdf.to_json(fname, orient="records")
+    pdf.to_json(bytes_file, orient="records")
 
     actual = cudf.read_json(
-        fname,
+        bytes_file,
         engine="cudf_experimental",
         orient="records",
         keep_quotes=keep_quotes,
