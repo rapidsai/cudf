@@ -238,7 +238,7 @@ TEST(SpanTest, CanUseDeviceSpan)
 
   auto d_span = device_span<bool>(d_message.data().get(), d_message.size());
 
-  simple_device_kernel<<<1, 1>>>(d_span);
+  simple_device_kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>(d_span);
 
   cudaDeviceSynchronize();
 
@@ -277,8 +277,8 @@ TEST(MdSpanTest, DeviceReadWrite)
 {
   auto vector = hostdevice_2dvector<int>(11, 23, cudf::default_stream_value);
 
-  readwrite_kernel<<<1, 1>>>(vector);
-  readwrite_kernel<<<1, 1>>>(vector);
+  readwrite_kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>(vector);
+  readwrite_kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>(vector);
   vector.device_to_host(cudf::default_stream_value, true);
   EXPECT_EQ(vector[5][6], 30);
 }

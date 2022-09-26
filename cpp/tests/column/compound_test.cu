@@ -66,7 +66,7 @@ struct checker_for_level2 {
 TEST_F(CompoundColumnTest, ChildrenLevel1)
 {
   rmm::device_uvector<int32_t> data(1000, cudf::default_stream_value);
-  thrust::sequence(rmm::exec_policy(), data.begin(), data.end(), 1);
+  thrust::sequence(rmm::exec_policy(cudf::default_stream_value), data.begin(), data.end(), 1);
 
   auto null_mask = cudf::create_null_mask(100, cudf::mask_state::UNALLOCATED);
   rmm::device_buffer data1{data.data() + 100, 100 * sizeof(int32_t), cudf::default_stream_value};
@@ -105,14 +105,14 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
 
   {
     auto column = cudf::column_device_view::create(parent->view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level1<cudf::column_device_view>{*column}));
   }
   {
     auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level1<cudf::mutable_column_device_view>{*column}));
@@ -122,7 +122,7 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
 TEST_F(CompoundColumnTest, ChildrenLevel2)
 {
   rmm::device_uvector<int32_t> data(1000, cudf::default_stream_value);
-  thrust::sequence(rmm::exec_policy(), data.begin(), data.end(), 1);
+  thrust::sequence(rmm::exec_policy(cudf::default_stream_value), data.begin(), data.end(), 1);
 
   auto null_mask = cudf::create_null_mask(100, cudf::mask_state::UNALLOCATED);
   rmm::device_buffer data11{data.data() + 100, 100 * sizeof(int32_t), cudf::default_stream_value};
@@ -202,14 +202,14 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
 
   {
     auto column = cudf::column_device_view::create(parent->view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level2<cudf::column_device_view>{*column}));
   }
   {
     auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level2<cudf::mutable_column_device_view>{*column}));
