@@ -744,6 +744,7 @@ struct JsonTreeTraversalTest : public cudf::test::BaseFixture,
 
 //
 std::vector<std::string> json_list = {
+  "[]",
   "value",
   "\"string\"",
   "[1, 2, 3]",
@@ -767,6 +768,7 @@ std::vector<std::string> json_list = {
 
 std::vector<std::string> json_lines_list = {
   // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i} with JSON-lines
+  "",
   R"(  {}
  { "a": { "y" : 6, "z": [] }}
  { "a": { "y" : 6, "z": [2, 3, 4, 5] }}

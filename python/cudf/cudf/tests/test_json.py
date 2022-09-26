@@ -603,6 +603,8 @@ def test_json_nested_basic(tmpdir):
             "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
             "c2": [["l11", "l21"], []],
         },
+        # empty input
+        {}
     ],
 )
 def test_json_nested_lines(data):
