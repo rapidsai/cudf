@@ -122,9 +122,7 @@ struct PageInfo {
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
-  // indicator.  instead the lengths for these are stored in the header.  for V1 we'll parse
-  // out the lengths and set them here, and set the pointers after decompressing.  for V2
-  // we'll have to allocate extra space in the buffer for decompression and copy the data.
+  // indicator. instead the lengths for these are stored in the header.
   uint8_t* def_lvl_data;  // uncompressed but packed definition level data pointer
   uint8_t* rep_lvl_data;  // uncompressed but packed repetition level data pointer
   int32_t def_lvl_bytes;  // length of the definition levels (V2 header)

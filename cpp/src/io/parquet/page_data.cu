@@ -146,7 +146,7 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
   } else if (encoding == Encoding::RLE) {
-    // only need to check for V2 pages here, since V2 only uses RLE encoding
+    // V2 only uses RLE encoding, so only perform check here
     if (s->page.hdr_version == 2) {
       len = 0;
       cur = lvl == level_type::DEFINITION ? s->page.def_lvl_data : s->page.rep_lvl_data;
@@ -162,9 +162,10 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
     } else {
+      len      = 0;
       s->error = 2;
     }
-    if (s->error != 2) {
+    if (!s->error) {
       uint32_t run            = get_vlq32(cur, end);
       s->initial_rle_run[lvl] = run;
       if (!(run & 1)) {
@@ -874,10 +875,10 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
     // if (s->page.num_input_values > 0 && s->page.num_rows > 0) {
     if (s->page.num_input_values > 0) {
       uint8_t* cur = s->page.page_data;
-      uint8_t* end = cur + s->page.uncompressed_page_size;
-      if (s->page.hdr_version == 2) {
-        end -= s->page.def_lvl_bytes + s->page.rep_lvl_bytes;
-      }
+      // uncompressed_page_size includes v2 level lengths, so subtract them. they
+      // will be 0 for v1 pages.
+      uint8_t* end =
+        cur + (s->page.uncompressed_page_size - s->page.def_lvl_bytes - s->page.rep_lvl_bytes);
 
       uint32_t dtype_len_out = s->col.data_type >> 3;
       s->ts_scale            = 0;
@@ -1017,6 +1018,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
       }
       if (cur > end) { s->error = 1; }
+      // if V1 header, set lvl_end here
       if (s->lvl_end == nullptr) { s->lvl_end = cur; }
       s->data_start = cur;
       s->data_end   = end;
