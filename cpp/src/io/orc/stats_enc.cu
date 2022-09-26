@@ -281,7 +281,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 sum = 3; // sum will store the total length of all strings
         // }
         if (s->chunk.has_minmax && s->chunk.has_sum) {
-          uint32_t sz = (pb_put_uint(cur, 3, s->chunk.sum.i_val) - cur) +
+          uint32_t sz = (pb_put_int(cur, 3, s->chunk.sum.i_val) - cur) +
                         (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur) +
                         (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur) +
                         s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
@@ -291,7 +291,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
           cur = pb_put_binary(
             cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
-          cur = pb_put_uint(cur, 3, s->chunk.sum.i_val);
+          cur = pb_put_int(cur, 3, s->chunk.sum.i_val);
         }
         break;
       case dtype_bool:

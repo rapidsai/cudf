@@ -39,7 +39,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike, NotImplementedType
+from cudf._typing import ColumnLike, Dtype, NotImplementedType
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -1057,7 +1057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(self._dtypes)
+        return pd.Series(self._dtypes, dtype="object")
 
     @property
     def ndim(self):
@@ -6536,9 +6536,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns: List[ColumnBase],
         column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
-            columns, column_names, index_names
+            columns,
+            column_names,
+            index_names,
+            override_dtypes=override_dtypes,
         )
         result._set_column_names_like(self)
         return result
@@ -6972,7 +6977,7 @@ def from_pandas(obj, nan_as_null=None):
 
     Converting a Pandas Series to cuDF Series:
 
-    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple', dtype='str')
     >>> psr
     0    a
     1    b

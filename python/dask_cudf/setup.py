@@ -4,9 +4,8 @@ import os
 import re
 import shutil
 
-from setuptools import find_packages, setup
-
 import versioneer
+from setuptools import find_packages, setup
 
 install_requires = [
     "cudf",
@@ -14,13 +13,13 @@ install_requires = [
     "distributed>=2022.7.1",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.5.0dev0",
+    "pandas>=1.0,<1.6.0dev0",
 ]
 
 extras_require = {
     "test": [
         "numpy",
-        "pandas>=1.0,<1.5.0dev0",
+        "pandas>=1.0,<1.6.0dev0",
         "pytest",
         "numba>=0.56.2",
         "dask>=2021.09.1",

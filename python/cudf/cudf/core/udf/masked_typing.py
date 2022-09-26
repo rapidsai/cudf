@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import operator
+from typing import Any, Dict
 
 from numba import types
 from numba.core.extending import (
@@ -26,6 +27,12 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
+from cudf.utils.dtypes import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    STRING_TYPES,
+    TIMEDELTA_TYPES,
+)
 
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
@@ -34,7 +41,49 @@ SUPPORTED_NUMBA_TYPES = (
     types.NPTimedelta,
 )
 
+SUPPORTED_NUMPY_TYPES = (
+    NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
+)
+supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
+MASKED_INIT_MAP: Dict[Any, Any] = {}
 
+
+def _format_error_string(err):
+    """
+    Wrap an error message in newlines and color it red.
+    """
+    return "\033[91m" + "\n" + err + "\n" + "\033[0m"
+
+
+def _type_to_masked_type(t):
+    result = MASKED_INIT_MAP.get(t)
+    if result is None:
+        if isinstance(t, SUPPORTED_NUMBA_TYPES):
+            return t
+        else:
+            # Unsupported Dtype. Numba tends to print out the type info
+            # for whatever operands and operation failed to type and then
+            # output its own error message. Putting the message in the repr
+            # then is one way of getting the true cause to the user
+            err = _format_error_string(
+                "Unsupported MaskedType. This is usually caused by "
+                "attempting to use a column of unsupported dtype in a UDF. "
+                f"Supported dtypes are:\n{supported_type_str}"
+            )
+            return types.Poison(err)
+    else:
+        return result
+
+
+MASKED_INIT_MAP[types.pyobject] = types.Poison(
+    _format_error_string(
+        "strings_udf library required for usage of string dtypes "
+        "inside user defined functions."
+    )
+)
+
+
+# Masked scalars of all types
 class MaskedType(types.Type):
     """
     A Numba type consisting of a value of some primitive type
@@ -44,19 +93,8 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if isinstance(value, SUPPORTED_NUMBA_TYPES):
-            self.value_type = value
-        else:
-            # Unsupported Dtype. Numba tends to print out the type info
-            # for whatever operands and operation failed to type and then
-            # output its own error message. Putting the message in the repr
-            # then is one way of getting the true cause to the user
-            self.value_type = types.Poison(
-                "\n\n\n Unsupported MaskedType. This is usually caused by "
-                "attempting to use a column of unsupported dtype in a UDF. "
-                f"Supported dtypes are {SUPPORTED_NUMBA_TYPES}"
-            )
-        super().__init__(name=f"Masked{self.value_type}")
+        self.value_type = _type_to_masked_type(value)
+        super().__init__(name=f"Masked({self.value_type})")
 
     def __hash__(self):
         """
@@ -131,44 +169,35 @@ def typeof_masked(val, c):
 
 # Implemented typing for Masked(value, valid) - the construction of a Masked
 # type in a kernel.
-@cuda_decl_registry.register
-class MaskedConstructor(ConcreteTemplate):
-    key = api.Masked
-    units = ["ns", "ms", "us", "s"]
-    datetime_cases = {types.NPDatetime(u) for u in units}
-    timedelta_cases = {types.NPTimedelta(u) for u in units}
-    cases = [
-        nb_signature(MaskedType(t), t, types.boolean)
-        for t in (
-            types.integer_domain
-            | types.real_domain
-            | datetime_cases
-            | timedelta_cases
-            | {types.boolean}
-        )
-    ]
+def register_masked_constructor(supported_masked_types):
+    class MaskedConstructor(ConcreteTemplate):
+        key = api.Masked
+        cases = [
+            nb_signature(MaskedType(t), t, types.boolean)
+            for t in supported_masked_types
+        ]
+
+    cuda_decl_registry.register(MaskedConstructor)
+
+    # Typing for `api.Masked`
+    @cuda_decl_registry.register_attr
+    class ClassesTemplate(AttributeTemplate):
+        key = types.Module(api)
+
+        def resolve_Masked(self, mod):
+            return types.Function(MaskedConstructor)
+
+    # Registration of the global is also needed for Numba to type api.Masked
+    cuda_decl_registry.register_global(api, types.Module(api))
+    # For typing bare Masked (as in `from .api import Masked`
+    cuda_decl_registry.register_global(
+        api.Masked, types.Function(MaskedConstructor)
+    )
 
 
 # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
 make_attribute_wrapper(MaskedType, "value", "value")
 make_attribute_wrapper(MaskedType, "valid", "valid")
-
-
-# Typing for `api.Masked`
-@cuda_decl_registry.register_attr
-class ClassesTemplate(AttributeTemplate):
-    key = types.Module(api)
-
-    def resolve_Masked(self, mod):
-        return types.Function(MaskedConstructor)
-
-
-# Registration of the global is also needed for Numba to type api.Masked
-cuda_decl_registry.register_global(api, types.Module(api))
-# For typing bare Masked (as in `from .api import Masked`
-cuda_decl_registry.register_global(
-    api.Masked, types.Function(MaskedConstructor)
-)
 
 
 # Tell numba how `MaskedType` is constructed on the backend in terms
