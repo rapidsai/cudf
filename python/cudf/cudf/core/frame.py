@@ -1266,7 +1266,7 @@ class Frame(BinaryOperand, Scannable):
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.isna()
-        GenericIndex([False, False, True, True, False, False], dtype='bool')
+        array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
@@ -1345,7 +1345,7 @@ class Frame(BinaryOperand, Scannable):
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.notna()
-        GenericIndex([True, True, False, False, True, True], dtype='bool')
+        array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
