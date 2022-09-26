@@ -147,7 +147,7 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->lvl_start[lvl]         = cur;
   } else if (encoding == Encoding::RLE) {
     // V2 only uses RLE encoding, so only perform check here
-    if (s->page.hdr_version == 2) {
+    if (s->page.def_lvl_bytes || s->page.rep_lvl_bytes) {
       len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
     } else if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);

@@ -125,7 +125,6 @@ struct PageInfo {
   // indicator. instead the lengths for these are stored in the header.
   int32_t def_lvl_bytes;  // length of the definition levels (V2 header)
   int32_t rep_lvl_bytes;  // length of the repetition levels (V2 header)
-  int32_t hdr_version;    // 1 for v1, 2 for v2
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
