@@ -388,11 +388,10 @@ class ParquetSizedTest : public ::testing::TestWithParam<int> {
 
 // test the allowed bit widths for dictionary encoding
 // values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
-INSTANTIATE_TEST_SUITE_P(
-  ParquetDictionaryTest,
-  ParquetSizedTest,
-  testing::Values(2, 4, 8, 16, 32, 64, 256, 1024, 4096, 65536, 128 * 1024, 2 * 1024 * 1024),
-  testing::PrintToStringParamName());
+INSTANTIATE_TEST_SUITE_P(ParquetDictionaryTest,
+                         ParquetSizedTest,
+                         testing::Range(1, 25),
+                         testing::PrintToStringParamName());
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -4594,30 +4593,29 @@ TEST_F(ParquetReaderTest, StructByteArray)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TEST_P(ParquetSizedTest, DictionaryTest)
+TEST_F(ParquetWriterTest, SingleValueDictionaryTest)
 {
-  constexpr int nrows = 3'000'000;
+  constexpr unsigned int expected_bits = 1;
+  constexpr unsigned int nrows         = 1'000'000U;
 
-  auto elements       = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    return "a unique string value suffixed with " + std::to_string(i % GetParam());
-  });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return "a unique string value suffixed with 1"; });
   auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
 
-  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  auto const filepath = temp_env->get_temp_filepath("SingleValueDictionaryTest.parquet");
   // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .row_group_size_rows(nrows)
-      .row_group_size_bytes(256 * 1024 * 1024);
+      .row_group_size_rows(nrows);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
-  auto const result = cudf_io::read_parquet(default_in_opts);
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
@@ -4640,16 +4638,57 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   // and check that the correct number of bits was used
   auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
   auto const nbits = read_dict_bits(source, oi.page_locations[0]);
-  auto const expected_bits =
-    cudf::io::parquet::CompactProtocolReader::NumRequiredBits(GetParam() - 1);
+  EXPECT_EQ(nbits, expected_bits);
+}
 
-  // copied from writer_impl.cu
-  constexpr auto allowed_bitsizes =
-    std::array<cudf::size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
-  auto const rle_bits =
-    *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), expected_bits);
+TEST_P(ParquetSizedTest, DictionaryTest)
+{
+  const unsigned int cardinality = (1 << (GetParam() - 1)) + 1;
+  const unsigned int nrows       = std::max(cardinality * 3 / 2, 3'000'000U);
 
-  EXPECT_EQ(nbits, rle_bits);
+  auto elements       = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
+    return "a unique string value suffixed with " + std::to_string(i % cardinality);
+  });
+  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("DictionaryTest.parquet");
+  // set row group size so that there will be only one row group
+  // no compression so we can easily read page data
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::NONE)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .row_group_size_rows(nrows)
+      .row_group_size_bytes(512 * 1024 * 1024);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  // make sure dictionary was used
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+  auto used_dict = [&fmd]() {
+    for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
+      if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+          enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
+        return true;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(used_dict());
+
+  // and check that the correct number of bits was used
+  auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
+  auto const nbits = read_dict_bits(source, oi.page_locations[0]);
+  EXPECT_EQ(nbits, GetParam());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
