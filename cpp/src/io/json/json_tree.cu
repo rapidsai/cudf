@@ -143,7 +143,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   // Whether the token pops from the parent node stack
-  auto does_pop = [] __device__(PdaTokenT const token) {
+  auto does_pop = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructMemberEnd:
       case token_t::StructEnd:
@@ -153,7 +153,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   // Whether the token pushes onto the parent node stack
-  auto does_push = [] __device__(PdaTokenT const token) {
+  auto does_push = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::FieldNameBegin:
       case token_t::StructBegin:
@@ -182,7 +182,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                "node category count mismatch");
 
   // Node levels: transform_exclusive_scan, copy_if.
-  rmm::device_uvector<size_type> token_levels(num_tokens, stream);
+  rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
   auto push_pop_it = thrust::make_transform_iterator(
     tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
       return does_push(token) - does_pop(token);
@@ -225,6 +225,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // TODO: make it own function.
   rmm::device_uvector<size_type> parent_token_ids(num_tokens, stream);
   rmm::device_uvector<size_type> initial_order(num_tokens, stream);
+  // TODO re-write the algorithm to work only on nodes, not tokens.
 
   thrust::sequence(rmm::exec_policy(stream), initial_order.begin(), initial_order.end());
   thrust::tabulate(rmm::exec_policy(stream),
@@ -250,15 +251,18 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                 parent_token_ids.data(),
                                 thrust::equal_to<size_type>{},
                                 thrust::maximum<size_type>{});
-  // Reusing token_levels memory & use scatter to restore the original order.
 
-  std::swap(token_levels, parent_token_ids);
-  auto& sorted_parent_token_ids = token_levels;
-  thrust::scatter(rmm::exec_policy(stream),
-                  sorted_parent_token_ids.begin(),
-                  sorted_parent_token_ids.end(),
-                  initial_order.data(),
-                  parent_token_ids.data());
+  // scatter to restore the original order.
+  {
+    rmm::device_uvector<size_type> temp_storage(num_tokens, stream);
+    thrust::scatter(rmm::exec_policy(stream),
+                    parent_token_ids.begin(),
+                    parent_token_ids.end(),
+                    initial_order.begin(),
+                    temp_storage.begin());
+    thrust::copy(
+      rmm::exec_policy(stream), temp_storage.begin(), temp_storage.end(), parent_token_ids.begin());
+  }
 
   rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
   thrust::exclusive_scan(
@@ -349,6 +353,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
     auto it = key_map.find(node_id, d_hasher, d_equal);
     return (it == key_map.end()) ? size_type{0} : it->second.load(cuda::std::memory_order_relaxed);
   };
+
   // convert field nodes to node indices, and other nodes to enum value.
   rmm::device_uvector<size_type> node_type(num_nodes, stream);
   thrust::tabulate(rmm::exec_policy(stream),
@@ -378,6 +383,7 @@ rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
   device_span<NodeIndexT const> parent_node_ids,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   auto const num_nodes      = scatter_indices.size();
   auto const gather_indices = cudf::detail::scatter_to_gather(
     scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
@@ -457,6 +463,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
     // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
     // we need to split to 2 Radix sorts.
     // Secondary sort on node_type
+
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream),
       node_type.data() + level_boundaries[level - 1],
@@ -493,6 +500,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                            col_id.data() + level_boundaries[level] + (level != num_levels - 1),
                            // +1 only for not-last-levels, for next level start col_id
                            col_id.data() + level_boundaries[level - 1]);
+
     // scatter to restore original order.
     auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
     {
