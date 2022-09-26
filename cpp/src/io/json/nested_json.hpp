@@ -342,7 +342,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                       rmm::cuda_stream_view stream);
 
 /** @copydoc parse_nested_json
- * All processing are done in device memory.
+ * All processing is done in device memory.
  *
  */
 table_with_metadata parse_nested_json2(

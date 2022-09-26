@@ -266,10 +266,10 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
                     d_offset_pairs,
                     d_offset_pairs + num_strings,
                     string_views.begin(),
-                    [input] __device__(auto const& offsets) {
+                    [data = input.data()] __device__(auto const& offsets) {
                       // Note: first character for non-field columns
                       return thrust::make_pair(
-                        input.data() + thrust::get<0>(offsets),
+                        data + thrust::get<0>(offsets),
                         static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
                     });
   auto d_column_names = cudf::make_strings_column(string_views, stream);
@@ -417,7 +417,7 @@ void make_json_column2(device_span<SymbolT const> input,
     CUDF_EXPECTS(it != columns.end(), "Parent column not found");
     auto& parent_col = it->second.get();
     bool replaced    = false;
-    if (mapped_columns.count({parent_col_id, name})) {
+    if (mapped_columns.count({parent_col_id, name}) > 0) {
       if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
         ignore_vals[this_col_id] = 1;
         continue;
@@ -758,6 +758,12 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =
     new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
+
+  // Zero row entries
+  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
+    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
+                               {{}, std::vector<column_name_info>{}}};
+  }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;
