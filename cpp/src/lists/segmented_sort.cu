@@ -46,6 +46,17 @@ namespace lists {
 namespace detail {
 
 struct SegmentedSortColumn {
+  /**
+   * @brief Compile time check for allowing radix sort for column type.
+   *
+   * Floating point is not included here because of the special handling of NaNs.
+   */
+  template <typename T>
+  static constexpr bool is_radix_sort_supported()
+  {
+    return std::is_integral<T>();
+  }
+
   template <typename KeyT, typename ValueT, typename OffsetIteratorT>
   void SortPairsAscending(KeyT const* keys_in,
                           KeyT* keys_out,
@@ -133,7 +144,7 @@ struct SegmentedSortColumn {
   }
 
   template <typename T>
-  std::enable_if_t<not is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<not is_radix_sort_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
     column_view const& segment_offsets,
     order column_order,
@@ -152,7 +163,7 @@ struct SegmentedSortColumn {
   }
 
   template <typename T>
-  std::enable_if_t<is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_radix_sort_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
     column_view const& offsets,
     order column_order,
@@ -253,14 +264,14 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                     });
   // for numeric columns, calls Faster segmented radix sort path
   // for non-numeric columns, calls segmented_sort_by_key.
-  auto output_child = type_dispatcher(input.child().type(),
-                                      SegmentedSortColumn{},
-                                      input.get_sliced_child(stream),
-                                      output_offset->view(),
-                                      column_order,
-                                      null_precedence,
-                                      stream,
-                                      mr);
+  auto output_child = type_dispatcher<dispatch_storage_type>(input.child().type(),
+                                                             SegmentedSortColumn{},
+                                                             input.get_sliced_child(stream),
+                                                             output_offset->view(),
+                                                             column_order,
+                                                             null_precedence,
+                                                             stream,
+                                                             mr);
 
   auto null_mask = cudf::detail::copy_bitmask(input.parent(), stream, mr);
 
