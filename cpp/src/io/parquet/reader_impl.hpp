@@ -69,11 +69,18 @@ class reader::impl {
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+   * bounds
    * @param row_group_indices Lists of row groups to read, one per source
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(std::vector<std::vector<size_type>> const& row_group_indices);
+  table_with_metadata read(size_type skip_rows,
+                           size_type num_rows,
+                           bool uses_custom_row_bounds,
+                           std::vector<std::vector<size_type>> const& row_group_indices);
 
  private:
   /**
@@ -152,13 +159,18 @@ class reader::impl {
    *
    * @param chunks All chunks to be decoded
    * @param pages All pages to be decoded
-   * @param num_rows The number of rows to be decoded
+   * @param min_rows crop all rows below min_row
+   * @param total_rows Maximum number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
+   * bounds
    * @param has_lists Whether or not this data contains lists and requires
    * a preprocess.
    */
   void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                           hostdevice_vector<gpu::PageInfo>& pages,
-                          size_t num_rows,
+                          size_t min_row,
+                          size_t total_rows,
+                          bool uses_custom_row_bounds,
                           bool has_lists);
 
   /**
@@ -167,11 +179,13 @@ class reader::impl {
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
    * @param page_nesting Page nesting array
+   * @param min_row Minimum number of rows from start
    * @param total_rows Number of rows to output
    */
   void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
                         hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
+                        size_t min_row,
                         size_t total_rows);
 
  private:

@@ -203,6 +203,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
   // from device. unique_ptr which gets automatically cleaned up when we leave.
   auto out_view = out->mutable_view();
   normalize_nans_and_zeros(out_view, stream);
+  out->set_null_count(input.null_count());
 
   return out;
 }

@@ -67,6 +67,7 @@ class DLPackUntypedTests : public BaseFixture {
 TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
 {
   cudf::table_view empty(std::vector<cudf::column_view>{});
+  // No type information to construct a correct empty dlpack object
   EXPECT_EQ(nullptr, cudf::to_dlpack(empty));
 }
 
@@ -75,7 +76,18 @@ TEST_F(DLPackUntypedTests, EmptyColsToDlpack)
   fixed_width_column_wrapper<int32_t> col1({});
   fixed_width_column_wrapper<int32_t> col2({});
   cudf::table_view input({col1, col2});
-  EXPECT_EQ(nullptr, cudf::to_dlpack(input));
+  unique_managed_tensor tensor(cudf::to_dlpack(input));
+  validate_dtype<int32_t>(tensor->dl_tensor.dtype);
+  EXPECT_NE(nullptr, tensor);
+  EXPECT_EQ(nullptr, tensor->dl_tensor.data);
+  EXPECT_EQ(2, tensor->dl_tensor.ndim);
+  EXPECT_EQ(0, tensor->dl_tensor.strides[0]);
+  EXPECT_EQ(0, tensor->dl_tensor.strides[1]);
+  EXPECT_EQ(0, tensor->dl_tensor.shape[0]);
+  EXPECT_EQ(2, tensor->dl_tensor.shape[1]);
+  EXPECT_EQ(kDLCUDA, tensor->dl_tensor.device.device_type);
+  auto result = cudf::from_dlpack(tensor.get());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
 
 TEST_F(DLPackUntypedTests, NullTensorFromDlpack)
@@ -481,6 +493,6 @@ TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
   cudf::table_view input(std::vector<cudf::column_view>{});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
-  // Verify that from_dlpack(to_dlpack(input)) == input
+  EXPECT_EQ(nullptr, tensor.get());
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }

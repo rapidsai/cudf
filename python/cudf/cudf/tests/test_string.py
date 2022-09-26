@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.testing._utils import (
@@ -872,6 +872,34 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
         got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "pat,esc,expect",
+    [
+        ("abc", "", [True, False, False, False, False, False]),
+        ("b%", "/", [False, True, False, False, False, False]),
+        ("%b", ":", [False, True, False, False, False, False]),
+        ("%b%", "*", [True, True, False, False, False, False]),
+        ("___", "", [True, True, True, False, False, False]),
+        ("__/%", "/", [False, False, True, False, False, False]),
+        ("55/____", "/", [False, False, False, True, False, False]),
+        ("%:%%", ":", [False, False, True, False, False, False]),
+        ("55*_100", "*", [False, False, False, True, False, False]),
+        ("abc", "abc", [True, False, False, False, False, False]),
+    ],
+)
+def test_string_like(pat, esc, expect):
+
+    expectation = does_not_raise()
+    if len(esc) > 1:
+        expectation = pytest.raises(ValueError)
+
+    with expectation:
+        gs = cudf.Series(["abc", "bab", "99%", "55_100", "", "556100"])
+        got = gs.str.like(pat, esc)
+        expect = cudf.Series(expect)
+        assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1737,8 +1765,14 @@ def test_strings_filling_tests(data, width, fillchar):
     [
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
-        ["+23", "³", "⅕", ""],
-        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["³", "⅕", ""],
+        pytest.param(
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/20868",
+            ),
+        ),
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
@@ -1979,10 +2013,32 @@ def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    assert_eq(
-        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
-    )
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
+    if pat is None:
+        assert_exceptions_equal(
+            lfunc=ps.str.startswith,
+            rfunc=gs.str.startswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+        assert_exceptions_equal(
+            lfunc=ps.str.endswith,
+            rfunc=gs.str.endswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+    else:
+        assert_eq(
+            ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+        )
+        assert_eq(
+            ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False
+        )
 
 
 @pytest.mark.parametrize(

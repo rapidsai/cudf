@@ -327,7 +327,7 @@ class spark_murmur_device_row_hasher {
                                                 size_type row_index) const noexcept
     {
       column_device_view curr_col = col.slice(row_index, 1);
-      while (is_nested(curr_col.type())) {
+      while (curr_col.type().id() == type_id::STRUCT || curr_col.type().id() == type_id::LIST) {
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return _seed; }
           // Non-empty structs are assumed to be decomposed and contain only one child

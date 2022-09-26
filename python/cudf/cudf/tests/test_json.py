@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -575,12 +576,6 @@ def test_default_float_bitwidth(default_float_bitwidth):
     assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
 
 
-def test_json_experimental():
-    # should raise an exception, for now
-    with pytest.raises(RuntimeError):
-        cudf.read_json("", engine="cudf_experimental")
-
-
 def test_json_nested_basic(tmpdir):
     fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_basic")
     data = {
@@ -594,3 +589,74 @@ def test_json_nested_basic(tmpdir):
     pdf = pd.read_json(fname, orient="records")
 
     assert_eq(pdf, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+            "c2": [["l11", "l21"], ["l12", "l22"]],
+        },
+        # Essential test case to handle omissions
+        {
+            "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
+            "c2": [["l11", "l21"], []],
+        },
+    ],
+)
+def test_json_nested_lines(data):
+    bytes = BytesIO()
+    pdf = pd.DataFrame(data)
+    pdf.to_json(bytes, orient="records", lines=True)
+    bytes.seek(0)
+    df = cudf.read_json(
+        bytes, engine="cudf_experimental", orient="records", lines=True
+    )
+    bytes.seek(0)
+    pdf = pd.read_json(bytes, orient="records", lines=True)
+    # In the second test-case we need to take a detour via pyarrow
+    # Pandas omits "f1" in first row, so we have to enforce a common schema,
+    # such that pandas would have the f1 member with null
+    # Also, pyarrow chooses to select different ordering of a nested column
+    # children though key-value pairs are correct.
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
+
+
+def test_json_nested_data():
+    json_str = (
+        '[{"0":{},"2":{}},{"1":[[""],[]],"2":{"2":""}},'
+        '{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
+    )
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
+    pdf = pd.read_json(StringIO(json_str), orient="records")
+    pdf.columns = pdf.columns.astype("str")
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
+
+
+def test_json_types_data():
+    # 0:<0:string,1:float>
+    # 1:list<int>
+    # 2:<0:bool>
+    json_str = (
+        '[{"0":null,"2":{}},'
+        '{"1":[123],"0":{"0":"foo","1":123.4},"2":{"0":false}},'
+        '{"0":{},"1":[],"2":{"0":null}}]'
+    )
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
+    pdf = pd.read_json(StringIO(json_str), orient="records")
+    pdf.columns = pdf.columns.astype("str")
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)

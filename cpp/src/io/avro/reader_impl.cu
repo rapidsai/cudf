@@ -164,7 +164,11 @@ rmm::device_buffer decompress_data(datasource& source,
   if (meta.codec == "deflate") {
     auto inflate_in = hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
     auto inflate_out   = hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
-    auto inflate_stats = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
+    auto inflate_stats = hostdevice_vector<compression_result>(meta.block_list.size(), stream);
+    thrust::fill(rmm::exec_policy(stream),
+                 inflate_stats.d_begin(),
+                 inflate_stats.d_end(),
+                 compression_result{0, compression_status::FAILURE});
 
     // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
     // and round up to the next multiple of 4096 bytes.
@@ -190,8 +194,6 @@ rmm::device_buffer decompress_data(datasource& source,
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
       inflate_out.host_to_device(stream);
-      CUDF_CUDA_TRY(cudaMemsetAsync(
-        inflate_stats.device_ptr(), 0, inflate_stats.memory_size(), stream.value()));
       gpuinflate(inflate_in, inflate_out, inflate_stats, gzip_header_included::NO, stream);
       inflate_stats.device_to_host(stream, true);
 
@@ -204,9 +206,9 @@ rmm::device_buffer decompress_data(datasource& source,
                        inflate_stats.begin(),
                        std::back_inserter(actual_uncomp_sizes),
                        [](auto const& inf_out, auto const& inf_stats) {
-                         // If error status is 1 (buffer too small), the `bytes_written` field
+                         // If error status is OUTPUT_OVERFLOW, the `bytes_written` field
                          // actually contains the uncompressed data size
-                         return inf_stats.status == 1
+                         return inf_stats.status == compression_status::OUTPUT_OVERFLOW
                                   ? std::max(inf_out.size(), inf_stats.bytes_written)
                                   : inf_out.size();
                        });
