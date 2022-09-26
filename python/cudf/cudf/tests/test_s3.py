@@ -187,7 +187,9 @@ def test_read_csv_byte_range(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             byte_range=(74, 73),
-            bytes_per_thread=bytes_per_thread if not use_python_file_object else None,
+            bytes_per_thread=bytes_per_thread
+            if not use_python_file_object
+            else None,
             header=None,
             names=["Integer", "Float", "Integer2", "String", "Boolean"],
             use_python_file_object=use_python_file_object,
