@@ -1712,10 +1712,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   return {};
 }
 
-table_with_metadata parse_nested_json(host_span<SymbolT const> input,
-                                      cudf::io::json_reader_options const& options,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();

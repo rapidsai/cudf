@@ -324,13 +324,13 @@ struct json_column_data {
  * @param mr Device memory resource used to allocate the device memory
  * of child_offets and validity members of `d_json_column`
  */
-void make_json_column2(device_span<SymbolT const> input,
-                       tree_meta_t& tree,
-                       device_span<NodeIndexT> col_ids,
-                       device_span<size_type> row_offsets,
-                       d_json_column& root,
-                       rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+void make_device_json_column(device_span<SymbolT const> input,
+                             tree_meta_t& tree,
+                             device_span<NodeIndexT> col_ids,
+                             device_span<size_type> row_offsets,
+                             device_json_column& root,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   // 1. gather column information.
@@ -388,7 +388,7 @@ void make_json_column2(device_span<SymbolT const> input,
   });
 
   // use hash map because we may skip field name's col_ids
-  std::unordered_map<NodeIndexT, std::reference_wrapper<d_json_column>> columns;
+  std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>> columns;
   // map{parent_col_id, child_col_name}> = child_col_id, used for null value column tracking
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   // find column_ids which are values, but should be ignored in validity
@@ -443,7 +443,7 @@ void make_json_column2(device_span<SymbolT const> input,
     }
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name");
     // move into parent
-    d_json_column col(stream, mr);
+    device_json_column col(stream, mr);
     initialize_json_columns(this_col_id, col);
     auto inserted = parent_col.child_columns.try_emplace(name, std::move(col)).second;
     CUDF_EXPECTS(inserted, "child column insertion failed, duplicate column name in the parent");
@@ -571,8 +571,8 @@ void make_json_column2(device_span<SymbolT const> input,
  */
 cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options);
 
-std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to_cudf_column2(
-  d_json_column& json_col,
+std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
+  device_json_column& json_col,
   device_span<SymbolT const> d_input,
   cudf::io::json_reader_options const& options,
   std::optional<schema_element> schema,
@@ -581,7 +581,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 {
   CUDF_FUNC_RANGE();
   auto make_validity =
-    [stream](d_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
+    [stream](device_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
     CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
     auto null_count =
@@ -661,10 +661,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         return {std::move(col), {{"offsets"}, {"chars"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
-      else {
-        return {std::move(col), {}};
-      }
-      break;
+      return {std::move(col), {}};
     }
     case json_col_t::StructColumn: {
       std::vector<std::unique_ptr<column>> child_columns;
@@ -675,7 +672,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         auto const& col = json_col.child_columns.find(col_name);
         column_names.emplace_back(col->first);
         auto& child_col            = col->second;
-        auto [child_column, names] = json_column_to_cudf_column2(
+        auto [child_column, names] = device_json_column_to_cudf_column(
           child_col, d_input, options, get_child_schema(col_name), stream, mr);
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
@@ -687,7 +684,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         make_structs_column(
           num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
         column_names};
-      break;
     }
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size() - 1;
@@ -700,12 +696,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         data_type{type_id::INT32}, num_rows + 1, json_col.child_offsets.release());
       // Create children column
       auto [child_column, names] =
-        json_column_to_cudf_column2(json_col.child_columns.begin()->second,
-                                    d_input,
-                                    options,
-                                    get_child_schema(json_col.child_columns.begin()->first),
-                                    stream,
-                                    mr);
+        device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
+                                          d_input,
+                                          options,
+                                          get_child_schema(json_col.child_columns.begin()->first),
+                                          stream,
+                                          mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows,
@@ -716,21 +712,17 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                 stream,
                                 mr),
               std::move(column_names)};
-      break;
     }
-    default: CUDF_FAIL("Unsupported column type, yet to be implemented"); break;
+    default: CUDF_FAIL("Unsupported column type"); break;
   }
-
-  return {};
 }
 
-table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
-                                       cudf::io::json_reader_options const& options,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
+                                             cudf::io::json_reader_options const& options,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
@@ -741,11 +733,13 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
     // gpu tree generation
     return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   }();  // IILE used to free memory of token data.
-  // print_tree(input, gpu_tree, stream);
+#ifdef NJP_DEBUG_PRINT
+  print_tree(input, gpu_tree, stream);
+#endif
 
   auto [gpu_col_id, gpu_row_offsets] = records_orient_tree_traversal(d_input, gpu_tree, stream);
 
-  d_json_column root_column(stream, mr);
+  device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
   thrust::fill(rmm::exec_policy(stream),
@@ -754,11 +748,11 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
                0);
 
   // Get internal JSON column
-  make_json_column2(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream, mr);
+  make_device_json_column(d_input, gpu_tree, gpu_col_id, gpu_row_offsets, root_column, stream, mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =
-    new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
+    options.is_enabled_lines() ? root_column : root_column.child_columns.begin()->second;
 
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
@@ -829,8 +823,8 @@ table_with_metadata parse_nested_json2(host_span<SymbolT const> input,
 #endif
 
     // Get this JSON column's cudf column and schema info, (modifies json_col)
-    auto [cudf_col, col_name_info] =
-      json_column_to_cudf_column2(json_col, d_input, options, child_schema_element, stream, mr);
+    auto [cudf_col, col_name_info] = device_json_column_to_cudf_column(
+      json_col, d_input, options, child_schema_element, stream, mr);
 
     out_column_names.back().children = std::move(col_name_info);
     out_columns.emplace_back(std::move(cudf_col));
