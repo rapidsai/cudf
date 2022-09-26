@@ -698,12 +698,13 @@ def test_json_keep_quotes(keep_quotes, result):
         "c2": [["l11", "l21"], ["l12", "l22"]],
     }
     pdf = pd.DataFrame(data)
-    pdf.to_json(bytes_file, orient="records")
+    pdf.to_json(bytes_file, orient="records", lines=True)
 
     actual = cudf.read_json(
         bytes_file,
         engine="cudf_experimental",
         orient="records",
+        lines=True,
         keep_quotes=keep_quotes,
     )
     expected = pd.DataFrame(result)
