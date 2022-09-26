@@ -37,7 +37,7 @@ def read_json(
 
     if engine == "cudf" and not lines:
         raise ValueError("cudf engine only supports JSON Lines format")
-    if engine == "cudf_experiment" and keep_quotes:
+    if engine != "cudf_experimental" and keep_quotes:
         raise ValueError(
             "keep_quotes='True' is supported only with"
             " engine='cudf_experimental'"
