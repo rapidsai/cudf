@@ -392,7 +392,7 @@ __global__ void __launch_bounds__(128)
             case PageType::DATA_PAGE:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
-              bs->page.flags       = 0;
+              bs->page.flags = 0;
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
@@ -402,7 +402,7 @@ __global__ void __launch_bounds__(128)
             case PageType::DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
-              bs->page.flags       = 0;
+              bs->page.flags = 0;
               values_found += bs->page.num_input_values;
               // V2 only uses RLE, so it was removed from the header
               bs->page.definition_level_encoding = Encoding::RLE;
