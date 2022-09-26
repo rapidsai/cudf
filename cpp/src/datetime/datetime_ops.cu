@@ -259,6 +259,8 @@ struct dispatch_round {
                       output->mutable_view().begin<Timestamp>(),
                       RoundingDispatcher{round_kind, component});
 
+    output->set_null_count(column.null_count());
+
     return output;
   }
 

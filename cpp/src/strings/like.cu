@@ -132,6 +132,8 @@ std::unique_ptr<column> like(
                     results->mutable_view().data<bool>(),
                     like_fn{*d_strings, d_pattern, d_escape});
 
+  results->set_null_count(input.null_count());
+
   return results;
 }
 
