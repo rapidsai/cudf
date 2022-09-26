@@ -15,6 +15,7 @@
  */
 
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/text/device_data_chunks.hpp"
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -38,18 +39,11 @@ namespace cudf::io::text {
 
 namespace {
 
-class device_uvector_data_chunk : public device_data_chunk {
- public:
-  device_uvector_data_chunk(rmm::device_uvector<char>&& data) : _data(std::move(data)) {}
-
-  [[nodiscard]] char const* data() const override { return _data.data(); }
-  [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
-
- private:
-  rmm::device_uvector<char> _data;
-};
-
+/**
+ * @brief Transforms offset tuples of the form [compressed_begin, compressed_end,
+ * decompressed_begin, decompressed_end] into span tuples of the form [compressed_device_span,
+ * decompressed_device_span] based on the provided pointers.
+ */
 struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
@@ -70,14 +64,6 @@ struct bgzip_nvcomp_transform_functor {
 
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
-  /*
-
-
-     Parsing code
-
-
-  */
-
   template <typename IntType>
   static IntType read_int(char* data)
   {
@@ -140,14 +126,6 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     return {read_int<uint32_t>(&buffer[4])};
   }
 
-  /*
-
-
-    High-level control flow
-
-
-  */
-
   template <typename T>
   using pinned_host_vector =
     thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>>;
@@ -162,7 +140,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyHostToDevice, stream.value()));
   }
 
-  struct compressed_blocks {
+  struct decompression_blocks {
     static constexpr std::size_t default_buffer_alloc =
       1 << 24;  // 16MB buffer allocation, resized on demand
     static constexpr std::size_t default_offset_alloc =
@@ -185,9 +163,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     // unless we are in the last chunk, where it's limited by _local_end
     std::size_t available_decompressed_size{};
     std::size_t read_pos{};
-    bool decompressed{};
+    bool is_decompressed{};
 
-    compressed_blocks(rmm::cuda_stream_view init_stream)
+    decompression_blocks(rmm::cuda_stream_view init_stream)
       : d_compressed_blocks(0, init_stream),
         d_decompressed_blocks(0, init_stream),
         d_compressed_offsets(0, init_stream),
@@ -206,7 +184,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
 
     void decompress(rmm::cuda_stream_view stream)
     {
-      if (decompressed) { return; }
+      if (is_decompressed) { return; }
       copy_to_device(h_compressed_blocks, d_compressed_blocks, stream);
       copy_to_device(h_compressed_offsets, d_compressed_offsets, stream);
       copy_to_device(h_decompressed_offsets, d_decompressed_offsets, stream);
@@ -245,7 +223,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                      stream);
         }
       }
-      decompressed = true;
+      is_decompressed = true;
     }
 
     void reset()
@@ -266,7 +244,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       max_decompressed_size        = 0;
       available_decompressed_size  = 0;
       read_pos                     = 0;
-      decompressed                 = false;
+      is_decompressed              = false;
     }
 
     [[nodiscard]] std::size_t num_blocks() const { return h_compressed_offsets.size() - 1; }
@@ -303,31 +281,31 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
 
   void read_next_compressed_chunk(std::size_t requested_size)
   {
-    std::swap(_curr_block, _prev_block);
-    if (_curr_block.decompressed) {
+    std::swap(_curr_blocks, _prev_blocks);
+    if (_curr_blocks.is_decompressed) {
       // synchronize on the last decompression + copy, so we don't clobber any buffers
-      CUDF_CUDA_TRY(cudaEventSynchronize(_curr_block.event));
+      CUDF_CUDA_TRY(cudaEventSynchronize(_curr_blocks.event));
     }
-    _curr_block.reset();
+    _curr_blocks.reset();
     // read chunks until we have enough decompressed data
-    while (_curr_block.decompressed_size() < requested_size) {
+    while (_curr_blocks.decompressed_size() < requested_size) {
       // calling peek on an already EOF stream causes it to fail, we need to avoid that
       if (_data_stream->eof()) { break; }
       // peek is necessary if we are already at the end, but didn't try to read another byte
       _data_stream->peek();
       if (_data_stream->eof() || _compressed_pos > _compressed_end) { break; }
       auto header = read_header();
-      _curr_block.read_block(header, *_data_stream);
+      _curr_blocks.read_block(header, *_data_stream);
       auto footer = read_footer();
-      _curr_block.add_block_offsets(header, footer);
+      _curr_blocks.add_block_offsets(header, footer);
       // for the last GZIP block, we restrict ourselves to the bytes up to _local_end
       // but only for the reader, not for decompression!
       if (_compressed_pos == _compressed_end) {
-        _curr_block.available_decompressed_size += _local_end;
+        _curr_blocks.available_decompressed_size += _local_end;
         _compressed_pos += header.block_size;
         break;
       } else {
-        _curr_block.available_decompressed_size += footer.decompressed_size;
+        _curr_blocks.available_decompressed_size += footer.decompressed_size;
         _compressed_pos += header.block_size;
       }
     }
@@ -340,8 +318,8 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                           uint64_t virtual_begin,
                           uint64_t virtual_end)
     : _data_stream(std::move(input_stream)),
-      _prev_block{cudf::default_stream_value},  // here we can use the default stream because
-      _curr_block{cudf::default_stream_value},  // we only initialize empty device_uvectors
+      _prev_blocks{cudf::default_stream_value},  // here we can use the default stream because
+      _curr_blocks{cudf::default_stream_value},  // we only initialize empty device_uvectors
       _local_end{virtual_end & 0xFFFFu},
       _compressed_pos{virtual_begin >> 16},
       _compressed_end{virtual_end >> 16}
@@ -355,18 +333,18 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     // seek to the beginning of the provided local offset
     auto const local_pos = virtual_begin & 0xFFFFu;
     if (local_pos > 0) {
-      CUDF_EXPECTS(_curr_block.h_compressed_offsets.size() > 1 &&
-                     local_pos < _curr_block.h_compressed_offsets[1],
+      CUDF_EXPECTS(_curr_blocks.h_compressed_offsets.size() > 1 &&
+                     local_pos < _curr_blocks.h_compressed_offsets[1],
                    "local part of virtual offset is out of bounds");
-      _curr_block.consume_bytes(local_pos);
+      _curr_blocks.consume_bytes(local_pos);
     }
   }
 
   void skip_bytes(std::size_t read_size) override
   {
-    while (read_size > _curr_block.remaining_size()) {
-      read_size -= _curr_block.remaining_size();
-      _curr_block.consume_bytes(_curr_block.remaining_size());
+    while (read_size > _curr_blocks.remaining_size()) {
+      read_size -= _curr_blocks.remaining_size();
+      _curr_blocks.consume_bytes(_curr_blocks.remaining_size());
       read_next_compressed_chunk(chunk_load_size);
       // calling peek on an already EOF stream causes it to fail, we need to avoid that
       if (_data_stream->eof()) { break; }
@@ -374,55 +352,56 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       _data_stream->peek();
       if (_data_stream->eof() || _compressed_pos > _compressed_end) { break; }
     }
-    read_size = std::min(read_size, _curr_block.remaining_size());
-    _curr_block.consume_bytes(read_size);
+    read_size = std::min(read_size, _curr_blocks.remaining_size());
+    _curr_blocks.consume_bytes(read_size);
   }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
   {
     CUDF_FUNC_RANGE();
-    if (read_size <= _curr_block.remaining_size()) {
-      _curr_block.decompress(stream);
+    if (read_size <= _curr_blocks.remaining_size()) {
+      _curr_blocks.decompress(stream);
       rmm::device_uvector<char> data(read_size, stream);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                    _curr_block.d_decompressed_blocks.data() + _curr_block.read_pos,
-                                    read_size,
-                                    cudaMemcpyDeviceToDevice,
-                                    stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(data.data(),
+                        _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
+                        read_size,
+                        cudaMemcpyDeviceToDevice,
+                        stream.value()));
       // record the host-to-device copy, decompression and device copy
-      CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, stream.value()));
-      _curr_block.consume_bytes(read_size);
+      CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
+      _curr_blocks.consume_bytes(read_size);
       return std::make_unique<device_uvector_data_chunk>(std::move(data));
     }
-    read_next_compressed_chunk(read_size /* - _curr_block.remaining_size()*/);
-    _prev_block.decompress(stream);
-    _curr_block.decompress(stream);
-    read_size = std::min(read_size, _prev_block.remaining_size() + _curr_block.remaining_size());
+    read_next_compressed_chunk(read_size /* - _curr_blocks.remaining_size()*/);
+    _prev_blocks.decompress(stream);
+    _curr_blocks.decompress(stream);
+    read_size = std::min(read_size, _prev_blocks.remaining_size() + _curr_blocks.remaining_size());
     rmm::device_uvector<char> data(read_size, stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                  _prev_block.d_decompressed_blocks.data() + _prev_block.read_pos,
-                                  _prev_block.remaining_size(),
+                                  _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
+                                  _prev_blocks.remaining_size(),
                                   cudaMemcpyDeviceToDevice,
                                   stream.value()));
-    CUDF_CUDA_TRY(cudaMemcpyAsync(data.data() + _prev_block.remaining_size(),
-                                  _curr_block.d_decompressed_blocks.data() + _curr_block.read_pos,
-                                  read_size - _prev_block.remaining_size(),
+    CUDF_CUDA_TRY(cudaMemcpyAsync(data.data() + _prev_blocks.remaining_size(),
+                                  _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
+                                  read_size - _prev_blocks.remaining_size(),
                                   cudaMemcpyDeviceToDevice,
                                   stream.value()));
     // record the host-to-device copy, decompression and device copy
-    CUDF_CUDA_TRY(cudaEventRecord(_curr_block.event, stream.value()));
-    CUDF_CUDA_TRY(cudaEventRecord(_prev_block.event, stream.value()));
-    read_size -= _prev_block.remaining_size();
-    _prev_block.consume_bytes(_prev_block.remaining_size());
-    _curr_block.consume_bytes(read_size);
+    CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
+    CUDF_CUDA_TRY(cudaEventRecord(_prev_blocks.event, stream.value()));
+    read_size -= _prev_blocks.remaining_size();
+    _prev_blocks.consume_bytes(_prev_blocks.remaining_size());
+    _curr_blocks.consume_bytes(read_size);
     return std::make_unique<device_uvector_data_chunk>(std::move(data));
   }
 
  private:
   std::unique_ptr<std::istream> _data_stream;
-  compressed_blocks _prev_block;
-  compressed_blocks _curr_block;
+  decompression_blocks _prev_blocks;
+  decompression_blocks _curr_blocks;
   std::size_t _local_end;
   std::size_t _compressed_pos;
   std::size_t _compressed_end;
