@@ -7,13 +7,13 @@ from cudf.core.buffer import as_device_buffer_like
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
+from rmm._cuda.stream import DEFAULT_STREAM
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from strings_udf._lib.cpp.strings_udf cimport (
     to_string_view_array as cpp_to_string_view_array,
 )
 
-from rmm._cuda.stream import DEFAULT_STREAM
 
 def to_string_view_array(Column strings_col):
     cdef unique_ptr[device_buffer] c_buffer
