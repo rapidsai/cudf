@@ -16,13 +16,7 @@ from strings_udf._lib.cpp.strings_udf cimport (
 
 def to_string_view_array(Column strings_col):
     cdef unique_ptr[device_buffer] c_buffer
-    print("Create view")
     cdef column_view input_view = strings_col.view()
-    print("C++ function")
-    with nogil:
-        c_buffer = move(cpp_to_string_view_array(input_view))
-
-    print("Make DeviceBuffer")
+    c_buffer = move(cpp_to_string_view_array(input_view))
     device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    print("as_device_buffer_like")
     return as_device_buffer_like(device_buffer, exposed=False)
