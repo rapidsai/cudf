@@ -122,7 +122,7 @@ struct column_statistics {
   std::optional<date_statistics> date_stats;
   std::optional<binary_statistics> binary_stats;
   std::optional<timestamp_statistics> timestamp_stats;
-  // TODO: hasNull (issue #7087)
+  std::optional<bool> has_null;
 };
 
 struct StripeStatistics {
@@ -421,6 +421,12 @@ template <>
 inline uint8_t ProtobufReader::get<uint8_t>()
 {
   return (m_cur < m_end) ? *m_cur++ : 0;
+};
+
+template <>
+inline bool ProtobufReader::get<bool>()
+{
+  return static_cast<bool>(get<uint8_t>());
 };
 
 template <>

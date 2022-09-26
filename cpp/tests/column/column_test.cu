@@ -31,6 +31,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
 
@@ -46,8 +48,10 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    thrust::sequence(thrust::device, typed_data, typed_data + data.size());
-    thrust::sequence(thrust::device, typed_mask, typed_mask + mask.size());
+    thrust::sequence(
+      rmm::exec_policy(cudf::default_stream_value), typed_data, typed_data + data.size());
+    thrust::sequence(
+      rmm::exec_policy(cudf::default_stream_value), typed_mask, typed_mask + mask.size());
   }
 
   cudf::size_type num_elements() { return _num_elements; }
@@ -349,7 +353,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
 {
   rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
                                           cudf::default_stream_value};
-  thrust::copy(thrust::device,
+  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
                static_cast<TypeParam*>(this->data.data()),
                static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
                original.begin());
@@ -366,7 +370,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
 {
   rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
                                           cudf::default_stream_value};
-  thrust::copy(thrust::device,
+  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
                static_cast<TypeParam*>(this->data.data()),
                static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
                original.begin());
