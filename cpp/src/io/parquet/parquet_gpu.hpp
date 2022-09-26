@@ -45,8 +45,11 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
+// Largest number of bits to use for dictionary keys
+constexpr int MAX_DICT_BITS = 24;
+
 // Total number of unsigned 24 bit values
-constexpr size_type MAX_DICT_SIZE = (1 << 24) - 1;
+constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 
 /**
  * @brief Struct representing an input column in the file.
