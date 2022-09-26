@@ -1595,6 +1595,14 @@ def build_list_column(
     offset: int, optional
     """
     dtype = ListDtype(element_type=elements.dtype)
+    if size is None:
+        if indices.size == 0:
+            size = 0
+        else:
+            # one less because the last element of offsets is the number of
+            # bytes in the data buffer
+            size = indices.size - 1
+        size = size - offset
 
     result = build_column(
         data=None,
