@@ -195,7 +195,7 @@ def test_json_lines_basic(json_input, engine):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["auto", "cudf"])
+@pytest.mark.parametrize("engine", ["auto", "cudf", "cudf_experimental"])
 def test_json_lines_multiple(tmpdir, json_input, engine):
     tmp_file1 = tmpdir.join("MultiInputs1.json")
     tmp_file2 = tmpdir.join("MultiInputs2.json")
@@ -213,7 +213,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
-@pytest.mark.parametrize("engine", ["auto", "cudf"])
+@pytest.mark.parametrize("engine", ["auto", "cudf", "cudf_experimental"])
 def test_json_read_directory(tmpdir, json_input, engine):
     pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(
@@ -517,7 +517,7 @@ def test_json_to_json_compare_contents(gdf, pdf):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["cudf", "pandas", "cudf_experimental"])
 def test_default_integer_bitwidth(default_integer_bitwidth, engine):
     buf = BytesIO()
     pd.DataFrame({"a": range(10)}).to_json(buf, lines=True, orient="records")
@@ -555,7 +555,7 @@ def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["cudf", "pandas", "cudf_experimental"])
 def test_default_integer_bitwidth_extremes(default_integer_bitwidth, engine):
     # Test that integer columns in json are _inferred_ as 32 bit columns.
     buf = StringIO(
