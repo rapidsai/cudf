@@ -148,16 +148,7 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
   } else if (encoding == Encoding::RLE) {
     // V2 only uses RLE encoding, so only perform check here
     if (s->page.hdr_version == 2) {
-      len = 0;
-      cur = lvl == level_type::DEFINITION ? s->page.def_lvl_data : s->page.rep_lvl_data;
-      auto lvl_end =
-        cur + (lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes);
-      if (cur == nullptr || lvl_end > end) {
-        s->error = 2;
-      } else {
-        end        = lvl_end;
-        s->lvl_end = std::max(s->lvl_end, lvl_end);
-      }
+      len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
     } else if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
@@ -875,10 +866,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
     // if (s->page.num_input_values > 0 && s->page.num_rows > 0) {
     if (s->page.num_input_values > 0) {
       uint8_t* cur = s->page.page_data;
-      // uncompressed_page_size includes v2 level lengths, so subtract them. they
-      // will be 0 for v1 pages.
-      uint8_t* end =
-        cur + (s->page.uncompressed_page_size - s->page.def_lvl_bytes - s->page.rep_lvl_bytes);
+      uint8_t* end = cur + s->page.uncompressed_page_size;
 
       uint32_t dtype_len_out = s->col.data_type >> 3;
       s->ts_scale            = 0;
@@ -979,8 +967,6 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       }
       s->first_output_value = 0;
 
-      // for V2 headers need to set lvl_end in InitLevelSection
-      s->lvl_end = nullptr;
       // Find the compressed size of repetition levels
       cur += InitLevelSection(s, cur, end, level_type::REPETITION);
       // Find the compressed size of definition levels
@@ -1018,8 +1004,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
       }
       if (cur > end) { s->error = 1; }
-      // if V1 header, set lvl_end here
-      if (s->lvl_end == nullptr) { s->lvl_end = cur; }
+      s->lvl_end    = cur;
       s->data_start = cur;
       s->data_end   = end;
     } else {

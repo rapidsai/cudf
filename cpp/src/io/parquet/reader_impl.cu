@@ -1131,8 +1131,6 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   for (auto& codec : codecs) {
     for_each_codec_page(codec.compression_type, [&](size_t page) {
-      // for V2 page headers, uncompressed_page_size is uncompressed_data_size +
-      // def_lvl_size + rep_lvl_size
       auto page_uncomp_size = pages[page].uncompressed_page_size;
       total_decomp_size += page_uncomp_size;
       codec.total_decomp_size += page_uncomp_size;
@@ -1165,33 +1163,21 @@ rmm::device_buffer reader::impl::decompress_page_data(
     if (codec.num_pages == 0) { continue; }
 
     for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
-      auto dst_base     = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
-      auto& page        = pages[page_idx];
-      page.rep_lvl_data = nullptr;
-      page.def_lvl_data = nullptr;
-      // only need to modify data pages
-      if (page.hdr_version == 2 && page.flags == 0) {
-        // for V2 need copy def and rep level info into place, and then offset the
-        // input and output buffers. otherwise we'd have to keep both the compressed
-        // and decompressed data.
-        auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
-        if (offset) {
-          thrust::copy(
-            rmm::exec_policy(_stream), page.page_data, page.page_data + offset, dst_base);
-          if (page.rep_lvl_bytes) { page.rep_lvl_data = dst_base; }
-          if (page.def_lvl_bytes) { page.def_lvl_data = dst_base + page.rep_lvl_bytes; };
-        }
-        comp_in.emplace_back(page.page_data + offset,
-                             static_cast<size_t>(page.compressed_page_size - offset));
-        comp_out.emplace_back(dst_base + offset,
-                              static_cast<size_t>(page.uncompressed_page_size - offset));
-        page.page_data = dst_base + offset;
-      } else {
-        comp_in.emplace_back(page.page_data, static_cast<size_t>(page.compressed_page_size));
-        comp_out.emplace_back(dst_base, static_cast<size_t>(page.uncompressed_page_size));
-        page.page_data = dst_base;
+      auto dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
+      auto& page    = pages[page_idx];
+      // offset will only be non-zero for V2 pages
+      auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+      // for V2 need to copy def and rep level info into place, and then offset the
+      // input and output buffers. otherwise we'd have to keep both the compressed
+      // and decompressed data.
+      if (offset) {
+        thrust::copy(rmm::exec_policy(_stream), page.page_data, page.page_data + offset, dst_base);
       }
-
+      comp_in.emplace_back(page.page_data + offset,
+                           static_cast<size_t>(page.compressed_page_size - offset));
+      comp_out.emplace_back(dst_base + offset,
+                            static_cast<size_t>(page.uncompressed_page_size - offset));
+      page.page_data = dst_base;
       decomp_offset += page.uncompressed_page_size;
     });
 
@@ -1244,47 +1230,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   decompress_check(comp_res, _stream);
 
-  // clean up pointers for uncompressed V2 pages
-  fix_v2_page_data(chunks, pages, false);
-
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
   pages.host_to_device(_stream);
 
   return decomp_pages;
-}
-
-/**
- * @copydoc cudf::io::detail::parquet::fix_v2_page_data
- */
-void reader::impl::fix_v2_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    bool sync_to_device)
-{
-  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
-    const auto page_stride = chunks[c].max_num_pages;
-    if (chunks[c].codec == Compression::UNCOMPRESSED) {
-      for (int k = 0; k < page_stride; k++) {
-        auto& page        = pages[page_count + k];
-        page.rep_lvl_data = nullptr;
-        page.def_lvl_data = nullptr;
-        if (page.hdr_version == 2 && page.flags == 0) {
-          auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
-          if (offset) {
-            auto data = page.page_data;
-            if (page.rep_lvl_bytes) { page.rep_lvl_data = data; }
-            if (page.def_lvl_bytes) { page.def_lvl_data = data + page.rep_lvl_bytes; };
-            page.page_data = data + offset;
-          }
-        }
-      }
-    }
-    page_count += page_stride;
-  }
-
-  // Update the page information in device memory with the updated value of
-  // page_data; it now points to the uncompressed data buffer
-  if (sync_to_device) { pages.host_to_device(_stream); }
 }
 
 /**
@@ -1782,9 +1732,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         for (size_t c = 0; c < chunks.size(); c++) {
           if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { page_data[c].reset(); }
         }
-      } else {
-        // if not compressed, fix data pointers for V2 pages
-        fix_v2_page_data(chunks, pages, true);
       }
 
       // build output column info
