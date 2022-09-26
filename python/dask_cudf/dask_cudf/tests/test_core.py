@@ -857,3 +857,14 @@ def test_categorical_dtype_round_trip():
     actual = ds.compute()
     expected = pds.compute()
     assert actual.dtype.ordered == expected.dtype.ordered
+
+
+def test_series_cummin():
+    df = cudf.DataFrame({"x": range(10)})
+    gddf = dgd.from_cudf(df, 2)
+    pgdf = dd.from_pandas(df.to_pandas(), npartitions=2)
+    import pdb
+
+    pdb.set_trace()
+    dd.assert_eq(gddf.x.cummin(), pgdf.x.cummin())
+    dd.assert_eq(gddf.cummin(), pgdf.cummin())

@@ -3288,6 +3288,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         level=None,
         errors="raise",
     ):
+        if axis not in {None, "index", 0}:
+            raise ValueError(
+                "axis can be either 0 or 'index' for object type Series"
+            )
+
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self({self.name: result_col}),

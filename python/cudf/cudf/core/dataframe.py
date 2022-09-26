@@ -2615,6 +2615,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         level=None,
         errors="raise",
     ):
+        import pdb
+
+        pdb.set_trace()
+        if axis not in {None, "index", 0}:
+            raise NotImplementedError(
+                f"axis=1/'columns' not yet implemented for DataFrame, "
+                f"got {axis}"
+            )
+
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,

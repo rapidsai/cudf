@@ -571,15 +571,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def where(
-        self,
-        cond,
-        other=None,
-        inplace=False,
-        axis=None,
-        level=None,
-        errors="raise",
-    ):
+    def where(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is False.
 
