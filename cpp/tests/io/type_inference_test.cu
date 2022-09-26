@@ -39,7 +39,7 @@ struct TypeInference : public cudf::test::BaseFixture {
 
 TEST_F(TypeInference, Basic)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -71,7 +71,7 @@ TEST_F(TypeInference, Basic)
 
 TEST_F(TypeInference, Null)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -104,7 +104,7 @@ TEST_F(TypeInference, Null)
 
 TEST_F(TypeInference, AllNull)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -136,7 +136,7 @@ TEST_F(TypeInference, AllNull)
 
 TEST_F(TypeInference, String)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -168,7 +168,7 @@ TEST_F(TypeInference, String)
 
 TEST_F(TypeInference, Bool)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -200,7 +200,7 @@ TEST_F(TypeInference, Bool)
 
 TEST_F(TypeInference, Timestamp)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -233,7 +233,7 @@ TEST_F(TypeInference, Timestamp)
 
 TEST_F(TypeInference, InvalidInput)
 {
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
