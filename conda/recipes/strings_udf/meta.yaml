@@ -39,7 +39,7 @@ requirements:
     - setuptools
     - numba >=0.54
     - libcudf ={{ version }}
-    - cudf ={{ version }}
+    - cudf >=22.10.00a220920
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
@@ -47,7 +47,7 @@ requirements:
     - numba >=0.54
     - numpy
     - libcudf ={{ version }}
-    - cudf ={{ version }}
+    - cudf >=22.10.00a220920
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - cachetools
     - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
