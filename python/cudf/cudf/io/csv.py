@@ -51,9 +51,15 @@ def read_csv(
     byte_range=None,
     use_python_file_object=True,
     storage_options=None,
-    bytes_per_thread=256_000_000,
+    bytes_per_thread=None,
 ):
     """{docstring}"""
+
+    if use_python_file_object and bytes_per_thread is not None:
+        raise ValueError(
+            "bytes_per_thread is only supported when "
+            "`use_python_file_object=False`"
+        )
 
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
@@ -70,7 +76,9 @@ def read_csv(
         iotypes=(BytesIO, StringIO, NativeFile),
         use_python_file_object=use_python_file_object,
         storage_options=storage_options,
-        bytes_per_thread=bytes_per_thread,
+        bytes_per_thread=256_000_000
+        if bytes_per_thread is None
+        else bytes_per_thread,
     )
 
     if na_values is not None and is_scalar(na_values):
