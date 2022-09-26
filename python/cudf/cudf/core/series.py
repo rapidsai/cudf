@@ -2252,10 +2252,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Support for use of string data within UDFs is provided through the
-        ``strings_udf`` rapids library. Supported operations include
-        the subset of functions and string methods that expect an input string
-        but do not return a string. Refer to caveats in the ``guide-to-udfs``
-        notebook referenced above.
+        [strings_udf](https://anaconda.org/rapidsai-nightly/strings_udf) RAPIDS
+        library. Supported operations on strings include the subset of
+        functions and string methods that expect an input string but do not
+        return a string. Refer to caveats in the UDF guide referenced above.
 
         Parameters
         ----------
@@ -2339,8 +2339,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
 
-        String data is allowed, so long as its use does not modify or create
-        a new string. The following UDF is allowed:
+        UDFs manipulating string data are allowed, as long as
+        they neither modify strings in place nor create new strings.
+        For example, the following UDF is allowed:
 
         >>> def f(st):
         ...     if len(st) == 0:
@@ -2359,18 +2360,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    2
         dtype: int64
 
-        However the following UDF is not allowed, because it includes an
-        operation that requires the creation of a new string, namely the
-        ``upper`` method. Methods that are not supported in this manner
-        will raise an ``AttributeError``.
+        However, the following UDF is not allowed since it includes an
+            operation that requires the creation of a new string: a call to the
+            ``upper`` method. Methods that are not supported in this manner
+            will raise an ``AttributeError``.
+
         >>> def f(st):
         ...     new = st.upper()
         ...     return 'ABC' in new
         ...
         >>> sr.apply(f) # AttributeError
 
-        For a complete list of supported functions and methods that may be used
-        to manipulate string data, see the ``guide-to-udfs`` IPython notebook.
+        For a complete list of supported functions and methods that may be
+        used to manipulate string data, see the the UDF guide,
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
 
         """
         if convert_dtype is not True:
