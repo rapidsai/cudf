@@ -434,10 +434,11 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   CUDF_FUNC_RANGE();
 
   auto const num_nodes = node_type.size();
-  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
   rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
   rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
+  if (num_nodes == 0) { return {std::move(col_id), std::move(parent_col_id)}; }
+  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
+  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
   // scatter 1 to level_boundaries alone, useful for scan later
   thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_constant_iterator(1),
@@ -673,6 +674,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 
   // 3. Find level boundaries.
   auto level_boundaries = [&]() {
+    if (d_tree.node_levels.is_empty()) return rmm::device_uvector<size_type>{0, stream};
     // Already node_levels is sorted
     auto max_level = d_tree.node_levels.back_element(stream);
     rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);

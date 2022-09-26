@@ -1758,6 +1758,12 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   auto const& data_root =
     new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
 
+  // Zero row entries
+  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
+    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
+                               {{}, std::vector<column_name_info>{}}};
+  }
+
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;
   CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and

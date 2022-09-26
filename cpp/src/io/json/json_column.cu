@@ -274,6 +274,7 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
                     });
   auto d_column_names = cudf::make_strings_column(string_views, stream);
   auto to_host        = [](auto const& col) {
+    if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
       cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
