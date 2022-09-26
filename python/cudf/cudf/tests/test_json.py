@@ -274,11 +274,10 @@ def test_json_lines_byte_range(json_input):
     assert df.shape == (1, 3)
 
 
-@pytest.mark.parametrize(
-    "dtype", [["float", "int", "short"], {1: "int", 2: "short", 0: "float"}]
-)
-def test_json_lines_dtypes(json_input, dtype):
-    df = cudf.read_json(json_input, lines=True, dtype=dtype)
+def test_json_lines_dtypes(json_input):
+    df = cudf.read_json(
+        json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
+    )
     assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
@@ -302,7 +301,10 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     pd_df.to_json(fname, compression=out_comp, lines=True, orient="records")
 
     cu_df = cudf.read_json(
-        str(fname), compression=in_comp, lines=True, dtype=["int32", "int32"]
+        str(fname),
+        compression=in_comp,
+        lines=True,
+        dtype={"col1": "int32", "col2": "int32"},
     )
     assert_eq(pd_df, cu_df)
 
@@ -345,7 +347,9 @@ def test_json_bool_values():
     # boolean values should be converted to 0/1
     np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
-    cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
+    cu_df = cudf.read_json(
+        buffer, lines=True, dtype={"0": "bool", "1": "long"}
+    )
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
@@ -663,3 +667,48 @@ def test_json_types_data():
         pdf, schema=df.to_arrow().schema, safe=False
     )
     assert df.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "keep_quotes,result",
+    [
+        (
+            True,
+            {
+                "c1": [
+                    {"f1": '"sf11"', "f2": '"sf21"'},
+                    {"f1": '"sf12"', "f2": '"sf22"'},
+                ],
+                "c2": [['"l11"', '"l21"'], ['"l12"', '"l22"']],
+            },
+        ),
+        (
+            False,
+            {
+                "c1": [
+                    {"f1": "sf11", "f2": "sf21"},
+                    {"f1": "sf12", "f2": "sf22"},
+                ],
+                "c2": [["l11", "l21"], ["l12", "l22"]],
+            },
+        ),
+    ],
+)
+def test_json_keep_quotes(keep_quotes, result):
+    bytes_file = BytesIO()
+    data = {
+        "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+        "c2": [["l11", "l21"], ["l12", "l22"]],
+    }
+    pdf = pd.DataFrame(data)
+    pdf.to_json(bytes_file, orient="records")
+
+    actual = cudf.read_json(
+        bytes_file,
+        engine="cudf_experimental",
+        orient="records",
+        keep_quotes=keep_quotes,
+    )
+    expected = pd.DataFrame(result)
+
+    assert_eq(actual, expected)

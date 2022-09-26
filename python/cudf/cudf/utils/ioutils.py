@@ -559,6 +559,11 @@ byte_range : list or tuple, default None
     size in bytes. Set the size to zero to read all data after the offset
     location. Reads the row that starts before or at the end of the range,
     even if it ends after the end of the range.
+keep_quotes : bool, default False
+    This parameter is only supported in ``cudf_experimental`` engine.
+    If `True`, any string values are read literally (and wrapped in an
+    additional set of quotes).
+    If `False` string values are parsed into Python strings.
 
 Returns
 -------
@@ -567,6 +572,30 @@ result : Series or DataFrame, depending on the value of `typ`.
 See Also
 --------
 cudf.DataFrame.to_json
+
+Examples
+--------
+>>> import cudf
+>>> df = cudf.DataFrame({'a': ["hello", "rapids"], 'b': ["hello", "worlds"]})
+>>> df
+        a       b
+0   hello   hello
+1  rapids  worlds
+>>> json_str = df.to_json(orient='records', lines=True)
+>>> json_str
+'{"a":"hello","b":"hello"}\n{"a":"rapids","b":"worlds"}\n'
+>>> cudf.read_json(json_str,  engine="cudf", lines=True)
+        a       b
+0   hello   hello
+1  rapids  worlds
+
+To read the strings with additional set of quotes:
+
+>>> cudf.read_json(json_str,  engine="cudf_experimental", lines=True,
+...                keep_quotes=True)
+          a         b
+0   "hello"   "hello"
+1  "rapids"  "worlds"
 """
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
