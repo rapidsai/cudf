@@ -1163,15 +1163,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
     if (codec.num_pages == 0) { continue; }
 
     for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
-      auto dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
-      auto& page    = pages[page_idx];
+      auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
+      auto& page          = pages[page_idx];
       // offset will only be non-zero for V2 pages
-      auto offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+      auto const offset = page.def_lvl_bytes + page.rep_lvl_bytes;
       // for V2 need to copy def and rep level info into place, and then offset the
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
       if (offset) {
-        thrust::copy(rmm::exec_policy(_stream), page.page_data, page.page_data + offset, dst_base);
+        CUDF_CUDA_TRY(
+          cudaMemcpyAsync(dst_base, page.page_data, offset, cudaMemcpyDeviceToDevice, _stream));
       }
       comp_in.emplace_back(page.page_data + offset,
                            static_cast<size_t>(page.compressed_page_size - offset));
