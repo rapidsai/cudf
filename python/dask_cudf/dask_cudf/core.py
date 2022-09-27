@@ -29,6 +29,7 @@ from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
+from dask_cudf.sorting import _set_shuffle
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -731,33 +732,6 @@ from_cudf.__doc__ = (
 @_dask_cudf_nvtx_annotate
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
-
-
-def _set_shuffle(shuffle):
-    # Utility to set the `shuffle`-kwarg default
-    # and validate a user-specified option
-    #
-    # Supported Options:
-    #  - "tasks"
-    #  - "explicit-comms"  (requires dask_cuda)
-    #
-    shuffle = shuffle or dask.config.get("shuffle", "tasks")
-    if shuffle not in ("tasks", "explicit-comms"):
-        raise ValueError(
-            f"Dask-cudf only supports in-memory shuffling with "
-            f"'tasks' or 'explicit-comms'. Got shuffle={shuffle}"
-        )
-
-    if shuffle == "explicit-comms":
-        try:
-            import dask_cuda  # noqa: F401
-        except ImportError:
-            raise ValueError(
-                "shuffle='explicit-comms' requires dask_cuda. "
-                "Please install dask_cuda, or use shuffle='tasks'."
-            )
-
-    return shuffle
 
 
 for name in [

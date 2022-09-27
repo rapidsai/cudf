@@ -6,6 +6,7 @@ import cupy
 import numpy as np
 import tlz as toolz
 
+import dask
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
@@ -291,7 +292,7 @@ def sort_values(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle=shuffle,
+        shuffle=_set_shuffle(shuffle),
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
@@ -303,3 +304,30 @@ def sort_values(
         df4.divisions = tuple(methods.tolist(divisions))
 
     return df4
+
+
+def _set_shuffle(shuffle):
+    # Utility to set the `shuffle`-kwarg default
+    # and validate a user-specified option
+    #
+    # Supported Options:
+    #  - "tasks"
+    #  - "explicit-comms"  (requires dask_cuda)
+    #
+    shuffle = shuffle or dask.config.get("shuffle", "tasks")
+    if shuffle not in ("tasks", "explicit-comms"):
+        raise ValueError(
+            f"Dask-cudf only supports in-memory shuffling with "
+            f"'tasks' or 'explicit-comms'. Got shuffle={shuffle}"
+        )
+
+    if shuffle == "explicit-comms":
+        try:
+            import dask_cuda  # noqa: F401
+        except ImportError:
+            raise ValueError(
+                "shuffle='explicit-comms' requires dask_cuda. "
+                "Please install dask_cuda, or use shuffle='tasks'."
+            )
+
+    return shuffle
