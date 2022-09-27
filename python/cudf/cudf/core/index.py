@@ -1255,6 +1255,26 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             output = repr(preprocess._clean_nulls_from_index().to_pandas())
 
             if isinstance(self, (DatetimeIndex, TimedeltaIndex)):
+                # Converting to CategoricalIndex was necessary to maintain repr
+                # formatting of 1 value per line, now we will have to remove
+                # the CategoricalIndex:
+                """
+                >>> s = cudf.Index([2113, 1221, 12321], dtype='datetime64[ns]')
+                >>> s.to_pandas()
+                DatetimeIndex(['1970-01-01 00:00:00.000002113',
+                              '1970-01-01 00:00:00.000001221',
+                              '1970-01-01 00:00:00.000012321'],
+                              dtype='datetime64[ns]', freq=None)
+                >>> s.to_pandas().astype('str')
+                Index(['1970-01-01 00:00:00.000002113', '1970-01-01 00:00:00.000001221',
+                      '1970-01-01 00:00:00.000012321'],
+                      dtype='object')
+                >>> s.to_pandas().astype('category')
+                CategoricalIndex(['1970-01-01 00:00:00.000002113',
+                                  '1970-01-01 00:00:00.000001221',
+                                  '1970-01-01 00:00:00.000012321'],
+                                categories=[1970-01-01 00:00:00.000001221, 1970-01-01 00:00:00.000002113, 1970-01-01 00:00:00.000012321], ordered=False, dtype='category')
+                """  # noqa: E501
                 output = (
                     output[: output.rfind("categories=[")]
                     + output[output.rfind(" dtype=") :]
