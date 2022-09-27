@@ -6,10 +6,10 @@ import cupy
 import numpy as np
 import tlz as toolz
 
+import dask
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
-from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
@@ -231,10 +231,18 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
+    shuffle=None,
     sort_function=None,
     sort_function_kwargs=None,
 ):
     """Sort by the given list/tuple of column names."""
+
+    shuffle = _get_shuffle_type(shuffle)
+    # Note that we cannot import `rearrange_by_column` in
+    # the header, because we need to allow dask-cuda to
+    # patch this function before we import it here
+    from dask.dataframe.shuffle import rearrange_by_column
+
     if not isinstance(ascending, bool):
         raise ValueError("ascending must be either True or False")
     if na_position not in ("first", "last"):
@@ -285,7 +293,7 @@ def sort_values(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle="tasks",
+        shuffle=shuffle,
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
@@ -297,3 +305,30 @@ def sort_values(
         df4.divisions = tuple(methods.tolist(divisions))
 
     return df4
+
+
+def _get_shuffle_type(shuffle):
+    # Utility to set the shuffle-kwarg default
+    # and to validate user-specified options
+    #
+    # Supported Options:
+    #  - "tasks"
+    #  - "explicit-comms"  (requires dask_cuda)
+    #
+    shuffle = shuffle or dask.config.get("shuffle", "tasks")
+    if shuffle not in {"tasks", "explicit-comms"}:
+        raise ValueError(
+            f"Dask-cudf only supports in-memory shuffling with "
+            f"'tasks' or 'explicit-comms'. Got shuffle={shuffle}"
+        )
+
+    if shuffle == "explicit-comms":
+        try:
+            import dask_cuda  # noqa: F401
+        except ImportError:
+            raise ValueError(
+                "shuffle='explicit-comms' requires dask_cuda. "
+                "Please install dask_cuda, or use shuffle='tasks'."
+            )
+
+    return shuffle
