@@ -132,7 +132,7 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{26, 4, 25});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{3, 1, 1});
+                                 fixed_width_column_wrapper<int16_t>{31, 1, 1});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{2, 3, 3});
