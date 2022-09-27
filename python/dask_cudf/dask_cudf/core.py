@@ -29,7 +29,7 @@ from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
-from dask_cudf.sorting import _set_shuffle
+from dask_cudf.sorting import _get_shuffle_type
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -139,7 +139,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if isinstance(on, tuple):
             on = list(on)
         return super().merge(
-            other, on=on, shuffle=_set_shuffle(shuffle), **kwargs
+            other, on=on, shuffle=_get_shuffle_type(shuffle), **kwargs
         )
 
     @_dask_cudf_nvtx_annotate
@@ -153,7 +153,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if isinstance(on, tuple):
             on = list(on)
         return super().join(
-            other, how=how, on=on, shuffle=_set_shuffle(shuffle), **kwargs
+            other, how=how, on=on, shuffle=_get_shuffle_type(shuffle), **kwargs
         )
 
     @_dask_cudf_nvtx_annotate
@@ -221,7 +221,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().set_index(
             other,
             sorted=pre_sorted,
-            shuffle=_set_shuffle(shuffle),
+            shuffle=_get_shuffle_type(shuffle),
             divisions=divisions,
             **kwargs,
         )
@@ -334,7 +334,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
     @_dask_cudf_nvtx_annotate
     def shuffle(self, *args, shuffle=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
-        return super().shuffle(*args, shuffle=_set_shuffle(shuffle), **kwargs)
+        return super().shuffle(
+            *args, shuffle=_get_shuffle_type(shuffle), **kwargs
+        )
 
     @_dask_cudf_nvtx_annotate
     def groupby(self, by=None, **kwargs):

@@ -237,6 +237,7 @@ def sort_values(
 ):
     """Sort by the given list/tuple of column names."""
 
+    shuffle = _get_shuffle_type(shuffle)
     # Note that we cannot import `rearrange_by_column` in
     # the header, because we need to allow dask-cuda to
     # patch this function before we import it here
@@ -292,7 +293,7 @@ def sort_values(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle=_set_shuffle(shuffle),
+        shuffle=shuffle,
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
@@ -306,28 +307,36 @@ def sort_values(
     return df4
 
 
-def _set_shuffle(shuffle):
-    # Utility to set the `shuffle`-kwarg default
-    # and validate a user-specified option
-    #
-    # Supported Options:
-    #  - "tasks"
-    #  - "explicit-comms"  (requires dask_cuda)
-    #
-    shuffle = shuffle or dask.config.get("shuffle", "tasks")
-    if shuffle not in ("tasks", "explicit-comms"):
-        raise ValueError(
-            f"Dask-cudf only supports in-memory shuffling with "
-            f"'tasks' or 'explicit-comms'. Got shuffle={shuffle}"
-        )
+# Define _get_shuffle_type utility to set the shuffle-kwarg
+# default and to validate user-specified options
+#
+# Supported Options:
+#  - "tasks"
+#  - "explicit-comms"  (requires dask_cuda)
+try:
+    import dask_cuda  # noqa: F401
 
-    if shuffle == "explicit-comms":
-        try:
-            import dask_cuda  # noqa: F401
-        except ImportError:
+    def _get_shuffle_type(shuffle):
+        shuffle = shuffle or dask.config.get("shuffle", "tasks")
+        if shuffle not in {"tasks", "explicit-comms"}:
+            raise ValueError(
+                f"Dask-cudf only supports in-memory shuffling with "
+                f"'tasks' or 'explicit-comms'. Got shuffle={shuffle}"
+            )
+        return shuffle
+
+except ImportError:
+
+    def _get_shuffle_type(shuffle):
+        shuffle = shuffle or dask.config.get("shuffle", "tasks")
+        if shuffle == "explicit-comms":
             raise ValueError(
                 "shuffle='explicit-comms' requires dask_cuda. "
                 "Please install dask_cuda, or use shuffle='tasks'."
             )
-
-    return shuffle
+        elif shuffle != "tasks":
+            raise ValueError(
+                f"Dask-cudf only supports in-memory shuffling with "
+                f"'tasks'. Got shuffle={shuffle}"
+            )
+        return shuffle
