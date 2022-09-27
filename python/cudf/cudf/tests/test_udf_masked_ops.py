@@ -56,6 +56,11 @@ def str_udf_data():
                 "cudf",
                 "cuda",
                 "gpu",
+                "This Is A Title",
+                "This is Not a Title",
+                "Neither is This a Title",
+                "NoT a TiTlE",
+                "123 Title Works",
             ]
         }
     )
@@ -835,6 +840,14 @@ def test_string_udf_islower(str_udf_data):
 def test_string_udf_isspace(str_udf_data):
     def func(row):
         return row["str_col"].isspace()
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+def test_string_udf_istitle(str_udf_data):
+    def func(row):
+        return row["str_col"].istitle()
 
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
