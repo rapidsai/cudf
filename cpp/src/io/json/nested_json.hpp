@@ -176,7 +176,7 @@ struct json_column {
  * @brief Intermediate representation of data from a nested JSON input, in device memory.
  * Device memory equivalent of `json_column`.
  */
-struct d_json_column {
+struct device_json_column {
   // Type used to count number of rows
   using row_offset_t = size_type;
 
@@ -195,11 +195,8 @@ struct d_json_column {
   // Map of child columns, if applicable.
   // Following "element" as the default child column's name of a list column
   // Using the struct's field names
-  std::map<std::string, d_json_column> child_columns;
-  std::vector<std::string> column_order;
-  // Counting the current number of items in this column
+  std::map<std::string, device_json_column> child_columns;
   row_offset_t num_rows = 0;
-
   /**
    * @brief Construct a new d json column object
    *
@@ -209,13 +206,11 @@ struct d_json_column {
    * @param stream The CUDA stream to which kernels are dispatched
    * @param mr Optional, resource with which to allocate
    */
-  d_json_column(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  device_json_column(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
     : string_offsets(0, stream),
       string_lengths(0, stream),
       child_offsets(0, stream, mr),
-      validity(0, stream, mr),
-      child_columns{},
-      column_order{}
+      validity(0, stream, mr)
   {
   }
 };
@@ -341,11 +336,11 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream);
 
-/** @copydoc parse_nested_json
+/** @copydoc host_parse_nested_json
  * All processing is done in device memory.
  *
  */
-table_with_metadata parse_nested_json2(
+table_with_metadata device_parse_nested_json(
   host_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
@@ -360,7 +355,7 @@ table_with_metadata parse_nested_json2(
  * @param mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
-table_with_metadata parse_nested_json(
+table_with_metadata host_parse_nested_json(
   host_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,

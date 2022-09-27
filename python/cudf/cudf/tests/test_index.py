@@ -406,14 +406,14 @@ def test_index_copy_deep(idx, deep):
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.isna().to_numpy(), pidx.isna())
+    assert_eq(gidx.isna(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.notna().to_numpy(), pidx.notna())
+    assert_eq(gidx.notna(), pidx.notna())
 
 
 def test_rangeindex_slice_attr_name():

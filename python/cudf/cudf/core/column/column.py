@@ -518,7 +518,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if step == 1:
+        if step == 1 and not isinstance(
+            self, (cudf.core.column.StructColumn, cudf.core.column.ListColumn)
+        ):
+            # NOTE: List & Struct dtypes aren't supported by both
+            # inplace & out-of-place fill. Hence we need to use scatter for
+            # these two types.
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:

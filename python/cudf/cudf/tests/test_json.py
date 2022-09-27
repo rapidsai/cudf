@@ -701,14 +701,86 @@ def test_json_keep_quotes(keep_quotes, result):
         "c2": [["l11", "l21"], ["l12", "l22"]],
     }
     pdf = pd.DataFrame(data)
-    pdf.to_json(bytes_file, orient="records")
+    pdf.to_json(bytes_file, orient="records", lines=True)
 
     actual = cudf.read_json(
         bytes_file,
         engine="cudf_experimental",
         orient="records",
+        lines=True,
         keep_quotes=keep_quotes,
     )
     expected = pd.DataFrame(result)
 
     assert_eq(actual, expected)
+
+
+def test_json_dtypes_nested_data():
+    # a: StructDtype({'a': StructDtype({'b': dtype('float64')}),
+    #                 'b': dtype('int64')})
+    # b: ListDtype(ListDtype(float64))
+    actual_json_str = (
+        '{"a":{"a":{"b":10.0},"b":11},"b":[[10.0,1.1],[12.0,23.0]]}\n'
+        '{"a":{"a":{"b":107.0},"b":5},"b":[[10.0,11.2],[12.0,0.23]]}\n'
+        '{"a":{"a":{"b":50.7},"b":2},"b":[[10.0,11.3],[12.0,2.3]]}\n'
+        '{"a":{"a":{"b":1.2},"b":67},"b":[[6.0,7.0]]}\n'
+        '{"a":{"a":{"b":40.1},"b":1090},"b":null}\n'
+    )
+
+    """
+    In [3]: df
+    Out[3]:
+                                   a                             b
+    0    {'a': {'b': 10.0}, 'b': 11}   [[10.0, 1.1], [12.0, 23.0]]
+    1    {'a': {'b': 107.0}, 'b': 5}  [[10.0, 11.2], [12.0, 0.23]]
+    2     {'a': {'b': 50.7}, 'b': 2}   [[10.0, 11.3], [12.0, 2.3]]
+    3     {'a': {'b': 1.2}, 'b': 67}                  [[6.0, 7.0]]
+    4  {'a': {'b': 40.1}, 'b': 1090}                          None
+    """
+
+    # a: StructDtype({'a': StructDtype({'b': dtype('int64')}),
+    #                 'b': dtype('float64')})
+    # b: ListDtype(ListDtype(int64))
+    expected_json_str = (
+        '{"a":{"a":{"b":10},"b":11.0},"b":[[10,1],[12,23]]}\n'
+        '{"a":{"a":{"b":107},"b":5.0},"b":[[10,11],[12,0]]}\n'
+        '{"a":{"a":{"b":50},"b":2.0},"b":[[10,11],[12,2]]}\n'
+        '{"a":{"a":{"b":1},"b":67.0},"b":[[6,7]]}\n'
+        '{"a":{"a":{"b":40},"b":1090.0},"b":null}\n'
+    )
+
+    """
+    In [7]: df
+    Out[7]:
+                                  a                    b
+    0    {'a': {'b': 10}, 'b': 11.0}  [[10, 1], [12, 23]]
+    1    {'a': {'b': 107}, 'b': 5.0}  [[10, 11], [12, 0]]
+    2     {'a': {'b': 50}, 'b': 2.0}  [[10, 11], [12, 2]]
+    3     {'a': {'b': 1}, 'b': 67.0}             [[6, 7]]
+    4  {'a': {'b': 40}, 'b': 1090.0}                 None
+    """
+
+    df = cudf.read_json(
+        StringIO(actual_json_str),
+        engine="cudf_experimental",
+        orient="records",
+        lines=True,
+        dtype={
+            "a": cudf.StructDtype(
+                {
+                    "a": cudf.StructDtype({"b": cudf.dtype("int64")}),
+                    "b": cudf.dtype("float64"),
+                }
+            ),
+            "b": cudf.ListDtype(cudf.ListDtype("int64")),
+        },
+    )
+
+    pdf = pd.read_json(
+        StringIO(expected_json_str), orient="records", lines=True
+    )
+    pdf.columns = pdf.columns.astype("str")
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
