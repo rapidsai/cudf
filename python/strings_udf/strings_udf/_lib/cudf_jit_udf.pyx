@@ -20,6 +20,6 @@ def to_string_view_array(Column strings_col):
     cdef column_view input_view = strings_col.view()
     with nogil:
         c_buffer = move(cpp_to_string_view_array(input_view))
-    device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
     DEFAULT_STREAM.c_synchronize()
+    device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
     return as_device_buffer_like(device_buffer, exposed=False)
