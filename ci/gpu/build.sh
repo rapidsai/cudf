@@ -189,28 +189,28 @@ else
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
-    # gpuci_logger "GoogleTests"
-    # # Run libcudf and libcudf_kafka gtests from libcudf-tests package
-    # for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
-    #     test_name=$(basename ${gt})
-    #     echo "Running GoogleTest $test_name"
-    #     ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
-    # done
+    gpuci_logger "GoogleTests"
+    # Run libcudf and libcudf_kafka gtests from libcudf-tests package
+    for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
+        test_name=$(basename ${gt})
+        echo "Running GoogleTest $test_name"
+        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+    done
 
-    # # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-    # for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
-    #     gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
-    #     echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-    #     LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
-    # done
+    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
+        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+    done
 
-    # export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
-    # # Copy libcudf build time results
-    # echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
-    # if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
-    #     gpuci_logger "Copying build time results"
-    #     cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
-    # fi
+    export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
+    # Copy libcudf build time results
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
+        gpuci_logger "Copying build time results"
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+    fi
 
     ################################################################################
     # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
