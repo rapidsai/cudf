@@ -76,6 +76,7 @@ _string_view_isnumeric = _declare_bool_str_int_func("pyisnumeric")
 _string_view_isspace = _declare_bool_str_int_func("pyisspace")
 _string_view_isupper = _declare_bool_str_int_func("pyisupper")
 _string_view_islower = _declare_bool_str_int_func("pyislower")
+_string_view_istitle = _declare_bool_str_int_func("pyistitle")
 
 
 _string_view_count = cuda.declare_device(
@@ -285,3 +286,8 @@ def isupper_impl(st, tbl):
 @create_unary_identifier_func("StringView.islower")
 def islower_impl(st, tbl):
     return _string_view_islower(st, tbl)
+
+
+@create_unary_identifier_func("StringView.istitle")
+def istitle_impl(st, tbl):
+    return _string_view_istitle(st, tbl)
