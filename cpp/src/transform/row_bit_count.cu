@@ -409,7 +409,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
   auto const num_rows = output.size();
   if (tid >= num_rows) { return; }
 
-  // branch stack. points to the last span prior to branching. a branch occurs only
+  // my_branch_stack points to the last span prior to branching. a branch occurs only
   // when we are inside of a list contained within a struct column.
   row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
