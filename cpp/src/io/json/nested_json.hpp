@@ -197,6 +197,7 @@ struct device_json_column {
   // Using the struct's field names
   std::map<std::string, device_json_column> child_columns;
   std::vector<std::string> column_order;
+  // Counting the current number of items in this column
   row_offset_t num_rows = 0;
 
   /**

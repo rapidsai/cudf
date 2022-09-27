@@ -494,8 +494,11 @@ TEST_P(JsonParserTest, UTF_JSON)
   bool const is_full_gpu = GetParam();
   auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
                                        : cuio_json::detail::host_parse_nested_json;
+
+  // Default parsing options
   cudf::io::json_reader_options default_options{};
 
+  // Only ASCII string
   std::string const ascii_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
@@ -544,7 +547,7 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
   options.enable_keep_quotes(true);
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
-  // Get the JSON's tree representation
+  // Get t   JSON's tree representation
   auto const cudf_table =
     json_parser(cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr);
 
