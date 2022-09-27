@@ -355,6 +355,7 @@ add_library(
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
   src/io/text/data_chunk_source_factories.cpp
+  src/io/text/bgzip_data_chunk_source.cu
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
