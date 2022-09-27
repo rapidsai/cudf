@@ -3956,8 +3956,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__ RAPIDS
-        library. Supported operations on strings include the subset of
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
+        RAPIDS library. Supported operations on strings include the subset of
         functions and string methods that expect an input string but do not
         return a string. Refer to caveats in the UDF guide referenced above.
 
