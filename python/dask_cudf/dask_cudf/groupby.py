@@ -11,6 +11,7 @@ from dask.dataframe.core import (
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
+from dask.utils import funcname
 
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
@@ -470,72 +471,44 @@ class CudfSeriesGroupBy(SeriesGroupBy):
 
 
 def _shuffle_aggregate(
-    args,
+    ddf,
     gb_cols,
-    chunk=None,
-    aggregate=None,
+    chunk,
+    chunk_kwargs,
+    aggregate,
+    aggregate_kwargs,
+    split_every,
+    split_out,
     token=None,
-    chunk_kwargs=None,
-    aggregate_kwargs=None,
-    split_every=None,
-    split_out=1,
     sort=None,
-    shuffle="tasks",
+    shuffle=None,
 ):
-    from numbers import Integral
-
-    from dask.dataframe.core import _Frame, map_partitions
-    from dask.utils import funcname
-
-    if chunk_kwargs is None:
-        chunk_kwargs = dict()
-    if aggregate_kwargs is None:
-        aggregate_kwargs = dict()
-
-    if not isinstance(args, (tuple, list)):
-        args = [args]
-
-    dfs = [arg for arg in args if isinstance(arg, _Frame)]
-
-    npartitions = {arg.npartitions for arg in dfs}
-    if len(npartitions) > 1:
-        raise ValueError("All arguments must have same number of partitions")
-    npartitions = npartitions.pop()
-
-    if split_every is None:
-        split_every = 8
-    elif split_every is False:
-        split_every = npartitions
-    elif split_every < 1 or not isinstance(split_every, Integral):
-        raise ValueError("split_every must be an integer >= 1")
-
     # Shuffle-based groupby aggregation
+    # NOTE: This function is the dask_cudf version of
+    # dask.dataframe.groupby._shuffle_aggregate
+
+    # Step 1 - Chunkwise groupby operation
     chunk_name = f"{token or funcname(chunk)}-chunk"
-    chunked = map_partitions(
+    chunked = ddf.map_partitions(
         chunk,
-        *args,
-        meta=chunk(
-            *[arg._meta if isinstance(arg, _Frame) else arg for arg in args],
-            **chunk_kwargs,
-        ),
+        meta=chunk(ddf._meta, **chunk_kwargs),
         enforce_metadata=False,
         token=chunk_name,
         **chunk_kwargs,
     )
 
+    # Step 2 - Perform global sort or shuffle
     shuffle_npartitions = max(
         chunked.npartitions // split_every,
         split_out,
     )
-
-    # Perform global sort or shuffle
     if sort and split_out > 1:
         result = (
             chunked.repartition(npartitions=shuffle_npartitions)
             .sort_values(
                 gb_cols,
                 ignore_index=True,
-                # TODO: pass `shuffle=shuffle` after #11576
+                shuffle=shuffle,
             )
             .map_partitions(
                 aggregate,
@@ -557,6 +530,7 @@ def _shuffle_aggregate(
             **aggregate_kwargs,
         )
 
+    # Step 3 - Repartition and return
     if split_out < result.npartitions:
         return result.repartition(npartitions=split_out)
     return result
@@ -692,23 +666,20 @@ def groupby_agg(
 
     # Check if we are using the shuffle-based algorithm
     if shuffle:
-        try:
-            # Shuffle-based aggregation
-            return _shuffle_aggregate(
-                [ddf],
-                gb_cols,
-                chunk=chunk,
-                chunk_kwargs=chunk_kwargs,
-                aggregate=aggregate,
-                aggregate_kwargs=aggregate_kwargs,
-                token="cudf-aggregate",
-                split_every=split_every,
-                split_out=split_out,
-                shuffle=shuffle if isinstance(shuffle, str) else "tasks",
-                sort=sort,
-            )
-        except ImportError:
-            pass
+        # Shuffle-based aggregation
+        return _shuffle_aggregate(
+            ddf,
+            gb_cols,
+            chunk,
+            chunk_kwargs,
+            aggregate,
+            aggregate_kwargs,
+            split_every,
+            split_out,
+            token="cudf-aggregate",
+            sort=sort,
+            shuffle=shuffle if isinstance(shuffle, str) else None,
+        )
 
     # Deal with sort/shuffle defaults
     if split_out > 1 and sort:
