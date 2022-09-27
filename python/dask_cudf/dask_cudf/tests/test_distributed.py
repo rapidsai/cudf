@@ -103,3 +103,27 @@ def test_shuffle_explicit_comms():
             got_ec = ddf.shuffle(["b"], shuffle="explicit-comms")
             assert hlg_layer(got_ec.dask, "explicit")
             assert len(got_ec) == len(ddf)
+
+            # Test merge API
+            got_ec = ddf.merge(ddf.copy(), on="b", shuffle="explicit-comms")
+            got_tasks = ddf.merge(ddf.copy(), on="b", shuffle="tasks")
+            assert hlg_layer(got_ec.dask, "explicit")
+            assert_eq(got_ec.compute(), got_tasks.compute())
+
+            # Test join API
+            got_ec = ddf.join(
+                ddf.set_index("b"),
+                on="b",
+                lsuffix="_l",
+                rsuffix="_r",
+                shuffle="explicit-comms",
+            )
+            got_tasks = ddf.join(
+                ddf.set_index("b"),
+                on="b",
+                lsuffix="_l",
+                rsuffix="_r",
+                shuffle="tasks",
+            )
+            assert hlg_layer(got_ec.dask, "explicit")
+            assert_eq(got_ec.compute(), got_tasks.compute())
