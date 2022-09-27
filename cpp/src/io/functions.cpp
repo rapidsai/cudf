@@ -287,6 +287,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
 {
   number_of_values = cs.number_of_values;
+  has_null         = cs.has_null;
   if (cs.int_stats) {
     type_specific_stats = *cs.int_stats;
   } else if (cs.double_stats) {

@@ -163,6 +163,7 @@ struct column_statistics;
  */
 struct column_statistics {
   std::optional<uint64_t> number_of_values;  ///< number of statistics
+  std::optional<bool> has_null;              ///< column has any nulls
   std::variant<no_statistics,
                integer_statistics,
                double_statistics,
