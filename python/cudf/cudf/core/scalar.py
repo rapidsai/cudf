@@ -54,7 +54,11 @@ class CachedScalarInstanceMeta(type):
             # if an instance couldn't be found in the cache,
             # construct it and add to cache:
             obj = super().__call__(value, dtype=dtype)
-            self.__instances[cache_key] = obj
+            try:
+                self.__instances[cache_key] = obj
+            except TypeError:
+                # couldn't hash the arguments, don't cache:
+                return obj
             if len(self.__instances) > self.__maxsize:
                 self.__instances.popitem(last=False)
             return obj
