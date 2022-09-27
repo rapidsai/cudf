@@ -22,8 +22,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 
-static constexpr uint32_t block_header_size = 3;
-
 enum CompressionKind : uint8_t {
   NONE   = 0,
   ZLIB   = 1,

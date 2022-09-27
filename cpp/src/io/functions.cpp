@@ -338,17 +338,17 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   return result;
 }
 
-column_info make_column_info(host_span<orc::SchemaType const> orc_schema,
-                             uint32_t column_id,
-                             std::string column_name)
+orc_column_metadata make_orc_column_metadata(host_span<orc::SchemaType const> orc_schema,
+                                             uint32_t column_id,
+                                             std::string column_name)
 {
-  column_info info{column_name};
+  orc_column_metadata info{column_name};
   auto const& orc_col_schema = orc_schema[column_id];
   for (auto i = 0ul; i < orc_col_schema.subtypes.size(); ++i) {
-    info.children.push_back(
-      make_column_info(orc_schema,
-                       orc_col_schema.subtypes[i],
-                       i < orc_col_schema.fieldNames.size() ? orc_col_schema.fieldNames[i] : ""));
+    info.children.push_back(make_orc_column_metadata(
+      orc_schema,
+      orc_col_schema.subtypes[i],
+      i < orc_col_schema.fieldNames.size() ? orc_col_schema.fieldNames[i] : ""));
   }
 
   return info;
@@ -362,10 +362,10 @@ orc_metadata read_orc_metadata(source_info const& src_info)
   auto internal_meta = orc::metadata(sources.front().get(), cudf::default_stream_value);
 
   auto const& root_cols = internal_meta.ff.types[0];
-  std::vector<column_info> col_infos;
+  std::vector<orc_column_metadata> col_infos;
   for (auto i = 0ul; i < root_cols.subtypes.size(); ++i) {
-    col_infos.push_back(
-      make_column_info(internal_meta.ff.types, root_cols.subtypes[i], root_cols.fieldNames[i]));
+    col_infos.push_back(make_orc_column_metadata(
+      internal_meta.ff.types, root_cols.subtypes[i], root_cols.fieldNames[i]));
   }
 
   return {std::move(col_infos), internal_meta.ff.stripes.size()};

@@ -37,6 +37,9 @@
 namespace cudf {
 namespace io {
 namespace orc {
+
+static constexpr uint32_t block_header_size = 3;
+
 struct PostScript {
   uint64_t footerLength       = 0;     // the length of the footer section in bytes
   CompressionKind compression = NONE;  // the kind of generic compression used
