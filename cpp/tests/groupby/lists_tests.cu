@@ -146,8 +146,7 @@ void test_sum_agg(column_view const& keys,
                   column_view const& expected_keys,
                   column_view const& expected_values)
 {
-  EXPECT_THROW(test_sort_based_sum_agg(keys, values, expected_keys, expected_values),
-               cudf::logic_error);
+  test_sort_based_sum_agg(keys, values, expected_keys, expected_values);
   test_hash_based_sum_agg(keys, values, expected_keys, expected_values);
 }
 }  // namespace
