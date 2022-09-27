@@ -1480,7 +1480,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         )
 
     def any(self):
-        return self._values.any()
+        if len(self) == 0:
+            return False
 
     def to_pandas(self):
         return pd.Index(self._values.to_pandas(), name=self.name)
