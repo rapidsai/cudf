@@ -2252,7 +2252,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Support for use of string data within UDFs is provided through the
-        [strings_udf](https://anaconda.org/rapidsai-nightly/strings_udf) RAPIDS
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__ RAPIDS
         library. Supported operations on strings include the subset of
         functions and string methods that expect an input string but do not
         return a string. Refer to caveats in the UDF guide referenced above.
@@ -2361,9 +2361,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         However, the following UDF is not allowed since it includes an
-            operation that requires the creation of a new string: a call to the
-            ``upper`` method. Methods that are not supported in this manner
-            will raise an ``AttributeError``.
+        operation that requires the creation of a new string: a call to the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
 
         >>> def f(st):
         ...     new = st.upper()
