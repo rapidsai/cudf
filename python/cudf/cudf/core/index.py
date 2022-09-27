@@ -2225,12 +2225,18 @@ class DatetimeIndex(GenericIndex):
         return False
 
     def _clean_nulls_from_index(self):
-        # Converting to string Index is necessary for DatetimeColumn
-        # because larger values will easily overflow while being
-        # converted to pandas later.
-        # Converting to CategoricalIndex is necessary to maintain repr
-        # formatting, as StringIndex is resulting in drastically different
-        # output.
+        # __repr__ for other data types works by converting
+        # to Pandas first, and relying on Pandas to convert
+        #  values to strings. However,
+        # Pandas encounters issues with overflow for datetime
+        # and timedelta types because it does not support
+        # sub-nanosecond resolutions. Thus, we do the work of
+        # converting datetimes/timedeltas to strings before handing
+        # off to Pandas.
+        # 
+        # Further, we need to cast the result to a `CategoricalIndex`,
+        # because `StringIndex` values in Pandas are printed on
+        # the same line, rather than one-per-line.
         return cudf.Index(
             self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
             name=self.name,
