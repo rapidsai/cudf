@@ -2233,7 +2233,7 @@ class DatetimeIndex(GenericIndex):
         # sub-nanosecond resolutions. Thus, we do the work of
         # converting datetimes/timedeltas to strings before handing
         # off to Pandas.
-        # 
+        #
         # Further, we need to cast the result to a `CategoricalIndex`,
         # because `StringIndex` values in Pandas are printed on
         # the same line, rather than one-per-line.
