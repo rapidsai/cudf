@@ -1175,7 +1175,8 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
                                                              int t)
 {
   // max nesting depth of the column
-  int const max_depth = s->col.max_nesting_depth;
+  int const max_depth       = s->col.max_nesting_depth;
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
   // how many (input) values we've processed in the page so far
   int input_value_count = s->input_value_count;
   // how many rows we've processed in the page so far
@@ -1235,7 +1236,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       uint32_t const warp_valid_mask =
         // for flat schemas, a simple ballot_sync gives us the correct count and bit positions
         // because every value in the input matches to a value in the output
-        max_depth == 1
+        !has_repetition
           ? ballot(is_valid)
           :
           // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
@@ -1284,11 +1285,12 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // the correct position to start reading. since we are about to write the validity vector here
       // we need to adjust our computed mask to take into account the write row bounds.
       int const in_write_row_bounds =
-        max_depth == 1
+        !has_repetition
           ? thread_row_index >= s->first_row && thread_row_index < (s->first_row + s->num_rows)
           : in_row_bounds;
       int const first_thread_in_write_range =
-        max_depth == 1 ? __ffs(ballot(in_write_row_bounds)) - 1 : 0;
+        !has_repetition ? __ffs(ballot(in_write_row_bounds)) - 1 : 0;
+
       // # of bits to of the validity mask to write out
       int const warp_valid_mask_bit_count =
         first_thread_in_write_range < 0 ? 0 : warp_value_count - first_thread_in_write_range;
@@ -1572,6 +1574,8 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
   }
 
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -1624,7 +1628,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       // - so we will end up ignoring the first two input rows, and input rows 2..n will
       //   get written to the output starting at position 0.
       //
-      if (s->col.max_nesting_depth == 1) { dst_pos -= s->first_row; }
+      if (!has_repetition) { dst_pos -= s->first_row; }
 
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
       // before first_row) in the flat hierarchy case.
@@ -1764,6 +1768,8 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
 
   // computes:
   // PageInfo::chunk_row for all pages
+  // Note: this is doing some redundant work for pages in flat hierarchies.  chunk_row has already
+  // been computed during header decoding. the overall amount of work here is very small though.
   auto key_input = thrust::make_transform_iterator(
     pages.device_ptr(), [] __device__(PageInfo const& page) { return page.chunk_idx; });
   auto page_input = thrust::make_transform_iterator(

@@ -2629,11 +2629,12 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     c1_offset_iter, c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<float> c1_floats(
     values, values + (num_rows * floats_per_row), valids);
-  auto c1 = cudf::make_lists_column(num_rows,
-                                    c1_offsets.release(),
-                                    c1_floats.release(),
-                                    cudf::UNKNOWN_NULL_COUNT,
-                                    cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  auto _c1 = cudf::make_lists_column(num_rows,
+                                     c1_offsets.release(),
+                                     c1_floats.release(),
+                                     cudf::UNKNOWN_NULL_COUNT,
+                                     cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  auto c1  = cudf::purge_nonempty_nulls(static_cast<cudf::lists_column_view>(*_c1));
 
   // list<list<int>>
   auto c2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
@@ -2651,22 +2652,24 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     0, [string_per_row](cudf::size_type idx) { return idx * string_per_row; });
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offset_iter,
                                                                     offset_iter + num_rows + 1);
-  auto c3_list =
+  auto _c3_list =
     cudf::make_lists_column(num_rows,
                             offsets.release(),
                             string_col.release(),
                             cudf::UNKNOWN_NULL_COUNT,
                             cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  auto c3_list = cudf::purge_nonempty_nulls(static_cast<cudf::lists_column_view>(*_c3_list));
   cudf::test::fixed_width_column_wrapper<int> c3_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> c3_floats(values, values + num_rows, valids);
   std::vector<std::unique_ptr<cudf::column>> c3_children;
   c3_children.push_back(std::move(c3_list));
   c3_children.push_back(c3_ints.release());
   c3_children.push_back(c3_floats.release());
-  cudf::test::structs_column_wrapper c3(std::move(c3_children));
+  cudf::test::structs_column_wrapper _c3(std::move(c3_children));
+  auto c3 = cudf::purge_nonempty_nulls(static_cast<cudf::structs_column_view>(_c3));
 
   // write it out
-  cudf::table_view tbl({c0, *c1, *c2, c3});
+  cudf::table_view tbl({c0, *c1, *c2, *c3});
   auto filepath = temp_env->get_temp_filepath("UserBoundsWithNullsMixedTypes.parquet");
   cudf_io::parquet_writer_options out_args =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
