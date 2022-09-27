@@ -57,10 +57,10 @@ def _check_groupby_supported(func):
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
     @_dask_cudf_nvtx_annotate
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sort=None, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, sort=sort, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def __getitem__(self, key):
@@ -280,10 +280,10 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
 class CudfSeriesGroupBy(SeriesGroupBy):
     @_dask_cudf_nvtx_annotate
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sort=None, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, sort=sort, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     @_check_groupby_supported

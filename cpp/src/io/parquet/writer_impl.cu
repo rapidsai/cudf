@@ -1051,31 +1051,23 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   // Make decision about which chunks have dictionary
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
-    std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() {
+    std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() -> std::pair<bool, uint8_t> {
       // calculate size of chunk if dictionary is used
 
       // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
       // of bits required to encode indices into the dictionary
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
-      auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
+      auto nbits          = std::max(CompactProtocolReader::NumRequiredBits(max_dict_index), 1);
 
-      // We don't use dictionary if the indices are > 24 bits because that's the maximum bitpacking
-      // bitsize we efficiently support
-      if (nbits > 24) { return std::pair(false, 0); }
+      // We don't use dictionary if the indices are > MAX_DICT_BITS bits because that's the maximum
+      // bitpacking bitsize we efficiently support
+      if (nbits > MAX_DICT_BITS) { return {false, 0}; }
 
-      // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-      constexpr auto allowed_bitsizes =
-        std::array<size_type, 12>{1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
-
-      // ceil to (1/2/3/4/5/6/8/10/12/16/20/24)
-      auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
-      auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
-
+      auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
+      if (ck.plain_data_size <= dict_enc_size) { return {false, 0}; }
 
-      bool use_dict = (ck.plain_data_size > dict_enc_size);
-      if (not use_dict) { rle_bits = 0; }
-      return std::pair(use_dict, rle_bits);
+      return {true, nbits};
     }();
   }
 

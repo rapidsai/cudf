@@ -29,6 +29,7 @@ from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
+from dask_cudf.sorting import _get_shuffle_type
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -133,14 +134,16 @@ class DataFrame(_Frame, dd.core.DataFrame):
         )
 
     @_dask_cudf_nvtx_annotate
-    def merge(self, other, **kwargs):
+    def merge(self, other, shuffle=None, **kwargs):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return _shuffle_context(super().merge, other, on=on, **kwargs)
+        return super().merge(
+            other, on=on, shuffle=_get_shuffle_type(shuffle), **kwargs
+        )
 
     @_dask_cudf_nvtx_annotate
-    def join(self, other, **kwargs):
+    def join(self, other, shuffle=None, **kwargs):
         # CuDF doesn't support "right" join yet
         how = kwargs.pop("how", "left")
         if how == "right":
@@ -149,11 +152,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return _shuffle_context(super().join, other, how=how, on=on, **kwargs)
+        return super().join(
+            other, how=how, on=on, shuffle=_get_shuffle_type(shuffle), **kwargs
+        )
 
     @_dask_cudf_nvtx_annotate
     def set_index(
-        self, other, sorted=False, divisions=None, shuffle="tasks", **kwargs
+        self, other, sorted=False, divisions=None, shuffle=None, **kwargs
     ):
 
         pre_sorted = sorted
@@ -217,7 +222,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             super().set_index,
             other,
             sorted=pre_sorted,
-            shuffle=shuffle,
+            shuffle=_get_shuffle_type(shuffle),
             divisions=divisions,
             **kwargs,
         )
@@ -234,7 +239,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         na_position="last",
         sort_function=None,
         sort_function_kwargs=None,
-        shuffle="tasks",
+        shuffle=None,
         **kwargs,
     ):
         if kwargs:
@@ -328,29 +333,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().repartition(*args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
-    def shuffle(self, *args, shuffle="tasks", **kwargs):
+    def shuffle(self, *args, shuffle=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
-        if (
-            shuffle == "explicit-comms"
-            or dask.config.get("explicit-comms", False)
-        ) and (kwargs.get("npartitions", self.npartitions) > self.npartitions):
-            # Explicit-comms shuffle handles `npartitions` kwarg
-            # better than upstream `dd.shuffle` (repartitions on worker)
-            try:
-                from dask_cuda.explicit_comms.dataframe.shuffle import (
-                    shuffle as ec_shuffle,
-                )
-
-                return ec_shuffle(self, *args, **kwargs)
-            except ImportError:
-                pass
-
-        # Use upstream shuffle
-        return _shuffle_context(
-            super().shuffle,
-            *args,
-            shuffle=shuffle,
-            **kwargs,
+        return super().shuffle(
+            *args, shuffle=_get_shuffle_type(shuffle), **kwargs
         )
 
     @_dask_cudf_nvtx_annotate

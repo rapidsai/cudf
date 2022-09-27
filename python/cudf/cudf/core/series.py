@@ -589,7 +589,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import pandas as pd
         >>> import numpy as np
         >>> data = [10, 20, 30, np.nan]
-        >>> pds = pd.Series(data)
+        >>> pds = pd.Series(data, dtype='float64')
         >>> cudf.Series.from_pandas(pds)
         0    10.0
         1    20.0

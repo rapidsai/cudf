@@ -577,8 +577,12 @@ def test_groupby_categorical_key():
     got = gddf.groupby("name", sort=True).agg(
         {"x": ["mean", "max"], "y": ["mean", "count"]}
     )
-    expect = ddf.groupby("name", sort=True).agg(
-        {"x": ["mean", "max"], "y": ["mean", "count"]}
+    # Use `compute` to avoid upstream issue for now
+    # (See: https://github.com/dask/dask/issues/9515)
+    expect = (
+        ddf.compute()
+        .groupby("name", sort=True)
+        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
     dd.assert_eq(expect, got)
 

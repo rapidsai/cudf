@@ -30,6 +30,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
@@ -153,7 +154,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(count,
+  thrust::for_each(rmm::exec_policy(cudf::default_stream_value),
+                   count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
                      auto const out_idx = in_idx * 2;

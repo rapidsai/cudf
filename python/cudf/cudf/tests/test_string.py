@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.testing._utils import (
@@ -1769,7 +1769,8 @@ def test_strings_filling_tests(data, width, fillchar):
         pytest.param(
             ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
             marks=pytest.mark.xfail(
-                reason="pandas 1.5 upgrade TODO",
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/20868",
             ),
         ),
         [" ", "\t\r\n ", ""],
@@ -2012,10 +2013,32 @@ def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    assert_eq(
-        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
-    )
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
+    if pat is None:
+        assert_exceptions_equal(
+            lfunc=ps.str.startswith,
+            rfunc=gs.str.startswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+        assert_exceptions_equal(
+            lfunc=ps.str.endswith,
+            rfunc=gs.str.endswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+    else:
+        assert_eq(
+            ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+        )
+        assert_eq(
+            ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False
+        )
 
 
 @pytest.mark.parametrize(

@@ -106,7 +106,7 @@ std::unique_ptr<column> extract_all_record(
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // Compile regex into device object.
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
   // The extract pattern should always include groups.
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "extract_all requires group indicators in the regex pattern.");
