@@ -619,9 +619,6 @@ TEST_F(RowBitCount, Table)
     mcv.begin<size_type>(),
     sum_functor{cv0.data<size_type>(), cv1.data<size_type>(), cv2.data<size_type>()});
 
-  cudf::test::print(*expected);
-  cudf::test::print(*result);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
 }
 
@@ -651,8 +648,8 @@ TEST_F(RowBitCount, DepthJump)
   table_view t({c0});
   auto result = cudf::row_bit_count(t);
 
-  // expected size = (num rows at level 1 + num_rows at level 2) + (# values in leafint column) + 1
-  // (int column)
+  // expected size = (num rows at level 1 + num_rows at level 2) + (# values the leaf int column) +
+  // 1 (value in topmost int column)
   constexpr size_type offset_size = sizeof(cudf::offset_type) * CHAR_BIT;
   constexpr size_type type_size   = sizeof(T) * CHAR_BIT;
   cudf::test::fixed_width_column_wrapper<size_type> expected{
