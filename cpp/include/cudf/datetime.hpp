@@ -134,7 +134,7 @@ std::unique_ptr<cudf::column> extract_second(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts millisecond from any date time type and returns an int16_t
+ * @brief  Extracts millisecond fraction from any date time type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -143,12 +143,12 @@ std::unique_ptr<cudf::column> extract_second(
  * @returns cudf::column of the extracted int16_t milliseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_millisecond(
+std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts microsecond from any date time type and returns an int16_t
+ * @brief  Extracts microsecond fraction from any date time type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -157,12 +157,12 @@ std::unique_ptr<cudf::column> extract_millisecond(
  * @returns cudf::column of the extracted int16_t microseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_microsecond(
+std::unique_ptr<cudf::column> extract_microsecond_fraction(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts nanosecond from any date time type and returns an int16_t
+ * @brief  Extracts nanosecond fraction from any date time type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -171,7 +171,7 @@ std::unique_ptr<cudf::column> extract_microsecond(
  * @returns cudf::column of the extracted int16_t nanoseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_nanosecond(
+std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

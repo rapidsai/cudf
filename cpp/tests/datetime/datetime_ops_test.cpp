@@ -60,9 +60,9 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   EXPECT_THROW(extract_hour(col), cudf::logic_error);
   EXPECT_THROW(extract_minute(col), cudf::logic_error);
   EXPECT_THROW(extract_second(col), cudf::logic_error);
-  EXPECT_THROW(extract_millisecond(col), cudf::logic_error);
-  EXPECT_THROW(extract_microsecond(col), cudf::logic_error);
-  EXPECT_THROW(extract_nanosecond(col), cudf::logic_error);
+  EXPECT_THROW(extract_millisecond_fraction(col), cudf::logic_error);
+  EXPECT_THROW(extract_microsecond_fraction(col), cudf::logic_error);
+  EXPECT_THROW(extract_nanosecond_fraction(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
   EXPECT_THROW(add_calendrical_months(
@@ -170,31 +170,31 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ns),
                                  fixed_width_column_wrapper<int16_t>{59, 0, 0});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond(timestamps_D),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond(timestamps_s),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_s),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond(timestamps_ms),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{762, 0, 929});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond(timestamps_ns),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_ns),
                                  fixed_width_column_wrapper<int16_t>{976, 23, 987});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond(timestamps_D),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond(timestamps_s),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_s),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond(timestamps_ms),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond(timestamps_ns),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_ns),
                                  fixed_width_column_wrapper<int16_t>{675, 432, 234});
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond(timestamps_D),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond(timestamps_s),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_s),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond(timestamps_ms),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond(timestamps_ns),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_ns),
                                  fixed_width_column_wrapper<int16_t>{766, 424, 623});
 }
 
@@ -226,9 +226,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps), int16s);
 }
 
 TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)

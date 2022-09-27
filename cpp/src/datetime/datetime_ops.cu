@@ -83,7 +83,7 @@ struct extract_component_operator {
     auto microsecs_ =
       duration_cast<microseconds>(time_since_midnight - hrs_ - mins_ - secs_ - millisecs_);
     auto nanosecs_ = duration_cast<nanoseconds>(time_since_midnight - hrs_ - mins_ - secs_ -
-                                                 millisecs_ - microsecs_);
+                                                millisecs_ - microsecs_);
 
     switch (Component) {
       case datetime_component::YEAR:
@@ -503,27 +503,27 @@ std::unique_ptr<column> extract_second(column_view const& column,
     cudf::type_id::INT16>(column, stream, mr);
 }
 
-std::unique_ptr<column> extract_millisecond(column_view const& column,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MILLISECOND>,
     cudf::type_id::INT16>(column, stream, mr);
 }
 
-std::unique_ptr<column> extract_microsecond(column_view const& column,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MICROSECOND>,
     cudf::type_id::INT16>(column, stream, mr);
 }
 
-std::unique_ptr<column> extract_nanosecond(column_view const& column,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::NANOSECOND>,
@@ -642,25 +642,25 @@ std::unique_ptr<column> extract_second(column_view const& column,
   return detail::extract_second(column, cudf::default_stream_value, mr);
 }
 
-std::unique_ptr<column> extract_millisecond(column_view const& column,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
+                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_millisecond(column, cudf::default_stream_value, mr);
+  return detail::extract_millisecond_fraction(column, cudf::default_stream_value, mr);
 }
 
-std::unique_ptr<column> extract_microsecond(column_view const& column,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
+                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_microsecond(column, cudf::default_stream_value, mr);
+  return detail::extract_microsecond_fraction(column, cudf::default_stream_value, mr);
 }
 
-std::unique_ptr<column> extract_nanosecond(column_view const& column,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_nanosecond(column, cudf::default_stream_value, mr);
+  return detail::extract_nanosecond_fraction(column, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,

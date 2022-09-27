@@ -50,11 +50,17 @@ def extract_datetime_component(Column col, object field):
         elif field == "second":
             c_result = move(libcudf_datetime.extract_second(col_view))
         elif field == "milli_second":
-            c_result = move(libcudf_datetime.extract_millisecond(col_view))
+            c_result = move(
+                libcudf_datetime.extract_millisecond_fraction(col_view)
+            )
         elif field == "micro_second":
-            c_result = move(libcudf_datetime.extract_microsecond(col_view))
+            c_result = move(
+                libcudf_datetime.extract_microsecond_fraction(col_view)
+            )
         elif field == "nano_second":
-            c_result = move(libcudf_datetime.extract_nanosecond(col_view))
+            c_result = move(
+                libcudf_datetime.extract_nanosecond_fraction(col_view)
+            )
         elif field == "day_of_year":
             c_result = move(libcudf_datetime.day_of_year(col_view))
         else:
