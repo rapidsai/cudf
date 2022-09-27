@@ -230,11 +230,17 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
-    shuffle="tasks",
+    shuffle=None,
     sort_function=None,
     sort_function_kwargs=None,
 ):
     """Sort by the given list/tuple of column names."""
+
+    # Note that we cannot import `rearrange_by_column` in
+    # the header, because we need to allow dask-cuda to
+    # patch this function before we import it here
+    from dask.dataframe.shuffle import rearrange_by_column
+
     if not isinstance(ascending, bool):
         raise ValueError("ascending must be either True or False")
     if na_position not in ("first", "last"):
@@ -280,7 +286,8 @@ def sort_values(
     )
 
     df2 = df.assign(_partitions=partitions)
-    df3 = df2.shuffle(
+    df3 = rearrange_by_column(
+        df2,
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,

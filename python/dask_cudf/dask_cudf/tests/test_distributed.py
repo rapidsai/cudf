@@ -98,3 +98,8 @@ def test_shuffle_explicit_comms():
             assert got_ec.divisions == got_tasks.divisions
             assert hlg_layer(got_ec.dask, "explicit")
             assert_eq(got_ec.compute(), got_tasks.compute())
+
+            # Test shuffle API
+            got_ec = ddf.shuffle(["b"], shuffle="explicit-comms")
+            assert hlg_layer(got_ec.dask, "explicit")
+            assert len(got_ec) == len(ddf)
