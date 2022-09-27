@@ -289,7 +289,7 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
       case token_t::StructBegin: return NC_STRUCT;
       case token_t::ListBegin: return NC_LIST;
       case token_t::StringBegin: return NC_STR;
-      case token_t::ValueBegin: return NC_VAL;
+      case token_t::ValueBegin: return NC_STR;  // NC_VAL;
       case token_t::FieldNameBegin: return NC_FN;
       default: return NC_ERR;
     };
@@ -576,14 +576,14 @@ TEST_F(JsonTest, TreeRepresentation)
   // Golden sample of node categories
   std::vector<cuio_json::node_t> golden_node_categories = {
     cuio_json::NC_LIST, cuio_json::NC_STRUCT, cuio_json::NC_FN,     cuio_json::NC_STR,
-    cuio_json::NC_FN,   cuio_json::NC_LIST,   cuio_json::NC_VAL,    cuio_json::NC_VAL,
-    cuio_json::NC_VAL,  cuio_json::NC_FN,     cuio_json::NC_STR,    cuio_json::NC_FN,
-    cuio_json::NC_STR,  cuio_json::NC_FN,     cuio_json::NC_VAL,    cuio_json::NC_STRUCT,
+    cuio_json::NC_FN,   cuio_json::NC_LIST,   cuio_json::NC_STR,    cuio_json::NC_STR,
+    cuio_json::NC_STR,  cuio_json::NC_FN,     cuio_json::NC_STR,    cuio_json::NC_FN,
+    cuio_json::NC_STR,  cuio_json::NC_FN,     cuio_json::NC_STR,    cuio_json::NC_STRUCT,
     cuio_json::NC_FN,   cuio_json::NC_STR,    cuio_json::NC_FN,     cuio_json::NC_LIST,
-    cuio_json::NC_VAL,  cuio_json::NC_STRUCT, cuio_json::NC_VAL,    cuio_json::NC_STRUCT,
+    cuio_json::NC_STR,  cuio_json::NC_STRUCT, cuio_json::NC_STR,    cuio_json::NC_STRUCT,
     cuio_json::NC_FN,   cuio_json::NC_LIST,   cuio_json::NC_STRUCT, cuio_json::NC_STRUCT,
     cuio_json::NC_FN,   cuio_json::NC_STR,    cuio_json::NC_FN,     cuio_json::NC_STR,
-    cuio_json::NC_FN,   cuio_json::NC_VAL};
+    cuio_json::NC_FN,   cuio_json::NC_STR};
 
   // Golden sample of node ids
   // clang-format off
@@ -664,9 +664,9 @@ TEST_F(JsonTest, TreeRepresentation2)
   // clang-format off
   std::vector<cuio_json::node_t> golden_node_categories = {
     cuio_json::NC_LIST, cuio_json::NC_STRUCT,
-    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_LIST,
-    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_VAL,
-                          cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_VAL};
+    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_STR, cuio_json::NC_FN,  cuio_json::NC_LIST,
+    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_STR, cuio_json::NC_FN,  cuio_json::NC_STR,
+                          cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_STR, cuio_json::NC_FN,  cuio_json::NC_STR};
 
   // Golden sample of node ids
   std::vector<cuio_json::NodeIndexT> golden_parent_node_ids = {
@@ -744,6 +744,7 @@ struct JsonTreeTraversalTest : public cudf::test::BaseFixture,
 
 //
 std::vector<std::string> json_list = {
+  "[]",
   "value",
   "\"string\"",
   "[1, 2, 3]",
@@ -767,6 +768,7 @@ std::vector<std::string> json_list = {
 
 std::vector<std::string> json_lines_list = {
   // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i} with JSON-lines
+  "",
   R"(  {}
  { "a": { "y" : 6, "z": [] }}
  { "a": { "y" : 6, "z": [2, 3, 4, 5] }}
