@@ -1763,9 +1763,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     cudf.core.column.datetime.DatetimeColumn,
                 ),
             ):
+                # Converting to string column is necessary for Timedelta
+                # & DatetimeColumn's because larger values will easily
+                # overflow while being converted to pandas later.
                 output._data[col_name] = output._data[col_name].astype("str")
-            else:
-                output._data[col_name] = output._data[col_name]
 
         output = output.to_pandas().to_string(
             max_rows=max_rows,

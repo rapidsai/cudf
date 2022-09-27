@@ -2214,6 +2214,12 @@ class DatetimeIndex(GenericIndex):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
+        # Converting to string Index is necessary for DatetimeColumn
+        # because larger values will easily overflow while being
+        # converted to pandas later.
+        # Converting to CategoricalIndex is necessary to maintain repr
+        # formatting, as StringIndex is resulting in drastically different
+        # output.
         return cudf.Index(
             self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
             name=self.name,
@@ -2477,6 +2483,12 @@ class TimedeltaIndex(GenericIndex):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
+        # Converting to string Index is necessary for TimedeltaColumn
+        # because larger values will easily overflow while being
+        # converted to pandas later.
+        # Converting to CategoricalIndex is necessary to maintain repr
+        # formatting, as StringIndex is resulting in drastically different
+        # output.
         return cudf.Index(
             self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
             name=self.name,

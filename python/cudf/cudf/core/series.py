@@ -1212,6 +1212,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 cudf.core.column.datetime.DatetimeColumn,
             ),
         ):
+            # Converting to string column is necessary for Timedelta
+            # & DatetimeColumn's because larger values will easily
+            # overflow while being converted to pandas later.
             output = repr(
                 preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
             )
