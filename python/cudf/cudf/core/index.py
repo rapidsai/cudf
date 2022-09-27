@@ -888,23 +888,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def to_series(self, index=None, name=None):
-        """
-        Create a Series with both index and values equal to the index keys.
-        Useful with map for returning an indexer based on an index.
-
-        Parameters
-        ----------
-        index : Index, optional
-            Index of resulting Series. If None, defaults to original index.
-        name : str, optional
-            Name of resulting Series. If None, defaults to name of original
-            index.
-
-        Returns
-        -------
-        Series
-            The dtype will be based on the type of the Index values.
-        """
         return cudf.Series._from_data(
             self._data,
             index=self.copy(deep=False) if index is None else index,
@@ -918,13 +901,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index().append(other)
 
     def isin(self, values):
-        """Return a boolean array where the index values are in values
-
-        Compute boolean array of whether each index value is found in
-        the passed set of values. The length of the returned boolean
-        array matches the length of the index.
-        """
-
         # To match pandas behavior, even though only list-like objects are
         # supposed to be passed, only scalars throw errors. Other types (like
         # dicts) just transparently return False (see the implementation of
@@ -1550,35 +1526,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._concat(to_concat)
 
     def unique(self):
-        """
-        Return unique values in the index.
-
-        Returns
-        -------
-        Index without duplicates
-        """
         return cudf.core.index._index_from_data(
             {self.name: self._values.unique()}, name=self.name
         )
 
     def to_series(self, index=None, name=None):
-        """
-        Create a Series with both index and values equal to the index keys.
-        Useful with map for returning an indexer based on an index.
-
-        Parameters
-        ----------
-        index : Index, optional
-            Index of resulting Series. If None, defaults to original index.
-        name : str, optional
-            Name of resulting Series. If None, defaults to name of original
-            index.
-
-        Returns
-        -------
-        Series
-            The dtype will be based on the type of the Index values.
-        """
         return cudf.Series._from_data(
             self._data,
             index=self.copy(deep=False) if index is None else index,
@@ -1586,34 +1538,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         )
 
     def isin(self, values):
-        """Return a boolean array where the index values are in values.
-
-        Compute boolean array of whether each index value is found in
-        the passed set of values. The length of the returned boolean
-        array matches the length of the index.
-
-        Parameters
-        ----------
-        values : set, list-like, Index
-            Sought values.
-
-        Returns
-        -------
-        is_contained : cupy array
-            CuPy array of boolean values.
-
-        Examples
-        --------
-        >>> idx = cudf.Index([1,2,3])
-        >>> idx
-        Int64Index([1, 2, 3], dtype='int64')
-
-        Check whether each index value in a list of values.
-
-        >>> idx.isin([1, 4])
-        array([ True, False, False])
-        """
-
         # To match pandas behavior, even though only list-like objects are
         # supposed to be passed, only scalars throw errors. Other types (like
         # dicts) just transparently return False (see the implementation of

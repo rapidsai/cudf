@@ -561,6 +561,66 @@ class BaseIndex(Serializable):
         """
         return NotImplementedError()
 
+    def isin(self, values):
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index
+            Sought values.
+
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
+        """
+        return NotImplementedError()
+
+    def unique(self):
+        """
+        Return unique values in the index.
+
+        Returns
+        -------
+        Index without duplicates
+        """
+        return NotImplementedError()
+
+    def to_series(self, index=None, name=None):
+        """
+        Create a Series with both index and values equal to the index keys.
+        Useful with map for returning an indexer based on an index.
+
+        Parameters
+        ----------
+        index : Index, optional
+            Index of resulting Series. If None, defaults to original index.
+        name : str, optional
+            Name of resulting Series. If None, defaults to name of original
+            index.
+
+        Returns
+        -------
+        Series
+            The dtype will be based on the type of the Index values.
+        """
+        return NotImplementedError()
+
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
