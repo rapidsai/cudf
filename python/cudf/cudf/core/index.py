@@ -929,7 +929,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def append(self, other):
         """
-        Append a collection of Index options together.
+        Append a collection of Index objects together.
         """
         return self._as_int_index().append(other)
 
