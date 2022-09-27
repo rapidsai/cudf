@@ -99,7 +99,7 @@ struct extract_component_operator {
       case datetime_component::SECOND: return secs_.count();
       case datetime_component::MILLISECOND: return millisecs_.count();
       case datetime_component::MICROSECOND: return microsecs_.count();
-      case datetime_component::NANOSECOND: return nanoosecs_.count();
+      case datetime_component::NANOSECOND: return nanosecs_.count();
       default: return 0;
     }
   }
