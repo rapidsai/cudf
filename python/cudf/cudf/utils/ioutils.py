@@ -842,14 +842,23 @@ sep : char, default ','
     Delimiter to be used.
 delimiter : char, default None
     Alternative argument name for sep.
-delim_whitespace : bool, default False
-    Determines whether to use whitespace as delimiter.
-lineterminator : char, default '\\n'
-    Character to indicate end of line.
-skipinitialspace : bool, default False
-    Skip spaces after delimiter.
+header : int, default 'infer'
+    Row number to use as the column names. Default behavior is to infer
+    the column names: if no names are passed, header=0;
+    if column names are passed explicitly, header=None.
 names : list of str, default None
     List of column names to be used.
+index_col : int, string or False, default None
+    Column to use as the row labels of the DataFrame. Passing `index_col=False`
+    explicitly disables index column inference and discards the last column.
+usecols : list of int or str, default None
+    Returns subset of the columns given in the list. All elements must be
+    either integer indices (column number) or strings that correspond to
+    column names
+prefix : str, default None
+    Prefix to add to column numbers when parsing without a header row
+mangle_dupe_cols : boolean, default True
+    Duplicate columns will be specified as 'X','X.1',...'X.N'.
 dtype : type, str, list of types, or dict of column -> type, default None
     Data type(s) for data or columns. If `dtype` is a type/str, all columns
     are mapped to the particular type passed. If list, types are applied in
@@ -858,63 +867,18 @@ dtype : type, str, list of types, or dict of column -> type, default None
     E.g. {{‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}}
     If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
     and not infer or interpret to dtype.
-quotechar : char, default '"'
-    Character to indicate start and end of quote item.
-quoting : str or int, default 0
-    Controls quoting behavior. Set to one of
-    0 (csv.QUOTE_MINIMAL), 1 (csv.QUOTE_ALL),
-    2 (csv.QUOTE_NONNUMERIC) or 3 (csv.QUOTE_NONE).
-    Quoting is enabled with all values except 3.
-doublequote : bool, default True
-    When quoting is enabled, indicates whether to interpret two
-    consecutive quotechar inside fields as single quotechar
-header : int, default 'infer'
-    Row number to use as the column names. Default behavior is to infer
-    the column names: if no names are passed, header=0;
-    if column names are passed explicitly, header=None.
-usecols : list of int or str, default None
-    Returns subset of the columns given in the list. All elements must be
-    either integer indices (column number) or strings that correspond to
-    column names
-mangle_dupe_cols : boolean, default True
-    Duplicate columns will be specified as 'X','X.1',...'X.N'.
-skiprows : int, default 0
-    Number of rows to be skipped from the start of file.
-skipfooter : int, default 0
-    Number of rows to be skipped at the bottom of file.
-compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
-    For on-the-fly decompression of on-disk data. If ‘infer’, then detect
-    compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
-    decompression). If using ‘zip’, the ZIP file must contain only one
-    data file to be read in, otherwise the first non-zero-sized file will
-    be used. Set to None for no decompression.
-decimal : char, default '.'
-    Character used as a decimal point.
-thousands : char, default None
-    Character used as a thousands delimiter.
 true_values : list, default None
     Values to consider as boolean True
 false_values : list, default None
     Values to consider as boolean False
+skipinitialspace : bool, default False
+    Skip spaces after delimiter.
+skiprows : int, default 0
+    Number of rows to be skipped from the start of file.
+skipfooter : int, default 0
+    Number of rows to be skipped at the bottom of file.
 nrows : int, default None
     If specified, maximum number of rows to read
-byte_range : list or tuple, default None
-    Byte range within the input file to be read. The first number is the
-    offset in bytes, the second number is the range size in bytes. Set the
-    size to zero to read all data after the offset location. Reads the row
-    that starts before or at the end of the range, even if it ends after
-    the end of the range.
-skip_blank_lines : bool, default True
-    If True, discard and do not parse empty lines
-    If False, interpret empty lines as NaN values
-parse_dates : list of int or names, default None
-    If list of columns, then attempt to parse each entry as a date.
-    Columns may not always be recognized as dates, for instance due to
-    unusual or non-standard formats. To guarantee a date and increase parsing
-    speed, explicitly specify `dtype='date'` for the desired columns.
-comment : char, default None
-    Character used as a comments indicator. If found at the beginning of a
-    line, the line will be ignored altogether.
 na_values : scalar, str, or list-like, optional
     Additional strings to recognize as nulls.
     By default the following values are interpreted as
@@ -927,16 +891,67 @@ keep_default_na : bool, default True
 na_filter : bool, default True
     Detect missing values (empty strings and the values in na_values).
     Passing False can improve performance.
-prefix : str, default None
-    Prefix to add to column numbers when parsing without a header row
-index_col : int, string or False, default None
-    Column to use as the row labels of the DataFrame. Passing `index_col=False`
-    explicitly disables index column inference and discards the last column.
+skip_blank_lines : bool, default True
+    If True, discard and do not parse empty lines
+    If False, interpret empty lines as NaN values
+parse_dates : list of int or names, default None
+    If list of columns, then attempt to parse each entry as a date.
+    Columns may not always be recognized as dates, for instance due to
+    unusual or non-standard formats. To guarantee a date and increase parsing
+    speed, explicitly specify `dtype='date'` for the desired columns.
+dayfirst : bool, default False
+    DD/MM format dates, international and European format.
+compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
+    For on-the-fly decompression of on-disk data. If ‘infer’, then detect
+    compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
+    decompression). If using ‘zip’, the ZIP file must contain only one
+    data file to be read in, otherwise the first non-zero-sized file will
+    be used. Set to None for no decompression.
+thousands : char, default None
+    Character used as a thousands delimiter.
+decimal : char, default '.'
+    Character used as a decimal point.
+lineterminator : char, default '\\n'
+    Character to indicate end of line.
+quotechar : char, default '"'
+    Character to indicate start and end of quote item.
+quoting : str or int, default 0
+    Controls quoting behavior. Set to one of
+    0 (csv.QUOTE_MINIMAL), 1 (csv.QUOTE_ALL),
+    2 (csv.QUOTE_NONNUMERIC) or 3 (csv.QUOTE_NONE).
+    Quoting is enabled with all values except 3.
+doublequote : bool, default True
+    When quoting is enabled, indicates whether to interpret two
+    consecutive quotechar inside fields as single quotechar
+comment : char, default None
+    Character used as a comments indicator. If found at the beginning of a
+    line, the line will be ignored altogether.
+delim_whitespace : bool, default False
+    Determines whether to use whitespace as delimiter.
+byte_range : list or tuple, default None
+    Byte range within the input file to be read. The first number is the
+    offset in bytes, the second number is the range size in bytes. Set the
+    size to zero to read all data after the offset location. Reads the row
+    that starts before or at the end of the range, even if it ends after
+    the end of the range.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
     performance when making small reads from larger CSV files.
-
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
+bytes_per_thread : int, default None
+    Determines the number of bytes to be allocated per thread to read the
+    files in parallel. When there is a file of large size, we get slightly
+    better throughput by decomposing it and transferring multiple "blocks"
+    in parallel (using a python thread pool). Default allocation is
+    256_000_000 bytes.
+    This parameter is functional only when `use_python_file_object=False`.
 Returns
 -------
 GPU ``DataFrame`` object.
@@ -1010,15 +1025,22 @@ header : bool, default True
     Write out the column names
 index : bool, default True
     Write out the index as a column
-line_terminator : char, default '\\n'
-chunksize : int or None, default None
-    Rows to write at a time
 encoding : str, default 'utf-8'
     A string representing the encoding to use in the output file
     Only ‘utf-8’ is currently supported
 compression : str, None
     A string representing the compression scheme to use in the the output file
     Compression while writing csv is not supported currently
+line_terminator : char, default '\\n'
+chunksize : int or None, default None
+    Rows to write at a time
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
 Returns
 -------
 None or str
