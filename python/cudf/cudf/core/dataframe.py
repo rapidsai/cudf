@@ -4105,7 +4105,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...     'str_col': ['', 'abc', 'some_example'],
         ...     'scale': [1, 2, 3]
         ... })
-        >>> df.apply(f, axis=1)
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
         0   -1
         1   -1
         2    4
@@ -4119,7 +4119,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> def f(row):
         ...     st = row['str_col'].upper()
         ...     return 'ABC' in st
-        >>> df.apply(f, axis=1) # AttributeError
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
 
         For a complete list of supported functions and methods that may be
         used to manipulate string data, see the the UDF guide,

@@ -2354,7 +2354,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ...             return 3
         ...
         >>> sr = cudf.Series(['', 'abc', 'some_example'])
-        >>> sr.apply(f)
+        >>> sr.apply(f)  # doctest: +SKIP
         0   -1
         1    1
         2    2
@@ -2369,7 +2369,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ...     new = st.upper()
         ...     return 'ABC' in new
         ...
-        >>> sr.apply(f) # AttributeError
+        >>> sr.apply(f)  # doctest: +SKIP
 
         For a complete list of supported functions and methods that may be
         used to manipulate string data, see the the UDF guide,
