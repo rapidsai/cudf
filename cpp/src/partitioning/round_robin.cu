@@ -166,6 +166,10 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
     "Incorrect start_partition index. Must be positive.");  // since cudf::size_type is an alias for
                                                             // int32_t, it _can_ be negative
 
+  if (nrows == 0) {
+    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
+  }
+
   // handle degenerate case:
   //
   if (num_partitions >= nrows) {
