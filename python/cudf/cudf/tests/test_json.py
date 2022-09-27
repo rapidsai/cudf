@@ -603,18 +603,21 @@ def test_json_nested_basic(tmpdir):
             "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
             "c2": [["l11", "l21"], []],
         },
+        # empty input
+        {},
     ],
 )
-def test_json_nested_lines(data):
+@pytest.mark.parametrize("lines", [True, False])
+def test_json_nested_lines(data, lines):
     bytes = BytesIO()
     pdf = pd.DataFrame(data)
-    pdf.to_json(bytes, orient="records", lines=True)
+    pdf.to_json(bytes, orient="records", lines=lines)
     bytes.seek(0)
     df = cudf.read_json(
-        bytes, engine="cudf_experimental", orient="records", lines=True
+        bytes, engine="cudf_experimental", orient="records", lines=lines
     )
     bytes.seek(0)
-    pdf = pd.read_json(bytes, orient="records", lines=True)
+    pdf = pd.read_json(bytes, orient="records", lines=lines)
     # In the second test-case we need to take a detour via pyarrow
     # Pandas omits "f1" in first row, so we have to enforce a common schema,
     # such that pandas would have the f1 member with null
