@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.20.1)
+cmake_minimum_required(VERSION 3.23.1)
 
 include(rapids-cmake)
 include(rapids-cpm)

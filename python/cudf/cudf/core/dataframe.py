@@ -1057,7 +1057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(self._dtypes)
+        return pd.Series(self._dtypes, dtype="object")
 
     @property
     def ndim(self):
@@ -5987,11 +5987,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns=None,
         header=True,
         index=True,
-        line_terminator="\n",
-        chunksize=None,
         encoding=None,
         compression=None,
-        **kwargs,
+        line_terminator="\n",
+        chunksize=None,
+        storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
@@ -6008,7 +6008,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             chunksize=chunksize,
             encoding=encoding,
             compression=compression,
-            **kwargs,
+            storage_options=storage_options,
         )
 
     @ioutils.doc_to_orc()
@@ -6977,7 +6977,7 @@ def from_pandas(obj, nan_as_null=None):
 
     Converting a Pandas Series to cuDF Series:
 
-    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple', dtype='str')
     >>> psr
     0    a
     1    b

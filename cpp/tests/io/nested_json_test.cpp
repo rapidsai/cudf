@@ -450,40 +450,50 @@ TEST_F(JsonTest, TokenStream2)
   }
 }
 
-TEST_F(JsonTest, ExtractColumn)
+struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {
+};
+INSTANTIATE_TEST_SUITE_P(Experimental, JsonParserTest, testing::Bool());
+
+TEST_P(JsonParserTest, ExtractColumn)
 {
   using cuio_json::SymbolT;
+  bool const is_full_gpu = GetParam();
+  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
+                                       : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::default_stream_value;
+  auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
 
   std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
   // Get the JSON's tree representation
-  auto const cudf_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream);
+  auto const cudf_table = json_parser(
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream, mr);
 
-  auto const expected_col_count  = 2;
-  auto const first_column_index  = 0;
-  auto const second_column_index = 1;
+  auto const expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 
   auto expected_col1 =
     cudf::test::fixed_width_column_wrapper<double>({0.0, 0.1, 0.2}, {true, true, true});
   auto expected_col2 =
     cudf::test::fixed_width_column_wrapper<double>({1.0, 1.1, 1.2}, {true, true, true});
-  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(first_column_index);
+  cudf::column_view parsed_col1 = cudf_table.tbl->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col1, parsed_col1);
-  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(second_column_index);
+  cudf::column_view parsed_col2 = cudf_table.tbl->get_column(1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
 }
 
-TEST_F(JsonTest, UTF_JSON)
+TEST_P(JsonParserTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream      = cudf::default_stream_value;
+  auto mr                = rmm::mr::get_current_device_resource();
+  bool const is_full_gpu = GetParam();
+  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
+                                       : cuio_json::detail::host_parse_nested_json;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -497,7 +507,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
 
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(ascii_pass, default_options, stream));
+  CUDF_EXPECT_NO_THROW(json_parser(ascii_pass, default_options, stream, mr));
 
   // utf-8 string that fails parsing.
   std::string const utf_failed = R"([
@@ -507,7 +517,7 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_failed, default_options, stream));
+  CUDF_EXPECT_NO_THROW(json_parser(utf_failed, default_options, stream, mr));
 
   // utf-8 string that passes parsing.
   std::string const utf_pass = R"([
@@ -518,15 +528,19 @@ TEST_F(JsonTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(cuio_json::detail::parse_nested_json(utf_pass, default_options, stream));
+  CUDF_EXPECT_NO_THROW(json_parser(utf_pass, default_options, stream, mr));
 }
 
-TEST_F(JsonTest, ExtractColumnWithQuotes)
+TEST_P(JsonParserTest, ExtractColumnWithQuotes)
 {
   using cuio_json::SymbolT;
+  bool const is_full_gpu = GetParam();
+  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
+                                       : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::default_stream_value;
+  auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
   cudf::io::json_reader_options options{};
@@ -534,8 +548,8 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
   // Get the JSON's tree representation
-  auto const cudf_table = cuio_json::detail::parse_nested_json(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream);
+  auto const cudf_table =
+    json_parser(cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr);
 
   auto constexpr expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
@@ -550,12 +564,16 @@ TEST_F(JsonTest, ExtractColumnWithQuotes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
 }
 
-TEST_F(JsonTest, ExpectFailMixStructAndList)
+TEST_P(JsonParserTest, ExpectFailMixStructAndList)
 {
   using cuio_json::SymbolT;
+  bool const is_full_gpu = GetParam();
+  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
+                                       : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::default_stream_value;
+  auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
   cudf::io::json_reader_options options{};
@@ -572,14 +590,37 @@ TEST_F(JsonTest, ExpectFailMixStructAndList)
 
   for (auto const& input : inputs_fail) {
     CUDF_EXPECT_THROW_MESSAGE(
-      auto const cudf_table = cuio_json::detail::parse_nested_json(
-        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream),
+      auto const cudf_table = json_parser(
+        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr),
       "A mix of lists and structs within the same column is not supported");
   }
 
   for (auto const& input : inputs_succeed) {
     CUDF_EXPECT_NO_THROW(
-      auto const cudf_table = cuio_json::detail::parse_nested_json(
-        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream));
+      auto const cudf_table = json_parser(
+        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr));
   }
+}
+
+TEST_P(JsonParserTest, EmptyString)
+{
+  using cuio_json::SymbolT;
+  bool const is_full_gpu = GetParam();
+  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
+                                       : cuio_json::detail::host_parse_nested_json;
+
+  // Prepare cuda stream for data transfers & kernels
+  auto const stream = cudf::default_stream_value;
+  auto mr           = rmm::mr::get_current_device_resource();
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+
+  std::string const input = R"([])";
+  // Get the JSON's tree representation
+  auto const cudf_table = json_parser(
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream, mr);
+
+  auto const expected_col_count = 0;
+  EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 }

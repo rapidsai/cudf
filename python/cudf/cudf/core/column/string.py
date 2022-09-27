@@ -1643,7 +1643,7 @@ class StringMethods(ColumnMethods):
         also includes other characters that can represent
         quantities such as unicode fractions.
 
-        >>> s2 = pd.Series(['23', '³', '⅕', ''])
+        >>> s2 = pd.Series(['23', '³', '⅕', ''], dtype='str')
         >>> s2.str.isnumeric()
         0     True
         1     True
