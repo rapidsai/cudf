@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/text/device_data_chunks.hpp"
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
@@ -27,30 +29,6 @@
 namespace cudf::io::text {
 
 namespace {
-
-class device_span_data_chunk : public device_data_chunk {
- public:
-  device_span_data_chunk(device_span<char const> data) : _data(data) {}
-
-  [[nodiscard]] char const* data() const override { return _data.data(); }
-  [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
-
- private:
-  device_span<char const> _data;
-};
-
-class device_uvector_data_chunk : public device_data_chunk {
- public:
-  device_uvector_data_chunk(rmm::device_uvector<char>&& data) : _data(std::move(data)) {}
-
-  [[nodiscard]] char const* data() const override { return _data.data(); }
-  [[nodiscard]] std::size_t size() const override { return _data.size(); }
-  operator device_span<char const>() const override { return _data; }
-
- private:
-  rmm::device_uvector<char> _data;
-};
 
 /**
  * @brief A reader which produces owning chunks of device memory which contain a copy of the data
@@ -207,7 +185,7 @@ class device_span_data_chunk_reader : public data_chunk_reader {
  */
 class file_data_chunk_source : public data_chunk_source {
  public:
-  file_data_chunk_source(std::string filename) : _filename(std::move(filename)) {}
+  file_data_chunk_source(std::string_view filename) : _filename(filename) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<istream_data_chunk_reader>(
@@ -255,7 +233,7 @@ std::unique_ptr<data_chunk_source> make_source(host_span<const char> data)
   return std::make_unique<host_span_data_chunk_source>(data);
 }
 
-std::unique_ptr<data_chunk_source> make_source_from_file(std::string const& filename)
+std::unique_ptr<data_chunk_source> make_source_from_file(std::string_view filename)
 {
   return std::make_unique<file_data_chunk_source>(filename);
 }

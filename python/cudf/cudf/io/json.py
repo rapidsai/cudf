@@ -21,13 +21,27 @@ def read_json(
     lines=False,
     compression="infer",
     byte_range=None,
+    keep_quotes=False,
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
+    if not isinstance(dtype, (abc.Mapping, bool)):
+        warnings.warn(
+            "passing 'dtype' as list is deprecated, instead pass "
+            "a dict of column name and types key-value paris."
+            "in future versions 'dtype' can only be a dict or bool",
+            FutureWarning,
+        )
+
     if engine == "cudf" and not lines:
-        raise ValueError("cudf engine only supports JSON Lines format")
+        raise ValueError(f"{engine} engine only supports JSON Lines format")
+    if engine != "cudf_experimental" and keep_quotes:
+        raise ValueError(
+            "keep_quotes='True' is supported only with"
+            " engine='cudf_experimental'"
+        )
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine == "cudf" or engine == "cudf_experimental":
@@ -64,6 +78,7 @@ def read_json(
             compression,
             byte_range,
             engine == "cudf_experimental",
+            keep_quotes,
         )
     else:
         warnings.warn(

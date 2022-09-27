@@ -209,6 +209,7 @@ id_unary_funcs = [
     "islower",
     "isspace",
     "isnumeric",
+    "istitle",
 ]
 
 for func in bool_binary_funcs:

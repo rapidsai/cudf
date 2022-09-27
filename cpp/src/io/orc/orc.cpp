@@ -184,7 +184,8 @@ void ProtobufReader::read(column_statistics& s, size_t maxlen)
                             make_field_reader(6, s.decimal_stats),
                             make_field_reader(7, s.date_stats),
                             make_field_reader(8, s.binary_stats),
-                            make_field_reader(9, s.timestamp_stats));
+                            make_field_reader(9, s.timestamp_stats),
+                            make_field_reader(10, s.has_null));
   function_builder(s, maxlen, op);
 }
 
