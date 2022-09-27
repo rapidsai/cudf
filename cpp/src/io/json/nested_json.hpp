@@ -61,7 +61,7 @@ using NodeT = char;
 
 /// Type used to index into the nodes within the tree of structs, lists, field names, and value
 /// nodes
-using NodeIndexT = uint32_t;
+using NodeIndexT = size_type;
 
 /// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
 using TreeDepthT = StackLevelT;
@@ -77,7 +77,7 @@ struct tree_meta_t {
   rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
-constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
+constexpr NodeIndexT parent_node_sentinel = -1;
 
 /**
  * @brief Class of a node (or a node "category") within the tree representation
@@ -173,6 +173,52 @@ struct json_column {
 };
 
 /**
+ * @brief Intermediate representation of data from a nested JSON input, in device memory.
+ * Device memory equivalent of `json_column`.
+ */
+struct device_json_column {
+  // Type used to count number of rows
+  using row_offset_t = size_type;
+
+  // The inferred type of this column (list, struct, or value/string column)
+  json_col_t type = json_col_t::Unknown;
+
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+
+  // Validity bitmap
+  rmm::device_uvector<bitmask_type> validity;
+
+  // Map of child columns, if applicable.
+  // Following "element" as the default child column's name of a list column
+  // Using the struct's field names
+  std::map<std::string, device_json_column> child_columns;
+  std::vector<std::string> column_order;
+  // Counting the current number of items in this column
+  row_offset_t num_rows = 0;
+
+  /**
+   * @brief Construct a new d json column object
+   *
+   * @note `mr` is used for allocating the device memory for child_offsets, and validity
+   * since it will moved into cudf::column later.
+   *
+   * @param stream The CUDA stream to which kernels are dispatched
+   * @param mr Optional, resource with which to allocate
+   */
+  device_json_column(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+    : string_offsets(0, stream),
+      string_lengths(0, stream),
+      child_offsets(0, stream, mr),
+      validity(0, stream, mr)
+  {
+  }
+};
+
+/**
  * @brief Tokens emitted while parsing a JSON input
  */
 enum token_t : PdaTokenT {
@@ -256,7 +302,51 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 tree_meta_t get_tree_representation(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Traverse the tree representation of the JSON input in records orient format and populate
+ * the output columns indices and row offsets within that column.
+ *
+ * @param d_input The JSON input
+ * @param d_tree A tree representation of the input JSON string as vectors of node type, parent
+ * index, level, begin index, and end index in the input JSON string
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return A tuple of the output column indices and the row offsets within each column for each node
+ */
+std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+records_orient_tree_traversal(
+  device_span<SymbolT const> d_input,
+  tree_meta_t& d_tree,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Reduce node tree into column tree by aggregating each property of column.
+ *
+ * @param tree json node tree to reduce (modified in-place, but restored to original state)
+ * @param col_ids column ids of each node (modified in-place, but restored to original state)
+ * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A tuple containing the column tree, identifier for each column and the maximum row index
+ * in each column
+ */
+std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+reduce_to_column_tree(tree_meta_t& tree,
+                      device_span<NodeIndexT> col_ids,
+                      device_span<size_type> row_offsets,
+                      rmm::cuda_stream_view stream);
+
+/** @copydoc host_parse_nested_json
+ * All processing is done in device memory.
+ *
+ */
+table_with_metadata device_parse_nested_json(
+  host_span<SymbolT const> input,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -268,10 +358,10 @@ tree_meta_t get_tree_representation(
  * @param mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
-table_with_metadata parse_nested_json(
+table_with_metadata host_parse_nested_json(
   host_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

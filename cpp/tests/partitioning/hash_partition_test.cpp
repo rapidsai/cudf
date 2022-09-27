@@ -72,7 +72,7 @@ TEST_F(HashPartition, ZeroPartitions)
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{0}, offsets.size());
+  EXPECT_EQ(std::size_t{num_partitions}, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroRows)
@@ -87,10 +87,10 @@ TEST_F(HashPartition, ZeroRows)
   cudf::size_type const num_partitions = 3;
   auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
-  // Expect empty table with same number of columns and zero partitions
+  // Expect empty table with same number of columns and same number of partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{0}, offsets.size());
+  EXPECT_EQ(std::size_t{num_partitions}, offsets.size());
 }
 
 TEST_F(HashPartition, ZeroColumns)
@@ -102,10 +102,10 @@ TEST_F(HashPartition, ZeroColumns)
   cudf::size_type const num_partitions = 3;
   auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
-  // Expect empty table with same number of columns and zero partitions
+  // Expect empty table with same number of columns and same number of partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
-  EXPECT_EQ(std::size_t{0}, offsets.size());
+  EXPECT_EQ(std::size_t{num_partitions}, offsets.size());
 }
 
 TEST_F(HashPartition, MixedColumnTypes)
