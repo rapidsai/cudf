@@ -312,6 +312,8 @@ class TimeDeltaColumn(ColumnBase):
                 target_dtype = self.dtype
                 format = "%D days"
 
+            # TODO: Remove the type-casting after there is option from libcudf
+            # side to support %3S, %6S, %9S.
             if self.dtype != target_dtype:
                 timedelta_col = self.astype(target_dtype)
             else:
