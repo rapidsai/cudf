@@ -151,6 +151,9 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  * @brief  Extracts microsecond fraction from any date time type and returns an int16_t
  * cudf::column.
  *
+ * A microsecond fraction is only the 3 digits that make up the microsecond portion of a duration.
+ * For example, the microsecond fraction of 1.234567890 seconds is 567.
+ *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
