@@ -1723,7 +1723,6 @@ def as_column(
         data = arbitrary._column
         if dtype is not None:
             data = data.astype(dtype)
-
     elif isinstance(arbitrary, cudf.BaseIndex):
         data = arbitrary._values
         if dtype is not None:
