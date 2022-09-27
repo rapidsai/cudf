@@ -2215,9 +2215,7 @@ class DatetimeIndex(GenericIndex):
         of the actual types correctly.
         """
         return cudf.Index(
-            self._values._preprocess_column_for_repr()
-            .fillna(cudf._NA_REP)
-            .astype("category"),
+            self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
             name=self.name,
         )
 
@@ -2480,9 +2478,7 @@ class TimedeltaIndex(GenericIndex):
         of the actual types correctly.
         """
         return cudf.Index(
-            self._values._preprocess_column_for_repr()
-            .fillna(cudf._NA_REP)
-            .astype("category"),
+            self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
             name=self.name,
         )
 

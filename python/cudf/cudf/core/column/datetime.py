@@ -214,34 +214,6 @@ class DatetimeColumn(column.ColumnBase):
             index=index,
         )
 
-    def _preprocess_column_for_repr(self):
-        has_hr = (self.get_dt_field("hour") > 0).any()
-        has_m = (self.get_dt_field("minute") > 0).any()
-        has_s = (self.get_dt_field("second") > 0).any()
-        has_ms = (self.get_dt_field("milli_second") > 0).any()
-        has_us = (self.get_dt_field("micro_second") > 0).any()
-        has_ns = (self.get_dt_field("nano_second") > 0).any()
-        has_ns = (self.get_dt_field("nano_second") > 0).any()
-
-        if has_ns:
-            preprocess = self.astype("O")
-        elif has_us:
-            preprocess = self.astype(
-                "O", format=_dtype_to_format_conversion.get("datetime64[us]")
-            )
-        elif has_ms:
-            preprocess = self.astype(
-                "O", format=_dtype_to_format_conversion.get("datetime64[ms]")
-            )
-        elif has_s or has_m or has_hr:
-            preprocess = self.astype(
-                "O", format=_dtype_to_format_conversion.get("datetime64[s]")
-            )
-        else:
-            preprocess = self.astype("O", format="%Y-%m-%d")
-
-        return preprocess
-
     @property
     def values(self):
         """
@@ -359,9 +331,16 @@ class DatetimeColumn(column.ColumnBase):
         self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if format is None:
-            format = _dtype_to_format_conversion.get(
-                self.dtype.name, "%Y-%m-%d %H:%M:%S"
-            )
+            if _has_ns(self):
+                format = _dtype_to_format_conversion.get(self.dtype.name)
+            elif _has_us(self):
+                format = _dtype_to_format_conversion.get("datetime64[us]")
+            elif _has_ms(self):
+                format = _dtype_to_format_conversion.get("datetime64[ms]")
+            elif _has_hr(self) or _has_m(self) or _has_s(self):
+                format = _dtype_to_format_conversion.get("datetime64[s]")
+            else:
+                format = "%Y-%m-%d"
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
@@ -609,3 +588,27 @@ def _resolve_mixed_dtypes(
     rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
     rhs_unit = units.index(rhs_time_unit)
     return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+
+
+def _has_hr(col: DatetimeColumn) -> bool:
+    return (col.get_dt_field("hour") > 0).any()
+
+
+def _has_m(col: DatetimeColumn) -> bool:
+    return (col.get_dt_field("minute") > 0).any()
+
+
+def _has_s(col: DatetimeColumn) -> bool:
+    return (col.get_dt_field("second") > 0).any()
+
+
+def _has_ms(col: DatetimeColumn) -> bool:
+    return (col.get_dt_field("milli_second") > 0).any()
+
+
+def _has_us(col: DatetimeColumn) -> bool:
+    return (col.get_dt_field("micro_second") > 0).any()
+
+
+def _has_ns(col: DatetimeColumn) -> bool:
+    return (col.get_dt_field("nano_second") > 0).any()

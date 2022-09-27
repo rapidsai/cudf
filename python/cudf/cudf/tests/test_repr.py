@@ -817,16 +817,14 @@ def test_series_null_index_repr(sr, pandas_special_case):
 @pytest.mark.parametrize(
     "data",
     [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
+        [1000000, 2000000, 3000000],
+        [1000000, 2000000, None],
         [],
         [None],
         [None, None, None, None, None],
         [12, 12, 22, 343, 4353534, 435342],
         np.array([10, 20, 30, None, 100]),
         cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
         [1],
         [12, 11, 232, 223432411, 2343241, 234324, 23234],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
@@ -881,9 +879,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.001000000
-            1    0 days 00:00:00.000200000
-            2    0 days 00:00:00.003000000
+            0    0 days 00:00:00.001000
+            1    0 days 00:00:00.000200
+            2    0 days 00:00:00.003000
             dtype: timedelta64[ns]
             """
             ),
@@ -903,9 +901,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, None], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.001000000
-            1    0 days 00:00:00.000200000
-            2                         <NA>
+            0    0 days 00:00:00.001000
+            1    0 days 00:00:00.000200
+            2                      <NA>
             dtype: timedelta64[ns]
             """
             ),
@@ -1034,13 +1032,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    157937 days 02:23:52.432
-            1         1 days 13:25:36.784
-            2         2 days 20:09:05.345
-            3         2 days 14:03:52.411
-            4     11573 days 23:39:03.241
-            5        42 days 01:35:48.734
-            6         0 days 00:00:23.234
+            0    -55566 days 21:10:41.277551616
+            1         1 days 13:25:36.784000000
+            2         2 days 20:09:05.345000000
+            3         2 days 14:03:52.411000000
+            4     11573 days 23:39:03.241000000
+            5        42 days 01:35:48.734000000
+            6         0 days 00:00:23.234000000
             dtype: timedelta64[ms]
             """
             ),
@@ -1087,13 +1085,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    157937 days 02:23:52.432
-            1         1 days 13:25:36.784
-            2         2 days 20:09:05.345
-            3         2 days 14:03:52.411
-            4     11573 days 23:39:03.241
-            5        42 days 01:35:48.734
-            6         0 days 00:00:23.234
+            0    -55566 days 21:10:41.277551616
+            1         1 days 13:25:36.784000000
+            2         2 days 20:09:05.345000000
+            3         2 days 14:03:52.411000000
+            4     11573 days 23:39:03.241000000
+            5        42 days 01:35:48.734000000
+            6         0 days 00:00:23.234000000
             Name: abc, dtype: timedelta64[ms]
             """
             ),

@@ -1763,9 +1763,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     cudf.core.column.datetime.DatetimeColumn,
                 ),
             ):
-                output._data[col_name] = output._data[
-                    col_name
-                ]._preprocess_column_for_repr()
+                output._data[col_name] = output._data[col_name].astype("str")
             else:
                 output._data[col_name] = output._data[col_name]
 
