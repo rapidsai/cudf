@@ -193,8 +193,8 @@ __device__ inline bool is_lower(cudf::strings::detail::character_flags_table_typ
 __device__ inline bool is_title(cudf::strings::detail::character_flags_table_type* flags_table,
                                 string_view d_str)
 {
-  bool valid                 = false;  // requires one or more cased characters
-  bool should_be_capitalized = true;   // current character should be upper-case
+  auto valid                 = false;  // requires one or more cased characters
+  auto should_be_capitalized = true;   // current character should be upper-case
   for (auto const chr : d_str) {
     auto const code_point = cudf::strings::detail::utf8_to_codepoint(chr);
     auto const flag       = code_point <= 0x00FFFF ? flags_table[code_point] : 0;
