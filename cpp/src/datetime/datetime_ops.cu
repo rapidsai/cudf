@@ -82,7 +82,7 @@ struct extract_component_operator {
     auto millisecs_ = duration_cast<milliseconds>(time_since_midnight - hrs_ - mins_ - secs_);
     auto microsecs_ =
       duration_cast<microseconds>(time_since_midnight - hrs_ - mins_ - secs_ - millisecs_);
-    auto nanoosecs_ = duration_cast<nanoseconds>(time_since_midnight - hrs_ - mins_ - secs_ -
+    auto nanosecs_ = duration_cast<nanoseconds>(time_since_midnight - hrs_ - mins_ - secs_ -
                                                  millisecs_ - microsecs_);
 
     switch (Component) {
