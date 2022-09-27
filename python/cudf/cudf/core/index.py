@@ -854,14 +854,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def isna(self):
         return cupy.zeros(len(self), dtype=bool)
 
-    isnull = isna
-
-    @_cudf_nvtx_annotate
-    def notna(self):
-        return cupy.ones(len(self), dtype=bool)
-
-    notnull = isna
-
     @_cudf_nvtx_annotate
     def _minmax(self, meth: str):
         no_steps = len(self) - 1
@@ -885,8 +877,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return cupy.arange(self.start, self.stop, self.step)
 
     def to_frame(self, index=True, name=None):
-        """Create a DataFrame with a column containing this Index"""
-
         if name is not None:
             col_name = name
         elif self.name is None:
@@ -922,15 +912,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def any(self):
-        """
-        Return whether any elements is True in Index.
-        """
         return self._values.any()
 
     def append(self, other):
-        """
-        Append a collection of Index objects together.
-        """
         return self._as_int_index().append(other)
 
     def isin(self, values):
@@ -951,9 +935,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 f"to isin(), you passed a {type(values).__name__}"
             )
 
-        return np.isin(
-            self.values_host, values
-        )  # return cupy.isin(self.values, cupy.asarray(values))
+        return np.isin(self.values_host, values)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -1410,18 +1392,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return begin, end
 
     @_cudf_nvtx_annotate
-    def isna(self):
-        return self._column.isnull().values
-
-    isnull = isna
-
-    @_cudf_nvtx_annotate
-    def notna(self):
-        return self._column.notnull().values
-
-    notnull = notna
-
-    @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
@@ -1523,21 +1493,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self
 
     def to_frame(self, index=True, name=None):
-        """Create a DataFrame with a column containing this Index
-
-        Parameters
-        ----------
-        index : boolean, default True
-            Set the index of the returned DataFrame as the original Index
-        name : str, default None
-            Name to be used for the column
-
-        Returns
-        -------
-        DataFrame
-            cudf DataFrame
-        """
-
         if name is not None:
             col_name = name
         elif self.name is None:
@@ -1549,60 +1504,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         )
 
     def any(self):
-        """
-        Return whether any elements is True in Index.
-        """
         return self._values.any()
 
     def to_pandas(self):
-        """
-        Convert to a Pandas Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([-3, 10, 15, 20])
-        >>> idx
-        Int64Index([-3, 10, 15, 20], dtype='int64')
-        >>> idx.to_pandas()
-        Int64Index([-3, 10, 15, 20], dtype='int64')
-        >>> type(idx.to_pandas())
-        <class 'pandas.core.indexes.numeric.Int64Index'>
-        >>> type(idx)
-        <class 'cudf.core.index.Int64Index'>
-        """
         return pd.Index(self._values.to_pandas(), name=self.name)
 
     def append(self, other):
-        """
-        Append a collection of Index options together.
-
-        Parameters
-        ----------
-        other : Index or list/tuple of indices
-
-        Returns
-        -------
-        appended : Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([1, 2, 10, 100])
-        >>> idx
-        Int64Index([1, 2, 10, 100], dtype='int64')
-        >>> other = cudf.Index([200, 400, 50])
-        >>> other
-        Int64Index([200, 400, 50], dtype='int64')
-        >>> idx.append(other)
-        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
-
-        append accepts list of Index objects
-
-        >>> idx.append([other, other])
-        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
-        """
-
         if is_list_like(other):
             to_concat = [self]
             to_concat.extend(other)
