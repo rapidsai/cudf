@@ -13,13 +13,10 @@ from strings_udf._lib.cpp.strings_udf cimport (
     to_string_view_array as cpp_to_string_view_array,
 )
 
-from rmm._cuda.stream import DEFAULT_STREAM
 
 def to_string_view_array(Column strings_col):
     cdef unique_ptr[device_buffer] c_buffer
     cdef column_view input_view = strings_col.view()
-    with nogil:
-        c_buffer = move(cpp_to_string_view_array(input_view))
-    DEFAULT_STREAM.c_synchronize()
+    c_buffer = move(cpp_to_string_view_array(input_view))
     device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
     return as_device_buffer_like(device_buffer, exposed=False)
