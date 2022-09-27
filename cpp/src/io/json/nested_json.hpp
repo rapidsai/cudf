@@ -196,7 +196,9 @@ struct device_json_column {
   // Following "element" as the default child column's name of a list column
   // Using the struct's field names
   std::map<std::string, device_json_column> child_columns;
+  std::vector<std::string> column_order;
   row_offset_t num_rows = 0;
+
   /**
    * @brief Construct a new d json column object
    *
