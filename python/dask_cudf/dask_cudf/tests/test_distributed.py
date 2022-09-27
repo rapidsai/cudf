@@ -126,4 +126,7 @@ def test_shuffle_explicit_comms():
                 shuffle="tasks",
             )
             assert hlg_layer(got_ec.dask, "explicit")
-            assert_eq(got_ec.compute(), got_tasks.compute())
+            assert_eq(
+                got_ec.compute().sort_index(),
+                got_tasks.compute().sort_index(),
+            )
