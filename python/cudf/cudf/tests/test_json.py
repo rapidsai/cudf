@@ -274,11 +274,10 @@ def test_json_lines_byte_range(json_input):
     assert df.shape == (1, 3)
 
 
-@pytest.mark.parametrize(
-    "dtype", [["float", "int", "short"], {1: "int", 2: "short", 0: "float"}]
-)
-def test_json_lines_dtypes(json_input, dtype):
-    df = cudf.read_json(json_input, lines=True, dtype=dtype)
+def test_json_lines_dtypes(json_input):
+    df = cudf.read_json(
+        json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
+    )
     assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
@@ -302,7 +301,10 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     pd_df.to_json(fname, compression=out_comp, lines=True, orient="records")
 
     cu_df = cudf.read_json(
-        str(fname), compression=in_comp, lines=True, dtype=["int32", "int32"]
+        str(fname),
+        compression=in_comp,
+        lines=True,
+        dtype={"col1": "int32", "col2": "int32"},
     )
     assert_eq(pd_df, cu_df)
 
@@ -345,7 +347,9 @@ def test_json_bool_values():
     # boolean values should be converted to 0/1
     np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
-    cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
+    cu_df = cudf.read_json(
+        buffer, lines=True, dtype={"0": "bool", "1": "long"}
+    )
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
@@ -603,18 +607,21 @@ def test_json_nested_basic(tmpdir):
             "c1": [{"f2": "sf21"}, {"f1": "sf12"}],
             "c2": [["l11", "l21"], []],
         },
+        # empty input
+        {},
     ],
 )
-def test_json_nested_lines(data):
+@pytest.mark.parametrize("lines", [True, False])
+def test_json_nested_lines(data, lines):
     bytes = BytesIO()
     pdf = pd.DataFrame(data)
-    pdf.to_json(bytes, orient="records", lines=True)
+    pdf.to_json(bytes, orient="records", lines=lines)
     bytes.seek(0)
     df = cudf.read_json(
-        bytes, engine="cudf_experimental", orient="records", lines=True
+        bytes, engine="cudf_experimental", orient="records", lines=lines
     )
     bytes.seek(0)
-    pdf = pd.read_json(bytes, orient="records", lines=True)
+    pdf = pd.read_json(bytes, orient="records", lines=lines)
     # In the second test-case we need to take a detour via pyarrow
     # Pandas omits "f1" in first row, so we have to enforce a common schema,
     # such that pandas would have the f1 member with null
@@ -655,6 +662,123 @@ def test_json_types_data():
         StringIO(json_str), engine="cudf_experimental", orient="records"
     )
     pdf = pd.read_json(StringIO(json_str), orient="records")
+    pdf.columns = pdf.columns.astype("str")
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "keep_quotes,result",
+    [
+        (
+            True,
+            {
+                "c1": [
+                    {"f1": '"sf11"', "f2": '"sf21"'},
+                    {"f1": '"sf12"', "f2": '"sf22"'},
+                ],
+                "c2": [['"l11"', '"l21"'], ['"l12"', '"l22"']],
+            },
+        ),
+        (
+            False,
+            {
+                "c1": [
+                    {"f1": "sf11", "f2": "sf21"},
+                    {"f1": "sf12", "f2": "sf22"},
+                ],
+                "c2": [["l11", "l21"], ["l12", "l22"]],
+            },
+        ),
+    ],
+)
+def test_json_keep_quotes(keep_quotes, result):
+    bytes_file = BytesIO()
+    data = {
+        "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
+        "c2": [["l11", "l21"], ["l12", "l22"]],
+    }
+    pdf = pd.DataFrame(data)
+    pdf.to_json(bytes_file, orient="records", lines=True)
+
+    actual = cudf.read_json(
+        bytes_file,
+        engine="cudf_experimental",
+        orient="records",
+        lines=True,
+        keep_quotes=keep_quotes,
+    )
+    expected = pd.DataFrame(result)
+
+    assert_eq(actual, expected)
+
+
+def test_json_dtypes_nested_data():
+    # a: StructDtype({'a': StructDtype({'b': dtype('float64')}),
+    #                 'b': dtype('int64')})
+    # b: ListDtype(ListDtype(float64))
+    actual_json_str = (
+        '{"a":{"a":{"b":10.0},"b":11},"b":[[10.0,1.1],[12.0,23.0]]}\n'
+        '{"a":{"a":{"b":107.0},"b":5},"b":[[10.0,11.2],[12.0,0.23]]}\n'
+        '{"a":{"a":{"b":50.7},"b":2},"b":[[10.0,11.3],[12.0,2.3]]}\n'
+        '{"a":{"a":{"b":1.2},"b":67},"b":[[6.0,7.0]]}\n'
+        '{"a":{"a":{"b":40.1},"b":1090},"b":null}\n'
+    )
+
+    """
+    In [3]: df
+    Out[3]:
+                                   a                             b
+    0    {'a': {'b': 10.0}, 'b': 11}   [[10.0, 1.1], [12.0, 23.0]]
+    1    {'a': {'b': 107.0}, 'b': 5}  [[10.0, 11.2], [12.0, 0.23]]
+    2     {'a': {'b': 50.7}, 'b': 2}   [[10.0, 11.3], [12.0, 2.3]]
+    3     {'a': {'b': 1.2}, 'b': 67}                  [[6.0, 7.0]]
+    4  {'a': {'b': 40.1}, 'b': 1090}                          None
+    """
+
+    # a: StructDtype({'a': StructDtype({'b': dtype('int64')}),
+    #                 'b': dtype('float64')})
+    # b: ListDtype(ListDtype(int64))
+    expected_json_str = (
+        '{"a":{"a":{"b":10},"b":11.0},"b":[[10,1],[12,23]]}\n'
+        '{"a":{"a":{"b":107},"b":5.0},"b":[[10,11],[12,0]]}\n'
+        '{"a":{"a":{"b":50},"b":2.0},"b":[[10,11],[12,2]]}\n'
+        '{"a":{"a":{"b":1},"b":67.0},"b":[[6,7]]}\n'
+        '{"a":{"a":{"b":40},"b":1090.0},"b":null}\n'
+    )
+
+    """
+    In [7]: df
+    Out[7]:
+                                  a                    b
+    0    {'a': {'b': 10}, 'b': 11.0}  [[10, 1], [12, 23]]
+    1    {'a': {'b': 107}, 'b': 5.0}  [[10, 11], [12, 0]]
+    2     {'a': {'b': 50}, 'b': 2.0}  [[10, 11], [12, 2]]
+    3     {'a': {'b': 1}, 'b': 67.0}             [[6, 7]]
+    4  {'a': {'b': 40}, 'b': 1090.0}                 None
+    """
+
+    df = cudf.read_json(
+        StringIO(actual_json_str),
+        engine="cudf_experimental",
+        orient="records",
+        lines=True,
+        dtype={
+            "a": cudf.StructDtype(
+                {
+                    "a": cudf.StructDtype({"b": cudf.dtype("int64")}),
+                    "b": cudf.dtype("float64"),
+                }
+            ),
+            "b": cudf.ListDtype(cudf.ListDtype("int64")),
+        },
+    )
+
+    pdf = pd.read_json(
+        StringIO(expected_json_str), orient="records", lines=True
+    )
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=df.to_arrow().schema, safe=False
