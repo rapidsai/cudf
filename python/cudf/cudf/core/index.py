@@ -2205,15 +2205,6 @@ class DatetimeIndex(GenericIndex):
         return False
 
     def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
         # Converting to string Index is necessary for DatetimeColumn
         # because larger values will easily overflow while being
         # converted to pandas later.
@@ -2474,15 +2465,6 @@ class TimedeltaIndex(GenericIndex):
         return False
 
     def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-
-        This will involve changing type of Index object
-        to StringIndex but it is the responsibility of the `__repr__`
-        methods using this method to replace or handle representation
-        of the actual types correctly.
-        """
         # Converting to string Index is necessary for TimedeltaColumn
         # because larger values will easily overflow while being
         # converted to pandas later.
@@ -2919,16 +2901,6 @@ class StringIndex(GenericIndex):
     @_cudf_nvtx_annotate
     def str(self):
         return StringMethods(parent=self)
-
-    def _clean_nulls_from_index(self):
-        """
-        Convert all na values(if any) in Index object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-        """
-        if self._values.has_nulls():
-            return self.fillna(cudf._NA_REP)
-        else:
-            return self
 
     def is_boolean(self):
         return False
