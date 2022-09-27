@@ -43,8 +43,8 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
 {
   {
     // full contents
-    auto reader = source.create_reader();
-    auto chunk  = reader->get_next_chunk(content.size(), rmm::cuda_stream_default);
+    auto reader      = source.create_reader();
+    auto const chunk = reader->get_next_chunk(content.size(), rmm::cuda_stream_default);
     ASSERT_EQ(chunk->size(), content.size());
     ASSERT_EQ(chunk_to_host(*chunk), content);
   }
@@ -52,15 +52,15 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
     // skipping contents
     auto reader = source.create_reader();
     reader->skip_bytes(4);
-    auto chunk = reader->get_next_chunk(content.size(), rmm::cuda_stream_default);
+    auto const chunk = reader->get_next_chunk(content.size(), rmm::cuda_stream_default);
     ASSERT_EQ(chunk->size(), content.size() - 4);
     ASSERT_EQ(chunk_to_host(*chunk), content.substr(4));
   }
   {
     // reading multiple chunks, starting with a small one
-    auto reader = source.create_reader();
-    auto chunk1 = reader->get_next_chunk(5, rmm::cuda_stream_default);
-    auto chunk2 = reader->get_next_chunk(content.size() - 5, rmm::cuda_stream_default);
+    auto reader       = source.create_reader();
+    auto const chunk1 = reader->get_next_chunk(5, rmm::cuda_stream_default);
+    auto const chunk2 = reader->get_next_chunk(content.size() - 5, rmm::cuda_stream_default);
     ASSERT_EQ(chunk1->size(), 5);
     ASSERT_EQ(chunk2->size(), content.size() - 5);
     ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, 5));
@@ -68,9 +68,9 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   }
   {
     // reading multiple chunks
-    auto reader = source.create_reader();
-    auto chunk1 = reader->get_next_chunk(content.size() / 2, rmm::cuda_stream_default);
-    auto chunk2 =
+    auto reader       = source.create_reader();
+    auto const chunk1 = reader->get_next_chunk(content.size() / 2, rmm::cuda_stream_default);
+    auto const chunk2 =
       reader->get_next_chunk(content.size() - content.size() / 2, rmm::cuda_stream_default);
     ASSERT_EQ(chunk1->size(), content.size() / 2);
     ASSERT_EQ(chunk2->size(), content.size() - content.size() / 2);
@@ -79,8 +79,8 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   }
   {
     // reading too many bytes
-    auto reader = source.create_reader();
-    auto chunk  = reader->get_next_chunk(content.size() + 10, rmm::cuda_stream_default);
+    auto reader      = source.create_reader();
+    auto const chunk = reader->get_next_chunk(content.size() + 10, rmm::cuda_stream_default);
     ASSERT_EQ(chunk->size(), content.size());
     ASSERT_EQ(chunk_to_host(*chunk), content);
     auto next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
@@ -90,37 +90,37 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
     // skipping past the end
     auto reader = source.create_reader();
     reader->skip_bytes(content.size() + 10);
-    auto next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
+    auto const next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
     ASSERT_EQ(next_chunk->size(), 0);
   }
 }
 
 TEST_F(DataChunkSourceTest, Device)
 {
-  std::string content = "device buffer source";
+  std::string const content = "device buffer source";
   cudf::string_scalar scalar(content);
-  auto source = cudf::io::text::make_source(scalar);
+  auto const source = cudf::io::text::make_source(scalar);
 
   test_source(content, *source);
 }
 
 TEST_F(DataChunkSourceTest, File)
 {
-  std::string content = "file source";
-  auto filename       = temp_env->get_temp_filepath("file_source");
+  std::string const content = "file source";
+  auto const filename       = temp_env->get_temp_filepath("file_source");
   {
     std::ofstream file{filename};
     file << content;
   }
-  auto source = cudf::io::text::make_source_from_file(filename);
+  auto const source = cudf::io::text::make_source_from_file(filename);
 
   test_source(content, *source);
 }
 
 TEST_F(DataChunkSourceTest, Host)
 {
-  std::string content = "host buffer source";
-  auto source         = cudf::io::text::make_source(content);
+  std::string const content = "host buffer source";
+  auto const source         = cudf::io::text::make_source(content);
 
   test_source(content, *source);
 }
@@ -151,33 +151,33 @@ void write_bgzip_block(std::ostream& stream,
     4,    // xfl: irrelevant
     3     // OS: irrelevant
   }};
-  std::array<char, 4> extra_blocklen_field{{66, 67, 2, 0}};
-  std::array<char, 11> extra_garbage_field1{{13,  // magic number
-                                             37,  // magic number
-                                             7,   // field length
-                                             0,   // field length
-                                             1,
-                                             2,
-                                             3,
-                                             4,
-                                             5,
-                                             6,
-                                             7}};
-  std::array<char, 23> extra_garbage_field2{{12,  // magic number
-                                             34,  // magic number
-                                             2,   // field length
-                                             0,   // field length
-                                             1,  2,
-                                             56,  // magic number
-                                             78,  // magic number
-                                             1,   // field length
-                                             0,   // field length
-                                             3,   //
-                                             90,  // magic number
-                                             12,  // magic number
-                                             8,   // field length
-                                             0,   // field length
-                                             1,  2, 3, 4, 5, 6, 7, 8}};
+  std::array<char, 4> const extra_blocklen_field{{66, 67, 2, 0}};
+  std::array<char, 11> const extra_garbage_field1{{13,  // magic number
+                                                   37,  // magic number
+                                                   7,   // field length
+                                                   0,   // field length
+                                                   1,
+                                                   2,
+                                                   3,
+                                                   4,
+                                                   5,
+                                                   6,
+                                                   7}};
+  std::array<char, 23> const extra_garbage_field2{{12,  // magic number
+                                                   34,  // magic number
+                                                   2,   // field length
+                                                   0,   // field length
+                                                   1,  2,
+                                                   56,  // magic number
+                                                   78,  // magic number
+                                                   1,   // field length
+                                                   0,   // field length
+                                                   3,   //
+                                                   90,  // magic number
+                                                   12,  // magic number
+                                                   8,   // field length
+                                                   0,   // field length
+                                                   1,  2, 3, 4, 5, 6, 7, 8}};
   stream.write(reinterpret_cast<const char*>(header.data()), header.size());
   uint16_t extra_size = extra_blocklen_field.size() + 2;
   if (add_extra_garbage_before) { extra_size += extra_garbage_field1.size(); }
@@ -187,8 +187,8 @@ void write_bgzip_block(std::ostream& stream,
     stream.write(extra_garbage_field1.data(), extra_garbage_field1.size());
   }
   stream.write(extra_blocklen_field.data(), extra_blocklen_field.size());
-  auto compressed_size          = data.size() + 5;
-  uint16_t block_size_minus_one = compressed_size + 19 + extra_size;
+  auto const compressed_size          = data.size() + 5;
+  uint16_t const block_size_minus_one = compressed_size + 19 + extra_size;
   write_int(stream, block_size_minus_one);
   if (add_extra_garbage_after) {
     stream.write(extra_garbage_field2.data(), extra_garbage_field2.size());
@@ -225,7 +225,7 @@ void write_bgzip(std::ostream& stream,
 
 TEST_F(DataChunkSourceTest, BgzipSource)
 {
-  auto filename = temp_env->get_temp_filepath("bgzip_source");
+  auto const filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"bananarama"};
   for (int i = 0; i < 24; i++) {
     input = input + input;
@@ -236,14 +236,14 @@ TEST_F(DataChunkSourceTest, BgzipSource)
     write_bgzip(stream, input, rng);
   }
 
-  auto source = cudf::io::text::make_source_from_bgzip_file(filename);
+  auto const source = cudf::io::text::make_source_from_bgzip_file(filename);
 
   test_source(input, *source);
 }
 
 TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
 {
-  auto filename = temp_env->get_temp_filepath("bgzip_source");
+  auto const filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"bananarama"};
   for (int i = 0; i < 24; i++) {
     input = input + input;
@@ -252,13 +252,13 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
   for (int i = 0; i < 10; i++) {
     padding_garbage = padding_garbage + padding_garbage;
   }
-  std::string data_garbage{"GARBAGE"};
-  std::string begininput{"begin of bananarama"};
-  std::string endinput{"end of bananarama"};
+  std::string const data_garbage{"GARBAGE"};
+  std::string const begininput{"begin of bananarama"};
+  std::string const endinput{"end of bananarama"};
   std::size_t begin_compressed_offset{};
   std::size_t end_compressed_offset{};
-  std::size_t begin_local_offset{data_garbage.size()};
-  std::size_t end_local_offset{endinput.size()};
+  std::size_t const begin_local_offset{data_garbage.size()};
+  std::size_t const end_local_offset{endinput.size()};
   {
     std::ofstream stream{filename};
     stream.write(padding_garbage.data(), padding_garbage.size());
@@ -273,7 +273,7 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
   }
   input = begininput + input + endinput;
 
-  auto source =
+  auto const source =
     cudf::io::text::make_source_from_bgzip_file(filename,
                                                 begin_compressed_offset << 16 | begin_local_offset,
                                                 end_compressed_offset << 16 | end_local_offset);
@@ -283,21 +283,21 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
 
 TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleGZipBlock)
 {
-  auto filename = temp_env->get_temp_filepath("bgzip_source");
-  std::string input{"collection unit brings"};
-  std::string head_garbage{"garbage"};
-  std::string tail_garbage{"GARBAGE"};
+  auto const filename = temp_env->get_temp_filepath("bgzip_source");
+  std::string const input{"collection unit brings"};
+  std::string const head_garbage{"garbage"};
+  std::string const tail_garbage{"GARBAGE"};
   std::size_t begin_compressed_offset{};
   std::size_t end_compressed_offset{};
-  std::size_t begin_local_offset{head_garbage.size()};
-  std::size_t end_local_offset{head_garbage.size() + input.size()};
+  std::size_t const begin_local_offset{head_garbage.size()};
+  std::size_t const end_local_offset{head_garbage.size() + input.size()};
   {
     std::ofstream stream{filename};
     write_bgzip_block(stream, head_garbage + input + tail_garbage, false, false);
     write_bgzip_block(stream, {}, false, false);
   }
 
-  auto source =
+  auto const source =
     cudf::io::text::make_source_from_bgzip_file(filename,
                                                 begin_compressed_offset << 16 | begin_local_offset,
                                                 end_compressed_offset << 16 | end_local_offset);
@@ -307,14 +307,14 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleGZipBlock)
 
 TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleChunk)
 {
-  auto filename = temp_env->get_temp_filepath("bgzip_source");
-  std::string input{"collection unit brings"};
-  std::string head_garbage{"garbage"};
-  std::string tail_garbage{"GARBAGE"};
+  auto const filename = temp_env->get_temp_filepath("bgzip_source");
+  std::string const input{"collection unit brings"};
+  std::string const head_garbage{"garbage"};
+  std::string const tail_garbage{"GARBAGE"};
   std::size_t begin_compressed_offset{};
   std::size_t end_compressed_offset{};
-  std::size_t begin_local_offset{head_garbage.size()};
-  std::size_t end_local_offset{input.size() - 10};
+  std::size_t const begin_local_offset{head_garbage.size()};
+  std::size_t const end_local_offset{input.size() - 10};
   {
     std::ofstream stream{filename};
     write_bgzip_block(stream, head_garbage + input.substr(0, 10), false, false);
@@ -323,7 +323,7 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleChunk)
     write_bgzip_block(stream, {}, false, false);
   }
 
-  auto source =
+  auto const source =
     cudf::io::text::make_source_from_bgzip_file(filename,
                                                 begin_compressed_offset << 16 | begin_local_offset,
                                                 end_compressed_offset << 16 | end_local_offset);

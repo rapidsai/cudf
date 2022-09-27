@@ -83,13 +83,13 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   {
     std::array<char, 12> buffer{};
     _data_stream->read(buffer.data(), sizeof(buffer));
-    std::array<uint8_t, 4> expected_header{{31, 139, 8, 4}};
+    std::array<uint8_t, 4> const expected_header{{31, 139, 8, 4}};
     CUDF_EXPECTS(
       std::equal(
         expected_header.begin(), expected_header.end(), reinterpret_cast<uint8_t*>(buffer.data())),
       "malformed BGZIP header");
     // we ignore the remaining bytes of the fixed header, since they don't matter to us
-    auto extra_length = read_int<uint16_t>(&buffer[10]);
+    auto const extra_length = read_int<uint16_t>(&buffer[10]);
     uint16_t extra_offset{};
     // read all the extra subfields
     while (extra_offset < extra_length) {
@@ -99,13 +99,13 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       // 66/67 identifies a BGZIP block size field, we skip all other fields
       _data_stream->read(buffer.data(), 4);
       extra_offset += 4;
-      auto subfield_size = read_int<uint16_t>(&buffer[2]);
+      auto const subfield_size = read_int<uint16_t>(&buffer[2]);
       if (buffer[0] == 66 && buffer[1] == 67) {
         // the block size subfield contains a single uint16 value, which is block_size - 1
         CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
         _data_stream->read(buffer.data(), sizeof(uint16_t));
         _data_stream->seekg(remaining_size - 6, std::ios_base::cur);
-        auto block_size_minus_one = read_int<uint16_t>(&buffer[0]);
+        auto const block_size_minus_one = read_int<uint16_t>(&buffer[0]);
         return {block_size_minus_one + 1, extra_length};
       } else {
         _data_stream->seekg(subfield_size, std::ios_base::cur);
