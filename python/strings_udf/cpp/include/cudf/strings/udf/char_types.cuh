@@ -183,6 +183,30 @@ __device__ inline bool is_lower(cudf::strings::detail::character_flags_table_typ
     flags_table, d_str, string_character_types::LOWER, string_character_types::CASE_TYPES);
 }
 
+/**
+ * @brief Returns true if string is in title case
+ *
+ * @param tables The char tables required for checking characters
+ * @param d_str Input string to check
+ * @return True if string is in title case
+ */
+__device__ inline bool is_title(cudf::strings::detail::character_flags_table_type* flags_table,
+                                string_view d_str)
+{
+  auto valid                 = false;  // requires one or more cased characters
+  auto should_be_capitalized = true;   // current character should be upper-case
+  for (auto const chr : d_str) {
+    auto const code_point = cudf::strings::detail::utf8_to_codepoint(chr);
+    auto const flag       = code_point <= 0x00FFFF ? flags_table[code_point] : 0;
+    if (cudf::strings::detail::IS_UPPER_OR_LOWER(flag)) {
+      if (should_be_capitalized == !cudf::strings::detail::IS_UPPER(flag)) return false;
+      valid = true;
+    }
+    should_be_capitalized = !cudf::strings::detail::IS_UPPER_OR_LOWER(flag);
+  }
+  return valid;
+}
+
 }  // namespace udf
 }  // namespace strings
 }  // namespace cudf

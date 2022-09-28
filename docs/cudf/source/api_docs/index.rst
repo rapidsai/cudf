@@ -19,4 +19,6 @@ This page provides a list of all publicly accessible modules, methods and classe
     io
     subword_tokenize
     string_handling
+    list_handling
+    struct_handling
     options
