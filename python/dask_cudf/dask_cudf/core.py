@@ -332,11 +332,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().repartition(*args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
-    def shuffle(self, index, shuffle=None, **kwargs):
+    def shuffle(self, *args, shuffle=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
 
         shuffle = _get_shuffle_type(shuffle)
-        if shuffle == "explicit-comms":
+        if shuffle == "explicit-comms" and len(args) == 1:
             # NOTE: The upstream shuffle does not directly support
             # the "explicit-comms" option, so it will create a
             # new "_partitions" column before calling down to
@@ -346,12 +346,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
             return rearrange_by_column(
                 self,
-                index,
+                *args,
                 shuffle=shuffle,
                 **kwargs,
             )
 
-        return super().shuffle(index, shuffle=shuffle, **kwargs)
+        return super().shuffle(*args, shuffle=shuffle, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def groupby(self, by=None, **kwargs):
