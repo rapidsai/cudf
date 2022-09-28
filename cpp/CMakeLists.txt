@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.10.00
+  VERSION 22.12.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -327,6 +327,7 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/json_column.cu
   src/io/json/json_gpu.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
@@ -354,6 +355,7 @@ add_library(
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
   src/io/text/data_chunk_source_factories.cpp
+  src/io/text/bgzip_data_chunk_source.cu
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
