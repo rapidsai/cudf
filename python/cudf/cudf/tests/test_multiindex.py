@@ -786,7 +786,7 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [child.base_data.ptr for child in lchildren]
         rptrs = [child.base_data.ptr for child in rchildren]
 
-        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+        assert all((x == y) == True for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
         mi1 = data

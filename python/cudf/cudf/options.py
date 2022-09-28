@@ -4,7 +4,7 @@ import textwrap
 from collections.abc import Container
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
-
+import os
 
 @dataclass
 class Option:
@@ -166,7 +166,7 @@ _register_option(
 
 _register_option(
     "copy_on_write",
-    True,
+    os.environ.get("CUDF_COPY_ON_WRITE", "0") == "1",
     textwrap.dedent(
         """
         Default behavior of performing deep copies.

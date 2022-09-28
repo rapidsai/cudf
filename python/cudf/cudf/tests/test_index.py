@@ -396,7 +396,11 @@ def test_index_copy_category(name, dtype, deep=True):
 def test_index_copy_deep(idx, deep):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    if not deep:
+    if isinstance(idx, cudf.StringIndex):
+        # StringColumn is immutable hence, deep copies of a
+        # StringIndex will share the same StringColumn.
+        assert_column_memory_eq(idx._values, idx_copy._values)
+    elif not deep:
         assert_column_memory_eq(idx._values, idx_copy._values)
     else:
         assert_column_memory_ne(idx._values, idx_copy._values)
