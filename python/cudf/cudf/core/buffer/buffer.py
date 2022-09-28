@@ -107,51 +107,6 @@ class DeviceBufferLike(Protocol, metaclass=_ProtocolMeta):
         """
 
 
-def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
-    """
-    Factory function to wrap `obj` in a DeviceBufferLike object.
-
-    If `obj` isn't device-buffer-like already, a new buffer that implements
-    DeviceBufferLike and points to the memory of `obj` is created. If `obj`
-    represents host memory, it is copied to a new `rmm.DeviceBuffer` device
-    allocation. Otherwise, the data of `obj` is **not** copied, instead the
-    new buffer keeps a reference to `obj` in order to retain the lifetime
-    of `obj`.
-
-    Raises ValueError if the data of `obj` isn't C-contiguous.
-
-    Parameters
-    ----------
-    obj : buffer-like or array-like
-        An object that exposes either device or host memory through
-        `__array_interface__`, `__cuda_array_interface__`, or the
-        buffer protocol. If `obj` represents host memory, data will
-        be copied.
-    exposed : bool, optional
-        Whether or not a raw pointer (integer or C pointer) has
-        been exposed to the outside world. If this is the case,
-        the buffer cannot be spilled.
-
-    Return
-    ------
-    DeviceBufferLike
-        A device-buffer-like instance that represents the device memory
-        of `obj`.
-    """
-    from cudf.core.buffer.spill_manager import global_manager
-    from cudf.core.buffer.spillable_buffer import SpillableBuffer
-
-    if isinstance(obj, DeviceBufferLike):
-        return obj
-
-    if global_manager.enabled:
-        return SpillableBuffer(
-            data=obj, exposed=exposed, manager=global_manager.get()
-        )
-    else:
-        return Buffer(obj)
-
-
 class Buffer(Serializable):
     """
     A Buffer represents device memory.

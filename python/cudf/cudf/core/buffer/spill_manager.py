@@ -11,16 +11,12 @@ import warnings
 import weakref
 from dataclasses import dataclass
 from functools import cached_property
-from typing import List, Mapping, MutableMapping, Optional, Set, Tuple
+from typing import List, MutableMapping, Optional, Tuple
 
 import rmm.mr
 
-from cudf._lib.column import Column
-from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer.buffer import DeviceBufferLike
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
-from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
-from cudf.core.indexed_frame import IndexedFrame
 from cudf.utils.string import format_bytes
 
 
@@ -329,70 +325,3 @@ class GlobalSpillManager:
 
 
 global_manager = GlobalSpillManager()
-
-
-def get_columns(obj: object) -> List[Column]:
-    """Return all columns in `obj` (no duplicates)"""
-    found: List[Column] = []
-    found_ids: Set[int] = set()
-
-    def _get_columns(obj: object) -> None:
-        if isinstance(obj, Column):
-            if id(obj) not in found_ids:
-                found_ids.add(id(obj))
-                found.append(obj)
-        elif isinstance(obj, IndexedFrame):
-            _get_columns(obj._data)
-            _get_columns(obj._index)
-        elif isinstance(obj, Frame):
-            _get_columns(obj._data)
-        elif isinstance(obj, ColumnAccessor):
-            for o in obj.columns:
-                _get_columns(o)
-        elif isinstance(obj, (list, tuple)):
-            for o in obj:
-                _get_columns(o)
-        elif isinstance(obj, Mapping):
-            for o in obj.values():
-                _get_columns(o)
-
-    _get_columns(obj)
-    return found
-
-
-def mark_columns_as_read_only_inplace(obj: object) -> None:
-    """
-    Mark all columns found in `obj` as read-only.
-
-    This is an in-place operation, which does nothing if
-    spilling is disabled.
-
-    Making columns as ready-only, makes it possible to unspill the
-    underlying buffers partially.
-    """
-    if not global_manager.enabled:
-        return
-
-    for col in get_columns(obj):
-        if col.base_children:
-            continue  # TODO: support non-fixed-length data types
-
-        if col.base_mask is not None:
-            continue  # TODO: support masks
-
-        if col.base_data is None:
-            continue
-        assert col.data is not None
-
-        if col.data is col.base_data:
-            continue  # We can ignore non-views
-
-        if isinstance(col.base_data, SpillableBuffer) and isinstance(
-            col.data, SpillableBuffer
-        ):
-            with col.base_data.lock:
-                if not col.base_data.is_spilled:
-                    continue  # We can ignore non-spilled columns
-                mem = col.data.memoryview()
-            col.set_base_data(as_device_buffer_like(mem, exposed=False))
-            col._offset = 0

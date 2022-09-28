@@ -13,7 +13,7 @@ import numpy
 
 import rmm
 
-from cudf.core.buffer import Buffer, Frame, get_ptr_and_size
+from cudf.core.buffer.buffer import Buffer, Frame, get_ptr_and_size
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:

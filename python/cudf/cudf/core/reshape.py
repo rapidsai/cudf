@@ -10,7 +10,7 @@ import pandas as pd
 import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._typing import Dtype
-from cudf.core.buffer.spill_manager import mark_columns_as_read_only_inplace
+from cudf.core.buffer import mark_columns_as_read_only_inplace
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 
