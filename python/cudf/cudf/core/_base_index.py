@@ -87,7 +87,7 @@ class BaseIndex(Serializable):
 
     @property
     def values(self):
-        return NotImplementedError()
+        raise NotImplementedError
 
     def get_loc(self, key, method=None, tolerance=None):
         raise NotImplementedError
@@ -534,13 +534,13 @@ class BaseIndex(Serializable):
         DataFrame
             cudf DataFrame
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     def any(self):
         """
         Return whether any elements is True in Index.
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     def to_pandas(self):
         """
@@ -559,7 +559,7 @@ class BaseIndex(Serializable):
         >>> type(idx)
         <class 'cudf.core.index.Int64Index'>
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     def isin(self, values):
         """Return a boolean array where the index values are in values.
@@ -589,7 +589,7 @@ class BaseIndex(Serializable):
         >>> idx.isin([1, 4])
         array([ True, False, False])
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     def unique(self):
         """
@@ -599,7 +599,7 @@ class BaseIndex(Serializable):
         -------
         Index without duplicates
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     def to_series(self, index=None, name=None):
         """
@@ -619,7 +619,7 @@ class BaseIndex(Serializable):
         Series
             The dtype will be based on the type of the Index values.
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -656,7 +656,7 @@ class BaseIndex(Serializable):
         >>> idx.append([other, other])
         Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
         """
-        return NotImplementedError()
+        raise NotImplementedError
 
     def difference(self, other, sort=None):
         """
