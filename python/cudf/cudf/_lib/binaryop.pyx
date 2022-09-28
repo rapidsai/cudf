@@ -25,7 +25,7 @@ from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
 from cudf.api.types import is_scalar, is_string_dtype
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator

@@ -14,7 +14,7 @@ from cudf._lib.cpp.hash cimport hash as cpp_hash, hash_id as cpp_hash_id
 from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 

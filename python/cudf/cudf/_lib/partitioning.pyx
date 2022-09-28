@@ -6,7 +6,7 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view

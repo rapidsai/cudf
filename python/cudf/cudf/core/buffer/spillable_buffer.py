@@ -17,7 +17,7 @@ from cudf.core.buffer import Buffer, Frame, get_ptr_and_size
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
-    from cudf.core.spill_manager import SpillManager
+    from cudf.core.buffer.spill_manager import SpillManager
 
 
 class SpillLock:
@@ -58,9 +58,9 @@ class SpillableBuffer(Buffer):
     """A spillable buffer that implements DeviceBufferLike.
 
     This buffer supports spilling the represented data to host memory.
-    Spilling can be done manually by calling `.__spill__(target="cpu")`
-    but usually the associated spilling manager triggers spilling based on
-    current device memory usage see `cudf.core.spill_manager.SpillManager`.
+    Spilling can be done manually by calling `.__spill__(target="cpu")` but
+    usually the associated spilling manager triggers spilling based on current
+    device memory usage see `cudf.core.buffer.spill_manager.SpillManager`.
     Unspill is triggered automatically when accessing the data of the buffer.
 
     The buffer might not be spillable, which is based on the "expose" status
@@ -360,7 +360,7 @@ class SpillableBuffer(Buffer):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
-        from cudf.core.spill_manager import global_manager
+        from cudf.core.buffer.spill_manager import global_manager
 
         if header["frame_count"] != 1:
             raise ValueError(

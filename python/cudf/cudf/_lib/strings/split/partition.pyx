@@ -4,7 +4,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column

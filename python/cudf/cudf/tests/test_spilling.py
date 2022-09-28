@@ -16,14 +16,14 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
-from cudf.core.spill_manager import (
+from cudf.core.buffer.spill_manager import (
     SpillManager,
     get_columns,
     get_rmm_memory_resource_stack,
     global_manager,
     mark_columns_as_read_only_inplace,
 )
-from cudf.core.spillable_buffer import SpillableBuffer, SpillLock
+from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.testing._utils import assert_eq
 
 

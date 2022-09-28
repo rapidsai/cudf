@@ -15,7 +15,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr

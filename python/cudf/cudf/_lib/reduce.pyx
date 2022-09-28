@@ -12,7 +12,7 @@ from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.scalar cimport DeviceScalar
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair

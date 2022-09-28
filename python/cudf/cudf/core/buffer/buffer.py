@@ -138,8 +138,8 @@ def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
         A device-buffer-like instance that represents the device memory
         of `obj`.
     """
-    from cudf.core.spill_manager import global_manager
-    from cudf.core.spillable_buffer import SpillableBuffer
+    from cudf.core.buffer.spill_manager import global_manager
+    from cudf.core.buffer.spillable_buffer import SpillableBuffer
 
     if isinstance(obj, DeviceBufferLike):
         return obj
@@ -181,7 +181,7 @@ class Buffer(Serializable):
     def __init__(
         self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
-        from cudf.core.spill_manager import global_manager
+        from cudf.core.buffer.spill_manager import global_manager
 
         if isinstance(data, int):
             if size is None:

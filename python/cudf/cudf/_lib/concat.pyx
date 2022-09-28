@@ -22,7 +22,7 @@ from cudf._lib.utils cimport (
 )
 
 from cudf.core.buffer import as_device_buffer_like
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 
 
 cpdef concat_masks(object columns):

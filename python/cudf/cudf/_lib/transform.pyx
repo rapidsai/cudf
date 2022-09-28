@@ -7,7 +7,7 @@ import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import as_device_buffer_like
-from cudf.core.spillable_buffer import SpillLock
+from cudf.core.buffer.spillable_buffer import SpillLock
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
