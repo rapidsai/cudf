@@ -1143,6 +1143,21 @@ filepath_or_buffer : str, path object, or file-like object
 delimiter : string, default None, The delimiter that should be used
     for splitting text chunks into separate cudf column rows. Currently
     only a single delimiter is supported.
+byte_range : list or tuple, default None
+    Byte range within the input file to be read. The first number is the
+    offset in bytes, the second number is the range size in bytes. Reads the
+    row that starts before or at the end of the range, even if it ends after
+    the end of the range.
+compression : string, default None
+    Which compression type is the input compressed with.
+    Currently supports only `bgzip`, and requires the path to a file as input.
+compression_offsets: list or tuple, default None
+    The virtual begin and end offset associated with the provided compression.
+    For `bgzip`, they are composed of a local uncompressed offset inside a
+    BGZIP block (lower 16 bits) and the start offset of this BGZIP block in the
+    compressed file (upper 48 bits).
+    The start offset points to the first byte to be read, the end offset points
+    one past the last byte to be read.
 
 Returns
 -------

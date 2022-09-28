@@ -5,6 +5,7 @@ from io import TextIOBase
 import cudf
 
 from cython.operator cimport dereference
+from libc.stdint cimport uint64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -15,9 +16,22 @@ from cudf._lib.cpp.io.text cimport (
     byte_range_info,
     data_chunk_source,
     make_source,
+    make_source_from_bgzip_file,
     make_source_from_file,
     multibyte_split,
 )
+
+
+class BGZIPFile:
+    def __init__(self, filename, compression_offsets):
+        self.filename = filename
+        self.has_offsets = compression_offsets is not None
+        if self.has_offsets:
+            if len(compression_offsets) != 2:
+                raise ValueError(
+                    "compression offsets need to consist of two elements")
+            self.begin_offset = compression_offsets[0]
+            self.end_offset = compression_offsets[1]
 
 
 def read_text(object filepaths_or_buffers,
@@ -38,9 +52,22 @@ def read_text(object filepaths_or_buffers,
     cdef size_t c_byte_range_offset
     cdef size_t c_byte_range_size
     cdef byte_range_info c_byte_range
+    cdef uint64_t c_compression_begin_offset
+    cdef uint64_t c_compression_end_offset
 
     if isinstance(filepaths_or_buffers, TextIOBase):
         datasource = move(make_source(filepaths_or_buffers.read().encode()))
+    elif isinstance(filepaths_or_buffers, BGZIPFile):
+        if filepaths_or_buffers.has_offsets:
+            c_compression_begin_offset = filepaths_or_buffers.begin_offset
+            c_compression_end_offset = filepaths_or_buffers.end_offset
+            datasource = move(make_source_from_bgzip_file(
+                filepaths_or_buffers.filename.encode(),
+                c_compression_begin_offset,
+                c_compression_end_offset))
+        else:
+            datasource = move(make_source_from_bgzip_file(
+                filepaths_or_buffers.filename.encode()))
     else:
         datasource = move(make_source_from_file(filepaths_or_buffers.encode()))
 

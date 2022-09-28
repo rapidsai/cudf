@@ -845,3 +845,52 @@ def test_read_text_in_memory(datadir):
     actual = cudf.read_text(StringIO("x::y::z"), delimiter="::")
 
     assert_eq(expected, actual)
+
+
+def test_read_text_bgzip(datadir):
+    chess_file = str(datadir) + "/chess.pgn.gz"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read().split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(
+        chess_file, compression="bgzip", delimiter=delimiter
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_bgzip_offsets(datadir):
+    chess_file = str(datadir) + "/chess.pgn.gz"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read()[29:620].split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(
+        chess_file,
+        compression="bgzip",
+        compression_offsets=[58 * 2**16 + 2, 781 * 2**16 + 9],
+        delimiter=delimiter,
+    )
+
+    assert_eq(expected, actual)
