@@ -16,8 +16,6 @@ from dask.utils import funcname
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
-from dask_cudf.sorting import _get_shuffle_type
-
 CUMULATIVE_AGGS = (
     "cumsum",
     "cumcount",
@@ -485,11 +483,9 @@ def _shuffle_aggregate(
     sort=None,
     shuffle=None,
 ):
-    shuffle = _get_shuffle_type(shuffle)
     # Shuffle-based groupby aggregation
     # NOTE: This function is the dask_cudf version of
     # dask.dataframe.groupby._shuffle_aggregate
-    from dask.dataframe.shuffle import rearrange_by_column
 
     # Step 1 - Chunkwise groupby operation
     chunk_name = f"{token or funcname(chunk)}-chunk"
@@ -507,6 +503,7 @@ def _shuffle_aggregate(
         split_out,
     )
     if sort and split_out > 1:
+        # Sort-based code path
         result = (
             chunked.repartition(npartitions=shuffle_npartitions)
             .sort_values(
@@ -522,14 +519,13 @@ def _shuffle_aggregate(
             )
         )
     else:
-        result1 = rearrange_by_column(
-            chunked,
+        # Hash-based code path
+        result = chunked.shuffle(
             gb_cols,
             npartitions=shuffle_npartitions,
             ignore_index=True,
             shuffle=shuffle,
-        )
-        result = result1.map_partitions(
+        ).map_partitions(
             aggregate,
             meta=aggregate(chunked._meta, **aggregate_kwargs),
             enforce_metadata=False,
