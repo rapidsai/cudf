@@ -1,10 +1,11 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import os
 import textwrap
 from collections.abc import Container
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
-import os
+
 
 @dataclass
 class Option:
