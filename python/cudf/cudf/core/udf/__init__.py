@@ -31,7 +31,6 @@ try:
     from . import strings_typing  # isort: skip
     from . import strings_lowering  # isort: skip
 
-    # add an overload of MaskedType.__init__(string_view, bool)
     cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
         masked_lowering.masked_constructor
     )
