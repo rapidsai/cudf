@@ -1140,13 +1140,18 @@ filepath_or_buffer : str, path object, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
-delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into separate cudf column rows. Currently
-    only a single delimiter is supported.
+delimiter : string, default None
+    The delimiter that should be used for splitting text chunks into 
+    separate cudf column rows. Currently only a single delimiter is supported.
+byte_range : list or tuple, default None
+    Byte range within the input file to be read. The first number is the
+    offset in bytes, the second number is the range size in bytes. Reads the row
+    that starts before or at the end of the range, even if it ends after
+    the end of the range.
 
 Returns
 -------
-result : GPU ``Series``
+result : Series
 
 """
 doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
