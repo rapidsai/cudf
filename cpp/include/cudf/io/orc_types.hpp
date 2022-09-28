@@ -18,9 +18,7 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc {
 
 enum CompressionKind : uint8_t {
   NONE   = 0,
@@ -85,6 +83,4 @@ enum ProtofType : uint8_t {
   INVALID_7   = 7,
 };
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc

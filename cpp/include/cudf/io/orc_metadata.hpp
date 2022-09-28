@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
 
 #include <optional>
@@ -208,14 +209,15 @@ struct parsed_orc_statistics {
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
 struct orc_column_metadata {
-  std::string name;  ///< Column name
-  // TypeKind type_kind;                // column data type
-  std::vector<orc_column_metadata> children;  ///< Child info
+  std::string name;                           ///< Column name (empty in some cases)
+  orc::TypeKind type_kind;                    ///< ORC data type
+  std::vector<orc_column_metadata> children;  ///< Metadata of nested columns
 };
 
 struct orc_metadata {
   std::vector<orc_column_metadata> schema;
-  size_t num_stripes;
+  size_type num_rows;
+  size_type num_stripes;
 };
 
 orc_metadata read_orc_metadata(source_info const& src_info);

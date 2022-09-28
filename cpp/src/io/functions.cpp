@@ -342,16 +342,16 @@ orc_column_metadata make_orc_column_metadata(host_span<orc::SchemaType const> or
                                              uint32_t column_id,
                                              std::string column_name)
 {
-  orc_column_metadata info{column_name};
+  orc_column_metadata col_meta{column_name, orc_schema[column_id].kind};
   auto const& orc_col_schema = orc_schema[column_id];
   for (auto i = 0ul; i < orc_col_schema.subtypes.size(); ++i) {
-    info.children.push_back(make_orc_column_metadata(
+    col_meta.children.push_back(make_orc_column_metadata(
       orc_schema,
       orc_col_schema.subtypes[i],
       i < orc_col_schema.fieldNames.size() ? orc_col_schema.fieldNames[i] : ""));
   }
 
-  return info;
+  return col_meta;
 }
 
 orc_metadata read_orc_metadata(source_info const& src_info)
@@ -359,16 +359,19 @@ orc_metadata read_orc_metadata(source_info const& src_info)
   auto sources = make_datasources(src_info);
 
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  auto internal_meta = orc::metadata(sources.front().get(), cudf::default_stream_value);
+  auto const internal_meta = orc::metadata(sources.front().get(), cudf::default_stream_value);
 
-  auto const& root_cols = internal_meta.ff.types[0];
-  std::vector<orc_column_metadata> col_infos;
+  auto const& footer    = internal_meta.ff;
+  auto const& root_cols = footer.types[0];
+  std::vector<orc_column_metadata> cols_meta;
   for (auto i = 0ul; i < root_cols.subtypes.size(); ++i) {
-    col_infos.push_back(make_orc_column_metadata(
-      internal_meta.ff.types, root_cols.subtypes[i], root_cols.fieldNames[i]));
+    cols_meta.push_back(
+      make_orc_column_metadata(footer.types, root_cols.subtypes[i], root_cols.fieldNames[i]));
   }
 
-  return {std::move(col_infos), internal_meta.ff.stripes.size()};
+  return {std::move(cols_meta),
+          static_cast<size_type>(footer.numberOfRows),
+          static_cast<size_type>(footer.stripes.size())};
 }
 
 /**
