@@ -85,6 +85,10 @@ class BaseIndex(Serializable):
         # The size of an index is always its length irrespective of dimension.
         return len(self)
 
+    @property
+    def values(self):
+        return NotImplementedError()
+
     def get_loc(self, key, method=None, tolerance=None):
         raise NotImplementedError
 
@@ -516,11 +520,143 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
+    def to_frame(self, index=True, name=None):
+        """Create a DataFrame with a column containing this Index
+
+        Parameters
+        ----------
+        index : boolean, default True
+            Set the index of the returned DataFrame as the original Index
+        name : str, default None
+            Name to be used for the column
+        Returns
+        -------
+        DataFrame
+            cudf DataFrame
+        """
+        return NotImplementedError()
+
+    def any(self):
+        """
+        Return whether any elements is True in Index.
+        """
+        return NotImplementedError()
+
+    def to_pandas(self):
+        """
+        Convert to a Pandas Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([-3, 10, 15, 20])
+        >>> idx
+        Int64Index([-3, 10, 15, 20], dtype='int64')
+        >>> idx.to_pandas()
+        Int64Index([-3, 10, 15, 20], dtype='int64')
+        >>> type(idx.to_pandas())
+        <class 'pandas.core.indexes.numeric.Int64Index'>
+        >>> type(idx)
+        <class 'cudf.core.index.Int64Index'>
+        """
+        return NotImplementedError()
+
+    def isin(self, values):
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index
+            Sought values.
+
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
+        """
+        return NotImplementedError()
+
+    def unique(self):
+        """
+        Return unique values in the index.
+
+        Returns
+        -------
+        Index without duplicates
+        """
+        return NotImplementedError()
+
+    def to_series(self, index=None, name=None):
+        """
+        Create a Series with both index and values equal to the index keys.
+        Useful with map for returning an indexer based on an index.
+
+        Parameters
+        ----------
+        index : Index, optional
+            Index of resulting Series. If None, defaults to original index.
+        name : str, optional
+            Name of resulting Series. If None, defaults to name of original
+            index.
+
+        Returns
+        -------
+        Series
+            The dtype will be based on the type of the Index values.
+        """
+        return NotImplementedError()
+
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
 
         return cudf.io.dlpack.to_dlpack(self)
+
+    def append(self, other):
+        """
+        Append a collection of Index objects together.
+
+        Parameters
+        ----------
+        other : Index or list/tuple of indices
+
+        Returns
+        -------
+        appended : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 10, 100])
+        >>> idx
+        Int64Index([1, 2, 10, 100], dtype='int64')
+        >>> other = cudf.Index([200, 400, 50])
+        >>> other
+        Int64Index([200, 400, 50], dtype='int64')
+        >>> idx.append(other)
+        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+
+        append accepts list of Index objects
+
+        >>> idx.append([other, other])
+        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
+        """
+        return NotImplementedError()
 
     def difference(self, other, sort=None):
         """
