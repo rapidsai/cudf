@@ -1145,9 +1145,10 @@ delimiter : string, default None
     separate cudf column rows. Currently only a single delimiter is supported.
 byte_range : list or tuple, default None
     Byte range within the input file to be read. The first number is the
-    offset in bytes, the second number is the range size in bytes. Reads the row
-    that starts before or at the end of the range, even if it ends after
-    the end of the range.
+    offset in bytes, the second number is the range size in bytes.
+    The output contains all rows that start inside the byte range
+    (i.e. at or after the offset, and before the end at `offset + size`),
+    which may include rows that continue past the end.
 
 Returns
 -------
