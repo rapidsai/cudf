@@ -895,7 +895,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def any(self):
-        return self._values.any()
+        if len(self) == 0:
+            return False
+        return True
 
     def append(self, other):
         return self._as_int_index().append(other)
@@ -1480,8 +1482,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         )
 
     def any(self):
-        if len(self) == 0:
-            return False
+        return self._values.any()
 
     def to_pandas(self):
         return pd.Index(self._values.to_pandas(), name=self.name)
