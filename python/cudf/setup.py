@@ -64,7 +64,7 @@ if os.getenv("CUDF_BUILD_WHEELS", "") != "":
 
 setup(
     name="cudf"+os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default=""),
-    version=versioneer.get_version(),
+    version=os.getenv("PYTHON_PACKAGE_VERSIONEER_OVERRIDE", default=versioneer.get_version()),
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",

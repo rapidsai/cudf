@@ -21,7 +21,7 @@ jobs:
 
       cibw-before-all-amd64: "yum update -y && yum install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-before-all-arm64: "apt update -y && apt install -y protobuf-compiler && tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple"
+      cibw-environment: "CUDF_BUILD_WHEELS=1 PIP_INDEX_URL=https://pypi.k8s.rapids.ai/simple PYTHON_PACKAGE_VERSIONEER_OVERRIDE=22.10.00a"
 
       skbuild-build-options: "-v"
       skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
