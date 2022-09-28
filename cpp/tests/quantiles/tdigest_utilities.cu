@@ -51,10 +51,6 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   auto sampled_result_weight = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
 
-  // We have to unpack the vector<tuple<...>> into three separate vectors for
-  // copying into device uvectors because rmm::device_uvector doesn't support
-  // thrust::tuple (it's not trivially copyable).
-  // TODO: thrust::tuple_element should work here, but doesn't seem to play nice
   auto h_expected_src    = std::vector<size_type>(h_expected.size());
   auto h_expected_mean   = std::vector<double>(h_expected.size());
   auto h_expected_weight = std::vector<double>(h_expected.size());
