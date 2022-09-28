@@ -41,6 +41,8 @@ jobs:
       package-name: dask_cudf
       package-dir: python/dask_cudf
       python-package-cuda-suffix: "-cu11"
+      python-package-versioneer-override: "22.10.00a"
+
       test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-extras:  "test"
       test-unittest: "pytest -v ./python/dask_cudf/dask_cudf/tests"
