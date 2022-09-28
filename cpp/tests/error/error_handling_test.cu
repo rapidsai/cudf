@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 
 #include <cudf/filling.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream.hpp>
@@ -89,7 +90,7 @@ TEST(DeathTest, CudaFatalError)
 {
   testing::FLAGS_gtest_death_test_style = "threadsafe";
   auto call_kernel                      = []() {
-    kernel<<<1, 1>>>();
+    kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>();
     try {
       CUDF_CUDA_TRY(cudaDeviceSynchronize());
     } catch (const cudf::fatal_cuda_error& fe) {
