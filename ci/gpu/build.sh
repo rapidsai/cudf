@@ -75,8 +75,6 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
-conda config --env --add channels numba
-
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
