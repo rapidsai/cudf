@@ -1298,7 +1298,7 @@ def test_parquet_reader_struct_sol_table(tmpdir, params):
 
 def test_parquet_reader_v2(tmpdir, simple_pdf):
     pdf_fname = tmpdir.join("pdfv2.parquet")
-    simple_pdf.to_parquet(pdf_fname, data_page_version='2.0')
+    simple_pdf.to_parquet(pdf_fname, data_page_version="2.0")
     assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
 
 
@@ -1368,7 +1368,7 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
 def test_parquet_reader_nested_v2(tmpdir, data):
     expect = pd.DataFrame(data)
     pdf_fname = tmpdir.join("pdfv2.parquet")
-    expect.to_parquet(pdf_fname, data_page_version='2.0')
+    expect.to_parquet(pdf_fname, data_page_version="2.0")
     assert_eq(cudf.read_parquet(pdf_fname), expect)
 
 
@@ -1588,6 +1588,7 @@ def test_parquet_writer_gpu_chunked_context(tmpdir, simple_pdf, simple_gdf):
         writer.write_table(simple_gdf)
 
     assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))
+
 
 def test_parquet_write_bytes_io(simple_gdf):
     output = BytesIO()
