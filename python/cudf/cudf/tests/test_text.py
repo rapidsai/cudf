@@ -848,7 +848,8 @@ def test_read_text_in_memory(datadir):
 
 
 def test_read_text_bgzip(datadir):
-    chess_file = str(datadir) + "/chess.pgn.gz"
+    chess_file_compressed = str(datadir) + "/chess.pgn.gz"
+    chess_file = str(datadir) + "/chess.pgn"
     delimiter = "1."
 
     with open(chess_file) as f:
@@ -864,18 +865,19 @@ def test_read_text_bgzip(datadir):
     )
 
     actual = cudf.read_text(
-        chess_file, compression="bgzip", delimiter=delimiter
+        chess_file_compressed, compression="bgzip", delimiter=delimiter
     )
 
     assert_eq(expected, actual)
 
 
 def test_read_text_bgzip_offsets(datadir):
-    chess_file = str(datadir) + "/chess.pgn.gz"
+    chess_file_compressed = str(datadir) + "/chess.pgn.gz"
+    chess_file = str(datadir) + "/chess.pgn"
     delimiter = "1."
 
     with open(chess_file) as f:
-        content = f.read()[29:620].split(delimiter)
+        content = f.read()[29:695].split(delimiter)
 
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
@@ -887,9 +889,9 @@ def test_read_text_bgzip_offsets(datadir):
     )
 
     actual = cudf.read_text(
-        chess_file,
+        chess_file_compressed,
         compression="bgzip",
-        compression_offsets=[58 * 2**16 + 2, 781 * 2**16 + 9],
+        compression_offsets=[58 * 2**16 + 2, 781 * 2**16 + 7],
         delimiter=delimiter,
     )
 
