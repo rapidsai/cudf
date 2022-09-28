@@ -396,11 +396,14 @@ def test_index_copy_category(name, dtype, deep=True):
 def test_index_copy_deep(idx, deep):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    if isinstance(idx, cudf.StringIndex):
+
+    if isinstance(idx, cudf.StringIndex) or not deep or cudf.get_option("copy_on_write"):
         # StringColumn is immutable hence, deep copies of a
         # StringIndex will share the same StringColumn.
-        assert_column_memory_eq(idx._values, idx_copy._values)
-    elif not deep:
+
+        # When `copy_on_write` is turned on, Index objects will
+        # have unique column object but they all point to same
+        # data pointers.
         assert_column_memory_eq(idx._values, idx_copy._values)
     else:
         assert_column_memory_ne(idx._values, idx_copy._values)
