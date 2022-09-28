@@ -34,7 +34,6 @@ from cudf.api.types import (
     is_dtype_equal,
     is_interval_dtype,
     is_list_like,
-    is_scalar,
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
@@ -876,24 +875,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def values(self):
         return cupy.arange(self.start, self.stop, self.step)
 
-    def to_frame(self, index=True, name=None):
-        if name is not None:
-            col_name = name
-        elif self.name is None:
-            col_name = 0
-        else:
-            col_name = self.name
-        return cudf.DataFrame(
-            {col_name: self._range}, index=self if index else None
-        )
-
-    def to_series(self, index=None, name=None):
-        return cudf.Series._from_data(
-            self._data,
-            index=self.copy(deep=False) if index is None else index,
-            name=self.name if name is None else name,
-        )
-
     def any(self):
         if len(self) == 0:
             return False
@@ -901,19 +882,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def append(self, other):
         return self._as_int_index().append(other)
-
-    def isin(self, values):
-        # To match pandas behavior, even though only list-like objects are
-        # supposed to be passed, only scalars throw errors. Other types (like
-        # dicts) just transparently return False (see the implementation of
-        # ColumnBase.isin).
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
-        return np.isin(self.values_host, values)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -1470,17 +1438,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         return self
 
-    def to_frame(self, index=True, name=None):
-        if name is not None:
-            col_name = name
-        elif self.name is None:
-            col_name = 0
-        else:
-            col_name = self.name
-        return cudf.DataFrame(
-            {col_name: self._values}, index=self if index else None
-        )
-
     def any(self):
         return self._values.any()
 
@@ -1531,26 +1488,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return cudf.core.index._index_from_data(
             {self.name: self._values.unique()}, name=self.name
         )
-
-    def to_series(self, index=None, name=None):
-        return cudf.Series._from_data(
-            self._data,
-            index=self.copy(deep=False) if index is None else index,
-            name=self.name if name is None else name,
-        )
-
-    def isin(self, values):
-        # To match pandas behavior, even though only list-like objects are
-        # supposed to be passed, only scalars throw errors. Other types (like
-        # dicts) just transparently return False (see the implementation of
-        # ColumnBase.isin).
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
-        return self._values.isin(values).values
 
 
 class NumericIndex(GenericIndex):

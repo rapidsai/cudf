@@ -534,7 +534,15 @@ class BaseIndex(Serializable):
         DataFrame
             cudf DataFrame
         """
-        raise NotImplementedError
+        if name is not None:
+            col_name = name
+        elif self.name is None:
+            col_name = 0
+        else:
+            col_name = self.name
+        return cudf.DataFrame(
+            {col_name: self._values}, index=self if index else None
+        )
 
     def any(self):
         """
@@ -589,7 +597,17 @@ class BaseIndex(Serializable):
         >>> idx.isin([1, 4])
         array([ True, False, False])
         """
-        raise NotImplementedError
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
+        return self._values.isin(values).values
 
     def unique(self):
         """
@@ -619,7 +637,11 @@ class BaseIndex(Serializable):
         Series
             The dtype will be based on the type of the Index values.
         """
-        raise NotImplementedError
+        return cudf.Series._from_data(
+            self._data,
+            index=self.copy(deep=False) if index is None else index,
+            name=self.name if name is None else name,
+        )
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
