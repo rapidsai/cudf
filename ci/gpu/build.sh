@@ -271,6 +271,7 @@ cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
 
 # retest cudf with strings_udf present
+cd $WORKSPACE/python/cudf/cudf
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
 gpuci_logger "Python py.test retest cuDF UDFs"
 py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
