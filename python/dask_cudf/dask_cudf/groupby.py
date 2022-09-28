@@ -11,6 +11,7 @@ from dask.dataframe.core import (
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
+from dask.utils import funcname
 
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
@@ -469,6 +470,74 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )
 
 
+def _shuffle_aggregate(
+    ddf,
+    gb_cols,
+    chunk,
+    chunk_kwargs,
+    aggregate,
+    aggregate_kwargs,
+    split_every,
+    split_out,
+    token=None,
+    sort=None,
+    shuffle=None,
+):
+    # Shuffle-based groupby aggregation
+    # NOTE: This function is the dask_cudf version of
+    # dask.dataframe.groupby._shuffle_aggregate
+
+    # Step 1 - Chunkwise groupby operation
+    chunk_name = f"{token or funcname(chunk)}-chunk"
+    chunked = ddf.map_partitions(
+        chunk,
+        meta=chunk(ddf._meta, **chunk_kwargs),
+        enforce_metadata=False,
+        token=chunk_name,
+        **chunk_kwargs,
+    )
+
+    # Step 2 - Perform global sort or shuffle
+    shuffle_npartitions = max(
+        chunked.npartitions // split_every,
+        split_out,
+    )
+    if sort and split_out > 1:
+        # Sort-based code path
+        result = (
+            chunked.repartition(npartitions=shuffle_npartitions)
+            .sort_values(
+                gb_cols,
+                ignore_index=True,
+                shuffle=shuffle,
+            )
+            .map_partitions(
+                aggregate,
+                meta=aggregate(chunked._meta, **aggregate_kwargs),
+                enforce_metadata=False,
+                **aggregate_kwargs,
+            )
+        )
+    else:
+        # Hash-based code path
+        result = chunked.shuffle(
+            gb_cols,
+            npartitions=shuffle_npartitions,
+            ignore_index=True,
+            shuffle=shuffle,
+        ).map_partitions(
+            aggregate,
+            meta=aggregate(chunked._meta, **aggregate_kwargs),
+            enforce_metadata=False,
+            **aggregate_kwargs,
+        )
+
+    # Step 3 - Repartition and return
+    if split_out < result.npartitions:
+        return result.repartition(npartitions=split_out)
+    return result
+
+
 @_dask_cudf_nvtx_annotate
 def groupby_agg(
     ddf,
@@ -501,12 +570,6 @@ def groupby_agg(
     in `dask.dataframe`, because it allows the cudf backend to
     perform multiple aggregations at once.
     """
-    if shuffle:
-        # Temporary error until shuffle-based groupby is implemented
-        raise NotImplementedError(
-            "The shuffle option is not yet implemented in dask_cudf."
-        )
-
     # Assert that aggregations are supported
     aggs = _redirect_aggs(aggs_in)
     if not _aggs_supported(aggs, SUPPORTED_AGGS):
@@ -522,16 +585,6 @@ def groupby_agg(
     # Deal with default split_out and split_every params
     split_every = split_every or 8
     split_out = split_out or 1
-
-    # Deal with sort/shuffle defaults
-    if split_out > 1 and sort:
-        # NOTE: This can be changed when `shuffle` is not `None`
-        # as soon as the shuffle-based groupby is implemented
-        raise ValueError(
-            "dask-cudf's groupby algorithm does not yet support "
-            "`sort=True` when `split_out>1`. Please use `split_out=1`, "
-            "or try grouping with `sort=False`."
-        )
 
     # Standardize `gb_cols`, `columns`, and `aggs`
     if isinstance(gb_cols, str):
@@ -608,6 +661,36 @@ def groupby_agg(
         "str_cols_out": str_cols_out,
         "aggs_renames": aggs_renames,
     }
+
+    # Use shuffle=True for split_out>1
+    if sort and split_out > 1 and shuffle is None:
+        shuffle = "tasks"
+
+    # Check if we are using the shuffle-based algorithm
+    if shuffle:
+        # Shuffle-based aggregation
+        return _shuffle_aggregate(
+            ddf,
+            gb_cols,
+            chunk,
+            chunk_kwargs,
+            aggregate,
+            aggregate_kwargs,
+            split_every,
+            split_out,
+            token="cudf-aggregate",
+            sort=sort,
+            shuffle=shuffle if isinstance(shuffle, str) else None,
+        )
+
+    # Deal with sort/shuffle defaults
+    if split_out > 1 and sort:
+        raise ValueError(
+            "dask-cudf's groupby algorithm does not yet support "
+            "`sort=True` when `split_out>1`, unless a shuffle-based "
+            "algorithm is used. Please use `split_out=1`, group "
+            "with `sort=False`, or set `shuffle=True`."
+        )
 
     return aca(
         [ddf],
