@@ -377,8 +377,7 @@ void batched_compress(compression_type compression,
 bool is_compression_enabled(compression_type compression)
 {
   switch (compression) {
-    case compression_type::DEFLATE:
-      return NVCOMP_HAS_DEFLATE and detail::nvcomp_integration::is_all_enabled();
+    case compression_type::DEFLATE: return false;
     case compression_type::SNAPPY: return detail::nvcomp_integration::is_stable_enabled();
     case compression_type::ZSTD:
       return NVCOMP_HAS_ZSTD_COMP and detail::nvcomp_integration::is_all_enabled();
