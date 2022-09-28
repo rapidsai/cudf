@@ -6,7 +6,6 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.distributed import Client
-from dask.utils_test import hlg_layer
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
@@ -78,55 +77,3 @@ def test_str_series_roundtrip():
 
             actual = dask_series.compute()
             assert_eq(actual, expected)
-
-
-def test_shuffle_explicit_comms():
-    with dask_cuda.LocalCUDACluster(n_workers=2) as cluster:
-        with Client(cluster):
-            df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [3, 1, 2, 4]})
-            ddf = dask_cudf.from_cudf(df, npartitions=4)
-
-            # Test sort_values API
-            got_ec = ddf.sort_values(["b"], shuffle="explicit-comms")
-            got_tasks = ddf.sort_values(["b"], shuffle="tasks")
-            assert hlg_layer(got_ec.dask, "explicit")
-            assert_eq(got_ec.compute(), got_tasks.compute())
-
-            # Test set_index API
-            got_ec = ddf.set_index("b", shuffle="explicit-comms")
-            got_tasks = ddf.set_index("b", shuffle="tasks")
-            assert got_ec.divisions == got_tasks.divisions
-            assert hlg_layer(got_ec.dask, "explicit")
-            assert_eq(got_ec.compute(), got_tasks.compute())
-
-            # Test shuffle API
-            got_ec = ddf.shuffle(["b"], shuffle="explicit-comms")
-            assert hlg_layer(got_ec.dask, "explicit")
-            assert len(got_ec) == len(ddf)
-
-            # Test merge API
-            got_ec = ddf.merge(ddf.copy(), on="b", shuffle="explicit-comms")
-            got_tasks = ddf.merge(ddf.copy(), on="b", shuffle="tasks")
-            assert hlg_layer(got_ec.dask, "explicit")
-            assert_eq(got_ec.compute(), got_tasks.compute())
-
-            # Test join API
-            got_ec = ddf.join(
-                ddf.set_index("b"),
-                on="b",
-                lsuffix="_l",
-                rsuffix="_r",
-                shuffle="explicit-comms",
-            )
-            got_tasks = ddf.join(
-                ddf.set_index("b"),
-                on="b",
-                lsuffix="_l",
-                rsuffix="_r",
-                shuffle="tasks",
-            )
-            assert hlg_layer(got_ec.dask, "explicit")
-            assert_eq(
-                got_ec.compute().sort_index(),
-                got_tasks.compute().sort_index(),
-            )
