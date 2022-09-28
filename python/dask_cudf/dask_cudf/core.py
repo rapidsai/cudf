@@ -336,7 +336,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         """Wraps dask.dataframe DataFrame.shuffle method"""
 
         shuffle = _get_shuffle_type(shuffle)
-        if shuffle == "explicit-comms" and isinstance(index, (str, list)):
+        if shuffle == "explicit-comms":
             # NOTE: The upstream shuffle does not directly support
             # the "explicit-comms" option, so it will create a
             # new "_partitions" column before calling down to
@@ -344,14 +344,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
             # creation of a temporary "_partitions" column
             from dask.dataframe.shuffle import rearrange_by_column
 
-            index = [index] if isinstance(index, str) else list(index)
-            if set(index).issubset(self.columns):
-                return rearrange_by_column(
-                    self,
-                    index,
-                    shuffle=shuffle,
-                    **kwargs,
-                )
+            return rearrange_by_column(
+                self,
+                index,
+                shuffle=shuffle,
+                **kwargs,
+            )
 
         return super().shuffle(index, shuffle=shuffle, **kwargs)
 
