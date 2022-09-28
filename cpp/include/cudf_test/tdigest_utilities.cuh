@@ -118,7 +118,6 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
   // verify min/max
   thrust::host_vector<device_span<T const>> h_spans;
   h_spans.push_back({input_values.begin<T>(), static_cast<size_t>(input_values.size())});
-  // thrust::device_vector<device_span<T const>> spans(h_spans);
   auto spans = cudf::detail::make_device_uvector_async(h_spans, cudf::default_stream_value);
 
   auto expected_min = cudf::make_fixed_width_column(
@@ -260,41 +259,41 @@ void tdigest_simple_large_input_double_aggregation(Func op)
   }
 
   // delta 100
-  //{
-  //  int const delta = 100;
-  //  auto result = cudf::type_dispatcher(values->view().type(), tdigest_gen{}, op, *values, delta);
-  //  std::vector<expected_value> expected{{0, 0.07265722021410986331, 739},
-  //                                       {7, 8.19766194442652640362, 10693},
-  //                                       {16, 36.82277869518204482802, 20276},
-  //                                       {29, 72.95424834129075009059, 22623},
-  //                                       {38, 90.61229683516096145013, 15581},
-  //                                       {46, 99.07283498858802772702, 5142},
-  //                                       {50, 99.99970905482754801596, 1}};
-  //  cudf::tdigest::tdigest_column_view tdv(*result);
-  //
-  //  tdigest_sample_compare(tdv, expected);
-  //
-  //  // verify min/max
-  //  tdigest_minmax_compare<double>(tdv, *values);
-  //}
-  //
-  //// delta 10
-  //{
-  //  int const delta = 10;
-  //  auto result = cudf::type_dispatcher(values->view().type(), tdigest_gen{}, op, *values, delta);
-  //  std::vector<expected_value> expected{{0, 7.15508346777729631327, 71618},
-  //                                       {1, 33.04971680740474226923, 187499},
-  //                                       {2, 62.50566666553867634093, 231762},
-  //                                       {3, 83.46216572053654658703, 187500},
-  //                                       {4, 96.42204425201593664951, 71620},
-  //                                       {5, 99.99970905482754801596, 1}};
-  //  cudf::tdigest::tdigest_column_view tdv(*result);
-  //
-  //  tdigest_sample_compare(tdv, expected);
-  //
-  //  // verify min/max
-  //  tdigest_minmax_compare<double>(tdv, *values);
-  //}
+  {
+    int const delta = 100;
+    auto result = cudf::type_dispatcher(values->view().type(), tdigest_gen{}, op, *values, delta);
+    std::vector<expected_value> expected{{0, 0.07265722021410986331, 739},
+                                         {7, 8.19766194442652640362, 10693},
+                                         {16, 36.82277869518204482802, 20276},
+                                         {29, 72.95424834129075009059, 22623},
+                                         {38, 90.61229683516096145013, 15581},
+                                         {46, 99.07283498858802772702, 5142},
+                                         {50, 99.99970905482754801596, 1}};
+    cudf::tdigest::tdigest_column_view tdv(*result);
+
+    tdigest_sample_compare(tdv, expected);
+
+    // verify min/max
+    tdigest_minmax_compare<double>(tdv, *values);
+  }
+
+  // delta 10
+  {
+    int const delta = 10;
+    auto result = cudf::type_dispatcher(values->view().type(), tdigest_gen{}, op, *values, delta);
+    std::vector<expected_value> expected{{0, 7.15508346777729631327, 71618},
+                                         {1, 33.04971680740474226923, 187499},
+                                         {2, 62.50566666553867634093, 231762},
+                                         {3, 83.46216572053654658703, 187500},
+                                         {4, 96.42204425201593664951, 71620},
+                                         {5, 99.99970905482754801596, 1}};
+    cudf::tdigest::tdigest_column_view tdv(*result);
+
+    tdigest_sample_compare(tdv, expected);
+
+    // verify min/max
+    tdigest_minmax_compare<double>(tdv, *values);
+  }
 }
 
 // shared test for groupby/reduction.
