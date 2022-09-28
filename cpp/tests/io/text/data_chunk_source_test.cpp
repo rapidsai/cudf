@@ -127,7 +127,7 @@ TEST_F(DataChunkSourceTest, Host)
   test_source(content, *source);
 }
 
-void write_bgzip(std::ostream& stream,
+void write_bgzip(std::ostream& output_stream,
                  const std::string& data,
                  std::default_random_engine& rng,
                  bool compress,
@@ -173,15 +173,15 @@ void write_bgzip(std::ostream& stream,
       i & 2 ? extra_garbage_field2 : host_span<char const>{};
     if (compress) {
       cudf::io::text::detail::bgzip::write_compressed_block(
-        stream, {begin, len}, garbage_before, garbage_after);
+        output_stream, {begin, len}, garbage_before, garbage_after);
     } else {
       cudf::io::text::detail::bgzip::write_uncompressed_block(
-        stream, {begin, len}, garbage_before, garbage_after);
+        output_stream, {begin, len}, garbage_before, garbage_after);
     }
     begin += len;
     i++;
   }
-  if (write_eof) { cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {}); }
+  if (write_eof) { cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {}); }
 }
 
 TEST_F(DataChunkSourceTest, BgzipSource)
@@ -192,9 +192,9 @@ TEST_F(DataChunkSourceTest, BgzipSource)
     input = input + input;
   }
   {
-    std::ofstream stream{filename};
+    std::ofstream output_stream{filename};
     std::default_random_engine rng{};
-    write_bgzip(stream, input, rng, false, true);
+    write_bgzip(output_stream, input, rng, false, true);
   }
 
   auto const source = cudf::io::text::make_source_from_bgzip_file(filename);
@@ -204,7 +204,7 @@ TEST_F(DataChunkSourceTest, BgzipSource)
 
 TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
 {
-  auto const filename = temp_env->get_temp_filepath("bgzip_source");
+  auto const filename = temp_env->get_temp_filepath("bgzip_source_offsets");
   std::string input{"bananarama"};
   for (int i = 0; i < 24; i++) {
     input = input + input;
@@ -221,17 +221,18 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
   std::size_t const begin_local_offset{data_garbage.size()};
   std::size_t const end_local_offset{endinput.size()};
   {
-    std::ofstream stream{filename};
-    stream.write(padding_garbage.data(), padding_garbage.size());
+    std::ofstream output_stream{filename};
+    output_stream.write(padding_garbage.data(), padding_garbage.size());
     std::default_random_engine rng{};
-    begin_compressed_offset = stream.tellp();
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream, data_garbage + begininput);
-    write_bgzip(stream, input, rng, false, false);
-    end_compressed_offset = stream.tellp();
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream,
+    begin_compressed_offset = output_stream.tellp();
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
+                                                            data_garbage + begininput);
+    write_bgzip(output_stream, input, rng, false, false);
+    end_compressed_offset = output_stream.tellp();
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
                                                             endinput + data_garbage + data_garbage);
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
-    stream.write(padding_garbage.data(), padding_garbage.size());
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
+    output_stream.write(padding_garbage.data(), padding_garbage.size());
   }
   input = begininput + input + endinput;
 
@@ -245,7 +246,7 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
 
 TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleGZipBlock)
 {
-  auto const filename = temp_env->get_temp_filepath("bgzip_source");
+  auto const filename = temp_env->get_temp_filepath("bgzip_source_offsets_single_block");
   std::string const input{"collection unit brings"};
   std::string const head_garbage{"garbage"};
   std::string const tail_garbage{"GARBAGE"};
@@ -254,10 +255,10 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleGZipBlock)
   std::size_t const begin_local_offset{head_garbage.size()};
   std::size_t const end_local_offset{head_garbage.size() + input.size()};
   {
-    std::ofstream stream{filename};
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream,
+    std::ofstream output_stream{filename};
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
                                                             head_garbage + input + tail_garbage);
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
   }
 
   auto const source =
@@ -270,7 +271,7 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleGZipBlock)
 
 TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleChunk)
 {
-  auto const filename = temp_env->get_temp_filepath("bgzip_source");
+  auto const filename = temp_env->get_temp_filepath("bgzip_source_offsets_single_chunk");
   std::string const input{"collection unit brings"};
   std::string const head_garbage{"garbage"};
   std::string const tail_garbage{"GARBAGE"};
@@ -279,13 +280,13 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleChunk)
   std::size_t const begin_local_offset{head_garbage.size()};
   std::size_t const end_local_offset{input.size() - 10};
   {
-    std::ofstream stream{filename};
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream,
+    std::ofstream output_stream{filename};
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
                                                             head_garbage + input.substr(0, 10));
-    end_compressed_offset = stream.tellp();
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream,
+    end_compressed_offset = output_stream.tellp();
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
                                                             input.substr(10) + tail_garbage);
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
   }
 
   auto const source =
@@ -315,17 +316,17 @@ TEST_F(DataChunkSourceTest, BgzipCompressedSourceVirtualOffsets)
   std::size_t const begin_local_offset{data_garbage.size()};
   std::size_t const end_local_offset{endinput.size()};
   {
-    std::ofstream stream{filename};
-    stream.write(padding_garbage.data(), padding_garbage.size());
+    std::ofstream output_stream{filename};
+    output_stream.write(padding_garbage.data(), padding_garbage.size());
     std::default_random_engine rng{};
-    begin_compressed_offset = stream.tellp();
-    cudf::io::text::detail::bgzip::write_compressed_block(stream, data_garbage + begininput);
-    write_bgzip(stream, input, rng, true, false);
-    end_compressed_offset = stream.tellp();
-    cudf::io::text::detail::bgzip::write_compressed_block(stream,
+    begin_compressed_offset = output_stream.tellp();
+    cudf::io::text::detail::bgzip::write_compressed_block(output_stream, data_garbage + begininput);
+    write_bgzip(output_stream, input, rng, true, false);
+    end_compressed_offset = output_stream.tellp();
+    cudf::io::text::detail::bgzip::write_compressed_block(output_stream,
                                                           endinput + data_garbage + data_garbage);
-    cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
-    stream.write(padding_garbage.data(), padding_garbage.size());
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
+    output_stream.write(padding_garbage.data(), padding_garbage.size());
   }
   input = begininput + input + endinput;
 

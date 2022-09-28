@@ -38,12 +38,12 @@ static IntType read_int(char* data)
 }
 
 template <typename T>
-void write_int(std::ostream& stream, T val)
+void write_int(std::ostream& output_stream, T val)
 {
   std::array<char, sizeof(T)> bytes;
   // we assume little-endian
   std::memcpy(&bytes[0], &val, sizeof(T));
-  stream.write(bytes.data(), bytes.size());
+  output_stream.write(bytes.data(), bytes.size());
 }
 
 struct header {
@@ -52,10 +52,10 @@ struct header {
   [[nodiscard]] int data_size() const { return block_size - extra_length - 20; }
 };
 
-header read_header(std::istream& stream)
+header read_header(std::istream& input_stream)
 {
   std::array<char, 12> buffer{};
-  stream.read(buffer.data(), sizeof(buffer));
+  input_stream.read(buffer.data(), sizeof(buffer));
   std::array<uint8_t, 4> const expected_header{{31, 139, 8, 4}};
   CUDF_EXPECTS(
     std::equal(
@@ -70,18 +70,18 @@ header read_header(std::istream& stream)
     CUDF_EXPECTS(remaining_size >= 4, "invalid extra field length");
     // a subfield consists of 2 identifier bytes and a uint16 length
     // 66/67 identifies a BGZIP block size field, we skip all other fields
-    stream.read(buffer.data(), 4);
+    input_stream.read(buffer.data(), 4);
     extra_offset += 4;
     auto const subfield_size = read_int<uint16_t>(&buffer[2]);
     if (buffer[0] == 66 && buffer[1] == 67) {
       // the block size subfield contains a single uint16 value, which is block_size - 1
       CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
-      stream.read(buffer.data(), sizeof(uint16_t));
-      stream.seekg(remaining_size - 6, std::ios_base::cur);
+      input_stream.read(buffer.data(), sizeof(uint16_t));
+      input_stream.seekg(remaining_size - 6, std::ios_base::cur);
       auto const block_size_minus_one = read_int<uint16_t>(&buffer[0]);
       return {block_size_minus_one + 1, extra_length};
     } else {
-      stream.seekg(subfield_size, std::ios_base::cur);
+      input_stream.seekg(subfield_size, std::ios_base::cur);
       extra_offset += subfield_size;
     }
   }
@@ -93,21 +93,21 @@ struct footer {
   uint32_t decompressed_size;
 };
 
-footer read_footer(std::istream& stream)
+footer read_footer(std::istream& input_stream)
 {
   std::array<char, 8> buffer{};
-  stream.read(buffer.data(), sizeof(buffer));
+  input_stream.read(buffer.data(), sizeof(buffer));
   return {read_int<uint32_t>(&buffer[0]), read_int<uint32_t>(&buffer[4])};
 }
 
-void write_footer(std::ostream& stream, host_span<char const> data)
+void write_footer(std::ostream& output_stream, host_span<char const> data)
 {
   // compute crc32 with zlib, this allows checking the generated files with external tools
-  write_int<uint32_t>(stream, crc32(0, (unsigned char*)data.data(), data.size()));
-  write_int<uint32_t>(stream, data.size());
+  write_int<uint32_t>(output_stream, crc32(0, (unsigned char*)data.data(), data.size()));
+  write_int<uint32_t>(output_stream, data.size());
 }
 
-void write_header(std::ostream& stream,
+void write_header(std::ostream& output_stream,
                   uint16_t compressed_size,
                   host_span<char const> pre_size_subfield,
                   host_span<char const> post_size_subfield)
@@ -129,35 +129,35 @@ void write_header(std::ostream& stream,
     4,                   // xfl: irrelevant
     3                    // OS: irrelevant
   }};
-  stream.write(header_data.data(), header_data.size());
+  output_stream.write(header_data.data(), header_data.size());
   std::array<char, 4> extra_blocklen_field{{66, 67, 2, 0}};
   auto const extra_size = pre_size_subfield.size() + extra_blocklen_field.size() +
                           sizeof(uint16_t) + post_size_subfield.size();
   auto const block_size =
     header_data.size() + sizeof(uint16_t) + extra_size + compressed_size + 2 * sizeof(uint32_t);
-  write_int<uint16_t>(stream, extra_size);
-  stream.write(pre_size_subfield.data(), pre_size_subfield.size());
-  stream.write(extra_blocklen_field.data(), extra_blocklen_field.size());
+  write_int<uint16_t>(output_stream, extra_size);
+  output_stream.write(pre_size_subfield.data(), pre_size_subfield.size());
+  output_stream.write(extra_blocklen_field.data(), extra_blocklen_field.size());
   CUDF_EXPECTS(block_size - 1 <= std::numeric_limits<uint16_t>::max(), "block size overflow");
-  write_int<uint16_t>(stream, block_size - 1);
-  stream.write(post_size_subfield.data(), post_size_subfield.size());
+  write_int<uint16_t>(output_stream, block_size - 1);
+  output_stream.write(post_size_subfield.data(), post_size_subfield.size());
 }
 
-void write_uncompressed_block(std::ostream& stream,
+void write_uncompressed_block(std::ostream& output_stream,
                               host_span<char const> data,
                               host_span<char const> extra_garbage_before = {},
                               host_span<char const> extra_garbage_after  = {})
 {
   CUDF_EXPECTS(data.size() <= std::numeric_limits<uint16_t>::max(), "data size overflow");
-  write_header(stream, data.size() + 5, extra_garbage_before, extra_garbage_after);
-  write_int<uint8_t>(stream, 1);
-  write_int<uint16_t>(stream, data.size());
-  write_int<uint16_t>(stream, ~static_cast<uint16_t>(data.size()));
-  stream.write(data.data(), data.size());
-  write_footer(stream, data);
+  write_header(output_stream, data.size() + 5, extra_garbage_before, extra_garbage_after);
+  write_int<uint8_t>(output_stream, 1);
+  write_int<uint16_t>(output_stream, data.size());
+  write_int<uint16_t>(output_stream, ~static_cast<uint16_t>(data.size()));
+  output_stream.write(data.data(), data.size());
+  write_footer(output_stream, data);
 }
 
-void write_compressed_block(std::ostream& stream,
+void write_compressed_block(std::ostream& output_stream,
                             host_span<char const> data,
                             host_span<char const> extra_garbage_before = {},
                             host_span<char const> extra_garbage_after  = {})
@@ -181,9 +181,9 @@ void write_compressed_block(std::ostream& stream,
     "deflateInit failed");
   CUDF_EXPECTS(deflate(&deflate_stream, Z_FINISH) == Z_STREAM_END, "deflate failed");
   CUDF_EXPECTS(deflateEnd(&deflate_stream) == Z_OK, "deflateEnd failed");
-  write_header(stream, deflate_stream.total_out, extra_garbage_before, extra_garbage_after);
-  stream.write(compressed_out.data(), deflate_stream.total_out);
-  write_footer(stream, data);
+  write_header(output_stream, deflate_stream.total_out, extra_garbage_before, extra_garbage_after);
+  output_stream.write(compressed_out.data(), deflate_stream.total_out);
+  write_footer(output_stream, data);
 }
 
 }  // namespace cudf::io::text::detail::bgzip
