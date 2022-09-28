@@ -30,13 +30,13 @@ constexpr int64_t data_size = 512 << 20;
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
-  auto const schema = cudf::io::read_orc_metadata(source).schema;
-  std::vector<std::string> root_cols_names;
-  std::transform(
-    schema.cbegin(), schema.cend(), std::back_inserter(root_cols_names), [](auto const& col_meta) {
-      return col_meta.name;
-    });
-  return root_cols_names;
+  auto const top_lvl_cols = cudf::io::read_orc_metadata(source).root_column.children;
+  std::vector<std::string> col_names;
+  std::transform(top_lvl_cols.cbegin(),
+                 top_lvl_cols.cend(),
+                 std::back_inserter(col_names),
+                 [](auto const& col_meta) { return col_meta.name; });
+  return col_names;
 }
 
 template <column_selection ColSelection,

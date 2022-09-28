@@ -215,7 +215,7 @@ struct orc_column_metadata {
 };
 
 struct orc_metadata {
-  std::vector<orc_column_metadata> schema;
+  orc_column_metadata root_column;
   size_type num_rows;
   size_type num_stripes;
 };

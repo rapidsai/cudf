@@ -359,17 +359,9 @@ orc_metadata read_orc_metadata(source_info const& src_info)
   auto sources = make_datasources(src_info);
 
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  auto const internal_meta = orc::metadata(sources.front().get(), cudf::default_stream_value);
+  auto const footer = orc::metadata(sources.front().get(), cudf::default_stream_value).ff;
 
-  auto const& footer    = internal_meta.ff;
-  auto const& root_cols = footer.types[0];
-  std::vector<orc_column_metadata> cols_meta;
-  for (auto i = 0ul; i < root_cols.subtypes.size(); ++i) {
-    cols_meta.push_back(
-      make_orc_column_metadata(footer.types, root_cols.subtypes[i], root_cols.fieldNames[i]));
-  }
-
-  return {std::move(cols_meta),
+  return {make_orc_column_metadata(footer.types, 0, ""),
           static_cast<size_type>(footer.numberOfRows),
           static_cast<size_type>(footer.stripes.size())};
 }
