@@ -130,14 +130,3 @@ def test_shuffle_explicit_comms():
                 got_ec.compute().sort_index(),
                 got_tasks.compute().sort_index(),
             )
-
-            # Test shuffle-based groupby aggreation
-            got_ec = ddf.groupby("b").agg(
-                {"a": "count"}, shuffle="explicit-comms"
-            )
-            got_tasks = ddf.groupby("b").agg({"a": "count"}, shuffle="tasks")
-            assert hlg_layer(got_ec.dask, "explicit")
-            assert_eq(
-                got_ec.compute().sort_index(),
-                got_tasks.compute().sort_index(),
-            )
