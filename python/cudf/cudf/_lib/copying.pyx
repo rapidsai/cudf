@@ -14,7 +14,7 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 
 from cudf._lib.column cimport Column
 
