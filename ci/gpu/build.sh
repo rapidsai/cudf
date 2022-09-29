@@ -32,7 +32,7 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
 export DASK_STABLE_VERSION="2022.7.1"
@@ -77,6 +77,11 @@ nvidia-smi
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
+
+# Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
+if [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
+  conda config --system --remove channels dask/label/dev
+fi
 
 gpuci_logger "Check conda environment"
 conda info
