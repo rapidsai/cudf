@@ -1746,8 +1746,10 @@ def test_writer_protobuf_large_rowindexentry():
 
 
 @pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
-def test_orc_writer_nvcomp(list_struct_buff, compression):
-    expected = cudf.read_orc(list_struct_buff)
+def test_orc_writer_nvcomp(compression):
+    expected = cudf.datasets.randomdata(
+        nrows=12345, dtypes={"a": int, "b": str, "c": float}, seed=1
+    )
 
     buff = BytesIO()
     try:

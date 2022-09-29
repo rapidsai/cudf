@@ -379,7 +379,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor.compression()) {
       case compression_type::ZLIB:
-        if (nvcomp_integration::is_all_enabled()) {
+        // See https://github.com/rapidsai/cudf/issues/11812
+        if (false) {
           nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
                                      inflate_in_view,
                                      inflate_out_view,
