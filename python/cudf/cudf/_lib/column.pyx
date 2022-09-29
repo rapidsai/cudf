@@ -556,8 +556,8 @@ cdef class Column:
             ):
                 data = data_owner
             else:
-                data = Buffer(
-                    data=data_ptr,
+                data = as_device_buffer_like(
+                    data_ptr,
                     size=base_nbytes,
                     owner=data_owner
                 )
@@ -606,8 +606,8 @@ cdef class Column:
                         exposed=False
                     )
             else:
-                mask = Buffer(
-                    data=mask_ptr,
+                mask = as_device_buffer_like(
+                    mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner
                 )

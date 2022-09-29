@@ -1,10 +1,9 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
-from typing import Callable
 
 import cupy as cp
 import pytest
 
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
 
 arr_len = 10
 
@@ -47,18 +46,23 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
     assert (expect == got).all()
 
 
-@pytest.mark.parametrize("creator", [Buffer, as_device_buffer_like])
-def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
+def test_buffer_creation_from_any():
     ary = cp.arange(arr_len)
-    b = creator(ary)
+    b = as_device_buffer_like(ary)
     assert isinstance(b, DeviceBufferLike)
-    assert ary.__cuda_array_interface__["data"][0] == b.ptr
+    assert ary.data.ptr == b.ptr
     assert ary.nbytes == b.size
 
     with pytest.raises(
-        ValueError, match="size must be specified when `data` is an integer"
+        ValueError, match="size must be specified when `obj` is an integer"
     ):
-        Buffer(42)
+        as_device_buffer_like(ary.data.ptr)
+
+    b = as_device_buffer_like(ary.data.ptr, size=ary.nbytes, owner=ary)
+    assert isinstance(b, DeviceBufferLike)
+    assert ary.data.ptr == b.ptr
+    assert ary.nbytes == b.size
+    assert b.owner.owner is ary
 
 
 @pytest.mark.parametrize(

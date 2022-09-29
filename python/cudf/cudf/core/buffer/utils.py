@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Mapping, Set
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, List, Mapping, Set, Union
 
 from cudf.core.buffer.buffer import Buffer, DeviceBufferLike
 from cudf.core.buffer.spill_manager import global_manager
@@ -12,7 +13,13 @@ if TYPE_CHECKING:
     from cudf._lib.column import Column
 
 
-def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
+def as_device_buffer_like(
+    obj: Union[int, Any],
+    *,
+    exposed=True,
+    size: int = None,
+    owner: object = None,
+) -> DeviceBufferLike:
     """
     Factory function to wrap `obj` in a DeviceBufferLike object.
 
@@ -23,19 +30,32 @@ def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
     new buffer keeps a reference to `obj` in order to retain the lifetime
     of `obj`.
 
+    If `obj` is an integer it must represent a device pointer and `size` must
+    be specified. If `obj` isn't an integer both `size` and `owner` must be
+    None.
+
     Raises ValueError if the data of `obj` isn't C-contiguous.
 
     Parameters
     ----------
-    obj : buffer-like or array-like
-        An object that exposes either device or host memory through
-        `__array_interface__`, `__cuda_array_interface__`, or the
-        buffer protocol. If `obj` represents host memory, data will
-        be copied.
+    data : int or buffer-like or array-like
+        - An integer representing a pointer to device memory, or
+        - An object that exposes either device or host memory through
+          `__array_interface__`, `__cuda_array_interface__`, or the buffer
+          protocol.
+        If `obj` represents host memory, data will be copied to device.
     exposed : bool, optional
         Whether or not a raw pointer (integer or C pointer) has
         been exposed to the outside world. If this is the case,
         the buffer cannot be spilled.
+    size : int, optional
+        Size of memory in bytes. Must be specified if `obj` is an integer
+        otherwise it must be None.
+    owner : object, optional
+        Python object to which the lifetime of the memory allocation is tied.
+        A reference to this object is kept in the returned Buffer. Can only be
+        specified when `obj` is an integer otherwise the `obj` itself will be
+        set as the owner.
 
     Return
     ------
@@ -46,6 +66,30 @@ def as_device_buffer_like(obj: Any, exposed=True) -> DeviceBufferLike:
 
     if isinstance(obj, DeviceBufferLike):
         return obj
+
+    if isinstance(obj, int):
+        if size is None:
+            raise ValueError("size must be specified when `obj` is an integer")
+        if size < 0:
+            raise ValueError("size cannot be negative")
+
+        # Convert `obj` to an object that exposes `__cuda_array_interface__`
+        # and keeps a reference to the owner.
+        obj = SimpleNamespace(
+            __cuda_array_interface__={
+                "data": (obj, False),
+                "shape": (size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 0,
+            },
+            owner=owner,
+        )
+    elif size is not None or owner is not None:
+        raise ValueError(
+            "`size` and `owner` must be None when "
+            "`obj` is a buffer-like object"
+        )
 
     if global_manager.enabled:
         return SpillableBuffer(

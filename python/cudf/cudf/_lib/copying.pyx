@@ -743,8 +743,8 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(
-            data=self.gpu_data_ptr,
+        gpu_data = as_device_buffer_like(
+            self.gpu_data_ptr,
             size=self.gpu_data_size,
             owner=self
         )
@@ -776,7 +776,8 @@ cdef class _CPackedColumns:
     def deserialize(header, frames):
         cdef _CPackedColumns p = _CPackedColumns.__new__(_CPackedColumns)
 
-        gpu_data = Buffer.deserialize(header["data"], frames)
+        gpu_data_type = pickle.loads(header["data"]["type-serialized"])
+        gpu_data = gpu_data_type.deserialize(header["data"], frames)
 
         dbuf = DeviceBuffer(
             ptr=gpu_data.ptr,
