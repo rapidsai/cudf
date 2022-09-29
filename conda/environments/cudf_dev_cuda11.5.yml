@@ -5,7 +5,7 @@ channels:
   - rapidsai
   - nvidia
   - rapidsai-nightly
-  # - dask/label/dev
+  - dask/label/dev
   - conda-forge
 dependencies:
   - c-compiler
