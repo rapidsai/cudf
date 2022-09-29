@@ -340,8 +340,8 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         if is_scalar(other):
             other = to_cudf_compatible_scalar(other)
             out_dtype = self._binop_result_dtype_or_error(other, op)
-            valid = self.is_valid and (
-                isinstance(other, np.generic) or other.is_valid
+            valid = self.is_valid() and (
+                isinstance(other, np.generic) or other.is_valid()
             )
             if not valid:
                 return Scalar(None, dtype=out_dtype)
