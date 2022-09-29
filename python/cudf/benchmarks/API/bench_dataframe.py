@@ -43,7 +43,9 @@ def bench_merge(benchmark, dataframe, num_key_cols):
     [
         lambda: range(50),
         lambda: {f"{string.ascii_lowercase[i]}": range(50) for i in range(10)},
-        lambda: cudf.DataFrame({f"{string.ascii_lowercase[i]}": range(50) for i in range(10)}),
+        lambda: cudf.DataFrame(
+            {f"{string.ascii_lowercase[i]}": range(50) for i in range(10)}
+        ),
         lambda: cudf.Series(range(50)),
     ],
 )
