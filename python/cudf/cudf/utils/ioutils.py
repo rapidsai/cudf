@@ -429,7 +429,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZLIB', 'ZSTD', None }}, default 'snappy'
+compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
