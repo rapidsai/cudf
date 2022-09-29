@@ -9,8 +9,8 @@ from setuptools import find_packages, setup
 
 install_requires = [
     "cudf",
-    "dask>=2022.7.1",
-    "distributed>=2022.7.1",
+    "dask==2022.9.1",
+    "distributed==2022.9.1",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
