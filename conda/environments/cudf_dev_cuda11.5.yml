@@ -19,7 +19,7 @@ dependencies:
   - scikit-build>=0.13.1
   - python>=3.8,<3.10
   - numba>=0.54
-  - numpy
+  - numpy<1.23
   - pandas>=1.0,<1.5.0dev0
   - pyarrow=8
   - fastavro>=0.22.9
