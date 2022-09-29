@@ -21,7 +21,7 @@ extras_require = {
         "numpy",
         "pandas>=1.0,<1.6.0dev0",
         "pytest",
-        "numba>=0.53.1",
+        "numba>=0.56.2",
         "dask>=2021.09.1",
         "distributed>=2021.09.1",
     ]
