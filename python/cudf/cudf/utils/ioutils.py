@@ -484,7 +484,7 @@ byte_range : list or tuple, default None (cudf engine only)
     size in bytes. Set the size to zero to read all data after the offset
     location. Reads the row that starts before or at the end of the range,
     even if it ends after the end of the range.
-keep_quotes : bool, default False (cudf_experimental engine only)    
+keep_quotes : bool, default False (cudf_experimental engine only)
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -499,7 +499,7 @@ compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
     '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
     otherwise. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
-    
+
 
 orient : string, (pandas engine only)
     Indication of expected JSON string format .
@@ -544,7 +544,7 @@ convert_dates : boolean, default True (pandas engine only)
     * it is ``'modified'``, or
     * it is ``'date'``
 keep_default_dates : boolean, default True (pandas engine only)
-    If parsing dates, parse the default datelike columns 
+    If parsing dates, parse the default datelike columns
 numpy : boolean, default False (pandas engine only)
     Direct decoding to numpy arrays. Supports numeric
     data only, but non-numeric column and index labels are supported. Note
