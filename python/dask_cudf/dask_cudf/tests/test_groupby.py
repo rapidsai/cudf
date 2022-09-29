@@ -837,3 +837,38 @@ def test_groupby_all_columns(func):
     actual = func(gddf)
 
     dd.assert_eq(expect, actual)
+
+
+def test_groupby_shuffle():
+    df = cudf.datasets.randomdata(
+        nrows=640, dtypes={"a": str, "b": int, "c": int}
+    )
+    gddf = dask_cudf.from_cudf(df, 8)
+    spec = {"b": "mean", "c": "max"}
+    expect = df.groupby("a", sort=True).agg(spec)
+
+    # Sorted aggregation, single-partition output
+    # (sort=True, split_out=1)
+    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=1)
+    dd.assert_eq(expect, got)
+
+    # Sorted aggregation, multi-partition output
+    # (sort=True, split_out=2)
+    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=2)
+    dd.assert_eq(expect, got)
+
+    # Un-sorted aggregation, single-partition output
+    # (sort=False, split_out=1)
+    got = gddf.groupby("a", sort=False).agg(spec, shuffle=True, split_out=1)
+    dd.assert_eq(expect.sort_index(), got.compute().sort_index())
+
+    # Un-sorted aggregation, multi-partition output
+    # (sort=False, split_out=2)
+    # NOTE: `shuffle=True` should be default
+    got = gddf.groupby("a", sort=False).agg(spec, split_out=2)
+    dd.assert_eq(expect, got.compute().sort_index())
+
+    # Sorted aggregation fails with split_out>1 when shuffle is False
+    # (sort=True, split_out=2, shuffle=False)
+    with pytest.raises(ValueError):
+        gddf.groupby("a", sort=True).agg(spec, shuffle=False, split_out=2)
