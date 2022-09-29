@@ -83,10 +83,17 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
 
   # BUILD_LIBCUDF == 1 means this job is being run on the cpu_build jobs
   # that is where we must also build the strings_udf package
+  mkdir -p ${CONDA_BLD_DIR}/strings_udf/work
+  STRINGS_UDF_BUILD_DIR=${CONDA_BLD_DIR}/strings_udf/work
+  gpuci_logger "Build conda pkg for cudf (python 3.8), for strings_udf"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/cudf ${CONDA_BUILD_ARGS} --python=3.8
+  gpuci_logger "Build conda pkg for cudf (python 3.9), for strings_udf"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/cudf ${CONDA_BUILD_ARGS} --python=3.9
+
   gpuci_logger "Build conda pkg for strings_udf (python 3.8)"
-  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.8
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} -c ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.8
   gpuci_logger "Build conda pkg for strings_udf (python 3.9)"
-  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.9
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} -c ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.9
 
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work

@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import decimal
+import operator
 from collections import OrderedDict
 
 import numpy as np
@@ -353,7 +354,13 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def _dispatch_scalar_binop(self, other, op):
         if isinstance(other, Scalar):
             other = other.value
-        return getattr(self.value, op)(other)
+        try:
+            func = getattr(operator, op)
+        except AttributeError:
+            func = getattr(self.value, op)
+        else:
+            return func(self.value, other)
+        return func(other)
 
     def _unaop_result_type_or_error(self, op):
         if op == "__neg__" and self.dtype == "bool":

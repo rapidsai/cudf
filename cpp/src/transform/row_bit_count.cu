@@ -409,7 +409,8 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
   auto const num_rows = output.size();
   if (tid >= num_rows) { return; }
 
-  // branch stack. points to the last list prior to branching.
+  // my_branch_stack points to the last span prior to branching. a branch occurs only
+  // when we are inside of a list contained within a struct column.
   row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
@@ -424,11 +425,12 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
   for (size_type idx = 0; idx < cols.size(); idx++) {
     column_device_view const& col = cols[idx];
 
-    // if we've returned from a branch
+    // if we've returned from a branch, pop to the proper span
     if (info[idx].branch_depth_start < last_branch_depth) {
-      cur_span = my_branch_stack[--branch_depth];
+      branch_depth = info[idx].branch_depth_start;
+      cur_span     = my_branch_stack[branch_depth];
     }
-    // if we're entering a new branch.
+    // if we're entering a new branch, push the current span
     // NOTE: this case can happen (a pop and a push by the same column)
     // when we have a struct<list, list>
     if (info[idx].branch_depth_end > info[idx].branch_depth_start) {
