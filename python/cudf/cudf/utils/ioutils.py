@@ -619,9 +619,6 @@ Using the `dtype` argument to specify type casting:
 >>> cudf.read_json(json_str, engine='cudf_experimental', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
     k1   k2
 0  1.0  [1]
-
->>>
-
 """
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
