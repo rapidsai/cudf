@@ -1622,8 +1622,8 @@ TEST_F(OrcMetadataReaderTest, TestBasic)
   EXPECT_EQ(meta.root_column.type_kind, cudf::io::orc::STRUCT);
   ASSERT_EQ(meta.root_column.children.size(), 2);
 
-  EXPECT_EQ(meta.root_column.children[0].name, "int_col");
-  EXPECT_EQ(meta.root_column.children[1].name, "float_col");
+  EXPECT_EQ(meta.root_column.child(0).name, "int_col");
+  EXPECT_EQ(meta.root_column.child(1).name, "float_col");
 }
 
 TEST_F(OrcMetadataReaderTest, TestNested)
@@ -1669,28 +1669,28 @@ TEST_F(OrcMetadataReaderTest, TestNested)
   EXPECT_EQ(meta.root_column.type_kind, cudf::io::orc::STRUCT);
   ASSERT_EQ(meta.root_column.children.size(), 2);
 
-  auto const& out_map_col = meta.root_column.children[0];
+  auto const& out_map_col = meta.root_column.child(0);
   EXPECT_EQ(out_map_col.name, "maps");
   EXPECT_EQ(out_map_col.type_kind, cudf::io::orc::MAP);
   ASSERT_EQ(out_map_col.children.size(), 2);
-  EXPECT_EQ(out_map_col.children[0].name, "");  // keys (no name in ORC)
-  EXPECT_EQ(out_map_col.children[1].name, "");  // values (no name in ORC)
+  EXPECT_EQ(out_map_col.child(0).name, "");  // keys (no name in ORC)
+  EXPECT_EQ(out_map_col.child(1).name, "");  // values (no name in ORC)
 
-  auto const& out_list_col = meta.root_column.children[1];
+  auto const& out_list_col = meta.root_column.child(1);
   EXPECT_EQ(out_list_col.name, "lists");
   EXPECT_EQ(out_list_col.type_kind, cudf::io::orc::LIST);
   ASSERT_EQ(out_list_col.children.size(), 1);
 
-  auto const& out_list_struct_col = out_list_col.children[0];
+  auto const& out_list_struct_col = out_list_col.child(0);
   EXPECT_EQ(out_list_struct_col.name, "");  // elements (no name in ORC)
   EXPECT_EQ(out_list_struct_col.type_kind, cudf::io::orc::STRUCT);
   ASSERT_EQ(out_list_struct_col.children.size(), 2);
 
-  auto const& out_int_col = out_list_struct_col.children[0];
+  auto const& out_int_col = out_list_struct_col.child(0);
   EXPECT_EQ(out_int_col.name, "int_field");
   EXPECT_EQ(out_int_col.type_kind, cudf::io::orc::INT);
 
-  auto const& out_float_col = out_list_struct_col.children[1];
+  auto const& out_float_col = out_list_struct_col.child(1);
   EXPECT_EQ(out_float_col.name, "float_field");
   EXPECT_EQ(out_float_col.type_kind, cudf::io::orc::FLOAT);
 }

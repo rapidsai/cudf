@@ -208,18 +208,43 @@ struct parsed_orc_statistics {
  */
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
+/**
+ * @brief Information about a column in ORC file, including the nested columns.
+ */
 struct orc_column_metadata {
-  std::string name;                           ///< Column name (empty in some cases)
+  std::string name;                           ///< Column name (can be empty)
   orc::TypeKind type_kind;                    ///< ORC data type
   std::vector<orc_column_metadata> children;  ///< Metadata of nested columns
+
+  /**
+   * @brief Returns metadata of the child with the given index.
+   *
+   * @param idx child index
+   *
+   * @return Child metadata
+   */
+  [[nodiscard]] auto const& child(int idx) const { return children.at(idx); }
 };
 
+/**
+ * @brief Information about content of an ORC file.
+ */
 struct orc_metadata {
-  orc_column_metadata root_column;
-  size_type num_rows;
-  size_type num_stripes;
+  orc_column_metadata root_column;  ///< Information on the root column (always a struct column that
+                                    ///< has all columns in the file as children)
+  size_type num_rows;     ///< number of rows in the root column; can vary for nested columns
+  size_type num_stripes;  ///< number of stripes in the file
 };
 
+/**
+ * @brief Reads file-level and stripe-level statistics of ORC dataset.
+ *
+ * @ingroup io_readers
+ *
+ * @param src_info Dataset source
+ *
+ * @return Column names and decoded ORC statistics
+ */
 orc_metadata read_orc_metadata(source_info const& src_info);
 
 }  // namespace io
