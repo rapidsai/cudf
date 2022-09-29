@@ -356,9 +356,10 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             other = other.value
         try:
             func = getattr(operator, op)
-            return func(self.value, other)
         except AttributeError:
             func = getattr(self.value, op)
+        else:
+            return func(self.value, other)
         return func(other)
 
     def _unaop_result_type_or_error(self, op):
