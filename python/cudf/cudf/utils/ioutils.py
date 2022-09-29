@@ -1141,7 +1141,7 @@ filepath_or_buffer : str, path object, or file-like object
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
 delimiter : string, default None
-    The delimiter that should be used for splitting text chunks into 
+    The delimiter that should be used for splitting text chunks into
     separate cudf column rows. The delimiter may be one or more characters.
 byte_range : list or tuple, default None
     Byte range within the input file to be read. The first number is the
