@@ -235,7 +235,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids.begin(),
                    parent_token_ids.end(),
                    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
-                     return (i > 0) && does_push(tokens_gpu[i - 1]) ? i - 1 : -1;
+                     return (i > 0)
+                              ? ((tokens_gpu[i - 1] == token_t::StructBegin ||
+                                  tokens_gpu[i - 1] == token_t::ListBegin)
+                                   ? i - 1
+                                   : (tokens_gpu[i - 1] == token_t::FieldNameEnd ? i - 2 : -1))
+                              : -1;
                      // -1, not sentinel used here because of max operation below
                    });
 
