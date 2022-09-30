@@ -1151,14 +1151,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
-#define NEWCOPY 1
-#if NEWCOPY
-  // vectors for v2 headers, if any
+  // vectors to save v2 def and rep level data, if any
   std::vector<device_span<uint8_t const>> copy_in;
   copy_in.reserve(num_comp_pages);
   std::vector<device_span<uint8_t>> copy_out;
   copy_out.reserve(num_comp_pages);
-#endif
 
   rmm::device_uvector<compression_result> comp_res(num_comp_pages, _stream);
   thrust::fill(rmm::exec_policy(_stream),
@@ -1180,14 +1177,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
       if (offset) {
-#if NEWCOPY
         copy_in.emplace_back(page.page_data, offset);
         copy_out.emplace_back(dst_base, offset);
-#else
-        //CUDF_CUDA_TRY(
-        //  cudaMemcpyAsync(dst_base, page.page_data, offset, cudaMemcpyDeviceToDevice, _stream));
-       thrust::copy(rmm::exec_policy(_stream), page.page_data, page.page_data + offset, dst_base);
-#endif
       }
       comp_in.emplace_back(page.page_data + offset,
                            static_cast<size_t>(page.compressed_page_size - offset));
@@ -1246,7 +1237,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   decompress_check(comp_res, _stream);
 
-#if NEWCOPY
+  // now copy the uncompressed V2 def and rep level data
   if (copy_in.size()) {
     host_span<device_span<uint8_t const> const> copy_in_view{copy_in.data(), copy_in.size()};
     auto const d_copy_in = cudf::detail::make_device_uvector_async(copy_in_view, _stream);
@@ -1256,7 +1247,6 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, _stream);
   }
-#endif
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
