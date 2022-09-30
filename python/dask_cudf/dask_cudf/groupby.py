@@ -806,8 +806,9 @@ def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
         _agg_dict
     )
-    gb.columns = [_make_name(name, sep=sep) for name in gb.columns]
-    return gb[sorted(gb.columns)]
+    output_columns = [_make_name(name, sep=sep) for name in gb.columns]
+    gb.columns = output_columns
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
@@ -838,11 +839,12 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     )
 
     # Don't include the last aggregation in the column names
-    gb.columns = [
+    output_columns = [
         _make_name(name[:-1] if isinstance(name, tuple) else name, sep=sep)
         for name in gb.columns
     ]
-    return gb[sorted(gb.columns)]
+    gb.columns = output_columns
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
