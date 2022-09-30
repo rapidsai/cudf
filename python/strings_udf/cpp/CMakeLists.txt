@@ -20,8 +20,8 @@ include(rapids-cuda)
 include(rapids-find)
 
 rapids_cpm_init()
+set(CMAKE_CUDA_ARCHITECTURES "60" "61" "70" "75" "80" "86")
 
-rapids_cuda_init_architectures(STRINGS_UDF)
 
 # Create a project so that we can enable CUDA architectures in this file.
 project(
