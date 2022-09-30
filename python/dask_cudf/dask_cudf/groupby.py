@@ -492,7 +492,6 @@ def _shuffle_aggregate(
     chunked = ddf.map_partitions(
         chunk,
         meta=chunk(ddf._meta, **chunk_kwargs),
-        # enforce_metadata=False,
         token=chunk_name,
         **chunk_kwargs,
     )
