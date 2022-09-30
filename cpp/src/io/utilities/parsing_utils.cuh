@@ -524,6 +524,27 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 }
 
 /**
+ * @brief Adjusts the range to ignore starting/trailing quotation characters.
+ *
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] quotechar The character used to denote quotes; '\0' if none
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
+                                                                      char const* end,
+                                                                      char quotechar = '\0')
+{
+  if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
+       *thrust::prev(end) == quotechar)) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
+  return {begin, end};
+}
+
+/**
  * @brief Decodes a numeric value base on templated cudf type T with specified
  * base.
  *
