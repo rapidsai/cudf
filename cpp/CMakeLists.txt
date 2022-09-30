@@ -618,10 +618,14 @@ target_compile_definitions(
 target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
 
 if(JITIFY_USE_CACHE)
-  # Instruct src/jit/cache what version of cudf we are building so it can compute
-  # a cal-ver cache directory. We isolate this definition to the single source so
-  # it doesn't effect compiling caching for all of libcudf
-  set_property(SOURCE src/jit/cache.cpp APPEND PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}")
+  # Instruct src/jit/cache what version of cudf we are building so it can compute a cal-ver cache
+  # directory. We isolate this definition to the single source so it doesn't effect compiling
+  # caching for all of libcudf
+  set_property(
+    SOURCE src/jit/cache.cpp
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}"
+  )
 endif()
 
 # Per-thread default stream
