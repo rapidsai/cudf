@@ -400,6 +400,343 @@ table_with_metadata read_parquet(
   parquet_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+// chunked reader stuff
+class chunked_parquet_reader_options_builder;
+
+/**
+ * @brief Settings for `read_parquet()`.
+ */
+class chunked_parquet_reader_options {
+  source_info _source;
+
+  // Path in schema of column to read; `nullopt` is all
+  std::optional<std::vector<std::string>> _columns;
+
+  // List of individual row groups to read (ignored if empty)
+  std::vector<std::vector<size_type>> _row_groups;
+  // Number of rows to skip from the start
+  size_type _skip_rows = 0;
+  // Number of rows to read; -1 is all
+  size_type _num_rows = -1;
+
+  // Whether to store string data as categorical type
+  bool _convert_strings_to_categories = false;
+  // Whether to use PANDAS metadata to load columns
+  bool _use_pandas_metadata = true;
+  // Cast timestamp columns to a specific type
+  data_type _timestamp_type{type_id::EMPTY};
+
+  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
+
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src source information used to read parquet file
+   */
+  explicit chunked_parquet_reader_options(source_info const& src) : _source(src) {}
+
+  friend chunked_parquet_reader_options_builder;
+
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit chunked_parquet_reader_options() = default;
+
+  /**
+   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   *
+   * @param src Source information to read parquet file
+   * @return Builder to build reader options
+   */
+  static chunked_parquet_reader_options_builder builder(source_info const& src);
+
+  /**
+   * @brief Returns source info.
+   *
+   * @return Source info
+   */
+  [[nodiscard]] source_info const& get_source() const { return _source; }
+
+  /**
+   * @brief Returns true/false depending on whether strings should be converted to categories or
+   * not.
+   *
+   * @return `true` if strings should be converted to categories
+   */
+  [[nodiscard]] bool is_enabled_convert_strings_to_categories() const
+  {
+    return _convert_strings_to_categories;
+  }
+
+  /**
+   * @brief Returns true/false depending whether to use pandas metadata or not while reading.
+   *
+   * @return `true` if pandas metadata is used while reading
+   */
+  [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
+
+  /**
+   * @brief Returns optional tree of metadata.
+   *
+   * @return vector of reader_column_schema objects.
+   */
+  [[nodiscard]] std::optional<std::vector<reader_column_schema>> get_column_schema() const
+  {
+    return _reader_column_schema;
+  }
+
+  /**
+   * @brief Returns number of rows to skip from the start.
+   *
+   * @return Number of rows to skip from the start
+   */
+  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
+
+  /**
+   * @brief Returns number of rows to read.
+   *
+   * @return Number of rows to read
+   */
+  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
+
+  /**
+   * @brief Returns names of column to be read, if set.
+   *
+   * @return Names of column to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_columns() const { return _columns; }
+
+  /**
+   * @brief Returns list of individual row groups to be read.
+   *
+   * @return List of individual row groups to be read
+   */
+  [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
+
+  /**
+   * @brief Returns timestamp type used to cast timestamp columns.
+   *
+   * @return Timestamp type used to cast timestamp columns
+   */
+  data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Sets names of the columns to be read.
+   *
+   * @param col_names Vector of column names
+   */
+  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+
+  /**
+   * @brief Sets vector of individual row groups to read.
+   *
+   * @param row_groups Vector of row groups to read
+   */
+  void set_row_groups(std::vector<std::vector<size_type>> row_groups)
+  {
+    if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
+      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
+    }
+
+    _row_groups = std::move(row_groups);
+  }
+
+  /**
+   * @brief Sets to enable/disable conversion of strings to categories.
+   *
+   * @param val Boolean value to enable/disable conversion of string columns to categories
+   */
+  void enable_convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
+
+  /**
+   * @brief Sets to enable/disable use of pandas metadata to read.
+   *
+   * @param val Boolean value whether to use pandas metadata
+   */
+  void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+
+  /**
+   * @brief Sets reader column schema.
+   *
+   * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
+   * Note default is to convert to string columns.
+   */
+  void set_column_schema(std::vector<reader_column_schema> val)
+  {
+    _reader_column_schema = std::move(val);
+  }
+
+  /**
+   * @brief Sets number of rows to skip.
+   *
+   * @param val Number of rows to skip from start
+   */
+  void set_skip_rows(size_type val)
+  {
+    if ((val != 0) and (!_row_groups.empty())) {
+      CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
+    }
+
+    _skip_rows = val;
+  }
+
+  /**
+   * @brief Sets number of rows to read.
+   *
+   * @param val Number of rows to read after skip
+   */
+  void set_num_rows(size_type val)
+  {
+    if ((val != -1) and (!_row_groups.empty())) {
+      CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
+    }
+
+    _num_rows = val;
+  }
+
+  /**
+   * @brief Sets timestamp_type used to cast timestamp columns.
+   *
+   * @param type The timestamp data_type to which all timestamp columns need to be cast
+   */
+  void set_timestamp_type(data_type type) { _timestamp_type = type; }
+};
+
+/**
+ * @brief Builds parquet_reader_options to use for `read_parquet()`.
+ */
+class chunked_parquet_reader_options_builder {
+  chunked_parquet_reader_options options;
+
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  chunked_parquet_reader_options_builder() = default;
+
+  /**
+   * @brief Constructor from source info.
+   *
+   * @param src The source information used to read parquet file
+   */
+  explicit chunked_parquet_reader_options_builder(source_info const& src) : options(src) {}
+
+  /**
+   * @brief Sets names of the columns to be read.
+   *
+   * @param col_names Vector of column names
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  {
+    options._columns = std::move(col_names);
+    return *this;
+  }
+
+  /**
+   * @brief Sets vector of individual row groups to read.
+   *
+   * @param row_groups Vector of row groups to read
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
+  {
+    options.set_row_groups(std::move(row_groups));
+    return *this;
+  }
+
+  /**
+   * @brief Sets enable/disable conversion of strings to categories.
+   *
+   * @param val Boolean value to enable/disable conversion of string columns to categories
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& convert_strings_to_categories(bool val)
+  {
+    options._convert_strings_to_categories = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable use of pandas metadata to read.
+   *
+   * @param val Boolean value whether to use pandas metadata
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& use_pandas_metadata(bool val)
+  {
+    options._use_pandas_metadata = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets reader metadata.
+   *
+   * @param val Tree of metadata information.
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& set_column_schema(std::vector<reader_column_schema> val)
+  {
+    options._reader_column_schema = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets number of rows to skip.
+   *
+   * @param val Number of rows to skip from start
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& skip_rows(size_type val)
+  {
+    options.set_skip_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets number of rows to read.
+   *
+   * @param val Number of rows to read after skip
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& num_rows(size_type val)
+  {
+    options.set_num_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief timestamp_type used to cast timestamp columns.
+   *
+   * @param type The timestamp data_type to which all timestamp columns need to be cast
+   * @return this for chaining
+   */
+  chunked_parquet_reader_options_builder& timestamp_type(data_type type)
+  {
+    options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief move parquet_reader_options member once it's built.
+   */
+  operator chunked_parquet_reader_options&&() { return std::move(options); }
+
+  /**
+   * @brief move parquet_reader_options member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `parquet_reader_options` object's r-value reference
+   */
+  chunked_parquet_reader_options&& build() { return std::move(options); }
+};
+
 /** @} */  // end of group
 /**
  * @addtogroup io_writers
