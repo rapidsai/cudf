@@ -404,205 +404,30 @@ table_with_metadata read_parquet(
 class chunked_parquet_reader_options_builder;
 
 /**
- * @brief Settings for `read_parquet()`.
+ * @brief Settings for `chunked_parquet_reader`.
  */
-class chunked_parquet_reader_options {
-  source_info _source;
-
-  // Path in schema of column to read; `nullopt` is all
-  std::optional<std::vector<std::string>> _columns;
-
-  // List of individual row groups to read (ignored if empty)
-  std::vector<std::vector<size_type>> _row_groups;
-  // Number of rows to skip from the start
-  size_type _skip_rows = 0;
-  // Number of rows to read; -1 is all
-  size_type _num_rows = -1;
-
-  // Whether to store string data as categorical type
-  bool _convert_strings_to_categories = false;
-  // Whether to use PANDAS metadata to load columns
-  bool _use_pandas_metadata = true;
-  // Cast timestamp columns to a specific type
-  data_type _timestamp_type{type_id::EMPTY};
-
-  std::optional<std::vector<reader_column_schema>> _reader_column_schema;
-
-  /**
-   * @brief Constructor from source info.
-   *
-   * @param src source information used to read parquet file
-   */
-  explicit chunked_parquet_reader_options(source_info const& src) : _source(src) {}
+class chunked_parquet_reader_options : public parquet_reader_options {
+  // Limit the number of maximum bytes that chunked_parquet_reader will read each time.
+  std::size_t _byte_limit;
 
   friend chunked_parquet_reader_options_builder;
 
  public:
   /**
-   * @brief Default constructor.
+   * @brief Return the maximum number of bytes that will be read by
+   * `chunked_parquet_reader::read_next()`.
    *
-   * This has been added since Cython requires a default constructor to create objects on stack.
+   * @return Number of maximum bytes to read
    */
-  explicit chunked_parquet_reader_options() = default;
+  [[nodiscard]] size_type get_byte_limit() const { return _byte_limit; }
 
   /**
-   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   * @brief Sets the maximum number of bytes that will be read by
+   * `chunked_parquet_reader::read_next()`.
    *
-   * @param src Source information to read parquet file
-   * @return Builder to build reader options
+   * @param byte_limit Number of maximum bytes to read
    */
-  static chunked_parquet_reader_options_builder builder(source_info const& src);
-
-  /**
-   * @brief Returns source info.
-   *
-   * @return Source info
-   */
-  [[nodiscard]] source_info const& get_source() const { return _source; }
-
-  /**
-   * @brief Returns true/false depending on whether strings should be converted to categories or
-   * not.
-   *
-   * @return `true` if strings should be converted to categories
-   */
-  [[nodiscard]] bool is_enabled_convert_strings_to_categories() const
-  {
-    return _convert_strings_to_categories;
-  }
-
-  /**
-   * @brief Returns true/false depending whether to use pandas metadata or not while reading.
-   *
-   * @return `true` if pandas metadata is used while reading
-   */
-  [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
-
-  /**
-   * @brief Returns optional tree of metadata.
-   *
-   * @return vector of reader_column_schema objects.
-   */
-  [[nodiscard]] std::optional<std::vector<reader_column_schema>> get_column_schema() const
-  {
-    return _reader_column_schema;
-  }
-
-  /**
-   * @brief Returns number of rows to skip from the start.
-   *
-   * @return Number of rows to skip from the start
-   */
-  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
-
-  /**
-   * @brief Returns number of rows to read.
-   *
-   * @return Number of rows to read
-   */
-  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
-
-  /**
-   * @brief Returns names of column to be read, if set.
-   *
-   * @return Names of column to be read; `nullopt` if the option is not set
-   */
-  [[nodiscard]] auto const& get_columns() const { return _columns; }
-
-  /**
-   * @brief Returns list of individual row groups to be read.
-   *
-   * @return List of individual row groups to be read
-   */
-  [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
-
-  /**
-   * @brief Returns timestamp type used to cast timestamp columns.
-   *
-   * @return Timestamp type used to cast timestamp columns
-   */
-  data_type get_timestamp_type() const { return _timestamp_type; }
-
-  /**
-   * @brief Sets names of the columns to be read.
-   *
-   * @param col_names Vector of column names
-   */
-  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
-
-  /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * @param row_groups Vector of row groups to read
-   */
-  void set_row_groups(std::vector<std::vector<size_type>> row_groups)
-  {
-    if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
-      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
-    }
-
-    _row_groups = std::move(row_groups);
-  }
-
-  /**
-   * @brief Sets to enable/disable conversion of strings to categories.
-   *
-   * @param val Boolean value to enable/disable conversion of string columns to categories
-   */
-  void enable_convert_strings_to_categories(bool val) { _convert_strings_to_categories = val; }
-
-  /**
-   * @brief Sets to enable/disable use of pandas metadata to read.
-   *
-   * @param val Boolean value whether to use pandas metadata
-   */
-  void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
-
-  /**
-   * @brief Sets reader column schema.
-   *
-   * @param val Tree of schema nodes to enable/disable conversion of binary to string columns.
-   * Note default is to convert to string columns.
-   */
-  void set_column_schema(std::vector<reader_column_schema> val)
-  {
-    _reader_column_schema = std::move(val);
-  }
-
-  /**
-   * @brief Sets number of rows to skip.
-   *
-   * @param val Number of rows to skip from start
-   */
-  void set_skip_rows(size_type val)
-  {
-    if ((val != 0) and (!_row_groups.empty())) {
-      CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-    }
-
-    _skip_rows = val;
-  }
-
-  /**
-   * @brief Sets number of rows to read.
-   *
-   * @param val Number of rows to read after skip
-   */
-  void set_num_rows(size_type val)
-  {
-    if ((val != -1) and (!_row_groups.empty())) {
-      CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-    }
-
-    _num_rows = val;
-  }
-
-  /**
-   * @brief Sets timestamp_type used to cast timestamp columns.
-   *
-   * @param type The timestamp data_type to which all timestamp columns need to be cast
-   */
-  void set_timestamp_type(data_type type) { _timestamp_type = type; }
+  void set_byte_limit(std::size_t byte_limit) { _byte_limit = byte_limit; }
 };
 
 /**
