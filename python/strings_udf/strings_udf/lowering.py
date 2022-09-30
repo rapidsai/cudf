@@ -15,7 +15,7 @@ from numba.cuda.cudaimpl import (
 from strings_udf._lib.tables import get_character_flags_table_ptr
 from strings_udf._typing import size_type, string_view
 
-character_flags_table_ptr = get_character_flags_table_ptr()
+character_flags_table_ptr = None
 
 
 # read-only functions
@@ -231,6 +231,9 @@ def create_unary_identifier_func(id_func):
             # Lookup table required for conversion functions
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
+            global character_flags_table_ptr
+            if character_flags_table_ptr is None:
+                character_flags_table_ptr = get_character_flags_table_ptr()
             tbl_ptr = context.get_constant(
                 types.int64, character_flags_table_ptr
             )
