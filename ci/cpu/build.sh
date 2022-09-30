@@ -26,6 +26,10 @@ export GPUCI_CONDA_RETRY_SLEEP=30
 export CMAKE_GENERATOR="Ninja"
 export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
 
+# Whether to keep `dask/label/dev` channel in the env. If INSTALL_DASK_MAIN=0,
+# `dask/label/dev` channel is removed.
+export INSTALL_DASK_MAIN=0
+
 # Switch to project root; also root of repo checkout
 cd "$WORKSPACE"
 
@@ -48,6 +52,11 @@ conda activate rapids
 # Remove `rapidsai-nightly` & `dask/label/dev` channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
   conda config --system --remove channels rapidsai-nightly
+  conda config --system --remove channels dask/label/dev
+fi
+
+# Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
+if [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
   conda config --system --remove channels dask/label/dev
 fi
 
