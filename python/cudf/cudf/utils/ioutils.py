@@ -429,7 +429,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZLIB', 'ZSTD', None }}, default 'snappy'
+compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
@@ -1163,13 +1163,19 @@ filepath_or_buffer : str, path object, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
-delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into separate cudf column rows. Currently
-    only a single delimiter is supported.
+delimiter : string, default None
+    The delimiter that should be used for splitting text chunks into
+    separate cudf column rows. The delimiter may be one or more characters.
+byte_range : list or tuple, default None
+    Byte range within the input file to be read. The first number is the
+    offset in bytes, the second number is the range size in bytes.
+    The output contains all rows that start inside the byte range
+    (i.e. at or after the offset, and before the end at `offset + size`),
+    which may include rows that continue past the end.
 
 Returns
 -------
-result : GPU ``Series``
+result : Series
 
 """
 doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
