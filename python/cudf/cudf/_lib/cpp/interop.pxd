@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
