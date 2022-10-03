@@ -492,7 +492,6 @@ def _shuffle_aggregate(
     chunked = ddf.map_partitions(
         chunk,
         meta=chunk(ddf._meta, **chunk_kwargs),
-        enforce_metadata=False,
         token=chunk_name,
         **chunk_kwargs,
     )
@@ -514,7 +513,6 @@ def _shuffle_aggregate(
             .map_partitions(
                 aggregate,
                 meta=aggregate(chunked._meta, **aggregate_kwargs),
-                enforce_metadata=False,
                 **aggregate_kwargs,
             )
         )
@@ -528,7 +526,6 @@ def _shuffle_aggregate(
         ).map_partitions(
             aggregate,
             meta=aggregate(chunked._meta, **aggregate_kwargs),
-            enforce_metadata=False,
             **aggregate_kwargs,
         )
 
@@ -809,8 +806,10 @@ def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
         _agg_dict
     )
-    gb.columns = [_make_name(name, sep=sep) for name in gb.columns]
-    return gb
+    output_columns = [_make_name(name, sep=sep) for name in gb.columns]
+    gb.columns = output_columns
+    # Return with deterministic column ordering
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
@@ -841,11 +840,13 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     )
 
     # Don't include the last aggregation in the column names
-    gb.columns = [
+    output_columns = [
         _make_name(name[:-1] if isinstance(name, tuple) else name, sep=sep)
         for name in gb.columns
     ]
-    return gb
+    gb.columns = output_columns
+    # Return with deterministic column ordering
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
