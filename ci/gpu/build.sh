@@ -269,6 +269,8 @@ cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
 
+
+# only install strings_udf after cuDF is finished testing without its presence
 gpuci_logger "Installing strings_udf"
 gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
@@ -276,9 +278,21 @@ gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
 
+STRINGS_UDF_PYTEST_RETCODE=0
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
+
+if [ ${STRINGS_UDF_PYTEST_RETCODE} -eq 5 ]; then
+    echo "No strings UDF tests were run, but this script will continue to execute."
+elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
+    exit ${STRINGS_UDF_PYTEST_RETCODE}
+else
+    cd "$WORKSPACE/python/cudf/cudf"
+    gpuci_logger "Python py.test retest cuDF UDFs"
+    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+fi
+
 # retest cudf with strings_udf present
 cd $WORKSPACE/python/cudf/cudf
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
 gpuci_logger "Python py.test retest cuDF UDFs"
 py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
 
