@@ -125,7 +125,11 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
                    std::pair(std::move(right), std::move(right_nulls)));
 }
 
-// Basic trivially copyable replacement for thrust::pair for use with `device_uvector`
+// `rmm::device_uvector<T>` requires that T be trivially copyable. `thrust::pair` does
+// not satisfy this requirement because it defines nontrivial copy/move
+// constructors. Therefore, we need a simple, trivially copyable pair-like
+// object. `index_pair` is a minimal implementation suitable for use in the
+// tests in this file.
 struct index_pair {
   cudf::size_type first{};
   cudf::size_type second{};
