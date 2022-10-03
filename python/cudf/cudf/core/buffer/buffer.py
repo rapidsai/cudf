@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
+import warnings
 from typing import (
     Any,
     Dict,
@@ -145,6 +146,12 @@ class Buffer(Serializable):
                 )
             if size < 0:
                 raise ValueError("size cannot be negative")
+            warnings.warn(
+                "Creating a Buffer() from an integer is deprecated and will "
+                "raise in a future version, use as_device_buffer_like() "
+                "instead.",
+                FutureWarning,
+            )
             self._ptr = data
             self._size = size
             self._owner = owner

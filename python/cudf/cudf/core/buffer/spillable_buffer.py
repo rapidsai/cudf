@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections.abc
 import pickle
 import time
+import warnings
 import weakref
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
@@ -326,14 +327,14 @@ class SpillableBuffer(Buffer):
         what libraries like Dask+UCX would do when communicating!
 
         The sound solution is to modify Dask et al. so that they access the
-        frames through `. get_ptr()` and holds on to the `spill_lock` until
+        frames through `.get_ptr()` and holds on to the `spill_lock` until
         the frame has been transferred. However, until this adaptation we
         use a hack where the frame is a `Buffer` with a `spill_lock` as the
         owner, which makes `self` unspillable while the frame is alive but
         doesn’t expose `self` when `__cuda_array_interface__` is accessed.
 
         Finally, this hack means that the returned frame must be copied before
-        given to `. deserialize()` otherwise we would have a `Buffer` pointing
+        given to `.deserialize()` otherwise we would have a `Buffer` pointing
         to memory already owned by an existing `SpillableBuffer`.
         """
 
@@ -346,16 +347,18 @@ class SpillableBuffer(Buffer):
             if self.is_spilled:
                 frames = [self.memoryview()]
             else:
-                # TODO: Use `[self]` as the frame, see doc above.
+                # TODO: Use `frames=[self]` instead of this hack, see doc above
                 spill_lock = SpillLock()
                 ptr = self.get_ptr(spill_lock=spill_lock)
-                frames = [
-                    Buffer(
-                        data=ptr,
-                        size=self.size,
-                        owner=(self._owner, spill_lock),
-                    )
-                ]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    frames = [
+                        Buffer(
+                            data=ptr,
+                            size=self.size,
+                            owner=(self._owner, spill_lock),
+                        )
+                    ]
             return header, frames
 
     @classmethod
