@@ -28,12 +28,11 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
-from cudf.api.types import (
+from cudf.api.types import (  # is_list_like,
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
     is_dtype_equal,
     is_interval_dtype,
-    is_list_like,
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
@@ -1445,16 +1444,13 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return pd.Index(self._values.to_pandas(), name=self.name)
 
     def append(self, other):
-        if is_list_like(other):
-            to_concat = [self]
-            to_concat.extend(other)
+        if not isinstance(other, BaseIndex):
+            raise TypeError("all inputs must be Index")
         else:
             this = self
             if len(other) == 0:
                 # short-circuit and return a copy
                 to_concat = [self]
-
-            other = cudf.Index(other)
 
             if len(self) == 0:
                 to_concat = [other]
@@ -1477,10 +1473,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                     if self.dtype != other.dtype:
                         this, other = numeric_normalize_types(self, other)
                 to_concat = [this, other]
-
-        for obj in to_concat:
-            if not isinstance(obj, BaseIndex):
-                raise TypeError("all inputs must be Index")
 
         return self._concat(to_concat)
 
