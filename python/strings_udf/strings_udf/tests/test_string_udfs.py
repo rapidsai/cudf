@@ -18,6 +18,7 @@ from strings_udf._typing import str_view_arg_handler, string_view
 if not strings_udf.ENABLED:
     pytest.skip("Strings UDF not enabled.", allow_module_level=True)
 
+
 def get_kernel(func, dtype):
     """
     Create a kernel for testing a single scalar string function

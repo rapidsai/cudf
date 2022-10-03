@@ -9,7 +9,9 @@ from numba.cuda.cudaimpl import (
 from cudf.core.dtypes import dtype
 from cudf.core.udf import api, row_function, utils
 from cudf.utils.dtypes import STRING_TYPES
+
 from . import masked_lowering, masked_typing
+
 _units = ["ns", "ms", "us", "s"]
 _datetime_cases = {types.NPDatetime(u) for u in _units}
 _timedelta_cases = {types.NPTimedelta(u) for u in _units}
