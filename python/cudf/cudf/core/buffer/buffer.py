@@ -137,8 +137,6 @@ class Buffer(Serializable):
     def __init__(
         self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
-        from cudf.core.buffer.spill_manager import global_manager
-
         if isinstance(data, int):
             if size is None:
                 raise ValueError(
@@ -181,9 +179,6 @@ class Buffer(Serializable):
                     self._ptr = buf.ptr
                     self._size = buf.size
             self._owner = buf
-
-        if global_manager.enabled:
-            global_manager.get().add_other(self)
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """

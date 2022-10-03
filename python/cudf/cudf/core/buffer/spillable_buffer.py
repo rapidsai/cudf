@@ -158,12 +158,7 @@ class SpillableBuffer(Buffer):
 
         # Finally, we inform the spilling manager about this new buffer
         self._manager = manager
-        if self._exposed:
-            # Since the buffer has been exposed permanently, we add it to
-            # "others".
-            self._manager.add_other(self)
-        else:
-            self._manager.add(self)
+        self._manager.add(self)
 
     @property
     def lock(self) -> RLock:

@@ -336,12 +336,6 @@ def test_concat_of_spilled_views(manager: SpillManager):
     assert not gen_df.is_spilled(res)
 
 
-def test_other_buffers(manager: SpillManager):
-    buf = Buffer(bytearray(100))
-    assert len(manager.other_buffers()) == 1
-    assert manager.other_buffers()[0] is buf
-
-
 def test_ptr_restricted(manager: SpillManager):
     buf = SpillableBuffer(
         data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager

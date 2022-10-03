@@ -15,7 +15,6 @@ from typing import List, MutableMapping, Optional, Tuple
 
 import rmm.mr
 
-from cudf.core.buffer.buffer import DeviceBufferLike
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
 from cudf.utils.string import format_bytes
 
@@ -45,7 +44,6 @@ class ExposeStatistic:
 
 class SpillManager:
     _base_buffers: MutableMapping[int, SpillableBuffer]
-    _other_buffers: MutableMapping[int, DeviceBufferLike]
     _expose_statistics: Optional[MutableMapping[str, ExposeStatistic]]
 
     def __init__(
@@ -57,7 +55,6 @@ class SpillManager:
     ) -> None:
         self._lock = threading.Lock()
         self._base_buffers = weakref.WeakValueDictionary()
-        self._other_buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
@@ -136,13 +133,6 @@ class SpillManager:
                 self._id_counter += 1
         self.spill_to_device_limit()
 
-    def add_other(self, buffer: DeviceBufferLike) -> None:
-        if buffer.size > 0:
-            with self._lock:
-                self._other_buffers[self._id_counter] = buffer
-                self._id_counter += 1
-        self.spill_to_device_limit()
-
     def base_buffers(
         self, order_by_access_time: bool = False
     ) -> Tuple[SpillableBuffer, ...]:
@@ -150,11 +140,6 @@ class SpillManager:
             ret = tuple(self._base_buffers.values())
         if order_by_access_time:
             ret = tuple(sorted(ret, key=lambda b: b.last_accessed))
-        return ret
-
-    def other_buffers(self) -> Tuple[DeviceBufferLike, ...]:
-        with self._lock:
-            ret = tuple(self._other_buffers.values())
         return ret
 
     def spill_device_memory(self) -> int:
@@ -184,10 +169,9 @@ class SpillManager:
         )
         if limit is None:
             return 0
-        others = sum(buf.size for buf in self.other_buffers())
         ret = 0
         while True:
-            unspilled = others + sum(
+            unspilled = sum(
                 buf.size for buf in self.base_buffers() if not buf.is_spilled
             )
             if unspilled < limit:
@@ -253,13 +237,12 @@ class SpillManager:
                 unspillable += buf.size
         unspillable_ratio = unspillable / unspilled if unspilled else 0
 
-        others = sum(b.size for b in self.other_buffers())
         return (
             f"<SpillManager spill_on_demand={self._spill_on_demand} "
             f"device_memory_limit={self._device_memory_limit} | "
             f"{format_bytes(spilled)} spilled | "
             f"{format_bytes(unspilled)} ({unspillable_ratio:.0%}) "
-            f"unspilled (unspillable) | {format_bytes(others)} others>"
+            f"unspilled (unspillable)>"
         )
 
 
