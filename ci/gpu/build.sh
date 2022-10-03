@@ -291,11 +291,6 @@ else
     py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
 fi
 
-# retest cudf with strings_udf present
-cd $WORKSPACE/python/cudf/cudf
-gpuci_logger "Python py.test retest cuDF UDFs"
-py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
-
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
 # Therefore, these runs only verify that benchmarks are valid.
