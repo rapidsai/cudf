@@ -346,6 +346,44 @@ the device view can be obtained via function `column_device_view::create(column_
 data, a specialized device view for list columns can be constructed via
 `lists_column_device_view(column_device_view)`.
 
+# libcudf policies and design principles
+
+Some aspects of libcudf usage may be surprising to new users.
+As a performance-oriented library, many design decisions prioritize flexibility and performance in ways that require some additional work or input from client code.
+We document these policies and the reasons behind them here:
+
+## libcudf does not introspect data
+
+libcudf APIs generally do not perform deep introspection and validation of input data.
+There are numerous reasons for this:
+1. It violates the single responsibility principle: validation is separate from execution.
+2. Since libcudf data structures store data on the GPU, any validation incurs the minimal overhead of a kernel launch.
+3. API promises around data introspection often significantly complicate implementation.
+
+Users are therefore responsible for passing valid data into such APIs.
+_Note that this policy does not mean that libcudf performs no validation whatsoever_.
+libcudf APIs should still perform any validation that does not require introspection, such as checking whether input column/table sizes or dtypes are appropriate.
+
+**TODO: What about checking null counts? The most likely path to fixing the implicit kernel invocation in `null_count` (which we have to remove in order to present a safe stream-ordered API) is forcing specification of the null count on construction, which would make checking null counts a cheap operation.**
+
+## libcudf will not sanitize nulls for nested types
+
+Various libcudf APIs accepting columns of nested dtypes (such as `LIST` or `STRUCT`) may assume that these columns have been sanitized.
+In this context, sanitization refers to ensuring that the null elements in a column with a nested dtype are compatible with the elements of nested columns.
+Specifically:
+- Null elements of list columns should also be empty. They should not contain arbitrary data.
+- Null elements of struct columns should also be null elements in the underlying structs.
+
+**TODO: Do we still need to ensure the above with the new nested comparators? Since the nested comparators no longer operate based on flattening struct columns, I suspect that we will no longer need to superimpose parent nulls. We'll need to check that, though.**
+
+libcudf APIs _should_ promise to never return "dirty" columns, i.e. columns containing unsanitized data.
+Therefore, the only problem is if users construct input columns that are not correctly sanitized and then pass those into libcudf APIs.
+
+## libcudf does not synchronize streams
+
+libcudf APIs may not synchronize the used stream before returning.
+It is incumbent on calling code to perform any syncs needed before accessing returned data.
+
 # libcudf++ API and Implementation
 
 ## Streams
