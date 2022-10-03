@@ -47,4 +47,3 @@ add_executable(custom_fast custom_fast.cu)
 target_compile_features(custom_fast PRIVATE cxx_std_17)
 target_compile_options(custom_fast PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(custom_fast PRIVATE cudf::cudf nvToolsExt)
-
