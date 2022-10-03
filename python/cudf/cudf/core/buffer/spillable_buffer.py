@@ -311,7 +311,7 @@ class SpillableBuffer(Buffer):
                 return ret
 
     def _getitem(self, offset: int, size: int) -> Buffer:
-        return SpillableBufferView(base=self, offset=offset, size=size)
+        return SpillableBufferSlice(base=self, offset=offset, size=size)
 
     def serialize(self) -> Tuple[dict, List[Frame]]:
         """Serialize the Buffer
@@ -392,10 +392,11 @@ class SpillableBuffer(Buffer):
         )
 
 
-class SpillableBufferView(SpillableBuffer):
-    """A view of a spillable buffer
+class SpillableBufferSlice(SpillableBuffer):
+    """A slice of a spillable buffer
 
-    This buffer deligates must operations to its base buffer.
+    This buffer applies the slicing and then deligates all
+    operations to its base buffer.
 
     Parameters
     ----------
@@ -430,7 +431,7 @@ class SpillableBufferView(SpillableBuffer):
         return self._base.get_ptr(spill_lock=spill_lock) + self._offset
 
     def _getitem(self, offset: int, size: int) -> Buffer:
-        return SpillableBufferView(
+        return SpillableBufferSlice(
             base=self._base, offset=offset + self._offset, size=size
         )
 
@@ -439,7 +440,7 @@ class SpillableBufferView(SpillableBuffer):
 
     def __repr__(self) -> str:
         return (
-            f"<SpillableBufferView size={format_bytes(self._size)} "
+            f"<SpillableBufferSlice size={format_bytes(self._size)} "
             f"offset={format_bytes(self._offset)} of {self._base} "
         )
 
