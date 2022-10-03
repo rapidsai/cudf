@@ -10,7 +10,6 @@ import traceback
 import warnings
 import weakref
 from dataclasses import dataclass
-from functools import cached_property
 from typing import List, MutableMapping, Optional, Tuple
 
 import rmm.mr
@@ -267,44 +266,41 @@ def _env_get_bool(name, default):
     return default
 
 
-class GlobalSpillManager:
-    def __init__(self):
-        self._manager: Optional[SpillManager] = None
-
-    def get_manager_from_env(self) -> Optional[SpillManager]:
-        if not _env_get_bool("CUDF_SPILL", False):
-            return None
-        return SpillManager(
-            spill_on_demand=_env_get_bool("CUDF_SPILL_ON_DEMAND", True),
-            device_memory_limit=_env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
-            expose_statistics=_env_get_bool("CUDF_SPILL_STAT_EXPOSE", False),
-        )
-
-    def clear(self) -> None:
-        if self._manager is not None:
-            gc.collect()
-            base_buffers = self._manager.base_buffers()
-            if len(base_buffers) > 0:
-                warnings.warn(f"overwriting non-empty manager: {base_buffers}")
-        self._manager = None
-        self.__dict__.pop("enabled", None)  # Clear cache
-
-    def reset(self, manager: SpillManager) -> SpillManager:
-        self.clear()
-        self._manager = manager
-        return manager
-
-    @cached_property
-    def enabled(self) -> bool:
-        if self._manager is None:
-            self._manager = self.get_manager_from_env()
-        return self._manager is not None
-
-    def get(self) -> SpillManager:
-        if self.enabled:
-            assert isinstance(self._manager, SpillManager)
-            return self._manager
-        raise ValueError("No global SpillManager")
+def _get_manager_from_env() -> Optional[SpillManager]:
+    if not _env_get_bool("CUDF_SPILL", False):
+        return None
+    return SpillManager(
+        spill_on_demand=_env_get_bool("CUDF_SPILL_ON_DEMAND", True),
+        device_memory_limit=_env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
+        expose_statistics=_env_get_bool("CUDF_SPILL_STAT_EXPOSE", False),
+    )
 
 
-global_manager = GlobalSpillManager()
+# The global manager has three states:
+#   - Uninitialized
+#   - Initialized to None (spilling disabled)
+#   - Initialized to a SpillManager instance (spilling enabled)
+_global_manager_uninitialized: bool = True
+_global_manager: Optional[SpillManager] = None
+
+
+def global_manager_reset(manager: Optional[SpillManager]) -> None:
+    """Set the global manager, which if None disables spilling"""
+
+    global _global_manager, _global_manager_uninitialized
+    if _global_manager is not None:
+        gc.collect()
+        base_buffers = _global_manager.base_buffers()
+        if len(base_buffers) > 0:
+            warnings.warn(f"overwriting non-empty manager: {base_buffers}")
+
+    _global_manager = manager
+    _global_manager_uninitialized = False
+
+
+def global_manager_get() -> Optional[SpillManager]:
+    """Get the global manager or None if spilling is disabled"""
+    global _global_manager_uninitialized
+    if _global_manager_uninitialized:
+        global_manager_reset(_get_manager_from_env())
+    return _global_manager

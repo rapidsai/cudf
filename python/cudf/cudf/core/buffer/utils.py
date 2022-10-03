@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, List, Mapping, Set, Union
 
 from cudf.core.buffer.buffer import Buffer, DeviceBufferLike
-from cudf.core.buffer.spill_manager import global_manager
+from cudf.core.buffer.spill_manager import global_manager_get
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
 
 if TYPE_CHECKING:
@@ -91,12 +91,10 @@ def as_device_buffer_like(
             "`obj` is a buffer-like object"
         )
 
-    if global_manager.enabled:
-        return SpillableBuffer(
-            data=obj, exposed=exposed, manager=global_manager.get()
-        )
-    else:
+    manager = global_manager_get()
+    if manager is None:
         return Buffer(obj)
+    return SpillableBuffer(data=obj, exposed=exposed, manager=manager)
 
 
 def get_columns(obj: object) -> List[Column]:
@@ -144,7 +142,7 @@ def mark_columns_as_read_only_inplace(obj: object) -> None:
     underlying buffers partially.
     """
 
-    if not global_manager.enabled:
+    if global_manager_get() is None:
         return
 
     for col in get_columns(obj):

@@ -358,7 +358,7 @@ class SpillableBuffer(Buffer):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
-        from cudf.core.buffer.spill_manager import global_manager
+        from cudf.core.buffer.spill_manager import global_manager_get
 
         if header["frame_count"] != 1:
             raise ValueError(
@@ -367,7 +367,9 @@ class SpillableBuffer(Buffer):
         (frame,) = frames
         if isinstance(frame, SpillableBuffer):
             return frame
-        return cls(frame, exposed=False, manager=global_manager.get())
+        manager = global_manager_get()
+        assert manager is not None
+        return cls(frame, exposed=False, manager=manager)
 
     def is_overlapping(self, ptr: int, size: int):
         with self._lock:
