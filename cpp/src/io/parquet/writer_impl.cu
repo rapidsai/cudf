@@ -382,7 +382,7 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
+    col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int64;
     col_schema.ts_scale       = 1000;
@@ -391,7 +391,7 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
+    col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
     col_schema.stats_dtype    = statistics_dtype::dtype_int64;
   }

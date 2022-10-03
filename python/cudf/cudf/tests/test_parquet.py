@@ -2588,3 +2588,18 @@ def test_parquet_writer_zstd():
     else:
         got = pd.read_orc(buff)
         assert_eq(expected, got)
+
+
+def test_parquet_writer_time_delta_physical_type():
+    df = cudf.DataFrame(
+        {
+            "s": cudf.Series([1], dtype="timedelta64[s]"),
+            "ms": cudf.Series([2], dtype="timedelta64[ms]"),
+            "us": cudf.Series([3], dtype="timedelta64[us]"),
+            "ns": cudf.Series([-4], dtype="timedelta64[ns]"),
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+
+    pd.read_parquet(buffer)  # should not throw
