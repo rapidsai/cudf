@@ -618,7 +618,45 @@ TEST_F(RowBitCount, Table)
     thrust::make_counting_iterator(0) + t.num_rows(),
     mcv.begin<size_type>(),
     sum_functor{cv0.data<size_type>(), cv1.data<size_type>(), cv2.data<size_type>()});
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
+}
+
+TEST_F(RowBitCount, DepthJump)
+{
+  // jump more than 1 branch depth.
+
+  using T = int;
+
+  // struct<list<struct<list<int>>, int>
+  // the jump occurs from depth 2 (the leafmost int column)
+  // to depth 0 (the topmost int column)
+  cudf::test::fixed_width_column_wrapper<T> ____c0{1, 2, 3, 5, 5, 6, 7, 8};
+  cudf::test::fixed_width_column_wrapper<cudf::offset_type> ___offsets{0, 2, 4, 6, 8};
+  auto ___c0 = cudf::make_lists_column(4, ___offsets.release(), ____c0.release(), 0, {});
+  std::vector<std::unique_ptr<cudf::column>> __children;
+  __children.push_back(std::move(___c0));
+  cudf::test::structs_column_wrapper __c0(std::move(__children));
+  cudf::test::fixed_width_column_wrapper<cudf::offset_type> _offsets{0, 3, 4};
+  auto _c0 = cudf::make_lists_column(2, _offsets.release(), __c0.release(), 0, {});
+  cudf::test::fixed_width_column_wrapper<int> _c1{3, 4};
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(std::move(_c0));
+  children.push_back(_c1.release());
+  cudf::test::structs_column_wrapper c0(std::move(children));
+
+  table_view t({c0});
+  auto result = cudf::row_bit_count(t);
+
+  // expected size = (num rows at level 1 + num_rows at level 2) + (# values the leaf int column) +
+  // 1 (value in topmost int column)
+  constexpr size_type offset_size = sizeof(cudf::offset_type) * CHAR_BIT;
+  constexpr size_type type_size   = sizeof(T) * CHAR_BIT;
+  cudf::test::fixed_width_column_wrapper<size_type> expected{
+    ((1 + 3) * offset_size) + (6 * type_size) + (1 * type_size),
+    ((1 + 1) * offset_size) + (2 * type_size) + (1 * type_size)};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, SlicedColumnsFixedWidth)

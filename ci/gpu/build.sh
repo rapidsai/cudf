@@ -34,6 +34,9 @@ unset GIT_DESCRIBE_TAG
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=1
 
+# Dask version to install when `INSTALL_DASK_MAIN=0`
+export DASK_STABLE_VERSION="2022.7.1"
+
 # ucx-py version
 export UCX_PY_VERSION='0.28.*'
 
@@ -91,8 +94,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -188,6 +191,9 @@ else
     # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+    
+    gpuci_logger "Check current conda environment"
+    conda list --show-channel-urls
 
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
@@ -266,27 +272,15 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 gpuci_logger "Installing strings_udf"
 gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
+# only install strings_udf after cuDF is finished testing without its presence
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
 
-# We do not want to exit with a nonzero exit code in the case where no
-# strings_udf tests are run because that will always happen when the local CUDA
-# version is not 11.5. We need to suppress the exit code because this script is
-# run with set -e and we're already setting a trap that we don't want to
-# override here.
-
-STRINGS_UDF_PYTEST_RETCODE=0
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
-
-if [ ${STRINGS_UDF_PYTEST_RETCODE} -eq 5 ]; then
-    echo "No strings UDF tests were run, but this script will continue to execute."
-elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
-    exit ${STRINGS_UDF_PYTEST_RETCODE}
-else
-    cd "$WORKSPACE/python/cudf/cudf"
-    gpuci_logger "Python py.test retest cuDF UDFs"
-    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
-fi
+# retest cudf with strings_udf present
+cd $WORKSPACE/python/cudf/cudf
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
+gpuci_logger "Python py.test retest cuDF UDFs"
+py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.

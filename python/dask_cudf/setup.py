@@ -8,6 +8,7 @@ import versioneer
 from setuptools import find_packages, setup
 
 
+<<<<<<< HEAD
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
     path_to_cuda_gdb = shutil.which("cuda-gdb")
