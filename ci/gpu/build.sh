@@ -79,7 +79,7 @@ gpuci_logger "Activate conda env"
 conda activate rapids
 
 # Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
-if [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
+if [ "$SOURCE_BRANCH" != "main" ] && [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
   conda config --system --remove channels dask/label/dev
   gpuci_mamba_retry install conda-forge::dask==$DASK_STABLE_VERSION conda-forge::distributed==$DASK_STABLE_VERSION conda-forge::dask-core==$DASK_STABLE_VERSION --force-reinstall
 fi
