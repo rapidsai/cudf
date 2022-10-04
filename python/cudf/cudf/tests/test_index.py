@@ -1106,115 +1106,115 @@ def test_index_append_error(data, other):
     )
 
 
-# @pytest.mark.parametrize(
-#     "data,other",
-#     [
-#         (
-#             pd.Index([1, 2, 3, 4, 5, 6]),
-#             [
-#                 pd.Index([1, 2, 3, 4, 5, 6]),
-#                 pd.Index([1, 2, 3, 4, 5, 6, 10]),
-#                 pd.Index([]),
-#             ],
-#         ),
-#         (
-#             pd.Index([]),
-#             [
-#                 pd.Index([1, 2, 3, 4, 5, 6]),
-#                 pd.Index([1, 2, 3, 4, 5, 6, 10]),
-#                 pd.Index([1, 4, 5, 6]),
-#             ],
-#         ),
-#         (
-#             pd.Index([10, 20, 30, 40, 50, 60]),
-#             [
-#                 pd.Index([10, 20, 30, 40, 50, 60]),
-#                 pd.Index([10, 20, 30]),
-#                 pd.Index([40, 50, 60]),
-#                 pd.Index([10, 60]),
-#                 pd.Index([60]),
-#             ],
-#         ),
-#         (
-#             pd.Index([]),
-#             [
-#                 pd.Index([10, 20, 30, 40, 50, 60]),
-#                 pd.Index([10, 20, 30]),
-#                 pd.Index([40, 50, 60]),
-#                 pd.Index([10, 60]),
-#                 pd.Index([60]),
-#             ],
-#         ),
-#         (
-#             pd.Index(["1", "2", "3", "4", "5", "6"]),
-#             [
-#                 pd.Index(["1", "2", "3", "4", "5", "6"]),
-#                 pd.Index(["1", "2", "3"]),
-#                 pd.Index(["6"]),
-#                 pd.Index(["1", "6"]),
-#             ],
-#         ),
-#         (
-#             pd.Index([]),
-#             [
-#                 pd.Index(["1", "2", "3", "4", "5", "6"]),
-#                 pd.Index(["1", "2", "3"]),
-#                 pd.Index(["6"]),
-#                 pd.Index(["1", "6"]),
-#             ],
-#         ),
-#         (
-#             pd.Index([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
-#             [
-#                 pd.Index([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
-#                 pd.Index([1.0, 6.0]),
-#                 pd.Index([]),
-#                 pd.Index([6.0]),
-#             ],
-#         ),
-#         (
-#             pd.Index([]),
-#             [
-#                 pd.Index([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
-#                 pd.Index([1.0, 6.0]),
-#                 pd.Index([1.0, 2.0, 6.0]),
-#                 pd.Index([6.0]),
-#             ],
-#         ),
-#         (
-#             pd.Index(["a"]),
-#             [
-#                 pd.Index(["a"]),
-#                 pd.Index(["a", "b", "c"]),
-#                 pd.Index(["c"]),
-#                 pd.Index(["d"]),
-#                 pd.Index(["ae", "hello", "world"]),
-#             ],
-#         ),
-#         (
-#             pd.Index([]),
-#             [
-#                 pd.Index(["a"]),
-#                 pd.Index(["a", "b", "c"]),
-#                 pd.Index(["c"]),
-#                 pd.Index(["d"]),
-#                 pd.Index(["ae", "hello", "world"]),
-#                 pd.Index([]),
-#             ],
-#         ),
-#     ],
-# )
-# def test_index_append_list(data, other):
-#     pd_data = data
-#     pd_other = other
+@pytest.mark.parametrize(
+    "data,other",
+    [
+        (
+            pd.Index([1, 2, 3, 4, 5, 6]),
+            [
+                pd.Index([1, 2, 3, 4, 5, 6]),
+                pd.Index([1, 2, 3, 4, 5, 6, 10]),
+                pd.Index([]),
+            ],
+        ),
+        (
+            pd.Index([]),
+            [
+                pd.Index([1, 2, 3, 4, 5, 6]),
+                pd.Index([1, 2, 3, 4, 5, 6, 10]),
+                pd.Index([1, 4, 5, 6]),
+            ],
+        ),
+        (
+            pd.Index([10, 20, 30, 40, 50, 60]),
+            [
+                pd.Index([10, 20, 30, 40, 50, 60]),
+                pd.Index([10, 20, 30]),
+                pd.Index([40, 50, 60]),
+                pd.Index([10, 60]),
+                pd.Index([60]),
+            ],
+        ),
+        (
+            pd.Index([]),
+            [
+                pd.Index([10, 20, 30, 40, 50, 60]),
+                pd.Index([10, 20, 30]),
+                pd.Index([40, 50, 60]),
+                pd.Index([10, 60]),
+                pd.Index([60]),
+            ],
+        ),
+        (
+            pd.Index(["1", "2", "3", "4", "5", "6"]),
+            [
+                pd.Index(["1", "2", "3", "4", "5", "6"]),
+                pd.Index(["1", "2", "3"]),
+                pd.Index(["6"]),
+                pd.Index(["1", "6"]),
+            ],
+        ),
+        (
+            pd.Index([]),
+            [
+                pd.Index(["1", "2", "3", "4", "5", "6"]),
+                pd.Index(["1", "2", "3"]),
+                pd.Index(["6"]),
+                pd.Index(["1", "6"]),
+            ],
+        ),
+        (
+            pd.Index([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+            [
+                pd.Index([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+                pd.Index([1.0, 6.0]),
+                pd.Index([]),
+                pd.Index([6.0]),
+            ],
+        ),
+        (
+            pd.Index([]),
+            [
+                pd.Index([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+                pd.Index([1.0, 6.0]),
+                pd.Index([1.0, 2.0, 6.0]),
+                pd.Index([6.0]),
+            ],
+        ),
+        (
+            pd.Index(["a"]),
+            [
+                pd.Index(["a"]),
+                pd.Index(["a", "b", "c"]),
+                pd.Index(["c"]),
+                pd.Index(["d"]),
+                pd.Index(["ae", "hello", "world"]),
+            ],
+        ),
+        (
+            pd.Index([]),
+            [
+                pd.Index(["a"]),
+                pd.Index(["a", "b", "c"]),
+                pd.Index(["c"]),
+                pd.Index(["d"]),
+                pd.Index(["ae", "hello", "world"]),
+                pd.Index([]),
+            ],
+        ),
+    ],
+)
+def test_index_append_list(data, other):
+    pd_data = data
+    pd_other = other
 
-#     gd_data = cudf.from_pandas(data)
-#     gd_other = [cudf.from_pandas(i) for i in other]
+    gd_data = cudf.from_pandas(data)
+    gd_other = [cudf.from_pandas(i) for i in other]
 
-#     expected = pd_data.append(pd_other)
-#     actual = gd_data.append(gd_other)
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
 
-#     assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
