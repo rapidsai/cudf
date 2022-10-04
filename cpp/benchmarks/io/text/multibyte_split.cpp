@@ -48,6 +48,20 @@ temp_directory const temp_dir("cudf_nvbench");
 
 enum class data_chunk_source_type { device, file, host, host_pinned, file_bgzip };
 
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  data_chunk_source_type,
+  [](auto value) {
+    switch (value) {
+      case data_chunk_source_type::device: return "device";
+      case data_chunk_source_type::file: return "file";
+      case data_chunk_source_type::host: return "host";
+      case data_chunk_source_type::host_pinned: return "host_pinned";
+      case data_chunk_source_type::file_bgzip: return "file_bgzip";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
 static cudf::string_scalar create_random_input(int32_t num_chars,
                                                double delim_factor,
                                                double deviation,
@@ -98,14 +112,15 @@ static void write_bgzip_file(cudf::host_span<char const> host_data, std::ostream
   cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
 }
 
-static void bench_multibyte_split(nvbench::state& state)
+template <data_chunk_source_type source_type>
+static void bench_multibyte_split(nvbench::state& state,
+                                  nvbench::type_list<nvbench::enum_type<source_type>>)
 {
   cudf::rmm_pool_raii pool_raii;
 
-  auto const source_type      = static_cast<data_chunk_source_type>(state.get_int64("source_type"));
-  auto const delim_size       = state.get_int64("delim_size");
-  auto const delim_percent    = state.get_int64("delim_percent");
-  auto const file_size_approx = state.get_int64("size_approx");
+  auto const delim_size         = state.get_int64("delim_size");
+  auto const delim_percent      = state.get_int64("delim_percent");
+  auto const file_size_approx   = state.get_int64("size_approx");
   auto const byte_range_percent = state.get_int64("byte_range_percent");
 
   auto const byte_range_factor = static_cast<double>(byte_range_percent) / 100;
@@ -181,14 +196,14 @@ static void bench_multibyte_split(nvbench::state& state)
   state.add_buffer_size(range_size, "efs", "Encoded file size");
 }
 
-NVBENCH_BENCH(bench_multibyte_split)
+using source_type_list = nvbench::enum_type_list<data_chunk_source_type::device,
+                                                 data_chunk_source_type::file,
+                                                 data_chunk_source_type::host,
+                                                 data_chunk_source_type::host_pinned,
+                                                 data_chunk_source_type::file_bgzip>;
+
+NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
   .set_name("multibyte_split")
-  .add_int64_axis("source_type",
-                  {static_cast<int>(data_chunk_source_type::device),
-                   static_cast<int>(data_chunk_source_type::file),
-                   static_cast<int>(data_chunk_source_type::host),
-                   static_cast<int>(data_chunk_source_type::host_pinned),
-                   static_cast<int>(data_chunk_source_type::file_bgzip)})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
