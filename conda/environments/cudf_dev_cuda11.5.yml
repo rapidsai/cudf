@@ -70,6 +70,7 @@ dependencies:
   - cachetools
   - transformers<=4.10.3
   - pydata-sphinx-theme
+  - pyorc
   - librdkafka=1.7.0
   - python-confluent-kafka=1.7.0
   - moto>=3.1.6
@@ -79,9 +80,6 @@ dependencies:
   - s3fs>=2022.3.0
   - werkzeug<2.2.0 # Temporary transient dependency pinning to avoid URL-LIB3 + moto timeouts
   - pytorch<1.12.0
-  - pip:
-      - git+https://github.com/python-streamz/streamz.git@master
-      - pyorc
   - cubinlinker  # [linux64]
   - gcc_linux-64=9.* # [linux64]
   - sysroot_linux-64==2.17 # [linux64]
@@ -90,3 +88,5 @@ dependencies:
   # - gcc_linux-aarch64=9.* # [aarch64]
   # - sysroot_linux-aarch64==2.17 # [aarch64]
   # - nvcc_linux-aarch64=11.5 # [aarch64]
+  - pip:
+      - git+https://github.com/python-streamz/streamz.git@master
