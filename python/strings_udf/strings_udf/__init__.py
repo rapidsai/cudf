@@ -33,7 +33,7 @@ def compiler_from_ptx_file(path):
     return int(major), int(minor)
 
 
-def get_appropriate_file(sms, cc):
+def _get_appropriate_file(sms, cc):
     filtered_sms = list(filter(lambda x: x[0] <= cc, sms))
     if filtered_sms:
         return max(filtered_sms, key=lambda y: y[0])
@@ -80,10 +80,10 @@ if cp.returncode == 0:
         result = None
         if virtual_sms:
             # First try to fetch ptx file from `.ptx` files
-            result = get_appropriate_file(virtual_sms, cc)
+            result = _get_appropriate_file(virtual_sms, cc)
         if result is None:
             # If the above fails, try to fetch ptx file from `-real.ptx` files
-            result = get_appropriate_file(native_sms, cc)
+            result = _get_appropriate_file(native_sms, cc)
 
         if result is None:
             raise RuntimeError(
