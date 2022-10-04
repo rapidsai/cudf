@@ -69,13 +69,13 @@ if cp.returncode == 0:
         native_sms = []
         for f in files:
             file_name = os.path.basename(f)
-            sm_number = (
+            sm_number = int(
                 file_name.rstrip(".ptx").lstrip("shim_").rstrip("-real")
             )
             if file_name.endswith("-real.ptx"):
-                native_sms.append((sm_number, file_name))
+                native_sms.append((sm_number, f))
             else:
-                virtual_sms.append((sm_number, file_name))
+                virtual_sms.append((sm_number, f))
 
         result = None
         if virtual_sms:
