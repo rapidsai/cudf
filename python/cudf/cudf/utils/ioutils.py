@@ -429,7 +429,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZLIB', 'ZSTD', None }}, default 'snappy'
+compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
@@ -596,7 +596,30 @@ To read the strings with additional set of quotes:
           a         b
 0   "hello"   "hello"
 1  "rapids"  "worlds"
-"""
+
+Reading a JSON string containing ordered lists and name/value pairs:
+
+>>> json_str = '[{"list": [0,1,2], "struct": {"k":"v1"}}, {"list": [3,4,5], "struct": {"k":"v2"}}]'
+>>> cudf.read_json(json_str, engine='cudf_experimental')
+        list       struct
+0  [0, 1, 2]  {'k': 'v1'}
+1  [3, 4, 5]  {'k': 'v2'}
+
+Reading JSON Lines data containing ordered lists and name/value pairs:
+
+>>> json_str = '{"a": [{"k1": "v1"}]}\n{"a": [{"k1":"v2"}]}'
+>>> cudf.read_json(json_str, engine='cudf_experimental', lines=True)
+                a
+0  [{'k1': 'v1'}]
+1  [{'k1': 'v2'}]
+
+Using the `dtype` argument to specify type casting:
+
+>>> json_str = '{"k1": 1, "k2":[1.5]}'
+>>> cudf.read_json(json_str, engine='cudf_experimental', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
+    k1   k2
+0  1.0  [1]
+"""  # noqa: E501
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
 _docstring_to_json = """
@@ -1140,14 +1163,15 @@ filepath_or_buffer : str, path object, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
-delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into separate cudf column rows. Currently
-    only a single delimiter is supported.
+delimiter : string, default None
+    The delimiter that should be used for splitting text chunks into
+    separate cudf column rows. The delimiter may be one or more characters.
 byte_range : list or tuple, default None
     Byte range within the input file to be read. The first number is the
-    offset in bytes, the second number is the range size in bytes. Reads the
-    row that starts before or at the end of the range, even if it ends after
-    the end of the range.
+    offset in bytes, the second number is the range size in bytes.
+    The output contains all rows that start inside the byte range
+    (i.e. at or after the offset, and before the end at `offset + size`),
+    which may include rows that continue past the end.
 compression : string, default None
     Which compression type is the input compressed with.
     Currently supports only `bgzip`, and requires the path to a file as input.
@@ -1161,7 +1185,7 @@ compression_offsets: list or tuple, default None
 
 Returns
 -------
-result : GPU ``Series``
+result : Series
 
 """
 doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
