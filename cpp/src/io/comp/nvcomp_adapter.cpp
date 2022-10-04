@@ -59,9 +59,9 @@
 // ZSTD is stable for nvcomp 2.3.2 or newer
 #if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or \
   (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and NVCOMP_PATCH_VERSION >= 2)
-#define NVCOMP_ZSTD_IS_EXPERIMENTAL 0
+#define NVCOMP_ZSTD_IS_STABLE 1
 #else
-#define NVCOMP_ZSTD_IS_EXPERIMENTAL 1
+#define NVCOMP_ZSTD_IS_STABLE 0
 #endif
 
 namespace cudf::io::nvcomp {
