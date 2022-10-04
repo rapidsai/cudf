@@ -25,7 +25,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
