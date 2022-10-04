@@ -550,6 +550,39 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
+    def isna(self):
+        """
+        Detect missing values.
+
+        Return a boolean same-sized object indicating if the values are NA.
+        NA values, such as ``None``, :attr:`numpy.NaN` or :attr:`cudf.NaN`, get
+        mapped to ``True`` values.
+        Everything else get mapped to ``False`` values.
+
+        Returns
+        -------
+        numpy.ndarray[bool]
+            A boolean array to indicate which entries are NA.
+
+        """
+        raise NotImplementedError
+
+    def notna(self):
+        """
+        Detect existing (non-missing) values.
+
+        Return a boolean same-sized object indicating if the values are not NA.
+        Non-missing values get mapped to ``True``.
+        NA values, such as None or :attr:`numpy.NaN`, get mapped to ``False``
+        values.
+
+        Returns
+        -------
+        numpy.ndarray[bool]
+            A boolean array to indicate which entries are not NA.
+        """
+        raise NotImplementedError
+
     def to_pandas(self):
         """
         Convert to a Pandas Index.

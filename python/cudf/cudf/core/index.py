@@ -28,11 +28,12 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
-from cudf.api.types import (  # is_list_like,
+from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
     is_dtype_equal,
     is_interval_dtype,
+    is_list_like,
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
@@ -852,6 +853,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def isna(self):
         return cupy.zeros(len(self), dtype=bool)
 
+    isnull = isna
+
+    @_cudf_nvtx_annotate
+    def notna(self):
+        return cupy.ones(len(self), dtype=bool)
+
+    notnull = isna
+
     @_cudf_nvtx_annotate
     def _minmax(self, meth: str):
         no_steps = len(self) - 1
@@ -1337,6 +1346,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return begin, end
 
     @_cudf_nvtx_annotate
+    def isna(self):
+        return self._column.isnull().values
+
+    isnull = isna
+
+    @_cudf_nvtx_annotate
+    def notna(self):
+        return self._column.notnull().values
+
+    notnull = notna
+
+    @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
@@ -1444,13 +1465,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return pd.Index(self._values.to_pandas(), name=self.name)
 
     def append(self, other):
-        if not isinstance(other, BaseIndex):
-            raise TypeError("all inputs must be Index")
+        if is_list_like(other):
+            to_concat = [self]
+            to_concat.extend(other)
         else:
             this = self
             if len(other) == 0:
                 # short-circuit and return a copy
                 to_concat = [self]
+
+            other = cudf.Index(other)
 
             if len(self) == 0:
                 to_concat = [other]
@@ -1473,6 +1497,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                     if self.dtype != other.dtype:
                         this, other = numeric_normalize_types(self, other)
                 to_concat = [this, other]
+
+        for obj in to_concat:
+            if not isinstance(obj, BaseIndex):
+                raise TypeError("all inputs must be Index")
 
         return self._concat(to_concat)
 
