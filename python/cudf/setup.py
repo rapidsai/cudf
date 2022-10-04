@@ -101,6 +101,8 @@ setup(
         "typing_extensions",
         "pyarrow==9.0.0",
         f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+        f"ptxcompiler{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+        f"cubinlinker{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
         f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0,<12.0.0a0; platform_machine=='x86_64'",
     ],
     extras_require={
