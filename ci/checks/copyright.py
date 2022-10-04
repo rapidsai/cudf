@@ -75,13 +75,19 @@ def modifiedFiles():
         target_branch = repo.git.describe(
             all=True, tags=True, match="branch-*", abbrev=0
         ).lstrip("heads/")
-    try:
+
+    upstream_target_branch = None
+    if target_branch not in repo.heads:
         # Use the tracking branch of the local reference if it exists
         upstream_target_branch = repo.heads[target_branch].tracking_branch()
-    except IndexError:
-        # Fall back to the remote reference (this happens on CI because the
-        # only local branch reference is current-pr-branch)
-        upstream_target_branch = repo.remote().refs[target_branch]
+    if upstream_target_branch is None:
+        try:
+            # Fall back to the remote reference (this happens on CI because the
+            # only local branch reference is current-pr-branch)
+            upstream_target_branch = repo.remote().refs[target_branch]
+        except IndexError:
+            # TODO
+            pass
     merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
     changed_files = {f for f in diff if f.b_path is not None}
