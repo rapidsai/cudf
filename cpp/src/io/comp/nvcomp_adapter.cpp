@@ -166,7 +166,7 @@ void check_is_zstd_enabled()
   CUDF_CUDA_TRY(cudaGetDevice(&device));
   CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
   CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
-  CUDF_EXPECTS(cc_major != 6 or cc_minor != 0,
+  CUDF_EXPECTS(cc_major != 6 or cc_minor != 1,
                "Zstandard decompression is disabled on some Pascal GPUs");
 #endif
 }
