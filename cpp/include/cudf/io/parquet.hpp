@@ -50,6 +50,7 @@ class parquet_reader_options_builder;
  * @brief Settings for `read_parquet()`.
  */
 class parquet_reader_options {
+ protected:
   source_info _source;
 
   // Path in schema of column to read; `nullopt` is all
@@ -252,6 +253,7 @@ class parquet_reader_options {
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
  */
 class parquet_reader_options_builder {
+ protected:
   parquet_reader_options options;
 
  public:
@@ -433,8 +435,18 @@ class chunked_parquet_reader_options : public parquet_reader_options {
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
  */
-class chunked_parquet_reader_options_builder {
-  chunked_parquet_reader_options options;
+class chunked_parquet_reader_options_builder : public parquet_reader_options_builder {
+  // Limit the number of maximum bytes that chunked_parquet_reader will read each time.
+  // This will be passed into the private instance of `chunked_parquet_reader_options`.
+  std::size_t _byte_limit;
+
+  chunked_parquet_reader_options create_options()
+  {
+    auto chunked_reader_options = chunked_parquet_reader_options{};
+    dynamic_cast<parquet_reader_options&>(chunked_reader_options) = std::move(options);
+    chunked_reader_options.set_byte_limit(_byte_limit);
+    return chunked_reader_options;
+  }
 
  public:
   /**
@@ -449,117 +461,36 @@ class chunked_parquet_reader_options_builder {
    *
    * @param src The source information used to read parquet file
    */
-  explicit chunked_parquet_reader_options_builder(source_info const& src) : options(src) {}
+  explicit chunked_parquet_reader_options_builder(source_info const& src)
+    : parquet_reader_options_builder(src)
+  {
+  }
 
   /**
-   * @brief Sets names of the columns to be read.
+   * @brief Sets number of byte limit to read each time.
    *
-   * @param col_names Vector of column names
+   * @param byte_limit Number of maximum bytes to read
    * @return this for chaining
    */
-  chunked_parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  chunked_parquet_reader_options_builder& byte_limit(std::size_t byte_limit)
   {
-    options._columns = std::move(col_names);
+    _byte_limit = byte_limit;
     return *this;
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * @param row_groups Vector of row groups to read
-   * @return this for chaining
+   * @brief Return `chunked_parquet_reader_options` instance once this's built.
    */
-  chunked_parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
-  {
-    options.set_row_groups(std::move(row_groups));
-    return *this;
-  }
+  operator chunked_parquet_reader_options() { return create_options(); }
 
   /**
-   * @brief Sets enable/disable conversion of strings to categories.
-   *
-   * @param val Boolean value to enable/disable conversion of string columns to categories
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& convert_strings_to_categories(bool val)
-  {
-    options._convert_strings_to_categories = val;
-    return *this;
-  }
-
-  /**
-   * @brief Sets to enable/disable use of pandas metadata to read.
-   *
-   * @param val Boolean value whether to use pandas metadata
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& use_pandas_metadata(bool val)
-  {
-    options._use_pandas_metadata = val;
-    return *this;
-  }
-
-  /**
-   * @brief Sets reader metadata.
-   *
-   * @param val Tree of metadata information.
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& set_column_schema(std::vector<reader_column_schema> val)
-  {
-    options._reader_column_schema = std::move(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets number of rows to skip.
-   *
-   * @param val Number of rows to skip from start
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& skip_rows(size_type val)
-  {
-    options.set_skip_rows(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets number of rows to read.
-   *
-   * @param val Number of rows to read after skip
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& num_rows(size_type val)
-  {
-    options.set_num_rows(val);
-    return *this;
-  }
-
-  /**
-   * @brief timestamp_type used to cast timestamp columns.
-   *
-   * @param type The timestamp data_type to which all timestamp columns need to be cast
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& timestamp_type(data_type type)
-  {
-    options._timestamp_type = type;
-    return *this;
-  }
-
-  /**
-   * @brief move parquet_reader_options member once it's built.
-   */
-  operator chunked_parquet_reader_options&&() { return std::move(options); }
-
-  /**
-   * @brief move parquet_reader_options member once it's built.
+   * @brief Return `chunked_parquet_reader_options` instance once this's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
    *
-   * @return Built `parquet_reader_options` object's r-value reference
+   * @return Built `chunked_parquet_reader_options` object's r-value reference
    */
-  chunked_parquet_reader_options&& build() { return std::move(options); }
+  chunked_parquet_reader_options build() { return create_options(); }
 };
 
 /** @} */  // end of group
