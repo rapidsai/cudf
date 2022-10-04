@@ -127,11 +127,15 @@ TEST_F(DataChunkSourceTest, Host)
   test_source(content, *source);
 }
 
+enum class compression { ENABLED, DISABLED };
+
+enum class eof { ADD_EOF_BLOCK, NO_EOF_BLOCK };
+
 void write_bgzip(std::ostream& output_stream,
-                 const std::string& data,
+                 cudf::host_span<const char> data,
                  std::default_random_engine& rng,
-                 bool compress,
-                 bool write_eof)
+                 compression compress,
+                 eof add_eof)
 {
   std::vector<char> const extra_garbage_field1{{13,  // magic number
                                                 37,  // magic number
@@ -161,8 +165,8 @@ void write_bgzip(std::ostream& output_stream,
                                                 1,  2, 3, 4, 5, 6, 7, 8}};
   // make sure the block size with header stays below 65536
   std::uniform_int_distribution<std::size_t> block_size_dist{1, 65000};
-  auto begin     = data.data();
-  auto const end = data.data() + data.size();
+  auto begin     = data.begin();
+  auto const end = data.end();
   int i          = 0;
   while (begin < end) {
     using cudf::host_span;
@@ -171,7 +175,7 @@ void write_bgzip(std::ostream& output_stream,
       i & 1 ? extra_garbage_field1 : host_span<char const>{};
     host_span<char const> const garbage_after =
       i & 2 ? extra_garbage_field2 : host_span<char const>{};
-    if (compress) {
+    if (compress == compression::ENABLED) {
       cudf::io::text::detail::bgzip::write_compressed_block(
         output_stream, {begin, len}, garbage_before, garbage_after);
     } else {
@@ -181,7 +185,9 @@ void write_bgzip(std::ostream& output_stream,
     begin += len;
     i++;
   }
-  if (write_eof) { cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {}); }
+  if (add_eof == eof::ADD_EOF_BLOCK) {
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
+  }
 }
 
 TEST_F(DataChunkSourceTest, BgzipSource)
@@ -194,7 +200,7 @@ TEST_F(DataChunkSourceTest, BgzipSource)
   {
     std::ofstream output_stream{filename};
     std::default_random_engine rng{};
-    write_bgzip(output_stream, input, rng, false, true);
+    write_bgzip(output_stream, input, rng, compression::DISABLED, eof::ADD_EOF_BLOCK);
   }
 
   auto const source = cudf::io::text::make_source_from_bgzip_file(filename);
@@ -227,7 +233,7 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
     begin_compressed_offset = output_stream.tellp();
     cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
                                                             data_garbage + begininput);
-    write_bgzip(output_stream, input, rng, false, false);
+    write_bgzip(output_stream, input, rng, compression::DISABLED, eof::NO_EOF_BLOCK);
     end_compressed_offset = output_stream.tellp();
     cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream,
                                                             endinput + data_garbage + data_garbage);
@@ -321,7 +327,7 @@ TEST_F(DataChunkSourceTest, BgzipCompressedSourceVirtualOffsets)
     std::default_random_engine rng{};
     begin_compressed_offset = output_stream.tellp();
     cudf::io::text::detail::bgzip::write_compressed_block(output_stream, data_garbage + begininput);
-    write_bgzip(output_stream, input, rng, true, false);
+    write_bgzip(output_stream, input, rng, compression::ENABLED, eof::NO_EOF_BLOCK);
     end_compressed_offset = output_stream.tellp();
     cudf::io::text::detail::bgzip::write_compressed_block(output_stream,
                                                           endinput + data_garbage + data_garbage);
