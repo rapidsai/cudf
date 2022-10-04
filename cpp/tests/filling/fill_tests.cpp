@@ -206,7 +206,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
         }));
 
     auto p_ret = cudf::fill(destination, begin, end, *p_val);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*p_ret, expected);
   }
 };
 

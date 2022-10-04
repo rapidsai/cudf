@@ -63,9 +63,6 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
 
-  // remove the null-mask if the scalar is valid
-  if (value.is_valid(stream)) { output->set_null_mask(rmm::device_buffer{}, 0); }
-
   return output;
 }
 
