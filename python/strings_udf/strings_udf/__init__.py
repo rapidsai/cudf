@@ -79,10 +79,10 @@ if cp.returncode == 0:
 
         result = None
         if virtual_sms:
-            # First try to fetch ptx file from `.ptx` files
+            # First try to fetch ptx file from `shim_sm.ptx` files
             result = _get_appropriate_file(virtual_sms, cc)
         if result is None:
-            # If the above fails, try to fetch ptx file from `-real.ptx` files
+            # If the above fails, try to fetch ptx file from `shim_sm-real.ptx` files
             result = _get_appropriate_file(native_sms, cc)
 
         if result is None:
