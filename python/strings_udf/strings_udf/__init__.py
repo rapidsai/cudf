@@ -72,33 +72,26 @@ if cp.returncode == 0:
             file_name = os.path.basename(f)
             sm_number = file_name.rstrip(".ptx").lstrip("shim_")
             if sm_number.endswith("a"):
-                suffix_a_sms.append((int(sm_number.rstrip("a")), f))
+                processed_sm_number = int(sm_number.rstrip("a"))
+                if processed_sm_number == cc:
+                    suffix_a_sms.append((processed_sm_number, f))
             else:
                 regular_sms.append((int(sm_number), f))
 
-        suffix_a_result = None
         regular_result = None
-        if suffix_a_sms:
-            suffix_a_result = _get_appropriate_file(suffix_a_sms, cc)
+
         if regular_sms:
             regular_result = _get_appropriate_file(regular_sms, cc)
 
-        if suffix_a_result is None and regular_result is None:
+        if not suffix_a_sms and regular_result is None:
             raise RuntimeError(
                 "This strings_udf installation is missing the necessary PTX "
                 f"files that are <={cc}."
             )
-        elif suffix_a_result is not None and regular_result is not None:
-            if suffix_a_result[0] >= regular_result[0]:
-                ptxpath = suffix_a_result[1]
-            else:
-                ptxpath = regular_result[1]
+        elif len(suffix_a_sms) > 0:
+            ptxpath = suffix_a_sms[0][1]
         else:
-            ptxpath = (
-                suffix_a_result[1]
-                if regular_result is None
-                else regular_result[1]
-            )
+            ptxpath = regular_result[1]
 
         if driver_version >= compiler_from_ptx_file(ptxpath):
             ENABLED = True
