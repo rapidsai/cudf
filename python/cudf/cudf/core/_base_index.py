@@ -175,6 +175,18 @@ class BaseIndex(Serializable):
 
         self.name = values[0]
 
+    def _clean_nulls_from_index(self):
+        """
+        Convert all na values(if any) in Index object
+        to `<NA>` as a preprocessing step to `__repr__` methods.
+
+        This will involve changing type of Index object
+        to StringIndex but it is the responsibility of the `__repr__`
+        methods using this method to replace or handle representation
+        of the actual types correctly.
+        """
+        raise NotImplementedError
+
     @property
     def is_monotonic(self):
         """Return boolean if values in the object are monotonic_increasing.
