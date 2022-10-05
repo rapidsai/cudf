@@ -18,6 +18,9 @@ set(strings_udf_version 22.10.00)
 
 include(../../fetch_rapids.cmake)
 
+include(rapids-cuda)
+rapids_cuda_init_architectures(strings-udf-python)
+
 project(
   strings-udf-python
   VERSION ${strings_udf_version}
