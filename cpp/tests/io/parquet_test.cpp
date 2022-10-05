@@ -461,8 +461,8 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
-
-TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
+/*
+TYPED_TEST(ParquetWriterTest, Durations)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
@@ -483,11 +483,38 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
       .timestamp_type(this->type());
   auto result = cudf::io::read_parquet(in_opts);
+  auto durations_ms_got =
+    cudf::cast(*durations_ms_rep, cudf::data_type{cudf::type_id::DURATION_MILLISECONDS});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}*/
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
+{
+  auto sequence = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+
+  auto expected = table_view{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .timestamp_type(this->type());
+  auto result = cudf::io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
@@ -500,7 +527,7 @@ TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
 
   auto expected = table_view{{col}};
 
-  auto filepath = temp_env->get_temp_filepath("ChronosWithNulls.parquet");
+  auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
