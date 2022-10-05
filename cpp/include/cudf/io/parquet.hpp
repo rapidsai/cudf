@@ -438,6 +438,12 @@ class chunked_parquet_reader_options : public parquet_reader_options {
 class chunked_parquet_reader_options_builder : public parquet_reader_options_builder {
   chunked_parquet_reader_options chunked_reader_options{};
 
+  /**
+   * @brief Create a `chunked_parquet_reader_options` object.
+   *
+   * The returned object is a result of taking over the ownership of the internal states.
+   * Therefore, this should be called at most once.
+   */
   chunked_parquet_reader_options create_options()
   {
     dynamic_cast<parquet_reader_options&>(chunked_reader_options) = std::move(options);
