@@ -466,6 +466,41 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 }
 
 /**
+ * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(chunked_parquet_reader_options const& options,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  //
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::read
+ */
+table_with_metadata chunked_parquet_reader::read()
+{
+  // TODO
+  return table_with_metadata{};
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::has_next
+ */
+bool chunked_parquet_reader::has_next()
+{
+  // TODO
+  return true;
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::preprocess
+ */
+void chunked_parquet_reader::preprocess()
+{
+  // TODO
+}
+
+/**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
 parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,
