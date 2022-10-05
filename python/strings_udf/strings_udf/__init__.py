@@ -65,7 +65,7 @@ if cp.returncode == 0:
                 "installed cudf and strings_udf."
             )
 
-        suffix_a_sms = []
+        suffix_a_sm = None
         regular_sms = []
 
         for f in files:
@@ -74,7 +74,7 @@ if cp.returncode == 0:
             if sm_number.endswith("a"):
                 processed_sm_number = int(sm_number.rstrip("a"))
                 if processed_sm_number == cc:
-                    suffix_a_sms.append((processed_sm_number, f))
+                    suffix_a_sm = (processed_sm_number, f)
             else:
                 regular_sms.append((int(sm_number), f))
 
@@ -83,12 +83,12 @@ if cp.returncode == 0:
         if regular_sms:
             regular_result = _get_appropriate_file(regular_sms, cc)
 
-        if not suffix_a_sms and regular_result is None:
+        if suffix_a_sm is None and regular_result is None:
             raise RuntimeError(
                 "This strings_udf installation is missing the necessary PTX "
                 f"files that are <={cc}."
             )
-        elif len(suffix_a_sms) > 0:
+        elif suffix_a_sm is not None:
             ptxpath = suffix_a_sms[0][1]
         else:
             ptxpath = regular_result[1]
