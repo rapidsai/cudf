@@ -8,6 +8,7 @@ from collections import abc
 from functools import cached_property
 from typing import Any, Iterable, List, Tuple, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
@@ -544,6 +545,18 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result[sizes > n]
 
+    def ngroup(self):
+        # Step 1: Using a sort-groupby, compute the group group offsets:
+        grouped_keys, _, offsets = self._groupby.groups([])
+
+        # the group IDs go from 0...len(group_offsets) - 1
+        num_groups = len(offsets) - 1
+        index = cudf.core.index._index_from_columns(grouped_keys)
+        group_ids = cudf.Series(cp.arange(num_groups), index=index.unique())
+
+        result = self._broadcast(group_ids)
+        return result.fillna(-1)
+
     def serialize(self):
         header = {}
         frames = []
@@ -925,6 +938,29 @@ class GroupBy(Serializable, Reducible, Scannable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    def _broadcast(self, values):
+        """
+        Broadcast the values of an aggregation to the group
+
+        Parameters
+        ----------
+        values: Series
+            A Series representing the values of an aggregation.  The
+            index of the Series must be the (unique) values
+            representing the group keys.
+
+        Returns
+        -------
+        A Series of the same size and with the same index as
+        ``self.obj``.
+        """
+        if not values.index.equals(self.grouping.keys):
+            values = values._align_to_index(
+                self.grouping.keys, how="right", allow_non_unique=True
+            )
+            values.index = self.obj.index
+        return values
+
     def transform(self, function):
         """Apply an aggregation, then broadcast the result to the group size.
 
@@ -966,12 +1002,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "Currently, `transform()` supports only aggregations."
             ) from e
 
-        if not result.index.equals(self.grouping.keys):
-            result = result._align_to_index(
-                self.grouping.keys, how="right", allow_non_unique=True
-            )
-            result.index = self.obj.index
-        return result
+        return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
         """
