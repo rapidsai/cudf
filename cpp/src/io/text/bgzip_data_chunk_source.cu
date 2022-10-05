@@ -15,12 +15,12 @@
  */
 
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/text/bgzip_utils.hpp"
 #include "io/text/device_data_chunks.hpp"
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 

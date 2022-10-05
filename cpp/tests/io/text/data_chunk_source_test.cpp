@@ -17,9 +17,8 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include "io/text/bgzip_utils.hpp"
-
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/io/text/detail/bgzip_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

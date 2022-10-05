@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/text/bgzip_utils.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
@@ -27,6 +25,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
@@ -95,7 +94,7 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
   return cudf::string_scalar(std::move(*chars_buffer));
 }
 
-static void write_bgzip_file(cudf::host_span<char const> host_data, std::ostream& stream)
+static void write_bgzip_file(cudf::host_span<char const> host_data, std::ostream& output_stream)
 {
   // a bit of variability with a decent amount of padding so we don't overflow 16 bit block sizes
   std::uniform_int_distribution<std::size_t> chunk_size_dist{64000, 65000};
@@ -104,12 +103,12 @@ static void write_bgzip_file(cudf::host_span<char const> host_data, std::ostream
   while (pos < host_data.size()) {
     auto const remainder  = host_data.size() - pos;
     auto const chunk_size = std::min(remainder, chunk_size_dist(rng));
-    cudf::io::text::detail::bgzip::write_compressed_block(stream,
+    cudf::io::text::detail::bgzip::write_compressed_block(output_stream,
                                                           {host_data.data() + pos, chunk_size});
     pos += chunk_size;
   }
   // empty block denotes EOF
-  cudf::io::text::detail::bgzip::write_uncompressed_block(stream, {});
+  cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
 }
 
 template <data_chunk_source_type source_type>
@@ -170,8 +169,8 @@ static void bench_multibyte_split(nvbench::state& state,
       case data_chunk_source_type::file_bgzip: {
         auto const temp_file_name = random_file_in_dir(temp_dir.path());
         {
-          std::ofstream stream(temp_file_name, std::ofstream::out);
-          write_bgzip_file(host_input, stream);
+          std::ofstream output_stream(temp_file_name, std::ofstream::out);
+          write_bgzip_file(host_input, output_stream);
         }
         return cudf::io::text::make_source_from_bgzip_file(temp_file_name);
       }

@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/text/bgzip_utils.hpp"
-
+#include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -49,11 +48,13 @@ void write_int(std::ostream& output_stream, T val)
 
 }  // namespace
 
+std::array<char, 4> constexpr extra_blocklen_field_header{{66, 67, 2, 0}};
+
 header read_header(std::istream& input_stream)
 {
   std::array<char, 12> buffer{};
   input_stream.read(buffer.data(), sizeof(buffer));
-  std::array<uint8_t, 4> const expected_header{{31, 139, 8, 4}};
+  std::array<uint8_t, 4> constexpr expected_header{{31, 139, 8, 4}};
   CUDF_EXPECTS(
     std::equal(
       expected_header.begin(), expected_header.end(), reinterpret_cast<uint8_t*>(buffer.data())),
@@ -70,9 +71,12 @@ header read_header(std::istream& input_stream)
     input_stream.read(buffer.data(), 4);
     extra_offset += 4;
     auto const subfield_size = read_int<uint16_t>(&buffer[2]);
-    if (buffer[0] == 66 && buffer[1] == 67) {
+    if (buffer[0] == extra_blocklen_field_header[0] &&
+        buffer[1] == extra_blocklen_field_header[1]) {
       // the block size subfield contains a single uint16 value, which is block_size - 1
-      CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
+      CUDF_EXPECTS(
+        buffer[2] == extra_blocklen_field_header[2] && buffer[3] == extra_blocklen_field_header[3],
+        "malformed BGZIP extra subfield");
       input_stream.read(buffer.data(), sizeof(uint16_t));
       input_stream.seekg(remaining_size - 6, std::ios_base::cur);
       auto const block_size_minus_one = read_int<uint16_t>(&buffer[0]);
@@ -104,32 +108,26 @@ void write_header(std::ostream& output_stream,
                   host_span<char const> pre_size_subfield,
                   host_span<char const> post_size_subfield)
 {
-  auto uint8_to_char = [](uint8_t val) {
-    char c{};
-    std::memcpy(&c, &val, 1);
-    return c;
-  };
-  std::array<char, 10> const header_data{{
-    31,                  // magic number
-    uint8_to_char(139),  // magic number
-    8,                   // compression type: deflate
-    4,                   // flags: extra header
-    0,                   // mtime
-    0,                   // mtime
-    0,                   // mtime
-    0,                   // mtime: irrelevant
-    4,                   // xfl: irrelevant
-    3                    // OS: irrelevant
+  std::array<uint8_t, 10> constexpr header_data{{
+    31,   // magic number
+    139,  // magic number
+    8,    // compression type: deflate
+    4,    // flags: extra header
+    0,    // mtime
+    0,    // mtime
+    0,    // mtime
+    0,    // mtime: irrelevant
+    4,    // xfl: irrelevant
+    3     // OS: irrelevant
   }};
-  output_stream.write(header_data.data(), header_data.size());
-  std::array<char, 4> extra_blocklen_field{{66, 67, 2, 0}};
-  auto const extra_size = pre_size_subfield.size() + extra_blocklen_field.size() +
+  output_stream.write(reinterpret_cast<const char*>(header_data.data()), header_data.size());
+  auto const extra_size = pre_size_subfield.size() + extra_blocklen_field_header.size() +
                           sizeof(uint16_t) + post_size_subfield.size();
   auto const block_size =
     header_data.size() + sizeof(uint16_t) + extra_size + compressed_size + 2 * sizeof(uint32_t);
   write_int<uint16_t>(output_stream, extra_size);
   output_stream.write(pre_size_subfield.data(), pre_size_subfield.size());
-  output_stream.write(extra_blocklen_field.data(), extra_blocklen_field.size());
+  output_stream.write(extra_blocklen_field_header.data(), extra_blocklen_field_header.size());
   CUDF_EXPECTS(block_size - 1 <= std::numeric_limits<uint16_t>::max(), "block size overflow");
   write_int<uint16_t>(output_stream, block_size - 1);
   output_stream.write(post_size_subfield.data(), post_size_subfield.size());
@@ -158,9 +156,9 @@ void write_compressed_block(std::ostream& output_stream,
   z_stream deflate_stream{};
   // let's make sure we have enough space to store the data
   std::vector<char> compressed_out(data.size() * 2 + 256);
-  deflate_stream.next_in   = (unsigned char*)data.data();
+  deflate_stream.next_in   = reinterpret_cast<unsigned char*>(const_cast<char*>(data.data()));
   deflate_stream.avail_in  = data.size();
-  deflate_stream.next_out  = (unsigned char*)compressed_out.data();
+  deflate_stream.next_out  = reinterpret_cast<unsigned char*>(compressed_out.data());
   deflate_stream.avail_out = compressed_out.size();
   CUDF_EXPECTS(
     deflateInit2(&deflate_stream,        // stream
