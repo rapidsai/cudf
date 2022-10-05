@@ -130,12 +130,8 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::UINT_32: return type_id::UINT32;
     case parquet::UINT_64: return type_id::UINT64;
     case parquet::DATE: return type_id::TIMESTAMP_DAYS;
-    case parquet::TIME_MILLIS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_MILLISECONDS;
-    case parquet::TIME_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_MICROSECONDS;
+    case parquet::TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
+    case parquet::TIME_MICROS: return type_id::DURATION_MICROSECONDS;
     case parquet::TIMESTAMP_MILLIS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
