@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from io import BytesIO, StringIO, TextIOBase
+from io import BytesIO, StringIO
 
 import cudf
 from cudf._lib import text as libtext
@@ -30,19 +30,12 @@ def read_text(
         **kwargs,
     )
 
-    if compression == "bgzip":
-        if isinstance(filepath_or_buffer, TextIOBase):
-            raise ValueError("bgzip compression requires a file path")
-        filepath_or_buffer = libtext.BGZIPFile(
-            filepath_or_buffer, compression_offsets
-        )
-    elif compression is not None:
-        raise ValueError("Only bgzip compression is supported at the moment")
-    elif compression_offsets is not None:
-        raise ValueError("compression_offsets requires compression to be set")
-
     return cudf.Series._from_data(
         libtext.read_text(
-            filepath_or_buffer, delimiter=delimiter, byte_range=byte_range
+            filepath_or_buffer,
+            delimiter=delimiter,
+            byte_range=byte_range,
+            compression=compression,
+            compression_offsets=compression_offsets,
         )
     )
