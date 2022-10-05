@@ -34,6 +34,7 @@ from cudf.api.types import (
     is_dtype_equal,
     is_interval_dtype,
     is_list_like,
+    is_scalar,
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
@@ -886,6 +887,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def append(self, other):
         return self._as_int_index().append(other)
 
+    def isin(self, values):
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
+        return self._values.isin(values).values
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
@@ -1494,6 +1504,15 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return cudf.core.index._index_from_data(
             {self.name: self._values.unique()}, name=self.name
         )
+
+    def isin(self, values):
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
+        return self._values.isin(values).values
 
 
 class NumericIndex(GenericIndex):
