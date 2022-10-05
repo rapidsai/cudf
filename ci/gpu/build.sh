@@ -197,7 +197,7 @@ else
     # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
-    
+
     gpuci_logger "Check current conda environment"
     conda list --show-channel-urls
 
@@ -269,7 +269,7 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORK
 
 gpuci_logger "Python py.tests for cuDF with spilling (CUDF_SPILL_DEVICE_LIMIT=1)"
 # Due to time concerns, we only run a limited set of tests
-CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -v -n 8 tests/test_binops.py tests/test_dataframe.py tests/test_buffer.py tests/test_onehot.py tests/test_reshape.py
+CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov-append --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests/test_binops.py tests/test_dataframe.py tests/test_buffer.py tests/test_onehot.py tests/test_reshape.py
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
@@ -278,7 +278,6 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
-
 
 # only install strings_udf after cuDF is finished testing without its presence
 gpuci_logger "Installing strings_udf"
