@@ -501,6 +501,14 @@ void chunked_parquet_reader::preprocess()
 }
 
 /**
+ * @copydoc cudf::io::chunked_parquet_reader::close
+ */
+void chunked_parquet_reader::close()
+{
+  // TODO
+}
+
+/**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
 parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,

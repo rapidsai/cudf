@@ -526,6 +526,11 @@ class chunked_parquet_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Destructor, calling `close()` for the reading file to release resources.
+   */
+  ~chunked_parquet_reader() { close(); }
+
+  /**
    * @brief Reads a chunk of Parquet dataset into a set of columns.
    *
    * TODO: move this paragraph into implementation code.
@@ -541,7 +546,7 @@ class chunked_parquet_reader {
    * dataset as reading the entire given file at once.
    *
    * An empty table will be returned if all the data in the given file has been read and returned by
-   * the previous calls.
+   * the previous calls, or the `close()` function has been called.
    *
    * @return The set of columns along with metadata
    */
@@ -551,9 +556,19 @@ class chunked_parquet_reader {
   /**
    * @brief Check if there is any data of the given file has not yet processed.
    *
+   * If the file has been closed (i.e., the `close()` function has been called), this will always
+   * return `false`.
+   *
    * @return A boolean value indicating if there is any data left to process
    */
   bool has_next();
+
+  /**
+   * @brief Close the reading file to release internal resources.
+   *
+   * This should not have any effect if called upon an already closed file.
+   */
+  void close();
 
  private:
   /**
