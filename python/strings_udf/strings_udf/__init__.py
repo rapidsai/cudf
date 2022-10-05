@@ -89,7 +89,7 @@ if cp.returncode == 0:
                 f"files that are <={cc}."
             )
         elif suffix_a_sm is not None:
-            ptxpath = suffix_a_sms[0][1]
+            ptxpath = suffix_a_sm[1]
         else:
             ptxpath = regular_result[1]
 
