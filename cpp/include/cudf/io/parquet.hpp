@@ -412,7 +412,7 @@ class chunked_parquet_reader_options : public parquet_reader_options {
   // Limit the number of maximum bytes that chunked_parquet_reader will read each time.
   std::size_t _byte_limit;
 
-  friend chunked_parquet_reader_options_builder;
+  friend class chunked_parquet_reader_options_builder;
 
  public:
   /**
