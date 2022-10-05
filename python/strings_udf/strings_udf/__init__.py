@@ -33,6 +33,14 @@ def compiler_from_ptx_file(path):
     return int(major), int(minor)
 
 
+def _get_appropriate_file(sms, cc):
+    filtered_sms = list(filter(lambda x: x[0] <= cc, sms))
+    if filtered_sms:
+        return max(filtered_sms, key=lambda y: y[0])
+    else:
+        return None
+
+
 # adapted from PTXCompiler
 cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
 if cp.returncode == 0:
@@ -45,11 +53,8 @@ if cp.returncode == 0:
     if driver_version >= runtime_version:
         # Load the highest compute capability file available that is less than
         # the current device's.
-        files = glob.glob(
-            os.path.join(os.path.dirname(__file__), "shim_*.ptx")
-        )
         dev = cuda.get_current_device()
-        cc = "".join(str(x) for x in dev.compute_capability)
+        cc = int("".join(str(x) for x in dev.compute_capability))
         files = glob.glob(
             os.path.join(os.path.dirname(__file__), "shim_*.ptx")
         )
@@ -59,13 +64,34 @@ if cp.returncode == 0:
                 "files. Please file an issue reporting this error and how you "
                 "installed cudf and strings_udf."
             )
-        sms = [
-            os.path.basename(f).rstrip(".ptx").lstrip("shim_") for f in files
-        ]
-        selected_sm = max(sm for sm in sms if sm < cc)
-        ptxpath = os.path.join(
-            os.path.dirname(__file__), f"shim_{selected_sm}.ptx"
-        )
+
+        suffix_a_sm = None
+        regular_sms = []
+
+        for f in files:
+            file_name = os.path.basename(f)
+            sm_number = file_name.rstrip(".ptx").lstrip("shim_")
+            if sm_number.endswith("a"):
+                processed_sm_number = int(sm_number.rstrip("a"))
+                if processed_sm_number == cc:
+                    suffix_a_sm = (processed_sm_number, f)
+            else:
+                regular_sms.append((int(sm_number), f))
+
+        regular_result = None
+
+        if regular_sms:
+            regular_result = _get_appropriate_file(regular_sms, cc)
+
+        if suffix_a_sm is None and regular_result is None:
+            raise RuntimeError(
+                "This strings_udf installation is missing the necessary PTX "
+                f"files that are <={cc}."
+            )
+        elif suffix_a_sm is not None:
+            ptxpath = suffix_a_sm[1]
+        else:
+            ptxpath = regular_result[1]
 
         if driver_version >= compiler_from_ptx_file(ptxpath):
             ENABLED = True
