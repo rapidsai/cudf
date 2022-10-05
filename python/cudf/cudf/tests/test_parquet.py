@@ -2603,3 +2603,33 @@ def test_parquet_writer_time_delta_physical_type():
     df.to_parquet(buffer)
 
     pd.read_parquet(buffer)  # should not throw
+
+
+def test_parquet_roundtrip_time_delta():
+    num_rows = 12345
+    df = cudf.DataFrame(
+        {
+            "s": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[s]",
+            ),
+            "ms": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[ms]",
+            ),
+            "us": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[us]",
+            ),
+            "ns": cudf.Series(
+                [
+                    elem // 1000 * 1000
+                    for elem in random.sample(range(0, 200000), num_rows)
+                ],
+                dtype="timedelta64[ns]",
+            ),
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    assert_eq(df, cudf.read_parquet(buffer))
