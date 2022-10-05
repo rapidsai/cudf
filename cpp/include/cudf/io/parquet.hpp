@@ -436,15 +436,11 @@ class chunked_parquet_reader_options : public parquet_reader_options {
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
  */
 class chunked_parquet_reader_options_builder : public parquet_reader_options_builder {
-  // Limit the number of maximum bytes that chunked_parquet_reader will read each time.
-  // This will be passed into the private instance of `chunked_parquet_reader_options`.
-  std::size_t _byte_limit;
+  chunked_parquet_reader_options chunked_reader_options{};
 
   chunked_parquet_reader_options create_options()
   {
-    auto chunked_reader_options = chunked_parquet_reader_options{};
     dynamic_cast<parquet_reader_options&>(chunked_reader_options) = std::move(options);
-    chunked_reader_options.set_byte_limit(_byte_limit);
     return chunked_reader_options;
   }
 
@@ -469,12 +465,12 @@ class chunked_parquet_reader_options_builder : public parquet_reader_options_bui
   /**
    * @brief Sets number of byte limit to read each time.
    *
-   * @param byte_limit Number of maximum bytes to read
+   * @param limit Number of maximum bytes to read per `read_next()` call
    * @return this for chaining
    */
-  chunked_parquet_reader_options_builder& byte_limit(std::size_t byte_limit)
+  chunked_parquet_reader_options_builder& byte_limit(std::size_t limit)
   {
-    _byte_limit = byte_limit;
+    chunked_reader_options.set_byte_limit(limit);
     return *this;
   }
 
