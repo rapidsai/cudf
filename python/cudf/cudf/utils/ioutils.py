@@ -1229,13 +1229,12 @@ def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
-def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
+def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
     """Return False if `path_or_data` resolves to multiple filepaths or
     buffers.
     """
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
             fs, _, paths = get_fs_token_paths(
@@ -1276,7 +1275,7 @@ def is_directory(path_or_data, **kwargs):
     return False
 
 
-def _get_filesystem_and_paths(path_or_data, **kwargs):
+def _get_filesystem_and_paths(path_or_data, storage_options):
     # Returns a filesystem object and the filesystem-normalized
     # paths. If `path_or_data` does not correspond to a path or
     # list of paths (or if the protocol is not supported), the
@@ -1289,7 +1288,6 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
         and isinstance(stringify_pathlike(path_or_data[0]), str)
     ):
         # Ensure we are always working with a list
-        storage_options = kwargs.get("storage_options")
         if isinstance(path_or_data, list):
             path_or_data = [
                 os.path.expanduser(stringify_pathlike(source))
@@ -1412,11 +1410,10 @@ def get_reader_filepath_or_buffer(
     mode="rb",
     fs=None,
     iotypes=(BytesIO, NativeFile),
-    byte_ranges=None,
     use_python_file_object=False,
     open_file_options=None,
     allow_raw_text_input=False,
-    **kwargs,
+    storage_options=None,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1445,6 +1442,15 @@ def get_reader_filepath_or_buffer(
         input and will not check for its existence in the filesystem. If False,
         the input must be a path and an error will be raised if it does not
         exist.
+    storage_options : dict, optional
+        Extra options that make sense for a particular storage connection, e.g.
+        host, port, username, password, etc. For HTTP(S) URLs the key-value
+        pairs are forwarded to ``urllib.request.Request`` as header options.
+        For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
+        pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+        ``urllib`` for more details, and for more examples on storage options
+        refer `here <https://pandas.pydata.org/docs/user_guide/io.html?
+        highlight=storage_options#reading-writing-remote-files>`__.
 
     Returns
     -------
@@ -1461,7 +1467,9 @@ def get_reader_filepath_or_buffer(
         # Get a filesystem object if one isn't already available
         paths = [path_or_data]
         if fs is None:
-            fs, paths = _get_filesystem_and_paths(path_or_data, **kwargs)
+            fs, paths = _get_filesystem_and_paths(
+                path_or_data, storage_options
+            )
             if fs is None:
                 return path_or_data, compression
 
@@ -1494,7 +1502,6 @@ def get_reader_filepath_or_buffer(
                             fpath,
                             fs=fs,
                             mode=mode,
-                            **kwargs,
                         )
                     )
                     for fpath in paths
@@ -1509,7 +1516,7 @@ def get_reader_filepath_or_buffer(
             path_or_data = ArrowPythonFile(path_or_data)
         else:
             path_or_data = BytesIO(
-                _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+                _fsspec_data_transfer(path_or_data, mode=mode)
             )
 
     return path_or_data, compression
@@ -1748,7 +1755,6 @@ def _fsspec_data_transfer(
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
-    **kwargs,
 ):
 
     # Require `fs` if `path_or_fob` is not file-like
@@ -1782,7 +1788,6 @@ def _fsspec_data_transfer(
         byte_ranges,
         buf,
         fs=fs,
-        **kwargs,
     )
 
     return buf.tobytes()
@@ -1832,7 +1837,6 @@ def _read_byte_ranges(
     ranges,
     local_buffer,
     fs=None,
-    **kwargs,
 ):
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf
