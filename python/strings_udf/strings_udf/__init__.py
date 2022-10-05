@@ -65,32 +65,40 @@ if cp.returncode == 0:
                 "installed cudf and strings_udf."
             )
 
-        virtual_sms = []
-        native_sms = []
+        suffix_a_sms = []
+        regular_sms = []
+
         for f in files:
             file_name = os.path.basename(f)
-            sm_number = int(
-                file_name.rstrip(".ptx").lstrip("shim_").rstrip("-real")
-            )
-            if file_name.endswith("-real.ptx"):
-                native_sms.append((sm_number, f))
+            sm_number = file_name.rstrip(".ptx").lstrip("shim_")
+            if sm_number.endswith("a"):
+                suffix_a_sms.append((int(sm_number.rstrip("a")), f))
             else:
-                virtual_sms.append((sm_number, f))
+                regular_sms.append((int(sm_number), f))
 
-        result = None
-        if virtual_sms:
-            # First try to fetch ptx file from `shim_sm.ptx` files
-            result = _get_appropriate_file(virtual_sms, cc)
-        if result is None and native_sms:
-            # If the above fails, try to fetch ptx file from `shim_sm-real.ptx` files
-            result = _get_appropriate_file(native_sms, cc)
+        suffix_a_result = None
+        regular_result = None
+        if suffix_a_sms:
+            suffix_a_result = _get_appropriate_file(suffix_a_sms, cc)
+        if regular_sms:
+            regular_result = _get_appropriate_file(regular_sms, cc)
 
-        if result is None:
+        if suffix_a_result is None and regular_result is None:
             raise RuntimeError(
                 "This strings_udf installation is missing the necessary PTX "
                 f"files that are <={cc}."
             )
-        ptxpath = result[1]
+        elif suffix_a_result is not None and regular_result is not None:
+            if suffix_a_result[0] >= regular_result[0]:
+                ptxpath = suffix_a_result[1]
+            else:
+                ptxpath = regular_result[1]
+        else:
+            ptxpath = (
+                suffix_a_result[1]
+                if regular_result is None
+                else regular_result[1]
+            )
 
         if driver_version >= compiler_from_ptx_file(ptxpath):
             ENABLED = True

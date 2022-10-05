@@ -91,6 +91,11 @@ endfunction()
 # Create the shim library for each architecture.
 set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")
+list(SORT CMAKE_CUDA_ARCHITECTURES)
+list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
+
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 
