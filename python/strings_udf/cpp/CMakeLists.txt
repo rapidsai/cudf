@@ -12,16 +12,14 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.20.1)
+cmake_minimum_required(VERSION 3.23.1)
 
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
 include(rapids-find)
 
-rapids_cpm_init()
-
-rapids_cuda_init_architectures(STRINGS_UDF)
+rapids_cuda_init_architectures(strings-udf-cpp)
 
 # Create a project so that we can enable CUDA architectures in this file.
 project(
@@ -29,6 +27,8 @@ project(
   VERSION ${strings_udf_version}
   LANGUAGES CUDA
 )
+
+rapids_cpm_init()
 
 rapids_find_package(
   CUDAToolkit REQUIRED
