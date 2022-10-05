@@ -1482,7 +1482,7 @@ __global__ void __launch_bounds__(block_size)
 
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
-  bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
   if (!has_repetition) { return; }
 
   if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {

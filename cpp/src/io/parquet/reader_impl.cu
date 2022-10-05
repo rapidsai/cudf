@@ -1360,11 +1360,11 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   // if we have any list columns that need further processing.
   bool has_lists = false;
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col = _input_columns[idx];
-    size_t max_depth      = input_col.nesting_depth();
+    auto const& input_col  = _input_columns[idx];
+    size_t const max_depth = input_col.nesting_depth();
 
     auto* cols = &_output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
+    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
