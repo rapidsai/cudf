@@ -2652,19 +2652,19 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   // write it out
   cudf::table_view tbl({c0, *c1, *c2, *c3});
   auto filepath = temp_env->get_temp_filepath("UserBoundsWithNullsMixedTypes.parquet");
-  cudf_io::parquet_writer_options out_args =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
-  cudf_io::write_parquet(out_args);
+  cudf::io::parquet_writer_options out_args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+  cudf::io::write_parquet(out_args);
 
   // read it back
   std::vector<std::pair<int, int>> params{
     {-1, -1}, {0, num_rows}, {1, num_rows - 1}, {num_rows - 1, 1}, {517, 22000}};
   for (auto p : params) {
-    cudf_io::parquet_reader_options read_args =
-      cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+    cudf::io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
     if (p.first >= 0) { read_args.set_skip_rows(p.first); }
     if (p.second >= 0) { read_args.set_num_rows(p.second); }
-    auto result = cudf_io::read_parquet(read_args);
+    auto result = cudf::io::read_parquet(read_args);
 
     p.first  = p.first < 0 ? 0 : p.first;
     p.second = p.second < 0 ? num_rows - p.first : p.second;
