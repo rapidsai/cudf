@@ -376,7 +376,7 @@ struct leaf_schema_fn {
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
   }
 
   template <typename T>
@@ -384,7 +384,7 @@ struct leaf_schema_fn {
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
     col_schema.ts_scale       = 1000;
   }
 
@@ -393,7 +393,7 @@ struct leaf_schema_fn {
   {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
   }
 
   template <typename T>

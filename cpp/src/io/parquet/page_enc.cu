@@ -1100,15 +1100,27 @@ __global__ void __launch_bounds__(128, 8)
       if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
         switch (physical_type) {
-          case INT32:
+          case INT32: [[fallthrough]];
           case FLOAT: {
             int32_t v;
-            if (dtype_len_in == 4)
+            if (dtype_len_in == 8)
+              v = s->col.leaf_column->element<int64_t>(val_idx);
+            else if (dtype_len_in == 4)
               v = s->col.leaf_column->element<int32_t>(val_idx);
             else if (dtype_len_in == 2)
               v = s->col.leaf_column->element<int16_t>(val_idx);
             else
               v = s->col.leaf_column->element<int8_t>(val_idx);
+
+            int32_t ts_scale = s->col.ts_scale;
+            if (ts_scale != 0) {
+              if (ts_scale < 0) {
+                v /= -ts_scale;
+              } else {
+                v *= ts_scale;
+              }
+            }
+
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
