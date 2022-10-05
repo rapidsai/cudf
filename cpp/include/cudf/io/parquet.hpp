@@ -417,37 +417,42 @@ class chunked_parquet_reader_options : public parquet_reader_options {
  public:
   /**
    * @brief Return the maximum number of bytes that will be read by
-   * `chunked_parquet_reader::read_next()`.
+   * `chunked_parquet_reader::read()`.
    *
-   * @return Number of maximum bytes to read
+   * @return Number of maximum bytes to read each time
    */
   [[nodiscard]] size_type get_byte_limit() const { return _byte_limit; }
 
   /**
    * @brief Sets the maximum number of bytes that will be read by
-   * `chunked_parquet_reader::read_next()`.
+   * `chunked_parquet_reader::read()`.
    *
-   * @param byte_limit Number of maximum bytes to read
+   * @param byte_limit Number of maximum bytes to read each time
    */
   void set_byte_limit(std::size_t byte_limit) { _byte_limit = byte_limit; }
 };
 
 /**
- * @brief Builds parquet_reader_options to use for `read_parquet()`.
+ * @brief Builds a `chunked_parquet_reader_options` instance to use with `chunked_parquet_reader`
+ * class.
  */
 class chunked_parquet_reader_options_builder : public parquet_reader_options_builder {
   chunked_parquet_reader_options chunked_reader_options{};
+  bool options_built{false};
 
   /**
    * @brief Create a `chunked_parquet_reader_options` object.
    *
    * The returned object is a result of taking over the ownership of the internal states.
-   * Therefore, this should be called at most once.
+   * Therefore, this should be called at most once to avoid data corruption.
    */
   chunked_parquet_reader_options create_options()
   {
+    CUDF_EXPECTS(!options_built, "This function should not be called more than once");
+    options_built = true;
+
     dynamic_cast<parquet_reader_options&>(chunked_reader_options) = std::move(options);
-    return chunked_reader_options;
+    return std::move(chunked_reader_options);
   }
 
  public:
@@ -493,6 +498,76 @@ class chunked_parquet_reader_options_builder : public parquet_reader_options_bui
    * @return Built `chunked_parquet_reader_options` object's r-value reference
    */
   chunked_parquet_reader_options build() { return create_options(); }
+};
+
+/**
+ * @brief The chunked parquet reader class to handle options and read tables in chunks.
+ *
+ * This class is designed to address the reading issue with parquet files that are very larger such
+ * that their content columns exceed the size limit in cudf. By reading the file content by chunks
+ * using this class, each chunk is guaranteed to have column sizes stay within the given limit.
+ */
+class chunked_parquet_reader {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *        This is added just to satisfy cython.
+   */
+  chunked_parquet_reader() = default;
+
+  /**
+   * @brief Constructor with chunked reader options.
+   *
+   * @param options The options used to read file
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    chunked_parquet_reader_options const& options,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Reads a chunk of Parquet dataset into a set of columns.
+   *
+   * TODO: move this paragraph into implementation code.
+   * On the first call, a preprocessing step is called which may be expensive before a table is
+   * returned. All subsequent calls are essentially just doing incremental column allocation and row
+   * decoding (using all the data stored from the preprocessing step). After each call, an internal
+   * `skip_rows` state is updated such that the next call will skip the rows returned by the
+   * previous call, making sure that the sequence of returned tables are continuous and form
+   * a complete dataset as reading the entire file at once.
+   *
+   *
+   * The sequence of returned tables, if concatenated by their order, guarantee to form a complete
+   * dataset as reading the entire given file at once.
+   *
+   * An empty table will be returned if all the data in the given file has been read and returned by
+   * the previous calls.
+   *
+   * @return The set of columns along with metadata
+   */
+
+  table_with_metadata read();
+
+  /**
+   * @brief Check if there is any data of the given file has not yet processed.
+   *
+   * @return A boolean value indicating if there is any data left to process
+   */
+  bool has_next();
+
+ private:
+  /**
+   * @brief Perform all necessary preprocessing work for reading the given file.
+   *
+   * The preprocessing is performed for the entire file, not just by chunks, which may include:
+   *  - Parsing the schema.
+   *  - Decompressing and processing pages.
+   *  - Any other necessary preprocessing steps.
+   */
+  void preprocess();
+
+  // The internal instance of the reader class to perform chunked reading.
+  std::unique_ptr<cudf::io::detail::parquet::reader> reader;
 };
 
 /** @} */  // end of group
