@@ -288,31 +288,28 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       // Determine temporary device storage requirements
       size_t temp_storage_bytes = 0;
       CUDF_PUSH_RANGE("cub-out");
-      rmm::device_uvector<TreeDepthT> node_levels1(num_nodes, stream, mr);
+      rmm::device_uvector<TreeDepthT> node_levels2(node_levels, stream);
+      rmm::device_uvector<TreeDepthT> node_levels1(num_nodes, stream);
       rmm::device_uvector<size_type> initial_order1(num_nodes, stream);
-      cub::DeviceRadixSort::SortPairs(nullptr,
-                                      temp_storage_bytes,
-                                      node_levels.data(),
-                                      node_levels1.data(),
-                                      initial_order2.data(),
-                                      initial_order1.data(),
-                                      num_nodes);
+      cub::DoubleBuffer<size_type> order(initial_order2.data(), initial_order1.data());
+      cub::DoubleBuffer<TreeDepthT> levels(node_levels2.data(), node_levels1.data());
+      cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, levels, order, num_nodes);
       CUDF_PUSH_RANGE("cub-temp");
+      // std::cout<<"temp_storage_bytes: "<<temp_storage_bytes<<std::endl;
       rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-      cub::DeviceRadixSort::SortPairs(d_temp_storage.data(),
-                                      temp_storage_bytes,
-                                      node_levels.data(),
-                                      node_levels1.data(),
-                                      initial_order2.data(),
-                                      initial_order1.data(),
-                                      num_nodes);
+      cub::DeviceRadixSort::SortPairs(
+        d_temp_storage.data(), temp_storage_bytes, levels, order, num_nodes);
       CUDF_POP_RANGE();
       CUDF_POP_RANGE();
       CUDF_POP_RANGE();
-      return std::pair{std::move(node_levels1), std::move(initial_order1)};
+      return std::pair{
+        levels.Current() == node_levels1.data() ? std::move(node_levels1) : std::move(node_levels2),
+        order.Current() == initial_order1.data() ? std::move(initial_order1)
+                                                 : std::move(initial_order2)};
     }();
     // gather. additional memory!!!?
     CUDF_PUSH_RANGE("scan");
+    CUDF_PUSH_RANGE("gather");
     rmm::device_uvector<size_type> parent_token_ids1(num_nodes, stream);
     thrust::gather(rmm::exec_policy(stream),
                    initial_order1.begin(),
@@ -321,7 +318,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                    parent_token_ids1.begin());
     CUDF_POP_RANGE();
 
-    CUDF_PUSH_RANGE("scan");
+    CUDF_PUSH_RANGE("inscan");
     thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                   node_levels1.data(),
                                   node_levels1.data() + num_nodes,
@@ -338,60 +335,64 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                     initial_order1.begin(),
                     parent_token_ids2.begin());
     CUDF_POP_RANGE();
+    CUDF_POP_RANGE();
   }
 
   CUDF_POP_RANGE();  // parent_token_ids
 
-  CUDF_PUSH_RANGE("node_ids");
-  // use copy_if counting_it and do lower_bound. which is faster?
-  // rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
-  // thrust::exclusive_scan(
-  //   rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
+  {
+    CUDF_PUSH_RANGE("node_ids");
+    // use copy_if counting_it and do lower_bound. which is faster?
+    // rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
+    // thrust::exclusive_scan(
+    //   rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
 
-  rmm::device_uvector<size_type> node_ids_gpu3(num_nodes,
-                                               stream);  // TODO reuse initial_order memory.
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator<size_type>(0),
-                  thrust::make_counting_iterator<size_type>(0) + num_tokens,
-                  tokens.begin(),
-                  node_ids_gpu3.begin(),
-                  is_node);
+    rmm::device_uvector<size_type> node_ids_gpu3(num_nodes,
+                                                 stream);  // TODO reuse initial_order memory.
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(0) + num_tokens,
+                    tokens.begin(),
+                    node_ids_gpu3.begin(),
+                    is_node);
 
-  CUDF_POP_RANGE();
-  // rmm::device_uvector<size_type> node_ids_gpu2(num_tokens, stream);
-  // thrust::sequence(rmm::exec_policy(stream), node_ids_gpu2.begin(), node_ids_gpu2.end());
-  // print_vec(node_ids_gpu2, "token_id_gpu", to_int);
-  // print_vec(tokens, "tokens", to_token_str);
-  // print_vec(node_ids_gpu, "node_ids_gpu", to_int);
-  // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
-  // print_vec(node_categories, "node_categories", to_cat);
-  // print_vec(node_ids_gpu3, "node_ids_gpu3", to_int);
+    CUDF_POP_RANGE();
+    // rmm::device_uvector<size_type> node_ids_gpu2(num_tokens, stream);
+    // thrust::sequence(rmm::exec_policy(stream), node_ids_gpu2.begin(), node_ids_gpu2.end());
+    // print_vec(node_ids_gpu2, "token_id_gpu", to_int);
+    // print_vec(tokens, "tokens", to_token_str);
+    // print_vec(node_ids_gpu, "node_ids_gpu", to_int);
+    // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
+    // print_vec(node_categories, "node_categories", to_cat);
+    // print_vec(node_ids_gpu3, "node_ids_gpu3", to_int);
 
-  CUDF_PUSH_RANGE("parent_node_ids");
-  // rmm::device_uvector<size_type> parent_node_ids2(num_nodes, stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    parent_token_ids2.begin(),
-                    parent_token_ids2.end(),
-                    parent_token_ids2.begin(),
-                    [node_ids_gpu = node_ids_gpu3.begin(),
-                     num_nodes] __device__(size_type const pid) -> NodeIndexT {
-                      return pid < 0 ? parent_node_sentinel
-                                     : thrust::lower_bound(
-                                         thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
-                                         node_ids_gpu;
-                    });
-  // print_vec(parent_node_ids2, "parent_node_ids2", to_int);
+    CUDF_PUSH_RANGE("parent_node_ids");
+    // rmm::device_uvector<size_type> parent_node_ids2(num_nodes, stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      parent_token_ids2.begin(),
+                      parent_token_ids2.end(),
+                      parent_token_ids2.begin(),
+                      [node_ids_gpu = node_ids_gpu3.begin(),
+                       num_nodes] __device__(size_type const pid) -> NodeIndexT {
+                        return pid < 0
+                                 ? parent_node_sentinel
+                                 : thrust::lower_bound(
+                                     thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
+                                     node_ids_gpu;
+                      });
+    // print_vec(parent_node_ids2, "parent_node_ids2", to_int);
 
-  // thrust::transform(
-  //   rmm::exec_policy(stream),
-  //   parent_token_ids2.begin(),
-  //   parent_token_ids2.end(),
-  //   parent_token_ids2.begin(),
-  //   [node_ids_gpu = node_ids_gpu.begin()] __device__(size_type const pid) -> NodeIndexT {
-  //     return pid < 0 ? parent_node_sentinel : node_ids_gpu[pid];
-  //   });
-  // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
-  CUDF_POP_RANGE();
+    // thrust::transform(
+    //   rmm::exec_policy(stream),
+    //   parent_token_ids2.begin(),
+    //   parent_token_ids2.end(),
+    //   parent_token_ids2.begin(),
+    //   [node_ids_gpu = node_ids_gpu.begin()] __device__(size_type const pid) -> NodeIndexT {
+    //     return pid < 0 ? parent_node_sentinel : node_ids_gpu[pid];
+    //   });
+    // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
+    CUDF_POP_RANGE();
+  }
 
   CUDF_PUSH_RANGE("node_categories");
   // Node categories: copy_if with transform.
