@@ -1004,7 +1004,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _broadcast(self, values):
         """
-        Broadcast the values of an aggregation to the group
+        Broadcast the results of an aggregation to the group
 
         Parameters
         ----------
