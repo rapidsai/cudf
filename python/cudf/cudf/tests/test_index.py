@@ -2537,32 +2537,20 @@ def rangeindex(request):
     return RangeIndex(request.param)
 
 
-def test_rangeindex_nunique(rangeindex):
+@pytest.mark.parametrize(
+    "func",
+    ["nunique", "min", "max", "any", "values"],
+)
+def test_rangeindex_methods(rangeindex, func):
     gidx = rangeindex
     pidx = gidx.to_pandas()
 
-    actual = gidx.nunique()
-    expected = pidx.nunique()
-
-    assert_eq(expected, actual)
-
-
-def test_rangeindex_min(rangeindex):
-    gidx = rangeindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.min()
-    expected = pidx.min()
-
-    assert_eq(expected, actual)
-
-
-def test_rangeindex_max(rangeindex):
-    gidx = rangeindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.max()
-    expected = pidx.max()
+    if func == "values":
+        expected = pidx.values
+        actual = gidx.values
+    else:
+        expected = getattr(pidx, func)()
+        actual = getattr(gidx, func)()
 
     assert_eq(expected, actual)
 
@@ -2695,26 +2683,6 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
     assert_eq(expected, actual)
 
 
-def test_rangeindex_values(rangeindex):
-    gidx = rangeindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.values
-    expected = pidx.values
-
-    assert_eq(expected, actual)
-
-
-def test_rangeindex_any(rangeindex):
-    gidx = rangeindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.any()
-    expected = pidx.any()
-
-    assert_eq(expected, actual)
-
-
 index_data = [
     range(np.random.randint(0, 100)),
     range(0, 10, -2),
@@ -2730,47 +2698,30 @@ index_data = [
 
 
 @pytest.fixture(params=index_data)
-def baseindex(request):
+def index(request):
     """Create a cudf Index of different dtypes"""
     return cudf.Index(request.param)
 
 
-def test_index_to_series_mixed_types(baseindex):
-    gidx = baseindex
+@pytest.mark.parametrize(
+    "func",
+    [
+        "to_series",
+        "isna",
+        "notna",
+        "append",
+    ],
+)
+def test_index_methods(index, func):
+    gidx = index
     pidx = gidx.to_pandas()
 
-    actual = gidx.to_series()
-    expected = pidx.to_series()
-
-    assert_eq(expected, actual)
-
-
-def test_index_isna_mixed_types(baseindex):
-    gidx = baseindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.isna()
-    expected = pidx.isna()
-
-    assert_eq(expected, actual)
-
-
-def test_index_notna_mixed_types(baseindex):
-    gidx = baseindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.notna()
-    expected = pidx.notna()
-
-    assert_eq(expected, actual)
-
-
-def test_index_append_mixed_types(baseindex):
-    gidx = baseindex
-    pidx = gidx.to_pandas()
-
-    actual = gidx.append(other=gidx)
-    expected = pidx.append(other=pidx)
+    if func == "append":
+        expected = pidx.append(other=pidx)
+        actual = gidx.append(other=gidx)
+    else:
+        expected = getattr(pidx, func)()
+        actual = getattr(gidx, func)()
 
     assert_eq(expected, actual)
 
@@ -2779,12 +2730,11 @@ def test_index_append_mixed_types(baseindex):
     "idx, values",
     [
         (range(100, 1000, 10), [200, 600, 800]),
-        (range(0, -10, -2), [-2, -6, -10]),
         ([None, "a", "3.2", "z", None, None], ["a", "z"]),
         (pd.Series(["a", "b", None], dtype="category"), [10, None]),
     ],
 )
-def test_index_isin_mixed_types(idx, values):
+def test_index_isin_values(idx, values):
     gidx = cudf.Index(idx)
     pidx = gidx.to_pandas()
 
@@ -2797,7 +2747,6 @@ def test_index_isin_mixed_types(idx, values):
 @pytest.mark.parametrize(
     "idx, scalar",
     [
-        (range(10), 200),
         (range(0, -10, -2), -4),
         ([None, "a", "3.2", "z", None, None], "x"),
         (pd.Series(["a", "b", None], dtype="category"), 10),
@@ -2814,3 +2763,23 @@ def test_index_isin_scalar_values(idx, scalar):
         ),
     ):
         gidx.isin(scalar)
+
+
+def test_index_any():
+    gidx = cudf.Index([1, 2, 3])
+    pidx = gidx.to_pandas()
+
+    assert_eq(pidx.any(), gidx.any())
+
+
+def test_index_values():
+    gidx = cudf.Index([1, 2, 3])
+    pidx = gidx.to_pandas()
+
+    assert_eq(pidx.values, gidx.values)
+
+
+def test_index_null_values():
+    gidx = cudf.Index([1.0, None, 3, 0, None])
+    with pytest.raises(ValueError):
+        gidx.values
