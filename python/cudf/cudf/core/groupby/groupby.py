@@ -1928,10 +1928,6 @@ class _Grouping(Serializable):
         out._key_columns = key_columns
         return out
 
-    # @property
-    # def has_null_group(self):
-    #     # return True if any of the groups is null
-
 
 def _is_multi_agg(aggs):
     """
