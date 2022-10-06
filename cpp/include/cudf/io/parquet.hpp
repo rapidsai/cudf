@@ -557,7 +557,7 @@ class chunked_parquet_reader {
   /**
    * @brief Close the reading file to release internal resources.
    *
-   * This should not have any effect if called upon an already closed file.
+   * This should not have any effect if being called on an already closed file.
    */
   void close();
 
