@@ -117,9 +117,9 @@ __global__ void __launch_bounds__(block_size)
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
-  frag_init_state_s* const s = &state_g;
-  uint32_t const t         = threadIdx.x;
-  auto const physical_type = col_desc[blockIdx.x].physical_type;
+  frag_init_state_s* const s              = &state_g;
+  uint32_t const t                        = threadIdx.x;
+  auto const physical_type                = col_desc[blockIdx.x].physical_type;
   uint32_t const num_fragments_per_column = frag.size().second;
 
   if (t == 0) { s->col = col_desc[blockIdx.x]; }
@@ -137,8 +137,9 @@ __global__ void __launch_bounds__(block_size)
       int part_end_row  = partitions[p].start_row + partitions[p].num_rows;
       s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
 
-      // frag.num_rows = fragment_size except for the last fragment in partition which can be smaller.
-      // num_rows is fixed but fragment size could be larger if the data is strings or nested.
+      // frag.num_rows = fragment_size except for the last fragment in partition which can be
+      // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
+      // nested.
       s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
       s->frag.num_dict_vals      = 0;
       s->frag.fragment_data_size = 0;
@@ -208,11 +209,11 @@ __global__ void __launch_bounds__(128)
   // TODO: why not 1 block per warp?
   __shared__ __align__(8) statistics_group group_g[4];
 
-  uint32_t const lane_id = threadIdx.x & 0x1f;
-  uint32_t const column_id = blockIdx.x;
+  uint32_t const lane_id                  = threadIdx.x & 0x1f;
+  uint32_t const column_id                = blockIdx.x;
   uint32_t const num_fragments_per_column = fragments.size().second;
-  auto const num_pass = util::div_rounding_up_safe(num_fragments_per_column, gridDim.y * 4);
-  statistics_group* const g     = &group_g[threadIdx.x >> 5];
+  auto const num_pass       = util::div_rounding_up_safe(num_fragments_per_column, gridDim.y * 4);
+  statistics_group* const g = &group_g[threadIdx.x >> 5];
 
   uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x >> 5);
   for (uint32_t i = 0; i < num_pass; i++, frag_id += gridDim.y * 4) {
@@ -2028,7 +2029,7 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
 {
   int const num_columns              = frag.size().first;
   int const num_fragments_per_column = frag.size().second;
-  auto const grid_y = std::min(num_fragments_per_column, (1 << 16) - 1);
+  auto const grid_y                  = std::min(num_fragments_per_column, (1 << 16) - 1);
   dim3 const dim_grid(num_columns, grid_y);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
@@ -2041,7 +2042,8 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
 {
   int const num_columns              = col_desc.size();
   int const num_fragments_per_column = fragments.size().second;
-  auto const y_dim = util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
+  auto const y_dim =
+    util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
   auto const grid_y = std::min(y_dim, (1 << 16) - 1);
   dim3 const dim_grid(num_columns, grid_y);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
