@@ -533,15 +533,6 @@ class chunked_parquet_reader {
   /**
    * @brief Reads a chunk of Parquet dataset into a set of columns.
    *
-   * TODO: move this paragraph into implementation code.
-   * On the first call, a preprocessing step is called which may be expensive before a table is
-   * returned. All subsequent calls are essentially just doing incremental column allocation and row
-   * decoding (using all the data stored from the preprocessing step). After each call, an internal
-   * `skip_rows` state is updated such that the next call will skip the rows returned by the
-   * previous call, making sure that the sequence of returned tables are continuous and form
-   * a complete dataset as reading the entire file at once.
-   *
-   *
    * The sequence of returned tables, if concatenated by their order, guarantee to form a complete
    * dataset as reading the entire given file at once.
    *
