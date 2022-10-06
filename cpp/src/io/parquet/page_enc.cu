@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "parquet_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
