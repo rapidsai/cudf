@@ -66,7 +66,7 @@
 
 // Issue https://github.com/NVIDIA/spark-rapids/issues/6614 impacts nvCOMP 2.4 ZSTD decompression on
 // compute 6.0
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 4)
+#if NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 4
 #define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL 1
 #else
 #define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL 0
@@ -170,12 +170,9 @@ void check_is_zstd_enabled()
 #if NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL
   int device;
   int cc_major;
-  int cc_minor;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
   CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
-  CUDF_EXPECTS(cc_major != 6 or cc_minor != 1,
-               "Zstandard decompression is disabled on some Pascal GPUs");
+  CUDF_EXPECTS(cc_major != 6, "Zstandard decompression is disabled on Pascal GPUs");
 #endif
 }
 
