@@ -467,13 +467,15 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 TEST_F(ParquetWriterTest, Durations)
 {
   std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 999);
+  std::uniform_int_distribution<int> distribution(0, 86000);
+  auto sequence_s = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return distribution(generator); });
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [&](auto i) { return distribution(generator) * 1000; });
   constexpr auto num_rows = 100;
 
   auto durations_s = cudf::test::fixed_width_column_wrapper<cudf::duration_s, int64_t>(
-    sequence, sequence + num_rows);
+    sequence_s, sequence_s + num_rows);
   auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int64_t>(
     sequence, sequence + num_rows);
   auto durations_us = cudf::test::fixed_width_column_wrapper<cudf::duration_us, int64_t>(
