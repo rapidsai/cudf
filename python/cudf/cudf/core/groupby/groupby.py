@@ -14,6 +14,7 @@ import pandas as pd
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_list_like
@@ -545,17 +546,80 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result[sizes > n]
 
-    def ngroup(self):
-        # Step 1: Using a sort-groupby, compute the group group offsets:
-        grouped_keys, _, offsets = self._groupby.groups([])
+    def ngroup(self, ascending=True):
+        """
+        Number each group from 0 to the number of groups - 1.
 
-        # the group IDs go from 0...len(group_offsets) - 1
-        num_groups = len(offsets) - 1
-        index = cudf.core.index._index_from_columns(grouped_keys)
-        group_ids = cudf.Series(cp.arange(num_groups), index=index.unique())
+        This is the enumerative complement of cumcount. Note that the
+        numbers given to the groups match the order in which the groups
+        would be seen when iterating over the groupby object, not the
+        order they are first observed.
 
-        result = self._broadcast(group_ids)
-        return result.fillna(-1)
+        Parameters
+        ----------
+        ascending : bool, default True
+            If False, number in reverse, from number of group - 1 to 0.
+
+        Returns
+        -------
+        Series
+            Unique numbers for each group.
+
+        See Also
+        --------
+        .cumcount : Number the rows in each group.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({"A": list("aaabba")})
+        >>> df
+           A
+        0  a
+        1  a
+        2  a
+        3  b
+        4  b
+        5  a
+        >>> df.groupby('A').ngroup()
+        0    0
+        1    0
+        2    0
+        3    1
+        4    1
+        5    0
+        dtype: int64
+        >>> df.groupby('A').ngroup(ascending=False)
+        0    1
+        1    1
+        2    1
+        3    0
+        4    0
+        5    1
+        dtype: int64
+        >>> df.groupby(["A", [1,1,2,3,2,1]]).ngroup()
+        0    0
+        1    0
+        2    1
+        3    3
+        4    2
+        5    0
+        dtype: int64
+        """
+        num_groups = len(index := self.grouping.keys.unique())
+
+        if ascending:
+            _, has_null_group = bitmask_or([*index._columns])
+            if has_null_group:
+                # when there's a null group,
+                # the first group ID is -1
+                group_ids = cp.arange(-1, num_groups - 1)
+            else:
+                group_ids = cp.arange(num_groups)
+        else:
+            # in the descending case, there's no difference:
+            group_ids = cp.arange(num_groups - 1, -1, -1)
+
+        return self._broadcast(cudf.Series(group_ids, index=index))
 
     def serialize(self):
         header = {}
@@ -1863,6 +1927,10 @@ class _Grouping(Serializable):
         out._named_columns = _named_columns
         out._key_columns = key_columns
         return out
+
+    # @property
+    # def has_null_group(self):
+    #     # return True if any of the groups is null
 
 
 def _is_multi_agg(aggs):

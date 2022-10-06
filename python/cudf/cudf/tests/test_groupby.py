@@ -2745,8 +2745,9 @@ def df_ngroup():
         lambda: pd.Series(["x", "y", "y", "x", "z", "x"]),
     ],
 )
-def test_groupby_ngroup(by, df_ngroup):
+@pytest.mark.parametrize("ascending", [True, False])
+def test_groupby_ngroup(by, ascending, df_ngroup):
     by = by()
-    expected = df_ngroup.to_pandas().groupby(by).ngroup()
-    actual = df_ngroup.groupby(by).ngroup()
+    expected = df_ngroup.to_pandas().groupby(by).ngroup(ascending=ascending)
+    actual = df_ngroup.groupby(by).ngroup(ascending=ascending)
     assert_eq(expected, actual, check_dtype=False)
