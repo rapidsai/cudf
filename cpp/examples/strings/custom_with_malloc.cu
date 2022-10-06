@@ -87,8 +87,7 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
     // build output string
     memcpy(output_ptr, last_initial.data(), last_initial.size_bytes());
     output_ptr += last_initial.size_bytes();
-    memcpy(output_ptr, " ", 1);
-    output_ptr++;
+    *output_ptr++ = ' ';
     memcpy(output_ptr, first.data(), first.size_bytes());
   } else {
     d_output[index] = cudf::string_view{redaction.data(), redaction.size_bytes()};
