@@ -1280,7 +1280,6 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
       auto& curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
-      //printf("%03d pg=%03d usz=%d\n", blockIdx.x, page, page_data_size);
       if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
         has_compression = true;
         compressed_data_size += comp_res->bytes_written;
@@ -1296,10 +1295,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
     if (has_compression) {
       uint32_t compression_error = atomicAdd(&error_count, 0);
       is_compressed = (!compression_error && compressed_data_size < uncompressed_data_size);
-      //printf("%03d ic=%d ce=%d csz=%d usz=%d\n", blockIdx.x, is_compressed, compression_error, compressed_data_size, uncompressed_data_size);
     } else {
       is_compressed = false;
-      //printf("%d no comp\n", blockIdx.x);
     }
     chunks[blockIdx.x].is_compressed = is_compressed;
     chunks[blockIdx.x].bfr_size      = uncompressed_data_size;
