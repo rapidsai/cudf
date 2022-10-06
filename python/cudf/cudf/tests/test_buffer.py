@@ -54,7 +54,7 @@ def test_buffer_creation_from_any():
     assert ary.nbytes == b.size
 
     with pytest.raises(
-        ValueError, match="size must be specified when `obj` is an integer"
+        ValueError, match="size must be specified when `data` is an integer"
     ):
         as_device_buffer_like(ary.data.ptr)
 

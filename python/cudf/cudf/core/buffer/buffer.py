@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
+from types import SimpleNamespace
 from typing import (
     Any,
     Dict,
@@ -138,47 +139,31 @@ class Buffer(Serializable):
         self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
         if isinstance(data, int):
-            if size is None:
-                raise ValueError(
-                    "size must be specified when `data` is an integer"
-                )
-            if size < 0:
-                raise ValueError("size cannot be negative")
             warnings.warn(
                 "Creating a Buffer() from an integer is deprecated and will "
                 "raise in a future version, use as_device_buffer_like() "
                 "instead.",
                 FutureWarning,
             )
-            self._ptr = data
-            self._size = size
-            self._owner = owner
-        else:
-            if size is not None or owner is not None:
-                raise ValueError(
-                    "`size` and `owner` must be None when "
-                    "`data` is a buffer-like object"
-                )
 
-            # `data` is a buffer-like object
-            buf: Any = data
-            if isinstance(buf, rmm.DeviceBuffer):
+        buf = ensure_buffer_like(data=data, size=size, owner=owner)
+        if isinstance(buf, rmm.DeviceBuffer):
+            self._ptr = buf.ptr
+            self._size = buf.size
+        else:
+            iface = getattr(buf, "__cuda_array_interface__", None)
+            if iface:
+                ptr, size = get_ptr_and_size(iface)
+                self._ptr = ptr
+                self._size = size
+            else:
+                ptr, size = get_ptr_and_size(
+                    np.asarray(buf).__array_interface__
+                )
+                buf = rmm.DeviceBuffer(ptr=ptr, size=size)
                 self._ptr = buf.ptr
                 self._size = buf.size
-            else:
-                iface = getattr(buf, "__cuda_array_interface__", None)
-                if iface:
-                    ptr, size = get_ptr_and_size(iface)
-                    self._ptr = ptr
-                    self._size = size
-                else:
-                    ptr, size = get_ptr_and_size(
-                        np.asarray(buf).__array_interface__
-                    )
-                    buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-                    self._ptr = buf.ptr
-                    self._size = buf.size
-            self._owner = buf
+        self._owner = buf
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
@@ -186,7 +171,9 @@ class Buffer(Serializable):
         without having to handle non-slice inputs.
         """
         return self.__class__(
-            data=self.ptr + offset, size=size, owner=self.owner
+            wrap_device_pointer(
+                ptr=self.ptr + offset, size=size, owner=self.owner
+            )
         )
 
     def __getitem__(self, key: slice) -> Buffer:
@@ -262,6 +249,81 @@ class Buffer(Serializable):
             f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
             f"ptr={hex(self._ptr)} owner={repr(self._owner)} "
         )
+
+
+def wrap_device_pointer(ptr: int, size: int, owner: object = None):
+    """
+    Wrap a device pointer in an object that exposes `__cuda_array_interface__`
+
+    Parameters
+    ----------
+    ptr : int
+        An integer representing a pointer to device memory.
+    size : int, optional
+        Size of device memory in bytes.
+    owner : object, optional
+        Python object to which the lifetime of the memory allocation is tied.
+        A reference to this object is kept in the returned wrapper object.
+
+    Return
+    ------
+    SimpleNamespace
+        An object that exposes `__cuda_array_interface__` and keeps a reference
+        to `owner`.
+    """
+
+    if size < 0:
+        raise ValueError("size cannot be negative")
+
+    return SimpleNamespace(
+        __cuda_array_interface__={
+            "data": (ptr, False),
+            "shape": (size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        },
+        owner=owner,
+    )
+
+
+def ensure_buffer_like(
+    *, data: Union[int, Any], size: int = None, owner: object = None
+) -> Any:
+    """
+    Ensure that `data` is a buffer-like object
+
+    Parameters
+    ----------
+    data : int or buffer-like or array-like
+        An integer representing a pointer to device memory or a buffer-like
+        or array-like object. When not an integer, `size` and `owner` must
+        be None.
+    size : int, optional
+        Size of device memory in bytes. Must be specified if `data` is an
+        integer.
+    owner : object, optional
+        Python object to which the lifetime of the memory allocation is tied.
+        A reference to this object is kept in the returned Buffer.
+
+    Return
+    ------
+    buffer-like
+        The buffer-like object.
+    """
+
+    if isinstance(data, int):
+        if size is None:
+            raise ValueError(
+                "size must be specified when `data` is an integer"
+            )
+        return wrap_device_pointer(ptr=data, size=size, owner=owner)
+    if size is not None or owner is not None:
+        raise ValueError(
+            "`size` and `owner` must be None when "
+            "`data` is a buffer-like object"
+        )
+    return data
 
 
 def is_c_contiguous(

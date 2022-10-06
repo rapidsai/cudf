@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, List, Mapping, Set, Union
 
-from cudf.core.buffer.buffer import Buffer, DeviceBufferLike
+from cudf.core.buffer.buffer import (
+    Buffer,
+    DeviceBufferLike,
+    ensure_buffer_like,
+)
 from cudf.core.buffer.spill_manager import global_manager_get
 from cudf.core.buffer.spillable_buffer import SpillableBuffer
 
@@ -14,27 +17,27 @@ if TYPE_CHECKING:
 
 
 def as_device_buffer_like(
-    obj: Union[int, Any],
+    data: Union[int, Any],
     *,
     exposed=True,
     size: int = None,
     owner: object = None,
 ) -> DeviceBufferLike:
     """
-    Factory function to wrap `obj` in a DeviceBufferLike object.
+    Factory function to wrap `data` in a DeviceBufferLike object.
 
-    If `obj` isn't device-buffer-like already, a new buffer that implements
-    DeviceBufferLike and points to the memory of `obj` is created. If `obj`
+    If `data` isn't device-buffer-like already, a new buffer that implements
+    DeviceBufferLike and points to the memory of `data` is created. If `data`
     represents host memory, it is copied to a new `rmm.DeviceBuffer` device
-    allocation. Otherwise, the data of `obj` is **not** copied, instead the
-    new buffer keeps a reference to `obj` in order to retain the lifetime
-    of `obj`.
+    allocation. Otherwise, the data of `data` is **not** copied, instead the
+    new buffer keeps a reference to `data` in order to retain the lifetime
+    of `data`.
 
-    If `obj` is an integer it must represent a device pointer and `size` must
-    be specified. If `obj` isn't an integer both `size` and `owner` must be
+    If `data` is an integer it must represent a device pointer and `size` must
+    be specified. If `data` isn't an integer both `size` and `owner` must be
     None.
 
-    Raises ValueError if the data of `obj` isn't C-contiguous.
+    Raises ValueError if the data of `data` isn't C-contiguous.
 
     Parameters
     ----------
@@ -43,61 +46,38 @@ def as_device_buffer_like(
         - An object that exposes either device or host memory through
           `__array_interface__`, `__cuda_array_interface__`, or the buffer
           protocol.
-        If `obj` represents host memory, data will be copied to device.
+        If `data` represents host memory, data will be copied to device.
     exposed : bool, optional
         Whether or not a raw pointer (integer or C pointer) has
         been exposed to the outside world. If this is the case,
         the buffer cannot be spilled.
     size : int, optional
-        Size of memory in bytes. Must be specified if `obj` is an integer
+        Size of memory in bytes. Must be specified if `data` is an integer
         otherwise it must be None.
     owner : object, optional
         Python object to which the lifetime of the memory allocation is tied.
         A reference to this object is kept in the returned Buffer. Can only be
-        specified when `obj` is an integer otherwise the `obj` itself will be
+        specified when `data` is an integer otherwise the `data` itself will be
         set as the owner.
 
     Return
     ------
     DeviceBufferLike
         A device-buffer-like instance that represents the device memory
-        of `obj`.
+        of `data`.
     """
 
-    if isinstance(obj, DeviceBufferLike):
-        return obj
+    if isinstance(data, DeviceBufferLike):
+        return data
 
-    if isinstance(obj, int):
-        if size is None:
-            raise ValueError("size must be specified when `obj` is an integer")
-        if size < 0:
-            raise ValueError("size cannot be negative")
-
-        # Convert `obj` to an object that exposes `__cuda_array_interface__`
-        # and keeps a reference to the owner.
-        obj = SimpleNamespace(
-            __cuda_array_interface__={
-                "data": (obj, False),
-                "shape": (size,),
-                "strides": None,
-                "typestr": "|u1",
-                "version": 0,
-            },
-            owner=owner,
-        )
-    elif size is not None or owner is not None:
-        raise ValueError(
-            "`size` and `owner` must be None when "
-            "`obj` is a buffer-like object"
-        )
-
+    data = ensure_buffer_like(data=data, size=size, owner=owner)
     manager = global_manager_get()
     if manager is None:
-        return Buffer(obj)
-    return SpillableBuffer(data=obj, exposed=exposed, manager=manager)
+        return Buffer(data)
+    return SpillableBuffer(data=data, exposed=exposed, manager=manager)
 
 
-def get_columns(obj: object) -> List[Column]:
+def get_columns(obj: Any) -> List[Column]:
     from cudf._lib.column import Column
     from cudf.core.column_accessor import ColumnAccessor
     from cudf.core.frame import Frame
@@ -131,7 +111,7 @@ def get_columns(obj: object) -> List[Column]:
     return found
 
 
-def mark_columns_as_read_only_inplace(obj: object) -> None:
+def mark_columns_as_read_only_inplace(obj: Any) -> None:
     """
     Mark all columns found in `obj` as read-only.
 
