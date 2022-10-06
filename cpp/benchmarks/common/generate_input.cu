@@ -273,17 +273,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 
   rmm::device_uvector<DeviceType> operator()(thrust::minstd_rand& engine, unsigned size)
   {
-    auto const ints = dist(engine, size);
-    rmm::device_uvector<DeviceType> result(size, cudf::default_stream_value);
-    // Clamp the generated random value to the specified range
-    thrust::transform(
-      thrust::device,
-      ints.begin(),
-      ints.end(),
-      result.begin(),
-      [upper_bound = this->upper_bound, lower_bound = this->lower_bound] __device__(
-        auto int_value) { return std::clamp(int_value, lower_bound, upper_bound); });
-    return result;
+    return dist(engine, size);
   }
 };
 
