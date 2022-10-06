@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 class GatherTestStr : public cudf::test::BaseFixture {
 };
@@ -135,7 +135,7 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED);
-  cudf::test::expect_strings_empty(results->get_column(0).view());
+  cudf::test::expect_column_empty(results->get_column(0).view());
 }
 
 TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)

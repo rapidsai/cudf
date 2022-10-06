@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/strings/convert/convert_fixed_point.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
-#include <limits>
 
-#include <tests/strings/utilities.h>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/strings/convert/convert_fixed_point.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
+#include <limits>
 
 struct StringsConvertTest : public cudf::test::BaseFixture {
 };
@@ -224,7 +223,7 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnFixedPoint)
   auto zero_size_column = cudf::make_empty_column(cudf::data_type{cudf::type_id::DECIMAL32});
 
   auto results = cudf::strings::from_fixed_point(zero_size_column->view());
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeFixedPointColumn)
