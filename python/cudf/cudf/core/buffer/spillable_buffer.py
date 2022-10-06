@@ -435,6 +435,15 @@ class SpillableBufferSlice(SpillableBuffer):
             base=self._base, offset=offset + self._offset, size=size
         )
 
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
+        # TODO: because of the hack in `SpillableBuffer.serialize()` where
+        # frames are of type `Buffer`, we always deserialize as if they are
+        # `SpillableBufferbuffer`. In the future, we should be able to
+        # deserialize into `SpillableBufferSlice` when the frames hasn't been
+        # copied.
+        return SpillableBuffer.deserialize(header, frames)
+
     def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
         return self._base.memoryview(offset=self._offset + offset, size=size)
 

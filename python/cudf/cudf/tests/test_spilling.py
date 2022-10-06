@@ -416,18 +416,24 @@ def test_expose_statistics(manager: SpillManager):
 
 
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
-def test_serialize_device(manager, target):
-    df1 = gen_df(target=target)
+@pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
+def test_serialize_device(manager, target, view):
+    df1 = gen_df()
+    if view is not None:
+        df1 = df1.iloc[view]
+    gen_df.buffer(df1).__spill__(target=target)
+
     header, frames = df1.device_serialize()
     assert len(frames) == 1
     if target == "gpu":
         assert isinstance(frames[0], Buffer)
-        assert len(gen_df.buffer(df1)._spill_locks) == 1
+        assert not gen_df.is_spilled(df1)
+        assert not gen_df.is_spillable(df1)
         frames[0] = cupy.array(frames[0], copy=True)
     else:
         assert isinstance(frames[0], memoryview)
-        assert len(gen_df.buffer(df1)._spill_locks) == 0
         assert gen_df.is_spilled(df1)
+        assert gen_df.is_spillable(df1)
 
     df2 = Serializable.device_deserialize(header, frames)
     assert_eq(df1, df2)
@@ -436,10 +442,12 @@ def test_serialize_device(manager, target):
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
 @pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
 def test_serialize_host(manager, target, view):
-    # Unspilled df becomes spilled after host serialization
-    df1 = gen_df(target=target)
+    df1 = gen_df()
     if view is not None:
         df1 = df1.iloc[view]
+    gen_df.buffer(df1).__spill__(target=target)
+
+    # Unspilled df becomes spilled after host serialization
     header, frames = df1.host_serialize()
     assert all(isinstance(f, memoryview) for f in frames)
     df2 = Serializable.host_deserialize(header, frames)
