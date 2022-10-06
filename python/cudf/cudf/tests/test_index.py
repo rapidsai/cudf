@@ -398,7 +398,7 @@ def test_index_copy_category(name, dtype, deep=True):
 def test_index_copy_deep(idx, deep):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    # import pdb;pdb.set_trace()
+
     if (
         isinstance(idx, cudf.StringIndex)
         or not deep
