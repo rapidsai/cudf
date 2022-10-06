@@ -867,15 +867,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def max(self):
         return self._minmax("max")
 
+    def __neg__(self):
+        return -self._as_int_index()
 
-# Patch in all binops and unary ops, which bypass __getattr__ on the instance
-# and prevent the above overload from working.
-for unaop in ("__neg__", "__pos__", "__abs__"):
-    setattr(
-        RangeIndex,
-        unaop,
-        lambda self, op=unaop: getattr(self._as_int64(), op)(),
-    )
+    def __pos__(self):
+        return +self._as_int_index()
+
+    def __abs__(self):
+        return abs(self._as_int_index())
 
 
 class GenericIndex(SingleColumnFrame, BaseIndex):
