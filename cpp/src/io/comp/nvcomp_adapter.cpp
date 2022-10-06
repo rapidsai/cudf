@@ -64,9 +64,9 @@
 #define NVCOMP_ZSTD_IS_STABLE 0
 #endif
 
-// Issue https://github.com/NVIDIA/spark-rapids/issues/6614 impacts nvCOMP 2.4 ZSTD decompression on
-// compute 6.x
-#if NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 4
+// Issue https://github.com/NVIDIA/spark-rapids/issues/6614 impacts nvCOMP 2.4.0 ZSTD decompression
+// on compute 6.x
+#if NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 4 and NVCOMP_PATCH_VERSION == 0
 #define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL 1
 #else
 #define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL 0
