@@ -29,6 +29,8 @@
 
 #include <cuco/static_map.cuh>
 
+#include <cub/device/device_radix_sort.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -274,58 +276,70 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                   is_node);
   CUDF_POP_RANGE();
 
-  CUDF_PUSH_RANGE("seq");
-  rmm::device_uvector<size_type> initial_order2(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), initial_order2.begin(), initial_order2.end());
-  CUDF_POP_RANGE();
-
-  CUDF_PUSH_RANGE("stable_sort");
-  auto out_pid2 = thrust::make_zip_iterator(parent_token_ids2.data(), initial_order2.data());
-  // Uses radix sort for builtin types.
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                             node_levels.data(),
-                             node_levels.data() + node_levels.size(),
-                             out_pid2);
-  CUDF_POP_RANGE();
-
-  CUDF_PUSH_RANGE("scan");
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                node_levels.data(),
-                                node_levels.data() + node_levels.size(),
-                                parent_token_ids2.data(),
-                                parent_token_ids2.data(),
-                                thrust::equal_to<size_type>{},
-                                thrust::maximum<size_type>{});
-  CUDF_POP_RANGE();
-  // thrust::sort_by_key(rmm::exec_policy(stream),
-  //                            initial_order2.data(),
-  //                            initial_order2.data() + initial_order2.size(),
-  //                            thrust::make_zip_iterator(parent_token_ids2.data(),
-  //                            node_levels.data()));
-
-  // scatter to restore the original order.
   {
+    auto [node_levels1, initial_order1] = [&]() {
+      // Uses stable radix sort for builtin types.
+      CUDF_PUSH_RANGE("cub-sort");
+      CUDF_PUSH_RANGE("seq");
+      rmm::device_uvector<size_type> initial_order2(num_nodes, stream);
+      thrust::sequence(rmm::exec_policy(stream), initial_order2.begin(), initial_order2.end());
+      CUDF_POP_RANGE();
+
+      // Determine temporary device storage requirements
+      size_t temp_storage_bytes = 0;
+      CUDF_PUSH_RANGE("cub-out");
+      rmm::device_uvector<TreeDepthT> node_levels1(num_nodes, stream, mr);
+      rmm::device_uvector<size_type> initial_order1(num_nodes, stream);
+      cub::DeviceRadixSort::SortPairs(nullptr,
+                                      temp_storage_bytes,
+                                      node_levels.data(),
+                                      node_levels1.data(),
+                                      initial_order2.data(),
+                                      initial_order1.data(),
+                                      num_nodes);
+      CUDF_PUSH_RANGE("cub-temp");
+      rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+      cub::DeviceRadixSort::SortPairs(d_temp_storage.data(),
+                                      temp_storage_bytes,
+                                      node_levels.data(),
+                                      node_levels1.data(),
+                                      initial_order2.data(),
+                                      initial_order1.data(),
+                                      num_nodes);
+      CUDF_POP_RANGE();
+      CUDF_POP_RANGE();
+      CUDF_POP_RANGE();
+      return std::pair{std::move(node_levels1), std::move(initial_order1)};
+    }();
+    // gather. additional memory!!!?
+    CUDF_PUSH_RANGE("scan");
+    rmm::device_uvector<size_type> parent_token_ids1(num_nodes, stream);
+    thrust::gather(rmm::exec_policy(stream),
+                   initial_order1.begin(),
+                   initial_order1.end(),
+                   parent_token_ids2.begin(),
+                   parent_token_ids1.begin());
+    CUDF_POP_RANGE();
+
+    CUDF_PUSH_RANGE("scan");
+    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                  node_levels1.data(),
+                                  node_levels1.data() + num_nodes,
+                                  parent_token_ids1.data(),
+                                  parent_token_ids1.data(),
+                                  thrust::equal_to<TreeDepthT>{},
+                                  thrust::maximum<size_type>{});
+    CUDF_POP_RANGE();
     CUDF_PUSH_RANGE("scatter");
-    rmm::device_uvector<size_type> temp_storage(num_nodes, stream);
+    // scatter to restore the original order.
     thrust::scatter(rmm::exec_policy(stream),
-                    parent_token_ids2.begin(),
-                    parent_token_ids2.end(),
-                    initial_order2.begin(),
-                    temp_storage.begin());
-    thrust::copy(rmm::exec_policy(stream),
-                 temp_storage.begin(),
-                 temp_storage.end(),
-                 parent_token_ids2.begin());
-    rmm::device_uvector<TreeDepthT> temp_storage2(num_nodes, stream);
-    thrust::scatter(rmm::exec_policy(stream),
-                    node_levels.begin(),
-                    node_levels.end(),
-                    initial_order2.begin(),
-                    temp_storage2.begin());
-    thrust::copy(
-      rmm::exec_policy(stream), temp_storage2.begin(), temp_storage2.end(), node_levels.begin());
+                    parent_token_ids1.begin(),
+                    parent_token_ids1.end(),
+                    initial_order1.begin(),
+                    parent_token_ids2.begin());
     CUDF_POP_RANGE();
   }
+
   CUDF_POP_RANGE();  // parent_token_ids
 
   CUDF_PUSH_RANGE("node_ids");
