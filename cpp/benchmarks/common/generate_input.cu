@@ -260,19 +260,19 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   {
   }
 
-  [[nodiscard]] numeric::scale_type get_scale() const
+  [[nodiscard]] numeric::scale_type get_scale(thrust::minstd_rand& engine)
   {
+    if (not scale.has_value()) {
+      constexpr int max_scale = std::numeric_limits<DeviceType>::digits10;
+      std::uniform_int_distribution<int> scale_dist{-max_scale, max_scale};
+      std::mt19937 engine_scale(engine());
+      scale = numeric::scale_type{scale_dist(engine_scale)};
+    }
     return scale.value_or(numeric::scale_type{0});
   }
 
   rmm::device_uvector<DeviceType> operator()(thrust::minstd_rand& engine, unsigned size)
   {
-    if (not scale.has_value()) {
-      int const max_scale = std::numeric_limits<DeviceType>::digits10;
-      std::uniform_int_distribution<int> scale_dist{-max_scale, max_scale};
-      std::mt19937 engine_scale(engine());
-      scale = numeric::scale_type{scale_dist(engine_scale)};
-    }
     auto const ints = dist(engine, size);
     rmm::device_uvector<DeviceType> result(size, cudf::default_stream_value);
     // Clamp the generated random value to the specified range
@@ -396,12 +396,18 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    thrust::minstd_rand& engine,
                                                    cudf::size_type num_rows)
 {
-  using DeviceType = cudf::device_storage_type_t<T>;
-  numeric::scale_type scale{};
   // Bernoulli distribution
   auto valid_dist = random_value_fn<bool>(
     distribution_params<bool>{1. - profile.get_null_probability().value_or(0)});
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
+
+  using DeviceType            = cudf::device_storage_type_t<T>;
+  cudf::data_type const dtype = [&]() {
+    if constexpr (cudf::is_fixed_point<T>())
+      return cudf::data_type{cudf::type_to_id<T>(), value_dist.get_scale(engine)};
+    else
+      return cudf::data_type{cudf::type_to_id<T>()};
+  }();
 
   // Distribution for picking elements from the array of samples
   auto const avg_run_len = profile.get_avg_run_length();
@@ -418,7 +424,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     }();
     rmm::device_uvector<bool> samples_null_mask = valid_dist(engine, cardinality);
     rmm::device_uvector<DeviceType> samples     = value_dist(engine, cardinality);
-    if constexpr (cudf::is_fixed_point<T>()) { scale = value_dist.get_scale(); }
+
     // generate n samples and gather.
     auto const sample_indices =
       sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
@@ -437,7 +443,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     cudf::detail::valid_if(null_mask.begin(), null_mask.end(), thrust::identity<bool>{});
 
   return std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_to_id<T>(), scale},
+    dtype,
     num_rows,
     data.release(),
     profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
