@@ -1009,7 +1009,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Parameters
         ----------
         values: Series
-            A Series representing the values of an aggregation.  The
+            A Series representing the results of an aggregation.  The
             index of the Series must be the (unique) values
             representing the group keys.
 
