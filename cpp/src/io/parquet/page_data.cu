@@ -1175,7 +1175,8 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
                                                              int t)
 {
   // max nesting depth of the column
-  int const max_depth = s->col.max_nesting_depth;
+  int const max_depth       = s->col.max_nesting_depth;
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
   // how many (input) values we've processed in the page so far
   int input_value_count = s->input_value_count;
   // how many rows we've processed in the page so far
@@ -1235,7 +1236,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       uint32_t const warp_valid_mask =
         // for flat schemas, a simple ballot_sync gives us the correct count and bit positions
         // because every value in the input matches to a value in the output
-        max_depth == 1
+        !has_repetition
           ? ballot(is_valid)
           :
           // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
@@ -1284,11 +1285,12 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // the correct position to start reading. since we are about to write the validity vector here
       // we need to adjust our computed mask to take into account the write row bounds.
       int const in_write_row_bounds =
-        max_depth == 1
+        !has_repetition
           ? thread_row_index >= s->first_row && thread_row_index < (s->first_row + s->num_rows)
           : in_row_bounds;
       int const first_thread_in_write_range =
-        max_depth == 1 ? __ffs(ballot(in_write_row_bounds)) - 1 : 0;
+        !has_repetition ? __ffs(ballot(in_write_row_bounds)) - 1 : 0;
+
       // # of bits to of the validity mask to write out
       int const warp_valid_mask_bit_count =
         first_thread_in_write_range < 0 ? 0 : warp_value_count - first_thread_in_write_range;
@@ -1384,7 +1386,6 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
 {
   // max nesting depth of the column
   int max_depth = s->col.max_nesting_depth;
-  // bool has_repetition = s->col.max_level[level_type::REPETITION] > 0 ? true : false;
   // how many input level values we've processed in the page so far
   int input_value_count = s->input_value_count;
   // how many leaf values we've processed in the page so far
@@ -1479,6 +1480,11 @@ __global__ void __launch_bounds__(block_size)
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
+  // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
+  // containing lists anywhere within).
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+  if (!has_repetition) { return; }
+
   if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
     return;
   }
@@ -1504,8 +1510,6 @@ __global__ void __launch_bounds__(block_size)
   }
   __syncthreads();
 
-  bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;
-
   // optimization : it might be useful to have a version of gpuDecodeStream that could go wider than
   // 1 warp.  Currently it only uses 1 warp so that it can overlap work with the value decoding step
   // when in the actual value decoding kernel. However, during this preprocess step we have no such
@@ -1516,16 +1520,13 @@ __global__ void __launch_bounds__(block_size)
     while (!s->error && s->input_value_count < s->num_input_values) {
       // decode repetition and definition levels. these will attempt to decode at
       // least up to the target, but may decode a few more.
-      if (has_repetition) {
-        gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
-      }
+      gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
       gpuDecodeStream(s->def, s, target_input_count, t, level_type::DEFINITION);
       __syncwarp();
 
       // we may have decoded different amounts from each stream, so only process what we've been
-      int actual_input_count = has_repetition ? min(s->lvl_count[level_type::REPETITION],
-                                                    s->lvl_count[level_type::DEFINITION])
-                                              : s->lvl_count[level_type::DEFINITION];
+      int actual_input_count =
+        min(s->lvl_count[level_type::REPETITION], s->lvl_count[level_type::DEFINITION]);
 
       // process what we got back
       gpuUpdatePageSizes(s, actual_input_count, t, trim_pass);
@@ -1572,6 +1573,8 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     out_thread0 =
       ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
   }
+
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
@@ -1625,7 +1628,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       // - so we will end up ignoring the first two input rows, and input rows 2..n will
       //   get written to the output starting at position 0.
       //
-      if (s->col.max_nesting_depth == 1) { dst_pos -= s->first_row; }
+      if (!has_repetition) { dst_pos -= s->first_row; }
 
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
       // before first_row) in the flat hierarchy case.
@@ -1765,6 +1768,8 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
 
   // computes:
   // PageInfo::chunk_row for all pages
+  // Note: this is doing some redundant work for pages in flat hierarchies.  chunk_row has already
+  // been computed during header decoding. the overall amount of work here is very small though.
   auto key_input = thrust::make_transform_iterator(
     pages.device_ptr(), [] __device__(PageInfo const& page) { return page.chunk_idx; });
   auto page_input = thrust::make_transform_iterator(
@@ -1840,25 +1845,13 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
           return page.nesting[l_idx].size;
         });
 
-      // compute column size.
+      // if this buffer is part of a list hierarchy, we need to determine it's
+      // final size and allocate it here.
+      //
       // for struct columns, higher levels of the output columns are shared between input
       // columns. so don't compute any given level more than once.
-      if (out_buf.size == 0) {
+      if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) && out_buf.size == 0) {
         int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
-
-        // Handle a specific corner case.  It is possible to construct a parquet file such that
-        // a column within a row group contains more rows than the row group itself. This may be
-        // invalid, but we have seen instances of this in the wild, including how they were created
-        // using the apache parquet tools.  Normally, the trim pass would handle this case quietly,
-        // but if we are not running the trim pass (which is most of the time) we need to cap the
-        // number of rows we will allocate/read from the file with the amount specified in the
-        // associated row group. This only applies to columns that are not children of lists as
-        // those may have an arbitrary number of rows in them.
-        if (!uses_custom_row_bounds &&
-            !(out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) &&
-            size > static_cast<size_type>(num_rows)) {
-          size = static_cast<size_type>(num_rows);
-        }
 
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
@@ -1867,16 +1860,21 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
         out_buf.create(size, stream, mr);
       }
 
-      // compute per-page start offset
-      thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                    page_keys.begin(),
-                                    page_keys.end(),
-                                    size_input,
-                                    start_offset_output_iterator{pages.device_ptr(),
-                                                                 page_index.begin(),
-                                                                 0,
-                                                                 static_cast<int>(src_col_schema),
-                                                                 static_cast<int>(l_idx)});
+      // for nested hierarchies, compute per-page start offset.
+      // it would be better/safer to be checking (schema.max_repetition_level > 0) here, but there's
+      // no easy way to get at that info here. we'd have to move this function into reader_impl.cu
+      if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) ||
+          out_buf.type.id() == type_id::LIST) {
+        thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                      page_keys.begin(),
+                                      page_keys.end(),
+                                      size_input,
+                                      start_offset_output_iterator{pages.device_ptr(),
+                                                                   page_index.begin(),
+                                                                   0,
+                                                                   static_cast<int>(src_col_schema),
+                                                                   static_cast<int>(l_idx)});
+      }
     }
   }
 
