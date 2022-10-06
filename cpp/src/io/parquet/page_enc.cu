@@ -122,13 +122,13 @@ __global__ void __launch_bounds__(block_size)
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
 #if FRAGSWAP
-  int frag_y                 = blockIdx.x;
-  auto const physical_type   = col_desc[blockIdx.y].physical_type;
+  int frag_y               = blockIdx.x;
+  auto const physical_type = col_desc[blockIdx.y].physical_type;
 
   if (t == 0) s->col = col_desc[blockIdx.y];
 #else
-  int frag_y                 = blockIdx.y;
-  auto const physical_type   = col_desc[blockIdx.x].physical_type;
+  int frag_y               = blockIdx.y;
+  auto const physical_type = col_desc[blockIdx.x].physical_type;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
 #endif
@@ -218,13 +218,13 @@ __global__ void __launch_bounds__(128)
   // TODO: why not 1 block per warp?
   __shared__ __align__(8) statistics_group group_g[4];
 
-  uint32_t lane_id              = threadIdx.x & 0x1f;
+  uint32_t lane_id = threadIdx.x & 0x1f;
 #if FRAGSWAP
-  uint32_t frag_id              = blockIdx.x * 4 + (threadIdx.x >> 5);
-  uint32_t column_id            = blockIdx.y;
+  uint32_t frag_id   = blockIdx.x * 4 + (threadIdx.x >> 5);
+  uint32_t column_id = blockIdx.y;
 #else
-  uint32_t frag_id              = blockIdx.y * 4 + (threadIdx.x >> 5);
-  uint32_t column_id            = blockIdx.x;
+  uint32_t frag_id   = blockIdx.y * 4 + (threadIdx.x >> 5);
+  uint32_t column_id = blockIdx.x;
 #endif
   auto num_fragments_per_column = fragments.size().second;
   statistics_group* const g     = &group_g[threadIdx.x >> 5];
@@ -2044,7 +2044,7 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
 #else
   dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
 #endif
-  //printf("call init frag dim(%d,%d)\n", dim_grid.x, dim_grid.y);
+  // printf("call init frag dim(%d,%d)\n", dim_grid.x, dim_grid.y);
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
@@ -2060,9 +2060,9 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
 #if FRAGSWAP
   dim3 dim_grid(grid_y, num_columns);  // 1 warp per fragment
 #else
-  dim3 dim_grid(num_columns, grid_y);  // 1 warp per fragment
+  dim3 dim_grid(num_columns, grid_y);                    // 1 warp per fragment
 #endif
-  //printf("call init frag stats dim(%d,%d)\n", dim_grid.x, dim_grid.y);
+  // printf("call init frag stats dim(%d,%d)\n", dim_grid.x, dim_grid.y);
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 

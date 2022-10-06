@@ -1056,7 +1056,7 @@ TEST_F(ParquetWriterTest, ManyFragments)
   auto filepath = temp_env->get_temp_filepath("ManyFragments.parquet");
   cudf::io::parquet_writer_options args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
-      .max_page_size_bytes(8*1024);
+      .max_page_size_bytes(8 * 1024);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options read_opts =
