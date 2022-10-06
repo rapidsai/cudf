@@ -2735,7 +2735,7 @@ def baseindex(request):
     return cudf.Index(request.param)
 
 
-def test_index_to_series_mixed_index(baseindex):
+def test_index_to_series_mixed_types(baseindex):
     gidx = baseindex
     pidx = gidx.to_pandas()
 
@@ -2745,7 +2745,7 @@ def test_index_to_series_mixed_index(baseindex):
     assert_eq(expected, actual)
 
 
-def test_index_isna_mixed_index(baseindex):
+def test_index_isna_mixed_types(baseindex):
     gidx = baseindex
     pidx = gidx.to_pandas()
 
@@ -2755,7 +2755,7 @@ def test_index_isna_mixed_index(baseindex):
     assert_eq(expected, actual)
 
 
-def test_index_notna_mixed_index(baseindex):
+def test_index_notna_mixed_types(baseindex):
     gidx = baseindex
     pidx = gidx.to_pandas()
 
@@ -2765,7 +2765,7 @@ def test_index_notna_mixed_index(baseindex):
     assert_eq(expected, actual)
 
 
-def test_index_append_mixed_index(baseindex):
+def test_index_append_mixed_types(baseindex):
     gidx = baseindex
     pidx = gidx.to_pandas()
 
@@ -2784,7 +2784,7 @@ def test_index_append_mixed_index(baseindex):
         (pd.Series(["a", "b", None], dtype="category"), [10, None]),
     ],
 )
-def test_index_isin_mixed_index(idx, values):
+def test_index_isin_mixed_types(idx, values):
     gidx = cudf.Index(idx)
     pidx = gidx.to_pandas()
 
