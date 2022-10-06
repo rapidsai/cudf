@@ -213,63 +213,28 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
   CUDF_POP_RANGE();
 
-  CUDF_PUSH_RANGE("node_categories");
-  // Node categories: copy_if with transform.
-  rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
-  auto node_categories_it =
-    thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
-  auto node_categories_end = thrust::copy_if(rmm::exec_policy(stream),
-                                             tokens.begin(),
-                                             tokens.begin() + num_tokens,
-                                             node_categories_it,
-                                             is_node);
-  CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
-               "node category count mismatch");
-  CUDF_POP_RANGE();
-
   CUDF_PUSH_RANGE("token_levels");
-  // Node levels: transform_exclusive_scan, copy_if.
-  rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
-  auto push_pop_it = thrust::make_transform_iterator(
-    tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
-      return does_push(token) - does_pop(token);
-    });
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
-  CUDF_POP_RANGE();
-
-  CUDF_PUSH_RANGE("node_levels");
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
-  auto node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
-                                         token_levels.begin(),
-                                         token_levels.begin() + num_tokens,
-                                         tokens.begin(),
-                                         node_levels.begin(),
-                                         is_node);
-  CUDF_EXPECTS(node_levels_end - node_levels.begin() == num_nodes, "node level count mismatch");
-  CUDF_POP_RANGE();
+  {
+    // Node levels: transform_exclusive_scan, copy_if.
+    rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
+    auto push_pop_it = thrust::make_transform_iterator(
+      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
+        return does_push(token) - does_pop(token);
+      });
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
+    CUDF_POP_RANGE();
 
-  CUDF_PUSH_RANGE("node_ranges");
-  // Node ranges: copy_if with transform.
-  rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream, mr);
-  rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
-  auto node_range_tuple_it =
-    thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  // Whether the tokenizer stage should keep quote characters for string values
-  // If the tokenizer keeps the quote characters, they may be stripped during type casting
-  constexpr bool include_quote_char = true;
-  auto node_range_out_it            = thrust::make_transform_output_iterator(
-    node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
-
-  auto node_range_out_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(0) + num_tokens,
-                    node_range_out_it,
-                    [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
-                      return is_node(tokens_gpu[i]);
-                    });
-  CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
+    CUDF_PUSH_RANGE("node_levels");
+    auto node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
+                                           token_levels.begin(),
+                                           token_levels.begin() + num_tokens,
+                                           tokens.begin(),
+                                           node_levels.begin(),
+                                           is_node);
+    CUDF_EXPECTS(node_levels_end - node_levels.begin() == num_nodes, "node level count mismatch");
+  }
   CUDF_POP_RANGE();
 
   CUDF_PUSH_RANGE("parent_token_ids");
@@ -412,6 +377,43 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   //     return pid < 0 ? parent_node_sentinel : node_ids_gpu[pid];
   //   });
   // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
+  CUDF_POP_RANGE();
+
+  CUDF_PUSH_RANGE("node_categories");
+  // Node categories: copy_if with transform.
+  rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
+  auto node_categories_it =
+    thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
+  auto node_categories_end = thrust::copy_if(rmm::exec_policy(stream),
+                                             tokens.begin(),
+                                             tokens.begin() + num_tokens,
+                                             node_categories_it,
+                                             is_node);
+  CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
+               "node category count mismatch");
+  CUDF_POP_RANGE();
+
+  CUDF_PUSH_RANGE("node_ranges");
+  // Node ranges: copy_if with transform.
+  rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream, mr);
+  rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
+  auto node_range_tuple_it =
+    thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
+  // Whether the tokenizer stage should keep quote characters for string values
+  // If the tokenizer keeps the quote characters, they may be stripped during type casting
+  constexpr bool include_quote_char = true;
+  auto node_range_out_it            = thrust::make_transform_output_iterator(
+    node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
+
+  auto node_range_out_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(0) + num_tokens,
+                    node_range_out_it,
+                    [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
+                      return is_node(tokens_gpu[i]);
+                    });
+  CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
   CUDF_POP_RANGE();
 
   return {std::move(node_categories),
