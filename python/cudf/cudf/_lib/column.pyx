@@ -317,12 +317,14 @@ cdef class Column:
 
         self._children = None
         self._base_children = value
-    
+
     def has_a_weakref(self):
         weakref_count = weakref.getweakrefcount(self.base_data)
 
         if weakref_count == 1:
-            return not (weakref.getweakrefs(self.base_data)[0]() is self.base_data)
+            return not (
+                weakref.getweakrefs(self.base_data)[0]() is self.base_data
+            )
         else:
             return weakref_count > 0
 
@@ -337,7 +339,6 @@ cdef class Column:
             self.set_base_children(new_col.base_children)
             self.set_base_mask(new_col.base_mask)
             self._weak_ref = None
-
 
     def _mimic_inplace(self, other_col, inplace=False):
         """
