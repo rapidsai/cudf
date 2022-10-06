@@ -255,7 +255,9 @@ def test_index_rename_inplace():
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    # assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
+    assert (
+        gds_renamed_deep._values.data_ptr == gds._values.data_ptr
+    ) == cudf.get_option("copy_on_write")
 
     # inplace=True returns none
     expected_ptr = gds._values.data_ptr
@@ -396,8 +398,12 @@ def test_index_copy_category(name, dtype, deep=True):
 def test_index_copy_deep(idx, deep):
     """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-
-    if isinstance(idx, cudf.StringIndex) or not deep or cudf.get_option("copy_on_write"):
+    # import pdb;pdb.set_trace()
+    if (
+        isinstance(idx, cudf.StringIndex)
+        or not deep
+        or cudf.get_option("copy_on_write")
+    ):
         # StringColumn is immutable hence, deep copies of a
         # StringIndex will share the same StringColumn.
 

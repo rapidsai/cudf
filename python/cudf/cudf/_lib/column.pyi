@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import weakref
 from typing import Dict, Optional, Tuple, TypeVar
 
 from cudf._typing import Dtype, DtypeObj, ScalarLike
@@ -22,6 +23,7 @@ class Column:
     _children: Tuple[ColumnBase, ...]
     _base_children: Tuple[ColumnBase, ...]
     _distinct_count: Dict[bool, int]
+    _weak_ref: Optional[weakref.ref]
 
     def __init__(
         self,
@@ -70,6 +72,8 @@ class Column:
     @property
     def children(self) -> Tuple[ColumnBase, ...]: ...
     def set_base_children(self, value: Tuple[ColumnBase, ...]) -> None: ...
+    def _detach_refs(self) -> None: ...
+    def has_a_weakref(self) -> bool: ...
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace=False
     ) -> Optional[ColumnBase]: ...

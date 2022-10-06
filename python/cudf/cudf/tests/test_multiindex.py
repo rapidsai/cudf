@@ -766,7 +766,7 @@ def test_multiindex_copy_deep(data, deep):
     Case1: Constructed from GroupBy, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
-    same_ref = not deep
+    same_ref = (not deep) or cudf.get_option("copy_on_write")
 
     if isinstance(data, dict):
         import operator
@@ -786,7 +786,7 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [child.base_data.ptr for child in lchildren]
         rptrs = [child.base_data.ptr for child in rchildren]
 
-        assert all((x == y) == True for x, y in zip(lptrs, rptrs))
+        assert all((x == y) for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
         mi1 = data

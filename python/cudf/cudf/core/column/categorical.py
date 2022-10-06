@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import weakref
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -25,6 +26,11 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
+
+
+def custom_weakref_callback(ref):
+    pass
+
 
 if TYPE_CHECKING:
     from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
@@ -1259,32 +1265,8 @@ class CategoricalColumn(column.ColumnBase):
         out = out.set_mask(self.mask)
         return out
 
-    def copy(self, deep: bool = True) -> CategoricalColumn:
-        if deep:
-            copied_col = libcudf.copying.copy_column(self)
-            copied_cat = libcudf.copying.copy_column(self.dtype._categories)
-
-            return column.build_categorical_column(
-                categories=copied_cat,
-                codes=column.build_column(
-                    copied_col.base_data, dtype=copied_col.dtype
-                ),
-                offset=copied_col.offset,
-                size=copied_col.size,
-                mask=copied_col.base_mask,
-                ordered=self.dtype.ordered,
-            )
-        else:
-            return column.build_categorical_column(
-                categories=self.dtype.categories._values,
-                codes=column.build_column(
-                    self.codes.base_data, dtype=self.codes.dtype
-                ),
-                mask=self.base_mask,
-                ordered=self.dtype.ordered,
-                offset=self.offset,
-                size=self.size,
-            )
+    def get_weakref(self):
+        return weakref.ref(self.codes.base_data, custom_weakref_callback)
 
     @cached_property
     def memory_usage(self) -> int:
