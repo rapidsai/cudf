@@ -49,8 +49,8 @@ dependencies:
   - pydocstyle=6.1.1
   - typing_extensions
   - pre-commit
-  - dask==2022.9.2
-  - distributed==2022.9.2
+  - dask>=2022.9.2
+  - distributed>=2022.9.2
   - streamz
   - arrow-cpp=9
   - dlpack>=0.5,<0.6.0a0
