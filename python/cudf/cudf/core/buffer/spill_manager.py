@@ -42,6 +42,30 @@ class ExposeStatistic:
 
 
 class SpillManager:
+    """Manager of spillable buffers.
+
+    This class implements tracking of all known spillable buffers, on-demand
+    spilling of said buffers, and (optional) maintains a memory usage limit.
+
+    When `spill_on_demand=True`, the manager registers an RMM out-of-memory
+    error handler, which will spill spillable buffers in order to free up
+    memory.
+
+    When `device_memory_limit=True`, the manager will try keep the device
+    memory usage below the specified limit by spilling of spillable buffers
+    continuously, which will introduce a modest overhead.
+
+    Parameters
+    ----------
+    spill_on_demand : bool
+        Enable spill on demand. The global manager sets this to the value of
+        `CUDF_SPILL_ON_DEMAND` or False.
+    device_memory_limit: int, optional
+        If not None, this is the device memory limit in bytes that triggers
+        device to host spilling. The global manager sets this to the value
+        of `CUDF_SPILL_DEVICE_LIMIT` or None.
+    """
+
     _base_buffers: MutableMapping[int, SpillableBuffer]
     _expose_statistics: Optional[MutableMapping[str, ExposeStatistic]]
 
