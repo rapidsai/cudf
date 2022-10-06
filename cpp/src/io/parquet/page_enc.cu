@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#define FRAGSWAP 1
+
 #include "parquet_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
@@ -118,10 +121,18 @@ __global__ void __launch_bounds__(block_size)
 
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
+#if FRAGSWAP
+  int frag_y                 = blockIdx.x;
+  auto const physical_type   = col_desc[blockIdx.y].physical_type;
+
+  if (t == 0) s->col = col_desc[blockIdx.y];
+#else
   int frag_y                 = blockIdx.y;
   auto const physical_type   = col_desc[blockIdx.x].physical_type;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
+#endif
+
   __syncthreads();
   if (!t) {
     // Find which partition this fragment came from
@@ -191,7 +202,11 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   __syncthreads();
+#if FRAGSWAP
+  if (t == 0) frag[blockIdx.y][blockIdx.x] = s->frag;
+#else
   if (t == 0) frag[blockIdx.x][blockIdx.y] = s->frag;
+#endif
 }
 
 // blockDim {128,1,1}
@@ -204,8 +219,13 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) statistics_group group_g[4];
 
   uint32_t lane_id              = threadIdx.x & 0x1f;
+#if FRAGSWAP
+  uint32_t frag_id              = blockIdx.x * 4 + (threadIdx.x >> 5);
+  uint32_t column_id            = blockIdx.y;
+#else
   uint32_t frag_id              = blockIdx.y * 4 + (threadIdx.x >> 5);
   uint32_t column_id            = blockIdx.x;
+#endif
   auto num_fragments_per_column = fragments.size().second;
   statistics_group* const g     = &group_g[threadIdx.x >> 5];
   if (!lane_id && frag_id < num_fragments_per_column) {
@@ -1260,6 +1280,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
       auto& curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
+      //printf("%03d pg=%03d usz=%d\n", blockIdx.x, page, page_data_size);
       if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
         has_compression = true;
         compressed_data_size += comp_res->bytes_written;
@@ -1275,8 +1296,10 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
     if (has_compression) {
       uint32_t compression_error = atomicAdd(&error_count, 0);
       is_compressed = (!compression_error && compressed_data_size < uncompressed_data_size);
+      //printf("%03d ic=%d ce=%d csz=%d usz=%d\n", blockIdx.x, is_compressed, compression_error, compressed_data_size, uncompressed_data_size);
     } else {
       is_compressed = false;
+      //printf("%d no comp\n", blockIdx.x);
     }
     chunks[blockIdx.x].is_compressed = is_compressed;
     chunks[blockIdx.x].bfr_size      = uncompressed_data_size;
@@ -2019,7 +2042,12 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
 {
   auto num_columns              = frag.size().first;
   auto num_fragments_per_column = frag.size().second;
+#if FRAGSWAP
+  dim3 dim_grid(num_fragments_per_column, num_columns);  // 1 threadblock per fragment
+#else
   dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
+#endif
+  //printf("call init frag dim(%d,%d)\n", dim_grid.x, dim_grid.y);
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
@@ -2032,7 +2060,12 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
   int const num_columns              = col_desc.size();
   int const num_fragments_per_column = fragments.size().second;
   auto grid_y = util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
+#if FRAGSWAP
+  dim3 dim_grid(grid_y, num_columns);  // 1 warp per fragment
+#else
   dim3 dim_grid(num_columns, grid_y);  // 1 warp per fragment
+#endif
+  //printf("call init frag stats dim(%d,%d)\n", dim_grid.x, dim_grid.y);
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 
