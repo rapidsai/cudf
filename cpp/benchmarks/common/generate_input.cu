@@ -248,10 +248,9 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
 template <typename T>
 struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   using DeviceType = cudf::device_storage_type_t<T>;
-  using rep        = typename T::rep;
   DeviceType const lower_bound;
   DeviceType const upper_bound;
-  distribution_fn<rep> dist;
+  distribution_fn<DeviceType> dist;
   std::optional<numeric::scale_type> scale;
 
   random_value_fn(distribution_params<DeviceType> const& desc)
