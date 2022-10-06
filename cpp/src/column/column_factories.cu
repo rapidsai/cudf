@@ -54,21 +54,15 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   rmm::mr::device_memory_resource* mr) const
 {
   if (size == 0) return make_empty_column(value.type());
-  auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
 
-  if (!value.is_valid(stream))
-    return std::make_unique<column>(
-      value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);
-
-  // Create a strings column_view with all nulls and no children.
   // Since we are setting every row to the scalar, the fill() never needs to access
   // any of the children in the strings column which would otherwise cause an exception.
-  column_view sc{
-    data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
+  column_view sc{value.type(), size, nullptr};
   auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
-  output->set_null_mask(rmm::device_buffer{}, 0);  // should be no nulls
+
   return output;
 }
 
