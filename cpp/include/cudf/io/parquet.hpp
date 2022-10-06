@@ -573,6 +573,7 @@ class chunked_parquet_reader {
   void preprocess();
 
   // The internal instance of the reader class to perform chunked reading.
+  // TODO: Replace this class with a reader class that has interface supporting chunked reading
   std::unique_ptr<cudf::io::detail::parquet::reader> reader;
 };
 
