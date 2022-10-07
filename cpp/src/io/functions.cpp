@@ -481,7 +481,7 @@ chunked_parquet_reader::chunked_parquet_reader(chunked_parquet_reader_options co
 /**
  * @copydoc cudf::io::chunked_parquet_reader::read
  */
-table_with_metadata chunked_parquet_reader::read()
+table_with_metadata chunked_parquet_reader::read_chunk()
 {
   // On the first call, a preprocessing step is called which may be expensive before a table is
   // returned. All subsequent calls are essentially just doing incremental column allocation and row
@@ -489,16 +489,11 @@ table_with_metadata chunked_parquet_reader::read()
   // After each call, an internal `skip_rows` state is updated such that the next call will skip the
   // rows returned by the previous call, making sure that the sequence of returned tables are
   // continuous and form a complete dataset as reading the entire file at once.
-  return table_with_metadata{};
-}
 
-/**
- * @copydoc cudf::io::chunked_parquet_reader::has_next
- */
-bool chunked_parquet_reader::has_next()
-{
-  // TODO
-  return true;
+  auto output = reader->read(parquet_reader_options{});
+  skip_rows += output.tbl->num_rows();
+
+  return output;
 }
 
 /**

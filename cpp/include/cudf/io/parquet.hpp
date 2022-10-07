@@ -531,7 +531,7 @@ class chunked_parquet_reader {
   ~chunked_parquet_reader() { close(); }
 
   /**
-   * @brief Reads a chunk of Parquet dataset into a set of columns.
+   * @brief Read a chunk of Parquet dataset into a set of columns.
    *
    * The sequence of returned tables, if concatenated by their order, guarantee to form a complete
    * dataset as reading the entire given file at once.
@@ -542,7 +542,7 @@ class chunked_parquet_reader {
    * @return The set of columns along with metadata
    */
 
-  table_with_metadata read();
+  table_with_metadata read_chunk();
 
   /**
    * @brief Check if there is any data of the given file has not yet processed.
@@ -552,7 +552,11 @@ class chunked_parquet_reader {
    *
    * @return A boolean value indicating if there is any data left to process
    */
-  bool has_next();
+  bool has_next()
+  {
+    // TODO: handle closed file
+    return skip_rows >= total_rows;
+  }
 
   /**
    * @brief Close the reading file to release internal resources.
@@ -575,6 +579,9 @@ class chunked_parquet_reader {
   // The internal instance of the reader class to perform chunked reading.
   // TODO: Replace this class with a reader class that has interface supporting chunked reading
   std::unique_ptr<cudf::io::detail::parquet::reader> reader;
+
+  size_type skip_rows{0};
+  size_type total_rows{0};
 };
 
 /** @} */  // end of group
