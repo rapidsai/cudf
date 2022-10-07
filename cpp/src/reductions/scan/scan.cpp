@@ -61,7 +61,7 @@ std::unique_ptr<column> scan(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scan(input, agg, inclusive, null_handling, cudf::default_stream_value, mr);
+  return detail::scan(input, agg, inclusive, null_handling, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -783,7 +783,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::optional<byte_range_info> byte_range,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream      = cudf::default_stream_value;
+  auto stream      = cudf::get_default_stream();
   auto stream_pool = rmm::cuda_stream_pool(2);
 
   auto result = detail::multibyte_split(

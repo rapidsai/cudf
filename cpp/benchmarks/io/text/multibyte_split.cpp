@@ -107,7 +107,7 @@ static void bench_multibyte_split(nvbench::state& state)
   if (source_type == data_chunk_source_type::host || source_type == data_chunk_source_type::file) {
     host_input = cudf::detail::make_std_vector_sync<char>(
       {device_input.data(), static_cast<std::size_t>(device_input.size())},
-      cudf::default_stream_value);
+      cudf::get_default_stream());
   }
   if (source_type == data_chunk_source_type::host_pinned) {
     host_pinned_input.resize(static_cast<std::size_t>(device_input.size()));
@@ -141,7 +141,7 @@ static void bench_multibyte_split(nvbench::state& state)
   cudf::io::text::byte_range_info range{range_offset, range_size};
   std::unique_ptr<cudf::column> output;
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     try_drop_l3_cache();
     output = cudf::io::text::multibyte_split(*source, delim, range);

@@ -45,7 +45,7 @@ static void BM_copy_if_else(benchmark::State& state, bool nulls)
   cudf::column_view lhs(input->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::copy_if_else(lhs, rhs, decision);
   }
 }

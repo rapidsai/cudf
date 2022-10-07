@@ -27,14 +27,19 @@ namespace cudf {
  * Use this value to ensure the correct stream is used when compiled with per
  * thread default stream.
  */
-#if defined(CUDF_CUSTOM_DEFAULT_STREAM)
-static const rmm::cuda_stream cudf_default_stream{};
-static const rmm::cuda_stream_view default_stream_value{cudf_default_stream};
-#elif defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
-static const rmm::cuda_stream_view default_stream_value{rmm::cuda_stream_per_thread};
-#else
-static constexpr rmm::cuda_stream_view default_stream_value{};
-#endif
+extern rmm::cuda_stream_view default_stream_value;
+
+// TODO: For now, this will set a single stream for all threads. Not only that,
+// but the setting is not thread safe. We will need to fix that for
+// multi-threaded execution contexts like Spark.
+// TODO: Should this function be responsible for accepting a stream (not a
+// view) and keeping that stream alive?
+inline void set_default_stream(rmm::cuda_stream_view new_default_stream)
+{
+  default_stream_value = new_default_stream;
+}
+
+inline rmm::cuda_stream_view get_default_stream() { return default_stream_value; }
 
 /**
  * @brief Check if per-thread default stream is enabled.
