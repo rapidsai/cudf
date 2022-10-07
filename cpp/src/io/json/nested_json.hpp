@@ -367,3 +367,27 @@ table_with_metadata host_parse_nested_json(
 }  // namespace detail
 
 }  // namespace cudf::io::json
+
+#define _CONCAT_(x, y) x##y
+#define CONCAT(x, y)   _CONCAT_(x, y)
+
+#define NVTX3_PUSH_RANGE_IN(D, tag)                                                            \
+  ::nvtx3::registered_message<D> const CONCAT(nvtx3_range_name__, __LINE__){std::string(tag)}; \
+  ::nvtx3::event_attributes const CONCAT(nvtx3_range_attr__,                                   \
+                                         __LINE__){CONCAT(nvtx3_range_name__, __LINE__)};      \
+  nvtxDomainRangePushEx(::nvtx3::domain::get<D>(), CONCAT(nvtx3_range_attr__, __LINE__).get());
+
+#define NVTX3_POP_RANGE(D) nvtxDomainRangePop(::nvtx3::domain::get<D>());
+
+#define CUDF_PUSH_RANGE(tag) NVTX3_PUSH_RANGE_IN(cudf::libcudf_domain, tag)
+#define CUDF_POP_RANGE()     NVTX3_POP_RANGE(cudf::libcudf_domain)
+
+#define NVTX3_SCOPED_RANGE_IN(D, tag)                                                        \
+  ::nvtx3::registered_message<D> const CONCAT(nvtx3_scope_name__,                            \
+                                              __LINE__){std::string(__func__) + "::" + tag}; \
+  ::nvtx3::event_attributes const CONCAT(nvtx3_scope_attr__,                                 \
+                                         __LINE__){CONCAT(nvtx3_scope_name__, __LINE__)};    \
+  ::nvtx3::domain_thread_range<D> const CONCAT(nvtx3_range__,                                \
+                                               __LINE__){CONCAT(nvtx3_scope_attr__, __LINE__)};
+
+#define CUDF_SCOPED_RANGE(tag) NVTX3_SCOPED_RANGE_IN(cudf::libcudf_domain, tag)
