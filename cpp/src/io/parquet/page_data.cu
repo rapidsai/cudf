@@ -877,6 +877,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
+            // Duration types are not included because no scaling is done when reading
             if (s->col.converted_type == TIMESTAMP_MILLIS) {
               units = cudf::timestamp_ms::period::den;
             } else if (s->col.converted_type == TIMESTAMP_MICROS) {

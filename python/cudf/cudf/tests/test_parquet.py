@@ -2598,7 +2598,8 @@ def test_parquet_writer_time_delta_physical_type():
             "s": cudf.Series([1], dtype="timedelta64[s]"),
             "ms": cudf.Series([2], dtype="timedelta64[ms]"),
             "us": cudf.Series([3], dtype="timedelta64[us]"),
-            # 4K because Pandas/pyarrow don't support non-zero nanoseconds in Parquet files
+            # 4K because Pandas/pyarrow don't support non-zero nanoseconds
+            # in Parquet files
             "ns": cudf.Series([4000], dtype="timedelta64[ns]"),
         }
     )
