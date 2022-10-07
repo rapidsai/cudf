@@ -128,7 +128,7 @@ __global__ void __launch_bounds__(block_size)
   auto const dtype_len = physical_type_len(physical_type, leaf_type);
 
   for (uint32_t frag_y = blockIdx.y; frag_y < num_fragments_per_column; frag_y += gridDim.y) {
-    if (!t) {
+    if (t == 0) {
       // Find which partition this fragment came from
       auto it =
         thrust::upper_bound(thrust::seq, part_frag_offset.begin(), part_frag_offset.end(), frag_y);
@@ -191,7 +191,7 @@ __global__ void __launch_bounds__(block_size)
       }
 
       len = block_reduce(reduce_storage).Sum(len);
-      if (!t) { s->frag.fragment_data_size += len; }
+      if (t == 0) { s->frag.fragment_data_size += len; }
       __syncthreads();
     }
     __syncthreads();
@@ -211,19 +211,19 @@ __global__ void __launch_bounds__(128)
   uint32_t const lane_id                  = threadIdx.x & 0x1f;
   uint32_t const column_id                = blockIdx.x;
   uint32_t const num_fragments_per_column = fragments.size().second;
-  auto const num_pass       = util::div_rounding_up_safe(num_fragments_per_column, gridDim.y * 4);
-  statistics_group* const g = &group_g[threadIdx.x >> 5];
+  statistics_group* const g               = &group_g[threadIdx.x >> 5];
 
   uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x >> 5);
-  for (uint32_t i = 0; i < num_pass; i++, frag_id += gridDim.y * 4) {
-    if (!lane_id && frag_id < num_fragments_per_column) {
-      g->col       = &col_desc[column_id];
-      g->start_row = fragments[column_id][frag_id].start_value_idx;
-      g->num_rows  = fragments[column_id][frag_id].num_leaf_values;
+  while (frag_id < num_fragments_per_column) {
+    if (lane_id == 0) {
+      g->col                     = &col_desc[column_id];
+      g->start_row               = fragments[column_id][frag_id].start_value_idx;
+      g->num_rows                = fragments[column_id][frag_id].num_leaf_values;
+      groups[column_id][frag_id] = *g;
     }
-    __syncthreads();
-    if (frag_id < num_fragments_per_column and lane_id == 0) { groups[column_id][frag_id] = *g; }
+    frag_id += gridDim.y * 4;
   }
+  __syncthreads();
 }
 
 // blockDim {128,1,1}
