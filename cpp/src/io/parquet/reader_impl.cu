@@ -1238,7 +1238,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
   decompress_check(comp_res, _stream);
 
   // now copy the uncompressed V2 def and rep level data
-  if (copy_in.size()) {
+  if (not copy_in.empty()) {
     host_span<device_span<uint8_t const> const> copy_in_view{copy_in.data(), copy_in.size()};
     auto const d_copy_in = cudf::detail::make_device_uvector_async(copy_in_view, _stream);
 
