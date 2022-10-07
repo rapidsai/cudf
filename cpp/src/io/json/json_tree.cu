@@ -170,6 +170,8 @@ struct node_ranges {
 /**
  * @brief Returns stable sorted key and its sorted order
  *
+ * Uses cub stable radix sort
+ *
  * @tparam IndexType sorted order type
  * @tparam KeyType key type
  * @param key key to sort
@@ -181,7 +183,6 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
   cudf::device_span<KeyType const> key, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  // Uses stable radix sort for builtin types.
 
   // Determine temporary device storage requirements
   rmm::device_uvector<TreeDepthT> key1(key.size(), stream);
@@ -308,7 +309,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   CUDF_PUSH_RANGE("parent_token_ids");
   // Node parent ids:
   // previous push node_id transform, stable sort by level, segmented scan with Max, reorder.
-  // This one is sort of logical stack. But more generalized.
+  // This algorithms si  is more generalized logical stack.
   // TODO: make it own function.
 
   rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream);
@@ -341,7 +342,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         return i - 2;
       else
         return -1;
-      // -1 is not sentinel, is required because of max operation below
     };
 
     CUDF_PUSH_RANGE("parent_node_ids");
@@ -357,6 +357,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                  ? parent_node_sentinel
                  : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
                      node_ids_gpu;
+        // parent_node_sentinel is -1, useful for segmented max operation below
       });
     // print_vec(parent_node_ids, "parent_node_ids", to_int);
     CUDF_POP_RANGE();
