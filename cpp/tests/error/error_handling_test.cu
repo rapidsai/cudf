@@ -145,7 +145,7 @@ int main(int argc, char** argv)
   rmm::cuda_stream const new_default_stream{};
   if (stream_mode == "custom") {
     const rmm::cuda_stream_view stream_view{new_default_stream};
-    cudf::set_default_stream(stream_view);
+    cudf::detail::set_default_stream(stream_view);
   }
   return RUN_ALL_TESTS();
 }
