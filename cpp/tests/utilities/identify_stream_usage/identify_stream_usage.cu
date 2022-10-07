@@ -18,6 +18,7 @@
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
+#include <stdexcept>
 
 /*
   Print the stack trace from the current frame.
@@ -127,9 +128,8 @@ __host__ cudaError_t cudaLaunchKernel(
 {
   if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||
       (stream == cudaStreamPerThread)) {
-    std::cout << "Found unexpected default stream!" << std::endl;
     print_trace();
-    std::cout << std::endl;
+    throw std::runtime_error("Found unexpected default stream!");
   }
   return cudaLaunchKernel_original(func, gridDim, blockDim, args, sharedMem, stream);
 }
