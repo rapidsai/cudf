@@ -287,7 +287,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     // Node levels: transform_exclusive_scan, copy_if.
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
     auto push_pop_it = thrust::make_transform_iterator(
-      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> TreeDepthT {
+      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
         return does_push(token) - does_pop(token);
       });
     thrust::exclusive_scan(
