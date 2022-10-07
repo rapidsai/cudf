@@ -205,25 +205,21 @@ __global__ void __launch_bounds__(128)
                        device_2dspan<PageFragment const> fragments,
                        device_span<parquet_column_device_view const> col_desc)
 {
-  // TODO: why not 1 block per warp?
-  __shared__ __align__(8) statistics_group group_g[4];
-
   uint32_t const lane_id                  = threadIdx.x & 0x1f;
   uint32_t const column_id                = blockIdx.x;
   uint32_t const num_fragments_per_column = fragments.size().second;
-  statistics_group* const g               = &group_g[threadIdx.x >> 5];
 
   uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x >> 5);
   while (frag_id < num_fragments_per_column) {
     if (lane_id == 0) {
-      g->col                     = &col_desc[column_id];
-      g->start_row               = fragments[column_id][frag_id].start_value_idx;
-      g->num_rows                = fragments[column_id][frag_id].num_leaf_values;
-      groups[column_id][frag_id] = *g;
+      statistics_group g;
+      g.col                      = &col_desc[column_id];
+      g.start_row                = fragments[column_id][frag_id].start_value_idx;
+      g.num_rows                 = fragments[column_id][frag_id].num_leaf_values;
+      groups[column_id][frag_id] = g;
     }
     frag_id += gridDim.y * 4;
   }
-  __syncthreads();
 }
 
 // blockDim {128,1,1}
