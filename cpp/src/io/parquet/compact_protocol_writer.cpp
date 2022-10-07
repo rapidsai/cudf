@@ -150,7 +150,7 @@ size_t CompactProtocolWriter::write(const SchemaElement& s)
   // if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or
   //    isset.TIME or isset.TIMESTAMP or isset.INTEGER or isset.UNKNOWN or isset.JSON or isset.BSON)
   //    {
-  if (isset.TIMESTAMP) { c.field_struct(10, s.logical_type); }
+  if (isset.TIMESTAMP or isset.TIME) { c.field_struct(10, s.logical_type); }
   return c.value();
 }
 

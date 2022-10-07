@@ -169,6 +169,11 @@ type_id to_type_id(SchemaElement const& schema,
                                                  : type_id::TIMESTAMP_NANOSECONDS;
   }
 
+  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64 and
+      logical_type.TIME.unit.isset.NANOS) {
+    return type_id::DURATION_NANOSECONDS;
+  }
+
   // is it simply a struct?
   if (schema.is_struct()) { return type_id::STRUCT; }
 
