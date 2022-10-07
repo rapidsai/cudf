@@ -132,7 +132,7 @@ void print_tree(tree_meta_t2 const& cpu_tree)
 }
 void print_tree(tree_meta_t const& d_gpu_tree)
 {
-  auto const cpu_tree = to_cpu_tree(d_gpu_tree, rmm::cuda_stream_default);
+  auto const cpu_tree = to_cpu_tree(d_gpu_tree, cudf::get_default_stream());
   print_tree(cpu_tree);
 }
 

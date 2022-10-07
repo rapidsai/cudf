@@ -263,3 +263,5 @@ TEST_F(TypeInference, InvalidInput)
   // Invalid input is inferred as string for now
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
+
+CUDF_TEST_PROGRAM_MAIN()

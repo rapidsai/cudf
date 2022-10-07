@@ -624,3 +624,5 @@ TEST_P(JsonParserTest, EmptyString)
   auto const expected_col_count = 0;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
