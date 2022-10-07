@@ -41,6 +41,7 @@
 #include <thrust/fill.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
@@ -166,6 +167,74 @@ struct node_ranges {
   }
 };
 
+/**
+ * @brief Returns stable sorted key and its sorted order
+ *
+ * @tparam IndexType sorted order type
+ * @tparam KeyType key type
+ * @param key key to sort
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return A pair of sorted key and its sorted order
+ */
+template <typename IndexType = size_t, typename KeyType>
+std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_sorted_key_order(
+  cudf::device_span<KeyType const> key, rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  // Uses stable radix sort for builtin types.
+
+  // Determine temporary device storage requirements
+  rmm::device_uvector<TreeDepthT> key1(key.size(), stream);
+  rmm::device_uvector<TreeDepthT> key2(key.size(), stream);
+  rmm::device_uvector<IndexType> order1(key.size(), stream);
+  rmm::device_uvector<IndexType> order2(key.size(), stream);
+  cub::DoubleBuffer<IndexType> order(order1.data(), order2.data());
+  cub::DoubleBuffer<TreeDepthT> key_buffer(key1.data(), key2.data());
+  size_t temp_storage_bytes = 0;
+  cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, key_buffer, order, key.size());
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  CUDF_PUSH_RANGE("copy");
+  thrust::copy(rmm::exec_policy(stream), key.begin(), key.end(), key1.begin());
+  CUDF_POP_RANGE();
+  CUDF_PUSH_RANGE("seq");
+  thrust::sequence(rmm::exec_policy(stream), order1.begin(), order1.end());
+  CUDF_POP_RANGE();
+  CUDF_PUSH_RANGE("cub-sort");
+  cub::DeviceRadixSort::SortPairs(
+    d_temp_storage.data(), temp_storage_bytes, key_buffer, order, key.size());
+  CUDF_POP_RANGE();
+  return std::pair{key_buffer.Current() == key1.data() ? std::move(key1) : std::move(key2),
+                   order.Current() == order1.data() ? std::move(order1) : std::move(order2)};
+}
+
+/**
+ * @brief Propagate parent node to siblings from first sibling.
+ *
+ * @param node_levels Node levels of each node
+ * @param parent_node_ids parent node ids initialized for first child of each push node,
+ *                       and other siblings are initialized to -1.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+void propagate_parent_to_siblings(cudf::device_span<TreeDepthT const> node_levels,
+                                  cudf::device_span<NodeIndexT> parent_node_ids,
+                                  rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  auto [sorted_node_levels, sorted_order] = stable_sorted_key_order<size_type>(node_levels, stream);
+  // instead of gather, using permutation_iterator, which is ~17% faster
+
+  CUDF_PUSH_RANGE("inscan");
+  thrust::inclusive_scan_by_key(
+    rmm::exec_policy(stream),
+    sorted_node_levels.begin(),
+    sorted_node_levels.end(),
+    thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
+    thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
+    thrust::equal_to<TreeDepthT>{},
+    thrust::maximum<NodeIndexT>{});
+  CUDF_POP_RANGE();
+}
+
 // Generates a tree representation of the given tokens, token_indices.
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
@@ -218,7 +287,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     // Node levels: transform_exclusive_scan, copy_if.
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
     auto push_pop_it = thrust::make_transform_iterator(
-      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
+      tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> TreeDepthT {
         return does_push(token) - does_pop(token);
       });
     thrust::exclusive_scan(
@@ -242,128 +311,64 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // This one is sort of logical stack. But more generalized.
   // TODO: make it own function.
 
-  // previous push node_id
-  // if previous node is a push, then i-1
-  // if previous node is FE, then i-2
-  // if previous node is SMB and its previous node is a push, then i-2
-  // else -1
-  rmm::device_uvector<size_type> parent_token_ids2(num_nodes, stream);
-  auto prev_parent_node_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
-    [does_push, tokens_gpu = tokens.begin()] __device__(auto i) -> size_type {
-      return (i > 0) ? ((tokens_gpu[i - 1] == token_t::StructBegin ||
-                         tokens_gpu[i - 1] == token_t::ListBegin)
-                          ? i - 1
-                          : ((tokens_gpu[i - 1] == token_t::FieldNameEnd ||
-                              (tokens_gpu[i - 1] == token_t::StructMemberBegin &&
-                               (tokens_gpu[i - 2] == token_t::StructBegin ||
-                                tokens_gpu[i - 2] == token_t::ListBegin)))
-                               ? i - 2
-                               : -1))
-                     : -1;
-      // -1, not sentinel used here because of max operation below
-    });
-  CUDF_PUSH_RANGE("copy_if");
-  thrust::copy_if(rmm::exec_policy(stream),
-                  prev_parent_node_it,
-                  prev_parent_node_it + num_tokens,
-                  tokens.begin(),
-                  parent_token_ids2.begin(),
-                  is_node);
-  CUDF_POP_RANGE();
-
+  rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream);
   {
-    auto [node_levels1, initial_order1] = [&]() {
-      // Uses stable radix sort for builtin types.
-      CUDF_PUSH_RANGE("cub-sort");
-      CUDF_PUSH_RANGE("seq");
-      rmm::device_uvector<size_type> initial_order2(num_nodes, stream);
-      thrust::sequence(rmm::exec_policy(stream), initial_order2.begin(), initial_order2.end());
-      CUDF_POP_RANGE();
-
-      // Determine temporary device storage requirements
-      size_t temp_storage_bytes = 0;
-      CUDF_PUSH_RANGE("cub-out");
-      rmm::device_uvector<TreeDepthT> node_levels2(node_levels, stream);
-      rmm::device_uvector<TreeDepthT> node_levels1(num_nodes, stream);
-      rmm::device_uvector<size_type> initial_order1(num_nodes, stream);
-      cub::DoubleBuffer<size_type> order(initial_order2.data(), initial_order1.data());
-      cub::DoubleBuffer<TreeDepthT> levels(node_levels2.data(), node_levels1.data());
-      cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, levels, order, num_nodes);
-      CUDF_PUSH_RANGE("cub-temp");
-      // std::cout<<"temp_storage_bytes: "<<temp_storage_bytes<<std::endl;
-      rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-      cub::DeviceRadixSort::SortPairs(
-        d_temp_storage.data(), temp_storage_bytes, levels, order, num_nodes);
-      CUDF_POP_RANGE();
-      CUDF_POP_RANGE();
-      CUDF_POP_RANGE();
-      return std::pair{
-        levels.Current() == node_levels1.data() ? std::move(node_levels1) : std::move(node_levels2),
-        order.Current() == initial_order1.data() ? std::move(initial_order1)
-                                                 : std::move(initial_order2)};
-    }();
-    // gather. additional memory!!!?
-    CUDF_PUSH_RANGE("scan");
-    CUDF_PUSH_RANGE("gather");
-    rmm::device_uvector<size_type> parent_token_ids1(num_nodes, stream);
-    thrust::gather(rmm::exec_policy(stream),
-                   initial_order1.begin(),
-                   initial_order1.end(),
-                   parent_token_ids2.begin(),
-                   parent_token_ids1.begin());
-    CUDF_POP_RANGE();
-
-    CUDF_PUSH_RANGE("inscan");
-    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                  node_levels1.data(),
-                                  node_levels1.data() + num_nodes,
-                                  parent_token_ids1.data(),
-                                  parent_token_ids1.data(),
-                                  thrust::equal_to<TreeDepthT>{},
-                                  thrust::maximum<size_type>{});
-    CUDF_POP_RANGE();
-    CUDF_PUSH_RANGE("scatter");
-    // scatter to restore the original order.
-    thrust::scatter(rmm::exec_policy(stream),
-                    parent_token_ids1.begin(),
-                    parent_token_ids1.end(),
-                    initial_order1.begin(),
-                    parent_token_ids2.begin());
-    CUDF_POP_RANGE();
-    CUDF_POP_RANGE();
-  }
-
-  CUDF_POP_RANGE();  // parent_token_ids
-
-  {
-    CUDF_PUSH_RANGE("node_ids");
-    rmm::device_uvector<size_type> node_ids_gpu3(num_nodes, stream);
+    rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
+    CUDF_PUSH_RANGE("copy_if");
     thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(0) + num_tokens,
+                    thrust::make_counting_iterator<NodeIndexT>(0),
+                    thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
                     tokens.begin(),
-                    node_ids_gpu3.begin(),
+                    node_token_ids.begin(),
                     is_node);
-
     CUDF_POP_RANGE();
+
+    // previous push node_id
+    // if previous node is a push, then i-1
+    // if previous node is FE, then i-2
+    // if previous node is SMB and its previous node is a push, then i-2
+    // else -1
+    auto first_childs_parent_token_id = [tokens_gpu =
+                                           tokens.begin()] __device__(auto i) -> NodeIndexT {
+      if (i <= 0) return -1;
+      if (tokens_gpu[i - 1] == token_t::StructBegin || tokens_gpu[i - 1] == token_t::ListBegin)
+        return i - 1;
+      else if (tokens_gpu[i - 1] == token_t::FieldNameEnd)
+        return i - 2;
+      else if (tokens_gpu[i - 1] == token_t::StructMemberBegin &&
+               (tokens_gpu[i - 2] == token_t::StructBegin ||
+                tokens_gpu[i - 2] == token_t::ListBegin))
+        return i - 2;
+      else
+        return -1;
+      // -1 is not sentinel, is required because of max operation below
+    };
 
     CUDF_PUSH_RANGE("parent_node_ids");
-    thrust::transform(rmm::exec_policy(stream),
-                      parent_token_ids2.begin(),
-                      parent_token_ids2.end(),
-                      parent_token_ids2.begin(),
-                      [node_ids_gpu = node_ids_gpu3.begin(),
-                       num_nodes] __device__(size_type const pid) -> NodeIndexT {
-                        return pid < 0
-                                 ? parent_node_sentinel
-                                 : thrust::lower_bound(
-                                     thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
-                                     node_ids_gpu;
-                      });
-    // print_vec(parent_node_ids2, "parent_node_ids2", to_int);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      node_token_ids.begin(),
+      node_token_ids.end(),
+      parent_node_ids.begin(),
+      [node_ids_gpu = node_token_ids.begin(), num_nodes, first_childs_parent_token_id] __device__(
+        NodeIndexT const tid) -> NodeIndexT {
+        auto pid = first_childs_parent_token_id(tid);
+        return pid < 0
+                 ? parent_node_sentinel
+                 : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
+                     node_ids_gpu;
+        // TODO node id will be 1 or 2 nodes back. It could be faster than binary search.
+      });
+    // print_vec(parent_node_ids, "parent_node_ids", to_int);
     CUDF_POP_RANGE();
   }
+  // Propagate parent node to siblings from first sibling - inplace.
+  propagate_parent_to_siblings(
+    cudf::device_span<TreeDepthT const>{node_levels.data(), node_levels.size()},
+    parent_node_ids,
+    stream);
+
+  CUDF_POP_RANGE();  // parent_token_ids
 
   CUDF_PUSH_RANGE("node_categories");
   // Node categories: copy_if with transform.
@@ -403,7 +408,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   CUDF_POP_RANGE();
 
   return {std::move(node_categories),
-          std::move(parent_token_ids2),
+          std::move(parent_node_ids),
           std::move(node_levels),
           std::move(node_range_begin),
           std::move(node_range_end)};
