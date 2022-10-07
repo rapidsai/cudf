@@ -208,10 +208,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
   CUDF_PUSH_RANGE("num_nodes");
   auto num_tokens = tokens.size();
-  // auto is_node_it = thrust::make_transform_iterator(
-  //   tokens.begin(),
-  //   [is_node] __device__(auto t) -> size_type { return static_cast<size_type>(is_node(t)); });
-  auto num_nodes = thrust::count_if(
+  auto num_nodes  = thrust::count_if(
     rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
   CUDF_POP_RANGE();
 
@@ -240,17 +237,16 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   CUDF_POP_RANGE();
 
   CUDF_PUSH_RANGE("parent_token_ids");
-  // Node parent ids: previous push token_id transform, stable sort, segmented scan with Max,
-  // reorder, copy_if. This one is sort of logical stack. But more generalized.
+  // Node parent ids:
+  // previous push node_id transform, stable sort by level, segmented scan with Max, reorder.
+  // This one is sort of logical stack. But more generalized.
   // TODO: make it own function.
 
-  // TODO re-write the algorithm to work only on nodes, not tokens.
-  // // ### only push nodes matter for scan! (verify throughly if true. For i-1 == FE, then i-3
-  // matters. or i-2 because FB and SMB treated same. make sure nodeid matches right for FB/SMB.
-  // // now copy only push operations to seperate array with token_levels, & node_id.
-  // // sort by level, then scan it. then scatter to node_id positions.
-  // // then another scan for non-push nodes? or another scan before scatter? L/S SMB FE.
-  // // total memory: num_nodes*(4b+b+4b) <= 9b*num_nodes.
+  // previous push node_id
+  // if previous node is a push, then i-1
+  // if previous node is FE, then i-2
+  // if previous node is SMB and its previous node is a push, then i-2
+  // else -1
   rmm::device_uvector<size_type> parent_token_ids2(num_nodes, stream);
   auto prev_parent_node_it = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
@@ -342,13 +338,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
   {
     CUDF_PUSH_RANGE("node_ids");
-    // use copy_if counting_it and do lower_bound. which is faster?
-    // rmm::device_uvector<size_type> node_ids_gpu(num_tokens, stream);
-    // thrust::exclusive_scan(
-    //   rmm::exec_policy(stream), is_node_it, is_node_it + num_tokens, node_ids_gpu.begin());
-
-    rmm::device_uvector<size_type> node_ids_gpu3(num_nodes,
-                                                 stream);  // TODO reuse initial_order memory.
+    rmm::device_uvector<size_type> node_ids_gpu3(num_nodes, stream);
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(0) + num_tokens,
@@ -357,17 +347,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                     is_node);
 
     CUDF_POP_RANGE();
-    // rmm::device_uvector<size_type> node_ids_gpu2(num_tokens, stream);
-    // thrust::sequence(rmm::exec_policy(stream), node_ids_gpu2.begin(), node_ids_gpu2.end());
-    // print_vec(node_ids_gpu2, "token_id_gpu", to_int);
-    // print_vec(tokens, "tokens", to_token_str);
-    // print_vec(node_ids_gpu, "node_ids_gpu", to_int);
-    // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
-    // print_vec(node_categories, "node_categories", to_cat);
-    // print_vec(node_ids_gpu3, "node_ids_gpu3", to_int);
 
     CUDF_PUSH_RANGE("parent_node_ids");
-    // rmm::device_uvector<size_type> parent_node_ids2(num_nodes, stream);
     thrust::transform(rmm::exec_policy(stream),
                       parent_token_ids2.begin(),
                       parent_token_ids2.end(),
@@ -381,16 +362,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                      node_ids_gpu;
                       });
     // print_vec(parent_node_ids2, "parent_node_ids2", to_int);
-
-    // thrust::transform(
-    //   rmm::exec_policy(stream),
-    //   parent_token_ids2.begin(),
-    //   parent_token_ids2.end(),
-    //   parent_token_ids2.begin(),
-    //   [node_ids_gpu = node_ids_gpu.begin()] __device__(size_type const pid) -> NodeIndexT {
-    //     return pid < 0 ? parent_node_sentinel : node_ids_gpu[pid];
-    //   });
-    // print_vec(parent_token_ids2, "parent_token_ids2", to_int);
     CUDF_POP_RANGE();
   }
 
