@@ -357,7 +357,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                  ? parent_node_sentinel
                  : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
                      node_ids_gpu;
-        // TODO node id will be 1 or 2 nodes back. It could be faster than binary search.
       });
     // print_vec(parent_node_ids, "parent_node_ids", to_int);
     CUDF_POP_RANGE();
