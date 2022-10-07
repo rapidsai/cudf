@@ -1176,7 +1176,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       // for V2 need to copy def and rep level info into place, and then offset the
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
-      if (offset) {
+      if (offset != 0) {
         copy_in.emplace_back(page.page_data, offset);
         copy_out.emplace_back(dst_base, offset);
       }
