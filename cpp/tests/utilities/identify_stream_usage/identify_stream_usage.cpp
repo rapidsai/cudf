@@ -20,11 +20,13 @@
 #include <iostream>
 #include <stdexcept>
 
+#include <cuda_runtime.h>
+
 /*
   Print the stack trace from the current frame.
   Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
 */
-__host__ void print_trace()
+void print_trace()
 {
 #ifdef __GNUC__
   // Try to get the stack trace.
@@ -123,7 +125,7 @@ void init()
   cudaLaunchKernel_original = (cudaLaunchKernel_t)dlsym(RTLD_NEXT, "cudaLaunchKernel");
 }
 
-__host__ cudaError_t cudaLaunchKernel(
+cudaError_t cudaLaunchKernel(
   const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
 {
   if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||

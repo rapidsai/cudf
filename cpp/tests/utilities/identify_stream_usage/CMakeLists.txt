@@ -17,16 +17,16 @@ cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 project(
   IDENTIFY_STREAM_USAGE
   VERSION 0.0.1
-  LANGUAGES CUDA
+  LANGUAGES CXX
 )
 
 set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
-add_library(identify_stream_usage SHARED identify_stream_usage.cu)
+add_library(identify_stream_usage SHARED identify_stream_usage.cpp)
 
 set_target_properties(
   identify_stream_usage
   PROPERTIES # set target compile options
-             CUDA_STANDARD 17
-             CUDA_STANDARD_REQUIRED ON
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
 )
