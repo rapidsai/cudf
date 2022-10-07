@@ -128,6 +128,14 @@ void init()
 cudaError_t cudaLaunchKernel(
   const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
 {
+  // We explicitly list the possibilities rather than using
+  // `cudf::get_default_stream().value()` for two reasons:
+  // 1. There is no guarantee that `thrust::device` and the default value of
+  //    `cudf::get_default_stream().value()` are actually the same. At present,
+  //    the former is `cudaStreamLegacy` while the latter is 0.
+  // 2. Using the cudf default stream would require linking against cudf, which
+  //    adds unnecessary complexity to the build process (especially in CI)
+  //    when this simple approach is sufficient.
   if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||
       (stream == cudaStreamPerThread)) {
     print_trace();
