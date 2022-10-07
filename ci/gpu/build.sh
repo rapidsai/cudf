@@ -213,7 +213,7 @@ else
         test_name=$(basename ${gt})
 
         echo "Running GoogleTest $test_name"
-        if [[ ${test_name} == "SPAN_TEST" ]];
+        if [[ ${test_name} == "SPAN_TEST" ]]; then
             # This one test is specifically designed to test using a thrust device
             # vector, so we expect and allow it to include default stream usage.
             gtest_filter="SpanTest.CanConstructFromDeviceContainers"
