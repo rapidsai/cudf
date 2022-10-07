@@ -21,7 +21,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -40,7 +39,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, Dtype, NotImplementedType
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -305,7 +304,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 start = arg[0].start
                 if start is None:
                     start = self._frame.index[0]
-                df.index = as_index(start)
+                df.index = as_index(start, name=self._frame.index.name)
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
@@ -313,7 +312,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         row_selection
                     )
                 else:
-                    df.index = as_index(row_selection)
+                    df.index = as_index(
+                        row_selection, name=self._frame.index.name
+                    )
         # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
@@ -1056,7 +1057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(self._dtypes)
+        return pd.Series(self._dtypes, dtype="object")
 
     @property
     def ndim(self):
@@ -1934,7 +1935,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:
@@ -3954,6 +3955,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
+        Support for use of string data within UDFs is provided through the
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
+        RAPIDS library. Supported operations on strings include the subset of
+        functions and string methods that expect an input string but do not
+        return a string. Refer to caveats in the UDF guide referenced above.
+
         Parameters
         ----------
         func : function
@@ -4077,6 +4084,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1     4.8
         2     5.0
         dtype: float64
+
+        UDFs manipulating string data are allowed, as long as
+        they neither modify strings in place nor create new strings.
+        For example, the following UDF is allowed:
+
+        >>> def f(row):
+        ...     st = row['str_col']
+        ...     scale = row['scale']
+        ...     if len(st) == 0:
+        ...             return -1
+        ...     elif st.startswith('a'):
+        ...             return 1 - scale
+        ...     elif 'example' in st:
+        ...             return 1 + scale
+        ...     else:
+        ...             return 42
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'str_col': ['', 'abc', 'some_example'],
+        ...     'scale': [1, 2, 3]
+        ... })
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
+        0   -1
+        1   -1
+        2    4
+        dtype: int64
+
+        However, the following UDF is not allowed since it includes an
+        operation that requires the creation of a new string: a call to the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
+
+        >>> def f(row):
+        ...     st = row['str_col'].upper()
+        ...     return 'ABC' in st
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
+
+        For a complete list of supported functions and methods that may be
+        used to manipulate string data, see the the UDF guide,
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
         """
         if axis != 1:
             raise ValueError(
@@ -5986,11 +6033,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns=None,
         header=True,
         index=True,
-        line_terminator="\n",
-        chunksize=None,
         encoding=None,
         compression=None,
-        **kwargs,
+        line_terminator="\n",
+        chunksize=None,
+        storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
@@ -6007,11 +6054,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             chunksize=chunksize,
             encoding=encoding,
             compression=compression,
-            **kwargs,
+            storage_options=storage_options,
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, compression=None, *args, **kwargs):
+    def to_orc(self, fname, compression="snappy", *args, **kwargs):
         """{docstring}"""
         from cudf.io import orc
 
@@ -6535,9 +6582,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns: List[ColumnBase],
         column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
-            columns, column_names, index_names
+            columns,
+            column_names,
+            index_names,
+            override_dtypes=override_dtypes,
         )
         result._set_column_names_like(self)
         return result
@@ -6971,7 +7023,7 @@ def from_pandas(obj, nan_as_null=None):
 
     Converting a Pandas Series to cuDF Series:
 
-    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple', dtype='str')
     >>> psr
     0    a
     1    b

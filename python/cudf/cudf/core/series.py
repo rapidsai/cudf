@@ -8,7 +8,7 @@ import pickle
 import textwrap
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
 import numpy as np
@@ -19,7 +19,12 @@ from pandas.core.dtypes.common import is_float
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import _is_null_host_scalar
-from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf._typing import (
+    ColumnLike,
+    DataFrameOrSeries,
+    NotImplementedType,
+    ScalarLike,
+)
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -584,7 +589,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import pandas as pd
         >>> import numpy as np
         >>> data = [10, 20, 30, np.nan]
-        >>> pds = pd.Series(data)
+        >>> pds = pd.Series(data, dtype='float64')
         >>> cudf.Series.from_pandas(pds)
         0    10.0
         1    20.0
@@ -1289,7 +1294,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:
@@ -2246,6 +2251,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
+        Support for use of string data within UDFs is provided through the
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
+        RAPIDS library. Supported operations on strings include the subset of
+        functions and string methods that expect an input string but do not
+        return a string. Refer to caveats in the UDF guide referenced above.
+
         Parameters
         ----------
         func : function
@@ -2327,6 +2338,43 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    <NA>
         2     4.5
         dtype: float64
+
+        UDFs manipulating string data are allowed, as long as
+        they neither modify strings in place nor create new strings.
+        For example, the following UDF is allowed:
+
+        >>> def f(st):
+        ...     if len(st) == 0:
+        ...             return -1
+        ...     elif st.startswith('a'):
+        ...             return 1
+        ...     elif 'example' in st:
+        ...             return 2
+        ...     else:
+        ...             return 3
+        ...
+        >>> sr = cudf.Series(['', 'abc', 'some_example'])
+        >>> sr.apply(f)  # doctest: +SKIP
+        0   -1
+        1    1
+        2    2
+        dtype: int64
+
+        However, the following UDF is not allowed since it includes an
+        operation that requires the creation of a new string: a call to the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
+
+        >>> def f(st):
+        ...     new = st.upper()
+        ...     return 'ABC' in new
+        ...
+        >>> sr.apply(f)  # doctest: +SKIP
+
+        For a complete list of supported functions and methods that may be
+        used to manipulate string data, see the the UDF guide,
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
+
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")

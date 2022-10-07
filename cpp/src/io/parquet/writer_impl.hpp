@@ -208,11 +208,11 @@ class writer::impl {
   // Cuda stream to be used
   rmm::cuda_stream_view stream;
 
+  Compression compression_               = Compression::UNCOMPRESSED;
   size_t max_row_group_size              = default_row_group_size_bytes;
   size_type max_row_group_rows           = default_row_group_size_rows;
   size_t max_page_size_bytes             = default_max_page_size_bytes;
   size_type max_page_size_rows           = default_max_page_size_rows;
-  Compression compression_               = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_     = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps                  = false;
   size_type column_index_truncate_length = default_column_index_truncate_length;

@@ -20,7 +20,7 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150
 from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
@@ -451,8 +451,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             )
 
-            if PANDAS_GE_120:
-                # TODO: Remove this whole `if` block,
+            if PANDAS_GE_120 and not PANDAS_GE_150:
+                # Need this whole `if` block,
                 # this is a workaround for the following issue:
                 # https://github.com/pandas-dev/pandas/issues/39984
                 preprocess_pdf = pd.DataFrame(
@@ -1458,7 +1458,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         return cls.from_frame(df, names=multiindex.names)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_unique(self):
         return len(self) == len(self.unique())
@@ -1854,7 +1854,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(self: MultiIndex, other: MultiIndex) -> MultiIndex:
+    def _copy_type_metadata(
+        self: MultiIndex, other: MultiIndex, *, override_dtypes=None
+    ) -> MultiIndex:
         res = super()._copy_type_metadata(other)
         res._names = other._names
         return res

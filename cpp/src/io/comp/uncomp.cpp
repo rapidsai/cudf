@@ -520,7 +520,9 @@ size_t decompress_zstd(host_span<uint8_t const> src,
   hd_dsts[0]   = d_dst;
   hd_dsts.host_to_device(stream);
 
-  auto hd_stats                   = hostdevice_vector<decompress_status>(1, stream);
+  auto hd_stats = hostdevice_vector<compression_result>(1, stream);
+  hd_stats[0]   = compression_result{0, compression_status::FAILURE};
+  hd_stats.host_to_device(stream);
   auto const max_uncomp_page_size = dst.size();
   nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                              hd_srcs,
@@ -531,7 +533,7 @@ size_t decompress_zstd(host_span<uint8_t const> src,
                              stream);
 
   hd_stats.device_to_host(stream, true);
-  CUDF_EXPECTS(hd_stats[0].status == 0, "ZSTD decompression failed");
+  CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
 
   // Copy temporary output to `dst`
   CUDF_CUDA_TRY(cudaMemcpyAsync(

@@ -20,6 +20,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.io.json cimport (
     json_reader_options,
     read_json as libcudf_read_json,
+    schema_element,
 )
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
 from cudf._lib.io.utils cimport make_source_info, update_struct_field_names
@@ -32,7 +33,8 @@ cpdef read_json(object filepaths_or_buffers,
                 bool lines,
                 object compression,
                 object byte_range,
-                bool experimental):
+                bool experimental,
+                bool keep_quotes):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -55,7 +57,7 @@ cpdef read_json(object filepaths_or_buffers,
 
     # Setup arguments
     cdef vector[data_type] c_dtypes_list
-    cdef map[string, data_type] c_dtypes_map
+    cdef map[string, schema_element] c_dtypes_schema_map
     cdef cudf_io_types.compression_type c_compression
     # Determine byte read offsets if applicable
     cdef size_type c_range_offset = (
@@ -81,8 +83,8 @@ cpdef read_json(object filepaths_or_buffers,
     elif dtype is not True:
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                c_dtypes_map[str(k).encode()] = \
-                    _get_cudf_data_type_from_dtype(v)
+                c_dtypes_schema_map[str(k).encode()] = \
+                    _get_cudf_schema_element_from_dtype(v)
         elif isinstance(dtype, abc.Collection):
             is_list_like_dtypes = True
             c_dtypes_list.reserve(len(dtype))
@@ -105,8 +107,9 @@ cpdef read_json(object filepaths_or_buffers,
     if is_list_like_dtypes:
         opts.set_dtypes(c_dtypes_list)
     else:
-        opts.set_dtypes(c_dtypes_map)
+        opts.set_dtypes(c_dtypes_schema_map)
 
+    opts.enable_keep_quotes(keep_quotes)
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
@@ -122,6 +125,32 @@ cpdef read_json(object filepaths_or_buffers,
     update_struct_field_names(df, c_result.metadata.schema_info)
 
     return df
+
+
+cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
+    cdef schema_element s_element
+    cdef data_type lib_type
+    if cudf.api.types.is_categorical_dtype(dtype):
+        raise NotImplementedError(
+            "CategoricalDtype as dtype is not yet "
+            "supported in JSON reader"
+        )
+
+    dtype = cudf.dtype(dtype)
+    lib_type = dtype_to_data_type(dtype)
+    s_element.type = lib_type
+    if isinstance(dtype, cudf.StructDtype):
+        for name, child_type in dtype.fields.items():
+            s_element.child_types[name.encode()] = \
+                _get_cudf_schema_element_from_dtype(child_type)
+    elif isinstance(dtype, cudf.ListDtype):
+        s_element.child_types["offsets".encode()] = \
+            _get_cudf_schema_element_from_dtype(cudf.dtype("int32"))
+        s_element.child_types["element".encode()] = \
+            _get_cudf_schema_element_from_dtype(dtype.element_type)
+
+    return s_element
+
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
     if cudf.api.types.is_categorical_dtype(dtype):

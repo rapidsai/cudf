@@ -699,7 +699,8 @@ def test_advanced_groupby_levels():
         pytest.param(
             lambda df: df.groupby(["x", "y", "z"]).sum(),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/32464"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/32464",
             ),
         ),
         lambda df: df.groupby(["x", "y"]).sum(),
@@ -1578,8 +1579,10 @@ def test_groupby_list_of_structs(list_agg):
     )
     gdf = cudf.from_pandas(pdf)
 
-    with pytest.raises(pd.core.base.DataError):
-        gdf.groupby("a").agg({"b": list_agg}),
+    with pytest.raises(
+        pd.errors.DataError if PANDAS_GE_150 else pd.core.base.DataError
+    ):
+        gdf.groupby("a").agg({"b": list_agg})
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
@@ -2698,14 +2701,19 @@ def test_groupby_pct_change_empty_columns():
         False,
     ],
 )
-def test_groupby_group_keys(group_keys):
+@pytest.mark.parametrize("by", ["A", ["A", "B"]])
+def test_groupby_group_keys(group_keys, by):
     gdf = cudf.DataFrame(
-        {"A": "a a b".split(), "B": [1, 2, 3], "C": [4, 6, 5]}
+        {
+            "A": "a a a a b b".split(),
+            "B": [1, 1, 2, 2, 3, 3],
+            "C": [4, 6, 5, 9, 8, 7],
+        }
     )
     pdf = gdf.to_pandas()
 
-    g_group = gdf.groupby("A", group_keys=group_keys)
-    p_group = pdf.groupby("A", group_keys=group_keys)
+    g_group = gdf.groupby(by, group_keys=group_keys)
+    p_group = pdf.groupby(by, group_keys=group_keys)
 
     actual = g_group[["B", "C"]].apply(lambda x: x / x.sum())
     expected = p_group[["B", "C"]].apply(lambda x: x / x.sum())
