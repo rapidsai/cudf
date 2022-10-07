@@ -19,35 +19,6 @@
 #include <execinfo.h>
 #include <iostream>
 
-// clang-format off
-/*
-   We need to overload all the functions from the runtime API (assuming that we
-   don't use the driver API) that accept streams. Here's a complete listing of
-   the API pages that contain any APIs using streams as of 9/20/2022:
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__STREAM.html
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXTRES__INTEROP.html#group__CUDART__EXTRES__INTEROP
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY__POOLS.html#group__CUDART__MEMORY__POOLS
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__OPENGL__DEPRECATED.html#group__CUDART__OPENGL__DEPRECATED
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EGL.html#group__CUDART__EGL
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__INTEROP.html#group__CUDART__INTEROP
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__GRAPH.html#group__CUDART__GRAPH
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__HIGHLEVEL.html#group__CUDART__HIGHLEVEL
- */
-// clang-format on
-
-using cudaLaunchKernel_t = cudaError_t (*)(const void*, dim3, dim3, void**, size_t, cudaStream_t);
-
-static cudaLaunchKernel_t cudaLaunchKernel_original;
-
-void __attribute__((constructor)) init();
-void init()
-{
-  cudaLaunchKernel_original = (cudaLaunchKernel_t)dlsym(RTLD_NEXT, "cudaLaunchKernel");
-}
-
 /*
   Print the stack trace from the current frame.
   Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
@@ -120,6 +91,35 @@ __host__ void print_trace()
 #else
   std::cout << "Backtraces are only support on GNU systems." << std::endl;
 #endif  // __GNUC__
+}
+
+// clang-format off
+/*
+   We need to overload all the functions from the runtime API (assuming that we
+   don't use the driver API) that accept streams. Here's a complete listing of
+   the API pages that contain any APIs using streams as of 9/20/2022:
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__STREAM.html
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXTRES__INTEROP.html#group__CUDART__EXTRES__INTEROP
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY__POOLS.html#group__CUDART__MEMORY__POOLS
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__OPENGL__DEPRECATED.html#group__CUDART__OPENGL__DEPRECATED
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EGL.html#group__CUDART__EGL
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__INTEROP.html#group__CUDART__INTEROP
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__GRAPH.html#group__CUDART__GRAPH
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__HIGHLEVEL.html#group__CUDART__HIGHLEVEL
+ */
+// clang-format on
+
+using cudaLaunchKernel_t = cudaError_t (*)(const void*, dim3, dim3, void**, size_t, cudaStream_t);
+
+static cudaLaunchKernel_t cudaLaunchKernel_original;
+
+void __attribute__((constructor)) init();
+void init()
+{
+  cudaLaunchKernel_original = (cudaLaunchKernel_t)dlsym(RTLD_NEXT, "cudaLaunchKernel");
 }
 
 __host__ cudaError_t cudaLaunchKernel(
