@@ -85,6 +85,7 @@ cdef class Column:
         self.set_base_data(data)
         self.set_base_mask(mask)
         self._weak_ref = weak_ref
+        self._zero_copied = False
 
     @property
     def base_size(self):
@@ -329,7 +330,7 @@ cdef class Column:
             return weakref_count > 0
 
     def _detach_refs(self):
-        if self.has_a_weakref():
+        if not self._zero_copied and self.has_a_weakref():
             new_col = self.force_deep_copy()
 
             self._offset = new_col.offset

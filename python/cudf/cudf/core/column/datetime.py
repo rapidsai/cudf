@@ -282,6 +282,9 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
+        self._detach_refs()
+        self._zero_copied = True
+
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),

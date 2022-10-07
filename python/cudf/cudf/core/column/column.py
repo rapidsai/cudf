@@ -121,6 +121,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         View the data as a device array object
         """
+        self._detach_refs()
+        self._zero_copied = True
+
         return cuda.as_cuda_array(self.data).view(self.dtype)
 
     @property

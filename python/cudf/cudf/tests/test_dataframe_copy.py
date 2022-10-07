@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 from numba import cuda
 
-import cudf
 from cudf.core.dataframe import DataFrame
 from cudf.testing._utils import ALL_TYPES, assert_eq
 
@@ -163,10 +162,7 @@ def test_kernel_deep_copy():
     sr = gdf["b"]
 
     add_one[1, len(sr)](sr._column.data_array_view)
-    if cudf.get_option("copy_on_write"):
-        assert gdf.to_string().split() == cdf.to_string().split()
-    else:
-        assert not gdf.to_string().split() == cdf.to_string().split()
+    assert not gdf.to_string().split() == cdf.to_string().split()
 
 
 def test_kernel_shallow_copy():
