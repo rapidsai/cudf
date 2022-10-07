@@ -554,7 +554,8 @@ class chunked_parquet_reader {
    */
   bool has_next()
   {
-    // TODO: handle closed file
+    // TODO:
+    // if(reader->is_close()) { return false; }
     return skip_rows >= total_rows;
   }
 
