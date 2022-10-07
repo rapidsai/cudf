@@ -59,9 +59,17 @@
 // ZSTD is stable for nvcomp 2.3.2 or newer
 #if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or \
   (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and NVCOMP_PATCH_VERSION >= 2)
-#define NVCOMP_ZSTD_IS_EXPERIMENTAL 0
+#define NVCOMP_ZSTD_IS_STABLE 1
 #else
-#define NVCOMP_ZSTD_IS_EXPERIMENTAL 1
+#define NVCOMP_ZSTD_IS_STABLE 0
+#endif
+
+// Issue https://github.com/NVIDIA/spark-rapids/issues/6614 impacts nvCOMP 2.4.0 ZSTD decompression
+// on compute 6.x
+#if NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 4 and NVCOMP_PATCH_VERSION == 0
+#define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL 1
+#else
+#define NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL 0
 #endif
 
 namespace cudf::io::nvcomp {
@@ -152,6 +160,22 @@ size_t batched_decompress_temp_size(compression_type compression,
   return temp_size;
 }
 
+void check_is_zstd_enabled()
+{
+  CUDF_EXPECTS(NVCOMP_HAS_ZSTD_DECOMP, "nvCOMP 2.3 or newer is required for Zstandard compression");
+  CUDF_EXPECTS(NVCOMP_ZSTD_IS_STABLE or cudf::io::detail::nvcomp_integration::is_all_enabled(),
+               "Zstandard compression is experimental, you can enable it through "
+               "`LIBCUDF_NVCOMP_POLICY` environment variable.");
+
+#if NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL
+  int device;
+  int cc_major;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+  CUDF_EXPECTS(cc_major != 6, "Zstandard decompression is disabled on Pascal GPUs");
+#endif
+}
+
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
@@ -160,18 +184,7 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
-  // TODO Consolidate config use to a common location
-  if (compression == compression_type::ZSTD) {
-#if NVCOMP_HAS_ZSTD_DECOMP
-#if NVCOMP_ZSTD_IS_EXPERIMENTAL
-    CUDF_EXPECTS(cudf::io::detail::nvcomp_integration::is_all_enabled(),
-                 "Zstandard compression is experimental, you can enable it through "
-                 "`LIBCUDF_NVCOMP_POLICY` environment variable.");
-#endif
-#else
-    CUDF_FAIL("nvCOMP 2.3 or newer is required for Zstandard compression");
-#endif
-  }
+  if (compression == compression_type::ZSTD) { check_is_zstd_enabled(); }
 
   auto const num_chunks = inputs.size();
 
