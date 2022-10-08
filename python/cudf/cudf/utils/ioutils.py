@@ -299,6 +299,10 @@ Total number of rows
 Number of stripes
 List of column names
 
+Notes
+-----
+{remote_data_sources}
+
 Examples
 --------
 >>> import cudf
