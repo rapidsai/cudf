@@ -1239,13 +1239,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
-    host_span<device_span<uint8_t const> const> copy_in_view{copy_in.data(), copy_in.size()};
-    auto const d_copy_in = cudf::detail::make_device_uvector_async(copy_in_view, _stream);
-
-    host_span<device_span<uint8_t> const> copy_out_view(copy_out.data(), copy_out.size());
-    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out_view, _stream);
+    auto const d_copy_in = cudf::detail::make_device_uvector_async(copy_in, _stream);
+    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, _stream);
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, _stream);
+    _stream.synchronize();
   }
 
   // Update the page information in device memory with the updated value of
