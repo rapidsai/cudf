@@ -1239,7 +1239,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
-    auto const d_copy_in = cudf::detail::make_device_uvector_async(copy_in, _stream);
+    auto const d_copy_in  = cudf::detail::make_device_uvector_async(copy_in, _stream);
     auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, _stream);
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, _stream);
