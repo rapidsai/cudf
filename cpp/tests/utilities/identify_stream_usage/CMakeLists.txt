@@ -23,6 +23,11 @@ project(
 set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
 add_library(identify_stream_usage SHARED identify_stream_usage.cpp)
 
+find_package(CUDAToolkit REQUIRED)
+
+set_target_properties(identify_stream_usage PROPERTIES CUDA_RUNTIME_LIBRARY SHARED)
+target_link_libraries(identify_stream_usage PUBLIC CUDA::cudart)
+
 set_target_properties(
   identify_stream_usage
   PROPERTIES # set target compile options
