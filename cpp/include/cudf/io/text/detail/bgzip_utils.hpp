@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <zlib.h>
+
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -23,8 +25,6 @@
 #include <array>
 #include <fstream>
 #include <limits>
-
-#include <zlib.h>
 
 namespace cudf::io::text::detail::bgzip {
 
@@ -85,14 +85,14 @@ void write_footer(std::ostream& output_stream, host_span<char const> data);
  *
  * @param output_stream The output stream
  * @param data The uncompressed data
- * @param extra_garbage_before Any GZIP extra subfields (need to be valid) to be placed before the
- *                             BGZIP block size subfield
- * @param extra_garbage_after Any subfields to be placed after the BGZIP block size subfield
+ * @param pre_size_subfields Any GZIP extra subfields (need to be valid) to be placed before the
+ *                           BGZIP block size subfield
+ * @param post_size_subfields Any subfields to be placed after the BGZIP block size subfield
  */
 void write_uncompressed_block(std::ostream& output_stream,
                               host_span<char const> data,
-                              host_span<char const> extra_garbage_before = {},
-                              host_span<char const> extra_garbage_after  = {});
+                              host_span<char const> pre_size_subfields  = {},
+                              host_span<char const> post_size_subfields = {});
 
 /**
  * @brief Writes the given data to the given stream as a compressed deflate block with BZGIP
@@ -100,13 +100,13 @@ void write_uncompressed_block(std::ostream& output_stream,
  *
  * @param output_stream The output stream
  * @param data The uncompressed data
- * @param extra_garbage_before Any GZIP extra subfields (need to be valid) to be placed before the
- *                             BGZIP block size subfield
- * @param extra_garbage_after Any subfields to be placed after the BGZIP block size subfield
+ * @param pre_size_subfields Any GZIP extra subfields (need to be valid) to be placed before the
+ *                           BGZIP block size subfield
+ * @param post_size_subfields Any subfields to be placed after the BGZIP block size subfield
  */
 void write_compressed_block(std::ostream& output_stream,
                             host_span<char const> data,
-                            host_span<char const> extra_garbage_before = {},
-                            host_span<char const> extra_garbage_after  = {});
+                            host_span<char const> pre_size_subfields  = {},
+                            host_span<char const> post_size_subfields = {});
 
 }  // namespace cudf::io::text::detail::bgzip

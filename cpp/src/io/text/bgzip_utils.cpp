@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <zlib.h>
+
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -22,8 +24,6 @@
 #include <array>
 #include <fstream>
 #include <limits>
-
-#include <zlib.h>
 
 namespace cudf::io::text::detail::bgzip {
 namespace {
@@ -135,11 +135,11 @@ void write_header(std::ostream& output_stream,
 
 void write_uncompressed_block(std::ostream& output_stream,
                               host_span<char const> data,
-                              host_span<char const> extra_garbage_before,
-                              host_span<char const> extra_garbage_after)
+                              host_span<char const> pre_size_subfields,
+                              host_span<char const> post_size_subfields)
 {
   CUDF_EXPECTS(data.size() <= std::numeric_limits<uint16_t>::max(), "data size overflow");
-  write_header(output_stream, data.size() + 5, extra_garbage_before, extra_garbage_after);
+  write_header(output_stream, data.size() + 5, pre_size_subfields, post_size_subfields);
   write_int<uint8_t>(output_stream, 1);
   write_int<uint16_t>(output_stream, data.size());
   write_int<uint16_t>(output_stream, ~static_cast<uint16_t>(data.size()));
@@ -149,8 +149,8 @@ void write_uncompressed_block(std::ostream& output_stream,
 
 void write_compressed_block(std::ostream& output_stream,
                             host_span<char const> data,
-                            host_span<char const> extra_garbage_before,
-                            host_span<char const> extra_garbage_after)
+                            host_span<char const> pre_size_subfields,
+                            host_span<char const> post_size_subfields)
 {
   CUDF_EXPECTS(data.size() <= std::numeric_limits<uint16_t>::max(), "data size overflow");
   z_stream deflate_stream{};
@@ -171,7 +171,7 @@ void write_compressed_block(std::ostream& output_stream,
     "deflateInit failed");
   CUDF_EXPECTS(deflate(&deflate_stream, Z_FINISH) == Z_STREAM_END, "deflate failed");
   CUDF_EXPECTS(deflateEnd(&deflate_stream) == Z_OK, "deflateEnd failed");
-  write_header(output_stream, deflate_stream.total_out, extra_garbage_before, extra_garbage_after);
+  write_header(output_stream, deflate_stream.total_out, pre_size_subfields, post_size_subfields);
   output_stream.write(compressed_out.data(), deflate_stream.total_out);
   write_footer(output_stream, data);
 }

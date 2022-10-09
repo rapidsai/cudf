@@ -136,32 +136,32 @@ void write_bgzip(std::ostream& output_stream,
                  compression compress,
                  eof add_eof)
 {
-  std::vector<char> const extra_garbage_field1{{13,  // magic number
-                                                37,  // magic number
-                                                7,   // field length
-                                                0,   // field length
-                                                1,
-                                                2,
-                                                3,
-                                                4,
-                                                5,
-                                                6,
-                                                7}};
-  std::vector<char> const extra_garbage_field2{{12,  // magic number
-                                                34,  // magic number
-                                                2,   // field length
-                                                0,   // field length
-                                                1,  2,
-                                                56,  // magic number
-                                                78,  // magic number
-                                                1,   // field length
-                                                0,   // field length
-                                                3,   //
-                                                90,  // magic number
-                                                12,  // magic number
-                                                8,   // field length
-                                                0,   // field length
-                                                1,  2, 3, 4, 5, 6, 7, 8}};
+  std::vector<char> const extra_garbage_fields1{{13,  // magic number
+                                                 37,  // magic number
+                                                 7,   // field length
+                                                 0,   // field length
+                                                 1,
+                                                 2,
+                                                 3,
+                                                 4,
+                                                 5,
+                                                 6,
+                                                 7}};
+  std::vector<char> const extra_garbage_fields2{{12,  // magic number
+                                                 34,  // magic number
+                                                 2,   // field length
+                                                 0,   // field length
+                                                 1,  2,
+                                                 56,  // magic number
+                                                 78,  // magic number
+                                                 1,   // field length
+                                                 0,   // field length
+                                                 3,   //
+                                                 90,  // magic number
+                                                 12,  // magic number
+                                                 8,   // field length
+                                                 0,   // field length
+                                                 1,  2, 3, 4, 5, 6, 7, 8}};
   // make sure the block size with header stays below 65536
   std::uniform_int_distribution<std::size_t> block_size_dist{1, 65000};
   auto begin     = data.begin();
@@ -171,9 +171,9 @@ void write_bgzip(std::ostream& output_stream,
     using cudf::host_span;
     auto len = std::min<std::size_t>(end - begin, block_size_dist(rng));
     host_span<char const> const garbage_before =
-      i & 1 ? extra_garbage_field1 : host_span<char const>{};
+      i & 1 ? extra_garbage_fields1 : host_span<char const>{};
     host_span<char const> const garbage_after =
-      i & 2 ? extra_garbage_field2 : host_span<char const>{};
+      i & 2 ? extra_garbage_fields2 : host_span<char const>{};
     if (compress == compression::ENABLED) {
       cudf::io::text::detail::bgzip::write_compressed_block(
         output_stream, {begin, len}, garbage_before, garbage_after);
