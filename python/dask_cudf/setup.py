@@ -7,7 +7,6 @@ import shutil
 import versioneer
 from setuptools import find_packages, setup
 
-
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
     path_to_cuda_gdb = shutil.which("cuda-gdb")
@@ -47,13 +46,16 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
 
 
 install_requires = [
-    "dask>=2022.7.1",
-    "distributed>=2022.7.1",
+    "dask==2022.9.2",
+    "distributed==2022.9.2",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
     f"cudf{os.getenv('RAPIDS_PY_WHEEL_CUDA_SUFFIX', default='')}",
-    f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0,<11.0.0a0; platform_machine=='x86_64'",
+    (
+        f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0,"
+        "<11.0.0a0; platform_machine=='x86_64'"
+    ),
 ]
 
 extras_require = {
@@ -68,8 +70,10 @@ extras_require = {
 }
 
 setup(
-    name="dask-cudf"+os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default=""),
-    version=os.getenv("RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()),
+    name="dask-cudf" + os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default=""),
+    version=os.getenv(
+        "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()
+    ),
     description="Utilities for Dask and cuDF interactions",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
