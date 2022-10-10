@@ -232,7 +232,7 @@ class SpillableBuffer(Buffer):
         self._manager.spill_to_device_limit()
         with self._lock:
             if not self._exposed:
-                self._manager.log_expose(self)
+                self._manager.statistics.log_expose(self)
             self.__spill__(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()

@@ -44,22 +44,45 @@ class ExposeStatistic:
 
 class Statistics:
     spills_totals: Dict[Tuple[str, str], Tuple[int, float]]
+    expose: Dict[str, ExposeStatistic]
 
     def __init__(self, level) -> None:
         self.lock = threading.Lock()
         self.level = level
         self.spills_totals = defaultdict(lambda: (0, 0))
+        self.expose = {}
 
     def __str__(self) -> str:
         ret = f"Spill Manager Statistics (level={self.level}):\n"
-        if self.level == 0 or len(self.spills_totals) == 0:
+        if self.level == 0:
             return ret[:-1] + " N/A"
+
+        # Print spilling stats
+        ret += " Spilling (level >= 1):"
+        if len(self.spills_totals) == 0:
+            ret += " None"
+        ret += "\n"
         for (src, dst), (nbytes, time) in self.spills_totals.items():
             ret += f"  {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
+
+        # Print expose stats
+        ret += " Expose (level >= 2):"
+        if self.level < 2:
+            return ret + " disabled"
+        if len(self.expose) == 0:
+            ret += " None"
+        ret += "\n"
+        for s in sorted(self.expose.values(), key=lambda x: -x.count):
+            ret += (
+                f" Count: {s.count}, total: {format_bytes(s.total_nbytes)}, "
+            )
+            ret += f"spilled: {format_bytes(s.spilled_nbytes)}\n"
+            ret += s.traceback
+            ret += "\n"
         return ret[:-1]
 
     def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
-        if self.level == 0:
+        if self.level < 1:
             return
         with self.lock:
             total_nbytes, total_time = self.spills_totals[(src, dst)]
@@ -67,6 +90,25 @@ class Statistics:
                 total_nbytes + nbytes,
                 total_time + time,
             )
+
+    def log_expose(self, buf: SpillableBuffer) -> None:
+        if self.level < 2:
+            return
+
+        with self.lock:
+            tb = get_traceback()
+            stat = self.expose.get(tb, None)
+            spilled_nbytes = buf.nbytes if buf.is_spilled else 0
+            if stat is None:
+                self.expose[tb] = ExposeStatistic(
+                    traceback=tb,
+                    total_nbytes=buf.nbytes,
+                    spilled_nbytes=spilled_nbytes,
+                )
+            else:
+                stat.count += 1
+                stat.total_nbytes += buf.nbytes
+                stat.spilled_nbytes += spilled_nbytes
 
 
 class SpillManager:
@@ -95,7 +137,6 @@ class SpillManager:
     """
 
     _base_buffers: MutableMapping[int, SpillableBuffer]
-    _expose_statistics: Optional[Dict[str, ExposeStatistic]]
     statistics: Statistics
 
     def __init__(
@@ -103,15 +144,13 @@ class SpillManager:
         *,
         spill_on_demand: bool = False,
         device_memory_limit: int = None,
-        expose_statistics=False,
-        statistic_level: int = 1,
+        statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
         self._base_buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
-        self._expose_statistics = {} if expose_statistics else None
         self.statistics = Statistics(statistic_level)
 
         if self._spill_on_demand:
@@ -171,13 +210,9 @@ class SpillManager:
         print(
             f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
             "failed, spill-on-demand couldn't find any device memory to "
-            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
+            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+            f"{self.statistics}"
         )
-        if self._expose_statistics is None:
-            print("Set `CUDF_SPILL_STAT_EXPOSE=on` for expose statistics")
-        else:
-            print(self.pprint_expose_statistics())
-
         return False  # Since we didn't find anything to spill, we give up
 
     def add(self, buffer: SpillableBuffer) -> None:
@@ -245,39 +280,6 @@ class SpillManager:
                 ret.append(buf)
         return ret
 
-    def log_expose(self, buf: SpillableBuffer) -> None:
-        if self._expose_statistics is None:
-            return
-        tb = get_traceback()
-        stat = self._expose_statistics.get(tb, None)
-        spilled_nbytes = buf.nbytes if buf.is_spilled else 0
-        if stat is None:
-            self._expose_statistics[tb] = ExposeStatistic(
-                traceback=tb,
-                total_nbytes=buf.nbytes,
-                spilled_nbytes=spilled_nbytes,
-            )
-        else:
-            stat.count += 1
-            stat.total_nbytes += buf.nbytes
-            stat.spilled_nbytes += spilled_nbytes
-
-    def get_expose_statistics(self) -> List[ExposeStatistic]:
-        if self._expose_statistics is None:
-            return []
-        return sorted(self._expose_statistics.values(), key=lambda x: -x.count)
-
-    def pprint_expose_statistics(self) -> str:
-        ret = "Expose Statistics:\n"
-        for s in self.get_expose_statistics():
-            ret += (
-                f" Count: {s.count}, total: {format_bytes(s.total_nbytes)}, "
-            )
-            ret += f"spilled: {format_bytes(s.spilled_nbytes)}\n"
-            ret += s.traceback
-            ret += "\n"
-        return ret
-
     def __repr__(self) -> str:
         spilled = sum(
             buf.size for buf in self.base_buffers() if buf.is_spilled
@@ -327,8 +329,7 @@ def _get_manager_from_env() -> Optional[SpillManager]:
     return SpillManager(
         spill_on_demand=_env_get_bool("CUDF_SPILL_ON_DEMAND", True),
         device_memory_limit=_env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
-        expose_statistics=_env_get_bool("CUDF_SPILL_STAT_EXPOSE", False),
-        statistic_level=_env_get_bool("CUDF_SPILL_STATS_LEVEL", False),
+        statistic_level=_env_get_int("CUDF_SPILL_STATS_LEVEL", 0),
     )
 
 

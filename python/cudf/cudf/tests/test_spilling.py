@@ -177,17 +177,15 @@ def test_environment_variables(monkeypatch):
 
     clear()
     monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
-    monkeypatch.setenv("CUDF_SPILL_STAT_EXPOSE", "on")
     manager = global_manager_get()
     assert isinstance(manager, SpillManager)
     assert manager._device_memory_limit == 1000
-    assert isinstance(manager._expose_statistics, dict)
 
     clear()
-    monkeypatch.setenv("CUDF_SPILL_STATS_LEVEL", "1")
+    monkeypatch.setenv("CUDF_SPILL_STATS_LEVEL", "2")
     manager = global_manager_get()
     assert isinstance(manager, SpillManager)
-    assert manager.statistics.level == 1
+    assert manager.statistics.level == 2
 
 
 def test_spill_device_memory(manager: SpillManager):
@@ -369,64 +367,11 @@ def test_ptr_restricted(manager: SpillManager):
     assert buf.spillable
 
 
-def test_expose_statistics(manager: SpillManager):
-    manager._expose_statistics = {}  # Enable expose statistics
-    assert len(manager.get_expose_statistics()) == 0
-
-    buffers = [
-        SpillableBuffer(
-            data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
-        )
-        for _ in range(10)
-    ]
-
-    # Expose the first buffer
-    buffers[0].ptr
-    assert len(manager.get_expose_statistics()) == 1
-    stat = manager.get_expose_statistics()[0]
-    assert stat.count == 1
-    assert stat.total_nbytes == buffers[0].nbytes
-    assert stat.spilled_nbytes == 0
-
-    # Expose all 10 buffers
-    for i in range(10):
-        buffers[i].ptr
-
-    assert len(manager.get_expose_statistics()) == 2
-
-    # The stats of the first buffer should now be the last
-    assert manager.get_expose_statistics()[1] == stat
-    # The rest should accumulate to a single stat
-    stat = manager.get_expose_statistics()[0]
-    assert stat.count == 9
-    assert stat.total_nbytes == buffers[0].nbytes * 9
-    assert stat.spilled_nbytes == 0
-
-    # Create and spill 10 new buffers
-    buffers = [
-        SpillableBuffer(
-            data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
-        )
-        for _ in range(10)
-    ]
-    manager.spill_to_device_limit(0)
-
-    # Expose the new buffers and check that they are counted as spilled
-    for i in range(10):
-        buffers[i].ptr
-    assert len(manager.get_expose_statistics()) == 3
-    stat = manager.get_expose_statistics()[0]
-    assert stat.count == 10
-    assert stat.total_nbytes == buffers[0].nbytes * 10
-    assert stat.spilled_nbytes == buffers[0].nbytes * 10
-
-
 @pytest.mark.parametrize(
     "manager", [{"statistic_level": 0}, {"statistic_level": 1}], indirect=True
 )
 def test_statistics(manager: SpillManager):
     assert len(manager.statistics.spills_totals) == 0
-    assert "N/A" in str(manager.statistics)
 
     if manager.statistics.level == 0:
         return
@@ -446,6 +391,55 @@ def test_statistics(manager: SpillManager):
     nbytes, time = manager.statistics.spills_totals[("cpu", "gpu")]
     assert nbytes == b1.size
     assert time > 0
+
+
+@pytest.mark.parametrize("manager", [{"statistic_level": 2}], indirect=True)
+def test_statistics_expose(manager: SpillManager):
+    assert len(manager.statistics.spills_totals) == 0
+
+    buffers = [
+        SpillableBuffer(
+            data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+        )
+        for _ in range(10)
+    ]
+
+    # Expose the first buffer
+    buffers[0].ptr
+    assert len(manager.statistics.expose) == 1
+    stat = list(manager.statistics.expose.values())[0]
+    assert stat.count == 1
+    assert stat.total_nbytes == buffers[0].nbytes
+    assert stat.spilled_nbytes == 0
+
+    # Expose all 10 buffers
+    for i in range(10):
+        buffers[i].ptr
+
+    # The rest should accumulate to a single stat
+    assert len(manager.statistics.expose) == 2
+    stat = list(manager.statistics.expose.values())[1]
+    assert stat.count == 9
+    assert stat.total_nbytes == buffers[0].nbytes * 9
+    assert stat.spilled_nbytes == 0
+
+    # Create and spill 10 new buffers
+    buffers = [
+        SpillableBuffer(
+            data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+        )
+        for _ in range(10)
+    ]
+    manager.spill_to_device_limit(0)
+
+    # Expose the new buffers and check that they are counted as spilled
+    for i in range(10):
+        buffers[i].ptr
+    assert len(manager.statistics.expose) == 3
+    stat = list(manager.statistics.expose.values())[2]
+    assert stat.count == 10
+    assert stat.total_nbytes == buffers[0].nbytes * 10
+    assert stat.spilled_nbytes == buffers[0].nbytes * 10
 
 
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
