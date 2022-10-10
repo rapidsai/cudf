@@ -82,17 +82,17 @@ def modifiedFiles():
         # returns None if no tracking branch is set.
         upstream_target_branch = repo.heads[target_branch].tracking_branch()
     if upstream_target_branch is None:
-        if target_branch in repo.remote().refs:
-            # Fall back to the remote reference. This code path is used on CI
-            # because the only local branch reference is current-pr-branch, and
-            # thus target_branch is not in repo.heads. This also happens if no
-            # tracking branch is defined for the local target_branch. We use
-            # the remote with the latest commit if multiple remotes are
-            # defined.
-            candidate_branches = [
-                remote.refs[target_branch] for remote in repo.remotes
-                if target_branch in remote.refs
-            ]
+        # Fall back to the remote with the newest target_branch. This code
+        # path is used on CI because the only local branch reference is
+        # current-pr-branch, and thus target_branch is not in repo.heads.
+        # This also happens if no tracking branch is defined for the local
+        # target_branch. We use the remote with the latest commit if
+        # multiple remotes are defined.
+        candidate_branches = [
+            remote.refs[target_branch] for remote in repo.remotes
+            if target_branch in remote.refs
+        ]
+        if len(candidate_branches) > 0:
             upstream_target_branch = sorted(
                 candidate_branches,
                 key=lambda branch: branch.commit.committed_datetime,
