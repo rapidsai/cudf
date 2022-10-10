@@ -183,6 +183,12 @@ def test_environment_variables(monkeypatch):
     assert manager._device_memory_limit == 1000
     assert isinstance(manager._expose_statistics, dict)
 
+    clear()
+    monkeypatch.setenv("CUDF_SPILL_STATS_LEVEL", "1")
+    manager = global_manager_get()
+    assert isinstance(manager, SpillManager)
+    assert manager.statistics.level == 1
+
 
 def test_spill_device_memory(manager: SpillManager):
     df = gen_df()
@@ -413,6 +419,33 @@ def test_expose_statistics(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+@pytest.mark.parametrize(
+    "manager", [{"statistic_level": 0}, {"statistic_level": 1}], indirect=True
+)
+def test_statistics(manager: SpillManager):
+    assert len(manager.statistics.spills_totals) == 0
+    assert "N/A" in str(manager.statistics)
+
+    if manager.statistics.level == 0:
+        return
+
+    b1 = SpillableBuffer(
+        data=rmm.DeviceBuffer(size=10), exposed=False, manager=manager
+    )
+
+    b1.__spill__(target="cpu")
+    assert len(manager.statistics.spills_totals) == 1
+    nbytes, time = manager.statistics.spills_totals[("gpu", "cpu")]
+    assert nbytes == b1.size
+    assert time > 0
+
+    b1.__spill__(target="gpu")
+    assert len(manager.statistics.spills_totals) == 2
+    nbytes, time = manager.statistics.spills_totals[("cpu", "gpu")]
+    assert nbytes == b1.size
+    assert time > 0
 
 
 @pytest.mark.parametrize("target", ["gpu", "cpu"])

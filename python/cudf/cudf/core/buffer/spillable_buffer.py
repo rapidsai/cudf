@@ -177,6 +177,7 @@ class SpillableBuffer(Buffer):
             The target of the spilling.
         """
 
+        time_start = time.perf_counter()
         with self._lock:
             ptr_type = self._ptr_desc["type"]
             if ptr_type == target:
@@ -209,6 +210,14 @@ class SpillableBuffer(Buffer):
                 # TODO: support moving to disk
                 raise ValueError(f"Unknown target: {target}")
             self._ptr_desc["type"] = target
+
+        time_end = time.perf_counter()
+        self._manager.statistics.log_spill(
+            src=ptr_type,
+            dst=target,
+            nbytes=self.size,
+            time=time_end - time_start,
+        )
 
     @property
     def ptr(self) -> int:

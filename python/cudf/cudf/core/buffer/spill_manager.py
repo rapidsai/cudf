@@ -9,8 +9,9 @@ import threading
 import traceback
 import warnings
 import weakref
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import List, MutableMapping, Optional, Tuple
+from typing import Dict, List, MutableMapping, Optional, Tuple
 
 import rmm.mr
 
@@ -41,6 +42,33 @@ class ExposeStatistic:
     spilled_nbytes: int = 0
 
 
+class Statistics:
+    spills_totals: Dict[Tuple[str, str], Tuple[int, float]]
+
+    def __init__(self, level) -> None:
+        self.lock = threading.Lock()
+        self.level = level
+        self.spills_totals = defaultdict(lambda: (0, 0))
+
+    def __str__(self) -> str:
+        ret = f"Spill Manager Statistics (level={self.level}):\n"
+        if self.level == 0 or len(self.spills_totals) == 0:
+            return ret[:-1] + " N/A"
+        for (src, dst), (nbytes, time) in self.spills_totals.items():
+            ret += f"  {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
+        return ret[:-1]
+
+    def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
+        if self.level == 0:
+            return
+        with self.lock:
+            total_nbytes, total_time = self.spills_totals[(src, dst)]
+            self.spills_totals[(src, dst)] = (
+                total_nbytes + nbytes,
+                total_time + time,
+            )
+
+
 class SpillManager:
     """Manager of spillable buffers.
 
@@ -67,14 +95,16 @@ class SpillManager:
     """
 
     _base_buffers: MutableMapping[int, SpillableBuffer]
-    _expose_statistics: Optional[MutableMapping[str, ExposeStatistic]]
+    _expose_statistics: Optional[Dict[str, ExposeStatistic]]
+    statistics: Statistics
 
     def __init__(
         self,
         *,
-        spill_on_demand=False,
-        device_memory_limit=None,
+        spill_on_demand: bool = False,
+        device_memory_limit: int = None,
         expose_statistics=False,
+        statistic_level: int = 1,
     ) -> None:
         self._lock = threading.Lock()
         self._base_buffers = weakref.WeakValueDictionary()
@@ -82,6 +112,7 @@ class SpillManager:
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
         self._expose_statistics = {} if expose_statistics else None
+        self.statistics = Statistics(statistic_level)
 
         if self._spill_on_demand:
             # Set the RMM out-of-memory handle if not already set
@@ -297,6 +328,7 @@ def _get_manager_from_env() -> Optional[SpillManager]:
         spill_on_demand=_env_get_bool("CUDF_SPILL_ON_DEMAND", True),
         device_memory_limit=_env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
         expose_statistics=_env_get_bool("CUDF_SPILL_STAT_EXPOSE", False),
+        statistic_level=_env_get_bool("CUDF_SPILL_STATS_LEVEL", False),
     )
 
 
