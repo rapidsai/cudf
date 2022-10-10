@@ -13,7 +13,7 @@ jobs:
       package-dir: python/cudf
       python-version: "3.8 3.9"
       python-package-versioneer-override: "22.10.00a"
-      python-package-build-tag: "2"
+      python-package-build-tag: "3"
 
       manylinux-container-amd64: "rapidsai/manylinux2014"
       manylinux-container-arm64: "rapidsai/manylinux_2_31"
