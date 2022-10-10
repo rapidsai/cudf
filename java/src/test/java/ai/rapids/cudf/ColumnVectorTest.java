@@ -3942,7 +3942,7 @@ public class ColumnVectorTest extends CudfTestBase {
     "\\THE\t8\ud720", "tést strings", "", "éé");
         ColumnVector res = cv.asByteList(true);
         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-          new HostColumnVector.BasicType(true, DType.INT8)), list1, list2, list3, list4, list5,
+          new HostColumnVector.BasicType(true, DType.UINT8)), list1, list2, list3, list4, list5,
           list6, list7, list8)) {
       assertColumnsAreEqual(expected, res);
     }
