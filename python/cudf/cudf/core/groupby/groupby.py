@@ -1011,12 +1011,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _broadcast(self, values):
         """
-        Broadcast the values of an aggregation to the group
+        Broadcast the results of an aggregation to the group
 
         Parameters
         ----------
         values: Series
-            A Series representing the values of an aggregation.  The
+            A Series representing the results of an aggregation.  The
             index of the Series must be the (unique) values
             representing the group keys.
 
