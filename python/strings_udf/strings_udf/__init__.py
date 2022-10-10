@@ -12,6 +12,7 @@ from . import _version
 
 __version__ = _version.get_versions()["version"]
 
+
 def _get_appropriate_file(sms, cc):
     filtered_sms = list(filter(lambda x: x[0] <= cc, sms))
     if filtered_sms:
@@ -28,9 +29,7 @@ if cp.returncode == 0:
     # the current device's.
     dev = cuda.get_current_device()
     cc = int("".join(str(x) for x in dev.compute_capability))
-    files = glob.glob(
-        os.path.join(os.path.dirname(__file__), "shim_*.ptx")
-    )
+    files = glob.glob(os.path.join(os.path.dirname(__file__), "shim_*.ptx"))
     if len(files) == 0:
         raise RuntimeError(
             "This strings_udf installation is missing the necessary PTX "

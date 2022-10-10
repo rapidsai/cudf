@@ -25,12 +25,12 @@ _supported_masked_types = (
 _STRING_UDFS_ENABLED = False
 try:
     import strings_udf
-
-    from . import strings_typing  # isort: skip
-    from . import strings_lowering  # isort: skip
     from strings_udf import ptxpath
     from strings_udf._lib.cudf_jit_udf import to_string_view_array
     from strings_udf._typing import str_view_arg_handler, string_view
+
+    from . import strings_typing  # isort: skip
+    from . import strings_lowering  # isort: skip
 
     # add an overload of MaskedType.__init__(string_view, bool)
     cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
