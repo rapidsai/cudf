@@ -36,18 +36,18 @@ jobs:
       test-unittest: "pytest -v ./python/cudf/cudf/tests"
       test-smoketest: "import cudf, requests, numpy; from io import StringIO; url = 'https://github.com/plotly/datasets/raw/master/tips.csv'; content = requests.get(url).content.decode('utf-8'); tips_df = cudf.read_csv(StringIO(content)); tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100; mean_tips = tips_df.groupby('size').tip_percentage.mean(); print(mean_tips); print(mean_tips.iloc[0]); assert numpy.isclose(mean_tips.iloc[0], 15.622920); import pyarrow as pa; n_legs = pa.array([2, 4, 5, 100]); animals = pa.array(['Flamingo', 'Horse', 'Brittle stars', 'Centipede']); names = ['n_legs', 'animals']; print(animals); foo = pa.table([n_legs, animals], names=names); print(foo); import cudf; df = cudf.DataFrame.from_arrow(foo); print(df); print(df.loc[df['animals'] == 'Centipede']['n_legs']); assert df.loc[df['animals'] == 'Centipede']['n_legs'].iloc[0] == 100"
     secrets: inherit
-      #dask_cudf-wheel:
-      #  needs: cudf-wheels
-      #  uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions-2
-      #  with:
-      #    package-name: dask_cudf
-      #    package-dir: python/dask_cudf
-      #    python-package-cuda-suffix: "-cu11"
-      #    python-package-versioneer-override: "22.10.00a"
-      #    python-package-build-tag: "1"
+      dask_cudf-wheel:
+        needs: cudf-wheels
+        uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions-2
+        with:
+          package-name: dask_cudf
+          package-dir: python/dask_cudf
+          python-package-cuda-suffix: "-cu11"
+          python-package-versioneer-override: "22.10.00a"
+          python-package-build-tag: "2"
 
-      #    test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      #    test-extras:  "test"
-      #    test-unittest: "pytest -v ./python/dask_cudf/dask_cudf/tests"
-      #    test-smoketest: "import dask_cudf; print(dask_cudf)"
-      #  secrets: inherit
+          test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+          test-extras:  "test"
+          test-unittest: "pytest -v ./python/dask_cudf/dask_cudf/tests"
+          test-smoketest: "import dask_cudf; print(dask_cudf)"
+        secrets: inherit
