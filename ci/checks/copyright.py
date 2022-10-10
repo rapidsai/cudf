@@ -91,6 +91,7 @@ def modifiedFiles():
             # defined.
             candidate_branches = [
                 remote.refs[target_branch] for remote in repo.remotes
+                if target_branch in remote.refs
             ]
             upstream_target_branch = sorted(
                 candidate_branches,
