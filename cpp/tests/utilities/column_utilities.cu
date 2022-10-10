@@ -861,7 +861,6 @@ void expect_column_empty(cudf::column_view const& col)
 {
   EXPECT_EQ(0, col.size());
   EXPECT_EQ(0, col.null_count());
-  EXPECT_EQ(0, col.num_children());
 }
 
 /**
