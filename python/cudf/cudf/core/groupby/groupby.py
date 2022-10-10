@@ -606,20 +606,27 @@ class GroupBy(Serializable, Reducible, Scannable):
         dtype: int64
         """
         num_groups = len(index := self.grouping.keys.unique())
+        _, has_null_group = bitmask_or([*index._columns])
 
         if ascending:
-            _, has_null_group = bitmask_or([*index._columns])
             if has_null_group:
-                # when there's a null group,
-                # the first group ID is -1
-                group_ids = cp.arange(-1, num_groups - 1)
+                group_ids = cudf.Series._from_data(
+                    {None: cp.arange(-1, num_groups - 1)}
+                )
             else:
-                group_ids = cp.arange(num_groups)
+                group_ids = cudf.Series._from_data(
+                    {None: cp.arange(num_groups)}
+                )
         else:
-            # in the descending case, there's no difference:
-            group_ids = cp.arange(num_groups - 1, -1, -1)
+            group_ids = cudf.Series._from_data(
+                {None: cp.arange(num_groups - 1, -1, -1)}
+            )
 
-        return self._broadcast(cudf.Series(group_ids, index=index))
+        if has_null_group:
+            group_ids.iloc[0] = cudf.NA
+
+        group_ids._index = index
+        return self._broadcast(group_ids)
 
     def serialize(self):
         header = {}
