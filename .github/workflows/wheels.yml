@@ -5,6 +5,10 @@ on:
     branches:
       - 'pull-request/[0-9]+'
 
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
 jobs:
   cudf-wheels:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions-2
@@ -13,7 +17,7 @@ jobs:
       package-dir: python/cudf
       python-version: "3.8 3.9"
       python-package-versioneer-override: "22.10.00a"
-      python-package-build-tag: "3"
+      python-package-build-tag: "4"
 
       manylinux-container-amd64: "rapidsai/manylinux2014"
       manylinux-container-arm64: "rapidsai/manylinux_2_31"
@@ -44,7 +48,7 @@ jobs:
       package-dir: python/dask_cudf
       python-package-cuda-suffix: "-cu11"
       python-package-versioneer-override: "22.10.00a"
-      python-package-build-tag: "2"
+      python-package-build-tag: "3"
 
       test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-extras:  "test"
