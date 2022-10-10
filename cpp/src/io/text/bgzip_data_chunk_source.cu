@@ -20,6 +20,7 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -36,7 +37,6 @@
 #include <limits>
 
 namespace cudf::io::text {
-
 namespace {
 
 /**
@@ -64,68 +64,6 @@ struct bgzip_nvcomp_transform_functor {
 
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
-  template <typename IntType>
-  static IntType read_int(char* data)
-  {
-    IntType result{};
-    // we assume little-endian
-    std::memcpy(&result, &data[0], sizeof(result));
-    return result;
-  }
-
-  struct bgzip_header {
-    int block_size;
-    int extra_length;
-    [[nodiscard]] int data_size() const { return block_size - extra_length - 20; }
-  };
-
-  bgzip_header read_header()
-  {
-    std::array<char, 12> buffer{};
-    _data_stream->read(buffer.data(), sizeof(buffer));
-    std::array<uint8_t, 4> const expected_header{{31, 139, 8, 4}};
-    CUDF_EXPECTS(
-      std::equal(
-        expected_header.begin(), expected_header.end(), reinterpret_cast<uint8_t*>(buffer.data())),
-      "malformed BGZIP header");
-    // we ignore the remaining bytes of the fixed header, since they don't matter to us
-    auto const extra_length = read_int<uint16_t>(&buffer[10]);
-    uint16_t extra_offset{};
-    // read all the extra subfields
-    while (extra_offset < extra_length) {
-      auto const remaining_size = extra_length - extra_offset;
-      CUDF_EXPECTS(remaining_size >= 4, "invalid extra field length");
-      // a subfield consists of 2 identifier bytes and a uint16 length
-      // 66/67 identifies a BGZIP block size field, we skip all other fields
-      _data_stream->read(buffer.data(), 4);
-      extra_offset += 4;
-      auto const subfield_size = read_int<uint16_t>(&buffer[2]);
-      if (buffer[0] == 66 && buffer[1] == 67) {
-        // the block size subfield contains a single uint16 value, which is block_size - 1
-        CUDF_EXPECTS(subfield_size == sizeof(uint16_t), "malformed BGZIP extra subfield");
-        _data_stream->read(buffer.data(), sizeof(uint16_t));
-        _data_stream->seekg(remaining_size - 6, std::ios_base::cur);
-        auto const block_size_minus_one = read_int<uint16_t>(&buffer[0]);
-        return {block_size_minus_one + 1, extra_length};
-      } else {
-        _data_stream->seekg(subfield_size, std::ios_base::cur);
-        extra_offset += subfield_size;
-      }
-    }
-    CUDF_FAIL("missing BGZIP size extra subfield");
-  }
-
-  struct bgzip_footer {
-    uint32_t decompressed_size;
-  };
-
-  bgzip_footer read_footer()
-  {
-    std::array<char, 8> buffer{};
-    _data_stream->read(buffer.data(), sizeof(buffer));
-    return {read_int<uint32_t>(&buffer[4])};
-  }
-
   template <typename T>
   using pinned_host_vector =
     thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>>;
@@ -258,13 +196,13 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       return available_decompressed_size - read_pos;
     }
 
-    void read_block(bgzip_header header, std::istream& stream)
+    void read_block(detail::bgzip::header header, std::istream& stream)
     {
       h_compressed_blocks.resize(h_compressed_blocks.size() + header.data_size());
       stream.read(h_compressed_blocks.data() + compressed_size(), header.data_size());
     }
 
-    void add_block_offsets(bgzip_header header, bgzip_footer footer)
+    void add_block_offsets(detail::bgzip::header header, detail::bgzip::footer footer)
     {
       max_decompressed_size =
         std::max<std::size_t>(footer.decompressed_size, max_decompressed_size);
@@ -294,9 +232,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       // peek is necessary if we are already at the end, but didn't try to read another byte
       _data_stream->peek();
       if (_data_stream->eof() || _compressed_pos > _compressed_end) { break; }
-      auto header = read_header();
+      auto header = detail::bgzip::read_header(*_data_stream);
       _curr_blocks.read_block(header, *_data_stream);
-      auto footer = read_footer();
+      auto footer = detail::bgzip::read_footer(*_data_stream);
       _curr_blocks.add_block_offsets(header, footer);
       // for the last GZIP block, we restrict ourselves to the bytes up to _local_end
       // but only for the reader, not for decompression!

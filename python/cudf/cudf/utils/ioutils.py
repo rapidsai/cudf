@@ -1172,6 +1172,16 @@ byte_range : list or tuple, default None
     The output contains all rows that start inside the byte range
     (i.e. at or after the offset, and before the end at `offset + size`),
     which may include rows that continue past the end.
+compression : string, default None
+    Which compression type is the input compressed with.
+    Currently supports only `bgzip`, and requires the path to a file as input.
+compression_offsets: list or tuple, default None
+    The virtual begin and end offset associated with the provided compression.
+    For `bgzip`, they are composed of a local uncompressed offset inside a
+    BGZIP block (lower 16 bits) and the start offset of this BGZIP block in the
+    compressed file (upper 48 bits).
+    The start offset points to the first byte to be read, the end offset points
+    one past the last byte to be read.
 
 Returns
 -------
