@@ -18,15 +18,19 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/column_buffer.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/functional.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -1480,12 +1484,22 @@ __global__ void __launch_bounds__(block_size)
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
+  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
+    return;
+  }
+
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
-  if (!has_repetition) { return; }
 
-  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
+  // if this is a flat data type, compute the size directly from the number of values.
+  // NOTE: does not work for strings!
+  if (!has_repetition) {
+    if (!t) {
+      for (size_type idx = 0; idx < pp->num_nesting_levels; idx++) {
+        pp->nesting[idx].size = pp->num_input_values;
+      }
+    }
     return;
   }
 
@@ -1737,18 +1751,97 @@ struct start_offset_output_iterator {
   }
 };
 
-/**
- * @copydoc cudf::io::parquet::gpu::PreprocessColumnData
- */
-void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
-                          hostdevice_vector<ColumnChunkDesc> const& chunks,
-                          std::vector<input_column_info>& input_columns,
-                          std::vector<cudf::io::detail::column_buffer>& output_columns,
-                          size_t num_rows,
-                          size_t min_row,
-                          bool uses_custom_row_bounds,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
+struct cumulative_row_info {
+  size_t row_count;   // cumulative row count
+  size_t size_bytes;  // cumulative size in bytes
+  int key;            // schema index
+};
+struct cumulative_row_sum {
+  cumulative_row_info operator()
+    __device__(cumulative_row_info const& a, cumulative_row_info const& b) const
+  {
+    return cumulative_row_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes, a.key};
+  }
+};
+
+struct row_size_functor {
+  template <typename T>
+  __device__ size_t operator()(size_t num_rows, bool nullable)
+  {
+    auto const element_size = sizeof(device_storage_type_t<T>);
+    return (element_size * num_rows) +
+           (nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0);
+  }
+};
+
+template <>
+__device__ size_t row_size_functor::operator()<list_view>(size_t num_rows, bool nullable)
+{
+  auto const offset_size = sizeof(offset_type);
+  return (offset_size * (num_rows + 1)) +
+         (nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0);
+}
+
+template <>
+__device__ size_t row_size_functor::operator()<struct_view>(size_t num_rows, bool nullable)
+{
+  return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0;
+}
+
+template <>
+__device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, bool nullable)
+{
+  // CUDF_FAIL("String types currently unsupported");
+  return 0;
+}
+
+struct get_cumulative_row_info {
+  PageInfo const* const pages;
+
+  cumulative_row_info operator() __device__(size_type index)
+  {
+    auto const& page = pages[index];
+    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
+      return cumulative_row_info{0, 0, page.src_col_schema};
+    }
+    size_t const row_count = page.nesting[0].size;
+    return cumulative_row_info{
+      row_count,
+      cudf::type_dispatcher(data_type{page.nesting[0].type}, row_size_functor{}, row_count, false),
+      page.src_col_schema};
+  }
+};
+
+struct row_total_size {
+  cumulative_row_info const* const c_info;
+  size_type const* const key_offsets;
+  size_t const num_keys;
+
+  __device__ cumulative_row_info operator()(cumulative_row_info const& i)
+  {
+    // sum sizes for each input column at this row
+    size_t sum = 0;
+    for (int idx = 0; idx < num_keys; idx++) {
+      auto const start = key_offsets[idx];
+      auto const end   = key_offsets[idx + 1];
+      auto iter        = cudf::detail::make_counting_transform_iterator(
+        0, [&] __device__(size_type i) { return c_info[start + i].row_count; });
+      auto const page_index =
+        (thrust::lower_bound(thrust::seq, iter, iter + (end - start), i.row_count) - iter) + start;
+      // printf("KI(%d): start(%d), end(%d), page_index(%d), size_bytes(%lu)\n", idx, start, end,
+      // (int)page_index, c_info[page_index].size_bytes);
+      sum += c_info[page_index].size_bytes;
+    }
+    return {i.row_count, sum};
+  }
+};
+
+void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
+                      hostdevice_vector<ColumnChunkDesc> const& chunks,
+                      size_t min_row,
+                      size_t num_rows,
+                      bool trim_pass,
+                      rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -1759,127 +1852,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
   // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
   // the starting and ending read values to account for these bounds.
   gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(),
-    chunks,
-    // if uses_custom_row_bounds is false, include all possible rows.
-    uses_custom_row_bounds ? min_row : 0,
-    uses_custom_row_bounds ? num_rows : INT_MAX,
-    !uses_custom_row_bounds);
-
-  // computes:
-  // PageInfo::chunk_row for all pages
-  // Note: this is doing some redundant work for pages in flat hierarchies.  chunk_row has already
-  // been computed during header decoding. the overall amount of work here is very small though.
-  auto key_input = thrust::make_transform_iterator(
-    pages.device_ptr(), [] __device__(PageInfo const& page) { return page.chunk_idx; });
-  auto page_input = thrust::make_transform_iterator(
-    pages.device_ptr(), [] __device__(PageInfo const& page) { return page.num_rows; });
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                key_input,
-                                key_input + pages.size(),
-                                page_input,
-                                chunk_row_output_iter{pages.device_ptr()});
-
-  // computes:
-  // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
-  // PageInfo::skipped_values, which tells us where to start decoding in the input  .
-  // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
-  // specified artifical bounds).
-  if (uses_custom_row_bounds) {
-    gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, true);
-  }
-
-  // ordering of pages is by input column schema, repeated across row groups.  so
-  // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
-  //
-  // 1, 1, 2, 2, 3, 3
-  //
-  // However, if we had more than one row group, the pattern would be
-  //
-  // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
-  // ^ row group 0     |
-  //                   ^ row group 1
-  //
-  // To use exclusive_scan_by_key, the ordering we actually want is
-  //
-  // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
-  //
-  // We also need to preserve key-relative page ordering, so we need to use a stable sort.
-  rmm::device_uvector<int> page_keys(pages.size(), stream);
-  rmm::device_uvector<int> page_index(pages.size(), stream);
-  {
-    thrust::transform(rmm::exec_policy(stream),
-                      pages.device_ptr(),
-                      pages.device_ptr() + pages.size(),
-                      page_keys.begin(),
-                      [] __device__(PageInfo const& page) { return page.src_col_schema; });
-
-    thrust::sequence(rmm::exec_policy(stream), page_index.begin(), page_index.end());
-    thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                               page_keys.begin(),
-                               page_keys.end(),
-                               page_index.begin(),
-                               thrust::less<int>());
-  }
-
-  // compute output column sizes by examining the pages of the -input- columns
-  for (size_t idx = 0; idx < input_columns.size(); idx++) {
-    auto const& input_col = input_columns[idx];
-    auto src_col_schema   = input_col.schema_idx;
-    size_t max_depth      = input_col.nesting_depth();
-
-    auto* cols = &output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
-      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-      cols          = &out_buf.children;
-
-      // size iterator. indexes pages by sorted order
-      auto size_input = thrust::make_transform_iterator(
-        page_index.begin(),
-        [src_col_schema, l_idx, pages = pages.device_ptr()] __device__(int index) {
-          auto const& page = pages[index];
-          if (page.src_col_schema != src_col_schema || page.flags & PAGEINFO_FLAGS_DICTIONARY) {
-            return 0;
-          }
-          return page.nesting[l_idx].size;
-        });
-
-      // if this buffer is part of a list hierarchy, we need to determine it's
-      // final size and allocate it here.
-      //
-      // for struct columns, higher levels of the output columns are shared between input
-      // columns. so don't compute any given level more than once.
-      if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) && out_buf.size == 0) {
-        int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
-
-        // if this is a list column add 1 for non-leaf levels for the terminating offset
-        if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
-
-        // allocate
-        out_buf.create(size, stream, mr);
-      }
-
-      // for nested hierarchies, compute per-page start offset.
-      // it would be better/safer to be checking (schema.max_repetition_level > 0) here, but there's
-      // no easy way to get at that info here. we'd have to move this function into reader_impl.cu
-      if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) ||
-          out_buf.type.id() == type_id::LIST) {
-        thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                      page_keys.begin(),
-                                      page_keys.end(),
-                                      size_input,
-                                      start_offset_output_iterator{pages.device_ptr(),
-                                                                   page_index.begin(),
-                                                                   0,
-                                                                   static_cast<int>(src_col_schema),
-                                                                   static_cast<int>(l_idx)});
-      }
-    }
-  }
-
-  // retrieve pages back
-  pages.device_to_host(stream);
+    pages.device_ptr(), chunks, min_row, num_rows, trim_pass);
 }
 
 /**

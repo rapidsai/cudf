@@ -350,6 +350,7 @@ add_library(
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
   src/io/parquet/reader_impl.cu
+  src/io/parquet/reader_preprocess.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
