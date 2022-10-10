@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 MAGIC_OVERRIDE_CODE="
 def my_run_line_magic(*args, **kwargs):

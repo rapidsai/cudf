@@ -66,7 +66,7 @@ std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 {
   auto indices =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED);
-  thrust::sequence(rmm::exec_policy(),
+  thrust::sequence(rmm::exec_policy(cudf::default_stream_value),
                    indices->mutable_view().begin<size_type>(),
                    indices->mutable_view().end<size_type>(),
                    0);
@@ -132,8 +132,9 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                ? (offsets[true_index + 1] - offsets[true_index])
                : 0;
     });
-  auto const output_size =
-    thrust::reduce(rmm::exec_policy(), row_size_iter, row_size_iter + row_indices.size());
+  auto const output_size = thrust::reduce(rmm::exec_policy(cudf::default_stream_value),
+                                          row_size_iter,
+                                          row_size_iter + row_indices.size());
   // no output. done.
   auto result =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
@@ -146,7 +147,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto output_row_start = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, row_indices.size(), mask_state::UNALLOCATED);
-  thrust::exclusive_scan(rmm::exec_policy(),
+  thrust::exclusive_scan(rmm::exec_policy(cudf::default_stream_value),
                          row_size_iter,
                          row_size_iter + row_indices.size(),
                          output_row_start->mutable_view().begin<size_type>());
@@ -155,7 +156,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [1, 1, 1, 1, 1]
   //
-  thrust::generate(rmm::exec_policy(),
+  thrust::generate(rmm::exec_policy(cudf::default_stream_value),
                    result->mutable_view().begin<size_type>(),
                    result->mutable_view().end<size_type>(),
                    [] __device__() { return 1; });
@@ -174,7 +175,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
       auto const true_index = row_indices[index] + offset;
       return offsets[true_index] - first_offset;
     });
-  thrust::scatter_if(rmm::exec_policy(),
+  thrust::scatter_if(rmm::exec_policy(cudf::default_stream_value),
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
@@ -188,18 +189,18 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto keys =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
-  thrust::generate(rmm::exec_policy(),
+  thrust::generate(rmm::exec_policy(cudf::default_stream_value),
                    keys->mutable_view().begin<size_type>(),
                    keys->mutable_view().end<size_type>(),
                    [] __device__() { return 0; });
-  thrust::scatter_if(rmm::exec_policy(),
+  thrust::scatter_if(rmm::exec_policy(cudf::default_stream_value),
                      row_size_iter,
                      row_size_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
                      row_size_iter,
                      keys->mutable_view().begin<size_type>(),
                      [] __device__(auto row_size) { return row_size != 0; });
-  thrust::inclusive_scan(rmm::exec_policy(),
+  thrust::inclusive_scan(rmm::exec_policy(cudf::default_stream_value),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
                          keys->mutable_view().begin<size_type>());
@@ -212,7 +213,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // output
   //    result = [6, 7, 11, 12, 13]
   //
-  thrust::inclusive_scan_by_key(rmm::exec_policy(),
+  thrust::inclusive_scan_by_key(rmm::exec_policy(cudf::default_stream_value),
                                 keys->view().begin<size_type>(),
                                 keys->view().end<size_type>(),
                                 result->view().begin<size_type>(),
@@ -255,7 +256,9 @@ struct column_property_comparator {
         auto const true_index = row_indices[index] + offset;
         return !validity || cudf::bit_is_set(validity, true_index) ? 0 : 1;
       });
-    return thrust::reduce(rmm::exec_policy(), validity_iter, validity_iter + row_indices.size());
+    return thrust::reduce(rmm::exec_policy(cudf::default_stream_value),
+                          validity_iter,
+                          validity_iter + row_indices.size());
   }
 
   bool compare_common(cudf::column_view const& lhs,
@@ -549,7 +552,7 @@ struct column_comparator_impl {
       lhs.size(), cudf::default_stream_value);  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
     auto diff_iter  = thrust::copy_if(
-      rmm::exec_policy(),
+      rmm::exec_policy(cudf::default_stream_value),
       input_iter,
       input_iter + lhs_row_indices.size(),
       differences.begin(),
@@ -640,7 +643,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     //
     auto input_iter = thrust::make_counting_iterator(0);
     auto diff_iter  = thrust::copy_if(
-      rmm::exec_policy(),
+      rmm::exec_policy(cudf::default_stream_value),
       input_iter,
       input_iter + lhs_row_indices.size(),
       differences.begin(),
@@ -862,7 +865,8 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
   }
   auto typed_lhs = static_cast<char const*>(lhs);
   auto typed_rhs = static_cast<char const*>(rhs);
-  EXPECT_TRUE(thrust::equal(thrust::device, typed_lhs, typed_lhs + size_bytes, typed_rhs));
+  EXPECT_TRUE(thrust::equal(
+    rmm::exec_policy(cudf::default_stream_value), typed_lhs, typed_lhs + size_bytes, typed_rhs));
 }
 
 /**
@@ -957,7 +961,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(),
+    rmm::exec_policy(cudf::default_stream_value),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),

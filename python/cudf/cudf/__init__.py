@@ -9,7 +9,6 @@ from numba import config as numba_config, cuda
 
 import rmm
 
-from cudf.api.types import dtype
 from cudf import api, core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
@@ -17,16 +16,28 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core.scalar import Scalar
-
+from cudf.api.types import dtype
+from cudf.core.algorithms import factorize
+from cudf.core.cut import cut
+from cudf.core.dataframe import DataFrame, from_dataframe, from_pandas, merge
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal32Dtype,
+    Decimal64Dtype,
+    Decimal128Dtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.core.groupby import Grouper
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
     DatetimeIndex,
     Float32Index,
     Float64Index,
-    Index,
     GenericIndex,
+    Index,
     Int8Index,
     Int16Index,
     Int32Index,
@@ -41,22 +52,8 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
-from cudf.core.series import Series
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
-from cudf.core.cut import cut
-from cudf.core.algorithms import factorize
-from cudf.core.dtypes import (
-    CategoricalDtype,
-    Decimal64Dtype,
-    Decimal32Dtype,
-    Decimal128Dtype,
-    IntervalDtype,
-    ListDtype,
-    StructDtype,
-)
-from cudf.core.groupby import Grouper
 from cudf.core.reshape import (
     concat,
     crosstab,
@@ -66,8 +63,9 @@ from cudf.core.reshape import (
     pivot_table,
     unstack,
 )
-from cudf.core.series import isclose
-from cudf.core.tools.datetimes import DateOffset, to_datetime
+from cudf.core.scalar import Scalar
+from cudf.core.series import Series, isclose
+from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
     from_dlpack,
@@ -80,26 +78,18 @@ from cudf.io import (
     read_parquet,
     read_text,
 )
-from cudf.core.tools.datetimes import date_range
+from cudf.options import describe_option, get_option, set_option
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import set_allocator
-
-from cudf.options import (
-    get_option,
-    set_option,
-    describe_option,
-)
+from cudf.utils.utils import clear_cache, set_allocator
 
 try:
-    from ptxcompiler.patch import patch_numba_codegen_if_needed
+    from cubinlinker.patch import patch_numba_linker_if_needed
 except ImportError:
     pass
 else:
     # Patch Numba to support CUDA enhanced compatibility.
-    # See https://github.com/rapidsai/ptxcompiler for
-    # details.
-    patch_numba_codegen_if_needed()
-    del patch_numba_codegen_if_needed
+    patch_numba_linker_if_needed()
+    del patch_numba_linker_if_needed
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
@@ -111,6 +101,10 @@ except AttributeError:
     # Numba < 0.54: No occupancy warnings
     pass
 del numba_config
+
+
+rmm.register_reinitialize_hook(clear_cache)
+
 
 __version__ = get_versions()["version"]
 del get_versions

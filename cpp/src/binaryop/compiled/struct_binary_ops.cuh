@@ -93,9 +93,17 @@ void apply_struct_binary_op(mutable_column_view& out,
       out.end<bool>(),
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
   };
-  is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
-    ? tabulate_device_operator(table_comparator.less_equivalent(comparator_nulls, comparator))
-    : tabulate_device_operator(table_comparator.less(comparator_nulls, comparator));
+  if (cudf::detail::has_nested_columns(tlhs) || cudf::detail::has_nested_columns(trhs)) {
+    is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
+      ? tabulate_device_operator(
+          table_comparator.less_equivalent<true>(comparator_nulls, comparator))
+      : tabulate_device_operator(table_comparator.less<true>(comparator_nulls, comparator));
+  } else {
+    is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
+      ? tabulate_device_operator(
+          table_comparator.less_equivalent<false>(comparator_nulls, comparator))
+      : tabulate_device_operator(table_comparator.less<false>(comparator_nulls, comparator));
+  }
 }
 
 template <typename PhysicalEqualityComparator =

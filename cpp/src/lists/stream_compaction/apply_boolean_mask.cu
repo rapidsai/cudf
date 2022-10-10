@@ -19,6 +19,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -102,6 +103,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(input, boolean_mask, cudf::default_stream_value, mr);
 }
 

@@ -24,10 +24,10 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/device_vector.h>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/equal.h>
-#include <thrust/execution_policy.h>
-#include <thrust/pair.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
@@ -123,6 +123,30 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 
   return std::pair(std::pair(std::move(left), std::move(left_nulls)),
                    std::pair(std::move(right), std::move(right_nulls)));
+}
+
+// `rmm::device_uvector<T>` requires that T be trivially copyable. `thrust::pair` does
+// not satisfy this requirement because it defines nontrivial copy/move
+// constructors. Therefore, we need a simple, trivially copyable pair-like
+// object. `index_pair` is a minimal implementation suitable for use in the
+// tests in this file.
+struct index_pair {
+  cudf::size_type first{};
+  cudf::size_type second{};
+  __device__ index_pair(){};
+  __device__ index_pair(cudf::size_type const& first, cudf::size_type const& second)
+    : first(first), second(second){};
+};
+
+__device__ inline bool operator<(const index_pair& lhs, const index_pair& rhs)
+{
+  if (lhs.first > rhs.first) return false;
+  return (lhs.first < rhs.first) || (lhs.second < rhs.second);
+}
+
+__device__ inline bool operator==(const index_pair& lhs, const index_pair& rhs)
+{
+  return lhs.first == rhs.first && lhs.second == rhs.second;
 }
 
 }  // namespace
@@ -251,33 +275,37 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
    */
   void _compare_to_hash_join(PairJoinReturn const& result, PairJoinReturn const& reference)
   {
-    thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> result_pairs(
-      result.first->size());
-    thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> reference_pairs(
-      reference.first->size());
+    auto result_pairs =
+      rmm::device_uvector<index_pair>(result.first->size(), cudf::default_stream_value);
+    auto reference_pairs =
+      rmm::device_uvector<index_pair>(reference.first->size(), cudf::default_stream_value);
 
-    thrust::transform(thrust::device,
+    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                       result.first->begin(),
                       result.first->end(),
                       result.second->begin(),
                       result_pairs.begin(),
                       [] __device__(cudf::size_type first, cudf::size_type second) {
-                        return thrust::make_pair(first, second);
+                        return index_pair{first, second};
                       });
-    thrust::transform(thrust::device,
+    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                       reference.first->begin(),
                       reference.first->end(),
                       reference.second->begin(),
                       reference_pairs.begin(),
                       [] __device__(cudf::size_type first, cudf::size_type second) {
-                        return thrust::make_pair(first, second);
+                        return index_pair{first, second};
                       });
 
-    thrust::sort(thrust::device, result_pairs.begin(), result_pairs.end());
-    thrust::sort(thrust::device, reference_pairs.begin(), reference_pairs.end());
+    thrust::sort(
+      rmm::exec_policy(cudf::default_stream_value), result_pairs.begin(), result_pairs.end());
+    thrust::sort(
+      rmm::exec_policy(cudf::default_stream_value), reference_pairs.begin(), reference_pairs.end());
 
-    EXPECT_TRUE(thrust::equal(
-      thrust::device, reference_pairs.begin(), reference_pairs.end(), result_pairs.begin()));
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::default_stream_value),
+                              reference_pairs.begin(),
+                              reference_pairs.end(),
+                              result_pairs.begin()));
   }
 
   void compare_to_hash_join(ColumnVector<T> left_data, ColumnVector<T> right_data)
@@ -696,9 +724,13 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
                              std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& reference)
   {
-    thrust::sort(thrust::device, result->begin(), result->end());
-    thrust::sort(thrust::device, reference->begin(), reference->end());
-    EXPECT_TRUE(thrust::equal(thrust::device, result->begin(), result->end(), reference->begin()));
+    thrust::sort(rmm::exec_policy(cudf::default_stream_value), result->begin(), result->end());
+    thrust::sort(
+      rmm::exec_policy(cudf::default_stream_value), reference->begin(), reference->end());
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::default_stream_value),
+                              result->begin(),
+                              result->end(),
+                              reference->begin()));
   }
 
   /*

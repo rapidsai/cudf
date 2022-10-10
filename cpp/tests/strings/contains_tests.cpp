@@ -330,6 +330,7 @@ TEST_F(StringsContainsTests, Errors)
   auto strings_view = cudf::strings_column_view(input);
 
   EXPECT_THROW(cudf::strings::contains_re(strings_view, "(3?)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "(?:3?)+"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::contains_re(strings_view, "3?+"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::count_re(strings_view, "{3}a"), cudf::logic_error);
 }
@@ -456,6 +457,23 @@ TEST_F(StringsContainsTests, OverlappedClasses)
   {
     auto results = cudf::strings::count_re(sv, "[á-éê-ú]");
     cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 0, 6, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, NegatedClasses)
+{
+  auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
+  auto sv    = cudf::strings_column_view(input);
+
+  {
+    auto results = cudf::strings::count_re(sv, "[^a-f]");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 4, 0, 5, 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::count_re(sv, "[^a-eá-é]");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({2, 5, 0, 1, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

@@ -11,7 +11,7 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
 include(../../fetch_rapids.cmake)
 include(rapids-cmake)
@@ -22,7 +22,7 @@ include(rapids-find)
 
 project(
   CUDA_KAFKA
-  VERSION 22.10.00
+  VERSION 22.12.00
   LANGUAGES CXX
 )
 

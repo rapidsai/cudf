@@ -107,7 +107,7 @@ struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
  * order. The `sum` is the total length of elements in the column.
  * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
  */
-struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
+struct string_statistics : minmax_statistics<std::string>, sum_statistics<int64_t> {
 };
 
 /**
@@ -163,6 +163,7 @@ struct column_statistics;
  */
 struct column_statistics {
   std::optional<uint64_t> number_of_values;  ///< number of statistics
+  std::optional<bool> has_null;              ///< column has any nulls
   std::variant<no_statistics,
                integer_statistics,
                double_statistics,

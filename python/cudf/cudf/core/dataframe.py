@@ -21,7 +21,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -40,7 +39,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, Dtype, NotImplementedType
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -305,7 +304,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 start = arg[0].start
                 if start is None:
                     start = self._frame.index[0]
-                df.index = as_index(start)
+                df.index = as_index(start, name=self._frame.index.name)
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
@@ -313,7 +312,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         row_selection
                     )
                 else:
-                    df.index = as_index(row_selection)
+                    df.index = as_index(
+                        row_selection, name=self._frame.index.name
+                    )
         # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
@@ -525,21 +526,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ----------
     data : array-like, Iterable, dict, or DataFrame.
         Dict can contain Series, arrays, constants, or list-like objects.
-
     index : Index or array-like
         Index to use for resulting frame. Will default to
         RangeIndex if no indexing information part of input data and
         no index provided.
-
     columns : Index or array-like
         Column labels to use for resulting frame.
         Will default to RangeIndex (0, 1, 2, …, n) if no column
         labels are provided.
-
     dtype : dtype, default None
         Data type to force. Only a single dtype is allowed.
         If None, infer.
-
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -547,7 +544,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     Examples
     --------
-
     Build dataframe with ``__setitem__``:
 
     >>> import cudf
@@ -1061,7 +1057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(self._dtypes)
+        return pd.Series(self._dtypes, dtype="object")
 
     @property
     def ndim(self):
@@ -1799,7 +1795,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def _get_renderable_dataframe(self):
         """
-        takes rows and columns from pandas settings or estimation from size.
+        Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
         multiindex as well producing an efficient representative string
         for printing with the dataframe.
@@ -1939,7 +1935,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            Type[NotImplemented],
+            NotImplementedType,
         ],
         Optional[BaseIndex],
     ]:
@@ -3841,7 +3837,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         level=None,
         as_index=True,
         sort=False,
-        group_keys=True,
+        group_keys=False,
         squeeze=False,
         observed=False,
         dropna=True,
@@ -3866,7 +3862,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         expr : str
             A boolean expression. Names in expression refer to columns.
             `index` can be used instead of index name, but this is not
@@ -3882,8 +3877,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-
-        filtered :  DataFrame
+        filtered : DataFrame
 
         Examples
         --------
@@ -3961,6 +3955,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
+        Support for use of string data within UDFs is provided through the
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
+        RAPIDS library. Supported operations on strings include the subset of
+        functions and string methods that expect an input string but do not
+        return a string. Refer to caveats in the UDF guide referenced above.
+
         Parameters
         ----------
         func : function
@@ -3979,7 +3979,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-
         Simple function of a single variable which could be NA:
 
         >>> def f(row):
@@ -4085,6 +4084,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1     4.8
         2     5.0
         dtype: float64
+
+        UDFs manipulating string data are allowed, as long as
+        they neither modify strings in place nor create new strings.
+        For example, the following UDF is allowed:
+
+        >>> def f(row):
+        ...     st = row['str_col']
+        ...     scale = row['scale']
+        ...     if len(st) == 0:
+        ...             return -1
+        ...     elif st.startswith('a'):
+        ...             return 1 - scale
+        ...     elif 'example' in st:
+        ...             return 1 + scale
+        ...     else:
+        ...             return 42
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'str_col': ['', 'abc', 'some_example'],
+        ...     'scale': [1, 2, 3]
+        ... })
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
+        0   -1
+        1   -1
+        2    4
+        dtype: int64
+
+        However, the following UDF is not allowed since it includes an
+        operation that requires the creation of a new string: a call to the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
+
+        >>> def f(row):
+        ...     st = row['str_col'].upper()
+        ...     return 'ABC' in st
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
+
+        For a complete list of supported functions and methods that may be
+        used to manipulate string data, see the the UDF guide,
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
         """
         if axis != 1:
             raise ValueError(
@@ -4103,7 +4142,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         na_action: Union[str, None] = None,
         **kwargs,
     ) -> DataFrame:
-
         """
         Apply a function to a Dataframe elementwise.
 
@@ -5175,7 +5213,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         axis : int
@@ -5278,7 +5315,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {`lower`, `higher`, `nearest`}
@@ -5288,7 +5324,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-
         DataFrame
         """
         if isinstance(q, numbers.Number):
@@ -5318,7 +5353,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-
         values : iterable, Series, DataFrame or dict
             The result will only be true at a location if all
             the labels match. If values is a Series, that’s the index.
@@ -5999,11 +6033,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns=None,
         header=True,
         index=True,
-        line_terminator="\n",
-        chunksize=None,
         encoding=None,
         compression=None,
-        **kwargs,
+        line_terminator="\n",
+        chunksize=None,
+        storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
@@ -6020,11 +6054,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             chunksize=chunksize,
             encoding=encoding,
             compression=compression,
-            **kwargs,
+            storage_options=storage_options,
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, compression=None, *args, **kwargs):
+    def to_orc(self, fname, compression="snappy", *args, **kwargs):
         """{docstring}"""
         from cudf.io import orc
 
@@ -6548,9 +6582,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns: List[ColumnBase],
         column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
-            columns, column_names, index_names
+            columns,
+            column_names,
+            index_names,
+            override_dtypes=override_dtypes,
         )
         result._set_column_names_like(self)
         return result
@@ -6984,7 +7023,7 @@ def from_pandas(obj, nan_as_null=None):
 
     Converting a Pandas Series to cuDF Series:
 
-    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple', dtype='str')
     >>> psr
     0    a
     1    b
@@ -7257,11 +7296,9 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
         ):
             # Combine and de-dupe the categories
-            categories[idx] = (
-                cudf.Series(concat_columns([col.categories for col in cols]))
-                .drop_duplicates(ignore_index=True)
-                ._column
-            )
+            categories[idx] = cudf.Series(
+                concat_columns([col.categories for col in cols])
+            )._column.unique(preserve_order=True)
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
