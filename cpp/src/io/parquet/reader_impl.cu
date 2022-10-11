@@ -1353,26 +1353,39 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                                       hostdevice_vector<gpu::PageInfo>& pages,
                                       size_t min_row,
                                       size_t total_rows,
-                                      bool uses_custom_row_bounds,
-                                      bool has_lists)
+                                      bool uses_custom_row_bounds)
 {
-  // TODO : we should be selectively preprocessing only columns that have
-  // lists in them instead of doing them all if even one contains lists.
+  // iterate over all input columns and allocate any associated output
+  // buffers if they are not part of a list hierarchy. mark down
+  // if we have any list columns that need further processing.
+  bool has_lists = false;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const& input_col  = _input_columns[idx];
+    size_t const max_depth = input_col.nesting_depth();
 
-  // if there are no lists, simply allocate every allocate every output
-  // column to be of size num_rows
-  if (!has_lists) {
-    std::function<void(std::vector<column_buffer>&)> create_columns =
-      [&](std::vector<column_buffer>& cols) {
-        for (size_t idx = 0; idx < cols.size(); idx++) {
-          auto& col = cols[idx];
-          col.create(total_rows, _stream, _mr);
-          create_columns(col.children);
-        }
-      };
-    create_columns(_output_columns);
-  } else {
-    // preprocess per-nesting level sizes by page
+    auto* cols = &_output_columns;
+    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+      cols          = &out_buf.children;
+
+      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
+      // to know how big this buffer actually is.
+      if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
+        has_lists = true;
+      }
+      // if we haven't already processed this column because it is part of a struct hierarchy
+      else if (out_buf.size == 0) {
+        // add 1 for the offset if this is a list column
+        out_buf.create(
+          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
+          _stream,
+          _mr);
+      }
+    }
+  }
+
+  // if we have columns containing lists, further preprocessing is necessary.
+  if (has_lists) {
     gpu::PreprocessColumnData(pages,
                               chunks,
                               _input_columns,
@@ -1636,9 +1649,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Keep track of column chunk file offsets
     std::vector<size_t> column_chunk_offsets(num_chunks);
 
-    // if there are lists present, we need to preprocess
-    bool has_lists = false;
-
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
@@ -1656,9 +1666,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         // look up metadata
         auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
         auto& schema   = _metadata->get_schema(col.schema_idx);
-
-        // this column contains repetition levels and will require a preprocess
-        if (schema.max_repetition_level > 0) { has_lists = true; }
 
         auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
@@ -1755,7 +1762,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, has_lists);
+      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds);
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
