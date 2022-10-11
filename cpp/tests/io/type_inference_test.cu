@@ -211,7 +211,7 @@ TEST_F(TypeInference, Timestamp)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
+  std::size_t constexpr size = 2;
   auto const string_offset   = std::vector<int32_t>{1, 10};
   auto const string_length   = std::vector<std::size_t>{8, 9};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
