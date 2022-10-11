@@ -125,7 +125,7 @@ class SpillableBuffer(Buffer):
             if self._exposed:
                 self._ptr_desc = {"type": "gpu"}
                 ptr, size = get_ptr_and_size(
-                    numpy.array(data).__array_interface__
+                    numpy.array(data, copy=False).__array_interface__
                 )
                 buf = rmm.DeviceBuffer(ptr=ptr, size=size)
                 self._ptr = buf.ptr
@@ -149,7 +149,7 @@ class SpillableBuffer(Buffer):
             # Assert that any buffers `data` may refer to has been exposed
             # already. If this is not the case, it means that somewhere we
             # are accessing a buffer's device pointer without marking it as
-            # exposed, which would be bug.
+            # exposed, which would be a bug.
             bases = manager.lookup_address_range(self._ptr, self._size)
             assert all(b.exposed for b in bases)
             # Assert that if `data` refers to any existing base buffers, it
