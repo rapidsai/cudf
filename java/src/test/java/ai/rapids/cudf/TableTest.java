@@ -7938,6 +7938,35 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testArrowIPCWriteEmptyToBufferChunked() {
+    try (Table emptyTable = new Table.TestBuilder().timestampDayColumn().build();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
+              .withColumnNames("day")
+              .build();
+      try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
+        writer.write(emptyTable);
+      }
+      try (StreamedTableReader reader = Table.readArrowIPCChunked(new MyBufferProvider(consumer))) {
+        boolean done = false;
+        int count = 0;
+        while (!done) {
+          try (Table t = reader.getNextIfAvailable()) {
+            if (t == null) {
+              done = true;
+            } else {
+              assertTablesAreEqual(emptyTable, t);
+              count++;
+            }
+          }
+        }
+        // Expect one empty batch for the empty table.
+        assertEquals(1, count);
+      }
+    }
+  }
+
+  @Test
   void testORCWriteToBufferChunked() {
     String[] selectedColumns = WriteUtils.getAllColumns(false);
     try (Table table0 = getExpectedFileTable(selectedColumns);
