@@ -33,12 +33,6 @@ if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF" == "1" ]]; then
   export LIBCUDF_FILES=$(conda build --no-build-id --croot "${CONDA_BLD_DIR}" conda/recipes/libcudf --output)
   LIBCUDF_FILES=$(echo "$LIBCUDF_FILES" | sed 's/.*libcudf-example.*//') # skip libcudf-example pkg upload
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing --no-progress $LIBCUDF_FILES
-
-  # also build strings_udf on cpu machines
-  export STRINGS_UDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/strings_udf --python=$PYTHON --output)
-  test -e ${STRINGS_UDF_FILE}
-  echo "Upload strings_udf: ${STRINGS_UDF_FILE}"
-  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${STRINGS_UDF_FILE} --no-progress
 fi
 
 if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
@@ -46,6 +40,11 @@ if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
   test -e ${CUDF_FILE}
   echo "Upload cudf: ${CUDF_FILE}"
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_FILE} --no-progress
+
+  export STRINGS_UDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/strings_udf --python=$PYTHON --output -c "${CONDA_BLD_DIR}")
+  test -e ${STRINGS_UDF_FILE}
+  echo "Upload strings_udf: ${STRINGS_UDF_FILE}"
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${STRINGS_UDF_FILE} --no-progress
 
   export DASK_CUDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/dask-cudf --python=$PYTHON --output)
   test -e ${DASK_CUDF_FILE}

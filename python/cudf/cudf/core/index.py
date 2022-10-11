@@ -841,6 +841,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def isna(self):
         return cupy.zeros(len(self), dtype=bool)
 
+    isnull = isna
+
+    @_cudf_nvtx_annotate
+    def notna(self):
+        return cupy.ones(len(self), dtype=bool)
+
+    notnull = isna
+
     @_cudf_nvtx_annotate
     def _minmax(self, meth: str):
         no_steps = len(self) - 1
@@ -1312,6 +1320,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
+
+    @_cudf_nvtx_annotate
+    def isna(self):
+        return self._column.isnull().values
+
+    isnull = isna
+
+    @_cudf_nvtx_annotate
+    def notna(self):
+        return self._column.notnull().values
+
+    notnull = notna
 
     @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
