@@ -226,7 +226,7 @@ class Buffer(Serializable):
             "typestr": "|u1",
             "version": 0,
         }
-    
+
     def _detach(self):
         # make a deep copy of existing DeviceBuffer
         # and replace pointer to it.
