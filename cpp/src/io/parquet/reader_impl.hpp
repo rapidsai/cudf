@@ -150,6 +150,8 @@ class reader::impl {
   /**
    * @brief Preprocess column information and allocate output buffers.
    *
+   * TODO
+   *
    * There are several pieces of information we can't compute directly from row counts in
    * the parquet headers when dealing with nested schemas.
    * - The total sizes of all output columns at all nesting levels
@@ -173,6 +175,16 @@ class reader::impl {
     bool uses_custom_row_bounds,
     size_type chunked_read_size);
 
+  /**
+   * TODO
+   * @brief allocate_columns
+   * @param chunks
+   * @param pages
+   * @param id
+   * @param min_row
+   * @param total_rows
+   * @param uses_custom_row_bounds
+   */
   void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
                         gpu::chunked_intermediate_data const& id,

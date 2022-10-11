@@ -236,6 +236,7 @@ struct ColumnChunkDesc {
   int32_t src_col_schema;  // my schema index in the file
 };
 
+// TODO: rename
 struct chunked_intermediate_data {
   rmm::device_uvector<int> page_keys;
   rmm::device_uvector<int> page_index;
