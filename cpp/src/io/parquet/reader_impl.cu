@@ -1770,9 +1770,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
       // TODO: make this a parameter.
-      // auto const chunked_read_size = 240000;
-      auto const chunked_read_size = 0;
-      auto chunk_reads             = preprocess_columns(
+      auto const chunked_read_size = 240000;
+      //      auto const chunked_read_size = 0;
+      auto chunk_reads = preprocess_columns(
         chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, chunked_read_size);
 
       // process each chunk. this is the part that would be externalized into multiple calls
