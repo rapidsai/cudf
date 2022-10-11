@@ -689,19 +689,24 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       size_type num_rows = json_col.child_offsets.size() - 1;
       std::vector<column_name_info> column_names{};
       column_names.emplace_back("offsets");
-      column_names.emplace_back(json_col.child_columns.begin()->first);
+      column_names.emplace_back(
+        json_col.child_columns.empty() ? "element" : json_col.child_columns.begin()->first);
 
       // Note: json_col modified here, reuse the memory
       auto offsets_column = std::make_unique<column>(
         data_type{type_id::INT32}, num_rows + 1, json_col.child_offsets.release());
       // Create children column
       auto [child_column, names] =
-        device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
-                                          d_input,
-                                          options,
-                                          get_child_schema(json_col.child_columns.begin()->first),
-                                          stream,
-                                          mr);
+        json_col.child_columns.empty()
+          ? std::pair<std::unique_ptr<column>,
+                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+          : device_json_column_to_cudf_column(
+              json_col.child_columns.begin()->second,
+              d_input,
+              options,
+              get_child_schema(json_col.child_columns.begin()->first),
+              stream,
+              mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows,
