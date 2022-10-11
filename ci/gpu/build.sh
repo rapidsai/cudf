@@ -35,10 +35,10 @@ unset GIT_DESCRIBE_TAG
 export INSTALL_DASK_MAIN=1
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2022.7.1"
+export DASK_STABLE_VERSION="2022.9.2"
 
 # ucx-py version
-export UCX_PY_VERSION='0.28.*'
+export UCX_PY_VERSION='0.29.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -77,6 +77,12 @@ nvidia-smi
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
+
+# Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
+if [ "$SOURCE_BRANCH" != "main" ] && [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
+  conda config --system --remove channels dask/label/dev
+  gpuci_mamba_retry install conda-forge::dask==$DASK_STABLE_VERSION conda-forge::distributed==$DASK_STABLE_VERSION conda-forge::dask-core==$DASK_STABLE_VERSION --force-reinstall
+fi
 
 gpuci_logger "Check conda environment"
 conda info
@@ -269,17 +275,14 @@ cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
 
+
+# only install strings_udf after cuDF is finished testing without its presence
 gpuci_logger "Installing strings_udf"
 gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
+# only install strings_udf after cuDF is finished testing without its presence
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
-
-# We do not want to exit with a nonzero exit code in the case where no
-# strings_udf tests are run because that will always happen when the local CUDA
-# version is not 11.5. We need to suppress the exit code because this script is
-# run with set -e and we're already setting a trap that we don't want to
-# override here.
 
 STRINGS_UDF_PYTEST_RETCODE=0
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?

@@ -5,6 +5,7 @@ from io import TextIOBase
 import cudf
 
 from cython.operator cimport dereference
+from libc.stdint cimport uint64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -15,6 +16,7 @@ from cudf._lib.cpp.io.text cimport (
     byte_range_info,
     data_chunk_source,
     make_source,
+    make_source_from_bgzip_file,
     make_source_from_file,
     multibyte_split,
 )
@@ -22,7 +24,9 @@ from cudf._lib.cpp.io.text cimport (
 
 def read_text(object filepaths_or_buffers,
               object delimiter=None,
-              object byte_range=None):
+              object byte_range=None,
+              object compression=None,
+              object compression_offsets=None):
     """
     Cython function to call into libcudf API, see `multibyte_split`.
 
@@ -38,11 +42,34 @@ def read_text(object filepaths_or_buffers,
     cdef size_t c_byte_range_offset
     cdef size_t c_byte_range_size
     cdef byte_range_info c_byte_range
+    cdef uint64_t c_compression_begin_offset
+    cdef uint64_t c_compression_end_offset
 
-    if isinstance(filepaths_or_buffers, TextIOBase):
-        datasource = move(make_source(filepaths_or_buffers.read().encode()))
+    if compression is None:
+        if isinstance(filepaths_or_buffers, TextIOBase):
+            datasource = move(make_source(
+                filepaths_or_buffers.read().encode()))
+        else:
+            datasource = move(make_source_from_file(
+                filepaths_or_buffers.encode()))
+    elif compression == "bgzip":
+        if isinstance(filepaths_or_buffers, TextIOBase):
+            raise ValueError("bgzip compression requires a file path")
+        if compression_offsets is not None:
+            if len(compression_offsets) != 2:
+                raise ValueError(
+                    "compression offsets need to consist of two elements")
+            c_compression_begin_offset = compression_offsets[0]
+            c_compression_end_offset = compression_offsets[1]
+            datasource = move(make_source_from_bgzip_file(
+                filepaths_or_buffers.encode(),
+                c_compression_begin_offset,
+                c_compression_end_offset))
+        else:
+            datasource = move(make_source_from_bgzip_file(
+                filepaths_or_buffers.encode()))
     else:
-        datasource = move(make_source_from_file(filepaths_or_buffers.encode()))
+        raise ValueError("Only bgzip compression is supported at the moment")
 
     if (byte_range is None):
         with nogil:

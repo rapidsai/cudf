@@ -301,8 +301,6 @@ List of column names
 
 Notes
 -----
-Support for reading files with struct columns is currently experimental,
-the output may not be as reliable as reading for other datatypes.
 {remote_data_sources}
 
 Examples
@@ -429,7 +427,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZLIB', 'ZSTD', None }}, default 'snappy'
+compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
@@ -446,11 +444,6 @@ cols_as_map_type : list of column names or None, default None
     A list of column names which should be written as map type in the ORC file.
     Note that this option only affects columns of ListDtype. Names of other
     column types will be ignored.
-
-Notes
------
-Support for writing tables with struct columns is currently experimental,
-the output may not be as reliable as writing for other datatypes.
 
 See Also
 --------
@@ -1165,13 +1158,29 @@ filepath_or_buffer : str, path object, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
-delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into separate cudf column rows. Currently
-    only a single delimiter is supported.
+delimiter : string, default None
+    The delimiter that should be used for splitting text chunks into
+    separate cudf column rows. The delimiter may be one or more characters.
+byte_range : list or tuple, default None
+    Byte range within the input file to be read. The first number is the
+    offset in bytes, the second number is the range size in bytes.
+    The output contains all rows that start inside the byte range
+    (i.e. at or after the offset, and before the end at `offset + size`),
+    which may include rows that continue past the end.
+compression : string, default None
+    Which compression type is the input compressed with.
+    Currently supports only `bgzip`, and requires the path to a file as input.
+compression_offsets: list or tuple, default None
+    The virtual begin and end offset associated with the provided compression.
+    For `bgzip`, they are composed of a local uncompressed offset inside a
+    BGZIP block (lower 16 bits) and the start offset of this BGZIP block in the
+    compressed file (upper 48 bits).
+    The start offset points to the first byte to be read, the end offset points
+    one past the last byte to be read.
 
 Returns
 -------
-result : GPU ``Series``
+result : Series
 
 """
 doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
