@@ -136,3 +136,7 @@ index 66fb46a..4a68cb5 100644
     */
  
 +  transform_output_iterator() = default;
++
+   /*! This constructor takes as argument an \c OutputIterator and an \c
+    * UnaryFunction and copies them to a new \p transform_output_iterator
+    *
