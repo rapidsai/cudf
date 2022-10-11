@@ -52,19 +52,22 @@ cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 cmdclass = versioneer.get_cmdclass()
 
-cmake_args=[]
+cmake_args = []
 
 if os.getenv("CUDF_BUILD_WHEELS", "") != "":
     import pyarrow as pa
-    cmake_args=[
+
+    cmake_args = [
         "-DCUDF_BUILD_WHEELS=ON",
         f"-DCUDF_PYARROW_WHEEL_DIR={pa.__path__[0]}",
     ]
 
 
 setup(
-    name="cudf"+os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default=""),
-    version=os.getenv("RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()),
+    name="cudf" + os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default=""),
+    version=os.getenv(
+        "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()
+    ),
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
@@ -93,7 +96,7 @@ setup(
         "cuda-python>=11.5,<11.7.1",
         "fsspec>=0.6.0",
         "numba>=0.54",
-        "numpy<1.23",
+        "numpy",
         "nvtx>=0.2.1",
         "packaging",
         "pandas>=1.0,<1.6.0dev0",
