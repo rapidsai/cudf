@@ -1596,7 +1596,7 @@ TEST_F(OrcReaderTest, EmptyColumnsParam)
 
 TEST_F(OrcMetadataReaderTest, TestBasic)
 {
-  auto const num_rows = 1200000;
+  auto const num_rows = 1'200'000;
 
   auto ints   = random_values<int>(num_rows);
   auto floats = random_values<float>(num_rows);
@@ -1616,7 +1616,7 @@ TEST_F(OrcMetadataReaderTest, TestBasic)
   cudf::io::write_orc(out_opts);
 
   auto meta = read_orc_metadata(cudf::io::source_info{filepath});
-  EXPECT_EQ(meta.num_rows, 1200000);
+  EXPECT_EQ(meta.num_rows, num_rows);
 
   EXPECT_EQ(meta.schema.root.name, "");
   EXPECT_EQ(meta.schema.root.type_kind, cudf::io::orc::STRUCT);
@@ -1628,7 +1628,7 @@ TEST_F(OrcMetadataReaderTest, TestBasic)
 
 TEST_F(OrcMetadataReaderTest, TestNested)
 {
-  auto const num_rows       = 1200000;
+  auto const num_rows       = 1'200'000;
   auto const lists_per_row  = 4;
   auto const num_child_rows = num_rows * lists_per_row;
 
@@ -1663,7 +1663,7 @@ TEST_F(OrcMetadataReaderTest, TestNested)
   cudf::io::write_orc(out_opts);
 
   auto meta = read_orc_metadata(cudf::io::source_info{filepath});
-  EXPECT_EQ(meta.num_rows, 1200000);
+  EXPECT_EQ(meta.num_rows, num_rows);
 
   EXPECT_EQ(meta.schema.root.name, "");
   EXPECT_EQ(meta.schema.root.type_kind, cudf::io::orc::STRUCT);
