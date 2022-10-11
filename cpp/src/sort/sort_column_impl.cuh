@@ -45,6 +45,8 @@ struct column_sorted_order_fn {
   /**
    * @brief Sorts fixed-width columns using faster thrust sort.
    *
+   * Should not be called if `input.has_nulls()==true`
+   *
    * @param input Column to sort
    * @param indices Output sorted indices
    * @param ascending True if sort order is ascending
@@ -122,8 +124,8 @@ struct column_sorted_order_fn {
   }
 
   template <typename T,
-            std::enable_if_t<cudf::is_relationally_comparable<T, T>() and
-                             is_faster_sort_supported<T>()>* = nullptr>
+            CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>() and
+                           is_faster_sort_supported<T>())>
   void operator()(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
@@ -138,8 +140,8 @@ struct column_sorted_order_fn {
   }
 
   template <typename T,
-            std::enable_if_t<cudf::is_relationally_comparable<T, T>() and
-                             not is_faster_sort_supported<T>()>* = nullptr>
+            CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>() and
+                           not is_faster_sort_supported<T>())>
   void operator()(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
@@ -149,7 +151,7 @@ struct column_sorted_order_fn {
     sorted_order<T>(input, indices, ascending, null_precedence, stream);
   }
 
-  template <typename T, std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_relationally_comparable<T, T>())>
   void operator()(column_view const&, mutable_column_view&, bool, null_order, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Column type must be relationally comparable");
