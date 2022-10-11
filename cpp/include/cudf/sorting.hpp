@@ -215,11 +215,11 @@ std::unique_ptr<column> rank(
  * keys = { {9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
  * offsets = {0, 3, 7, 10}
  * result = cudf::segmented_sorted_order(keys, offsets);
- * result is { 2,1,0, 7,6,5,4, 10,9,8 }
+ * result is { 2,1,0, 6,5,4,3, 9,8,7 }
  * @endcode
  *
  * If segment_offsets is empty or contains a single index, no values are sorted
- * and the result is a sequence of integers from 0 to keys.size().
+ * and the result is a sequence of integers from 0 to keys.size()-1.
  *
  * The segment_offsets are not required to include all indices. Any indices
  * outside the specified segments will not be sorted.
@@ -229,7 +229,7 @@ std::unique_ptr<column> rank(
  * keys = { {9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
  * offsets = {3, 7}
  * result = cudf::segmented_sorted_order(keys, offsets);
- * result is { 0,1,2, 7,6,5,4, 8,9,10 }
+ * result is { 0,1,2, 6,5,4,3, 7,8,9 }
  * @endcode
  *
  * @param keys The table that determines the ordering of elements in each segment
