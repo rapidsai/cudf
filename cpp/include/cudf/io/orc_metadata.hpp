@@ -212,34 +212,125 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
  * @brief Schema of an ORC column, including the nested columns.
  */
 struct orc_column_schema {
-  std::string name;                         ///< Column name (can be empty)
-  orc::TypeKind type_kind;                  ///< ORC data type
-  std::vector<orc_column_schema> children;  ///< Metadata of nested columns
+ public:
+  /**
+   * @brief constructor
+   *
+   * @param name column name
+   * @param type ORC type
+   * @param children child columns (empty for non-nested types)
+   */
+  orc_column_schema(std::string_view name,
+                    orc::TypeKind type,
+                    std::vector<orc_column_schema> children)
+    : _name{name}, _type_kind{type}, children{std::move(children)}
+  {
+  }
 
   /**
-   * @brief Returns metadata of the child with the given index.
+   * @brief Returns ORC column name; can be empty.
+   *
+   * @return Column name
+   */
+  [[nodiscard]] std::string_view name() const { return _name; }
+
+  /**
+   * @brief Returns ORC type of the column.
+   *
+   * @return Column ORC type
+   */
+  [[nodiscard]] auto type_kind() const { return _type_kind; }
+
+  /**
+   * @brief Returns schema of the child with the given index.
    *
    * @param idx child index
    *
-   * @return Child metadata
+   * @return Child schema
    */
   [[nodiscard]] auto const& child(int idx) const { return children.at(idx); }
+
+  /**
+   * @brief Returns the number of child columns.
+   *
+   * @return Children count
+   */
+  [[nodiscard]] auto num_children() const { return children.size(); }
+
+ private:
+  std::string _name;
+  orc::TypeKind _type_kind;
+  std::vector<orc_column_schema> children;
 };
 
 /**
  * @brief Schema of an ORC file.
  */
 struct orc_schema {
-  orc_column_schema root;  ///< Schema of the struct column that contains all columns as fields
+ public:
+  /**
+   * @brief constructor
+   *
+   * @param root_column_schema root column
+   */
+  orc_schema(orc_column_schema root_column_schema) : _root{std::move(root_column_schema)} {}
+
+  /**
+   * @brief Returns the schema of the struct column that contains all columns as fields.
+   *
+   * @return Root column schema
+   */
+  auto const& root() const { return _root; }
+
+ private:
+  orc_column_schema _root;
 };
 
 /**
  * @brief Information about content of an ORC file.
  */
-struct orc_metadata {
-  orc_schema schema;      ///< Schema (e.g. types, names)
-  size_type num_rows;     ///< Number of rows in the root column; can vary for nested columns
-  size_type num_stripes;  ///< Number of stripes in the file
+class orc_metadata {
+ public:
+  /**
+   * @brief constructor
+   *
+   * @param schema ORC schema
+   * @param num_rows number of rows
+   * @param num_stripes number of stripes
+   */
+  orc_metadata(orc_schema schema, size_type num_rows, size_type num_stripes)
+    : _schema{std::move(schema)}, _num_rows{num_rows}, _num_stripes{num_stripes}
+  {
+  }
+
+  /**
+   * @brief Returns the ORC schema.
+   *
+   * @return ORC schema
+   */
+  [[nodiscard]] auto const& schema() const { return _schema; }
+
+  ///< Number of rows in the root column; can vary for nested columns
+  /**
+   * @brief Returns the number of rows of the root column.
+   *
+   * If a file contains list columns, nested columns can have a different number of rows.
+   *
+   * @return Number of rows
+   */
+  [[nodiscard]] auto num_rows() const { return _num_rows; }
+
+  /**
+   * @brief Returns the number of stripes in the file.
+   *
+   * @return Number of stripes
+   */
+  [[nodiscard]] auto num_stripes() const { return _num_stripes; }
+
+ private:
+  orc_schema _schema;
+  size_type _num_rows;
+  size_type _num_stripes;
 };
 
 /**

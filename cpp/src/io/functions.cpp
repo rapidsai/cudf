@@ -342,16 +342,16 @@ orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_sc
                                          uint32_t column_id,
                                          std::string column_name)
 {
-  orc_column_schema col_meta{column_name, orc_schema[column_id].kind};
+  std::vector<orc_column_schema> children;
   auto const& orc_col_schema = orc_schema[column_id];
   for (auto i = 0ul; i < orc_col_schema.subtypes.size(); ++i) {
-    col_meta.children.push_back(make_orc_column_schema(
+    children.emplace_back(make_orc_column_schema(
       orc_schema,
       orc_col_schema.subtypes[i],
       i < orc_col_schema.fieldNames.size() ? orc_col_schema.fieldNames[i] : ""));
   }
 
-  return col_meta;
+  return {std::move(column_name), orc_schema[column_id].kind, std::move(children)};
 }
 
 orc_metadata read_orc_metadata(source_info const& src_info)
