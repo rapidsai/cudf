@@ -27,11 +27,10 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-#include <cstdlib>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <sys/time.h>
 
 /**
  * @brief Main example function returns redacted strings column.
@@ -97,24 +96,18 @@ int main(int argc, char const** argv)
   auto const csv_result = [csv_file] {
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_file}).header(-1);
-    return std::move(cudf::io::read_csv(in_opts).tbl);
+    return cudf::io::read_csv(in_opts).tbl;
   }();
   auto const csv_table = csv_result->view();
 
   std::cout << "table: " << csv_table.num_rows() << " rows " << csv_table.num_columns()
             << " columns\n";
 
-  // utility function that captures current time in microseconds
-  auto get_time = []() {
-    timeval tv;
-    gettimeofday(&tv, nullptr);
-    return static_cast<double>(tv.tv_sec * 1000000 + tv.tv_usec) / 1000000.0;
-  };
+  auto st     = std::chrono::steady_clock::now();
+  auto result = redact_strings(csv_table.column(0), csv_table.column(1));
 
-  auto st      = get_time();
-  auto result  = redact_strings(csv_table.column(0), csv_table.column(1));
-  auto elapsed = get_time() - st;
-  std::cout << "Wall time: " << elapsed << " seconds\n";
+  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
+  std::cout << "Wall time: " << elapsed.count() << " seconds\n";
   std::cout << "Output size " << result->view().child(1).size() << " bytes\n";
 
   return 0;
