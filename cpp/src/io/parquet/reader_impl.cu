@@ -1349,64 +1349,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 }
 
 /**
- * @copydoc cudf::io::detail::parquet::preprocess_columns
- */
-/*
-void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                      hostdevice_vector<gpu::PageInfo>& pages,
-                                      size_t min_row,
-                                      size_t total_rows,
-                                      bool uses_custom_row_bounds,
-                                      size_type chunked_read_size)
-{
-  // iterate over all input columns and allocate any associated output
-  // buffers if they are not part of a list hierarchy. mark down
-  // if we have any list columns that need further processing.
-  bool has_lists = false;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col = _input_columns[idx];
-    size_t max_depth      = input_col.nesting_depth();
-
-    auto* cols = &_output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
-      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-      cols          = &out_buf.children;
-
-      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
-      // to know how big this buffer actually is.
-      if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
-        has_lists = true;
-      }
-      // if we haven't already processed this column because it is part of a struct hierarchy
-      else if (out_buf.size == 0) {
-        // add 1 for the offset if this is a list column
-        out_buf.create(
-          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
-          _stream,
-          _mr);
-      }
-    }
-  }
-
-  // if we have columns containing lists, or if we're doing chunked reads,
-  // further preprocessing is necessary.
-  if (has_lists || chunked_read_size > 0) {
-    gpu::PreprocessColumnData(pages,
-                              chunks,
-                              _input_columns,
-                              _output_columns,
-                              total_rows,
-                              min_row,
-                              uses_custom_row_bounds,
-                              chunked_read_size,
-                              _stream,
-                              _mr);
-    _stream.synchronize();
-  }
-}
-*/
-
-/**
  * @copydoc cudf::io::detail::parquet::decode_page_data
  */
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
