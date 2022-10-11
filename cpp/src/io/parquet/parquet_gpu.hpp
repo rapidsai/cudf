@@ -99,6 +99,7 @@ struct PageNestingInfo {
   // set at initialization
   int32_t max_def_level;
   int32_t max_rep_level;
+  cudf::type_id type;
 
   // set during preprocessing
   int32_t size;              // this page/nesting-level's size contribution to the output column
@@ -233,6 +234,20 @@ struct ColumnChunkDesc {
 
   int32_t src_col_index;   // my input column index
   int32_t src_col_schema;  // my schema index in the file
+};
+
+struct chunked_intermediate_data {
+  rmm::device_uvector<int> page_keys;
+  rmm::device_uvector<int> page_index;
+  chunked_intermediate_data()
+    : page_keys(0, rmm::cuda_stream_default), page_index(0, rmm::cuda_stream_default)
+  {
+  }
+};
+
+struct chunked_read_info {
+  size_t skip_rows;
+  size_t num_rows;
 };
 
 /**
@@ -407,6 +422,13 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 int32_t num_chunks,
                                 rmm::cuda_stream_view stream);
 
+void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
+                      hostdevice_vector<ColumnChunkDesc> const& chunks,
+                      size_t num_rows,
+                      size_t min_row,
+                      bool trim_pass,
+                      rmm::cuda_stream_view stream);
+
 /**
  * @brief Preprocess column information for nested schemas.
  *
@@ -428,6 +450,7 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
  * bounds
  * @param stream Cuda stream
  */
+/*
 void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           hostdevice_vector<ColumnChunkDesc> const& chunks,
                           std::vector<input_column_info>& input_columns,
@@ -436,7 +459,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
                           size_t min_row,
                           bool uses_custom_row_bounds,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+                          rmm::mr::device_memory_resource* mr);*/
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages

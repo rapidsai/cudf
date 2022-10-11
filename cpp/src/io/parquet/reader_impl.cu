@@ -1328,6 +1328,8 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
           pni[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
           pni[cur_depth].size          = 0;
+          pni[cur_depth].type =
+            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
         }
 
         // move up the hierarchy
@@ -1349,22 +1351,24 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 /**
  * @copydoc cudf::io::detail::parquet::preprocess_columns
  */
+/*
 void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                       hostdevice_vector<gpu::PageInfo>& pages,
                                       size_t min_row,
                                       size_t total_rows,
-                                      bool uses_custom_row_bounds)
+                                      bool uses_custom_row_bounds,
+                                      size_type chunked_read_size)
 {
   // iterate over all input columns and allocate any associated output
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
   bool has_lists = false;
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col  = _input_columns[idx];
-    size_t const max_depth = input_col.nesting_depth();
+    auto const& input_col = _input_columns[idx];
+    size_t max_depth      = input_col.nesting_depth();
 
     auto* cols = &_output_columns;
-    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
@@ -1384,8 +1388,9 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     }
   }
 
-  // if we have columns containing lists, further preprocessing is necessary.
-  if (has_lists) {
+  // if we have columns containing lists, or if we're doing chunked reads,
+  // further preprocessing is necessary.
+  if (has_lists || chunked_read_size > 0) {
     gpu::PreprocessColumnData(pages,
                               chunks,
                               _input_columns,
@@ -1393,11 +1398,13 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                               total_rows,
                               min_row,
                               uses_custom_row_bounds,
+                              chunked_read_size,
                               _stream,
                               _mr);
     _stream.synchronize();
   }
 }
+*/
 
 /**
  * @copydoc cudf::io::detail::parquet::decode_page_data
@@ -1762,20 +1769,36 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds);
+      // TODO: make this a parameter.
+      // auto const chunked_read_size = 240000;
+      auto const chunked_read_size = 0;
+      auto chunk_reads             = preprocess_columns(
+        chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, chunked_read_size);
 
-      // decoding of column data itself
-      decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
+      // process each chunk. this is the part that would be externalized into multiple calls
+      auto read_info = chunk_reads.second[0];
+      {
+        // allocate outgoing columns
+        allocate_columns(chunks,
+                         pages,
+                         chunk_reads.first,
+                         read_info.skip_rows,
+                         read_info.num_rows,
+                         uses_custom_row_bounds);
 
-      // create the final output cudf columns
-      for (size_t i = 0; i < _output_columns.size(); ++i) {
-        column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        auto const metadata =
-          _reader_column_schema.has_value()
-            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-            : std::nullopt;
-        out_columns.emplace_back(
-          make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
+        // decoding column data
+        decode_page_data(chunks, pages, page_nesting_info, read_info.skip_rows, read_info.num_rows);
+
+        // create the final output cudf columns
+        for (size_t i = 0; i < _output_columns.size(); ++i) {
+          column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+          auto const metadata =
+            _reader_column_schema.has_value()
+              ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+              : std::nullopt;
+          out_columns.emplace_back(
+            make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
+        }
       }
     }
   }

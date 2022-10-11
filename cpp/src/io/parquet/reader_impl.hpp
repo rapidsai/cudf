@@ -165,11 +165,20 @@ class reader::impl {
    * bounds
    * a preprocess.
    */
-  void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                          hostdevice_vector<gpu::PageInfo>& pages,
-                          size_t min_row,
-                          size_t total_rows,
-                          bool uses_custom_row_bounds);
+  std::pair<gpu::chunked_intermediate_data, std::vector<gpu::chunked_read_info>> preprocess_columns(
+    hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+    hostdevice_vector<gpu::PageInfo>& pages,
+    size_t min_row,
+    size_t total_rows,
+    bool uses_custom_row_bounds,
+    size_type chunked_read_size);
+
+  void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                        hostdevice_vector<gpu::PageInfo>& pages,
+                        gpu::chunked_intermediate_data const& id,
+                        size_t min_row,
+                        size_t total_rows,
+                        bool uses_custom_row_bounds);
 
   /**
    * @brief Converts the page data and outputs to columns.
