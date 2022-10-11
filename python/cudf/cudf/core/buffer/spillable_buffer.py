@@ -454,6 +454,7 @@ class SpillableBufferSlice(SpillableBuffer):
         return SpillableBuffer.deserialize(header, frames)
 
     def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
+        size = self._size if size is None else size
         return self._base.memoryview(offset=self._offset + offset, size=size)
 
     def __repr__(self) -> str:
