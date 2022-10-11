@@ -146,12 +146,12 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
   CUDF_FUNC_RANGE();
 
   // Determine temporary device storage requirements
-  rmm::device_uvector<TreeDepthT> key1(key.size(), stream);
-  rmm::device_uvector<TreeDepthT> key2(key.size(), stream);
+  rmm::device_uvector<KeyType> key1(key.size(), stream);
+  rmm::device_uvector<KeyType> key2(key.size(), stream);
   rmm::device_uvector<IndexType> order1(key.size(), stream);
   rmm::device_uvector<IndexType> order2(key.size(), stream);
   cub::DoubleBuffer<IndexType> order(order1.data(), order2.data());
-  cub::DoubleBuffer<TreeDepthT> key_buffer(key1.data(), key2.data());
+  cub::DoubleBuffer<KeyType> key_buffer(key1.data(), key2.data());
   size_t temp_storage_bytes = 0;
   cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, key_buffer, order, key.size());
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
@@ -272,8 +272,9 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
     // previous push node_id
     // if previous node is a push, then i-1
-    // if previous node is FE, then i-2
+    // if previous node is FE, then i-2 (returns FB's index)
     // if previous node is SMB and its previous node is a push, then i-2
+    // eg. `{ SMB FB FE VB VE SME` -> `{` index as FB's parent.
     // else -1
     auto first_childs_parent_token_id = [tokens_gpu =
                                            tokens.begin()] __device__(auto i) -> NodeIndexT {
