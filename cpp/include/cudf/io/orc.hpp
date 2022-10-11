@@ -378,9 +378,6 @@ class orc_reader_options_builder {
  *  auto result  = cudf::io::read_orc(options);
  * @endcode
  *
- * Note: Support for reading files with struct columns is currently experimental, the output may not
- * be as reliable as reading for other datatypes.
- *
  * @param options Settings for controlling reading behavior
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
@@ -782,9 +779,6 @@ class orc_writer_options_builder {
  *  auto options     = cudf::io::orc_writer_options::builder(destination, table->view());
  *  cudf::io::write_orc(options);
  * @endcode
- *
- * Note: Support for writing tables with struct columns is currently experimental, the output may
- * not be as reliable as writing for other datatypes.
  *
  * @param options Settings for controlling reading behavior
  * @param mr Device memory resource to use for device memory allocation
