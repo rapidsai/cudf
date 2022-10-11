@@ -19,81 +19,94 @@
 #include <execinfo.h>
 #include <iostream>
 #include <stdexcept>
+#include <unordered_map>
 
 #include <cuda_runtime.h>
 
 /*
-  Print the stack trace from the current frame.
-  Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
-*/
-void print_trace()
+ */
+void check_stream_and_error(cudaStream_t stream)
 {
+  // We explicitly list the possibilities rather than using
+  // `cudf::get_default_stream().value()` for two reasons:
+  // 1. There is no guarantee that `thrust::device` and the default value of
+  //    `cudf::get_default_stream().value()` are actually the same. At present,
+  //    the former is `cudaStreamLegacy` while the latter is 0.
+  // 2. Using the cudf default stream would require linking against cudf, which
+  //    adds unnecessary complexity to the build process (especially in CI)
+  //    when this simple approach is sufficient.
+  if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||
+      (stream == cudaStreamPerThread)) {
 #ifdef __GNUC__
-  // Try to get the stack trace.
-  constexpr int kMaxStackDepth = 64;
-  void* stack[kMaxStackDepth];
-  auto depth   = backtrace(stack, kMaxStackDepth);
-  auto strings = backtrace_symbols(stack, depth);
+    // If we're on the wrong stream, print the stack trace from the current frame.
+    // Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
+    constexpr int kMaxStackDepth = 64;
+    void* stack[kMaxStackDepth];
+    auto depth   = backtrace(stack, kMaxStackDepth);
+    auto strings = backtrace_symbols(stack, depth);
 
-  if (strings == nullptr) {
-    std::cout << "No stack trace could be found!" << std::endl;
-  } else {
-    // If we were able to extract a trace, parse it, demangle symbols, and
-    // print a readable output.
+    if (strings == nullptr) {
+      std::cout << "No stack trace could be found!" << std::endl;
+    } else {
+      // If we were able to extract a trace, parse it, demangle symbols, and
+      // print a readable output.
 
-    // allocate string which will be filled with the demangled function name
-    size_t funcnamesize = 256;
-    char* funcname      = (char*)malloc(funcnamesize);
+      // allocate string which will be filled with the demangled function name
+      size_t funcnamesize = 256;
+      char* funcname      = (char*)malloc(funcnamesize);
 
-    // Start at frame 1 to skip print_trace itself.
-    for (int i = 1; i < depth; ++i) {
-      char* begin_name   = nullptr;
-      char* begin_offset = nullptr;
-      char* end_offset   = nullptr;
+      // Start at frame 1 to skip print_trace itself.
+      for (int i = 1; i < depth; ++i) {
+        char* begin_name   = nullptr;
+        char* begin_offset = nullptr;
+        char* end_offset   = nullptr;
 
-      // find parentheses and +address offset surrounding the mangled name:
-      // ./module(function+0x15c) [0x8048a6d]
-      for (char* p = strings[i]; *p; ++p) {
-        if (*p == '(') {
-          begin_name = p;
-        } else if (*p == '+') {
-          begin_offset = p;
-        } else if (*p == ')' && begin_offset) {
-          end_offset = p;
-          break;
+        // find parentheses and +address offset surrounding the mangled name:
+        // ./module(function+0x15c) [0x8048a6d]
+        for (char* p = strings[i]; *p; ++p) {
+          if (*p == '(') {
+            begin_name = p;
+          } else if (*p == '+') {
+            begin_offset = p;
+          } else if (*p == ')' && begin_offset) {
+            end_offset = p;
+            break;
+          }
         }
-      }
 
-      if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
-        *begin_name++   = '\0';
-        *begin_offset++ = '\0';
-        *end_offset     = '\0';
+        if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
+          *begin_name++   = '\0';
+          *begin_offset++ = '\0';
+          *end_offset     = '\0';
 
-        // mangled name is now in [begin_name, begin_offset) and caller offset
-        // in [begin_offset, end_offset). now apply __cxa_demangle():
+          // mangled name is now in [begin_name, begin_offset) and caller offset
+          // in [begin_offset, end_offset). now apply __cxa_demangle():
 
-        int status;
-        char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
-        if (status == 0) {
-          funcname = ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
-          std::cout << "#" << i << " in " << strings[i] << " : " << funcname << "+" << begin_offset
-                    << std::endl;
+          int status;
+          char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
+          if (status == 0) {
+            funcname =
+              ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
+            std::cout << "#" << i << " in " << strings[i] << " : " << funcname << "+"
+                      << begin_offset << std::endl;
+          } else {
+            // demangling failed. Output function name as a C function with no arguments.
+            std::cout << "#" << i << " in " << strings[i] << " : " << begin_name << "()+"
+                      << begin_offset << std::endl;
+          }
         } else {
-          // demangling failed. Output function name as a C function with no arguments.
-          std::cout << "#" << i << " in " << strings[i] << " : " << begin_name << "()+"
-                    << begin_offset << std::endl;
+          std::cout << "#" << i << " in " << strings[i] << std::endl;
         }
-      } else {
-        std::cout << "#" << i << " in " << strings[i] << std::endl;
       }
-    }
 
-    free(funcname);
-  }
-  free(strings);
+      free(funcname);
+    }
+    free(strings);
 #else
-  std::cout << "Backtraces are only support on GNU systems." << std::endl;
+    std::cout << "Backtraces are only support on GNU systems." << std::endl;
 #endif  // __GNUC__
+    throw std::runtime_error("Found unexpected default stream!");
+  }
 }
 
 // clang-format off
@@ -115,31 +128,50 @@ void print_trace()
  */
 // clang-format on
 
-using cudaLaunchKernel_t = cudaError_t (*)(const void*, dim3, dim3, void**, size_t, cudaStream_t);
+/*
+ * @brief Container for CUDA APIs that have been overloaded using DEFINE_OVERLOAD.
+ */
+static std::unordered_map<std::string, void*> originals;
 
-static cudaLaunchKernel_t cudaLaunchKernel_original;
-
-void __attribute__((constructor)) init();
-void init()
-{
-  cudaLaunchKernel_original = (cudaLaunchKernel_t)dlsym(RTLD_NEXT, "cudaLaunchKernel");
-}
-
-cudaError_t cudaLaunchKernel(
-  const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
-{
-  // We explicitly list the possibilities rather than using
-  // `cudf::get_default_stream().value()` for two reasons:
-  // 1. There is no guarantee that `thrust::device` and the default value of
-  //    `cudf::get_default_stream().value()` are actually the same. At present,
-  //    the former is `cudaStreamLegacy` while the latter is 0.
-  // 2. Using the cudf default stream would require linking against cudf, which
-  //    adds unnecessary complexity to the build process (especially in CI)
-  //    when this simple approach is sufficient.
-  if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||
-      (stream == cudaStreamPerThread)) {
-    print_trace();
-    throw std::runtime_error("Found unexpected default stream!");
+/**
+ * @brief Macro for generating functions to override existing CUDA functions.
+ *
+ * Define a new function with the provided signature that checks the used
+ * stream and raises an exception if it is one of CUDA's default streams. If
+ * not, the new function forwards all arguments to the original function.
+ *
+ * @param function The function to overload.
+ * @param ret_type The return type of the function
+ * @param signature The function signature (must include names, not just types).
+ * @parameter arguments The function arguments (names only, no types).
+ */
+#define DEFINE_OVERLOAD(function, ret_type, signature, arguments) \
+  using function##_t = ret_type (*)(signature);                   \
+                                                                  \
+  ret_type function(signature)                                    \
+  {                                                               \
+    check_stream_and_error(stream);                               \
+    return ((function##_t)originals["function"])(arguments);      \
   }
-  return cudaLaunchKernel_original(func, gridDim, blockDim, args, sharedMem, stream);
+
+/**
+ * @brief Helper macro to define macro arguments that contain a comma.
+ */
+#define ARG(...) __VA_ARGS__
+
+DEFINE_OVERLOAD(cudaLaunchKernel,
+                cudaError_t,
+                ARG(const void* func,
+                    dim3 gridDim,
+                    dim3 blockDim,
+                    void** args,
+                    size_t sharedMem,
+                    cudaStream_t stream),
+                ARG(func, gridDim, blockDim, args, sharedMem, stream))
+
+void __attribute__((constructor)) init()
+{
+  for (auto it : originals) {
+    originals[it.first] = dlsym(RTLD_NEXT, it.first.data());
+  }
 }
