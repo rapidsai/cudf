@@ -26,10 +26,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/sort.h>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace parquet {
+namespace cudf::io::detail::parquet {
 
 // Import functionality that's independent of legacy code
 using namespace cudf::io::parquet;
@@ -589,30 +586,4 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   }
 }
 
-/*
-{
-  std::mt19937 gen(6542);
-  std::bernoulli_distribution bn(0.7f);
-  //auto valids =
-//    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = thrust::make_counting_iterator(0);
-
-  constexpr size_type num_rows = 40000;
-  cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
-  cudf::test::fixed_width_column_wrapper<int64_t> b(values, values + num_rows);
-
-  cudf::table_view t({a, b});
-  cudf::io::parquet_writer_options opts =
-cudf::io::parquet_writer_options::builder(cudf::io::sink_info{"parquet/tmp/chunked_splits.parquet"},
-t); cudf::io::write_parquet(opts);
-
-  cudf::io::parquet_reader_options in_opts =
-cudf::io::parquet_reader_options::builder(cudf::io::source_info{"parquet/tmp/chunked_splits.parquet"});
-  auto result = cudf::io::read_parquet(in_opts);
-}
-*/
-
-}  // namespace parquet
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail::parquet
