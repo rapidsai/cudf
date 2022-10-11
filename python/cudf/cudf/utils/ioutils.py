@@ -451,7 +451,7 @@ cudf.read_orc
 """
 doc_to_orc = docfmt_partial(docstring=_docstring_to_orc)
 
-_docstring_read_json = """
+_docstring_read_json = r"""
 Load a JSON dataset into a DataFrame
 
 Parameters
@@ -466,36 +466,14 @@ path_or_buf : list, str, path object, or file-like object
 engine : {{ 'auto', 'cudf', 'cudf_experimental', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters.
-lines : boolean, default False
-    Read the file as a json object per line.
-dtype : boolean or dict, default True
-    If True, infer dtypes, if a dict of column to dtype, then use those,
-    if False, then don't infer dtypes at all, applies only to the data.
-byte_range : list or tuple, default None (cudf engine only)
-    Byte range within the input file to be read.
-    The first number is the offset in bytes, the second number is the range
-    size in bytes. Set the size to zero to read all data after the offset
-    location. Reads the row that starts before or at the end of the range,
-    even if it ends after the end of the range.
-keep_quotes : bool, default False (cudf_experimental engine only)
-    If `True`, any string values are read literally (and wrapped in an
-    additional set of quotes).
-    If `False` string values are parsed into Python strings.
-typ : type of object to recover (series or frame), default 'frame'
-    With cudf engine, only frame output is supported.
-encoding : str, default is 'utf-8'
-    The encoding to use to decode py3 bytes.
-    With cudf engine, only utf-8 is supported.
-compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
-    For on-the-fly decompression of on-disk data. If 'infer', then use
-    gzip, bz2, zip or xz if path_or_buf is a string ending in
-    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
-    otherwise. If using 'zip', the ZIP file must contain only one data
-    file to be read in. Set to None for no decompression.
+orient : string
 
+    .. admonition:: Not GPU-accelerated
 
-orient : string, (pandas engine only)
-    Indication of expected JSON string format .
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
+    Indication of expected JSON string format.
     Compatible JSON strings can be produced by ``to_json()`` with a
     corresponding orient value.
     The set of possible orients is:
@@ -525,9 +503,27 @@ orient : string, (pandas engine only)
         ``'columns'``.
       - The DataFrame columns must be unique for orients ``'index'``,
         ``'columns'``, and ``'records'``.
-convert_axes : boolean, default True (pandas engine only)
+typ : type of object to recover (series or frame), default 'frame'
+    With cudf engine, only frame output is supported.
+dtype : boolean or dict, default True
+    If True, infer dtypes for all columns; if False, then don't infer dtypes at all,
+    if a dict, provide a mapping from column names to their respective dtype (any missing
+    columns will have their dtype inferred). Applies only to the data.
+convert_axes : boolean, default True
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
     Try to convert the axes to the proper dtypes.
-convert_dates : boolean, default True (pandas engine only)
+convert_dates : boolean, default True
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
     List of columns to parse for dates; If True, then try
     to parse datelike columns default is True; a column label is datelike if
 
@@ -536,29 +532,98 @@ convert_dates : boolean, default True (pandas engine only)
     * it begins with ``'timestamp'``,
     * it is ``'modified'``, or
     * it is ``'date'``
-keep_default_dates : boolean, default True (pandas engine only)
-    If parsing dates, parse the default datelike columns
-numpy : boolean, default False (pandas engine only)
+keep_default_dates : boolean, default True
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
+    If parsing dates, parse the default datelike columns.
+numpy : boolean, default False
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
     Direct decoding to numpy arrays. Supports numeric
     data only, but non-numeric column and index labels are supported. Note
     also that the JSON ordering MUST be the same for each term if numpy=True.
-precise_float : boolean, default False (pandas engine only)
+precise_float : boolean, default False
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
     Set to enable usage of higher precision (strtod) function when
-    decoding string to double values. Default (False)
+    decoding string to double values (pandas engine only). Default (False)
     is to use fast but less precise builtin functionality
-date_unit : string, default None (pandas engine only)
+date_unit : string, default None
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
     The timestamp unit to detect if converting dates.
     The default behavior is to try and detect the correct precision, but if
     this is not desired then pass one of 's', 'ms', 'us' or 'ns' to force
     parsing only seconds, milliseconds, microseconds or nanoseconds.
-chunksize : integer, default None (pandas engine only)
+encoding : str, default is 'utf-8'
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
+    The encoding to use to decode py3 bytes.
+    With cudf engine, only utf-8 is supported.
+lines : boolean, default False
+    Read the file as a json object per line.
+chunksize : integer, default None
+
+    .. admonition:: Not GPU-accelerated
+
+       This parameter is only supported with pandas engine.
+       (i.e., ``engine='pandas'``)
+
     Return JsonReader object for iteration.
     See the `line-delimited json docs
     <http://pandas.pydata.org/pandas-docs/stable/io.html#io-jsonl>`_
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
     If this is None, the file will be read into memory all at once.
+compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+    For on-the-fly decompression of on-disk data. If 'infer', then use
+    gzip, bz2, zip or xz if path_or_buf is a string ending in
+    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
+    otherwise. If using 'zip', the ZIP file must contain only one data
+    file to be read in. Set to None for no decompression.
+byte_range : list or tuple, default None
 
+    .. admonition:: GPU-accelerated
+
+       This parameter is only supported with cudf engine.
+       (i.e., ``engine='cudf'``)
+
+    Byte range within the input file to be read.
+    The first number is the offset in bytes, the second number is the range
+    size in bytes. Set the size to zero to read all data after the offset
+    location. Reads the row that starts before or at the end of the range,
+    even if it ends after the end of the range.
+keep_quotes : bool, default False
+
+    .. admonition:: GPU-accelerated experimental feature
+
+       This parameter is only supported with cudf experimental engine.
+       (i.e., ``engine='cudf_experimental'``)
+
+    This parameter is only supported in ``cudf_experimental`` engine.
+    If `True`, any string values are read literally (and wrapped in an
+    additional set of quotes).
+    If `False` string values are parsed into Python strings.
 
 Returns
 -------
