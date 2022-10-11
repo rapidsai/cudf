@@ -84,6 +84,8 @@ class reader::impl {
 
  private:
   /**
+   * TODO: Rename this into something more meaningful
+   *
    * @brief Reads compressed page data to device memory
    *
    * @param page_data Buffers to hold compressed page data for each chunk
