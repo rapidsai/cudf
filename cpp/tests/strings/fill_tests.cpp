@@ -47,7 +47,7 @@ TEST_F(StringsFillTest, Fill)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results = cudf::strings::detail::fill(view, 2, 4, cudf::string_scalar("", false));
@@ -57,23 +57,23 @@ TEST_F(StringsFillTest, Fill)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results = cudf::strings::detail::fill(view, 5, 5, cudf::string_scalar("zz"));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, view.parent());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, view.parent());
   }
   {
     auto results = cudf::strings::detail::fill(view, 0, 7, cudf::string_scalar(""));
     cudf::test::strings_column_wrapper expected({"", "", "", "", "", "", ""},
                                                 {1, 1, 1, 1, 1, 1, 1});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results = cudf::strings::detail::fill(view, 0, 7, cudf::string_scalar("", false));
     cudf::test::strings_column_wrapper expected({"", "", "", "", "", "", ""},
                                                 {0, 0, 0, 0, 0, 0, 0});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
 }
 

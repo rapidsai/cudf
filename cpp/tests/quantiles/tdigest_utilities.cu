@@ -51,13 +51,34 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   auto sampled_result_weight = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
 
-  rmm::device_vector<expected_value> expected(h_expected.begin(), h_expected.end());
+  auto h_expected_src    = std::vector<size_type>(h_expected.size());
+  auto h_expected_mean   = std::vector<double>(h_expected.size());
+  auto h_expected_weight = std::vector<double>(h_expected.size());
+
+  {
+    auto iter = thrust::make_counting_iterator(0);
+    std::for_each_n(iter, h_expected.size(), [&](size_type const index) {
+      h_expected_src[index]    = thrust::get<0>(h_expected[index]);
+      h_expected_mean[index]   = thrust::get<1>(h_expected[index]);
+      h_expected_weight[index] = thrust::get<2>(h_expected[index]);
+    });
+  }
+
+  auto d_expected_src =
+    cudf::detail::make_device_uvector_async(h_expected_src, cudf::default_stream_value);
+  auto d_expected_mean =
+    cudf::detail::make_device_uvector_async(h_expected_mean, cudf::default_stream_value);
+  auto d_expected_weight =
+    cudf::detail::make_device_uvector_async(h_expected_weight, cudf::default_stream_value);
+
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
     rmm::exec_policy(cudf::default_stream_value),
     iter,
-    iter + expected.size(),
-    [expected            = expected.data().get(),
+    iter + h_expected.size(),
+    [expected_src_in     = d_expected_src.data(),
+     expected_mean_in    = d_expected_mean.data(),
+     expected_weight_in  = d_expected_weight.data(),
      expected_mean       = expected_mean->mutable_view().begin<double>(),
      expected_weight     = expected_weight->mutable_view().begin<double>(),
      result_mean         = result_mean.begin<double>(),
@@ -65,9 +86,9 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
      sampled_result_mean = sampled_result_mean->mutable_view().begin<double>(),
      sampled_result_weight =
        sampled_result_weight->mutable_view().begin<double>()] __device__(size_type index) {
-      expected_mean[index]         = thrust::get<1>(expected[index]);
-      expected_weight[index]       = thrust::get<2>(expected[index]);
-      auto const src_index         = thrust::get<0>(expected[index]);
+      expected_mean[index]         = expected_mean_in[index];
+      expected_weight[index]       = expected_weight_in[index];
+      auto const src_index         = expected_src_in[index];
       sampled_result_mean[index]   = result_mean[src_index];
       sampled_result_weight[index] = result_weight[src_index];
     });
