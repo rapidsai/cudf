@@ -152,6 +152,7 @@ outputs:
         - test -f $PREFIX/include/cudf/io/text/byte_range_info.hpp
         - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
         - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
+        - test -f $PREFIX/include/cudf/io/text/detail/bgzip_utils.hpp
         - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
         - test -f $PREFIX/include/cudf/io/text/detail/tile_state.hpp
         - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
