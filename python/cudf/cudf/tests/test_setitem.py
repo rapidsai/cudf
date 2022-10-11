@@ -297,3 +297,19 @@ def test_series_slice_setitem_struct():
     actual[0:3] = cudf.Scalar({"a": {"b": 5050}, "b": 101})
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("indices", [0, [1, 2]])
+def test_series_setitem_upcasting(dtype, indices):
+    sr = pd.Series([0, 0, 0], dtype=dtype)
+    cr = cudf.from_pandas(sr)
+    assert_eq(sr.values, cr.values)
+    new_value = np.float64(10.5)
+    col_ref = cr._column
+    sr[indices] = new_value
+    cr[indices] = new_value
+    assert_eq(sr.values, cr.values)
+    if dtype == np.float64:
+        # no-op type cast should not modify backing column
+        assert col_ref == cr._column

@@ -222,11 +222,12 @@ class _SeriesIlocIndexer(_FrameIndexer):
             and _is_non_decimal_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
-            if not is_integer(key):
-                to_dtype = np.result_type(
-                    value.dtype, self._frame._column.dtype
-                )
-                value = value.astype(to_dtype)
+            # In contrast to Column.__setitem__ (which downcasts the value to
+            # the dtype of the column) here we upcast the series to the
+            # larger data type mimicing pandas
+            to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
+            value = value.astype(to_dtype)
+            if to_dtype != self._frame._column.dtype:
                 self._frame._column._mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )
