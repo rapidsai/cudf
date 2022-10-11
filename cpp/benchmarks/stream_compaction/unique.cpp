@@ -18,7 +18,7 @@
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -62,10 +62,9 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   auto input_column = source_column->view();
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto result =
-      cudf::detail::unique(input_table, {0}, Keep, cudf::null_equality::EQUAL, stream_view);
+    auto result = cudf::unique(input_table, {0}, Keep, cudf::null_equality::EQUAL);
   });
 }
 
