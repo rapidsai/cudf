@@ -338,14 +338,14 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   return result;
 }
 
-orc_column_metadata make_orc_column_metadata(host_span<orc::SchemaType const> orc_schema,
-                                             uint32_t column_id,
-                                             std::string column_name)
+orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_schema,
+                                         uint32_t column_id,
+                                         std::string column_name)
 {
-  orc_column_metadata col_meta{column_name, orc_schema[column_id].kind};
+  orc_column_schema col_meta{column_name, orc_schema[column_id].kind};
   auto const& orc_col_schema = orc_schema[column_id];
   for (auto i = 0ul; i < orc_col_schema.subtypes.size(); ++i) {
-    col_meta.children.push_back(make_orc_column_metadata(
+    col_meta.children.push_back(make_orc_column_schema(
       orc_schema,
       orc_col_schema.subtypes[i],
       i < orc_col_schema.fieldNames.size() ? orc_col_schema.fieldNames[i] : ""));
@@ -361,7 +361,7 @@ orc_metadata read_orc_metadata(source_info const& src_info)
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
   auto const footer = orc::metadata(sources.front().get(), cudf::default_stream_value).ff;
 
-  return {make_orc_column_metadata(footer.types, 0, ""),
+  return {{make_orc_column_schema(footer.types, 0, "")},
           static_cast<size_type>(footer.numberOfRows),
           static_cast<size_type>(footer.stripes.size())};
 }

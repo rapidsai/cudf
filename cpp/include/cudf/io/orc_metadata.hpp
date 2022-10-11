@@ -209,12 +209,12 @@ struct parsed_orc_statistics {
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
 /**
- * @brief Information about a column in ORC file, including the nested columns.
+ * @brief Schema of an ORC column, including the nested columns.
  */
-struct orc_column_metadata {
-  std::string name;                           ///< Column name (can be empty)
-  orc::TypeKind type_kind;                    ///< ORC data type
-  std::vector<orc_column_metadata> children;  ///< Metadata of nested columns
+struct orc_column_schema {
+  std::string name;                         ///< Column name (can be empty)
+  orc::TypeKind type_kind;                  ///< ORC data type
+  std::vector<orc_column_schema> children;  ///< Metadata of nested columns
 
   /**
    * @brief Returns metadata of the child with the given index.
@@ -227,13 +227,19 @@ struct orc_column_metadata {
 };
 
 /**
+ * @brief Schema of an ORC file.
+ */
+struct orc_schema {
+  orc_column_schema root;  ///< Schema of the struct column that contains all columns as fields
+};
+
+/**
  * @brief Information about content of an ORC file.
  */
 struct orc_metadata {
-  orc_column_metadata root_column;  ///< Information on the root column (always a struct column that
-                                    ///< has all columns in the file as children)
-  size_type num_rows;     ///< number of rows in the root column; can vary for nested columns
-  size_type num_stripes;  ///< number of stripes in the file
+  orc_schema schema;      ///< Schema (e.g. types, names)
+  size_type num_rows;     ///< Number of rows in the root column; can vary for nested columns
+  size_type num_stripes;  ///< Number of stripes in the file
 };
 
 /**
