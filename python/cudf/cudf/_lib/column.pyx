@@ -128,7 +128,7 @@ cdef class Column:
             return self.data.ptr
 
     def set_base_data(self, value):
-        if value is not None and not isinstance(value, DeviceBufferLike):
+        if value is not None and not isinstance(value, (Buffer, DeviceBufferLike)):
             raise TypeError(
                 "Expected a DeviceBufferLike or None for data, "
                 f"got {type(value).__name__}"
@@ -177,7 +177,7 @@ cdef class Column:
         modify size or offset in any way, so the passed mask is expected to be
         compatible with the current offset.
         """
-        if value is not None and not isinstance(value, DeviceBufferLike):
+        if value is not None and not isinstance(value, (Buffer, DeviceBufferLike)):
             raise TypeError(
                 "Expected a DeviceBufferLike or None for mask, "
                 f"got {type(value).__name__}"

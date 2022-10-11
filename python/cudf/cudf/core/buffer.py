@@ -226,6 +226,15 @@ class Buffer(Serializable):
             "typestr": "|u1",
             "version": 0,
         }
+    
+    def _detach(self):
+        # make a deep copy of existing DeviceBuffer
+        # and replace pointer to it.
+        current_buf = rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
+        new_buf = current_buf.copy()
+        self._ptr = new_buf.ptr
+        self._size = new_buf.size
+        self._owner = new_buf
 
     def memoryview(self) -> memoryview:
         host_buf = bytearray(self.size)
