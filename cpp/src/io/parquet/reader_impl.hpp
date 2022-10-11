@@ -84,6 +84,17 @@ class reader::impl {
 
  private:
   /**
+   * TODO
+   *
+   * @brief load_column_chunk_descriotions
+   * @return
+   */
+  std::pair<hostdevice_vector<gpu::ColumnChunkDesc>, hostdevice_vector<gpu::PageInfo>>
+  read_intermediate_data(size_type skip_rows,
+                         size_type num_rows,
+                         std::vector<std::vector<size_type>> const& row_group_list);
+
+  /**
    * TODO: Rename this into something more meaningful
    *
    * @brief Reads compressed page data to device memory

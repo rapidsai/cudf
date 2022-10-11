@@ -1568,6 +1568,124 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
+std::pair<hostdevice_vector<gpu::ColumnChunkDesc>, hostdevice_vector<gpu::PageInfo>>
+reader::impl::read_intermediate_data(size_type skip_rows,
+                                     size_type num_rows,
+                                     const std::vector<std::vector<size_type>>& row_group_list)
+{
+  // Select only row groups required
+  const auto selected_row_groups =
+    _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
+
+  // TODO: fix this
+  if (selected_row_groups.size() != 0 && _input_columns.size() != 0) {
+    return {hostdevice_vector<gpu::ColumnChunkDesc>(0, 0, _stream),
+            hostdevice_vector<gpu::PageInfo>(0, 0, _stream)};
+  }
+
+  // Descriptors for all the chunks that make up the selected columns
+  const auto num_input_columns = _input_columns.size();
+  const auto num_chunks        = selected_row_groups.size() * num_input_columns;
+  hostdevice_vector<gpu::ColumnChunkDesc> chunks(0, num_chunks, _stream);
+
+  // Association between each column chunk and its source
+  std::vector<size_type> chunk_source_map(num_chunks);
+
+  // Tracker for eventually deallocating compressed and uncompressed data
+  std::vector<std::unique_ptr<datasource::buffer>> page_data(num_chunks);
+
+  // Keep track of column chunk file offsets
+  std::vector<size_t> column_chunk_offsets(num_chunks);
+
+  // Initialize column chunk information
+  size_t total_decompressed_size = 0;
+  auto remaining_rows            = num_rows;
+  std::vector<std::future<void>> read_rowgroup_tasks;
+  for (const auto& rg : selected_row_groups) {
+    const auto& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
+    auto const row_group_start  = rg.start_row;
+    auto const row_group_source = rg.source_index;
+    auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
+    auto const io_chunk_idx     = chunks.size();
+
+    // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
+    for (size_t i = 0; i < num_input_columns; ++i) {
+      auto col = _input_columns[i];
+      // look up metadata
+      auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
+      auto& schema   = _metadata->get_schema(col.schema_idx);
+
+      auto [type_width, clock_rate, converted_type] =
+        conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
+                        _timestamp_type.id(),
+                        schema.type,
+                        schema.converted_type,
+                        schema.type_length);
+
+      column_chunk_offsets[chunks.size()] =
+        (col_meta.dictionary_page_offset != 0)
+          ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
+          : col_meta.data_page_offset;
+
+      chunks.push_back(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
+                                            nullptr,
+                                            col_meta.num_values,
+                                            schema.type,
+                                            type_width,
+                                            row_group_start,
+                                            row_group_rows,
+                                            schema.max_definition_level,
+                                            schema.max_repetition_level,
+                                            _metadata->get_output_nesting_depth(col.schema_idx),
+                                            required_bits(schema.max_definition_level),
+                                            required_bits(schema.max_repetition_level),
+                                            col_meta.codec,
+                                            converted_type,
+                                            schema.logical_type,
+                                            schema.decimal_scale,
+                                            clock_rate,
+                                            i,
+                                            col.schema_idx));
+
+      // Map each column chunk to its column index and its source index
+      chunk_source_map[chunks.size() - 1] = row_group_source;
+
+      if (col_meta.codec != Compression::UNCOMPRESSED) {
+        total_decompressed_size += col_meta.total_uncompressed_size;
+      }
+    }
+    // Read compressed chunk data to device memory
+    read_rowgroup_tasks.push_back(read_column_chunks(
+      page_data, chunks, io_chunk_idx, chunks.size(), column_chunk_offsets, chunk_source_map));
+
+    remaining_rows -= row_group.num_rows;
+  }
+  for (auto& task : read_rowgroup_tasks) {
+    task.wait();
+  }
+  assert(remaining_rows <= 0);
+
+  // Process dataset chunk pages into output columns
+  const auto total_pages = count_page_headers(chunks);
+  hostdevice_vector<gpu::PageInfo> pages(total_pages, total_pages, _stream);
+
+  if (total_pages > 0) {
+    rmm::device_buffer decomp_page_data;
+
+    // decoding of column/page information
+    decode_page_headers(chunks, pages);
+    if (total_decompressed_size > 0) {
+      decomp_page_data = decompress_page_data(chunks, pages);
+      // Free compressed data
+      for (size_t c = 0; c < chunks.size(); c++) {
+        if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) { page_data[c].reset(); }
+      }
+    }
+  }
+
+  return {std::move(chunks), std::move(pages)};
+}
+
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
