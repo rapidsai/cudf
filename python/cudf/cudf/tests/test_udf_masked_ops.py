@@ -13,6 +13,7 @@ from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
     comparison_ops,
+    shift_ops,
     unary_ops,
 )
 from cudf.core.udf.utils import precompiled
@@ -100,6 +101,17 @@ def test_arith_masked_vs_masked(op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1, None, 3, None], "b": [4, 5, None, None]})
+    run_masked_udf_test(func, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", shift_ops)
+def test_arith_masked_vs_masked_shift_ops(op):
+    def func(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    gdf = cudf.DataFrame({"a": [5, -10, 0], "b": [1, 2, 3]})
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 

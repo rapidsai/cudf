@@ -16,6 +16,7 @@ from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
     comparison_ops,
+    shift_ops,
     unary_ops,
 )
 from cudf.core.udf.masked_typing import MaskedType, NAType
@@ -229,7 +230,7 @@ def register_const_op(op):
 
 
 # register all lowering at init
-for binary_op in arith_ops + bitwise_ops + comparison_ops:
+for binary_op in arith_ops + bitwise_ops + comparison_ops + shift_ops:
     register_arithmetic_op(binary_op)
     register_const_op(binary_op)
     # null op impl can be shared between all ops

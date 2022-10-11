@@ -23,6 +23,14 @@ arith_ops = [
     operator.ixor,
 ]
 
+# only distinct for separate testing
+shift_ops = [
+    operator.lshift,
+    operator.rshift,
+    operator.ilshift,
+    operator.irshift,
+]
+
 bitwise_ops = [operator.and_, operator.or_, operator.xor]
 
 unary_ops = [
@@ -57,6 +65,7 @@ unary_ops = [
     operator.neg,
     operator.not_,
     operator.invert,
+    operator.truth,
 ]
 
 comparison_ops = [
