@@ -216,7 +216,14 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
+                (
+                    # Casting only for string and non-decimal numeric
+                    # columns
+                    cudf.core.dtypes.DecimalDtype,
+                    cudf.CategoricalDtype,
+                    cudf.ListDtype,
+                    cudf.StructDtype,
+                ),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
