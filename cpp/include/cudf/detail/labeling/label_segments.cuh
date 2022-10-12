@@ -26,6 +26,7 @@
 #include <thrust/iterator/iterator_traits.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {

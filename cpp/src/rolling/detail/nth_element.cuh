@@ -22,8 +22,15 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/bit.hpp>
 
-#include <limits>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/reverse_iterator.h>
+
+#include <limits>
 
 namespace cudf::detail::rolling {
 

@@ -68,9 +68,6 @@ def to_dlpack(cudf_obj):
     cuDF to_dlpack() produces column-major (Fortran order) output. If the
     output tensor needs to be row major, transpose the output of this function.
     """
-    if len(cudf_obj) == 0:
-        raise ValueError("Cannot create DLPack tensor of 0 size")
-
     if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):

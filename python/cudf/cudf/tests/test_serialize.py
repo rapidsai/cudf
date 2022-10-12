@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_150
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq
 
@@ -86,13 +87,14 @@ from cudf.testing._utils import assert_eq
             ),
         ),
         pd._testing.makeRangeIndex,
-        pd._testing.makeStringIndex,
         pd._testing.makeStringSeries,
         pd._testing.makeTimeDataFrame,
         pd._testing.makeTimeSeries,
         pd._testing.makeTimedeltaIndex,
         pd._testing.makeUIntIndex,
-        pd._testing.makeUnicodeIndex,
+        pd._testing.makeUnicodeIndex
+        if not PANDAS_GE_150
+        else pd._testing.makeStringIndex,
     ],
 )
 @pytest.mark.parametrize("to_host", [True, False])
@@ -356,8 +358,8 @@ def test_serialize_sliced_string():
     # because both should be identical
     for i in range(3):
         assert_eq(
-            serialized_gd_series[1][i].to_host_array(),
-            serialized_sliced[1][i].to_host_array(),
+            serialized_gd_series[1][i].memoryview(),
+            serialized_sliced[1][i].memoryview(),
         )
 
     recreated = cudf.Series.deserialize(*sliced.serialize())

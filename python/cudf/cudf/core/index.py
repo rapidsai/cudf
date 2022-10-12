@@ -184,7 +184,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # whereas _stop is an upper bound.
         self._end = self._start + self._step * (len(self._range) - 1)
 
-    def _copy_type_metadata(self: RangeIndex, other: RangeIndex) -> RangeIndex:
+    def _copy_type_metadata(
+        self: RangeIndex, other: RangeIndex, *, override_dtypes=None
+    ) -> RangeIndex:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -231,7 +233,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _num_rows(self):
         return len(self)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
@@ -839,6 +841,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def isna(self):
         return cupy.zeros(len(self), dtype=bool)
 
+    isnull = isna
+
+    @_cudf_nvtx_annotate
+    def notna(self):
+        return cupy.ones(len(self), dtype=bool)
+
+    notnull = isna
+
     @_cudf_nvtx_annotate
     def _minmax(self, meth: str):
         no_steps = len(self) - 1
@@ -978,9 +988,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     # Override just to make mypy happy.
     @_cudf_nvtx_annotate
     def _copy_type_metadata(
-        self: GenericIndex, other: GenericIndex
+        self: GenericIndex, other: GenericIndex, *, override_dtypes=None
     ) -> GenericIndex:
-        return super()._copy_type_metadata(other)
+        return super()._copy_type_metadata(
+            other, override_dtypes=override_dtypes
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1308,6 +1320,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
+
+    @_cudf_nvtx_annotate
+    def isna(self):
+        return self._column.isnull().values
+
+    isnull = isna
+
+    @_cudf_nvtx_annotate
+    def notna(self):
+        return self._column.notnull().values
+
+    notnull = notna
 
     @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
@@ -2796,7 +2820,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     Currently supported inputs are:
 
     * ``Column``
-    * ``Buffer``
+    * ``DeviceBufferLike``
     * ``Series``
     * ``Index``
     * numba device array

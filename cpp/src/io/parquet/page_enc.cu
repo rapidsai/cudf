@@ -30,16 +30,11 @@
 #include <cuda/std/chrono>
 
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
-#include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -59,6 +54,12 @@ constexpr bool enable_bool_rle = false;
 using ::cudf::detail::device_2dspan;
 
 constexpr uint32_t rle_buffer_size = (1 << 9);
+
+// do not truncate statistics
+constexpr int32_t NO_TRUNC_STATS = 0;
+
+// minimum scratch space required for encoding statistics
+constexpr size_t MIN_STATS_SCRATCH_SIZE = sizeof(__int128_t);
 
 struct frag_init_state_s {
   parquet_column_device_view col;
@@ -227,7 +228,8 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group* chunk_grstats,
                int32_t num_columns,
                size_t max_page_size_bytes,
-               size_type max_page_size_rows)
+               size_type max_page_size_rows,
+               uint32_t page_align)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -283,7 +285,8 @@ __global__ void __launch_bounds__(128)
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
-        page_offset += page_g.max_hdr_size + page_g.max_data_size;
+        page_offset +=
+          util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
         if (not comp_page_sizes.empty()) {
           comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
         }
@@ -359,7 +362,8 @@ __global__ void __launch_bounds__(128)
             }
             page_g.max_hdr_size += stats_hdr_len;
           }
-          page_g.page_data = ck_g.uncompressed_bfr + page_offset;
+          page_g.max_hdr_size = util::round_up_unsafe(page_g.max_hdr_size, page_align);
+          page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
           }
@@ -383,7 +387,8 @@ __global__ void __launch_bounds__(128)
 
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
-          page_offset += page_g.max_hdr_size + page_g.max_data_size;
+          page_offset +=
+            util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
           if (not comp_page_sizes.empty()) {
             comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page + num_pages];
           }
@@ -421,7 +426,7 @@ __global__ void __launch_bounds__(128)
     __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
-        uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
+        uint32_t ck_stat_size = util::round_up_unsafe(48 + 2 * ck_max_stats_len, page_align);
         page_offset += ck_stat_size;
         comp_page_offset += ck_stat_size;
         ck_g.ck_stat_size = ck_stat_size;
@@ -448,8 +453,8 @@ __global__ void __launch_bounds__(128)
  *[nbits-1]
  */
 static __device__ __constant__ uint32_t kRleRunMask[24] = {
-  0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3,
-  0x1,        0x1,    0x1,    0x1,  0x1,  0x1,  0x1, 0x1, 0x1, 0x1, 0x1, 0x1};
+  0x00ff'ffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3,
+  0x1,         0x1,    0x1,    0x1,  0x1,  0x1,  0x1, 0x1, 0x1, 0x1, 0x1, 0x1};
 
 /**
  * @brief Variable-length encode an integer
@@ -465,89 +470,186 @@ inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 }
 
 /**
- * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
+ * @brief Pack literal values in output bitstream (1,2,3,4,5,6,8,10,12,16,20 or 24 bits per value)
+ */
+inline __device__ void PackLiteralsShuffle(
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
+  constexpr uint32_t MASK2T = 1;  // mask for 2 thread leader
+  constexpr uint32_t MASK4T = 3;  // mask for 4 thread leader
+  constexpr uint32_t MASK8T = 7;  // mask for 8 thread leader
+  uint64_t v64;
+
+  if (t > (count | 0x1f)) { return; }
+
+  switch (w) {
+    case 1:
+      v |= shuffle_xor(v, 1) << 1;  // grab bit 1 from neighbor
+      v |= shuffle_xor(v, 2) << 2;  // grab bits 2-3 from 2 lanes over
+      v |= shuffle_xor(v, 4) << 4;  // grab bits 4-7 from 4 lanes over
+      // sub-warp leader writes the combined bits
+      if (t < count && !(t & MASK8T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 2:
+      v |= shuffle_xor(v, 1) << 2;
+      v |= shuffle_xor(v, 2) << 4;
+      if (t < count && !(t & MASK4T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 3:
+      v |= shuffle_xor(v, 1) << 3;
+      v |= shuffle_xor(v, 2) << 6;
+      v |= shuffle_xor(v, 4) << 12;
+      if (t < count && !(t & MASK8T)) {
+        dst[(t >> 3) * 3 + 0] = v;
+        dst[(t >> 3) * 3 + 1] = v >> 8;
+        dst[(t >> 3) * 3 + 2] = v >> 16;
+      }
+      return;
+    case 4:
+      v |= shuffle_xor(v, 1) << 4;
+      if (t < count && !(t & MASK2T)) { dst[(t * w) >> 3] = v; }
+      return;
+    case 5:
+      v |= shuffle_xor(v, 1) << 5;
+      v |= shuffle_xor(v, 2) << 10;
+      v64 = static_cast<uint64_t>(shuffle_xor(v, 4)) << 20 | v;
+      if (t < count && !(t & MASK8T)) {
+        dst[(t >> 3) * 5 + 0] = v64;
+        dst[(t >> 3) * 5 + 1] = v64 >> 8;
+        dst[(t >> 3) * 5 + 2] = v64 >> 16;
+        dst[(t >> 3) * 5 + 3] = v64 >> 24;
+        dst[(t >> 3) * 5 + 4] = v64 >> 32;
+      }
+      return;
+    case 6:
+      v |= shuffle_xor(v, 1) << 6;
+      v |= shuffle_xor(v, 2) << 12;
+      if (t < count && !(t & MASK4T)) {
+        dst[(t >> 2) * 3 + 0] = v;
+        dst[(t >> 2) * 3 + 1] = v >> 8;
+        dst[(t >> 2) * 3 + 2] = v >> 16;
+      }
+      return;
+    case 8:
+      if (t < count) { dst[t] = v; }
+      return;
+    case 10:
+      v |= shuffle_xor(v, 1) << 10;
+      v64 = static_cast<uint64_t>(shuffle_xor(v, 2)) << 20 | v;
+      if (t < count && !(t & MASK4T)) {
+        dst[(t >> 2) * 5 + 0] = v64;
+        dst[(t >> 2) * 5 + 1] = v64 >> 8;
+        dst[(t >> 2) * 5 + 2] = v64 >> 16;
+        dst[(t >> 2) * 5 + 3] = v64 >> 24;
+        dst[(t >> 2) * 5 + 4] = v64 >> 32;
+      }
+      return;
+    case 12:
+      v |= shuffle_xor(v, 1) << 12;
+      if (t < count && !(t & MASK2T)) {
+        dst[(t >> 1) * 3 + 0] = v;
+        dst[(t >> 1) * 3 + 1] = v >> 8;
+        dst[(t >> 1) * 3 + 2] = v >> 16;
+      }
+      return;
+    case 16:
+      if (t < count) {
+        dst[t * 2 + 0] = v;
+        dst[t * 2 + 1] = v >> 8;
+      }
+      return;
+    case 20:
+      v64 = static_cast<uint64_t>(shuffle_xor(v, 1)) << 20 | v;
+      if (t < count && !(t & MASK2T)) {
+        dst[(t >> 1) * 5 + 0] = v64;
+        dst[(t >> 1) * 5 + 1] = v64 >> 8;
+        dst[(t >> 1) * 5 + 2] = v64 >> 16;
+        dst[(t >> 1) * 5 + 3] = v64 >> 24;
+        dst[(t >> 1) * 5 + 4] = v64 >> 32;
+      }
+      return;
+    case 24:
+      if (t < count) {
+        dst[t * 3 + 0] = v;
+        dst[t * 3 + 1] = v >> 8;
+        dst[t * 3 + 2] = v >> 16;
+      }
+      return;
+
+    default: CUDF_UNREACHABLE("Unsupported bit width");
+  }
+}
+
+/**
+ * @brief Pack literals of arbitrary bit-length in output bitstream.
+ */
+inline __device__ void PackLiteralsRoundRobin(
+  uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
+  // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
+  // words but the destination mem may not be a multiple of 4 bytes.
+  // TODO (dm): This assumes blockdim = 128. Reduce magic numbers.
+  constexpr uint32_t NUM_THREADS  = 128;  // this needs to match gpuEncodePages block_size parameter
+  constexpr uint32_t NUM_BYTES    = (NUM_THREADS * MAX_DICT_BITS) >> 3;
+  constexpr uint32_t SCRATCH_SIZE = NUM_BYTES / sizeof(uint32_t);
+  __shared__ uint32_t scratch[SCRATCH_SIZE];
+  for (uint32_t i = t; i < SCRATCH_SIZE; i += NUM_THREADS) {
+    scratch[i] = 0;
+  }
+  __syncthreads();
+
+  if (t <= count) {
+    // shift symbol left by up to 31 bits
+    uint64_t v64 = v;
+    v64 <<= (t * w) & 0x1f;
+
+    // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
+    uint32_t v32[2];
+    memcpy(&v32, &v64, sizeof(uint64_t));
+
+    // Atomically write result to scratch
+    if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
+    if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
+  }
+  __syncthreads();
+
+  // Copy scratch data to final destination
+  auto available_bytes = (count * w + 7) / 8;
+
+  auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
+  for (uint32_t i = t; i < available_bytes; i += NUM_THREADS) {
+    dst[i] = scratch_bytes[i];
+  }
+  __syncthreads();
+}
+
+/**
+ * @brief Pack literal values in output bitstream
  */
 inline __device__ void PackLiterals(
   uint8_t* dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
-  if (w == 1 || w == 2 || w == 4 || w == 8 || w == 12 || w == 16 || w == 24) {
-    if (t <= (count | 0x1f)) {
-      if (w == 1 || w == 2 || w == 4) {
-        uint32_t mask = 0;
-        if (w == 1) {
-          v |= shuffle_xor(v, 1) << 1;
-          v |= shuffle_xor(v, 2) << 2;
-          v |= shuffle_xor(v, 4) << 4;
-          mask = 0x7;
-        } else if (w == 2) {
-          v |= shuffle_xor(v, 1) << 2;
-          v |= shuffle_xor(v, 2) << 4;
-          mask = 0x3;
-        } else if (w == 4) {
-          v |= shuffle_xor(v, 1) << 4;
-          mask = 0x1;
-        }
-        if (t < count && mask && !(t & mask)) { dst[(t * w) >> 3] = v; }
-        return;
-      } else if (w == 8) {
-        if (t < count) { dst[t] = v; }
-        return;
-      } else if (w == 12) {
-        v |= shuffle_xor(v, 1) << 12;
-        if (t < count && !(t & 1)) {
-          dst[(t >> 1) * 3 + 0] = v;
-          dst[(t >> 1) * 3 + 1] = v >> 8;
-          dst[(t >> 1) * 3 + 2] = v >> 16;
-        }
-        return;
-      } else if (w == 16) {
-        if (t < count) {
-          dst[t * 2 + 0] = v;
-          dst[t * 2 + 1] = v >> 8;
-        }
-        return;
-      } else if (w == 24) {
-        if (t < count) {
-          dst[t * 3 + 0] = v;
-          dst[t * 3 + 1] = v >> 8;
-          dst[t * 3 + 2] = v >> 16;
-        }
-        return;
-      }
-    } else {
+  if (w > 24) { CUDF_UNREACHABLE("Unsupported bit width"); }
+  switch (w) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 6:
+    case 8:
+    case 10:
+    case 12:
+    case 16:
+    case 20:
+    case 24:
+      // bit widths that lie on easy boundaries can be handled either directly
+      // (8, 16, 24) or through fast shuffle operations.
+      PackLiteralsShuffle(dst, v, count, w, t);
       return;
-    }
-  } else if (w <= 16) {
-    // Scratch space to temporarily write to. Needed because we will use atomics to write 32 bit
-    // words but the destination mem may not be a multiple of 4 bytes.
-    // TODO (dm): This assumes blockdim = 128 and max bits per value = 16. Reduce magic numbers.
-    __shared__ uint32_t scratch[64];
-    if (t < 64) { scratch[t] = 0; }
-    __syncthreads();
-
-    if (t <= count) {
-      uint64_t v64 = v;
-      v64 <<= (t * w) & 0x1f;
-
-      // Copy 64 bit word into two 32 bit words while following C++ strict aliasing rules.
-      uint32_t v32[2];
-      memcpy(&v32, &v64, sizeof(uint64_t));
-
-      // Atomically write result to scratch
-      if (v32[0]) { atomicOr(scratch + ((t * w) >> 5), v32[0]); }
-      if (v32[1]) { atomicOr(scratch + ((t * w) >> 5) + 1, v32[1]); }
-    }
-    __syncthreads();
-
-    // Copy scratch data to final destination
-    auto available_bytes = (count * w + 7) / 8;
-
-    auto scratch_bytes = reinterpret_cast<char*>(&scratch[0]);
-    if (t < available_bytes) { dst[t] = scratch_bytes[t]; }
-    if (t + 128 < available_bytes) { dst[t + 128] = scratch_bytes[t + 128]; }
-    __syncthreads();
-  } else {
-    CUDF_UNREACHABLE("Unsupported bit width");
+    default:
+      // bit packing that uses atomics, but can handle arbitrary bit widths up to 24.
+      PackLiteralsRoundRobin(dst, v, count, w, t);
   }
 }
 
@@ -575,7 +677,7 @@ static __device__ void RleEncode(
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
       __syncthreads();
       if (t < 32) {
-        uint32_t c32 = ballot(t >= 4 || s->rpt_map[t] != 0xffffffffu);
+        uint32_t c32 = ballot(t >= 4 || s->rpt_map[t] != 0xffff'ffffu);
         if (!t) {
           uint32_t last_idx = __ffs(c32) - 1;
           s->rle_rpt_count =
@@ -768,7 +870,7 @@ __global__ void __launch_bounds__(128, 8)
   gpuEncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats)
+                 device_span<compression_result> comp_results)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1115,18 +1217,17 @@ __global__ void __launch_bounds__(128, 8)
     }
   }
   if (t == 0) {
-    uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
-    auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
-    uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
-    s->page.max_data_size        = actual_data_size;
+    uint8_t* base         = s->page.page_data + s->page.max_hdr_size;
+    auto actual_data_size = static_cast<uint32_t>(s->cur - base);
+    s->page.max_data_size = actual_data_size;
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};
-      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, compressed_bfr_size};
+      comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, 0};  // size is unused
     }
     pages[blockIdx.x] = s->page;
-    if (not comp_stats.empty()) {
-      comp_stats[blockIdx.x]      = {0, ~0u};
-      pages[blockIdx.x].comp_stat = &comp_stats[blockIdx.x];
+    if (not comp_results.empty()) {
+      comp_results[blockIdx.x]   = {0, compression_status::FAILURE};
+      pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
     }
   }
 }
@@ -1159,10 +1260,10 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
       auto& curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
-      if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
+      if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
         has_compression = true;
-        compressed_data_size += comp_status->bytes_written;
-        if (comp_status->status != 0) { atomicAdd(&error_count, 1); }
+        compressed_data_size += comp_res->bytes_written;
+        if (comp_res->status != compression_status::SUCCESS) { atomicAdd(&error_count, 1); }
       }
     }
     uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
@@ -1325,9 +1426,11 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
+namespace {
+
 // byteswap 128 bit integer, placing result in dst in network byte order.
 // dst must point to at least 16 bytes of memory.
-static __device__ void byte_reverse128(__int128_t v, void* dst)
+__device__ void byte_reverse128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   auto const d_char_ptr = static_cast<unsigned char*>(dst);
@@ -1337,50 +1440,222 @@ static __device__ void byte_reverse128(__int128_t v, void* dst)
                d_char_ptr);
 }
 
-__device__ void get_extremum(const statistics_val* stats_val,
-                             statistics_dtype dtype,
-                             void* scratch,
-                             const void** val,
-                             uint32_t* len)
+/**
+ * @brief Test to see if a span contains all valid UTF-8 characters.
+ *
+ * @param span device_span to test.
+ * @return true if the span contains all valid UTF-8 characters.
+ */
+__device__ bool is_valid_utf8(device_span<unsigned char const> span)
 {
-  uint8_t dtype_len;
+  auto idx = 0;
+  while (idx < span.size_bytes()) {
+    // UTF-8 character should start with valid beginning bit pattern
+    if (not strings::detail::is_valid_begin_utf8_char(span[idx])) { return false; }
+    // subsequent elements of the character should be continuation chars
+    auto const width = strings::detail::bytes_in_utf8_byte(span[idx++]);
+    for (size_type i = 1; i < width && idx < span.size_bytes(); i++, idx++) {
+      if (not strings::detail::is_utf8_continuation_char(span[idx])) { return false; }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @brief Increment part of a UTF-8 character.
+ *
+ * Attempt to increment the char pointed to by ptr, which is assumed to be part of a valid UTF-8
+ * character. Returns true if successful, false if the increment caused an overflow, in which case
+ * the data at ptr will be set to the lowest valid UTF-8 bit pattern (start or continuation).
+ * Will halt execution if passed invalid UTF-8.
+ */
+__device__ bool increment_utf8_at(unsigned char* ptr)
+{
+  unsigned char elem = *ptr;
+  // elem is one of (no 5 or 6 byte chars allowed):
+  //  0b0vvvvvvv a 1 byte character
+  //  0b10vvvvvv a continuation byte
+  //  0b110vvvvv start of a 2 byte characther
+  //  0b1110vvvv start of a 3 byte characther
+  //  0b11110vvv start of a 4 byte characther
+
+  // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
+  uint8_t mask  = 0xF8;
+  uint8_t valid = 0xF0;
+
+  while (mask != 0) {
+    if ((elem & mask) == valid) {
+      elem++;
+      if ((elem & mask) != mask) {  // no overflow
+        *ptr = elem;
+        return true;
+      }
+      *ptr = valid;
+      return false;
+    }
+    mask <<= 1;
+    valid <<= 1;
+  }
+
+  // should not reach here since we test for valid UTF-8 higher up the call chain
+  CUDF_UNREACHABLE("Trying to increment non-utf8");
+}
+
+/**
+ * @brief Attempt to truncate a span of UTF-8 characters to at most truncate_length_bytes.
+ *
+ * If is_min is false, then the final character (or characters if there is overflow) will be
+ * incremented so that the resultant UTF-8 will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the span cannot be
+ * truncated, leave it untouched and return the original length.
+ *
+ * @return Pair object containing a pointer to the truncated data and its length.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
+                                                          bool is_min,
+                                                          void* scratch,
+                                                          size_type truncate_length)
+{
+  // we know at this point that truncate_length < size_bytes, so
+  // there is data at [len]. work backwards until we find
+  // the start of a UTF-8 encoded character, since UTF-8 characters may be multi-byte.
+  auto len = truncate_length;
+  while (not strings::detail::is_begin_utf8_char(span[len]) && len > 0) {
+    len--;
+  }
+
+  if (len != 0) {
+    if (is_min) { return {span.data(), len}; }
+    memcpy(scratch, span.data(), len);
+    // increment last byte, working backwards if the byte overflows
+    auto const ptr = static_cast<unsigned char*>(scratch);
+    for (int32_t i = len - 1; i >= 0; i--) {
+      if (increment_utf8_at(&ptr[i])) {  // true if no overflow
+        return {scratch, len};
+      }
+    }
+    // cannot increment, so fall through
+  }
+
+  // couldn't truncate, return original value
+  return {span.data(), span.size_bytes()};
+}
+
+/**
+ * @brief Attempt to truncate a span of binary data to at most truncate_length bytes.
+ *
+ * If is_min is false, then the final byte (or bytes if there is overflow) will be
+ * incremented so that the resultant binary will still be a valid maximum. scratch is only used when
+ * is_min is false, and must be at least truncate_length bytes in size. If the span cannot be
+ * truncated, leave it untouched and return the original length.
+ *
+ * @return Pair object containing a pointer to the truncated data and its length.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+                                                            bool is_min,
+                                                            void* scratch,
+                                                            size_type truncate_length)
+{
+  if (is_min) { return {arr.data(), truncate_length}; }
+  memcpy(scratch, arr.data(), truncate_length);
+  // increment last byte, working backwards if the byte overflows
+  auto const ptr = static_cast<uint8_t*>(scratch);
+  for (int32_t i = truncate_length - 1; i >= 0; i--) {
+    ptr[i]++;
+    if (ptr[i] != 0) {  // no overflow
+      return {scratch, i + 1};
+    }
+  }
+
+  // couldn't truncate, return original value
+  return {arr.data(), arr.size_bytes()};
+}
+
+// TODO (ets): the assumption here is that string columns might have UTF-8 or plain binary,
+// while binary columns are assumed to be binary and will be treated as such.  If this assumption
+// is incorrect, then truncate_byte_array() and truncate_string() should just be combined into
+// a single function.
+/**
+ * @brief Attempt to truncate a UTF-8 string to at most truncate_length bytes.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
+                                                            bool is_min,
+                                                            void* scratch,
+                                                            size_type truncate_length)
+{
+  if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
+    return {str.data(), str.size_bytes()};
+  }
+
+  // convert char to unsigned since UTF-8 is just bytes, not chars.  can't use std::byte because
+  // that can't be incremented.
+  auto const span = device_span<unsigned char const>(
+    reinterpret_cast<unsigned char const*>(str.data()), str.size_bytes());
+
+  // if str is all 8-bit chars, or is actually not UTF-8, then we can just use truncate_binary()
+  if (str.size_bytes() != str.length() and is_valid_utf8(span.first(truncate_length))) {
+    return truncate_utf8(span, is_min, scratch, truncate_length);
+  }
+  return truncate_binary(span, is_min, scratch, truncate_length);
+}
+
+/**
+ * @brief Attempt to truncate a binary array to at most truncate_length bytes.
+ */
+__device__ std::pair<const void*, uint32_t> truncate_byte_array(
+  const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
+{
+  if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
+    return {arr.data(), arr.size_bytes()};
+  }
+
+  // convert std::byte to uint8_t since bytes can't be incremented
+  device_span<uint8_t const> const span{reinterpret_cast<uint8_t const*>(arr.data()),
+                                        arr.size_bytes()};
+  return truncate_binary(span, is_min, scratch, truncate_length);
+}
+
+/**
+ * @brief Find a min or max value of the proper form to be included in Parquet statistics
+ * structures.
+ *
+ * Given a statistics_val union and a data type, perform any transformations needed to produce a
+ * valid min or max binary value.  String and byte array types will be truncated if they exceed
+ * truncate_length.
+ */
+__device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* stats_val,
+                                                         statistics_dtype dtype,
+                                                         void* scratch,
+                                                         bool is_min,
+                                                         size_type truncate_length)
+{
   switch (dtype) {
-    case dtype_bool: dtype_len = 1; break;
+    case dtype_bool: return {stats_val, sizeof(bool)};
     case dtype_int8:
     case dtype_int16:
     case dtype_int32:
-    case dtype_date32:
-    case dtype_float32: dtype_len = 4; break;
+    case dtype_date32: return {stats_val, sizeof(int32_t)};
+    case dtype_float32: {
+      auto const fp_scratch = static_cast<float*>(scratch);
+      fp_scratch[0]         = stats_val->fp_val;
+      return {scratch, sizeof(float)};
+    }
     case dtype_int64:
     case dtype_timestamp64:
     case dtype_float64:
-    case dtype_decimal64: dtype_len = 8; break;
-    case dtype_decimal128: dtype_len = 16; break;
-    case dtype_string:
-    case dtype_byte_array:
-    default: dtype_len = 0; break;
-  }
-
-  if (dtype == dtype_string) {
-    *len = stats_val->str_val.length;
-    *val = stats_val->str_val.ptr;
-  } else if (dtype == dtype_byte_array) {
-    *len = stats_val->byte_val.length;
-    *val = stats_val->byte_val.ptr;
-  } else {
-    *len = dtype_len;
-    if (dtype == dtype_float32) {  // Convert from double to float32
-      auto const fp_scratch = static_cast<float*>(scratch);
-      fp_scratch[0]         = stats_val->fp_val;
-      *val                  = scratch;
-    } else if (dtype == dtype_decimal128) {
+    case dtype_decimal64: return {stats_val, sizeof(int64_t)};
+    case dtype_decimal128:
       byte_reverse128(stats_val->d128_val, scratch);
-      *val = scratch;
-    } else {
-      *val = stats_val;
-    }
+      return {scratch, sizeof(__int128_t)};
+    case dtype_string: return truncate_string(stats_val->str_val, is_min, scratch, truncate_length);
+    case dtype_byte_array:
+      return truncate_byte_array(stats_val->byte_val, is_min, scratch, truncate_length);
+    default: CUDF_UNREACHABLE("Invalid statistics data type");
   }
 }
+
+}  // namespace
 
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
@@ -1391,13 +1666,12 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
-    const void *vmin, *vmax;
-    uint32_t lmin, lmax;
-
-    get_extremum(&s->max_value, dtype, scratch, &vmax, &lmax);
-    encoder.field_binary(5, vmax, lmax);
-    get_extremum(&s->min_value, dtype, scratch, &vmin, &lmin);
-    encoder.field_binary(6, vmin, lmin);
+    auto const [max_ptr, max_size] =
+      get_extremum(&s->max_value, dtype, scratch, false, NO_TRUNC_STATS);
+    encoder.field_binary(5, max_ptr, max_size);
+    auto const [min_ptr, min_size] =
+      get_extremum(&s->min_value, dtype, scratch, true, NO_TRUNC_STATS);
+    encoder.field_binary(6, min_ptr, min_size);
   }
   encoder.end(&end);
   return end;
@@ -1406,7 +1680,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stat,
+                       device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats)
 {
@@ -1414,7 +1688,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) unsigned char scratch[16];
+  __shared__ __align__(8) unsigned char scratch[MIN_STATS_SCRATCH_SIZE];
 
   uint32_t t = threadIdx.x;
 
@@ -1435,7 +1709,7 @@ __global__ void __launch_bounds__(128)
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_stat[blockIdx.x].bytes_written;
+      compressed_page_size = (uint32_t)comp_results[blockIdx.x].bytes_written;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
@@ -1538,11 +1812,13 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
+namespace {
+
 /**
  * @brief Tests if statistics are comparable given the column's
  * physical and converted types
  */
-static __device__ bool is_comparable(Type ptype, ConvertedType ctype)
+__device__ bool is_comparable(Type ptype, ConvertedType ctype)
 {
   switch (ptype) {
     case Type::BOOLEAN:
@@ -1572,10 +1848,10 @@ constexpr __device__ int32_t compare(T& v1, T& v2)
  * @brief Compares two statistics_val structs.
  * @return < 0 if v1 < v2, 0 if v1 == v2, > 0 if v1 > v2
  */
-static __device__ int32_t compare_values(Type ptype,
-                                         ConvertedType ctype,
-                                         const statistics_val& v1,
-                                         const statistics_val& v2)
+__device__ int32_t compare_values(Type ptype,
+                                  ConvertedType ctype,
+                                  const statistics_val& v1,
+                                  const statistics_val& v2)
 {
   switch (ptype) {
     case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
@@ -1603,10 +1879,10 @@ static __device__ int32_t compare_values(Type ptype,
 /**
  * @brief Determine if a set of statstistics are in ascending order.
  */
-static __device__ bool is_ascending(const statistics_chunk* s,
-                                    Type ptype,
-                                    ConvertedType ctype,
-                                    uint32_t num_pages)
+__device__ bool is_ascending(const statistics_chunk* s,
+                             Type ptype,
+                             ConvertedType ctype,
+                             uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
@@ -1620,10 +1896,10 @@ static __device__ bool is_ascending(const statistics_chunk* s,
 /**
  * @brief Determine if a set of statstistics are in descending order.
  */
-static __device__ bool is_descending(const statistics_chunk* s,
-                                     Type ptype,
-                                     ConvertedType ctype,
-                                     uint32_t num_pages)
+__device__ bool is_descending(const statistics_chunk* s,
+                              Type ptype,
+                              ConvertedType ctype,
+                              uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
     if (compare_values(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
@@ -1637,10 +1913,10 @@ static __device__ bool is_descending(const statistics_chunk* s,
 /**
  * @brief Determine the ordering of a set of statistics.
  */
-static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
-                                                   Type ptype,
-                                                   ConvertedType ctype,
-                                                   uint32_t num_pages)
+__device__ int32_t calculate_boundary_order(const statistics_chunk* s,
+                                            Type ptype,
+                                            ConvertedType ctype,
+                                            uint32_t num_pages)
 {
   if (not is_comparable(ptype, ctype)) { return BoundaryOrder::UNORDERED; }
   if (is_ascending(s, ptype, ctype, num_pages)) {
@@ -1651,15 +1927,24 @@ static __device__ int32_t calculate_boundary_order(const statistics_chunk* s,
   return BoundaryOrder::UNORDERED;
 }
 
+// align ptr to an 8-byte boundary. address returned will be <= ptr.
+constexpr __device__ void* align8(void* ptr)
+{
+  // it's ok to round down because we have an extra 7 bytes in the buffer
+  auto algn = 3 & reinterpret_cast<std::uintptr_t>(ptr);
+  return static_cast<char*>(ptr) - algn;
+}
+
+}  // namespace
+
 // blockDim(1, 1, 1)
 __global__ void __launch_bounds__(1)
   gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
-                         device_span<statistics_chunk const> column_stats)
+                         device_span<statistics_chunk const> column_stats,
+                         size_type column_index_truncate_length)
 {
-  const void *vmin, *vmax;
-  uint32_t lmin, lmax;
+  __align__(8) unsigned char s_scratch[MIN_STATS_SCRATCH_SIZE];
   uint8_t* col_idx_end;
-  unsigned char scratch[16];
 
   if (column_stats.empty()) { return; }
 
@@ -1671,6 +1956,14 @@ __global__ void __launch_bounds__(1)
 
   header_encoder encoder(ck_g->column_index_blob);
 
+  // make sure scratch is aligned properly. here column_index_size indicates
+  // how much scratch space is available for this chunk, including space for
+  // truncation scratch + padding for alignment.
+  void* scratch =
+    column_index_truncate_length < MIN_STATS_SCRATCH_SIZE
+      ? s_scratch
+      : align8(ck_g->column_index_blob + ck_g->column_index_size - column_index_truncate_length);
+
   // null_pages
   encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
@@ -1680,15 +1973,23 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page].min_value, col_g.stats_dtype, scratch, &vmin, &lmin);
-    encoder.put_binary(vmin, lmin);
+    auto const [min_ptr, min_size] = get_extremum(&column_stats[pageidx + page].min_value,
+                                                  col_g.stats_dtype,
+                                                  scratch,
+                                                  true,
+                                                  column_index_truncate_length);
+    encoder.put_binary(min_ptr, min_size);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_extremum(&column_stats[pageidx + page].max_value, col_g.stats_dtype, scratch, &vmax, &lmax);
-    encoder.put_binary(vmax, lmax);
+    auto const [max_ptr, max_size] = get_extremum(&column_stats[pageidx + page].max_value,
+                                                  col_g.stats_dtype,
+                                                  scratch,
+                                                  false,
+                                                  column_index_truncate_length);
+    encoder.put_binary(max_ptr, max_size);
   }
   encoder.field_list_end(3);
   // boundary_order
@@ -1705,514 +2006,8 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_end(5);
   encoder.end(&col_idx_end, false);
 
+  // now reset column_index_size to the actual size of the encoded column index blob
   ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
-}
-
-/**
- * @brief Functor to get definition level value for a nested struct column until the leaf level or
- * the first list level.
- *
- */
-struct def_level_fn {
-  column_device_view const* parent_col;
-  uint8_t const* d_nullability;
-  uint8_t sub_level_start;
-  uint8_t curr_def_level;
-
-  __device__ uint32_t operator()(size_type i)
-  {
-    uint32_t def       = curr_def_level;
-    uint8_t l          = sub_level_start;
-    bool is_col_struct = false;
-    auto col           = *parent_col;
-    do {
-      // If col not nullable then it does not contribute to def levels
-      if (d_nullability[l]) {
-        if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
-          ++def;
-        } else {  // We have found the shallowest level at which this row is null
-          break;
-        }
-      }
-      is_col_struct = (col.type().id() == type_id::STRUCT);
-      if (is_col_struct) {
-        col = col.child(0);
-        ++l;
-      }
-    } while (is_col_struct);
-    return def;
-  }
-};
-
-/**
- * @brief Get the dremel offsets and repetition and definition levels for a LIST column
- *
- * The repetition and definition level values are ideally computed using a recursive call over a
- * nested structure but in order to better utilize GPU resources, this function calculates them
- * with a bottom up merge method.
- *
- * Given a LIST column of type `List<List<int>>` like so:
- * ```
- * col = {
- *    [],
- *    [[], [1, 2, 3], [4, 5]],
- *    [[]]
- * }
- * ```
- * We can represent it in cudf format with two level of offsets like this:
- * ```
- * Level 0 offsets = {0, 0, 3, 5, 6}
- * Level 1 offsets = {0, 0, 3, 5, 5}
- * Values          = {1, 2, 3, 4, 5}
- * ```
- * The desired result of this function is the repetition and definition level values that
- * correspond to the data values:
- * ```
- * col = {[], [[], [1, 2, 3], [4, 5]], [[]]}
- * def = { 0    1,  2, 2, 2,   2, 2,     1 }
- * rep = { 0,   0,  0, 2, 2,   1, 2,     0 }
- * ```
- *
- * Since repetition and definition levels arrays contain a value for each empty list, the size of
- * the rep/def level array can be given by
- * ```
- * rep_level.size() = size of leaf column + number of empty lists in level 0
- *                                        + number of empty lists in level 1 ...
- * ```
- *
- * We start with finding the empty lists in the penultimate level and merging it with the indices
- * of the leaf level. The values for the merge are the definition and repetition levels
- * ```
- * empties at level 1 = {0, 5}
- * def values at 1    = {1, 1}
- * rep values at 1    = {1, 1}
- * indices at leaf    = {0, 1, 2, 3, 4}
- * def values at leaf = {2, 2, 2, 2, 2}
- * rep values at leaf = {2, 2, 2, 2, 2}
- * ```
- *
- * merged def values  = {1, 2, 2, 2, 2, 2, 1}
- * merged rep values  = {1, 2, 2, 2, 2, 2, 1}
- *
- * The size of the rep/def values is now larger than the leaf values and the offsets need to be
- * adjusted in order to point to the correct start indices. We do this with an exclusive scan over
- * the indices of offsets of empty lists and adding to existing offsets.
- * ```
- * Level 1 new offsets = {0, 1, 4, 6, 7}
- * ```
- * Repetition values at the beginning of a list need to be decremented. We use the new offsets to
- * scatter the rep value.
- * ```
- * merged rep values  = {1, 2, 2, 2, 2, 2, 1}
- * scatter (1, new offsets)
- * new offsets        = {0, 1,       4,    6, 7}
- * new rep values     = {1, 1, 2, 2, 1, 2, 1}
- * ```
- *
- * Similarly we merge up all the way till level 0 offsets
- *
- * STRUCT COLUMNS :
- * In case of struct columns, we don't have to merge struct levels with their children because a
- * struct is the same size as its children. e.g. for a column `struct<int, float>`, if the row `i`
- * is null, then the children columns `int` and `float` are also null at `i`. They also have the
- * null entry represented in their respective null masks. So for any case of strictly struct based
- * nesting, we can get the definition levels merely by iterating over the nesting for the same row.
- *
- * In case struct and lists are intermixed, the definition levels of all the contiguous struct
- * levels can be constructed using the aforementioned iterative method. Only when we reach a list
- * level, we need to do a merge with the subsequent level.
- *
- * So, for a column like `struct<list<int>>`, we are going to merge between the levels `struct<list`
- * and `int`.
- * For a column like `list<struct<int>>`, we are going to merge between `list` and `struct<int>`.
- *
- * In general, one nesting level is the list level and any struct level that precedes it.
- *
- * A few more examples to visualize the partitioning of column hierarchy into nesting levels:
- * (L is list, S is struct, i is integer(leaf data level), angle brackets omitted)
- * ```
- * 1. LSi     = L   Si
- *              - | --
- *
- * 2. LLSi    = L   L   Si
- *              - | - | --
- *
- * 3. SSLi    = SSL   i
- *              --- | -
- *
- * 4. LLSLSSi = L   L   SL   SSi
- *              - | - | -- | ---
- * ```
- */
-dremel_data get_dremel_data(column_view h_col,
-                            // TODO(cp): use device_span once it is converted to a single hd_vec
-                            rmm::device_uvector<uint8_t> const& d_nullability,
-                            std::vector<uint8_t> const& nullability,
-                            bool output_as_byte_array,
-                            rmm::cuda_stream_view stream)
-{
-  auto get_list_level = [](column_view col) {
-    while (col.type().id() == type_id::STRUCT) {
-      col = col.child(0);
-    }
-    return col;
-  };
-
-  auto get_empties = [&](column_view col, size_type start, size_type end) {
-    auto lcv = lists_column_view(get_list_level(col));
-    rmm::device_uvector<size_type> empties_idx(lcv.size(), stream);
-    rmm::device_uvector<size_type> empties(lcv.size(), stream);
-    auto d_off = lcv.offsets().data<size_type>();
-
-    auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(start),
-                      thrust::make_counting_iterator(end),
-                      empties_idx.begin(),
-                      [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
-    auto empties_end = thrust::gather(rmm::exec_policy(stream),
-                                      empties_idx.begin(),
-                                      empties_idx_end,
-                                      lcv.offsets().begin<size_type>(),
-                                      empties.begin());
-
-    auto empties_size = empties_end - empties.begin();
-    return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
-  };
-
-  // Check if there are empty lists with empty offsets in this column
-  bool has_empty_list_offsets = false;
-  {
-    auto curr_col = h_col;
-    while (is_nested(curr_col.type())) {
-      if (curr_col.type().id() == type_id::LIST) {
-        auto lcv = lists_column_view(curr_col);
-        if (lcv.offsets().size() == 0) {
-          has_empty_list_offsets = true;
-          break;
-        }
-        curr_col = lcv.child();
-      } else if (curr_col.type().id() == type_id::STRUCT) {
-        curr_col = curr_col.child(0);
-      }
-    }
-  }
-  std::unique_ptr<column> empty_list_offset_col;
-  if (has_empty_list_offsets) {
-    empty_list_offset_col = make_fixed_width_column(data_type(type_id::INT32), 1);
-    cudaMemsetAsync(empty_list_offset_col->mutable_view().head(), 0, sizeof(size_type), stream);
-    std::function<column_view(column_view const&)> normalize_col = [&](column_view const& col) {
-      auto children = [&]() -> std::vector<column_view> {
-        if (col.type().id() == type_id::LIST) {
-          auto lcol = lists_column_view(col);
-          auto offset_col =
-            lcol.offsets().head() == nullptr ? empty_list_offset_col->view() : lcol.offsets();
-          return {offset_col, normalize_col(lcol.child())};
-        } else if (col.type().id() == type_id::STRUCT) {
-          return {normalize_col(col.child(0))};
-        } else {
-          return {col.child_begin(), col.child_end()};
-        }
-      }();
-      return column_view(col.type(),
-                         col.size(),
-                         col.head(),
-                         col.null_mask(),
-                         UNKNOWN_NULL_COUNT,
-                         col.offset(),
-                         std::move(children));
-    };
-    h_col = normalize_col(h_col);
-  }
-
-  auto curr_col = h_col;
-  std::vector<column_view> nesting_levels;
-  std::vector<uint8_t> def_at_level;
-  std::vector<uint8_t> start_at_sub_level;
-  uint8_t curr_nesting_level_idx = 0;
-
-  auto add_def_at_level = [&](column_view col) {
-    // Add up all def level contributions in this column all the way till the first list column
-    // appears in the hierarchy or until we get to leaf
-    uint32_t def = 0;
-    start_at_sub_level.push_back(curr_nesting_level_idx);
-    while (col.type().id() == type_id::STRUCT) {
-      def += (nullability[curr_nesting_level_idx]) ? 1 : 0;
-      col = col.child(0);
-      ++curr_nesting_level_idx;
-    }
-    // At the end of all those structs is either a list column or the leaf. Leaf column contributes
-    // at least one def level. It doesn't matter what the leaf contributes because it'll be at the
-    // end of the exclusive scan.
-    def += (nullability[curr_nesting_level_idx]) ? 2 : 1;
-    def_at_level.push_back(def);
-    ++curr_nesting_level_idx;
-  };
-  while (cudf::is_nested(curr_col.type())) {
-    nesting_levels.push_back(curr_col);
-    add_def_at_level(curr_col);
-    while (curr_col.type().id() == type_id::STRUCT) {
-      // Go down the hierarchy until we get to the LIST or the leaf level
-      curr_col = curr_col.child(0);
-    }
-    if (curr_col.type().id() == type_id::LIST) {
-      auto child = curr_col.child(lists_column_view::child_column_index);
-      if ((child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8) &&
-          output_as_byte_array) {
-        // consider this the bottom
-        break;
-      }
-      curr_col = child;
-      if (not is_nested(curr_col.type())) {
-        // Special case: when the leaf data column is the immediate child of the list col then we
-        // want it to be included right away. Otherwise the struct containing it will be included in
-        // the next iteration of this loop.
-        nesting_levels.push_back(curr_col);
-        add_def_at_level(curr_col);
-        break;
-      }
-    }
-  }
-
-  auto [device_view_owners, d_nesting_levels] =
-    contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
-
-  thrust::exclusive_scan(
-    thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
-
-  // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size(), stream);
-  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size(), stream);
-
-  auto d_col = column_device_view::create(h_col, stream);
-  cudf::detail::device_single_thread(
-    [offset_at_level  = d_column_offsets.data(),
-     end_idx_at_level = d_column_ends.data(),
-     col              = *d_col] __device__() {
-      auto curr_col           = col;
-      size_type off           = curr_col.offset();
-      size_type end           = off + curr_col.size();
-      size_type level         = 0;
-      offset_at_level[level]  = off;
-      end_idx_at_level[level] = end;
-      ++level;
-      // Apply offset recursively until we get to leaf data
-      // Skip doing the following for any structs we encounter in between.
-      while (curr_col.type().id() == type_id::LIST or curr_col.type().id() == type_id::STRUCT) {
-        if (curr_col.type().id() == type_id::LIST) {
-          off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
-          end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
-          offset_at_level[level]  = off;
-          end_idx_at_level[level] = end;
-          ++level;
-          curr_col = curr_col.child(lists_column_view::child_column_index);
-        } else {
-          curr_col = curr_col.child(0);
-        }
-      }
-    },
-    stream);
-
-  thrust::host_vector<size_type> column_offsets =
-    cudf::detail::make_host_vector_async(d_column_offsets, stream);
-  thrust::host_vector<size_type> column_ends =
-    cudf::detail::make_host_vector_async(d_column_ends, stream);
-  stream.synchronize();
-
-  size_t max_vals_size = 0;
-  for (size_t l = 0; l < column_offsets.size(); ++l) {
-    max_vals_size += column_ends[l] - column_offsets[l];
-  }
-
-  rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
-  rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
-
-  rmm::device_uvector<uint8_t> temp_rep_vals(max_vals_size, stream);
-  rmm::device_uvector<uint8_t> temp_def_vals(max_vals_size, stream);
-  rmm::device_uvector<size_type> new_offsets(0, stream);
-  size_type curr_rep_values_size = 0;
-  {
-    // At this point, curr_col contains the leaf column. Max nesting level is
-    // nesting_levels.size().
-
-    // We are going to start by merging the last column in nesting_levels (the leaf, which is at the
-    // index `nesting_levels.size() - 1`) with the second-to-last (which is at
-    // `nesting_levels.size() - 2`).
-    size_t level              = nesting_levels.size() - 2;
-    curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(get_list_level(curr_col));
-    auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
-
-    // Get empties at this level
-    auto [empties, empties_idx, empties_size] =
-      get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
-
-    // Merge empty at deepest parent level with the rep, def level vals at leaf level
-
-    auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it =
-      thrust::make_transform_iterator(empties_idx.begin(),
-                                      def_level_fn{d_nesting_levels + level,
-                                                   d_nullability.data(),
-                                                   start_at_sub_level[level],
-                                                   def_at_level[level]});
-
-    // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
-    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
-    auto input_child_def_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
-                                      def_level_fn{d_nesting_levels + level + 1,
-                                                   d_nullability.data(),
-                                                   start_at_sub_level[level + 1],
-                                                   def_at_level[level + 1]});
-
-    // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
-
-    auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_child_rep_it, input_child_def_it));
-
-    auto output_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
-
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
-                                     empties.begin(),
-                                     empties.begin() + empties_size,
-                                     thrust::make_counting_iterator(column_offsets[level + 1]),
-                                     thrust::make_counting_iterator(column_ends[level + 1]),
-                                     input_parent_zip_it,
-                                     input_child_zip_it,
-                                     thrust::make_discard_iterator(),
-                                     output_zip_it);
-
-    curr_rep_values_size = ends.second - output_zip_it;
-
-    // Scan to get distance by which each offset value is shifted due to the insertion of empties
-    auto scan_it = cudf::detail::make_counting_transform_iterator(
-      column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
-    rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
-
-    // Add scan output to existing offsets to get new offsets into merged rep level values
-    new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       offset_size_at_level,
-                       [off      = lcv.offsets().data<size_type>() + column_offsets[level],
-                        scan_out = scan_out.data(),
-                        new_off  = new_offsets.data()] __device__(auto i) {
-                         new_off[i] = off[i] - off[0] + scan_out[i];
-                       });
-
-    // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream),
-                    scatter_it,
-                    scatter_it + new_offsets.size() - 1,
-                    new_offsets.begin(),
-                    rep_level.begin());
-  }
-
-  // Having already merged the last two levels, we are now going to merge the result with the
-  // third-last level which is at index `nesting_levels.size() - 3`.
-  for (int level = nesting_levels.size() - 3; level >= 0; level--) {
-    curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(get_list_level(curr_col));
-    auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
-
-    // Get empties at this level
-    auto [empties, empties_idx, empties_size] =
-      get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
-
-    auto offset_transformer = [new_child_offsets = new_offsets.data(),
-                               child_start       = column_offsets[level + 1]] __device__(auto x) {
-      return new_child_offsets[x - child_start];  // (x - child's offset)
-    };
-
-    // We will be reading from old rep_levels and writing again to rep_levels. Swap the current
-    // rep values into temp_rep_vals so it can become the input and rep_levels can again be output.
-    std::swap(temp_rep_vals, rep_level);
-    std::swap(temp_def_vals, def_level);
-
-    // Merge empty at parent level with the rep, def level vals at current level
-    auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
-
-    auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it =
-      thrust::make_transform_iterator(empties_idx.begin(),
-                                      def_level_fn{d_nesting_levels + level,
-                                                   d_nullability.data(),
-                                                   start_at_sub_level[level],
-                                                   def_at_level[level]});
-
-    // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
-
-    auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
-
-    auto output_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
-
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
-                                     transformed_empties,
-                                     transformed_empties + empties_size,
-                                     thrust::make_counting_iterator(0),
-                                     thrust::make_counting_iterator(curr_rep_values_size),
-                                     input_parent_zip_it,
-                                     input_child_zip_it,
-                                     thrust::make_discard_iterator(),
-                                     output_zip_it);
-
-    curr_rep_values_size = ends.second - output_zip_it;
-
-    // Scan to get distance by which each offset value is shifted due to the insertion of dremel
-    // level value fof an empty list
-    auto scan_it = cudf::detail::make_counting_transform_iterator(
-      column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
-    rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
-
-    // Add scan output to existing offsets to get new offsets into merged rep level values
-    rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       offset_size_at_level,
-                       [off      = lcv.offsets().data<size_type>() + column_offsets[level],
-                        scan_out = scan_out.data(),
-                        new_off  = temp_new_offsets.data(),
-                        offset_transformer] __device__(auto i) {
-                         new_off[i] = offset_transformer(off[i]) + scan_out[i];
-                       });
-    new_offsets = std::move(temp_new_offsets);
-
-    // Set rep level values at level starts to appropriate rep level
-    auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream),
-                    scatter_it,
-                    scatter_it + new_offsets.size() - 1,
-                    new_offsets.begin(),
-                    rep_level.begin());
-  }
-
-  size_t level_vals_size = new_offsets.back_element(stream);
-  rep_level.resize(level_vals_size, stream);
-  def_level.resize(level_vals_size, stream);
-
-  stream.synchronize();
-
-  size_type leaf_data_size = column_ends.back() - column_offsets.back();
-
-  return dremel_data{
-    std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
 }
 
 void InitPageFragments(device_2dspan<PageFragment> frag,
@@ -2249,6 +2044,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
+                      uint32_t page_align,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
@@ -2264,19 +2060,21 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      chunk_grstats,
                                                      num_columns,
                                                      max_page_size_bytes,
-                                                     max_page_size_rows);
+                                                     max_page_size_rows,
+                                                     page_align);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
-                 device_span<decompress_status> comp_stats,
+                 device_span<compression_result> comp_results,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, comp_stats);
+  gpuEncodePages<128>
+    <<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, comp_results);
 }
 
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -2285,7 +2083,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_stats,
+                       device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)
@@ -2293,7 +2091,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
   // threads to coop load structs
   gpuEncodePageHeaders<<<pages.size(), 128, 0, stream.value()>>>(
-    pages, comp_stats, page_stats, chunk_stats);
+    pages, comp_results, page_stats, chunk_stats);
 }
 
 void GatherPages(device_span<EncColumnChunk> chunks,
@@ -2305,9 +2103,11 @@ void GatherPages(device_span<EncColumnChunk> chunks,
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
+                         size_type column_index_truncate_length,
                          rmm::cuda_stream_view stream)
 {
-  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats);
+  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(
+    chunks, column_stats, column_index_truncate_length);
 }
 
 }  // namespace gpu

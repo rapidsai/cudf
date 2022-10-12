@@ -40,7 +40,7 @@ using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
-constexpr std::size_t MAX_WORKING_MEM = 0x01FFFFFFFF;  ///< Memory size for state data
+constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for state data
 constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing working memory
 
 /**
@@ -91,15 +91,19 @@ class reprog_device {
     std::string_view pattern, rmm::cuda_stream_view stream);
 
   /**
-   * @brief Create the device program instance from a regex pattern.
+   * @brief Create the device program instance from a regex pattern
    *
-   * @param pattern The regex pattern to compile.
-   * @param re_flags Regex flags for interpreting special characters in the pattern.
+   * @param pattern The regex pattern to compile
+   * @param re_flags Regex flags for interpreting special characters in the pattern
+   * @param capture Control how capture groups are processed
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return The program device object.
+   * @return The program device object
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string_view pattern, regex_flags const re_flags, rmm::cuda_stream_view stream);
+    std::string_view pattern,
+    regex_flags const re_flags,
+    capture_groups const capture,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().

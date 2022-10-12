@@ -39,6 +39,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
@@ -240,19 +241,21 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
   int8_t converted_type = converted;
   if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      not cudf::is_fixed_point(column_type_id)) {
+      not cudf::is_fixed_point(data_type{column_type_id})) {
     converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
 
-inline void decompress_check(device_span<decompress_status const> stats,
+inline void decompress_check(device_span<compression_result const> results,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
+                              results.begin(),
+                              results.end(),
+                              [] __device__(auto const& res) {
+                                return res.status == compression_status::SUCCESS;
+                              }),
                "Error during decompression");
 }
 }  // namespace
@@ -1148,11 +1151,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
-  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, _stream);
   thrust::fill(rmm::exec_policy(_stream),
-               comp_stats.begin(),
-               comp_stats.end(),
-               decompress_status{0, static_cast<uint32_t>(-1000), 0});
+               comp_res.begin(),
+               comp_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
@@ -1176,31 +1179,30 @@ rmm::device_buffer reader::impl::decompress_page_data(
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
     auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, _stream);
-    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
-                                                     codec.num_pages);
+    device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
       case parquet::GZIP:
-        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, _stream);
+        gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, _stream);
         break;
       case parquet::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      d_comp_in,
                                      d_comp_out,
-                                     d_comp_stats_view,
+                                     d_comp_res_view,
                                      codec.max_decompressed_size,
                                      codec.total_decomp_size,
                                      _stream);
         } else {
-          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, _stream);
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_res_view, _stream);
         }
         break;
       case parquet::ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    d_comp_in,
                                    d_comp_out,
-                                   d_comp_stats_view,
+                                   d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
                                    _stream);
@@ -1208,7 +1210,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       case parquet::BROTLI:
         gpu_debrotli(d_comp_in,
                      d_comp_out,
-                     d_comp_stats_view,
+                     d_comp_res_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
                      _stream);
@@ -1218,7 +1220,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
     start_pos += codec.num_pages;
   }
 
-  decompress_check(comp_stats, _stream);
+  decompress_check(comp_res, _stream);
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
@@ -1594,7 +1596,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
   // Binary columns can be read as binary or strings
-  _force_binary_columns_as_strings = options.get_convert_binary_to_strings();
+  _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
@@ -1658,13 +1660,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         // this column contains repetition levels and will require a preprocess
         if (schema.max_repetition_level > 0) { has_lists = true; }
 
-        // Spec requires each row group to contain exactly one chunk for every
-        // column. If there are too many or too few, continue with best effort
-        if (chunks.size() >= chunks.max_size()) {
-          std::cerr << "Detected too many column chunks" << std::endl;
-          continue;
-        }
-
         auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
@@ -1677,25 +1672,25 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
             : col_meta.data_page_offset;
 
-        chunks.insert(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
-                                           nullptr,
-                                           col_meta.num_values,
-                                           schema.type,
-                                           type_width,
-                                           row_group_start,
-                                           row_group_rows,
-                                           schema.max_definition_level,
-                                           schema.max_repetition_level,
-                                           _metadata->get_output_nesting_depth(col.schema_idx),
-                                           required_bits(schema.max_definition_level),
-                                           required_bits(schema.max_repetition_level),
-                                           col_meta.codec,
-                                           converted_type,
-                                           schema.logical_type,
-                                           schema.decimal_scale,
-                                           clock_rate,
-                                           i,
-                                           col.schema_idx));
+        chunks.push_back(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
+                                              nullptr,
+                                              col_meta.num_values,
+                                              schema.type,
+                                              type_width,
+                                              row_group_start,
+                                              row_group_rows,
+                                              schema.max_definition_level,
+                                              schema.max_repetition_level,
+                                              _metadata->get_output_nesting_depth(col.schema_idx),
+                                              required_bits(schema.max_definition_level),
+                                              required_bits(schema.max_repetition_level),
+                                              col_meta.codec,
+                                              converted_type,
+                                              schema.logical_type,
+                                              schema.decimal_scale,
+                                              clock_rate,
+                                              i,
+                                              col.schema_idx));
 
         // Map each column chunk to its column index and its source index
         chunk_source_map[chunks.size() - 1] = row_group_source;
@@ -1765,28 +1760,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
 
-      auto make_output_column = [&](column_buffer& buf, column_name_info* schema_info, int i) {
-        auto col = make_column(buf, schema_info, _stream, _mr);
-        if (should_write_byte_array(i)) {
-          auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
-          if (schema.converted_type == parquet::UNKNOWN) {
-            auto const num_rows = col->size();
-            auto data           = col->release();
-            return make_lists_column(
-              num_rows,
-              std::move(data.children[strings_column_view::offsets_column_index]),
-              std::move(data.children[strings_column_view::chars_column_index]),
-              UNKNOWN_NULL_COUNT,
-              std::move(*data.null_mask));
-          }
-        }
-        return col;
-      };
-
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        out_columns.emplace_back(make_output_column(_output_columns[i], &col_name, i));
+        auto const metadata =
+          _reader_column_schema.has_value()
+            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+            : std::nullopt;
+        out_columns.emplace_back(
+          make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
       }
     }
   }

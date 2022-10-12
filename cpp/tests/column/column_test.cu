@@ -31,6 +31,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
 
@@ -46,8 +48,10 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    thrust::sequence(thrust::device, typed_data, typed_data + data.size());
-    thrust::sequence(thrust::device, typed_mask, typed_mask + mask.size());
+    thrust::sequence(
+      rmm::exec_policy(cudf::default_stream_value), typed_data, typed_data + data.size());
+    thrust::sequence(
+      rmm::exec_policy(cudf::default_stream_value), typed_mask, typed_mask + mask.size());
   }
 
   cudf::size_type num_elements() { return _num_elements; }
@@ -338,6 +342,42 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
 
   EXPECT_EQ(0, original.size());
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
+
+  // Verify move
+  cudf::column_view moved_to_view = moved_to;
+  EXPECT_EQ(original_data, moved_to_view.head());
+  EXPECT_EQ(original_mask, moved_to_view.null_mask());
+}
+
+TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
+{
+  rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
+                                          cudf::default_stream_value};
+  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
+               static_cast<TypeParam*>(this->data.data()),
+               static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
+               original.begin());
+  auto original_data = original.data();
+  cudf::column moved_to{std::move(original)};
+  verify_column_views(moved_to);
+
+  // Verify move
+  cudf::column_view moved_to_view = moved_to;
+  EXPECT_EQ(original_data, moved_to_view.head());
+}
+
+TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
+{
+  rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
+                                          cudf::default_stream_value};
+  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
+               static_cast<TypeParam*>(this->data.data()),
+               static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
+               original.begin());
+  auto original_data = original.data();
+  auto original_mask = this->all_valid_mask.data();
+  cudf::column moved_to{std::move(original), std::move(this->all_valid_mask)};
+  verify_column_views(moved_to);
 
   // Verify move
   cudf::column_view moved_to_view = moved_to;

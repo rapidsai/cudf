@@ -14,7 +14,12 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_130, PANDAS_LT_140
+from cudf.core._compat import (
+    PANDAS_GE_110,
+    PANDAS_GE_130,
+    PANDAS_GE_150,
+    PANDAS_LT_140,
+)
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -694,7 +699,8 @@ def test_advanced_groupby_levels():
         pytest.param(
             lambda df: df.groupby(["x", "y", "z"]).sum(),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/32464"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/32464",
             ),
         ),
         lambda df: df.groupby(["x", "y"]).sum(),
@@ -1573,8 +1579,10 @@ def test_groupby_list_of_structs(list_agg):
     )
     gdf = cudf.from_pandas(pdf)
 
-    with pytest.raises(pd.core.base.DataError):
-        gdf.groupby("a").agg({"b": list_agg}),
+    with pytest.raises(
+        pd.errors.DataError if PANDAS_GE_150 else pd.core.base.DataError
+    ):
+        gdf.groupby("a").agg({"b": list_agg})
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
@@ -2677,3 +2685,36 @@ def test_groupby_pct_change_empty_columns():
     expected = pdf.groupby("id").pct_change()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        None,
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/pull/34998",
+            ),
+        ),
+        False,
+    ],
+)
+@pytest.mark.parametrize("by", ["A", ["A", "B"]])
+def test_groupby_group_keys(group_keys, by):
+    gdf = cudf.DataFrame(
+        {
+            "A": "a a a a b b".split(),
+            "B": [1, 1, 2, 2, 3, 3],
+            "C": [4, 6, 5, 9, 8, 7],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    g_group = gdf.groupby(by, group_keys=group_keys)
+    p_group = pdf.groupby(by, group_keys=group_keys)
+
+    actual = g_group[["B", "C"]].apply(lambda x: x / x.sum())
+    expected = p_group[["B", "C"]].apply(lambda x: x / x.sum())
+    assert_eq(actual, expected)

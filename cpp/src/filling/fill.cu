@@ -159,7 +159,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
     auto result = std::make_unique<cudf::column>(input, stream, mr);
     auto mview  = result->mutable_view();
     cudf::detail::set_null_mask(mview.null_mask(), begin, end, false, stream);
-    mview.set_null_count(input.null_count() + (end - begin));
+    result->set_null_count(input.null_count() + (end - begin));
     return result;
   }
 

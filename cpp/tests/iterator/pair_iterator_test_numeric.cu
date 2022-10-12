@@ -14,6 +14,8 @@
  */
 #include <tests/iterator/pair_iterator_test.cuh>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/reduce.h>
@@ -111,7 +113,8 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   // GPU test
   auto it_dev         = d_col->pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(it_dev_squared,
+  auto result         = thrust::reduce(rmm::exec_policy(cudf::default_stream_value),
+                               it_dev_squared,
                                it_dev_squared + d_col->size(),
                                thrust::make_pair(T_output{}, true),
                                sum_if_not_null{});

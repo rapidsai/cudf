@@ -109,7 +109,7 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
     out_index_tape = std::fill_n(out_index_tape, out_size, in_offset);
 
     // Transition the state of the finite-state machine
-    state = transition_table[state][symbol_group];
+    state = static_cast<char>(transition_table[state][symbol_group]);
 
     // Continue with next symbol from input tape
     in_offset++;

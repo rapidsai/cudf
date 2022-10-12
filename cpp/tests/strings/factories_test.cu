@@ -30,6 +30,7 @@
 #include <tests/strings/utilities.h>
 
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
@@ -213,7 +214,7 @@ TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
 
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::default_stream_value);
-  thrust::transform(thrust::device,
+  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
                     pairs.data(),

@@ -21,16 +21,30 @@ def read_json(
     lines=False,
     compression="infer",
     byte_range=None,
+    keep_quotes=False,
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
+    if not isinstance(dtype, (abc.Mapping, bool)):
+        warnings.warn(
+            "passing 'dtype' as list is deprecated, instead pass "
+            "a dict of column name and types key-value paris."
+            "in future versions 'dtype' can only be a dict or bool",
+            FutureWarning,
+        )
+
     if engine == "cudf" and not lines:
-        raise ValueError("cudf engine only supports JSON Lines format")
+        raise ValueError(f"{engine} engine only supports JSON Lines format")
+    if engine != "cudf_experimental" and keep_quotes:
+        raise ValueError(
+            "keep_quotes='True' is supported only with"
+            " engine='cudf_experimental'"
+        )
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-    if engine == "cudf":
+    if engine == "cudf" or engine == "cudf_experimental":
         # Multiple sources are passed as a list. If a single source is passed,
         # wrap it in a list for unified processing downstream.
         if not is_list_like(path_or_buf):
@@ -57,10 +71,14 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        df = cudf.DataFrame._from_data(
-            *libjson.read_json(
-                filepaths_or_buffers, dtype, lines, compression, byte_range
-            )
+        df = libjson.read_json(
+            filepaths_or_buffers,
+            dtype,
+            lines,
+            compression,
+            byte_range,
+            engine == "cudf_experimental",
+            keep_quotes,
         )
     else:
         warnings.warn(

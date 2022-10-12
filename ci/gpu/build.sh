@@ -34,8 +34,11 @@ unset GIT_DESCRIBE_TAG
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=0
 
+# Dask version to install when `INSTALL_DASK_MAIN=0`
+export DASK_STABLE_VERSION="2022.9.2"
+
 # ucx-py version
-export UCX_PY_VERSION='0.27.*'
+export UCX_PY_VERSION='0.28.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -75,11 +78,16 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
+# Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
+if [ "$SOURCE_BRANCH" != "main" ] && [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
+  conda config --system --remove channels dask/label/dev
+  gpuci_mamba_retry install conda-forge::dask==$DASK_STABLE_VERSION conda-forge::distributed==$DASK_STABLE_VERSION conda-forge::dask-core==$DASK_STABLE_VERSION --force-reinstall
+fi
+
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
 conda list --show-channel-urls
-
 gpuci_logger "Check compiler versions"
 python --version
 
@@ -92,8 +100,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.7.1 conda-forge::distributed==2022.7.1 conda-forge::dask-core==2022.7.1 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask==2022.7.1 conda-forge::distributed==2022.7.1 conda-forge::dask-core==2022.7.1 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -121,11 +129,11 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     install_dask
 
     ################################################################################
-    # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
+    # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka strings_udf benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
@@ -152,6 +160,13 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
             echo "Running GoogleTest $test_name"
             ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
+
+        # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+            gt="$WORKSPACE/cpp/build/gtests/$test_name"
+            echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+            LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        done
     fi
 else
     #Project Flash
@@ -176,14 +191,29 @@ else
     gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
     gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
 
-    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
+    # the CUDA component of strings_udf must be built on cuda 11.5 just like libcudf
+    # but because there is no separate python package, we must also build the python on the 11.5 jobs
+    # this means that at this point (on the GPU test jobs) the whole package is already built and has been
+    # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
+    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+    
+    gpuci_logger "Check current conda environment"
+    conda list --show-channel-urls
 
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
+        test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+    done
+
+    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
+        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
@@ -232,6 +262,8 @@ fi
 
 cd "$WORKSPACE/python/cudf/cudf"
 # It is essential to cd into $WORKSPACE/python/cudf/cudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
+gpuci_logger "Check conda packages"
+conda list
 gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
@@ -242,6 +274,28 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
+
+
+# only install strings_udf after cuDF is finished testing without its presence
+gpuci_logger "Installing strings_udf"
+gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+
+# only install strings_udf after cuDF is finished testing without its presence
+cd "$WORKSPACE/python/strings_udf/strings_udf"
+gpuci_logger "Python py.test for strings_udf"
+
+STRINGS_UDF_PYTEST_RETCODE=0
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
+
+if [ ${STRINGS_UDF_PYTEST_RETCODE} -eq 5 ]; then
+    echo "No strings UDF tests were run, but this script will continue to execute."
+elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
+    exit ${STRINGS_UDF_PYTEST_RETCODE}
+else
+    cd "$WORKSPACE/python/cudf/cudf"
+    gpuci_logger "Python py.test retest cuDF UDFs"
+    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.

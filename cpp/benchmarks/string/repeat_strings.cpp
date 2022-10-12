@@ -35,17 +35,16 @@ static std::unique_ptr<cudf::table> create_data_table(cudf::size_type n_cols,
   CUDF_EXPECTS(n_cols == 1 || n_cols == 2, "Invalid number of columns.");
 
   std::vector<cudf::type_id> dtype_ids{cudf::type_id::STRING};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  auto builder = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
 
   if (n_cols == 2) {
     dtype_ids.push_back(cudf::type_id::INT32);
-    table_profile.set_distribution_params(
+    builder.distribution(
       cudf::type_id::INT32, distribution_id::NORMAL, min_repeat_times, max_repeat_times);
   }
 
-  return create_random_table(dtype_ids, row_count{n_rows}, table_profile);
+  return create_random_table(dtype_ids, row_count{n_rows}, data_profile{builder});
 }
 
 static void BM_repeat_strings_scalar_times(benchmark::State& state)

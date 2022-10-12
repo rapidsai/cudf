@@ -38,7 +38,7 @@ PROJECT_NAME           = "libcudf"
 # could be handy for archiving the generated documentation or if some version
 # control system is used.
 
-PROJECT_NUMBER         = 22.08.01
+PROJECT_NUMBER         = 22.10.00
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for a project that appears at the top of each page and should give viewer a
@@ -739,7 +739,7 @@ FILE_VERSION_FILTER    =
 # DoxygenLayout.xml, doxygen will parse it automatically even if the LAYOUT_FILE
 # tag is left empty.
 
-LAYOUT_FILE            =
+LAYOUT_FILE            = DoxygenLayout.xml
 
 # The CITE_BIB_FILES tag can be used to specify one or more bib files containing
 # the reference definitions. This must be a list of .bib files. The .bib
@@ -830,6 +830,10 @@ WARN_LOGFILE           =
 INPUT                  = main_page.md \
                          regex.md \
                          unicode.md \
+                         developer_guide/BENCHMARKING.md \
+                         developer_guide/DOCUMENTATION.md \
+                         developer_guide/DEVELOPER_GUIDE.md \
+                         developer_guide/TESTING.md \
                          ../include \
                          ../include/cudf_test/column_wrapper.hpp \
                          ../include/cudf_test/column_utilities.hpp \
@@ -975,7 +979,7 @@ INPUT_FILTER           =
 # need to set EXTENSION_MAPPING for the extension otherwise the files are not
 # properly processed by doxygen.
 
-FILTER_PATTERNS        =
+FILTER_PATTERNS        = *.md=./modify_fences.sh
 
 # If the FILTER_SOURCE_FILES tag is set to YES, the input filter (if set using
 # INPUT_FILTER) will also be used to filter the input files that are used for
@@ -2158,7 +2162,7 @@ SKIP_FUNCTION_MACROS   = YES
 # the path). If a tag file is not located in the directory in which doxygen is
 # run, you must also specify the path to the tagfile here.
 
-TAGFILES               = rmm.tag=https://docs.rapids.ai/api/librmm/22.08
+TAGFILES               = rmm.tag=https://docs.rapids.ai/api/librmm/22.10
 
 # When a file name is specified after GENERATE_TAGFILE, doxygen will create a
 # tag file that is based on the input files it reads. See section "Linking to

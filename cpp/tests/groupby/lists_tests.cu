@@ -28,6 +28,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
@@ -122,7 +124,8 @@ inline void test_hash_based_sum_agg(column_view const& keys,
 
   // For each row in expected table `t[0, num_rows)`, there must be a match
   // in the resulting table `t[num_rows, 2 * num_rows)`
-  EXPECT_TRUE(thrust::all_of(thrust::make_counting_iterator<cudf::size_type>(0),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
+                             thrust::make_counting_iterator<cudf::size_type>(0),
                              thrust::make_counting_iterator<cudf::size_type>(num_rows),
                              func));
 }

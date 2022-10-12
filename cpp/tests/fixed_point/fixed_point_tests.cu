@@ -85,8 +85,10 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   std::vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
   auto d_vec1 = cudf::detail::make_device_uvector_sync(vec1);
 
-  auto const sum = thrust::reduce(
-    rmm::exec_policy(), std::cbegin(d_vec1), std::cend(d_vec1), decimal32{0, scale_type{-2}});
+  auto const sum = thrust::reduce(rmm::exec_policy(cudf::default_stream_value),
+                                  std::cbegin(d_vec1),
+                                  std::cend(d_vec1),
+                                  decimal32{0, scale_type{-2}});
 
   EXPECT_EQ(static_cast<int32_t>(sum), 1000);
 
@@ -99,8 +101,10 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   std::vector<int32_t> vec2(1000);
   std::iota(std::begin(vec2), std::end(vec2), 1);
 
-  auto const res1 = thrust::reduce(
-    rmm::exec_policy(), std::cbegin(d_vec1), std::cend(d_vec1), decimal32{0, scale_type{-2}});
+  auto const res1 = thrust::reduce(rmm::exec_policy(cudf::default_stream_value),
+                                   std::cbegin(d_vec1),
+                                   std::cend(d_vec1),
+                                   decimal32{0, scale_type{-2}});
 
   auto const res2 = std::accumulate(std::cbegin(vec2), std::cend(vec2), 0);
 
@@ -108,7 +112,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   rmm::device_uvector<int32_t> d_vec3(1000, cudf::default_stream_value);
 
-  thrust::transform(rmm::exec_policy(),
+  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                     std::cbegin(d_vec1),
                     std::cend(d_vec1),
                     std::begin(d_vec3),

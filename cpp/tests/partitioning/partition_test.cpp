@@ -53,7 +53,7 @@ TYPED_TEST(PartitionTest, EmptyInputs)
 
   auto result_offsets = result.second;
 
-  EXPECT_TRUE(result_offsets.empty());
+  EXPECT_EQ(result_offsets.size(), std::size_t{11});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column, result.first->get_column(0));
 }

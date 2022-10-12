@@ -63,6 +63,7 @@ std::unique_ptr<column> stable_sorted_order(table_view const& input,
                                             std::vector<null_order> const& null_precedence,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::stable_sorted_order(
     input, column_order, null_precedence, cudf::default_stream_value, mr);
 }
