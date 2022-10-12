@@ -3665,7 +3665,7 @@ class DatetimeProperties:
         2    2
         dtype: int16
         """
-        return self._get_dt_field("nano_second")
+        return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
