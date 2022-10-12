@@ -288,42 +288,13 @@ class TimeDeltaColumn(ColumnBase):
         self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         if format is None:
-            components = self.components() > 0
-            has_hr = components.hours.any()
-            has_m = components.seconds.any()
-            has_s = components.seconds.any()
-            has_ms = components.milliseconds.any()
-            has_us = components.microseconds.any()
-            has_ns = components.nanoseconds.any()
-
-            if has_ns:
-                format = _dtype_to_format_conversion.get("timedelta64[ns]")
-                target_dtype = cudf.dtype("timedelta64[ns]")
-            elif has_us:
-                format = _dtype_to_format_conversion.get("timedelta64[us]")
-                target_dtype = cudf.dtype("timedelta64[us]")
-            elif has_ms:
-                format = _dtype_to_format_conversion.get("timedelta64[ms]")
-                target_dtype = cudf.dtype("timedelta64[ms]")
-            elif has_s or has_m or has_hr:
-                format = _dtype_to_format_conversion.get("timedelta64[s]")
-                target_dtype = cudf.dtype("timedelta64[s]")
-            else:
-                target_dtype = self.dtype
-                format = "%D days"
-
-            # TODO: Remove the type-casting after there is option from libcudf
-            # side to support %3S, %6S, %9S.
-            if self.dtype != target_dtype:
-                timedelta_col = self.astype(target_dtype)
-            else:
-                timedelta_col = self
-        else:
-            timedelta_col = self
-        if len(timedelta_col) > 0:
+            format = _dtype_to_format_conversion.get(
+                self.dtype.name, "%D days %H:%M:%S"
+            )
+        if len(self) > 0:
             return string._timedelta_to_str_typecast_functions[
-                cudf.dtype(timedelta_col.dtype)
-            ](timedelta_col, format=format)
+                cudf.dtype(self.dtype)
+            ](self, format=format)
         else:
             return cast(
                 "cudf.core.column.StringColumn",

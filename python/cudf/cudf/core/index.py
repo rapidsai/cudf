@@ -1282,39 +1282,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 output = repr(preprocess.to_pandas())
 
             output = output.replace("nan", cudf._NA_REP)
-        elif preprocess._values.nullable or isinstance(
-            preprocess, (DatetimeIndex, TimedeltaIndex)
-        ):
-            output = repr(preprocess._clean_nulls_from_index().to_pandas())
+        elif preprocess._values.nullable:
+            output = repr(self._clean_nulls_from_index().to_pandas())
 
-            if isinstance(self, (DatetimeIndex, TimedeltaIndex)):
-                # Converting to CategoricalIndex was necessary to maintain repr
-                # formatting of 1 value per line, now we will have to remove
-                # the CategoricalIndex:
-                """
-                >>> s = cudf.Index([2113, 1221, 12321], dtype='datetime64[ns]')
-                >>> s.to_pandas()
-                DatetimeIndex(['1970-01-01 00:00:00.000002113',
-                              '1970-01-01 00:00:00.000001221',
-                              '1970-01-01 00:00:00.000012321'],
-                              dtype='datetime64[ns]', freq=None)
-                >>> s.to_pandas().astype('str')
-                Index(['1970-01-01 00:00:00.000002113', '1970-01-01 00:00:00.000001221',
-                      '1970-01-01 00:00:00.000012321'],
-                      dtype='object')
-                >>> s.to_pandas().astype('category')
-                CategoricalIndex(['1970-01-01 00:00:00.000002113',
-                                  '1970-01-01 00:00:00.000001221',
-                                  '1970-01-01 00:00:00.000012321'],
-                                categories=[1970-01-01 00:00:00.000001221, 1970-01-01 00:00:00.000002113, 1970-01-01 00:00:00.000012321], ordered=False, dtype='category')
-                """  # noqa: E501
-                output = (
-                    output[: output.rfind("categories=[")]
-                    + output[output.rfind(" dtype=") :]
-                )
-            if not isinstance(
-                self, (StringIndex, DatetimeIndex, TimedeltaIndex)
-            ):
+            if not isinstance(self, StringIndex):
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1345,15 +1316,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         else:
             lines[-1] = lines[-1] + ")"
 
-        if isinstance(preprocess, (DatetimeIndex, TimedeltaIndex)):
-            replace_spaces = (
-                "   " if isinstance(preprocess, DatetimeIndex) else "  "
-            )
-            if len(lines) > 1:
-                lines[1:-1] = [
-                    line.replace(replace_spaces, "", 1) for line in lines[1:-1]
-                ]
-                lines[-1] = lines[-1].replace(replace_spaces + " ", "", 1)
         return "\n".join(lines)
 
     @_cudf_nvtx_annotate
@@ -2102,12 +2064,12 @@ class DatetimeIndex(GenericIndex):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="ms"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01 00:00:00.000', '2000-01-01 00:00:00.001',
-                       '2000-01-01 00:00:00.002'],
+        DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.001000',
+                       '2000-01-01 00:00:00.002000'],
                       dtype='datetime64[ns]')
         >>> datetime_index.millisecond
         Int16Index([0, 1, 2], dtype='int16')
-        """
+        """  # noqa: E501
         return self._get_dt_field("milli_second")
 
     @property  # type: ignore
@@ -2123,9 +2085,9 @@ class DatetimeIndex(GenericIndex):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="us"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01 00:00:00.000000', '2000-01-01 00:00:00.000001',
-                       '2000-01-01 00:00:00.000002'],
-                      dtype='datetime64[ns]')
+        DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.000001',
+               '2000-01-01 00:00:00.000002'],
+              dtype='datetime64[ns]')
         >>> datetime_index.microsecond
         Int16Index([0, 1, 2], dtype='int16')
         """  # noqa: E501
@@ -2144,7 +2106,7 @@ class DatetimeIndex(GenericIndex):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="ns"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01 00:00:00.000000000',
+        DatetimeIndex([          '2000-01-01 00:00:00',
                        '2000-01-01 00:00:00.000000001',
                        '2000-01-01 00:00:00.000000002'],
                       dtype='datetime64[ns]')
@@ -2235,9 +2197,9 @@ class DatetimeIndex(GenericIndex):
         ...     "2017-01-08", freq="D"))
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
-                       '2017-01-08'],
-                      dtype='datetime64[ns]')
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
         >>> datetime_index.day_of_year
         Int16Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -2331,24 +2293,6 @@ class DatetimeIndex(GenericIndex):
 
     def is_boolean(self):
         return False
-
-    def _clean_nulls_from_index(self):
-        # __repr__ for other data types works by converting
-        # to Pandas first, and relying on Pandas to convert
-        #  values to strings. However,
-        # Pandas encounters issues with overflow for datetime
-        # and timedelta types because it does not support
-        # sub-nanosecond resolutions. Thus, we do the work of
-        # converting datetimes/timedeltas to strings before handing
-        # off to Pandas.
-        #
-        # Further, we need to cast the result to a `CategoricalIndex`,
-        # because `StringIndex` values in Pandas are printed on
-        # the same line, rather than one-per-line.
-        return cudf.Index(
-            self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
-            name=self.name,
-        )
 
     @_cudf_nvtx_annotate
     def ceil(self, freq):
@@ -2597,18 +2541,6 @@ class TimedeltaIndex(GenericIndex):
 
     def is_boolean(self):
         return False
-
-    def _clean_nulls_from_index(self):
-        # Converting to string Index is necessary for TimedeltaColumn
-        # because larger values will easily overflow while being
-        # converted to pandas later.
-        # Converting to CategoricalIndex is necessary to maintain repr
-        # formatting, as StringIndex is resulting in drastically different
-        # output.
-        return cudf.Index(
-            self._values.astype("str").fillna(cudf._NA_REP).astype("category"),
-            name=self.name,
-        )
 
 
 class CategoricalIndex(GenericIndex):
@@ -3035,6 +2967,12 @@ class StringIndex(GenericIndex):
     @_cudf_nvtx_annotate
     def str(self):
         return StringMethods(parent=self)
+
+    def _clean_nulls_from_index(self):
+        if self._values.has_nulls():
+            return self.fillna(cudf._NA_REP)
+        else:
+            return self
 
     def is_boolean(self):
         return False

@@ -1207,14 +1207,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
             preprocess._column,
-            (
-                cudf.core.column.timedelta.TimeDeltaColumn,
-                cudf.core.column.datetime.DatetimeColumn,
-            ),
+            cudf.core.column.timedelta.TimeDeltaColumn,
         ):
-            # Converting to string column is necessary for Timedelta
-            # & DatetimeColumn's because larger values will easily
-            # overflow while being converted to pandas later.
             output = repr(
                 preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
             )

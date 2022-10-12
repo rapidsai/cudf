@@ -4023,20 +4023,19 @@ def test_series_astype_datetime_to_other(as_dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype",
+    "inp",
     [
-        "datetime64[ns]",
-        "datetime64[us]",
-        "datetime64[ms]",
-        "datetime64[s]",
+        ("datetime64[ns]", "2011-01-01 00:00:00.000000000"),
+        ("datetime64[us]", "2011-01-01 00:00:00.000000"),
+        ("datetime64[ms]", "2011-01-01 00:00:00.000"),
+        ("datetime64[s]", "2011-01-01 00:00:00"),
     ],
 )
-def test_series_astype_datetime_to_string(dtype):
+def test_series_astype_datetime_to_string(inp):
+    dtype, expect = inp
     base_date = "2011-01-01"
     sr = cudf.Series([base_date], dtype=dtype)
-    psr = sr.to_pandas()
     got = sr.astype(str)[0]
-    expect = psr.astype(str)[0]
     assert expect == got
 
 
@@ -4168,14 +4167,7 @@ def test_series_astype_null_cases():
         "2001-03-01 00:00:00.000000",
     ]
     assert_eq(
-        cudf.Series(
-            [
-                "2001-01-01",
-                "2001-02-01",
-                None,
-                "2001-03-01",
-            ]
-        ),
+        cudf.Series(data),
         cudf.Series(data, dtype="datetime64[us]").astype("str"),
     )
 
@@ -4573,14 +4565,8 @@ def test_df_astype_datetime_to_other(as_dtype):
             [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
         )
     elif as_dtype == "str":
-        expect["foo"] = cudf.Series(
-            gdf["foo"].to_pandas().astype("str").replace("NaT", None),
-            dtype="str",
-        )
-        expect["bar"] = cudf.Series(
-            gdf["bar"].to_pandas().astype("str").replace("NaT", None),
-            dtype="str",
-        )
+        expect["foo"] = cudf.Series(data, dtype="str")
+        expect["bar"] = cudf.Series(data, dtype="str")
     elif as_dtype == "category":
         expect["foo"] = cudf.Series(gdf["foo"], dtype="category")
         expect["bar"] = cudf.Series(gdf["bar"], dtype="category")
