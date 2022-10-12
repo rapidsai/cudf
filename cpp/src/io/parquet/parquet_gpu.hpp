@@ -236,14 +236,18 @@ struct ColumnChunkDesc {
   int32_t src_col_schema;  // my schema index in the file
 };
 
-// TODO: rename
+// TODO: rename?
+struct file_intermediate_data {
+  hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
+  hostdevice_vector<gpu::PageInfo> pages_info{};
+  hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+  bool has_data{false};
+};
+
+// TODO: rename?
 struct chunked_intermediate_data {
-  rmm::device_uvector<int> page_keys;
-  rmm::device_uvector<int> page_index;
-  chunked_intermediate_data()
-    : page_keys(0, rmm::cuda_stream_default), page_index(0, rmm::cuda_stream_default)
-  {
-  }
+  rmm::device_uvector<int> page_keys{0, rmm::cuda_stream_default};
+  rmm::device_uvector<int> page_index{0, rmm::cuda_stream_default};
 };
 
 struct chunked_read_info {

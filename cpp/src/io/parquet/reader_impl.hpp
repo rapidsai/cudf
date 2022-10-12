@@ -82,21 +82,18 @@ class reader::impl {
                            bool uses_custom_row_bounds,
                            std::vector<std::vector<size_type>> const& row_group_indices);
 
- private:
   /**
    * TODO
    *
    * @brief load_column_chunk_descriotions
    * @return
    */
-  std::tuple<bool,
-             hostdevice_vector<gpu::ColumnChunkDesc>,
-             hostdevice_vector<gpu::PageInfo>,
-             hostdevice_vector<gpu::PageNestingInfo>>
-  read_intermediate_data(size_type skip_rows,
-                         size_type num_rows,
-                         std::vector<std::vector<size_type>> const& row_group_list);
+  gpu::file_intermediate_data preprocess_file(
+    size_type skip_rows,
+    size_type num_rows,
+    std::vector<std::vector<size_type>> const& row_group_list);
 
+ private:
   /**
    * TODO: Rename this into something more meaningful
    *
