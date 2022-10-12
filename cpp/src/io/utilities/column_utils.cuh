@@ -67,7 +67,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
       size_type index) {
       col_desc[index].parent_column = parent_col_view.begin() + index;
       column_device_view col        = parent_col_view.column(index);
-      // traverse till leaf columnf
+      // traverse till leaf column
       while (col.type().id() == type_id::LIST || col.type().id() == type_id::STRUCT) {
         auto const child = (col.type().id() == type_id::LIST)
                              ? col.child(lists_column_view::child_column_index)
