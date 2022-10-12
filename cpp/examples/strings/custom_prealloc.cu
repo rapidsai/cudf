@@ -28,6 +28,8 @@
 /**
  * @brief Builds the output for each row
  *
+ * This thread is called once per row in d_names.
+ *
  * @param d_names Column of names
  * @param d_visibilities Column of visibilities
  * @param redaction Redacted string replacement
@@ -42,7 +44,9 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
                               cudf::offset_type const* d_offsets,
                               cudf::string_view* d_output)
 {
+  // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
+  // There may be more threads than actual rows
   if (index >= d_names.size()) return;
 
   auto const visible = cudf::string_view("public", 6);
@@ -81,14 +85,15 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
 std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
                                              cudf::column_view const& visibilities)
 {
+  // all device memory operations and kernel functions will run on this stream
   auto stream = rmm::cuda_stream_default;
 
   auto const d_names        = cudf::column_device_view::create(names, stream);
   auto const d_visibilities = cudf::column_device_view::create(visibilities, stream);
   auto const d_redaction    = cudf::string_scalar(std::string("X X"), true, stream);
 
-  constexpr auto block_size = 128;
-  auto const blocks         = (names.size() + block_size - 1) / block_size;
+  constexpr int block_size = 128;  // this arbitrary size should be a power of 2
+  auto const blocks        = (names.size() + block_size - 1) / block_size;
 
   nvtxRangePushA("redact_strings");
 
@@ -112,6 +117,9 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   // this copies all the individual strings into a single output column
   auto result = cudf::make_strings_column(str_ptrs, cudf::string_view{nullptr, 0}, stream);
   // temporary memory cleanup cost here for str_ptrs and working_memory
+
+  // wait for all of the above to finish
+  stream.synchronize();
 
   nvtxRangePop();
   return result;

@@ -51,6 +51,8 @@ void set_malloc_heap_size(size_t heap_size = 1073741824)  // 1GB
 /**
  * @brief Builds the output for each row
  *
+ * This thread is called once per row in d_names.
+ *
  * Note: This uses malloc() in a device kernel which works great
  * but is not very efficient. This can be useful for prototyping
  * on functions where performance is not yet important.
@@ -67,8 +69,9 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
                               cudf::string_view redaction,
                               cudf::string_view* d_output)
 {
-  // get index for this thread
+  // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
+  // There may be more threads than actual rows
   if (index >= d_names.size()) return;
 
   auto const visible = cudf::string_view("public", 6);
@@ -110,21 +113,23 @@ __global__ void free_kernel(cudf::string_view redaction, cudf::string_view* d_ou
   if (index >= count) return;
 
   auto ptr = const_cast<char*>(d_output[index].data());
-  if (ptr != redaction.data()) free(ptr);
+  if (ptr != redaction.data()) { free(ptr); }
 }
 
 std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
                                              cudf::column_view const& visibilities)
 {
+  // all device memory operations and kernel functions will run on this stream
   auto stream = rmm::cuda_stream_default;
-  set_malloc_heap_size();
+
+  set_malloc_heap_size();  // to illustrate adjusting the malloc heap
 
   auto const d_names        = cudf::column_device_view::create(names, stream);
   auto const d_visibilities = cudf::column_device_view::create(visibilities, stream);
   auto const d_redaction    = cudf::string_scalar(std::string("X X"), true, stream);
 
-  constexpr auto block_size = 128;
-  auto const blocks         = (names.size() + block_size - 1) / block_size;
+  constexpr int block_size = 128;  // this arbitrary size should be a power of 2
+  auto const blocks        = (names.size() + block_size - 1) / block_size;
 
   nvtxRangePushA("redact_strings");
 
@@ -144,6 +149,9 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   free_kernel<<<blocks, block_size, 0, stream.value()>>>(
     d_redaction.value(), str_ptrs->data(), names.size());
   delete str_ptrs;
+
+  // wait for all of the above to finish
+  stream.synchronize();
 
   nvtxRangePop();
   return result;

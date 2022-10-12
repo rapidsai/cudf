@@ -31,6 +31,8 @@
 /**
  * @brief Computes the size of each output row
  *
+ * This thread is called once per row in d_names.
+ *
  * @param d_names Column of names
  * @param d_visibilities Column of visibilities
  * @param d_sizes Output sizes for each row
@@ -39,7 +41,9 @@ __global__ void sizes_kernel(cudf::column_device_view const d_names,
                              cudf::column_device_view const d_visibilities,
                              cudf::size_type* d_sizes)
 {
+  // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
+  // There may be more threads than actual rows
   if (index >= d_names.size()) return;
 
   auto const visible   = cudf::string_view("public", 6);
@@ -63,6 +67,8 @@ __global__ void sizes_kernel(cudf::column_device_view const d_names,
 /**
  * @brief Builds the output for each row
  *
+ * This thread is called once per row in d_names.
+ *
  * @param d_names Column of names
  * @param d_visibilities Column of visibilities
  * @param d_offsets Byte offset in `d_chars` for each row
@@ -73,7 +79,9 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
                               cudf::size_type const* d_offsets,
                               char* d_chars)
 {
+  // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
+  // There may be more threads than actual rows
   if (index >= d_names.size()) return;
 
   auto const visible   = cudf::string_view("public", 6);
@@ -114,12 +122,13 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
 std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
                                              cudf::column_view const& visibilities)
 {
+  // all device memory operations and kernel functions will run on this stream
   auto stream = rmm::cuda_stream_default;
 
   auto const d_names        = cudf::column_device_view::create(names, stream);
   auto const d_visibilities = cudf::column_device_view::create(visibilities, stream);
 
-  constexpr int block_size = 128;
+  constexpr int block_size = 128;  // this arbitrary size should be a power of 2
   int const blocks         = (names.size() + block_size - 1) / block_size;
 
   nvtxRangePushA("redact_strings");
@@ -135,7 +144,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   thrust::exclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
 
   // last element is the total output size
-  // (device-to-host copy of 1 integer)
+  // (device-to-host copy of 1 integer -- includes synching the stream)
   cudf::size_type output_size = offsets.back_element(stream);
 
   //  create chars vector
@@ -147,7 +156,9 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
 
   // create column from offsets and chars vectors (no copy is performed)
   auto result = cudf::make_strings_column(names.size(), std::move(offsets), std::move(chars));
-  cudaStreamSynchronize(stream.value());
+
+  // wait for all of the above to finish
+  stream.synchronize();
 
   nvtxRangePop();
   return result;
