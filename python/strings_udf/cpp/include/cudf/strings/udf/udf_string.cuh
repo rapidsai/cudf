@@ -34,7 +34,8 @@ __device__ inline static cudf::size_type bytes_in_null_terminated_string(char co
 {
   if (!str) return 0;
   cudf::size_type bytes = 0;
-  while (*str++) ++bytes;
+  while (*str++)
+    ++bytes;
   return bytes;
 }
 
@@ -379,12 +380,16 @@ __device__ void udf_string::shift_bytes(cudf::size_type spos,
     // shift bytes to the left [...wxyz] -> [wxyzxyz]
     auto src = epos;
     auto tgt = spos;
-    while (tgt < nbytes) { m_data[tgt++] = m_data[src++]; }
+    while (tgt < nbytes) {
+      m_data[tgt++] = m_data[src++];
+    }
   } else if (nbytes > m_bytes) {
     // shift bytes to the right [abcd...] -> [abcabcd]
     auto src = m_bytes;
     auto tgt = nbytes;
-    while (src > epos) { m_data[--tgt] = m_data[--src]; }
+    while (src > epos) {
+      m_data[--tgt] = m_data[--src];
+    }
   }
 }
 
