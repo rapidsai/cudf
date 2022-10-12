@@ -3,6 +3,7 @@
 from enum import Enum
 
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
@@ -11,11 +12,15 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.null_mask cimport (
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
+    bitmask_and as cpp_bitmask_and,
+    bitmask_or as cpp_bitmask_or,
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,
     underlying_type_t_mask_state,
 )
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport mask_state, size_type
+from cudf._lib.utils cimport table_view_from_columns
 
 from cudf.core.buffer import as_device_buffer_like
 
@@ -95,3 +100,27 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = as_device_buffer_like(rmm_db)
     return buf
+
+
+def bitmask_and(columns: list):
+    cdef table_view c_view = table_view_from_columns(columns)
+    cdef pair[device_buffer, size_type] c_result
+    cdef unique_ptr[device_buffer] up_db
+    with nogil:
+        c_result = move(cpp_bitmask_and(c_view))
+        up_db = make_unique[device_buffer](move(c_result.first))
+    dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
+    buf = as_device_buffer_like(dbuf)
+    return buf, c_result.second
+
+
+def bitmask_or(columns: list):
+    cdef table_view c_view = table_view_from_columns(columns)
+    cdef pair[device_buffer, size_type] c_result
+    cdef unique_ptr[device_buffer] up_db
+    with nogil:
+        c_result = move(cpp_bitmask_or(c_view))
+        up_db = make_unique[device_buffer](move(c_result.first))
+    dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
+    buf = as_device_buffer_like(dbuf)
+    return buf, c_result.second
