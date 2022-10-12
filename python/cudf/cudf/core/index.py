@@ -118,6 +118,11 @@ def _index_from_data(data: MutableMapping, name: Any = None):
             index_class_type = CategoricalIndex
         elif isinstance(values, (IntervalColumn, StructColumn)):
             index_class_type = IntervalIndex
+        else:
+            raise NotImplementedError(
+                "Unsupported column type passed to "
+                f"create an Index: {type(values)}"
+            )
     else:
         index_class_type = cudf.MultiIndex
     return index_class_type._from_data(data, name)
