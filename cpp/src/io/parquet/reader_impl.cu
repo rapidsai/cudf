@@ -1779,10 +1779,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        bool uses_custom_row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_list)
 {
-  // Select only row groups required
-  const auto selected_row_groups =
-    _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
-
   auto file_data = preprocess_file(skip_rows, num_rows, row_group_list);
 
   // todo: fix this (should be empty instead of null)
