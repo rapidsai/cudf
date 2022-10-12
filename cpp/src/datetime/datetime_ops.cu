@@ -79,26 +79,18 @@ struct extract_component_operator {
     auto const hrs_  = [&] { return duration_cast<hours>(time_since_midnight); };
     auto const mins_ = [&] { return duration_cast<minutes>(time_since_midnight) - hrs_(); };
     auto const secs_ = [&] {
-      return duration_cast<seconds>(time_since_midnight) - hrs_();
-      -mins_();
+      return duration_cast<seconds>(time_since_midnight) - hrs_() - mins_()
     };
     auto const millisecs_ = [&] {
-      return duration_cast<milliseconds>(time_since_midnight) - hrs_();
-      -mins_();
-      -secs_();
+      return duration_cast<milliseconds>(time_since_midnight) - hrs_() - mins_() - secs_()
     };
     auto const microsecs_ = [&] {
-      return duration_cast<microseconds>(time_since_midnight) - hrs_();
-      -mins_();
-      -secs_();
-      -millisecs_();
+      return duration_cast<microseconds>(time_since_midnight) - hrs_() - mins_() - secs_() -
+             millisecs_()
     };
     auto const nanosecs_ = [&] {
-      return duration_cast<nanoseconds>(time_since_midnight) - hrs_();
-      -mins_();
-      -secs_();
-      -millisecs_();
-      -microsecs_();
+      return duration_cast<nanoseconds>(time_since_midnight) - hrs_() - mins_() - secs_() -
+             millisecs_() - microsecs_()
     };
 
     switch (Component) {
