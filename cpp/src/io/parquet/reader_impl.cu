@@ -1568,9 +1568,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
-std::tuple<hostdevice_vector<gpu::ColumnChunkDesc>,
+std::tuple<bool,
+           hostdevice_vector<gpu::ColumnChunkDesc>,
            hostdevice_vector<gpu::PageInfo>,
-           std::size_t,
            hostdevice_vector<gpu::PageNestingInfo>>
 reader::impl::read_intermediate_data(size_type skip_rows,
                                      size_type num_rows,
@@ -1582,9 +1582,9 @@ reader::impl::read_intermediate_data(size_type skip_rows,
 
   // TODO: fix this
   if (selected_row_groups.size() == 0 || _input_columns.size() == 0) {
-    return {hostdevice_vector<gpu::ColumnChunkDesc>(0, 0, _stream),
+    return {false,
+            hostdevice_vector<gpu::ColumnChunkDesc>(0, 0, _stream),
             hostdevice_vector<gpu::PageInfo>(0, 0, _stream),
-            std::size_t{0},
             hostdevice_vector<gpu::PageNestingInfo>{}};
   }
 
@@ -1709,7 +1709,7 @@ reader::impl::read_intermediate_data(size_type skip_rows,
     allocate_nesting_info(chunks, pages, page_nesting_info);
   }
 
-  return {std::move(chunks), std::move(pages), total_pages, std::move(page_nesting_info)};
+  return {total_pages > 0, std::move(chunks), std::move(pages), std::move(page_nesting_info)};
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1727,51 +1727,48 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<std::unique_ptr<column>> out_columns;
   out_columns.reserve(_output_columns.size());
 
-  auto [chunks, pages, total_pages, page_nesting_info] =
+  auto [has_read_data, chunks, pages, page_nesting_info] =
     read_intermediate_data(skip_rows, num_rows, row_group_list);
 
-  if (selected_row_groups.size() != 0 && _input_columns.size() != 0) {
-    // Process dataset chunk pages into output columns
-    if (total_pages > 0) {
-      // - compute column sizes and allocate output buffers.
-      //   important:
-      //   for nested schemas, we have to do some further preprocessing to determine:
-      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-      //    of
-      //      nesting and it's size is the row count)
-      //
-      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-      // purposes of decoding.
-      // TODO: make this a parameter.
-      auto const chunked_read_size = 240000;
-      //      auto const chunked_read_size = 0;
-      auto chunk_reads = preprocess_columns(
-        chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, chunked_read_size);
+  if (has_read_data) {
+    // - compute column sizes and allocate output buffers.
+    //   important:
+    //   for nested schemas, we have to do some further preprocessing to determine:
+    //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+    //    of
+    //      nesting and it's size is the row count)
+    //
+    // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+    // purposes of decoding.
+    // TODO: make this a parameter.
+    auto const chunked_read_size = 240000;
+    //      auto const chunked_read_size = 0;
+    auto chunk_reads = preprocess_columns(
+      chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, chunked_read_size);
 
-      // process each chunk. this is the part that would be externalized into multiple calls
-      auto read_info = chunk_reads.second[0];
-      {
-        // allocate outgoing columns
-        allocate_columns(chunks,
-                         pages,
-                         chunk_reads.first,
-                         read_info.skip_rows,
-                         read_info.num_rows,
-                         uses_custom_row_bounds);
+    // process each chunk. this is the part that would be externalized into multiple calls
+    auto read_info = chunk_reads.second[0];
+    {
+      // allocate outgoing columns
+      allocate_columns(chunks,
+                       pages,
+                       chunk_reads.first,
+                       read_info.skip_rows,
+                       read_info.num_rows,
+                       uses_custom_row_bounds);
 
-        // decoding column data
-        decode_page_data(chunks, pages, page_nesting_info, read_info.skip_rows, read_info.num_rows);
+      // decoding column data
+      decode_page_data(chunks, pages, page_nesting_info, read_info.skip_rows, read_info.num_rows);
 
-        // create the final output cudf columns
-        for (size_t i = 0; i < _output_columns.size(); ++i) {
-          column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-          auto const metadata =
-            _reader_column_schema.has_value()
-              ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-              : std::nullopt;
-          out_columns.emplace_back(
-            make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
-        }
+      // create the final output cudf columns
+      for (size_t i = 0; i < _output_columns.size(); ++i) {
+        column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+        auto const metadata =
+          _reader_column_schema.has_value()
+            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+            : std::nullopt;
+        out_columns.emplace_back(
+          make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
       }
     }
   }

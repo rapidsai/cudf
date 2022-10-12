@@ -89,9 +89,9 @@ class reader::impl {
    * @brief load_column_chunk_descriotions
    * @return
    */
-  std::tuple<hostdevice_vector<gpu::ColumnChunkDesc>,
+  std::tuple<bool,
+             hostdevice_vector<gpu::ColumnChunkDesc>,
              hostdevice_vector<gpu::PageInfo>,
-             std::size_t,
              hostdevice_vector<gpu::PageNestingInfo>>
   read_intermediate_data(size_type skip_rows,
                          size_type num_rows,
