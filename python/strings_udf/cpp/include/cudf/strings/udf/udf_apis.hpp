@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -33,6 +34,15 @@ namespace udf {
  * @throw cudf::logic_error if input is not a strings column.
  */
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input);
+
+/**
+ * @brief Return a cudf::column given an array of udf_string objects.
+ *
+ * @param d_buffer Pointer to device memory of udf_string objects
+ * @param d_size The number of bytes in the d_buffer
+ * @return A strings column copy of the udf_string objects
+ */
+std::unique_ptr<cudf::column> column_from_udf_string_array(void* d_buffer, std::size_t size);
 
 }  // namespace udf
 }  // namespace strings
