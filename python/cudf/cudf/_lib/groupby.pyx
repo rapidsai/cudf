@@ -121,13 +121,36 @@ cdef class GroupBy:
         self.dropna = dropna
 
     def groups(self, list values):
+        """
+        Perform a sort groupby, using ``self.keys`` as the key columns
+        and ``values`` as the value columns.
+
+        Parameters
+        ----------
+        values: list of Columns
+            The value columns
+
+        Returns
+        -------
+        grouped_keys: list of Columns
+            The grouped key columns
+        grouped_values: list of Columns
+            The grouped value columns
+        offsets: list of integers
+            Integer offsets such that offsets[i+1] - offsets[i]
+            represents the size of group `i`.
+        """
         cdef table_view values_view = table_view_from_columns(values)
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
 
         grouped_key_cols = columns_from_unique_ptr(move(c_groups.keys))
-        grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
+
+        if values:
+            grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
+        else:
+            grouped_value_cols = []
         return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
     def aggregate_internal(self, values, aggregations):

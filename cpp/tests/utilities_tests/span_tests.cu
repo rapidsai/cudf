@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -234,17 +235,14 @@ __global__ void simple_device_kernel(device_span<bool> result) { result[0] = tru
 
 TEST(SpanTest, CanUseDeviceSpan)
 {
-  rmm::device_vector<bool> d_message = std::vector<bool>({false});
+  auto d_message =
+    cudf::detail::make_zeroed_device_uvector_async<bool>(1, cudf::default_stream_value);
 
-  auto d_span = device_span<bool>(d_message.data().get(), d_message.size());
+  auto d_span = device_span<bool>(d_message.data(), d_message.size());
 
   simple_device_kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>(d_span);
 
-  cudaDeviceSynchronize();
-
-  thrust::host_vector<bool> h_message = d_message;
-
-  ASSERT_TRUE(h_message[0]);
+  ASSERT_TRUE(d_message.element(0, cudf::default_stream_value));
 }
 
 class MdSpanTest : public cudf::test::BaseFixture {
