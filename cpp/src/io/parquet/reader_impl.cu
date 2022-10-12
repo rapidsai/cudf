@@ -1581,7 +1581,7 @@ reader::impl::read_intermediate_data(size_type skip_rows,
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
   // TODO: fix this
-  if (selected_row_groups.size() != 0 && _input_columns.size() != 0) {
+  if (selected_row_groups.size() == 0 || _input_columns.size() == 0) {
     return {hostdevice_vector<gpu::ColumnChunkDesc>(0, 0, _stream),
             hostdevice_vector<gpu::PageInfo>(0, 0, _stream),
             std::size_t{0},
