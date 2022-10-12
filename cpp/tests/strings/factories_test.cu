@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -24,10 +28,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -188,12 +188,12 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
   rmm::device_uvector<cudf::bitmask_type> d_nulls{0, cudf::default_stream_value};
 
   auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> d_strings{
     0, cudf::default_stream_value};
   results = cudf::make_strings_column(d_strings);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 namespace {
