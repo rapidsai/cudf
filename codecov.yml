@@ -5,7 +5,7 @@ coverage:
     patch:
       default:
         target: auto
-        threshold: 0%
+        threshold: 5%
 
 github_checks:
     annotations: true
