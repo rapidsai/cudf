@@ -93,6 +93,9 @@ class reader::impl {
     size_type num_rows,
     std::vector<std::vector<size_type>> const& row_group_list);
 
+  table_with_metadata make_output(table_metadata& out_metadata,
+                                  std::vector<std::unique_ptr<column>>& out_columns);
+
  private:
   /**
    * TODO: Rename this into something more meaningful

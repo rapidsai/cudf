@@ -1712,6 +1712,30 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
   return output;
 }
 
+table_with_metadata reader::impl::make_output(table_metadata& out_metadata,
+                                              std::vector<std::unique_ptr<column>>& out_columns)
+{
+  // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
+  for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
+    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+    out_columns.emplace_back(io::detail::empty_like(_output_columns[i], &col_name, _stream, _mr));
+  }
+
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_output_columns.size());
+  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+    auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.column_names[i] = schema.name;
+  }
+
+  // Return user metadata
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
+
+  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+}
+
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
@@ -1780,25 +1804,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     }
   }
 
-  // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
-  for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
-    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-    out_columns.emplace_back(io::detail::empty_like(_output_columns[i], &col_name, _stream, _mr));
-  }
-
-  // Return column names (must match order of returned columns)
-  out_metadata.column_names.resize(_output_columns.size());
-  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-    auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
-    out_metadata.column_names[i] = schema.name;
-  }
-
-  // Return user metadata
-  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
-  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                            out_metadata.per_file_user_data[0].end()};
-
-  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+  return make_output(out_metadata, out_columns);
 }
 
 // Forward to implementation
