@@ -93,10 +93,30 @@ class reader::impl {
     size_type num_rows,
     std::vector<std::vector<size_type>> const& row_group_list);
 
-  table_with_metadata make_output(table_metadata& out_metadata,
-                                  std::vector<std::unique_ptr<column>>& out_columns);
+  /**
+   * TODO
+   *
+   * @brief read_chunk
+   * @param chunk_info
+   * @return
+   */
+  table_with_metadata read_chunk(gpu::file_intermediate_data& file_data,
+                                 gpu::chunked_intermediate_data& chunk_data,
+                                 gpu::chunked_read_info const& read_info,
+                                 bool uses_custom_row_bounds);
 
  private:
+  /**
+   * TODO
+   *
+   * @brief make_output
+   * @param out_metadata
+   * @param out_columns
+   * @return
+   */
+  table_with_metadata finalize_output(table_metadata& out_metadata,
+                                      std::vector<std::unique_ptr<column>>& out_columns);
+
   /**
    * TODO: Rename this into something more meaningful
    *

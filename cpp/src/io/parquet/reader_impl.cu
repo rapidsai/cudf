@@ -1712,8 +1712,46 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
   return output;
 }
 
-table_with_metadata reader::impl::make_output(table_metadata& out_metadata,
-                                              std::vector<std::unique_ptr<column>>& out_columns)
+table_with_metadata reader::impl::read_chunk(gpu::file_intermediate_data& file_data,
+                                             gpu::chunked_intermediate_data& chunk_data,
+                                             gpu::chunked_read_info const& read_info,
+                                             bool uses_custom_row_bounds)
+{
+  table_metadata out_metadata;
+
+  // output cudf columns as determined by the top level schema
+  std::vector<std::unique_ptr<column>> out_columns;
+  out_columns.reserve(_output_columns.size());
+
+  // allocate outgoing columns
+  allocate_columns(file_data.chunks,
+                   file_data.pages_info,
+                   chunk_data,
+                   read_info.skip_rows,
+                   read_info.num_rows,
+                   uses_custom_row_bounds);
+
+  // decoding column data
+  decode_page_data(file_data.chunks,
+                   file_data.pages_info,
+                   file_data.page_nesting_info,
+                   read_info.skip_rows,
+                   read_info.num_rows);
+
+  // create the final output cudf columns
+  for (size_t i = 0; i < _output_columns.size(); ++i) {
+    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+    auto const metadata        = _reader_column_schema.has_value()
+                                   ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                                   : std::nullopt;
+    out_columns.emplace_back(make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
+  }
+
+  return finalize_output(out_metadata, out_columns);
+}
+
+table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
+                                                  std::vector<std::unique_ptr<column>>& out_columns)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
@@ -1745,66 +1783,33 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
-  table_metadata out_metadata;
+  auto file_data = preprocess_file(skip_rows, num_rows, row_group_list);
 
-  // output cudf columns as determined by the top level schema
-  std::vector<std::unique_ptr<column>> out_columns;
-  out_columns.reserve(_output_columns.size());
+  // todo: fix this (should be empty instead of null)
+  if (!file_data.has_data) { return table_with_metadata{}; }
 
-  auto intermediate_data = preprocess_file(skip_rows, num_rows, row_group_list);
+  // - compute column sizes and allocate output buffers.
+  //   important:
+  //   for nested schemas, we have to do some further preprocessing to determine:
+  //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+  //    of
+  //      nesting and it's size is the row count)
+  //
+  // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+  // purposes of decoding.
+  // TODO: make this a parameter.
+  auto const chunked_read_size = 240000;
+  //      auto const chunked_read_size = 0;
+  auto chunk_reads = preprocess_columns(file_data.chunks,
+                                        file_data.pages_info,
+                                        skip_rows,
+                                        num_rows,
+                                        uses_custom_row_bounds,
+                                        chunked_read_size);
 
-  if (intermediate_data.has_data) {
-    // - compute column sizes and allocate output buffers.
-    //   important:
-    //   for nested schemas, we have to do some further preprocessing to determine:
-    //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-    //    of
-    //      nesting and it's size is the row count)
-    //
-    // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-    // purposes of decoding.
-    // TODO: make this a parameter.
-    auto const chunked_read_size = 240000;
-    //      auto const chunked_read_size = 0;
-    auto chunk_reads = preprocess_columns(intermediate_data.chunks,
-                                          intermediate_data.pages_info,
-                                          skip_rows,
-                                          num_rows,
-                                          uses_custom_row_bounds,
-                                          chunked_read_size);
-
-    // process each chunk. this is the part that would be externalized into multiple calls
-    auto read_info = chunk_reads.second[0];
-    {
-      // allocate outgoing columns
-      allocate_columns(intermediate_data.chunks,
-                       intermediate_data.pages_info,
-                       chunk_reads.first,
-                       read_info.skip_rows,
-                       read_info.num_rows,
-                       uses_custom_row_bounds);
-
-      // decoding column data
-      decode_page_data(intermediate_data.chunks,
-                       intermediate_data.pages_info,
-                       intermediate_data.page_nesting_info,
-                       read_info.skip_rows,
-                       read_info.num_rows);
-
-      // create the final output cudf columns
-      for (size_t i = 0; i < _output_columns.size(); ++i) {
-        column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        auto const metadata =
-          _reader_column_schema.has_value()
-            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-            : std::nullopt;
-        out_columns.emplace_back(
-          make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
-      }
-    }
-  }
-
-  return make_output(out_metadata, out_columns);
+  // process each chunk. this is the part that would be externalized into multiple calls
+  auto read_info = chunk_reads.second[0];
+  return read_chunk(file_data, chunk_reads.first, read_info, uses_custom_row_bounds);
 }
 
 // Forward to implementation
