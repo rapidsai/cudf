@@ -88,7 +88,7 @@ class reader::impl {
    * @brief load_column_chunk_descriotions
    * @return
    */
-  gpu::file_intermediate_data preprocess_file(
+  std::tuple<gpu::file_intermediate_data, size_type, size_type> preprocess_file(
     size_type skip_rows,
     size_type num_rows,
     std::vector<std::vector<size_type>> const& row_group_list);

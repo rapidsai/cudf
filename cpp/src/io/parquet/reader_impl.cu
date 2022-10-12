@@ -1568,26 +1568,29 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
-gpu::file_intermediate_data reader::impl::preprocess_file(
+std::tuple<gpu::file_intermediate_data, size_type, size_type> reader::impl::preprocess_file(
   size_type skip_rows,
   size_type num_rows,
   const std::vector<std::vector<size_type>>& row_group_list)
 {
-  gpu::file_intermediate_data output{};
+  gpu::file_intermediate_data file_data{};
 
   // Select only row groups required
+  // Note: `skip_rows` and `num_rows` will be modified in this function.
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
   // TODO: fix this
-  if (selected_row_groups.size() == 0 || _input_columns.size() == 0) { return output; }
+  if (selected_row_groups.size() == 0 || _input_columns.size() == 0) {
+    return {std::move(file_data), skip_rows, num_rows};
+  }
 
-  output.has_data = true;
+  file_data.has_data = true;
 
   // Descriptors for all the chunks that make up the selected columns
   const auto num_input_columns = _input_columns.size();
   const auto num_chunks        = selected_row_groups.size() * num_input_columns;
-  output.chunks                = hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
+  file_data.chunks             = hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
 
   // Association between each column chunk and its source
   std::vector<size_type> chunk_source_map(num_chunks);
@@ -1607,7 +1610,7 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
     auto const row_group_start  = rg.start_row;
     auto const row_group_source = rg.source_index;
     auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
-    auto const io_chunk_idx     = output.chunks.size();
+    auto const io_chunk_idx     = file_data.chunks.size();
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -1623,12 +1626,12 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
                         schema.converted_type,
                         schema.type_length);
 
-      column_chunk_offsets[output.chunks.size()] =
+      column_chunk_offsets[file_data.chunks.size()] =
         (col_meta.dictionary_page_offset != 0)
           ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
           : col_meta.data_page_offset;
 
-      output.chunks.push_back(
+      file_data.chunks.push_back(
         gpu::ColumnChunkDesc(col_meta.total_compressed_size,
                              nullptr,
                              col_meta.num_values,
@@ -1650,7 +1653,7 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
                              col.schema_idx));
 
       // Map each column chunk to its column index and its source index
-      chunk_source_map[output.chunks.size() - 1] = row_group_source;
+      chunk_source_map[file_data.chunks.size() - 1] = row_group_source;
 
       if (col_meta.codec != Compression::UNCOMPRESSED) {
         total_decompressed_size += col_meta.total_uncompressed_size;
@@ -1658,9 +1661,9 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
     }
     // Read compressed chunk data to device memory
     read_rowgroup_tasks.push_back(read_column_chunks(page_data,
-                                                     output.chunks,
+                                                     file_data.chunks,
                                                      io_chunk_idx,
-                                                     output.chunks.size(),
+                                                     file_data.chunks.size(),
                                                      column_chunk_offsets,
                                                      chunk_source_map));
 
@@ -1672,19 +1675,21 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
   assert(remaining_rows <= 0);
 
   // Process dataset chunk pages into output columns
-  const auto total_pages = count_page_headers(output.chunks);
-  output.pages_info      = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
+  const auto total_pages = count_page_headers(file_data.chunks);
+  file_data.pages_info   = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
   if (total_pages > 0) {
     rmm::device_buffer decomp_page_data;
 
     // decoding of column/page information
-    decode_page_headers(output.chunks, output.pages_info);
+    decode_page_headers(file_data.chunks, file_data.pages_info);
     if (total_decompressed_size > 0) {
-      decomp_page_data = decompress_page_data(output.chunks, output.pages_info);
+      decomp_page_data = decompress_page_data(file_data.chunks, file_data.pages_info);
       // Free compressed data
-      for (size_t c = 0; c < output.chunks.size(); c++) {
-        if (output.chunks[c].codec != parquet::Compression::UNCOMPRESSED) { page_data[c].reset(); }
+      for (size_t c = 0; c < file_data.chunks.size(); c++) {
+        if (file_data.chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+          page_data[c].reset();
+        }
       }
     }
 
@@ -1706,10 +1711,10 @@ gpu::file_intermediate_data reader::impl::preprocess_file(
     // nesting information (sizes, etc) stored -per page-
     // note : even for flat schemas, we allocate 1 level of "nesting" info
 
-    allocate_nesting_info(output.chunks, output.pages_info, output.page_nesting_info);
+    allocate_nesting_info(file_data.chunks, file_data.pages_info, file_data.page_nesting_info);
   }
 
-  return output;
+  return {std::move(file_data), skip_rows, num_rows};
 }
 
 table_with_metadata reader::impl::read_chunk(gpu::file_intermediate_data& file_data,
@@ -1779,7 +1784,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        bool uses_custom_row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_list)
 {
-  auto file_data = preprocess_file(skip_rows, num_rows, row_group_list);
+  auto [file_data, skip_rows_corrected, num_rows_corrected] =
+    preprocess_file(skip_rows, num_rows, row_group_list);
 
   // todo: fix this (should be empty instead of null)
   if (!file_data.has_data) { return table_with_metadata{}; }
@@ -1798,8 +1804,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   //      auto const chunked_read_size = 0;
   auto chunk_reads = preprocess_columns(file_data.chunks,
                                         file_data.pages_info,
-                                        skip_rows,
-                                        num_rows,
+                                        skip_rows_corrected,
+                                        num_rows_corrected,
                                         uses_custom_row_bounds,
                                         chunked_read_size);
 
