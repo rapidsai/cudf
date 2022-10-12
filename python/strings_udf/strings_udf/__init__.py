@@ -5,12 +5,16 @@ import re
 import subprocess
 import sys
 
+from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
 from numba import cuda
+from numba.cuda.cudadrv.driver import Linker
 from ptxcompiler.patch import CMD
 
 from . import _version
 
 __version__ = _version.get_versions()["version"]
+
+logger = get_logger()
 
 
 def _get_appropriate_file(sms, cc):
@@ -21,10 +25,23 @@ def _get_appropriate_file(sms, cc):
         return None
 
 
+def maybe_patch_numba_linker(driver_version):
+    if driver_version < (11, 5):
+        logger.debug("Driver version %s.%s needs patching" % driver_version)
+        if _numba_version_ok:
+            logger.debug("Patching Numba Linker")
+            Linker.new = new_patched_linker
+        else:
+            logger.debug("Cannot patch Numba Linker - unsupported version")
+
+
 # adapted from PTXCompiler
 cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
 # must have a driver to proceed
 if cp.returncode == 0:
+    versions = [int(s) for s in cp.stdout.strip().split()]
+    driver_version = tuple(versions[:2])
+    maybe_patch_numba_linker(driver_version)
     # Load the highest compute capability file available that is less than
     # the current device's.
     dev = cuda.get_current_device()
