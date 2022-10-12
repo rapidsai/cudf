@@ -3640,7 +3640,7 @@ class DatetimeProperties:
         2    2
         dtype: int16
         """
-        return self._get_dt_field("micro_second")
+        return self._get_dt_field("microsecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
