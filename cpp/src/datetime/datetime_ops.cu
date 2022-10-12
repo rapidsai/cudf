@@ -76,6 +76,15 @@ struct extract_component_operator {
 
     if (time_since_midnight.count() < 0) { time_since_midnight += days(1); }
 
+    auto hrs_       = duration_cast<hours>(time_since_midnight);
+    auto mins_      = duration_cast<minutes>(time_since_midnight - hrs_);
+    auto secs_      = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
+    auto millisecs_ = duration_cast<milliseconds>(time_since_midnight - hrs_ - mins_ - secs_);
+    auto microsecs_ =
+      duration_cast<microseconds>(time_since_midnight - hrs_ - mins_ - secs_ - millisecs_);
+    auto nanosecs_ = duration_cast<nanoseconds>(time_since_midnight - hrs_ - mins_ - secs_ -
+                                                millisecs_ - microsecs_);
+
     switch (Component) {
       case datetime_component::YEAR:
         return static_cast<int>(year_month_day(days_since_epoch).year());
@@ -85,28 +94,12 @@ struct extract_component_operator {
         return static_cast<unsigned>(year_month_day(days_since_epoch).day());
       case datetime_component::WEEKDAY:
         return year_month_weekday(days_since_epoch).weekday().iso_encoding();
-      case datetime_component::HOUR:
-      case datetime_component::MINUTE:
-      case datetime_component::SECOND:
-      case datetime_component::MILLISECOND:
-      case datetime_component::MICROSECOND:
-      case datetime_component::NANOSECOND: {
-        auto const hrs_ = duration_cast<hours>(time_since_midnight);
-        if (Component == datetime_component::HOUR) { return hrs_.count(); }
-        auto const mins_ = duration_cast<minutes>(time_since_midnight - hrs_);
-        if (Component == datetime_component::MINUTE) { return mins_.count(); }
-        auto const secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
-        if (Component == datetime_component::SECOND) { return secs_.count(); }
-        auto const millisecs_ =
-          duration_cast<milliseconds>(time_since_midnight - hrs_ - mins_ - secs_);
-        if (Component == datetime_component::MILLISECOND) { return millisecs_.count(); }
-        auto const microsecs_ =
-          duration_cast<microseconds>(time_since_midnight - hrs_ - mins_ - secs_ - millisecs_);
-        if (Component == datetime_component::MICROSECOND) { return microsecs_.count(); }
-        auto const nanosecs_ = duration_cast<nanoseconds>(time_since_midnight - hrs_ - mins_ -
-                                                          secs_ - millisecs_ - microsecs_);
-        if (Component == datetime_component::NANOSECOND) { return nanosecs_.count(); }
-      }
+      case datetime_component::HOUR: return hrs_.count();
+      case datetime_component::MINUTE: return mins_.count();
+      case datetime_component::SECOND: return secs_.count();
+      case datetime_component::MILLISECOND: return millisecs_.count();
+      case datetime_component::MICROSECOND: return microsecs_.count();
+      case datetime_component::NANOSECOND: return nanosecs_.count();
       default: return 0;
     }
   }
