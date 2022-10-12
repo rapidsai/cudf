@@ -82,6 +82,9 @@ fields = [
     "minute",
     "second",
     "microsecond",
+    # Pandas supports 'second', 'microsecond' & 'nanosecond'
+    # but weirdly left out 'millisecond', hence can't have 'millisecond'
+    # in this list.
     "nanosecond",
     "weekday",
     "dayofweek",
