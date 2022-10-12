@@ -3615,7 +3615,7 @@ class DatetimeProperties:
         2    2
         dtype: int16
         """
-        return self._get_dt_field("milli_second")
+        return self._get_dt_field("millisecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -3640,7 +3640,7 @@ class DatetimeProperties:
         2    2
         dtype: int16
         """
-        return self._get_dt_field("micro_second")
+        return self._get_dt_field("microsecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -3665,7 +3665,7 @@ class DatetimeProperties:
         2    2
         dtype: int16
         """
-        return self._get_dt_field("nano_second")
+        return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

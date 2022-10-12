@@ -2070,7 +2070,7 @@ class DatetimeIndex(GenericIndex):
         >>> datetime_index.millisecond
         Int16Index([0, 1, 2], dtype='int16')
         """  # noqa: E501
-        return self._get_dt_field("milli_second")
+        return self._get_dt_field("millisecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2091,7 +2091,7 @@ class DatetimeIndex(GenericIndex):
         >>> datetime_index.microsecond
         Int16Index([0, 1, 2], dtype='int16')
         """  # noqa: E501
-        return self._get_dt_field("micro_second")
+        return self._get_dt_field("microsecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2113,7 +2113,7 @@ class DatetimeIndex(GenericIndex):
         >>> datetime_index.nanosecond
         Int16Index([0, 1, 2], dtype='int16')
         """
-        return self._get_dt_field("nano_second")
+        return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

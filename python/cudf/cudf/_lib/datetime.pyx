@@ -49,15 +49,15 @@ def extract_datetime_component(Column col, object field):
             c_result = move(libcudf_datetime.extract_minute(col_view))
         elif field == "second":
             c_result = move(libcudf_datetime.extract_second(col_view))
-        elif field == "milli_second":
+        elif field == "millisecond":
             c_result = move(
                 libcudf_datetime.extract_millisecond_fraction(col_view)
             )
-        elif field == "micro_second":
+        elif field == "microsecond":
             c_result = move(
                 libcudf_datetime.extract_microsecond_fraction(col_view)
             )
-        elif field == "nano_second":
+        elif field == "nanosecond":
             c_result = move(
                 libcudf_datetime.extract_nanosecond_fraction(col_view)
             )
