@@ -112,7 +112,7 @@ std::unique_ptr<cudf::table> create_compressible_fixed_table(cudf::size_type num
 // this function replicates the "list_gen" function in
 // python/cudf/cudf/tests/test_parquet.py
 template <typename T>
-std::unique_ptr<cudf::column> make_parquet_list_col(
+std::unique_ptr<cudf::column> make_parquet_list_list_col(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity)
 {
   auto valids =
@@ -2212,8 +2212,8 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
 
   bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
                  true,  true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true};
 
+                 true,  true, true, true, true, true, true, true, true};
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
   T c1b[num_els];
@@ -2589,6 +2589,92 @@ TEST_F(ParquetReaderTest, UserBoundsWithNulls)
   }
 }
 
+TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
+{
+  constexpr int num_rows = 32 * 1024;
+
+  std::mt19937 gen(6542);
+  std::bernoulli_distribution bn(0.7f);
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
+  auto values = thrust::make_counting_iterator(0);
+
+  // int64
+  cudf::test::fixed_width_column_wrapper<int64_t> c0(values, values + num_rows, valids);
+
+  // list<float>
+  constexpr int floats_per_row = 4;
+  auto c1_offset_iter          = cudf::detail::make_counting_transform_iterator(
+    0, [floats_per_row](cudf::size_type idx) { return idx * floats_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c1_offsets(
+    c1_offset_iter, c1_offset_iter + num_rows + 1);
+  cudf::test::fixed_width_column_wrapper<float> c1_floats(
+    values, values + (num_rows * floats_per_row), valids);
+  auto _c1 = cudf::make_lists_column(num_rows,
+                                     c1_offsets.release(),
+                                     c1_floats.release(),
+                                     cudf::UNKNOWN_NULL_COUNT,
+                                     cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  auto c1  = cudf::purge_nonempty_nulls(static_cast<cudf::lists_column_view>(*_c1));
+
+  // list<list<int>>
+  auto c2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
+
+  // struct<list<string>, int, float>
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+  constexpr int string_per_row  = 3;
+  constexpr int num_string_rows = num_rows * string_per_row;
+  cudf::test::strings_column_wrapper string_col{string_iter, string_iter + num_string_rows};
+  auto offset_iter = cudf::detail::make_counting_transform_iterator(
+    0, [string_per_row](cudf::size_type idx) { return idx * string_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offset_iter,
+                                                                    offset_iter + num_rows + 1);
+  auto _c3_list =
+    cudf::make_lists_column(num_rows,
+                            offsets.release(),
+                            string_col.release(),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            cudf::test::detail::make_null_mask(valids, valids + num_rows));
+  auto c3_list = cudf::purge_nonempty_nulls(static_cast<cudf::lists_column_view>(*_c3_list));
+  cudf::test::fixed_width_column_wrapper<int> c3_ints(values, values + num_rows, valids);
+  cudf::test::fixed_width_column_wrapper<float> c3_floats(values, values + num_rows, valids);
+  std::vector<std::unique_ptr<cudf::column>> c3_children;
+  c3_children.push_back(std::move(c3_list));
+  c3_children.push_back(c3_ints.release());
+  c3_children.push_back(c3_floats.release());
+  cudf::test::structs_column_wrapper _c3(std::move(c3_children));
+  auto c3 = cudf::purge_nonempty_nulls(static_cast<cudf::structs_column_view>(_c3));
+
+  // write it out
+  cudf::table_view tbl({c0, *c1, *c2, *c3});
+  auto filepath = temp_env->get_temp_filepath("UserBoundsWithNullsMixedTypes.parquet");
+  cudf::io::parquet_writer_options out_args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+  cudf::io::write_parquet(out_args);
+
+  // read it back
+  std::vector<std::pair<int, int>> params{
+    {-1, -1}, {0, num_rows}, {1, num_rows - 1}, {num_rows - 1, 1}, {517, 22000}};
+  for (auto p : params) {
+    cudf::io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    if (p.first >= 0) { read_args.set_skip_rows(p.first); }
+    if (p.second >= 0) { read_args.set_num_rows(p.second); }
+    auto result = cudf::io::read_parquet(read_args);
+
+    p.first  = p.first < 0 ? 0 : p.first;
+    p.second = p.second < 0 ? num_rows - p.first : p.second;
+    std::vector<cudf::size_type> slice_indices{p.first, p.first + p.second};
+    auto expected = cudf::slice(tbl, slice_indices);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected[0]);
+  }
+}
+
 TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
 {
   constexpr int num_rows = 30 * 1000000;
@@ -2636,7 +2722,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
 TEST_F(ParquetReaderTest, ListUserBoundsWithNullsLarge)
 {
   constexpr int num_rows = 5 * 1000000;
-  auto colp              = make_parquet_list_col<int>(0, num_rows, 5, 8, true);
+  auto colp              = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
   cudf::column_view col  = *colp;
 
   // this file will have row groups of 1,000,000 each
