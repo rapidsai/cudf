@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/convert/convert_integers.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -265,7 +264,7 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_integers(zero_size_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)

@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/replace_re.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/strings/replace_re.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
