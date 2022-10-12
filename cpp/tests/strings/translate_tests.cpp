@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -69,9 +68,9 @@ TEST_F(StringsTranslateTest, ZeroSizeStringsColumn)
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> translate_table;
   auto results = cudf::strings::translate(strings_view, translate_table);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
   results = cudf::strings::filter_characters(strings_view, translate_table);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsTranslateTest, FilterCharacters)

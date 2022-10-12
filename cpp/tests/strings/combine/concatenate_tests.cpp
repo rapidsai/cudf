@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -158,7 +157,7 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
   strings_columns.push_back(zero_size_strings_column);
   cudf::table_view table(strings_columns);
   auto results = cudf::strings::concatenate(table);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsCombineTest, SingleColumnErrorCheck)
@@ -207,7 +206,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ZeroSizedColumns)
 
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(col0));
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsNoReplacements)

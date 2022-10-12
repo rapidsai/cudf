@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -23,13 +28,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 class TypedScatterListsTest : public cudf::test::BaseFixture {
