@@ -16,7 +16,9 @@
 
 #include "cuco/sentinel.cuh"
 #include "nested_json.hpp"
+#include "thrust/binary_search.h"
 #include "thrust/for_each.h"
+#include "thrust/functional.h"
 #include "thrust/iterator/discard_iterator.h"
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
@@ -887,11 +889,24 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     };
     // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
     // hashing)
-    auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+    // auto iter = cudf::detail::make_counting_transform_iterator(
+    //   0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
     CUDF_PUSH_RANGE("insert");
-    key_map.insert(iter, iter + num_nodes, d_hasher, d_equal, stream.value());
+    // key_map.insert(iter, iter + num_nodes, d_hasher, d_equal, stream.value());
+    auto num_inserted = thrust::count_if(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(num_nodes),
+      [d_hasher,
+       d_equal,
+       view       = key_map.get_device_mutable_view(),
+       uq_node_id = new_col_id.begin()] __device__(auto node_id) mutable {
+        // typename hash_map_type::value_type const insert_pair{};
+        auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hasher, d_equal);
+        uq_node_id[node_id] = (it.first)->first;
+        return it.second;
+      });
     CUDF_POP_RANGE();
     // auto get_hash_value = [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(
     //                         auto node_id) -> size_type {
@@ -901,37 +916,41 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     // };
     // TODO overwrite the values with new column ids.
     auto num_columns = key_map.get_size();
+    // std::cout<<"num_columns: "<<num_columns<<std::endl;
+    // std::cout<<"num_inserted: "<<num_inserted<<std::endl;
+    num_columns = num_inserted;
     rmm::device_uvector<size_type> unique_keys(num_columns, stream);
     CUDF_PUSH_RANGE("retrieve_all");
     key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
     CUDF_POP_RANGE();
     CUDF_PUSH_RANGE("erase");
-    key_map.erase(unique_keys.begin(), unique_keys.end(), d_hasher, d_equal, stream.value());
+    thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
+    // key_map.erase(unique_keys.begin(), unique_keys.end(), d_hasher, d_equal, stream.value());
     stream.synchronize();
     CUDF_POP_RANGE();
 
     CUDF_PUSH_RANGE("u-insert");
-    auto col_id = cudf::detail::make_counting_transform_iterator(
-      0,
-      [key = unique_keys.begin()] __device__(size_type i) { return cuco::make_pair(key[i], i); });
+    // auto col_id = cudf::detail::make_counting_transform_iterator(
+    //   0,
+    //   [key = unique_keys.begin()] __device__(size_type i) { return cuco::make_pair(key[i], i);
+    //   });
     // this runtime is much smaller than num_nodes.
-    key_map.insert(col_id, col_id + num_columns, d_hasher, d_equal, stream.value());
+    // key_map.insert(col_id, col_id + num_columns, d_hasher, thrust::equal_to<>{}, stream.value());
     // TODO try thrust::equal_to for key_equal. not required since num_columns is small.
     stream.synchronize();
     CUDF_POP_RANGE();
 
     CUDF_PUSH_RANGE("find");
+    thrust::lower_bound(rmm::exec_policy(stream),
+                        unique_keys.begin(),
+                        unique_keys.end(),
+                        new_col_id.begin(),
+                        new_col_id.end(),
+                        new_col_id.begin());
     // convert field nodes to node indices, and other nodes to enum value.
     // TODO replace all keys with sequence. how?
-    key_map.find(thrust::make_counting_iterator<size_type>(0),
-                 thrust::make_counting_iterator<size_type>(num_nodes),
-                 new_col_id.begin(),
-                 d_hasher,
-                 d_equal,
-                 stream.value());
     stream.synchronize();
     CUDF_POP_RANGE();
-    // return new_column_id;
     // print_vec(cudf::detail::make_std_vector_async(new_column_id, stream), "new_col_id", to_int);
     // auto gpu_col_id2 = translate_col_id(cudf::detail::make_std_vector_async(new_column_id,
     // stream)); print_vec(gpu_col_id2, "gpu_col_id2", to_int);
