@@ -742,6 +742,8 @@ class ListMethods(ColumnMethods):
         >>> s2.dtype
         ListDtype(float64)
         """
+        if self.dtype == dtype:
+            return self
         return self._return_or_inplace(
             self._column._transform_leaves(
                 lambda col, dtype: col.astype(dtype), dtype
