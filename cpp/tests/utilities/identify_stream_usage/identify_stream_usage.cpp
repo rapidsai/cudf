@@ -206,7 +206,7 @@ DEFINE_OVERLOAD_HOST(cudaLaunchHostFunc,
                      ARG(cudaStream_t stream, cudaHostFn_t fn, void* userData),
                      ARG(stream, fn, userData));
 
-// Memory APIS:
+// Memory transfer APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
 DEFINE_OVERLOAD_HOST(cudaMemPrefetchAsync,
                      cudaError_t,
@@ -292,6 +292,21 @@ DEFINE_OVERLOAD_HOST_DEVICE(cudaMemsetAsync,
                             cudaError_t,
                             ARG(void* devPtr, int value, size_t count, cudaStream_t stream),
                             ARG(devPtr, value, count, stream));
+
+// Memory allocation APIS:
+// https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY__POOLS.html#group__CUDART__MEMORY__POOLS
+DEFINE_OVERLOAD_HOST(cudaFreeAsync,
+                     cudaError_t,
+                     ARG(void* devPtr, cudaStream_t stream),
+                     ARG(devPtr, stream));
+DEFINE_OVERLOAD_HOST(cudaMallocAsync,
+                     cudaError_t,
+                     ARG(void** devPtr, size_t size, cudaStream_t stream),
+                     ARG(devPtr, size, stream));
+DEFINE_OVERLOAD_HOST(cudaMallocFromPoolAsync,
+                     cudaError_t,
+                     ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
+                     ARG(ptr, size, memPool, stream));
 
 __attribute__((constructor)) void init()
 {
