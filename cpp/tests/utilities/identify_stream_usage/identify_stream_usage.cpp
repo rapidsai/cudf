@@ -206,6 +206,93 @@ DEFINE_OVERLOAD_HOST(cudaLaunchHostFunc,
                      ARG(cudaStream_t stream, cudaHostFn_t fn, void* userData),
                      ARG(stream, fn, userData));
 
+// Memory APIS:
+// https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
+DEFINE_OVERLOAD_HOST(cudaMemPrefetchAsync,
+                     cudaError_t,
+                     ARG(const void* devPtr, size_t count, int dstDevice, cudaStream_t stream),
+                     ARG(devPtr, count, dstDevice, stream));
+DEFINE_OVERLOAD_HOST_DEVICE(cudaMemcpy2DAsync,
+                            cudaError_t,
+                            ARG(void* dst,
+                                size_t dpitch,
+                                const void* src,
+                                size_t spitch,
+                                size_t width,
+                                size_t height,
+                                cudaMemcpyKind kind,
+                                cudaStream_t stream),
+                            ARG(dst, dpitch, src, spitch, width, height, kind, stream));
+DEFINE_OVERLOAD_HOST(cudaMemcpy2DFromArrayAsync,
+                     cudaError_t,
+                     ARG(void* dst,
+                         size_t dpitch,
+                         cudaArray_const_t src,
+                         size_t wOffset,
+                         size_t hOffset,
+                         size_t width,
+                         size_t height,
+                         cudaMemcpyKind kind,
+                         cudaStream_t stream),
+                     ARG(dst, dpitch, src, wOffset, hOffset, width, height, kind, stream));
+DEFINE_OVERLOAD_HOST(cudaMemcpy2DToArrayAsync,
+                     cudaError_t,
+                     ARG(cudaArray_t dst,
+                         size_t wOffset,
+                         size_t hOffset,
+                         const void* src,
+                         size_t spitch,
+                         size_t width,
+                         size_t height,
+                         cudaMemcpyKind kind,
+                         cudaStream_t stream),
+                     ARG(dst, wOffset, hOffset, src, spitch, width, height, kind, stream));
+DEFINE_OVERLOAD_HOST_DEVICE(cudaMemcpy3DAsync,
+                            cudaError_t,
+                            ARG(const cudaMemcpy3DParms* p, cudaStream_t stream),
+                            ARG(p, stream));
+DEFINE_OVERLOAD_HOST(cudaMemcpy3DPeerAsync,
+                     cudaError_t,
+                     ARG(const cudaMemcpy3DPeerParms* p, cudaStream_t stream),
+                     ARG(p, stream));
+DEFINE_OVERLOAD_HOST_DEVICE(
+  cudaMemcpyAsync,
+  cudaError_t,
+  ARG(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream),
+  ARG(dst, src, count, kind, stream));
+DEFINE_OVERLOAD_HOST(cudaMemcpyFromSymbolAsync,
+                     cudaError_t,
+                     ARG(void* dst,
+                         const void* symbol,
+                         size_t count,
+                         size_t offset,
+                         cudaMemcpyKind kind,
+                         cudaStream_t stream),
+                     ARG(dst, symbol, count, offset, kind, stream));
+DEFINE_OVERLOAD_HOST(cudaMemcpyToSymbolAsync,
+                     cudaError_t,
+                     ARG(const void* symbol,
+                         const void* src,
+                         size_t count,
+                         size_t offset,
+                         cudaMemcpyKind kind,
+                         cudaStream_t stream),
+                     ARG(symbol, src, count, offset, kind, stream));
+DEFINE_OVERLOAD_HOST_DEVICE(
+  cudaMemset2DAsync,
+  cudaError_t,
+  ARG(void* devPtr, size_t pitch, int value, size_t width, size_t height, cudaStream_t stream),
+  ARG(devPtr, pitch, value, width, height, stream));
+DEFINE_OVERLOAD_HOST_DEVICE(
+  cudaMemset3DAsync,
+  cudaError_t,
+  ARG(cudaPitchedPtr pitchedDevPtr, int value, cudaExtent extent, cudaStream_t stream),
+  ARG(pitchedDevPtr, value, extent, stream));
+DEFINE_OVERLOAD_HOST_DEVICE(cudaMemsetAsync,
+                            cudaError_t,
+                            ARG(void* devPtr, int value, size_t count, cudaStream_t stream),
+                            ARG(devPtr, value, count, stream));
+
 __attribute__((constructor)) void init()
 {
   for (auto it : originals) {
