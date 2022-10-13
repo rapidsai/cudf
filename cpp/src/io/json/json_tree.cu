@@ -377,13 +377,21 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
+  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
+                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
+  auto num_fields = thrust::count_if(rmm::exec_policy(stream),
+                                     d_tree.node_categories.begin(),
+                                     d_tree.node_categories.end(),
+                                     is_field_name_node);
+  // TODO two-level hashing:  one for field names
+  // and another for {node-level, node_category} + field hash for the entire path
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
     cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
   auto num_nodes = d_tree.node_categories.size();
 
   constexpr size_type empty_node_index_sentinel = -1;
-  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
+  hash_map_type key_map{compute_hash_table_size(num_fields, 40),
                         cuco::sentinel::empty_key{empty_node_index_sentinel},
                         cuco::sentinel::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
@@ -405,8 +413,6 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
       d_input + node_range_begin[node_id2], node_range_end[node_id2] - node_range_begin[node_id2]);
     return field_name1 == field_name2;
   };
-  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
-                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
   auto iter = cudf::detail::make_counting_transform_iterator(
