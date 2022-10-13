@@ -655,9 +655,9 @@ TEST_F(SegmentedReductionTestUntyped, PartialSegmentReduction)
 
   auto const input = fixed_width_column_wrapper<int32_t>{
     {1, 2, 3, 4, 5, 6, 7}, {true, true, true, true, true, true, true}};
-  auto const offsets   = std::vector<size_type>{0, 1, 3, 4};
+  auto const offsets   = std::vector<size_type>{1, 3, 4};
   auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<int32_t>{{1, 5, 4}, {true, true, true}};
+  auto const expect    = fixed_width_column_wrapper<int32_t>{{5, 4}, {true, true}};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -669,7 +669,7 @@ TEST_F(SegmentedReductionTestUntyped, PartialSegmentReduction)
 
   // Test with initial value
   auto const init_scalar = cudf::make_fixed_width_scalar<int32_t>(3);
-  auto const init_expect = fixed_width_column_wrapper<int32_t>{{4, 8, 7}, {true, true, true}};
+  auto const init_expect = fixed_width_column_wrapper<int32_t>{{8, 7}, {true, true}};
 
   res = segmented_reduce(input,
                          d_offsets,
@@ -681,8 +681,7 @@ TEST_F(SegmentedReductionTestUntyped, PartialSegmentReduction)
 
   // Test with null initial value
   init_scalar->set_valid_async(false);
-  auto null_init_expect =
-    fixed_width_column_wrapper<int32_t>{{XXX, XXX, XXX}, {false, false, false}};
+  auto null_init_expect = fixed_width_column_wrapper<int32_t>{{XXX, XXX}, {false, false}};
 
   res = segmented_reduce(input,
                          d_offsets,
