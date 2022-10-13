@@ -17,7 +17,7 @@ jobs:
       package-dir: python/cudf
       python-version: "3.8 3.9"
       python-package-versioneer-override: "22.10.00a"
-      python-package-build-tag: "7"
+      python-package-build-tag: "8"
 
       cibw-before-all-amd64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-before-all-arm64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
@@ -38,7 +38,7 @@ jobs:
       package-dir: python/dask_cudf
       python-package-cuda-suffix: "-cu11"
       python-package-versioneer-override: "22.10.00a"
-      python-package-build-tag: "7"
+      python-package-build-tag: "8"
 
       test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-extras:  "test"
