@@ -373,8 +373,6 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                                       bool uses_custom_row_bounds,
                                       size_type chunked_read_size)
 {
-  if (columns_preprocessed) { return; }
-
   // iterate over all input columns and determine if they contain lists so we can further
   // preprocess them.
   bool has_lists = false;
@@ -482,8 +480,8 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     chunked_read_size > 0 ? compute_splits(pages, id, num_rows, chunked_read_size, _stream)
                           : std::vector<gpu::chunked_read_info>{{min_row, num_rows}};
 
-  chunked_itm_data  = std::move(id);
-  chunked_read_info = std::move(read_chunks);
+  chunk_itm_data  = std::move(id);
+  chunk_read_info = std::move(read_chunks);
 }
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,

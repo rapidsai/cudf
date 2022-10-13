@@ -97,13 +97,10 @@ class reader::impl {
    * @brief read_completed
    * @return
    */
-  bool has_next() { return current_read_chunk >= chunked_read_info.size(); }
+  bool has_next() { return current_read_chunk >= chunk_read_info.size(); }
 
  private:
-  table_with_metadata read_chunk_internal(gpu::file_intermediate_data& file_data,
-                                          gpu::chunked_intermediate_data& chunk_data,
-                                          gpu::chunked_read_info const& read_info,
-                                          bool uses_custom_row_bounds);
+  table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
 
   /**
    * TODO
@@ -111,7 +108,7 @@ class reader::impl {
    * @brief load_column_chunk_descriotions
    * @return
    */
-  std::tuple<gpu::file_intermediate_data, size_type, size_type> preprocess_file(
+  std::pair<size_type, size_type> preprocess_file(
     size_type skip_rows,
     size_type num_rows,
     std::vector<std::vector<size_type>> const& row_group_list);
@@ -271,10 +268,11 @@ class reader::impl {
   data_type _timestamp_type{type_id::EMPTY};
 
   // Variables used for chunked reading:
-  cudf::io::parquet::gpu::chunked_intermediate_data chunked_itm_data;
-  std::vector<cudf::io::parquet::gpu::chunked_read_info> chunked_read_info;
+  cudf::io::parquet::gpu::file_intermediate_data file_itm_data;
+  cudf::io::parquet::gpu::chunked_intermediate_data chunk_itm_data;
+  std::vector<cudf::io::parquet::gpu::chunked_read_info> chunk_read_info;
   std::size_t current_read_chunk{0};
-  bool columns_preprocessed{false};
+  bool preprocessed{false};
 };
 
 }  // namespace parquet
