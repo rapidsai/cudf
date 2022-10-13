@@ -265,12 +265,13 @@ Time/date components
    DatetimeIndex.millisecond
    DatetimeIndex.microsecond
    DatetimeIndex.nanosecond
-   DatetimeIndex.dayofweek
-   DatetimeIndex.dayofyear
    DatetimeIndex.day_of_year
+   DatetimeIndex.dayofyear
+   DatetimeIndex.dayofweek
    DatetimeIndex.weekday
-   DatetimeIndex.is_leap_year
    DatetimeIndex.quarter
+   DatetimeIndex.is_leap_year
+   
    DatetimeIndex.isocalendar
 
 Time-specific operations
