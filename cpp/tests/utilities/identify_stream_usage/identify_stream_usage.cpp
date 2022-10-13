@@ -112,17 +112,21 @@ void check_stream_and_error(cudaStream_t stream)
 
 /**
  * @brief Container for CUDA APIs that have been overloaded using DEFINE_OVERLOAD.
+ *
+ * This variable must be initialized before everything else.
  */
-static std::unordered_map<std::string, void*> originals;
+__attribute__((init_priority(1001))) std::unordered_map<std::string, void*> originals;
 
-// Note: This macro assumes that defaults can be "inherited" from the declarations in
-// cuda_runtime.h.
 /**
  * @brief Macro for generating functions to override existing CUDA functions.
  *
  * Define a new function with the provided signature that checks the used
  * stream and raises an exception if it is one of CUDA's default streams. If
  * not, the new function forwards all arguments to the original function.
+ *
+ * Note that since this only defines the function, we do not need default
+ * parameter values since those will be provided by the original declarations
+ * in CUDA itself.
  *
  * @param function The function to overload.
  * @param ret_type The return type of the function
@@ -135,8 +139,9 @@ static std::unordered_map<std::string, void*> originals;
   attributes ret_type function(signature)                                     \
   {                                                                           \
     check_stream_and_error(stream);                                           \
-    return ((function##_t)originals["function"])(arguments);                  \
-  }
+    return ((function##_t)originals[#function])(arguments);                   \
+  }                                                                           \
+  __attribute__((constructor(1002))) void queue_##function() { originals[#function] = nullptr; }
 
 /**
  * @brief Helper macro to define macro arguments that contain a comma.
@@ -171,15 +176,15 @@ static std::unordered_map<std::string, void*> originals;
 
 // Event APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
-// DEFINE_OVERLOAD_HOST_DEVICE(cudaEventRecord,
-//                            cudaError_t,
-//                            ARG(cudaEvent_t event, cudaStream_t stream),
-//                            ARG(event, stream));
-//
-// DEFINE_OVERLOAD_HOST(cudaEventRecordWithFlags,
-//                     cudaError_t,
-//                     ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
-//                     ARG(event, stream, flags));
+DEFINE_OVERLOAD_HOST_DEVICE(cudaEventRecord,
+                            cudaError_t,
+                            ARG(cudaEvent_t event, cudaStream_t stream),
+                            ARG(event, stream));
+
+DEFINE_OVERLOAD_HOST(cudaEventRecordWithFlags,
+                     cudaError_t,
+                     ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
+                     ARG(event, stream, flags));
 
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
@@ -308,7 +313,15 @@ DEFINE_OVERLOAD_HOST(cudaMallocFromPoolAsync,
                      ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
                      ARG(ptr, size, memPool, stream));
 
-__attribute__((constructor)) void init()
+/**
+ * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.
+ *
+ * Note the priorities:
+ * - originals must be initialized first, so it is 1001.
+ * - The function names must be added to originals next in the macro, so those are 1002.
+ * - Finally, this function actually finds the original symbols so it is 1003.
+ */
+__attribute__((constructor(1003))) void find_originals()
 {
   for (auto it : originals) {
     originals[it.first] = dlsym(RTLD_NEXT, it.first.data());
