@@ -156,11 +156,11 @@ static std::unordered_map<std::string, void*> originals;
    https://docs.nvidia.com/cuda/cuda-runtime-api/modules.html#modules. Here are
    the modules containing any APIs using streams as of 9/20/2022:
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__STREAM.html
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT - Done
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXTRES__INTEROP.html#group__CUDART__EXTRES__INTEROP
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
-   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY__POOLS.html#group__CUDART__MEMORY__POOLS
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION - Done
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY - Done
+   - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY__POOLS.html#group__CUDART__MEMORY__POOLS - Done
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__OPENGL__DEPRECATED.html#group__CUDART__OPENGL__DEPRECATED
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EGL.html#group__CUDART__EGL
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__INTEROP.html#group__CUDART__INTEROP
@@ -171,7 +171,6 @@ static std::unordered_map<std::string, void*> originals;
 
 // Event APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
-
 DEFINE_OVERLOAD_HOST_DEVICE(cudaEventRecord,
                             cudaError_t,
                             ARG(cudaEvent_t event, cudaStream_t stream),
@@ -181,6 +180,7 @@ DEFINE_OVERLOAD_HOST(cudaEventRecordWithFlags,
                      cudaError_t,
                      ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
                      ARG(event, stream, flags));
+
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
 DEFINE_OVERLOAD_HOST(cudaLaunchKernel,
