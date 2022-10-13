@@ -23,7 +23,8 @@
 
 #include <cuda_runtime.h>
 
-/*
+/**
+ * @brief Print a backtrace and raise and error if stream is a default stream.
  */
 void check_stream_and_error(cudaStream_t stream)
 {
@@ -109,7 +110,7 @@ void check_stream_and_error(cudaStream_t stream)
   }
 }
 
-/*
+/**
  * @brief Container for CUDA APIs that have been overloaded using DEFINE_OVERLOAD.
  */
 static std::unordered_map<std::string, void*> originals;
