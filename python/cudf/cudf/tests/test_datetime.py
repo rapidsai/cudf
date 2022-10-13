@@ -28,7 +28,9 @@ def data1():
 
 
 def data2():
-    return pd.date_range("20010101", "20020215", freq="400h", name="times")
+    return pd.date_range(
+        "20010101", freq="243434324423423234N", name="times", periods=10
+    )
 
 
 def timeseries_us_data():
@@ -81,7 +83,12 @@ fields = [
     "hour",
     "minute",
     "second",
-    "microsecond",
+    pytest.param(
+        "microsecond",
+        marks=pytest.mark.xfail(
+            reason="https://github.com/pandas-dev/pandas/issues/49073"
+        ),
+    ),
     # Pandas supports 'second', 'microsecond' & 'nanosecond'
     # but weirdly left out 'millisecond', hence can't have 'millisecond'
     # in this list.
@@ -177,7 +184,7 @@ def test_dt_ops(data):
 
 
 # libcudf doesn't respect timezones
-@pytest.mark.parametrize("data", [data1()])
+@pytest.mark.parametrize("data", [data1(), data2()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_series(data, field):
     pd_data = pd.Series(data.copy())
@@ -187,7 +194,7 @@ def test_dt_series(data, field):
     assert_eq(base, test)
 
 
-@pytest.mark.parametrize("data", [data1()])
+@pytest.mark.parametrize("data", [data1(), data2()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_index(data, field):
     pd_data = data.copy()
