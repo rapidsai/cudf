@@ -205,7 +205,7 @@ else
 
     # Set up library for finding incorrect default stream usage.
     cd "$WORKSPACE/cpp/tests/utilities/identify_stream_usage/"
-    mkdir build && cd build && cmake .. -GNinja && ninja
+    mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
     STREAM_IDENTIFY_LIB="$WORKSPACE/cpp/tests/utilities/identify_stream_usage/build/libidentify_stream_usage.so"
 
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
