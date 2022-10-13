@@ -1718,7 +1718,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
 
 table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bounds)
 {
-  auto const& read_info = chunk_read_info[current_read_chunk];
+  auto const& read_info = chunk_read_info[current_read_chunk++];
   table_metadata out_metadata;
 
   // output cudf columns as determined by the top level schema
