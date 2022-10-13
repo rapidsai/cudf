@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/convert/convert_urls.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/strings/convert/convert_urls.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -230,7 +230,7 @@ TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn)
   cudf::column_view zero_size_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::url_encode(zero_size_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
   results = cudf::strings::url_decode(zero_size_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
