@@ -24,7 +24,6 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -35,24 +34,49 @@ namespace {
  */
 enum class sort_method { STABLE, UNSTABLE };
 
-// returns segment indices for each element for all segments.
-// first segment begin index = 0, last segment end index = num_rows.
+/**
+ * @brief Builds indices to identify segments to sort
+ *
+ * The segments are added to the input table-view keys so they
+ * are lexicographically sorted within the segmented groups.
+ *
+ * ```
+ * Example 1:
+ * num_rows = 10
+ * offsets = {0, 3, 7, 10}
+ * segment-indices -> { 3,3,3, 7,7,7,7, 10,10,10 }
+ * ```
+ *
+ * ```
+ * Example 2: (offsets do not cover all indices)
+ * num_rows = 10
+ * offsets = {3, 7}
+ * segment-indices -> { 0,1,2, 7,7,7,7, 8,9,10 }
+ * ```
+ *
+ * @param num_rows Total number of rows in the input keys to sort
+ * @param offsets The offsets identifying the segments
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
                                                    column_view const& offsets,
                                                    rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<size_type> segment_ids(num_rows, stream);
 
-  auto offset_begin = offsets.begin<size_type>();  // assumes already offset column contains offset.
-  auto offsets_minus_one = thrust::make_transform_iterator(
-    offset_begin, [offset_begin] __device__(auto i) { return i - 1; });
+  auto offset_begin  = offsets.begin<size_type>();
+  auto offset_end    = offsets.end<size_type>();
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::lower_bound(rmm::exec_policy(stream),
-                      offsets_minus_one,
-                      offsets_minus_one + offsets.size(),
-                      counting_iter,
-                      counting_iter + segment_ids.size(),
-                      segment_ids.begin());
+  thrust::transform(rmm::exec_policy(stream),
+                    counting_iter,
+                    counting_iter + segment_ids.size(),
+                    segment_ids.begin(),
+                    [offset_begin, offset_end] __device__(auto idx) {
+                      if (offset_begin == offset_end || idx < *offset_begin) { return idx; }
+                      if (idx >= *(offset_end - 1)) { return idx + 1; }
+                      return static_cast<size_type>(
+                        *thrust::upper_bound(thrust::seq, offset_begin, offset_end, idx));
+                    });
   return segment_ids;
 }
 

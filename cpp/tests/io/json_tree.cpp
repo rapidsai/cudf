@@ -773,7 +773,11 @@ std::vector<std::string> json_lines_list = {
  { "a": { "y" : 6, "z": [] }}
  { "a": { "y" : 6, "z": [2, 3, 4, 5] }}
  { "a": { "z": [4], "y" : 6 }}
- { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )"};
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )",
+  // empty list, row.
+  R"( {"a" : [], "b" : {}}
+ {"a" : []}
+ {"b" : {}})"};
 INSTANTIATE_TEST_SUITE_P(Mixed_And_Records,
                          JsonTreeTraversalTest,
                          ::testing::Combine(::testing::Values(false),

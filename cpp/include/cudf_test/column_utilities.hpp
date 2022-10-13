@@ -108,6 +108,13 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                size_type fp_ulps            = cudf::test::default_ulp);
 
 /**
+ * @brief Verifies the given column is empty
+ *
+ * @param col The column to check
+ */
+void expect_column_empty(cudf::column_view const& col);
+
+/**
  * @brief Verifies the bitwise equality of two device memory buffers.
  *
  * @param lhs The first buffer

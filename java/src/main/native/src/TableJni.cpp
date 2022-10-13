@@ -258,7 +258,15 @@ public:
       writer = *tmp_writer;
       initialized = true;
     }
-    writer->WriteTable(*arrow_tab, max_chunk);
+    if (arrow_tab->num_rows() == 0) {
+      // Arrow C++ IPC writer will not write an empty batch in the case of an
+      // empty table, so need to write an empty batch explicitly.
+      // For more please see https://issues.apache.org/jira/browse/ARROW-17912.
+      auto empty_batch = arrow::RecordBatch::MakeEmpty(arrow_tab->schema());
+      writer->WriteRecordBatch(*(*empty_batch));
+    } else {
+      writer->WriteTable(*arrow_tab, max_chunk);
+    }
   }
 
   void close() {

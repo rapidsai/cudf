@@ -855,6 +855,15 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
 }
 
 /**
+ * @copydoc cudf::test::expect_column_empty
+ */
+void expect_column_empty(cudf::column_view const& col)
+{
+  EXPECT_EQ(0, col.size());
+  EXPECT_EQ(0, col.null_count());
+}
+
+/**
  * @copydoc cudf::test::expect_equal_buffers
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
