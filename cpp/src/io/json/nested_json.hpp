@@ -343,6 +343,11 @@ reduce_to_column_tree(tree_meta_t& tree,
  * All processing is done in device memory.
  *
  */
+ table_with_metadata device_parse_nested_json2(
+  device_span<SymbolT const> input,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 table_with_metadata device_parse_nested_json(
   host_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
