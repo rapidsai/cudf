@@ -470,8 +470,7 @@ orient : string
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     Indication of expected JSON string format.
     Compatible JSON strings can be produced by ``to_json()`` with a
@@ -513,16 +512,14 @@ convert_axes : boolean, default True
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     Try to convert the axes to the proper dtypes.
 convert_dates : boolean, default True
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     List of columns to parse for dates; If True, then try
     to parse datelike columns default is True; a column label is datelike if
@@ -536,16 +533,14 @@ keep_default_dates : boolean, default True
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     If parsing dates, parse the default datelike columns.
 numpy : boolean, default False
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     Direct decoding to numpy arrays. Supports numeric
     data only, but non-numeric column and index labels are supported. Note
@@ -554,8 +549,7 @@ precise_float : boolean, default False
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     Set to enable usage of higher precision (strtod) function when
     decoding string to double values (pandas engine only). Default (False)
@@ -564,8 +558,7 @@ date_unit : string, default None
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     The timestamp unit to detect if converting dates.
     The default behavior is to try and detect the correct precision, but if
@@ -575,8 +568,7 @@ encoding : str, default is 'utf-8'
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     The encoding to use to decode py3 bytes.
     With cudf engine, only utf-8 is supported.
@@ -586,8 +578,7 @@ chunksize : integer, default None
 
     .. admonition:: Not GPU-accelerated
 
-       This parameter is only supported with pandas engine.
-       (i.e., ``engine='pandas'``)
+       This parameter is only supported with ``engine='pandas'``.
 
     Return JsonReader object for iteration.
     See the `line-delimited json docs
@@ -605,8 +596,7 @@ byte_range : list or tuple, default None
 
     .. admonition:: GPU-accelerated
 
-       This parameter is only supported with cudf engine.
-       (i.e., ``engine='cudf'``)
+       This parameter is only supported with ``engine='cudf'``.
 
     Byte range within the input file to be read.
     The first number is the offset in bytes, the second number is the range
@@ -617,8 +607,7 @@ keep_quotes : bool, default False
 
     .. admonition:: GPU-accelerated experimental feature
 
-       This parameter is only supported with cudf experimental engine.
-       (i.e., ``engine='cudf_experimental'``)
+       This parameter is only supported with ``engine='cudf_experimental'``.
 
     This parameter is only supported in ``cudf_experimental`` engine.
     If `True`, any string values are read literally (and wrapped in an
