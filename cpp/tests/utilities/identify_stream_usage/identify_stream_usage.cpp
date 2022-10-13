@@ -171,15 +171,15 @@ static std::unordered_map<std::string, void*> originals;
 
 // Event APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
-DEFINE_OVERLOAD_HOST_DEVICE(cudaEventRecord,
-                            cudaError_t,
-                            ARG(cudaEvent_t event, cudaStream_t stream),
-                            ARG(event, stream));
-
-DEFINE_OVERLOAD_HOST(cudaEventRecordWithFlags,
-                     cudaError_t,
-                     ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
-                     ARG(event, stream, flags));
+// DEFINE_OVERLOAD_HOST_DEVICE(cudaEventRecord,
+//                            cudaError_t,
+//                            ARG(cudaEvent_t event, cudaStream_t stream),
+//                            ARG(event, stream));
+//
+// DEFINE_OVERLOAD_HOST(cudaEventRecordWithFlags,
+//                     cudaError_t,
+//                     ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
+//                     ARG(event, stream, flags));
 
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
