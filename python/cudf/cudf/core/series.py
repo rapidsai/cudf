@@ -3646,7 +3646,7 @@ class DatetimeProperties:
     @_cudf_nvtx_annotate
     def nanosecond(self):
         """
-        The nanosecond of the datetime.
+        The nanoseconds of the datetime.
 
         Examples
         --------
