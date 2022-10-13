@@ -17,7 +17,7 @@ cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 project(
   IDENTIFY_STREAM_USAGE
   VERSION 0.0.1
-  LANGUAGES CXX
+  LANGUAGES CXX CUDA
 )
 
 set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
@@ -34,4 +34,15 @@ set_target_properties(
              CXX_STANDARD 17
              CXX_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
+)
+
+# Add the test file.
+include(CTest)
+
+add_executable(Tests test_default_stream_identification.cu)
+add_test(NAME default_stream_identification COMMAND Tests)
+
+set_tests_properties(
+  default_stream_identification PROPERTIES ENVIRONMENT
+                                           LD_PRELOAD=$<TARGET_FILE:identify_stream_usage>
 )
