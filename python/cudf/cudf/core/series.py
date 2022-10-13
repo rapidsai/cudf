@@ -3621,7 +3621,7 @@ class DatetimeProperties:
     @_cudf_nvtx_annotate
     def microsecond(self):
         """
-        The microsecond of the datetime.
+        The microseconds of the datetime.
 
         Examples
         --------
