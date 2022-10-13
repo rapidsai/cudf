@@ -24,6 +24,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/file_utilities.hpp>
+#include <cudf_test/stream_checking_resource_adapter.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
@@ -333,21 +334,23 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                        \
-  int main(int argc, char** argv)                                       \
-  {                                                                     \
-    ::testing::InitGoogleTest(&argc, argv);                             \
-    auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
-    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
-    auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_current_device_resource(resource.get());               \
-                                                                        \
-    auto const stream_mode = cmd_opts["stream_mode"].as<std::string>(); \
-    rmm::cuda_stream const new_default_stream{};                        \
-    if (stream_mode == "custom") {                                      \
-      const rmm::cuda_stream_view stream_view{new_default_stream};      \
-      cudf::detail::set_default_stream(stream_view);                    \
-    }                                                                   \
-                                                                        \
-    return RUN_ALL_TESTS();                                             \
+#define CUDF_TEST_PROGRAM_MAIN()                                            \
+  int main(int argc, char** argv)                                           \
+  {                                                                         \
+    ::testing::InitGoogleTest(&argc, argv);                                 \
+    auto const cmd_opts = parse_cudf_test_opts(argc, argv);                 \
+    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();           \
+    auto resource       = cudf::test::create_memory_resource(rmm_mode);     \
+    rmm::mr::set_current_device_resource(resource.get());                   \
+                                                                            \
+    auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();     \
+    rmm::cuda_stream const new_default_stream{};                            \
+    if (stream_mode == "custom") {                                          \
+      const rmm::cuda_stream_view stream_view{new_default_stream};          \
+      cudf::detail::set_default_stream(stream_view);                        \
+      auto adapter = make_stream_checking_resource_adaptor(resource.get()); \
+      rmm::mr::set_current_device_resource(&adapter);                       \
+    }                                                                       \
+                                                                            \
+    return RUN_ALL_TESTS();                                                 \
   }
