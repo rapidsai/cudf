@@ -316,8 +316,8 @@ DEFINE_OVERLOAD_HOST(cudaMallocFromPoolAsync,
 /**
  * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.
  *
- * Note the priorities:
- * - originals must be initialized first, so it is 1001.
+ * Note on priorities:
+ * - `originals` must be initialized first, so it is 1001.
  * - The function names must be added to originals next in the macro, so those are 1002.
  * - Finally, this function actually finds the original symbols so it is 1003.
  */
