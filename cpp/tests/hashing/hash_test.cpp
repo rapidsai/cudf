@@ -26,10 +26,8 @@
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
-using namespace cudf::test;
-using namespace cudf::test::iterators;
 
-constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 class HashTest : public cudf::test::BaseFixture {
 };
@@ -546,8 +544,8 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     0.f, 100.f, -100.f, float_limits::infinity(), -float_limits::infinity()};
   fixed_width_column_wrapper<int64_t> y_col{
     0L, 100L, -100L, 0x0123'4567'89ab'cdefL, -0x0123'4567'89ab'cdefL};
-  structs_column_wrapper c_col{{x_col, y_col}};
-  structs_column_wrapper const structs_col{{a_col, b_col, c_col}};
+  cudf::test::structs_column_wrapper c_col{{x_col, y_col}};
+  cudf::test::structs_column_wrapper const structs_col{{a_col, b_col, c_col}};
 
   strings_column_wrapper const strings_col({"",
                                             "The quick brown fox",
@@ -558,7 +556,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     {0., -0., -double_limits::quiet_NaN(), double_limits::lowest(), double_limits::max()});
   fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> const timestamps_col(
     {0L, 100L, -100L, long_limits::min() / 1000000, long_limits::max() / 1000000});
-  fixed_point_column_wrapper<int64_t> const decimal64_col(
+  cudf::test::fixed_point_column_wrapper<int64_t> const decimal64_col(
     {0L, 100L, -100L, -999999999999999999L, 999999999999999999L}, numeric::scale_type{-7});
   fixed_width_column_wrapper<int64_t> const longs_col(
     {0L, 100L, -100L, long_limits::min(), long_limits::max()});
@@ -566,15 +564,15 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     {0.f, -0.f, -float_limits::quiet_NaN(), float_limits::lowest(), float_limits::max()});
   fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> dates_col(
     {0, 100, -100, int_limits::min() / 100, int_limits::max() / 100});
-  fixed_point_column_wrapper<int32_t> const decimal32_col({0, 100, -100, -999999999, 999999999},
-                                                          numeric::scale_type{-3});
+  cudf::test::fixed_point_column_wrapper<int32_t> const decimal32_col(
+    {0, 100, -100, -999999999, 999999999}, numeric::scale_type{-3});
   fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, int_limits::min(), int_limits::max()});
   fixed_width_column_wrapper<int16_t> const shorts_col({0, 100, -100, -32768, 32767});
   fixed_width_column_wrapper<int8_t> const bytes_col({0, 100, -100, -128, 127});
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
-  fixed_point_column_wrapper<__int128_t> const decimal128_col(
+  cudf::test::fixed_point_column_wrapper<__int128_t> const decimal128_col(
     {static_cast<__int128>(0),
      static_cast<__int128>(100),
      static_cast<__int128>(-1),
@@ -691,27 +689,28 @@ TEST_F(SparkMurmurHash3Test, ListValues)
   df2.show(false)
   */
 
-  auto const null  = -1;
-  auto nested_list = cudf::test::lists_column_wrapper<int>({{},
-                                                            {1},
-                                                            {1, 2},
-                                                            {1, 2, 3},
-                                                            {1, 2},
-                                                            {3},
-                                                            {1},
-                                                            {2, 3},
-                                                            {1},
-                                                            {{null, 2, 3}, nulls_at({0})},
-                                                            {1, 2},
-                                                            {3},
-                                                            {{null}, nulls_at({0})},
-                                                            {1, 2},
-                                                            {},
-                                                            {3}},
-                                                           nulls_at({0, 14}));
+  auto const null = -1;
+  auto nested_list =
+    cudf::test::lists_column_wrapper<int>({{},
+                                           {1},
+                                           {1, 2},
+                                           {1, 2, 3},
+                                           {1, 2},
+                                           {3},
+                                           {1},
+                                           {2, 3},
+                                           {1},
+                                           {{null, 2, 3}, cudf::test::iterators::nulls_at({0})},
+                                           {1, 2},
+                                           {3},
+                                           {{null}, cudf::test::iterators::nulls_at({0})},
+                                           {1, 2},
+                                           {},
+                                           {3}},
+                                          cudf::test::iterators::nulls_at({0, 14}));
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 1, 2, 3, 4, 6, 8, 10, 13, 16};
-  auto list_validity        = nulls_at({0});
+  auto list_validity        = cudf::test::iterators::nulls_at({0});
   auto list_validity_buffer = cudf::test::detail::make_null_mask(list_validity, list_validity + 11);
   auto list_column          = cudf::make_lists_column(11,
                                              offsets.release(),
@@ -766,11 +765,18 @@ TEST_F(SparkMurmurHash3Test, StructOfListValues)
   */
 
   auto const null = -1;
-  auto col1       = cudf::test::lists_column_wrapper<int>(
-    {{}, {0}, {{1, null}, nulls_at({1})}, {{1, null}, nulls_at({1})}, {}, {} /*NULL*/, {2, 3}},
-    nulls_at({5}));
+  auto col1 =
+    cudf::test::lists_column_wrapper<int>({{},
+                                           {0},
+                                           {{1, null}, cudf::test::iterators::nulls_at({1})},
+                                           {{1, null}, cudf::test::iterators::nulls_at({1})},
+                                           {},
+                                           {} /*NULL*/,
+                                           {2, 3}},
+                                          cudf::test::iterators::nulls_at({5}));
   auto col2 = cudf::test::lists_column_wrapper<int>(
-    {{}, {0}, {} /*NULL*/, {}, {{null, 1}, nulls_at({0})}, {1}, {4, 5}}, nulls_at({2}));
+    {{}, {0}, {} /*NULL*/, {}, {{null, 1}, cudf::test::iterators::nulls_at({0})}, {1}, {4, 5}},
+    cudf::test::iterators::nulls_at({2}));
   auto struct_column = cudf::test::structs_column_wrapper{{col1, col2}};
 
   auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{
@@ -814,10 +820,11 @@ TEST_F(SparkMurmurHash3Test, ListOfStructValues)
 
   auto const null = -1;
   auto col1 = fixed_width_column_wrapper<int32_t>({0, null, null, 1, null, null, 2, 2, null, 2, 4},
-                                                  nulls_at({1, 2, 4, 5, 8}));
+                                                  cudf::test::iterators::nulls_at({1, 2, 4, 5, 8}));
   auto col2 = fixed_width_column_wrapper<int32_t>({0, null, null, null, 1, 1, 3, 3, null, 3, 5},
-                                                  nulls_at({1, 2, 3, 8}));
-  auto struct_column = structs_column_wrapper{{col1, col2}, {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1}};
+                                                  cudf::test::iterators::nulls_at({1, 2, 3, 8}));
+  auto struct_column =
+    cudf::test::structs_column_wrapper{{col1, col2}, {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1}};
   auto offsets       = fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 5, 7, 9, 11};
   auto list_nullmask = std::vector<bool>(1, 8);
   auto list_validity_buffer =
@@ -944,7 +951,7 @@ TEST_F(MD5HashTest, StringListsNulls)
      "All work and no play makes Jack a dull boy",
      R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
 
-  lists_column_wrapper<cudf::string_view> strings_list_col(
+  cudf::test::lists_column_wrapper<cudf::string_view> strings_list_col(
     {{""},
      {{"NULL", "A 60 character string to test MD5's message padding algorithm"}, validity},
      {"A very long (greater than 128 bytes/char string) to test a multi hash-step data point in "
@@ -1010,7 +1017,7 @@ TEST_F(MD5HashTest, TestBoolListsWithNulls)
                                               {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  lists_column_wrapper<bool> const list_col(
+  cudf::test::lists_column_wrapper<bool> const list_col(
     {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
 
   auto const input1 = cudf::table_view({col1, col2, col3});
@@ -1027,7 +1034,8 @@ template <typename T>
 class MD5HashListTestTyped : public cudf::test::BaseFixture {
 };
 
-using NumericTypesNoBools = Concat<IntegralTypesNotBool, FloatingPointTypes>;
+using NumericTypesNoBools =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(MD5HashListTestTyped, NumericTypesNoBools);
 
 TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
@@ -1042,7 +1050,7 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
                                            {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  lists_column_wrapper<T> const list_col(
+  cudf::test::lists_column_wrapper<T> const list_col(
     {{0, 0, 0}, {127}, {}, {{32, 127, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
     validity);
 
@@ -1091,9 +1099,9 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  lists_column_wrapper<T> const col1(
+  cudf::test::lists_column_wrapper<T> const col1(
     {{T(0.0)}, {T(100.0), T(-100.0)}, {min, max, nan}, {inf, -inf}});
-  lists_column_wrapper<T> const col2(
+  cudf::test::lists_column_wrapper<T> const col2(
     {{T(-0.0)}, {T(100.0), T(-100.0)}, {min, max, -nan}, {inf, -inf}});
 
   auto const input1 = cudf::table_view({col1});
