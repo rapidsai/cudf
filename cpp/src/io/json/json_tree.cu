@@ -425,21 +425,19 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
-                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
-  auto num_fields = thrust::count_if(rmm::exec_policy(stream),
-                                     d_tree.node_categories.begin(),
-                                     d_tree.node_categories.end(),
-                                     is_field_name_node);
+  auto num_fields = thrust::count(rmm::exec_policy(stream),
+                                  d_tree.node_categories.begin(),
+                                  d_tree.node_categories.end(),
+                                  node_t::NC_FN);
   // TODO two-level hashing:  one for field names
   // and another for {node-level, node_category} + field hash for the entire path
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
     cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
   auto num_nodes = d_tree.node_categories.size();
-  // std::cout<<"num_nodes: "<<num_nodes<<std::endl;
-  // std::cout<<"num_fields: "<<num_fields<<std::endl;
-  // std::cout<<"hash_size: "<<compute_hash_table_size(num_fields, 40)<<std::endl;
+  // std::cout << "num_nodes: " << num_nodes << std::endl;
+  // std::cout << "num_fields: " << num_fields << std::endl;
+  // std::cout << "hash_size: " << compute_hash_table_size(num_fields, 40) << std::endl;
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_fields, 40),
@@ -470,6 +468,8 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
   CUDF_PUSH_RANGE("insert_if");
+  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
+                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
   key_map.insert_if(iter,
                     iter + num_nodes,
                     thrust::counting_iterator<size_type>(0),  // stencil
