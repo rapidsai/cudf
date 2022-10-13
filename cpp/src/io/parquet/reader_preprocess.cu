@@ -366,14 +366,15 @@ struct start_offset_output_iterator {
 /**
  * @copydoc cudf::io::detail::parquet::preprocess_columns
  */
-std::pair<gpu::chunked_intermediate_data, std::vector<gpu::chunked_read_info>>
-reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                 hostdevice_vector<gpu::PageInfo>& pages,
-                                 size_t min_row,
-                                 size_t num_rows,
-                                 bool uses_custom_row_bounds,
-                                 size_type chunked_read_size)
+void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                                      hostdevice_vector<gpu::PageInfo>& pages,
+                                      size_t min_row,
+                                      size_t num_rows,
+                                      bool uses_custom_row_bounds,
+                                      size_type chunked_read_size)
 {
+  if (columns_preprocessed) { return; }
+
   // iterate over all input columns and determine if they contain lists so we can further
   // preprocess them.
   bool has_lists = false;
@@ -481,7 +482,8 @@ reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks
     chunked_read_size > 0 ? compute_splits(pages, id, num_rows, chunked_read_size, _stream)
                           : std::vector<gpu::chunked_read_info>{{min_row, num_rows}};
 
-  return {std::move(id), std::move(read_chunks)};
+  chunked_itm_data  = std::move(id);
+  chunked_read_info = std::move(read_chunks);
 }
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,

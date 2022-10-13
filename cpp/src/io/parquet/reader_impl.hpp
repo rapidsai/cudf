@@ -203,13 +203,12 @@ class reader::impl {
    * bounds
    * a preprocess.
    */
-  std::pair<gpu::chunked_intermediate_data, std::vector<gpu::chunked_read_info>> preprocess_columns(
-    hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-    hostdevice_vector<gpu::PageInfo>& pages,
-    size_t min_row,
-    size_t total_rows,
-    bool uses_custom_row_bounds,
-    size_type chunked_read_size);
+  void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                          hostdevice_vector<gpu::PageInfo>& pages,
+                          size_t min_row,
+                          size_t total_rows,
+                          bool uses_custom_row_bounds,
+                          size_type chunked_read_size);
 
   /**
    * TODO
@@ -260,6 +259,11 @@ class reader::impl {
   bool _strings_to_categorical = false;
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
+
+  // Variables used for chunked reading:
+  cudf::io::parquet::gpu::chunked_intermediate_data chunked_itm_data;
+  std::vector<cudf::io::parquet::gpu::chunked_read_info> chunked_read_info;
+  bool columns_preprocessed{false};
 };
 
 }  // namespace parquet

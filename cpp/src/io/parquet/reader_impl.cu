@@ -1802,16 +1802,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // TODO: make this a parameter.
   auto const chunked_read_size = 240000;
   //      auto const chunked_read_size = 0;
-  auto chunk_reads = preprocess_columns(file_data.chunks,
-                                        file_data.pages_info,
-                                        skip_rows_corrected,
-                                        num_rows_corrected,
-                                        uses_custom_row_bounds,
-                                        chunked_read_size);
+  preprocess_columns(file_data.chunks,
+                     file_data.pages_info,
+                     skip_rows_corrected,
+                     num_rows_corrected,
+                     uses_custom_row_bounds,
+                     chunked_read_size);
 
   // process each chunk. this is the part that would be externalized into multiple calls
-  auto read_info = chunk_reads.second[0];
-  return read_chunk(file_data, chunk_reads.first, read_info, uses_custom_row_bounds);
+  auto read_info = chunked_read_info[0];
+  return read_chunk(file_data, chunked_itm_data, read_info, uses_custom_row_bounds);
 }
 
 // Forward to implementation
