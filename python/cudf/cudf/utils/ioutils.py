@@ -301,8 +301,6 @@ List of column names
 
 Notes
 -----
-Support for reading files with struct columns is currently experimental,
-the output may not be as reliable as reading for other datatypes.
 {remote_data_sources}
 
 Examples
@@ -446,11 +444,6 @@ cols_as_map_type : list of column names or None, default None
     A list of column names which should be written as map type in the ORC file.
     Note that this option only affects columns of ListDtype. Names of other
     column types will be ignored.
-
-Notes
------
-Support for writing tables with struct columns is currently experimental,
-the output may not be as reliable as writing for other datatypes.
 
 See Also
 --------

@@ -2718,3 +2718,36 @@ def test_groupby_group_keys(group_keys, by):
     actual = g_group[["B", "C"]].apply(lambda x: x / x.sum())
     expected = p_group[["B", "C"]].apply(lambda x: x / x.sum())
     assert_eq(actual, expected)
+
+
+@pytest.fixture
+def df_ngroup():
+    df = cudf.DataFrame(
+        {
+            "a": [2, 2, 1, 1, 2, 3],
+            "b": [1, 2, 1, 2, 1, 2],
+            "c": ["a", "a", "b", "c", "d", "c"],
+        },
+        index=[1, 3, 5, 7, 4, 2],
+    )
+    df.index.name = "foo"
+    return df
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        lambda: "a",
+        lambda: "b",
+        lambda: ["a", "b"],
+        lambda: "c",
+        lambda: pd.Series([1, 2, 1, 2, 1, 2]),
+        lambda: pd.Series(["x", "y", "y", "x", "z", "x"]),
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+def test_groupby_ngroup(by, ascending, df_ngroup):
+    by = by()
+    expected = df_ngroup.to_pandas().groupby(by).ngroup(ascending=ascending)
+    actual = df_ngroup.groupby(by).ngroup(ascending=ascending)
+    assert_eq(expected, actual, check_dtype=False)

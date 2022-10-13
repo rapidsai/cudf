@@ -280,14 +280,15 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 gpuci_logger "Installing strings_udf"
 gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
-# only install strings_udf after cuDF is finished testing without its presence
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
 
+# retest cuDF UDFs
 cd "$WORKSPACE/python/cudf/cudf"
 gpuci_logger "Python py.test retest cuDF UDFs"
-py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+py.test -n 8 tests/test_udf_masked_ops.py --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests
+
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.

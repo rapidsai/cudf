@@ -1555,7 +1555,6 @@ def test_names_in_struct_dtype_nesting(datadir):
     assert edf.dtypes.equals(got.dtypes)
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 def test_writer_lists_structs(list_struct_buff):
     df_in = cudf.read_orc(list_struct_buff)
 
@@ -1567,7 +1566,6 @@ def test_writer_lists_structs(list_struct_buff):
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "data",
     [
@@ -1668,7 +1666,6 @@ def test_empty_statistics():
         assert stats[0]["i"].get("sum") == 1
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "equivalent_columns",
     [
