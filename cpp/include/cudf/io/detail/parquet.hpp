@@ -36,6 +36,7 @@ namespace io {
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
+class chunked_parquet_reader_options;
 class chunked_parquet_writer_options;
 
 namespace detail {
@@ -45,7 +46,7 @@ namespace parquet {
  * @brief Class to read Parquet dataset data into columns.
  */
 class reader {
- private:
+ protected:
   class impl;
   std::unique_ptr<impl> _impl;
 
@@ -66,7 +67,7 @@ class reader {
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
-  ~reader();
+  virtual ~reader();
 
   /**
    * @brief Reads the dataset as per given options.
@@ -75,7 +76,51 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options);
+  virtual table_with_metadata read(parquet_reader_options const& options);
+};
+
+/**
+ * TODO
+ *
+ * @brief The chunked_reader class
+ */
+class chunked_reader : reader {
+ public:
+  /**
+   * TODO
+   *
+   * @brief Constructor from an array of datasources
+   *
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit chunked_reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          chunked_parquet_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr);
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
+  ~chunked_reader();
+
+  /**
+   * TODO
+   *
+   * @brief has_next
+   * @return
+   */
+  bool has_next();
+
+  /**
+   * TODO
+   *
+   * @brief read_chunk
+   * @return
+   */
+  table_with_metadata read_chunk();
 };
 
 /**

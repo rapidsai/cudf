@@ -526,9 +526,19 @@ class chunked_parquet_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Destructor, calling `close()` for the reading file to release resources.
+   * @brief Destructor, destroying the internal reader instance.
    */
-  ~chunked_parquet_reader() { close(); }
+  ~chunked_parquet_reader();
+
+  /**
+   * @brief Check if there is any data of the given file has not yet processed.
+   *
+   * If the file has been closed (i.e., the `close()` function has been called), this will always
+   * return `false`.
+   *
+   * @return A boolean value indicating if there is any data left to process
+   */
+  bool has_next();
 
   /**
    * @brief Read a chunk of Parquet dataset into a set of columns.
@@ -541,30 +551,7 @@ class chunked_parquet_reader {
    *
    * @return The set of columns along with metadata
    */
-
   table_with_metadata read_chunk();
-
-  /**
-   * @brief Check if there is any data of the given file has not yet processed.
-   *
-   * If the file has been closed (i.e., the `close()` function has been called), this will always
-   * return `false`.
-   *
-   * @return A boolean value indicating if there is any data left to process
-   */
-  bool has_next()
-  {
-    // TODO:
-    // if(reader->is_close()) { return false; }
-    return skip_rows >= total_rows;
-  }
-
-  /**
-   * @brief Close the reading file to release internal resources.
-   *
-   * This should not have any effect if being called on an already closed file.
-   */
-  void close();
 
  private:
   /**
@@ -575,14 +562,9 @@ class chunked_parquet_reader {
    *  - Decompressing and processing pages.
    *  - Any other necessary preprocessing steps.
    */
-  void preprocess();
+  //  void preprocess();
 
-  // The internal instance of the reader class to perform chunked reading.
-  // TODO: Replace this class with a reader class that has interface supporting chunked reading
-  std::unique_ptr<cudf::io::detail::parquet::reader> reader;
-
-  size_type skip_rows{0};
-  size_type total_rows{0};
+  std::unique_ptr<cudf::io::detail::parquet::chunked_reader> reader;
 };
 
 /** @} */  // end of group

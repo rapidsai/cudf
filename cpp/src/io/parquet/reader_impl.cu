@@ -1717,10 +1717,10 @@ std::tuple<gpu::file_intermediate_data, size_type, size_type> reader::impl::prep
   return {std::move(file_data), skip_rows, num_rows};
 }
 
-table_with_metadata reader::impl::read_chunk(gpu::file_intermediate_data& file_data,
-                                             gpu::chunked_intermediate_data& chunk_data,
-                                             gpu::chunked_read_info const& read_info,
-                                             bool uses_custom_row_bounds)
+table_with_metadata reader::impl::read_chunk_internal(gpu::file_intermediate_data& file_data,
+                                                      gpu::chunked_intermediate_data& chunk_data,
+                                                      gpu::chunked_read_info const& read_info,
+                                                      bool uses_custom_row_bounds)
 {
   table_metadata out_metadata;
 
@@ -1811,8 +1811,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   // process each chunk. this is the part that would be externalized into multiple calls
   auto read_info = chunked_read_info[0];
-  return read_chunk(file_data, chunked_itm_data, read_info, uses_custom_row_bounds);
+  return read_chunk_internal(file_data, chunked_itm_data, read_info, uses_custom_row_bounds);
 }
+
+table_with_metadata reader::impl::read_chunk() { return table_with_metadata{}; }
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
@@ -1836,6 +1838,25 @@ table_with_metadata reader::read(parquet_reader_options const& options)
                      uses_custom_row_bounds,
                      options.get_row_groups());
 }
+
+// Forward to implementation
+chunked_reader::chunked_reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                               chunked_parquet_reader_options const& options,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+  : reader(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
+           dynamic_cast<parquet_reader_options const&>(options),
+           stream,
+           mr)
+{
+}
+
+// Destructor within this translation unit
+chunked_reader::~chunked_reader() = default;
+
+bool chunked_reader::has_next() { return _impl->has_next(); }
+
+table_with_metadata chunked_reader::read_chunk() { return _impl->read_chunk(); }
 
 }  // namespace parquet
 }  // namespace detail
