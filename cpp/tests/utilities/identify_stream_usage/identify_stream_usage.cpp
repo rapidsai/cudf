@@ -128,19 +128,25 @@ static std::unordered_map<std::string, void*> originals;
  * @param signature The function signature (must include names, not just types).
  * @parameter arguments The function arguments (names only, no types).
  */
-#define DEFINE_OVERLOAD(function, ret_type, signature, arguments) \
-  using function##_t = ret_type (*)(signature);                   \
-                                                                  \
-  __host__ ret_type function(signature)                           \
-  {                                                               \
-    check_stream_and_error(stream);                               \
-    return ((function##_t)originals["function"])(arguments);      \
+#define DEFINE_OVERLOAD(function, ret_type, signature, arguments, attributes) \
+  using function##_t = ret_type (*)(signature);                               \
+                                                                              \
+  attributes ret_type function(signature)                                     \
+  {                                                                           \
+    check_stream_and_error(stream);                                           \
+    return ((function##_t)originals["function"])(arguments);                  \
   }
 
 /**
  * @brief Helper macro to define macro arguments that contain a comma.
  */
 #define ARG(...) __VA_ARGS__
+
+#define DEFINE_OVERLOAD_HOST(function, ret_type, signature, arguments) \
+  DEFINE_OVERLOAD(function, ret_type, ARG(signature), ARG(arguments), __host__)
+
+#define DEFINE_OVERLOAD_HOST_DEVICE(function, ret_type, signature, arguments) \
+  DEFINE_OVERLOAD(function, ret_type, ARG(signature), ARG(arguments), __host__ __device__)
 
 // clang-format off
 /*
@@ -164,28 +170,28 @@ static std::unordered_map<std::string, void*> originals;
 
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
-DEFINE_OVERLOAD(cudaLaunchKernel,
-                cudaError_t,
-                ARG(const void* func,
-                    dim3 gridDim,
-                    dim3 blockDim,
-                    void** args,
-                    size_t sharedMem,
-                    cudaStream_t stream),
-                ARG(func, gridDim, blockDim, args, sharedMem, stream));
-DEFINE_OVERLOAD(cudaLaunchCooperativeKernel,
-                cudaError_t,
-                ARG(const void* func,
-                    dim3 gridDim,
-                    dim3 blockDim,
-                    void** args,
-                    size_t sharedMem,
-                    cudaStream_t stream),
-                ARG(func, gridDim, blockDim, args, sharedMem, stream));
-DEFINE_OVERLOAD(cudaLaunchHostFunc,
-                cudaError_t,
-                ARG(cudaStream_t stream, cudaHostFn_t fn, void* userData),
-                ARG(stream, fn, userData));
+DEFINE_OVERLOAD_HOST(cudaLaunchKernel,
+                     cudaError_t,
+                     ARG(const void* func,
+                         dim3 gridDim,
+                         dim3 blockDim,
+                         void** args,
+                         size_t sharedMem,
+                         cudaStream_t stream),
+                     ARG(func, gridDim, blockDim, args, sharedMem, stream));
+DEFINE_OVERLOAD_HOST(cudaLaunchCooperativeKernel,
+                     cudaError_t,
+                     ARG(const void* func,
+                         dim3 gridDim,
+                         dim3 blockDim,
+                         void** args,
+                         size_t sharedMem,
+                         cudaStream_t stream),
+                     ARG(func, gridDim, blockDim, args, sharedMem, stream));
+DEFINE_OVERLOAD_HOST(cudaLaunchHostFunc,
+                     cudaError_t,
+                     ARG(cudaStream_t stream, cudaHostFn_t fn, void* userData),
+                     ARG(stream, fn, userData));
 
 __attribute__((constructor)) void init()
 {
