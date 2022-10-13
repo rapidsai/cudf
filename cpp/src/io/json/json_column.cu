@@ -403,7 +403,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     std::string name   = "";
     auto parent_col_id = column_parent_ids[this_col_id];
     if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
-      name = "element";
+      name = list_child_name;
     } else if (column_categories[parent_col_id] == NC_FN) {
       auto field_name_col_id = parent_col_id;
       parent_col_id          = column_parent_ids[parent_col_id];
@@ -690,7 +690,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       std::vector<column_name_info> column_names{};
       column_names.emplace_back("offsets");
       column_names.emplace_back(
-        json_col.child_columns.empty() ? "element" : json_col.child_columns.begin()->first);
+        json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
       // Note: json_col modified here, reuse the memory
       auto offsets_column = std::make_unique<column>(

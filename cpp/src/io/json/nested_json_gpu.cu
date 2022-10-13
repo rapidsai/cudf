@@ -1162,9 +1162,6 @@ void make_json_column(json_column& root_column,
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
-  // Default name for a list's child column
-  std::string const list_child_name = "element";
-
   // Parse the JSON and get the token stream
   const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
@@ -1286,7 +1283,7 @@ void make_json_column(json_column& root_column,
    * (b) a list, the selected child column corresponds to single child column of
    * the list column. In this case, the child column may not exist yet.
    */
-  auto get_selected_column = [&list_child_name](std::stack<tree_node>& current_data_path) {
+  auto get_selected_column = [](std::stack<tree_node>& current_data_path) {
     json_column* selected_col = current_data_path.top().current_selected_col;
 
     // If the node does not have a selected column yet
@@ -1681,7 +1678,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       std::vector<column_name_info> column_names{};
       column_names.emplace_back("offsets");
       column_names.emplace_back(
-        json_col.child_columns.empty() ? "element" : json_col.child_columns.begin()->first);
+        json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
         cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
