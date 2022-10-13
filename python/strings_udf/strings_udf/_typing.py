@@ -23,9 +23,9 @@ target_data = ll.create_target_data(data_layout)
 
 
 # String object definitions
-class DString(types.Type):
+class UDFString(types.Type):
     def __init__(self):
-        super().__init__(name="dstring")
+        super().__init__(name="udf_string")
         llty = default_manager[self].get_value_type()
         self.size_bytes = llty.get_abi_size(target_data)
 
@@ -56,9 +56,9 @@ class stringview_model(models.StructModel):
         super().__init__(dmm, fe_type, self._members)
 
 
-@register_model(DString)
-class dstring_model(models.StructModel):
-    # from dstring.hpp:
+@register_model(UDFString)
+class udf_string_model(models.StructModel):
+    # from udf_string.hpp:
     # private:
     #   char* m_data{};
     #   cudf::size_type m_bytes{};
@@ -74,8 +74,9 @@ class dstring_model(models.StructModel):
         super().__init__(dmm, fe_type, self._members)
 
 
-any_string_ty = (StringView, DString, types.StringLiteral)
+any_string_ty = (StringView, UDFString, types.StringLiteral)
 string_view = StringView()
+udf_string = UDFString()
 
 
 class StrViewArgHandler:
@@ -93,13 +94,35 @@ class StrViewArgHandler:
     """
 
     def prepare_args(self, ty, val, **kwargs):
-        if isinstance(ty, types.CPointer) and isinstance(ty.dtype, StringView):
+        if isinstance(ty, types.CPointer) and isinstance(
+            ty.dtype, (StringView, UDFString)
+        ):
             return types.uint64, val.ptr
         else:
             return ty, val
 
 
 str_view_arg_handler = StrViewArgHandler()
+
+
+# a python object for numba to grab on to, just to have
+# something to replace with code
+def maybe_post_process_result(result):
+    pass
+
+
+@cuda_decl_registry.register_global(maybe_post_process_result)
+class MaybePostProcessResult(AbstractTemplate):
+    def generic(self, args, kws):
+        # a UDF may be typed to return a string_view in some edge cases
+        # 1. a string is returned unmodified from an input column
+        # 2. a view of a string variable is returned such as a substring
+        # in both cases the result must be promoted to udf_string to be
+        # returned. This requires a copy.
+        if len(args) == 1 and isinstance(args[0], StringView):
+            return nb_signature(udf_string, args[0])
+        else:
+            return nb_signature(args[0], args[0])
 
 
 # String functions
@@ -113,7 +136,7 @@ class StringLength(AbstractTemplate):
         if isinstance(args[0], any_string_ty) and len(args) == 1:
             # length:
             # string_view -> int32
-            # dstring -> int32
+            # udf_string -> int32
             # literal -> int32
             return nb_signature(size_type, args[0])
 

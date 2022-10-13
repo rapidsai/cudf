@@ -10,6 +10,7 @@ from cudf._lib.cpp.column.column cimport column, column_view
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from strings_udf._lib.cpp.strings_udf cimport (
+    column_from_udf_string_array as cpp_column_from_udf_string_array,
     to_string_view_array as cpp_to_string_view_array,
 )
 
@@ -22,3 +23,15 @@ def to_string_view_array(Column strings_col):
 
     device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
     return Buffer(device_buffer)
+
+
+def from_udf_string_array(DeviceBuffer d_buffer):
+    cdef size_t size = d_buffer.c_size()
+    cdef void* data = d_buffer.c_data()
+    cdef unique_ptr[column] c_result
+    # data = <void *>
+
+    with nogil:
+        c_result = move(cpp_column_from_udf_string_array(data, size))
+
+    return Column.from_unique_ptr(move(c_result))

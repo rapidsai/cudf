@@ -5,6 +5,7 @@ from functools import partial
 
 from numba import cuda, types
 from numba.core import cgutils
+from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.cudaimpl import (
@@ -13,7 +14,13 @@ from numba.cuda.cudaimpl import (
 )
 
 from strings_udf._lib.tables import get_character_flags_table_ptr
-from strings_udf._typing import size_type, string_view
+from strings_udf._typing import (
+    StringView,
+    maybe_post_process_result,
+    size_type,
+    string_view,
+    udf_string,
+)
 
 character_flags_table_ptr = get_character_flags_table_ptr()
 
@@ -105,6 +112,45 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     )
 
     return sv._getvalue()
+
+
+# utilities
+_create_udf_string_from_string_view = cuda.declare_device(
+    "udf_string_from_string_view",
+    types.void(types.CPointer(string_view), types.CPointer(udf_string)),
+)
+
+
+def call_create_udf_string_from_string_view(sv, udf_str):
+    _create_udf_string_from_string_view(sv, udf_str)
+
+
+@cuda_lower(maybe_post_process_result, types.Any)
+def maybe_post_process_result_impl(context, builder, sig, args):
+    if not isinstance(sig.args[0], StringView):
+        return args[0]
+    else:
+        sv_ptr = builder.alloca(args[0].type)
+
+        # obtain llvm type for udf_string
+        udf_str_ptr = builder.alloca(
+            default_manager[udf_string].get_value_type()
+        )
+        builder.store(args[0], sv_ptr)
+
+        _ = context.compile_internal(
+            builder,
+            call_create_udf_string_from_string_view,
+            nb_signature(
+                types.void, _STR_VIEW_PTR, types.CPointer(udf_string)
+            ),
+            (sv_ptr, udf_str_ptr),
+        )
+        result = cgutils.create_struct_proxy(udf_string)(
+            context, builder, value=builder.load(udf_str_ptr)
+        )
+
+        return result._getvalue()
 
 
 # String function implementations
