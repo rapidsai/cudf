@@ -229,7 +229,7 @@ class reader::impl {
    */
   void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
-                        gpu::chunked_intermediate_data const& id,
+                        gpu::chunk_intermediate_data const& id,
                         size_t min_row,
                         size_t total_rows,
                         bool uses_custom_row_bounds);
@@ -269,8 +269,8 @@ class reader::impl {
 
   // Variables used for chunked reading:
   cudf::io::parquet::gpu::file_intermediate_data file_itm_data;
-  cudf::io::parquet::gpu::chunked_intermediate_data chunk_itm_data;
-  std::vector<cudf::io::parquet::gpu::chunked_read_info> chunk_read_info;
+  cudf::io::parquet::gpu::chunk_intermediate_data chunk_itm_data;
+  std::vector<cudf::io::parquet::gpu::chunk_read_info> chunk_read_info;
   std::size_t current_read_chunk{0};
   bool preprocessed{false};
 };

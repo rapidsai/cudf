@@ -245,12 +245,12 @@ struct file_intermediate_data {
 };
 
 // TODO: rename?
-struct chunked_intermediate_data {
+struct chunk_intermediate_data {
   rmm::device_uvector<int> page_keys{0, rmm::cuda_stream_default};
   rmm::device_uvector<int> page_index{0, rmm::cuda_stream_default};
 };
 
-struct chunked_read_info {
+struct chunk_read_info {
   size_t skip_rows;
   size_t num_rows;
 };

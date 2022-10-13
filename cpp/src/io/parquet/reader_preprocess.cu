@@ -119,8 +119,8 @@ struct row_total_size {
   }
 };
 
-std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageInfo>& pages,
-                                                   gpu::chunked_intermediate_data const& id,
+std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo>& pages,
+                                                   gpu::chunk_intermediate_data const& id,
                                                    size_type num_rows,
                                                    size_type chunked_read_size,
                                                    rmm::cuda_stream_view stream)
@@ -237,7 +237,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
   // splits.
   // TODO: come up with a clever way to do this entirely in parallel. For now, as long as batch
   // sizes are reasonably large, this shouldn't iterate too many times
-  std::vector<gpu::chunked_read_info> splits;
+  std::vector<gpu::chunk_read_info> splits;
   {
     size_t cur_pos         = 0;
     size_t cumulative_size = 0;
@@ -261,7 +261,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
 
       auto const start_row = cur_row_count;
       cur_row_count        = h_adjusted[p].row_count;
-      splits.push_back(gpu::chunked_read_info{start_row, cur_row_count - start_row});
+      splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
       cur_pos         = p;
       cumulative_size = h_adjusted[p].size_bytes;
     }
@@ -396,7 +396,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   // intermediate data we will need for further chunked reads
-  gpu::chunked_intermediate_data id;
+  gpu::chunk_intermediate_data id;
   if (has_lists || chunked_read_size > 0) {
     // computes:
     // PageNestingInfo::size for each level of nesting, for each page.
@@ -476,9 +476,9 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   // compute splits if necessary.
-  std::vector<gpu::chunked_read_info> read_chunks =
+  std::vector<gpu::chunk_read_info> read_chunks =
     chunked_read_size > 0 ? compute_splits(pages, id, num_rows, chunked_read_size, _stream)
-                          : std::vector<gpu::chunked_read_info>{{min_row, num_rows}};
+                          : std::vector<gpu::chunk_read_info>{{min_row, num_rows}};
 
   chunk_itm_data  = std::move(id);
   chunk_read_info = std::move(read_chunks);
@@ -486,7 +486,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
-                                    gpu::chunked_intermediate_data const& id,
+                                    gpu::chunk_intermediate_data const& id,
                                     size_t min_row,
                                     size_t num_rows,
                                     bool uses_custom_row_bounds)
