@@ -231,7 +231,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to
             # the dtype of the column) here we upcast the series to the
-            # larger data type mimicing pandas
+            # larger data type mimicking pandas
             to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
             value = value.astype(to_dtype)
             if to_dtype != self._frame._column.dtype:
