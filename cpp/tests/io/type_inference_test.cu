@@ -50,9 +50,8 @@ TEST_F(TypeInference, Basic)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
-  auto const string_offset   = std::vector<int32_t>{1, 4, 7};
-  auto const string_length   = std::vector<std::size_t>{2, 2, 1};
+  auto const string_offset = std::vector<int32_t>{1, 4, 7};
+  auto const string_length = std::vector<std::size_t>{2, 2, 1};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -63,7 +62,7 @@ TEST_F(TypeInference, Basic)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
@@ -82,9 +81,8 @@ TEST_F(TypeInference, Null)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
-  auto const string_offset   = std::vector<int32_t>{1, 1, 4};
-  auto const string_length   = std::vector<std::size_t>{0, 2, 1};
+  auto const string_offset = std::vector<int32_t>{1, 1, 4};
+  auto const string_length = std::vector<std::size_t>{0, 2, 1};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -95,7 +93,7 @@ TEST_F(TypeInference, Null)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   EXPECT_EQ(res_type,
@@ -115,9 +113,8 @@ TEST_F(TypeInference, AllNull)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
-  auto const string_offset   = std::vector<int32_t>{1, 1, 1};
-  auto const string_length   = std::vector<std::size_t>{0, 0, 4};
+  auto const string_offset = std::vector<int32_t>{1, 1, 1};
+  auto const string_length = std::vector<std::size_t>{0, 0, 4};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -128,7 +125,7 @@ TEST_F(TypeInference, AllNull)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT8});  // INT8 if all nulls
@@ -147,9 +144,8 @@ TEST_F(TypeInference, String)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
-  auto const string_offset   = std::vector<int32_t>{1, 8, 12};
-  auto const string_length   = std::vector<std::size_t>{6, 3, 4};
+  auto const string_offset = std::vector<int32_t>{1, 8, 12};
+  auto const string_length = std::vector<std::size_t>{6, 3, 4};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -160,7 +156,7 @@ TEST_F(TypeInference, String)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
@@ -179,9 +175,8 @@ TEST_F(TypeInference, Bool)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
-  auto const string_offset   = std::vector<int32_t>{1, 6, 12};
-  auto const string_length   = std::vector<std::size_t>{4, 5, 5};
+  auto const string_offset = std::vector<int32_t>{1, 6, 12};
+  auto const string_length = std::vector<std::size_t>{4, 5, 5};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -192,7 +187,7 @@ TEST_F(TypeInference, Bool)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::BOOL8});
@@ -211,9 +206,8 @@ TEST_F(TypeInference, Timestamp)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 3;
-  auto const string_offset   = std::vector<int32_t>{1, 10};
-  auto const string_length   = std::vector<std::size_t>{8, 9};
+  auto const string_offset = std::vector<int32_t>{1, 10};
+  auto const string_length = std::vector<std::size_t>{8, 9};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -224,7 +218,7 @@ TEST_F(TypeInference, Timestamp)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   // All data time (quoted and unquoted) is inferred as string for now
@@ -244,9 +238,8 @@ TEST_F(TypeInference, InvalidInput)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  std::size_t constexpr size = 5;
-  auto const string_offset   = std::vector<int32_t>{1, 3, 5, 7, 9};
-  auto const string_length   = std::vector<std::size_t>{1, 1, 1, 1, 1};
+  auto const string_offset = std::vector<int32_t>{1, 3, 5, 7, 9};
+  auto const string_length = std::vector<std::size_t>{1, 1, 1, 1, 1};
   rmm::device_vector<int32_t> d_string_offset{string_offset};
   rmm::device_vector<std::size_t> d_string_length{string_length};
 
@@ -257,7 +250,7 @@ TEST_F(TypeInference, InvalidInput)
     infer_data_type(options.json_view(),
                     {d_string_scalar.data(), static_cast<std::size_t>(d_string_scalar.size())},
                     d_col_strings,
-                    size,
+                    string_offset.size(),
                     stream);
 
   // Invalid input is inferred as string for now
