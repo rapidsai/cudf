@@ -1787,7 +1787,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   auto [file_data, skip_rows_corrected, num_rows_corrected] =
     preprocess_file(skip_rows, num_rows, row_group_list);
 
-  // todo: fix this (should be empty instead of null)
+  // todo: fix this (empty output may be incorrect)
   if (!file_data.has_data) { return table_with_metadata{}; }
 
   // - compute column sizes and allocate output buffers.
