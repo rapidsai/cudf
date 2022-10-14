@@ -684,8 +684,8 @@ class aggregate_reader_metadata {
         // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
         // data stored) so add me to the list.
         if (schema_elem.num_children == 0) {
-          input_column_info& input_col =
-            input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+          input_column_info& input_col = input_columns.emplace_back(
+            input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
           // set up child output column for one-level encoding list
           if (schema_elem.is_one_level_list()) {
