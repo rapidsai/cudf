@@ -114,6 +114,24 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     return sv._getvalue()
 
 
+@cuda_lowering_registry.lower_cast(string_view, udf_string)
+def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
+    sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    udf_str_ptr = builder.alloca(default_manager[toty].get_value_type())
+    builder.store(val, sv_ptr)
+    _ = context.compile_internal(
+        builder,
+        call_create_udf_string_from_string_view,
+        nb_signature(types.void, _STR_VIEW_PTR, types.CPointer(udf_string)),
+        (sv_ptr, udf_str_ptr),
+    )
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+
+    return result._getvalue()
+
+
 # utilities
 _create_udf_string_from_string_view = cuda.declare_device(
     "udf_string_from_string_view",

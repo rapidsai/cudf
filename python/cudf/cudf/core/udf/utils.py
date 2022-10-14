@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List
 
 import cachetools
 import cupy as cp
+import numba
 import numpy as np
 from numba import cuda, typeof
 from numba.core.errors import TypingError
@@ -31,6 +32,7 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 arg_handlers: List[Any] = []
 ptx_files: List[Any] = []
+udf_return_type_map: Dict[Any, Any] = {}
 
 
 @_cudf_nvtx_annotate
@@ -54,6 +56,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
     ptx, output_type = cudautils.compile_udf(func, compile_sig)
+
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
@@ -64,6 +67,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
         if not isinstance(numba_output_type, MaskedType)
         else numba_output_type.value_type
     )
+    result = udf_return_type_map.get(result, result)
 
     # _get_udf_return_type will throw a TypingError if the user tries to use
     # a field in the row containing an unsupported dtype, except in the
@@ -142,9 +146,12 @@ def _construct_signature(frame, return_type, args):
     actually JIT the kernel itself later, accounting for types
     and offsets. Skips columns with unsupported dtypes.
     """
-
+    if return_type in udf_return_type_map.values():
+        return_type = CPointer(return_type)
+    else:
+        return_type = return_type[::1]
     # Tuple of arrays, first the output data array, then the mask
-    return_type = Tuple((return_type[::1], boolean[::1]))
+    return_type = Tuple((return_type, boolean[::1]))
     offsets = []
     sig = [return_type, int64]
     for col in _supported_cols_from_frame(frame).values():
@@ -213,7 +220,11 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
-    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    try:
+        np_return_type = numpy_support.as_dtype(scalar_return_type)
+    except numba.core.errors.NumbaNotImplementedError:
+        # TODO: fix
+        np_return_type = np.dtype("object")
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
