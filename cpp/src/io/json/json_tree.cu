@@ -504,38 +504,6 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 }
 
 /**
- * @brief Translates sorted parent_node_ids to parent_indices with indices from scatter_indices
- *
- * @param scatter_indices The sorted order of parent_node_ids
- * @param parent_node_ids The sorted parent_node_ids
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return Translated parent_indices pointing to sorted node_ids positions
- */
-rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
-  device_span<size_type const> scatter_indices,
-  device_span<NodeIndexT const> parent_node_ids,
-  rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-  auto const num_nodes      = scatter_indices.size();
-  auto const gather_indices = cudf::detail::scatter_to_gather(
-    scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
-
-  rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
-  // gather, except parent sentinels
-  thrust::transform(rmm::exec_policy(stream),
-                    parent_node_ids.begin(),
-                    parent_node_ids.end(),
-                    parent_indices.begin(),
-                    [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
-                      return (parent_node_id == parent_node_sentinel)
-                               ? parent_node_sentinel
-                               : gather_indices[parent_node_id];
-                    });
-  return parent_indices;
-};
-
-/**
  * @brief Computes row indices of each node in the hierarchy.
  * 5. Generate row_offset.
  *   a. stable_sort by parent_col_id.
