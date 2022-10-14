@@ -18,10 +18,7 @@ def test_read_json(tmp_path):
     ).reset_index(drop=True)
     json_path = str(tmp_path / "data-*.json")
     df1.to_json(json_path)
-    with dask.config.set({"dataframe.backend": "cudf"}):
-        df2 = dd.read_json(json_path)
-        assert isinstance(df2, dask_cudf.DataFrame)
-    #df2 = dask_cudf.read_json(json_path)
+    df2 = dask_cudf.read_json(json_path)
     dd.assert_eq(df1, df2)
 
     # file path test

@@ -435,10 +435,6 @@ try:
     from dask.dataframe.backends import DataFrameBackendEntrypoint
 
     class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
-        def __init__(self):
-            # Importing this class will already guarentee
-            # that data-dispatch functions are registered
-            pass
 
         def from_dict(self, data, npartitions, orient="columns", **kwargs):
             if orient != "columns":
@@ -491,4 +487,5 @@ try:
             return ddf
 
 except ImportError:
-    pass
+    # Dask version does not support backend dispatching
+    CudfBackendEntrypoint = None
