@@ -342,4 +342,33 @@ TEST_F(DataChunkSourceTest, BgzipCompressedSourceVirtualOffsets)
   test_source(input, *source);
 }
 
+TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleCompressedGZipBlock)
+{
+  auto const filename = temp_env->get_temp_filepath("bgzip_source_offsets_single_compressed_block");
+  std::string const input{"collection unit brings"};
+  std::string head_garbage{"garbage"};
+  // make the head_garbage large enough so the local offset will overrun the compressed block size
+  for (int i = 0; i < 10; i++) {
+    head_garbage += head_garbage;
+  }
+  std::string const tail_garbage{"GARBAGE"};
+  std::size_t begin_compressed_offset{};
+  std::size_t end_compressed_offset{};
+  std::size_t const begin_local_offset{head_garbage.size()};
+  std::size_t const end_local_offset{head_garbage.size() + input.size()};
+  {
+    std::ofstream output_stream{filename};
+    cudf::io::text::detail::bgzip::write_compressed_block(output_stream,
+                                                          head_garbage + input + tail_garbage);
+    cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
+  }
+
+  auto const source =
+    cudf::io::text::make_source_from_bgzip_file(filename,
+                                                begin_compressed_offset << 16 | begin_local_offset,
+                                                end_compressed_offset << 16 | end_local_offset);
+
+  test_source(input, *source);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
