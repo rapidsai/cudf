@@ -16,6 +16,9 @@ __version__ = _version.get_versions()["version"]
 
 logger = get_logger()
 
+# TODO: embed this in the .so and read dynamically?
+strings_udf_ptx_version = (11, 5)
+
 
 def _get_appropriate_file(sms, cc):
     filtered_sms = list(filter(lambda x: x[0] <= cc, sms))
@@ -26,7 +29,10 @@ def _get_appropriate_file(sms, cc):
 
 
 def maybe_patch_numba_linker(driver_version):
-    if driver_version < (11, 5):
+    # Numba thinks cubinkinker is only needed if the driver is older than the ctk
+    # but when strings_udf is present, it might also need to patch because the PTX
+    # file strings_udf relies on may be newer than the driver as well
+    if driver_version < strings_udf_ptx_version:
         logger.debug("Driver version %s.%s needs patching" % driver_version)
         if _numba_version_ok:
             logger.debug("Patching Numba Linker")
