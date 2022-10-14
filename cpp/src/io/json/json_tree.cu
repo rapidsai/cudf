@@ -543,19 +543,16 @@ rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
  *   c. propagate to non-list leaves from parent list node by recursion
  *
  * pre-condition:
- *  scatter_indices is a sequence, representing node_id.
  *  d_tree.node_categories, d_tree.parent_node_ids, parent_col_id are in order of node_id.
  * post-condition: row_offsets is in order of node_id.
  *  parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
- * @param scatter_indices node_id
  * @param parent_col_id parent node's column id
  * @param d_tree Tree representation of the JSON string
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return row_offsets
  */
-rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatter_indices,
-                                                   rmm::device_uvector<NodeIndexT>&& parent_col_id,
+rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndexT>&& parent_col_id,
                                                    tree_meta_t& d_tree,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
@@ -563,6 +560,10 @@ rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatte
   CUDF_FUNC_RANGE();
   auto const num_nodes = d_tree.node_categories.size();
   // TODO generate scatter_indices sequences here itself
+  CUDF_PUSH_RANGE("seq");
+  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
+  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
+  CUDF_POP_RANGE();
   CUDF_PUSH_RANGE("sort parent_col_id");
   thrust::stable_sort_by_key(
     rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
@@ -777,14 +778,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     CUDF_POP_RANGE();
   }
 
-  CUDF_PUSH_RANGE("seq");
-  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-  CUDF_POP_RANGE();
-
   // 5. Generate row_offset.
-  auto row_offsets =
-    compute_row_offsets(scatter_indices, std::move(new_parent_col_id), d_tree, stream, mr);
+  auto row_offsets = compute_row_offsets(std::move(new_parent_col_id), d_tree, stream, mr);
   return std::tuple{std::move(new_col_id), std::move(row_offsets)};
 }
 
