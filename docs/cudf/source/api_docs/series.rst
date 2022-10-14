@@ -267,7 +267,6 @@ Datetime properties
    minute
    second
    microsecond
-   millisecond
    nanosecond
    dayofweek
    weekday
