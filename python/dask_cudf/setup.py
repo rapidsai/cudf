@@ -92,6 +92,6 @@ setup(
     install_requires=install_requires,
     extras_require=extras_require,
     entry_points={
-        "dask.backends": ["cudf=dask_cudf.backends:CudfBackendEntrypoint"],
+        "dask.dataframe.backends": ["cudf=dask_cudf.backends:CudfBackendEntrypoint"],
     },
 )
