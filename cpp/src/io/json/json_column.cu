@@ -724,9 +724,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 }
 
 table_with_metadata device_parse_nested_json2(device_span<SymbolT const> d_input,
-                                             cudf::io::json_reader_options const& options,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                              cudf::io::json_reader_options const& options,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -737,7 +737,8 @@ table_with_metadata device_parse_nested_json2(device_span<SymbolT const> d_input
     return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
-  thrust::host_vector<char> h_input(thrust::device_pointer_cast(d_input.begin()), thrust::device_pointer_cast(d_input.end()));
+  thrust::host_vector<char> h_input(thrust::device_pointer_cast(d_input.begin()),
+                                    thrust::device_pointer_cast(d_input.end()));
   print_tree(h_input, gpu_tree, stream);
 #endif
 
