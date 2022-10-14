@@ -48,25 +48,92 @@
 struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ParquetChunkedReaderTest, Test)
+// TEST_F(ParquetChunkedReaderTest, Test)
+//{
+//  std::mt19937 gen(6542);
+//  std::bernoulli_distribution bn(0.7f);
+//  auto values = thrust::make_counting_iterator(0);
+
+//  constexpr cudf::size_type num_rows = 40000;
+//  cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
+//  cudf::test::fixed_width_column_wrapper<int64_t> b(values, values + num_rows);
+
+//  cudf::table_view t({a, b});
+//  cudf::io::parquet_writer_options opts = cudf::io::parquet_writer_options::builder(
+//    cudf::io::sink_info{"/tmp/chunked_splits.parquet"}, t);
+//  cudf::io::write_parquet(opts);
+
+//  cudf::io::parquet_reader_options in_opts =
+//    cudf::io::parquet_reader_options::builder(cudf::io::source_info{"/tmp/chunked_splits.parquet"});
+//  auto result = cudf::io::read_parquet(in_opts);
+//  printf("\nResult size: %d\n\n", result.tbl->num_rows());
+//}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedRead)
 {
   std::mt19937 gen(6542);
   std::bernoulli_distribution bn(0.7f);
-  // auto valids =
-  //    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
   auto values = thrust::make_counting_iterator(0);
 
+  printf("test, line %d\n\n", __LINE__);
   constexpr cudf::size_type num_rows = 40000;
   cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
   cudf::test::fixed_width_column_wrapper<int64_t> b(values, values + num_rows);
+
+  printf("test, line %d\n\n", __LINE__);
 
   cudf::table_view t({a, b});
   cudf::io::parquet_writer_options opts = cudf::io::parquet_writer_options::builder(
     cudf::io::sink_info{"/tmp/chunked_splits.parquet"}, t);
   cudf::io::write_parquet(opts);
 
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{"/tmp/chunked_splits.parquet"});
-  auto result = cudf::io::read_parquet(in_opts);
-  printf("result size: %d\n", result.tbl->num_rows());
+  printf("test, line %d\n\n", __LINE__);
+
+  cudf::io::chunked_parquet_reader_options in_opts =
+    cudf::io::chunked_parquet_reader_options::builder(
+      cudf::io::source_info{"/tmp/chunked_splits.parquet"});
+
+  printf("test, line %d\n\n", __LINE__);
+  fflush(stdout);
+
+  cudf::io::chunked_parquet_reader reader(in_opts);
+
+#if 0
+  printf("test, line %d\n\n", __LINE__);
+  fflush(stdout);
+  reader.has_next();
+
+  printf("test, line %d\n\n", __LINE__);
+  fflush(stdout);
+  reader.has_next();
+
+  printf("test, line %d\n\n", __LINE__);
+  fflush(stdout);
+
+  {
+    auto result = reader.read_chunk();
+    printf("Result size: %d\n", result.tbl->num_rows());
+    fflush(stdout);
+  }
+
+  {
+    auto result = reader.read_chunk();
+    printf("Result size: %d\n", result.tbl->num_rows());
+    fflush(stdout);
+  }
+
+  printf("test, line %d\n\n", __LINE__);
+  fflush(stdout);
+  reader.has_next();
+
+#else
+  int count{0};
+  while (reader.has_next()) {
+    printf("\n\nhas next %d\n\n", count++);
+    fflush(stdout);
+    auto result = reader.read_chunk();
+    printf("Result size: %d\n", result.tbl->num_rows());
+    fflush(stdout);
+  }
+#endif
 }

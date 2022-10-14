@@ -416,6 +416,21 @@ class chunked_parquet_reader_options : public parquet_reader_options {
 
  public:
   /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit chunked_parquet_reader_options() = default;
+
+  /**
+   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   *
+   * @param src Source information to read parquet file
+   * @return Builder to build reader options
+   */
+  static chunked_parquet_reader_options_builder builder(source_info const& src);
+
+  /**
    * @brief Return the maximum number of bytes that will be read by
    * `chunked_parquet_reader::read()`.
    *

@@ -97,7 +97,7 @@ class reader::impl {
    * @brief read_completed
    * @return
    */
-  bool has_next() { return current_read_chunk < chunk_read_info.size(); }
+  bool has_next();
 
  private:
   table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);

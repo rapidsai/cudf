@@ -1357,9 +1357,15 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
                                     size_t min_row,
                                     size_t total_rows)
 {
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
     return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
   };
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   // Count the number of string dictionary entries
   // NOTE: Assumes first page in the chunk is always the dictionary page
@@ -1373,6 +1379,9 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   // directly due to variable-sized elements
   auto str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
     total_str_dict_indexes, _stream);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   // TODO (dm): hd_vec should have begin and end iterator members
   size_t sum_max_depths =
@@ -1389,6 +1398,9 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths, _stream);
   auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, _stream);
   auto chunk_offsets       = std::vector<size_t>();
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, str_ofs = 0, chunk_off = 0; c < chunks.size(); c++) {
@@ -1468,18 +1480,33 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
     page_count += chunks[c].max_num_pages;
   }
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   chunks.host_to_device(_stream);
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   if (total_str_dict_indexes > 0) {
     gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), _stream);
   }
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
+  printf("read total_rows = %d, min_row = %d\n", (int)total_rows, (int)min_row);
+  fflush(stdout);
+
   gpu::DecodePageData(pages, chunks, total_rows, min_row, _stream);
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
   _stream.synchronize();
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
@@ -1514,6 +1541,9 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
     }
   }
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < pages.size(); idx++) {
     gpu::PageInfo* pi = &pages[idx];
@@ -1537,7 +1567,13 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
     }
   }
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   _stream.synchronize();
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
@@ -1731,6 +1767,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
   std::vector<std::unique_ptr<column>> out_columns;
   out_columns.reserve(_output_columns.size());
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   // allocate outgoing columns
   allocate_columns(file_itm_data.chunks,
                    file_itm_data.pages_info,
@@ -1739,12 +1778,20 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
                    read_info.num_rows,
                    uses_custom_row_bounds);
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
+  printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows, (int)read_info.num_rows);
+
   // decoding column data
   decode_page_data(file_itm_data.chunks,
                    file_itm_data.pages_info,
                    file_itm_data.page_nesting_info,
                    read_info.skip_rows,
                    read_info.num_rows);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   // create the final output cudf columns
   for (size_t i = 0; i < _output_columns.size(); ++i) {
@@ -1755,12 +1802,18 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     out_columns.emplace_back(make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
   }
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   return finalize_output(out_metadata, out_columns);
 }
 
 table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
                                                   std::vector<std::unique_ptr<column>>& out_columns)
 {
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
     column_name_info& col_name = out_metadata.schema_info.emplace_back("");
@@ -1778,6 +1831,9 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
   out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
                             out_metadata.per_file_user_data[0].end()};
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
@@ -1817,7 +1873,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
 table_with_metadata reader::impl::read_chunk()
 {
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   if (!preprocessed) {
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+
     [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
 
     // todo: fix this (empty output may be incorrect)
@@ -1842,9 +1904,64 @@ table_with_metadata reader::impl::read_chunk()
                          chunked_read_size);
     }
     preprocessed = true;
+
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
   }
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
   return read_chunk_internal(false);
+}
+
+bool reader::impl::has_next()
+{
+  printf("prepr: %d\n", (int)preprocessed);
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
+  if (!preprocessed) {
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+    [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
+
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+    // todo: fix this (empty output may be incorrect)
+    if (file_itm_data.has_data) {
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
+
+      // - compute column sizes and allocate output buffers.
+      //   important:
+      //   for nested schemas, we have to do some further preprocessing to determine:
+      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+      //    of
+      //      nesting and it's size is the row count)
+      //
+      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+      // purposes of decoding.
+      // TODO: make this a parameter.
+      auto const chunked_read_size = 240000;
+      //      auto const chunked_read_size = 0;
+      preprocess_columns(file_itm_data.chunks,
+                         file_itm_data.pages_info,
+                         skip_rows_corrected,
+                         num_rows_corrected,
+                         true /*uses_custom_row_bounds*/,
+                         chunked_read_size);
+
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
+    }
+    preprocessed = true;
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+  }
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+  return current_read_chunk < chunk_read_info.size();
 }
 
 // Forward to implementation

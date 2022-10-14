@@ -86,6 +86,13 @@ parquet_reader_options_builder parquet_reader_options::builder(source_info const
   return parquet_reader_options_builder{src};
 }
 
+// Returns builder for parquet_reader_options
+chunked_parquet_reader_options_builder chunked_parquet_reader_options::builder(
+  source_info const& src)
+{
+  return chunked_parquet_reader_options_builder{src};
+}
+
 // Returns builder for parquet_writer_options
 parquet_writer_options_builder parquet_writer_options::builder(sink_info const& sink,
                                                                table_view const& table)
