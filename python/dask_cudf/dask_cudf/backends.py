@@ -487,8 +487,7 @@ try:
 
             # HDF5 reader not yet implemented in cudf
             with config.set({"dataframe.backend": "pandas"}):
-                ddf = from_dask_dataframe(dd.read_hdf(*args, **kwargs))
-            return ddf
+                return from_dask_dataframe(dd.read_hdf(*args, **kwargs))
 
 except ImportError:
     pass
