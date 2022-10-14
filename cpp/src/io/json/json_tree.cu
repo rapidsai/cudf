@@ -131,7 +131,9 @@ struct node_ranges {
 /**
  * @brief Returns stable sorted keys and its sorted order
  *
- * Uses cub stable radix sort
+ * Uses cub stable radix sort. The order is internally generated, hence it saves a copy and memory.
+ * Since the key and order is returned, using double buffer helps to avoid extra copy to user
+ * provided output iterator.
  *
  * @tparam IndexType sorted order type
  * @tparam KeyType key type
