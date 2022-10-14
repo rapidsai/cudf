@@ -33,7 +33,7 @@ namespace strings {
 namespace detail {
 
 // Copy reprog primitive values
-reprog_device::reprog_device(reprog& prog)
+reprog_device::reprog_device(reprog const& prog)
   : _startinst_id{prog.get_start_inst()},
     _num_capturing_groups{prog.groups_count()},
     _insts_count{prog.insts_count()},
@@ -45,22 +45,8 @@ reprog_device::reprog_device(reprog& prog)
 }
 
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string_view pattern, rmm::cuda_stream_view stream)
+  reprog const& h_prog, rmm::cuda_stream_view stream)
 {
-  return reprog_device::create(
-    pattern, regex_flags::MULTILINE, capture_groups::NON_CAPTURE, stream);
-}
-
-// Create instance of the reprog that can be passed into a device kernel
-std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string_view pattern,
-  regex_flags const flags,
-  capture_groups const capture,
-  rmm::cuda_stream_view stream)
-{
-  // compile pattern into host object
-  reprog h_prog = reprog::create_from(pattern, flags, capture);
-
   // compute size to hold all the member data
   auto const insts_count   = h_prog.insts_count();
   auto const classes_count = h_prog.classes_count();
@@ -144,7 +130,7 @@ void reprog_device::destroy() { delete this; }
 
 std::size_t reprog_device::working_memory_size(int32_t num_threads) const
 {
-  return relist::alloc_size(_insts_count, num_threads) * 2;
+  return compute_working_memory_size(insts_counts(), num_threads);
 }
 
 std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(
@@ -174,6 +160,11 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 int32_t reprog_device::compute_shared_memory_size() const
 {
   return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
+}
+
+std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)
+{
+  return relist::alloc_size(insts_count, num_threads) * 2;
 }
 
 }  // namespace detail

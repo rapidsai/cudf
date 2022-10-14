@@ -128,7 +128,7 @@ class reprog {
   [[nodiscard]] reinst const* insts_data() const;
 
   [[nodiscard]] int32_t classes_count() const;
-  [[nodiscard]] reclass& class_at(int32_t id);
+  [[nodiscard]] reclass const& class_at(int32_t id) const;
   [[nodiscard]] reclass const* classes_data() const;
 
   [[nodiscard]] const int32_t* starts_data() const;

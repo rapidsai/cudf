@@ -24,6 +24,9 @@
 
 namespace cudf {
 namespace strings {
+
+struct regex_program;
+
 /**
  * @addtogroup strings_contains
  * @{
@@ -60,6 +63,32 @@ std::unique_ptr<column> contains_re(
 
 /**
  * @brief Returns a boolean column identifying rows which
+ * match the given regex_program object
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["abc", "123", "def456"]
+ * p = regex_program::create("\\d+")
+ * r = contains_re(s, p)
+ * r is now [false, true, true]
+ * @endcode
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @param strings Strings instance for this operation
+ * @param prog Regex program instance
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
+ */
+std::unique_ptr<column> contains_re(
+  strings_column_view const& strings,
+  regex_program const& prog,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a boolean column identifying rows which
  * matching the given regex pattern but only at the beginning the string.
  *
  * @code{.pseudo}
@@ -83,6 +112,32 @@ std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
   std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a boolean column identifying rows which
+ * matching the given regex_program object but only at the beginning the string.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["abc", "123", "def456"]
+ * p = regex_program::create("\\d+")
+ * r = matches_re(s, p)
+ * r is now [false, true, false]
+ * @endcode
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @param strings Strings instance for this operation
+ * @param prog Regex program instance
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
+ */
+std::unique_ptr<column> matches_re(
+  strings_column_view const& strings,
+  regex_program const& prog,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -110,6 +165,32 @@ std::unique_ptr<column> count_re(
   strings_column_view const& strings,
   std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the number of times the given regex_program's pattern
+ * matches in each string
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["abc", "123", "def45"]
+ * p = regex_program::create("\\d")
+ * r = count_re(s, p)
+ * r is now [0, 3, 2]
+ * @endcode
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @param strings Strings instance for this operation
+ * @param prog Regex program instance
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New INT32 column with counts for each string
+ */
+std::unique_ptr<column> count_re(
+  strings_column_view const& strings,
+  regex_program const& prog,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

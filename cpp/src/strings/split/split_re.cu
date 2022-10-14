@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -184,13 +185,13 @@ struct tokens_transform_fn {
 };
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string_view pattern,
+                                regex_program const& prog,
                                 split_direction direction,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
+  CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
 
   auto const strings_count = input.size();
 
@@ -200,8 +201,9 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
     return std::make_unique<table>(std::move(results));
   }
 
-  // create the regex device prog from the given pattern
-  auto d_prog    = reprog_device::create(pattern, stream);
+  // create device object from regex_program
+  auto d_prog = prog.get_impl()->create_prog_device(stream);
+
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
@@ -252,18 +254,19 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string_view pattern,
+                                        regex_program const& prog,
                                         split_direction direction,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
+  CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
 
   auto const strings_count = input.size();
 
-  // create the regex device prog from the given pattern
-  auto d_prog    = reprog_device::create(pattern, stream);
+  // create device object from regex_program
+  auto d_prog = prog.get_impl()->create_prog_device(stream);
+
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
@@ -289,39 +292,39 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 }  // namespace
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string_view pattern,
+                                regex_program const& prog,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return split_re(input, pattern, split_direction::FORWARD, maxsplit, stream, mr);
+  return split_re(input, prog, split_direction::FORWARD, maxsplit, stream, mr);
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string_view pattern,
+                                        regex_program const& prog,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  return split_record_re(input, pattern, split_direction::FORWARD, maxsplit, stream, mr);
+  return split_record_re(input, prog, split_direction::FORWARD, maxsplit, stream, mr);
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
-                                 std::string_view pattern,
+                                 regex_program const& prog,
                                  size_type maxsplit,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return split_re(input, pattern, split_direction::BACKWARD, maxsplit, stream, mr);
+  return split_re(input, prog, split_direction::BACKWARD, maxsplit, stream, mr);
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
-                                         std::string_view pattern,
+                                         regex_program const& prog,
                                          size_type maxsplit,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  return split_record_re(input, pattern, split_direction::BACKWARD, maxsplit, stream, mr);
+  return split_record_re(input, prog, split_direction::BACKWARD, maxsplit, stream, mr);
 }
 
 }  // namespace detail
@@ -334,7 +337,17 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  auto const h_prog = regex_program::create(pattern);
+  return detail::split_re(input, *h_prog, maxsplit, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<table> split_re(strings_column_view const& input,
+                                regex_program const& prog,
+                                size_type maxsplit,
+                                rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::split_re(input, prog, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
@@ -343,7 +356,17 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  auto const h_prog = regex_program::create(pattern);
+  return detail::split_record_re(input, *h_prog, maxsplit, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> split_record_re(strings_column_view const& input,
+                                        regex_program const& prog,
+                                        size_type maxsplit,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::split_record_re(input, prog, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
@@ -352,7 +375,17 @@ std::unique_ptr<table> rsplit_re(strings_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  auto const h_prog = regex_program::create(pattern);
+  return detail::rsplit_re(input, *h_prog, maxsplit, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<table> rsplit_re(strings_column_view const& input,
+                                 regex_program const& prog,
+                                 size_type maxsplit,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::rsplit_re(input, prog, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
@@ -361,7 +394,18 @@ std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_record_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  auto const h_prog = regex_program::create(pattern);
+  return detail::rsplit_record_re(input, *h_prog, maxsplit, cudf::default_stream_value, mr);
 }
+
+std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
+                                         regex_program const& prog,
+                                         size_type maxsplit,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::rsplit_record_re(input, prog, maxsplit, cudf::default_stream_value, mr);
+}
+
 }  // namespace strings
 }  // namespace cudf

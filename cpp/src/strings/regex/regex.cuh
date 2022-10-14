@@ -25,6 +25,8 @@
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 
+#include <cuda_runtime.h>
+
 #include <memory>
 
 namespace cudf {
@@ -56,6 +58,8 @@ struct alignas(16) reclass_device {
   __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
 };
 
+class reprog;
+
 /**
  * @brief Regex program of instructions/data for a specific regex pattern.
  *
@@ -78,32 +82,14 @@ class reprog_device {
   reprog_device& operator=(reprog_device&&) = default;
 
   /**
-   * @brief Create device program instance from a regex pattern.
+   * @brief Create device program instance from a regex program
    *
-   * The number of strings is needed to compute the state data size required when evaluating the
-   * regex.
-   *
-   * @param pattern The regex pattern to compile.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @return The program device object.
-   */
-  static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string_view pattern, rmm::cuda_stream_view stream);
-
-  /**
-   * @brief Create the device program instance from a regex pattern
-   *
-   * @param pattern The regex pattern to compile
-   * @param re_flags Regex flags for interpreting special characters in the pattern
-   * @param capture Control how capture groups are processed
+   * @param prog The regex program to create from
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return The program device object
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string_view pattern,
-    regex_flags const re_flags,
-    capture_groups const capture,
-    rmm::cuda_stream_view stream);
+    reprog const& prog, rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
@@ -270,7 +256,7 @@ class reprog_device {
                                          cudf::size_type& end,
                                          cudf::size_type const group_id = 0) const;
 
-  reprog_device(reprog&);
+  reprog_device(reprog const&);
 
   int32_t _startinst_id;          // first instruction id
   int32_t _num_capturing_groups;  // instruction groups
@@ -288,6 +274,16 @@ class reprog_device {
   void* _buffer{};           // working memory buffer
   int32_t _thread_count{};   // threads available in working memory
 };
+
+/**
+ * @brief Return the size in bytes needed for working memory to
+ * execute insts_count instructions in parallel over num_threads threads.
+ *
+ * @param num_threads Number of parallel threads (usually one per string in a strings column)
+ * @param insts_count Number of instructions from a compiled regex pattern
+ * @return Number of bytes needed for working memory
+ */
+std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count);
 
 }  // namespace detail
 }  // namespace strings
