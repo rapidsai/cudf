@@ -13,7 +13,7 @@
 # =============================================================================
 
 # This function finds thrust and sets any additional necessary environment variables.
-function(find_and_configure_thrust )
+function(find_and_configure_thrust)
 
   include(${rapids-cmake-dir}/cpm/thrust.cmake)
   include(${rapids-cmake-dir}/cpm/package_override.cmake)
@@ -27,15 +27,20 @@ function(find_and_configure_thrust )
   set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/lib")
 
   # Find or install Thrust with our custom set of patches
-  rapids_cpm_thrust(NAMESPACE cudf BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+  rapids_cpm_thrust(
+    NAMESPACE cudf
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+  )
 
   if(Thrust_SOURCE_DIR)
     # Store where CMake can find our custom Thrust install
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(
-      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/cmake/thrust]=] cudf-exports
+      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/cmake/thrust]=]
+      cudf-exports
     )
   endif()
 endfunction()
 
-find_and_configure_thrust( )
+find_and_configure_thrust()
