@@ -179,41 +179,46 @@ struct node_ranges {
 };
 
 /**
- * @brief Returns stable sorted key and its sorted order
+ * @brief Returns stable sorted keys and its sorted order
  *
- * Uses cub stable radix sort
+ * Uses cub stable radix sort. The order is internally generated, hence it saves a copy and memory.
+ * Since the key and order is returned, using double buffer helps to avoid extra copy to user
+ * provided output iterator.
  *
  * @tparam IndexType sorted order type
  * @tparam KeyType key type
- * @param key key to sort
+ * @param keys keys to sort
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return A pair of sorted key and its sorted order
+ * @return Sorted keys and indices producing that sorted order
  */
 template <typename IndexType = size_t, typename KeyType>
 std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_sorted_key_order(
-  cudf::device_span<KeyType const> key, rmm::cuda_stream_view stream)
+  cudf::device_span<KeyType const> keys, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
   // Determine temporary device storage requirements
-  rmm::device_uvector<KeyType> key1(key.size(), stream);
-  rmm::device_uvector<KeyType> key2(key.size(), stream);
-  rmm::device_uvector<IndexType> order1(key.size(), stream);
-  rmm::device_uvector<IndexType> order2(key.size(), stream);
-  cub::DoubleBuffer<IndexType> order(order1.data(), order2.data());
-  cub::DoubleBuffer<KeyType> key_buffer(key1.data(), key2.data());
+  rmm::device_uvector<KeyType> keys_buffer1(keys.size(), stream);
+  rmm::device_uvector<KeyType> keys_buffer2(keys.size(), stream);
+  rmm::device_uvector<IndexType> order_buffer1(keys.size(), stream);
+  rmm::device_uvector<IndexType> order_buffer2(keys.size(), stream);
+  cub::DoubleBuffer<IndexType> order_buffer(order_buffer1.data(), order_buffer2.data());
+  cub::DoubleBuffer<KeyType> keys_buffer(keys_buffer1.data(), keys_buffer2.data());
   size_t temp_storage_bytes = 0;
-  cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, key_buffer, order, key.size());
+  cub::DeviceRadixSort::SortPairs(
+    nullptr, temp_storage_bytes, keys_buffer, order_buffer, keys.size());
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
-  thrust::copy(rmm::exec_policy(stream), key.begin(), key.end(), key1.begin());
-  thrust::sequence(rmm::exec_policy(stream), order1.begin(), order1.end());
+  thrust::copy(rmm::exec_policy(stream), keys.begin(), keys.end(), keys_buffer1.begin());
+  thrust::sequence(rmm::exec_policy(stream), order_buffer1.begin(), order_buffer1.end());
 
   cub::DeviceRadixSort::SortPairs(
-    d_temp_storage.data(), temp_storage_bytes, key_buffer, order, key.size());
+    d_temp_storage.data(), temp_storage_bytes, keys_buffer, order_buffer, keys.size());
 
-  return std::pair{key_buffer.Current() == key1.data() ? std::move(key1) : std::move(key2),
-                   order.Current() == order1.data() ? std::move(order1) : std::move(order2)};
+  return std::pair{keys_buffer.Current() == keys_buffer1.data() ? std::move(keys_buffer1)
+                                                                : std::move(keys_buffer2),
+                   order_buffer.Current() == order_buffer1.data() ? std::move(order_buffer1)
+                                                                  : std::move(order_buffer2)};
 }
 
 /**
@@ -312,14 +317,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                            tokens.begin(),
                                            node_levels.begin(),
                                            is_node);
-    CUDF_EXPECTS(node_levels_end - node_levels.begin() == num_nodes, "node level count mismatch");
+    CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
+                 "node level count mismatch");
   }
 
   // Node parent ids:
   // previous push node_id transform, stable sort by level, segmented scan with Max, reorder.
-  // This algorithms is a more generalized logical stack.
-  // TODO: make it own function.
   rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream, mr);
+  // This block of code is generalized logical stack algorithm. TODO: make this a seperate function.
   {
     rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
     thrust::copy_if(rmm::exec_policy(stream),
@@ -337,17 +342,18 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     // else -1
     auto first_childs_parent_token_id = [tokens_gpu =
                                            tokens.begin()] __device__(auto i) -> NodeIndexT {
-      if (i <= 0) return -1;
-      if (tokens_gpu[i - 1] == token_t::StructBegin || tokens_gpu[i - 1] == token_t::ListBegin)
+      if (i <= 0) { return -1; }
+      if (tokens_gpu[i - 1] == token_t::StructBegin or tokens_gpu[i - 1] == token_t::ListBegin) {
         return i - 1;
-      else if (tokens_gpu[i - 1] == token_t::FieldNameEnd)
+      } else if (tokens_gpu[i - 1] == token_t::FieldNameEnd) {
         return i - 2;
-      else if (tokens_gpu[i - 1] == token_t::StructMemberBegin &&
-               (tokens_gpu[i - 2] == token_t::StructBegin ||
-                tokens_gpu[i - 2] == token_t::ListBegin))
+      } else if (tokens_gpu[i - 1] == token_t::StructMemberBegin and
+                 (tokens_gpu[i - 2] == token_t::StructBegin ||
+                  tokens_gpu[i - 2] == token_t::ListBegin)) {
         return i - 2;
-      else
+      } else {
         return -1;
+      }
     };
 
     thrust::transform(

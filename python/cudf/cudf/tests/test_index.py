@@ -2783,3 +2783,15 @@ def test_index_null_values():
     gidx = cudf.Index([1.0, None, 3, 0, None])
     with pytest.raises(ValueError):
         gidx.values
+
+
+def test_index_error_list_index():
+    s = cudf.Series([[1, 2], [2], [4]])
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "Unsupported column type passed to create an "
+            "Index: <class 'cudf.core.column.lists.ListColumn'>"
+        ),
+    ):
+        cudf.Index(s)

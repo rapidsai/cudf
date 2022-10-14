@@ -2633,6 +2633,11 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
     0, [string_per_row](cudf::size_type idx) { return idx * string_per_row; });
   cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offset_iter,
                                                                     offset_iter + num_rows + 1);
+
+  auto _c3_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 200; });
+  std::vector<bool> c3_valids(num_rows);
+  std::copy(_c3_valids, _c3_valids + num_rows, c3_valids.begin());
   auto _c3_list =
     cudf::make_lists_column(num_rows,
                             offsets.release(),
@@ -2646,7 +2651,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   c3_children.push_back(std::move(c3_list));
   c3_children.push_back(c3_ints.release());
   c3_children.push_back(c3_floats.release());
-  cudf::test::structs_column_wrapper _c3(std::move(c3_children));
+  cudf::test::structs_column_wrapper _c3(std::move(c3_children), c3_valids);
   auto c3 = cudf::purge_nonempty_nulls(static_cast<cudf::structs_column_view>(_c3));
 
   // write it out
