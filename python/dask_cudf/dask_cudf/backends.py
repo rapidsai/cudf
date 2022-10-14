@@ -431,12 +431,13 @@ def sizeof_cudf_series_index(obj):
 
 
 try:
+
     # Define "cudf" backend engine to be registered with Dask
     from dask.dataframe.backends import DataFrameBackendEntrypoint
 
     class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
-
-        def from_dict(self, data, npartitions, orient="columns", **kwargs):
+        @staticmethod
+        def from_dict(data, npartitions, orient="columns", **kwargs):
             if orient != "columns":
                 raise ValueError(f"orient={orient} is not supported")
             return dd.from_pandas(
@@ -444,27 +445,31 @@ try:
                 npartitions=npartitions,
             )
 
-        def read_parquet(self, *args, engine=None, **kwargs):
-            from .io.parquet import CudfEngine
+        @staticmethod
+        def read_parquet(*args, engine=None, **kwargs):
+            from dask_cudf.io.parquet import CudfEngine
 
-            with config.set({"dataframe.backend.library": "pandas"}):
+            with config.set({"dataframe.backend": "pandas"}):
                 return dd.read_parquet(
                     *args,
                     engine=CudfEngine,
                     **kwargs,
                 )
 
-        def read_json(self, *args, engine=None, **kwargs):
-            with config.set({"dataframe.backend.library": "pandas"}):
+        @staticmethod
+        def read_json(*args, engine=None, **kwargs):
+            with config.set({"dataframe.backend": "pandas"}):
                 return dd.read_json(*args, engine=cudf.read_json, **kwargs)
 
-        def read_orc(self, *args, **kwargs):
-            from .io import read_orc
+        @staticmethod
+        def read_orc(*args, **kwargs):
+            from dask_cudf.io import read_orc
 
             return read_orc(*args, **kwargs)
 
-        def read_csv(self, *args, **kwargs):
-            from .io import read_csv
+        @staticmethod
+        def read_csv(*args, **kwargs):
+            from dask_cudf.io import read_csv
 
             chunksize = kwargs.pop("chunksize", None)
             blocksize = kwargs.pop("blocksize", "default")
@@ -476,16 +481,14 @@ try:
                 **kwargs,
             )
 
-        def read_hdf(self, *args, **kwargs):
+        @staticmethod
+        def read_hdf(*args, **kwargs):
+            from dask_cudf import from_dask_dataframe
+
             # HDF5 reader not yet implemented in cudf
-            with config.set({"dataframe.backend.library": "pandas"}):
-                ddf = self.move_from_pandas(dd.read_hdf(*args, **kwargs))
-            if isinstance(ddf._meta, pd.DataFrame):
-                return ddf.map_partitions(cudf.DataFrame.from_pandas)
-            elif isinstance(ddf._meta, pd.Series):
-                return ddf.map_partitions(cudf.Series.from_pandas)
+            with config.set({"dataframe.backend": "pandas"}):
+                ddf = from_dask_dataframe(dd.read_hdf(*args, **kwargs))
             return ddf
 
 except ImportError:
-    # Dask version does not support backend dispatching
-    CudfBackendEntrypoint = None
+    pass
