@@ -3423,3 +3423,37 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
         sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
     )
     assert_eq(actual, expected)
+
+
+def test_str_find_multiple():
+    s = cudf.Series(["strings", "to", "search", "in"])
+    t = cudf.Series(["a", "s", "g", "i", "o", "r"])
+
+    expected = cudf.Series(
+        [
+            [-1, 0, 5, 3, -1, 2],
+            [-1, -1, -1, -1, 1, -1],
+            [2, 0, -1, -1, -1, 3],
+            [-1, -1, -1, 0, -1, -1],
+        ]
+    )
+
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+    s = cudf.Index(s)
+    t = cudf.Index(t)
+
+    expected.index = s
+
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+
+def test_str_find_multiple_error():
+    s = cudf.Series(["strings", "to", "search", "in"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "patterns can only be a Series/Index, got: <class 'str'>"
+        ),
+    ):
+        s.str.find_multiple("a")

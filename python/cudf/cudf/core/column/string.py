@@ -3623,6 +3623,54 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
+    def find_multiple(self, patterns: SeriesOrIndex) -> SeriesOrIndex:
+        """
+        Find all first occurrences of patterns in the Series/Index.
+
+        Parameters
+        ----------
+        patterns : Series of Index
+            Patters to search for in the given Series/Index.
+
+        Returns
+        -------
+        Series
+            A Series with a list of all indices
+            if the pattern's first occurrence.
+            -1 if a pattern is not found.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["strings", "to", "search", "in"])
+        >>> s
+        0    strings
+        1         to
+        2     search
+        3         in
+        dtype: object
+        >>> t = cudf.Series(["a", "s", "g", "i", "o", "r"])
+        >>> s.str.find_multiple(t)
+        0       [-1, 0, 5, 3, -1, 2]
+        1    [-1, -1, -1, -1, 1, -1]
+        2      [2, 0, -1, -1, -1, 3]
+        3    [-1, -1, -1, 0, -1, -1]
+        dtype: list
+        """
+        if not isinstance(patterns, (cudf.Series, cudf.Index)):
+            raise TypeError(
+                "patterns can only be a Series/Index, "
+                f"got: {type(patterns)}"
+            )
+
+        return cudf.Series(
+            libstrings.find_multiple(self._column, patterns._column),
+            index=self._parent.index
+            if isinstance(self._parent, cudf.Series)
+            else self._parent,
+            name=self._parent.name,
+        )
+
     def isempty(self) -> SeriesOrIndex:
         """
         Check whether each string is an empty string.
