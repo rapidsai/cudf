@@ -187,10 +187,26 @@ def pop_thread_spill_lock():
     _thread_spill_locks[_id] = (spill_lock, count - 1)
 
 
-def with_spill_lock(read_only_columns=False, memory_usage=None):
+def with_spill_lock(*, read_only_columns=False):
+    """Decorator to set spill lock within a function automatically.
+
+    All calls to `SpillManager.get_ptr()` within the decorated function will
+    use a spill lock with a lifetime bound to the function execution.
+
+    Parameters
+    ----------
+    read_only_columns : bool
+        Mark all columns found in the arguments to the decorated function
+        as read-only. This is an in-place operation, which does nothing if
+        spilling is disabled. Making columns as ready-only, makes it
+        possible to unspill the underlying buffers partially.
+    """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            if read_only_columns:
+                mark_columns_as_read_only_inplace((args, kwargs))
             push_thread_spill_lock()
             try:
                 return func(*args, **kwargs)

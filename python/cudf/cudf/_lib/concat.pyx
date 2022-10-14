@@ -45,7 +45,7 @@ def concat_columns(object columns):
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@with_spill_lock(read_only_columns=True)
 def concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views

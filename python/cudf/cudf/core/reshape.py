@@ -10,7 +10,6 @@ import pandas as pd
 import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._typing import Dtype
-from cudf.core.buffer import mark_columns_as_read_only_inplace
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 
@@ -234,8 +233,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     if not objs:
         raise ValueError("All objects passed were None")
-
-    mark_columns_as_read_only_inplace(objs)
 
     # Return for single object
     if len(objs) == 1:

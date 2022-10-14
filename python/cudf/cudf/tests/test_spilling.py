@@ -342,6 +342,10 @@ def test_mark_columns_as_read_only(manager: SpillManager):
 def test_concat_of_spilled_views(manager: SpillManager):
     df_base = cudf.DataFrame({"a": range(10)})
     df1, df2 = df_base.iloc[0:1], df_base.iloc[1:3]
+    # We access `null_count` to cache it before spilling otherwise the
+    # preprocessing in `cudf.concat()` will trigger an unspill of the columns.
+    df1["a"].null_count
+    df2["a"].null_count
     manager.spill_to_device_limit(0)
     assert len(manager.base_buffers()) == 1
     assert gen_df.is_spilled(df_base)
