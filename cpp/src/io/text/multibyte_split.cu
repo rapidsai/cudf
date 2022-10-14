@@ -259,7 +259,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
     auto const thread_state = thread_multistate.max_tail();
     auto const is_match     = i < thread_input_size and thread_state == delim.size();
     thread_match_mask[i / 32] |= uint32_t{is_match} << (i % 32);
-    thread_offset = thread_offset + int{is_match};
+    thread_offset += output_offset{is_match};
   }
 
   // STEP 4: Scan flags to determine absolute thread output offset
@@ -322,7 +322,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     auto const is_match = i < thread_input_size and thread_chars[i] == delim;
     thread_match_mask[i / 32] |= uint32_t{is_match} << (i % 32);
-    thread_offset = thread_offset + int{is_match};
+    thread_offset += output_offset{is_match};
   }
 
   // STEP 3: Scan flags to determine absolute thread output offset
