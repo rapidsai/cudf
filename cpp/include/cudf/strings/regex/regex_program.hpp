@@ -52,7 +52,19 @@ struct regex_program {
                                                regex_flags flags      = regex_flags::DEFAULT,
                                                capture_groups capture = capture_groups::EXTRACT);
 
+  /**
+   * @brief Move constructor
+   *
+   * @param other Object to move from
+   */
   regex_program(regex_program&& other);
+
+  /**
+   * @brief Move operator assignment
+   *
+   * @param other Object to move from
+   * @return this object
+   */
   regex_program& operator=(regex_program&& other);
 
   /**
@@ -100,6 +112,7 @@ struct regex_program {
   /**
    * @brief Return the pattern used to create this instance
    *
+   * @param num_threads Number of parallel threads for computation
    * @return regex pattern as a string
    */
   std::size_t compute_working_memory_size(int32_t num_threads) const;
