@@ -536,155 +536,6 @@ rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
 };
 
 /**
- * @brief Generates column id and parent column id for each node from the node_level sorted inputs
- *
- * 4. Per-Level Processing: Propagate parent node ids for each level.
- *   For each level,
- *     a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
- *     b. stable sort by {parent_col_id, node_type}
- *     c. scan sum of unique {parent_col_id, node_type}
- *     d. scatter the col_id back to stable node_level order (using scatter_indices)
- *
- * pre-condition: All input arguments are stable sorted by node_level (stable in node_id order)
- * post-condition: Returned column_id, parent_col_id are level sorted.
- * @param node_type Unique id to identify node type, field with different name has different id.
- * @param parent_indices Parent node indices in the sorted node_level order
- * @param d_level_boundaries The boundaries of each level in the sorted node_level order
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return column_id, parent_column_id
- */
-std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
-  device_span<size_type> node_type,        // level sorted
-  device_span<NodeIndexT> parent_indices,  // level sorted
-  device_span<size_type const> d_level_boundaries,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-
-  auto const num_nodes = node_type.size();
-  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
-  rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
-  if (num_nodes == 0) { return {std::move(col_id), std::move(parent_col_id)}; }
-  CUDF_PUSH_RANGE("cid: seq");
-  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-  CUDF_POP_RANGE();
-  CUDF_PUSH_RANGE("cid: scatter1");
-  // scatter 1 to level_boundaries alone, useful for scan later
-  thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_constant_iterator(1),
-                  thrust::make_constant_iterator(1) + d_level_boundaries.size() - 1,
-                  d_level_boundaries.begin(),
-                  col_id.begin());
-  CUDF_POP_RANGE();
-  CUDF_PUSH_RANGE("cid: D2H LB");
-  auto level_boundaries = cudf::detail::make_std_vector_async(d_level_boundaries, stream);
-  CUDF_POP_RANGE();
-  CUDF_PUSH_RANGE("cid: fill");
-  // Initialize First level node's node col_id to 0
-  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
-  // Initialize First level node's parent_col_id to parent_node_sentinel sentinel
-  thrust::fill(rmm::exec_policy(stream),
-               parent_col_id.begin(),
-               parent_col_id.begin() + level_boundaries[0],
-               parent_node_sentinel);
-  CUDF_POP_RANGE();
-
-  // Per-level processing
-  auto const num_levels = level_boundaries.size();
-  for (size_t level = 1; level < num_levels; level++) {
-    CUDF_SCOPED_RANGE("cid: level" + std::to_string(level));
-    CUDF_PUSH_RANGE("gather");
-    // Gather the each node's parent's column id for the nodes of the current level
-    thrust::gather(rmm::exec_policy(stream),
-                   parent_indices.data() + level_boundaries[level - 1],
-                   parent_indices.data() + level_boundaries[level],
-                   col_id.data(),
-                   parent_col_id.data() + level_boundaries[level - 1]);
-    CUDF_POP_RANGE();
-    CUDF_PUSH_RANGE("sort");
-
-    // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
-    // we need to split to 2 Radix sorts.
-    // Secondary sort on node_type
-
-    thrust::stable_sort_by_key(
-      rmm::exec_policy(stream),
-      node_type.data() + level_boundaries[level - 1],
-      node_type.data() + level_boundaries[level],
-      thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
-                                scatter_indices.begin()));
-    // Primary sort on parent_col_id
-    thrust::stable_sort_by_key(
-      rmm::exec_policy(stream),
-      parent_col_id.begin() + level_boundaries[level - 1],
-      parent_col_id.begin() + level_boundaries[level],
-      thrust::make_zip_iterator(node_type.data() + level_boundaries[level - 1],
-                                scatter_indices.begin()));
-    CUDF_POP_RANGE();
-    CUDF_PUSH_RANGE("transform");
-
-    auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
-                                              node_type.data() + level_boundaries[level - 1]);
-    auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
-    // Compares two adjacent items, beginning with the first and second item from the current level.
-    // Writes flags to the index of the rhs item.
-    // First index holds next col_id from previous level.
-    thrust::transform(rmm::exec_policy(stream),
-                      adjacent_pair_it + 1,
-                      adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
-                      col_id.data() + level_boundaries[level - 1] + 1,
-                      [] __device__(auto adjacent_pair) -> size_type {
-                        auto const lhs = thrust::get<0>(adjacent_pair);
-                        auto const rhs = thrust::get<1>(adjacent_pair);
-                        return lhs != rhs ? 1 : 0;
-                      });
-    CUDF_POP_RANGE();
-    CUDF_PUSH_RANGE("scan");
-
-    // includes previous level last col_id to continue the index.
-    thrust::inclusive_scan(rmm::exec_policy(stream),
-                           col_id.data() + level_boundaries[level - 1],
-                           col_id.data() + level_boundaries[level] + (level != num_levels - 1),
-                           // +1 only for not-last-levels, for next level start col_id
-                           col_id.data() + level_boundaries[level - 1]);
-    CUDF_POP_RANGE();
-
-    // scatter to restore original order.
-    auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
-    {
-      CUDF_SCOPED_RANGE("cid: restore");
-      rmm::device_uvector<NodeIndexT> tmp_col_id(num_nodes_per_level, stream);
-      rmm::device_uvector<NodeIndexT> tmp_parent_col_id(num_nodes_per_level, stream);
-      thrust::scatter(rmm::exec_policy(stream),
-                      thrust::make_zip_iterator(col_id.begin() + level_boundaries[level - 1],
-                                                parent_col_id.data() + level_boundaries[level - 1]),
-                      thrust::make_zip_iterator(col_id.begin() + level_boundaries[level],
-                                                parent_col_id.data() + level_boundaries[level]),
-                      scatter_indices.begin(),
-                      thrust::make_zip_iterator(tmp_col_id.begin(), tmp_parent_col_id.begin()));
-      thrust::copy(rmm::exec_policy(stream),
-                   tmp_col_id.begin(),
-                   tmp_col_id.end(),
-                   col_id.begin() + level_boundaries[level - 1]);
-      thrust::copy(rmm::exec_policy(stream),
-                   tmp_parent_col_id.begin(),
-                   tmp_parent_col_id.end(),
-                   parent_col_id.begin() + level_boundaries[level - 1]);
-    }
-    CUDF_PUSH_RANGE("seq");
-    thrust::sequence(rmm::exec_policy(stream),
-                     scatter_indices.begin(),
-                     scatter_indices.begin() + num_nodes_per_level);
-    CUDF_POP_RANGE();
-  }
-
-  return {std::move(col_id), std::move(parent_col_id)};
-}
-
-/**
  * @brief Computes row indices of each node in the hierarchy.
  * 5. Generate row_offset.
  *   a. stable_sort by parent_col_id.
@@ -776,19 +627,14 @@ Algorithm:
   b. Convert the node categories to node types.
      Node type is defined as node category enum value if it is not a field node,
      otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
-2. Preprocessing: Translate parent node ids after sorting by level.
-  a. sort by level
-  b. get gather map of sorted indices
-  c. translate parent_node_ids to new sorted indices
-3. Find level boundaries.
-   copy_if index of first unique values of sorted levels.
-4. Per-Level Processing: Propagate parent node ids for each level.
-  For each level,
-    a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
-    b. stable sort by {parent_col_id, node_type}
-    c. scan sum of unique {parent_col_id, node_type}
-    d. scatter the col_id back to stable node_level order (using scatter_indices)
-  Restore original node_id order
+2. Set operation on entire path of each node
+  a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent until
+root. b. While creating hashmap, transform node id to unique node ids that are inserted into the
+hash map This mimicks set operation with hash map.
+3. Generate col_id:
+  a. gather unique node ids from hash map.
+  b. sort and use binary search to generate column ids.
+  c. Translate parent node ids to parent column ids.
 5. Generate row_offset.
   a. stable_sort by parent_col_id.
   b. scan_by_key {parent_col_id} (required only on nodes whose parent is a list)
@@ -931,86 +777,10 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     CUDF_POP_RANGE();
   }
 
-  // 2. Preprocessing: Translate parent node ids after sorting by level.
-  //   a. sort by level
-  //   b. get gather map of sorted indices
-  //   c. translate parent_node_ids to sorted indices
-
   CUDF_PUSH_RANGE("seq");
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
   CUDF_POP_RANGE();
-
-  /*
-  rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
-  auto out_pid =
-    thrust::make_zip_iterator(scatter_indices.data(), parent_node_ids.data(), node_type.data());
-  // Uses cub radix sort. sort by level
-  CUDF_PUSH_RANGE("sort-by-level");
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                             d_tree.node_levels.data(),
-                             d_tree.node_levels.data() + num_nodes,
-                             out_pid);
-  CUDF_POP_RANGE();
-
-  rmm::device_uvector<NodeIndexT> parent_indices =
-    translate_sorted_parent_node_indices(scatter_indices, parent_node_ids, stream);
-  // TODO optimize memory usage: parent_node_ids is no longer needed
-
-  // 3. Find level boundaries.
-  auto level_boundaries = [&]() {
-    if (d_tree.node_levels.is_empty()) return rmm::device_uvector<size_type>{0, stream};
-    CUDF_PUSH_RANGE("level-boundaries");
-    // Already node_levels is sorted
-    auto max_level = d_tree.node_levels.back_element(stream);
-    rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);
-    // TODO try reduce_by_key
-    auto level_end =
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(1),
-                      thrust::make_counting_iterator<size_type>(num_nodes + 1),
-                      level_boundaries.begin(),
-                      [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
-                        return index == num_nodes || node_levels[index] != node_levels[index - 1];
-                      });
-    CUDF_EXPECTS(thrust::distance(level_boundaries.begin(), level_end) == max_level + 1,
-                 "num_levels != max_level + 1");
-    CUDF_POP_RANGE();
-    return level_boundaries;
-  };
-
-  // 4. Per-Level Processing: Propagate parent node ids for each level.
-  auto [col_id, parent_col_id] = generate_column_id(node_type,       // level sorted
-                                                    parent_indices,  // level sorted
-                                                    level_boundaries(),
-                                                    stream,
-                                                    mr);
-
-  // restore original order of col_id, parent_col_id and used d_tree members
-  {
-    CUDF_SCOPED_RANGE("restore-order");
-    rmm::device_uvector<NodeIndexT> tmp_col_id(num_nodes, stream);
-    rmm::device_uvector<NodeIndexT> tmp_parent_col_id(num_nodes, stream);
-    rmm::device_uvector<TreeDepthT> tmp_node_levels(num_nodes, stream);
-    CUDF_PUSH_RANGE("scatter");
-    thrust::scatter(
-      rmm::exec_policy(stream),
-      thrust::make_zip_iterator(col_id.begin(), parent_col_id.begin(), d_tree.node_levels.begin()),
-      thrust::make_zip_iterator(col_id.end(), parent_col_id.end(), d_tree.node_levels.end()),
-      scatter_indices.begin(),
-      thrust::make_zip_iterator(
-        tmp_col_id.begin(), tmp_parent_col_id.begin(), tmp_node_levels.begin()));
-    CUDF_POP_RANGE();
-    col_id             = std::move(tmp_col_id);
-    parent_col_id      = std::move(tmp_parent_col_id);
-    d_tree.node_levels = std::move(tmp_node_levels);
-    CUDF_PUSH_RANGE("seq2");
-    thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-    CUDF_POP_RANGE();
-  }
-  // auto gpu_col_id1 = translate_col_id(cudf::detail::make_std_vector_async(col_id, stream));
-  // print_vec(gpu_col_id1, "gpu_col_id1", to_int);
-  //*/
 
   // 5. Generate row_offset.
   auto row_offsets =
