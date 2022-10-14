@@ -83,15 +83,7 @@ fields = [
     "hour",
     "minute",
     "second",
-    pytest.param(
-        "microsecond",
-        marks=pytest.mark.xfail(
-            reason="https://github.com/pandas-dev/pandas/issues/49073"
-        ),
-    ),
-    # Pandas supports 'second', 'microsecond' & 'nanosecond'
-    # but weirdly left out 'millisecond', hence can't have 'millisecond'
-    # in this list.
+    "microsecond",
     "nanosecond",
     "weekday",
     "dayofweek",
@@ -2052,17 +2044,3 @@ def test_datetime_constructor(data, dtype):
     actual = cudf.DatetimeIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
-
-
-# Pandas supports 'second', 'microsecond' & 'nanosecond'
-# but weirdly left out 'millisecond', hence can't compare to
-# a pandas API.
-def test_datetime_millisecond_property():
-    data = pd.date_range("2000-01-01", periods=3, freq="ms")
-
-    gsr = cudf.Series(data)
-
-    assert_eq(gsr.dt.millisecond, cudf.Series([0, 1, 2], dtype="int16"))
-
-    gi = cudf.Index(data)
-    assert_eq(gi.millisecond, cudf.Index([0, 1, 2], dtype="int16"))

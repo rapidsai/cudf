@@ -2089,9 +2089,13 @@ class DatetimeIndex(GenericIndex):
                '2000-01-01 00:00:00.000002'],
               dtype='datetime64[ns]')
         >>> datetime_index.microsecond
-        Int16Index([0, 1, 2], dtype='int16')
+        Int32Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
-        return self._get_dt_field("microsecond")
+        return as_index(
+            (self._values.get_dt_field("millisecond") * 1000)
+            + self._values.get_dt_field("microsecond"),
+            name=self.name,
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
