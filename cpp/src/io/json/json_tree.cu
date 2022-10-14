@@ -129,29 +129,29 @@ struct node_ranges {
 };
 
 /**
- * @brief Returns stable sorted key and its sorted order
+ * @brief Returns stable sorted keys and its sorted order
  *
  * Uses cub stable radix sort
  *
  * @tparam IndexType sorted order type
  * @tparam KeyType key type
- * @param key key to sort
+ * @param keys keys to sort
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return A pair of sorted key and its sorted order
+ * @return Sorted keys and indices producing that sorted order
  */
 template <typename IndexType = size_t, typename KeyType>
 std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_sorted_key_order(
-  cudf::device_span<KeyType const> key, rmm::cuda_stream_view stream)
+  cudf::device_span<KeyType const> keys, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
   // Determine temporary device storage requirements
-  rmm::device_uvector<KeyType> key1(key.size(), stream);
-  rmm::device_uvector<KeyType> key2(key.size(), stream);
-  rmm::device_uvector<IndexType> order1(key.size(), stream);
-  rmm::device_uvector<IndexType> order2(key.size(), stream);
-  cub::DoubleBuffer<IndexType> order(order1.data(), order2.data());
-  cub::DoubleBuffer<KeyType> key_buffer(key1.data(), key2.data());
+  rmm::device_uvector<KeyType> keys_buffer1(key.size(), stream);
+  rmm::device_uvector<KeyType> keys_buffer2(key.size(), stream);
+  rmm::device_uvector<IndexType> order_buffer1(key.size(), stream);
+  rmm::device_uvector<IndexType> order_buffer2(key.size(), stream);
+  cub::DoubleBuffer<IndexType> order_buffer(order_buffer1.data(), order_buffer2.data());
+  cub::DoubleBuffer<KeyType> keys_buffer(keys_buffer1.data(), keys_buffer2.data());
   size_t temp_storage_bytes = 0;
   cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, key_buffer, order, key.size());
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
@@ -253,7 +253,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                            tokens.begin(),
                                            node_levels.begin(),
                                            is_node);
-    CUDF_EXPECTS(node_levels_end - node_levels.begin() == num_nodes, "node level count mismatch");
+    CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes, "node level count mismatch");
   }
 
   // Node parent ids:
