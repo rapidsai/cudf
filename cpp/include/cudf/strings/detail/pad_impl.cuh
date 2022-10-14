@@ -25,6 +25,18 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+/**
+ * @brief Return the size in bytes of padding d_str to width characters using a fill character
+ * with byte length of fill_char_size
+ *
+ * Pad does not perform truncation. That is, If `d_str.length() > width` then `d_str.size_bytes()`
+ * is returned.
+ *
+ * @param d_str String to pad
+ * @param width Number of characters for the padded string result
+ * @param fill_char_size Size of the fill character in bytes
+ * @return The number of bytes required for the pad
+ */
 __device__ size_type compute_padded_size(string_view d_str,
                                          size_type width,
                                          size_type fill_char_size)
@@ -36,6 +48,18 @@ __device__ size_type compute_padded_size(string_view d_str,
   return bytes;
 }
 
+/**
+ * @brief Pad d_str with fill_char into output up to width characters
+ *
+ * Pad does not perform truncation. That is, If `d_str.length() > width` then
+ * then d_str is copied into output.
+ *
+ * @tparam side Specifies where fill_char is added to d_str
+ * @param d_str String to pad
+ * @param width Number of characters for the padded string result
+ * @param fill_char Size of the fill character in bytes
+ * @param output Device memory to copy the padded string into
+ */
 template <side_type side = side_type::RIGHT>
 __device__ void pad_impl(cudf::string_view d_str,
                          cudf::size_type width,
@@ -70,6 +94,19 @@ __device__ void pad_impl(cudf::string_view d_str,
   }
 }
 
+/**
+ * @brief Prepend d_str with '0' into output up to width characters
+ *
+ * Pad does not perform truncation. That is, If `d_str.length() > width` then
+ * then d_str is copied into output.
+ *
+ * If d_str starts with a sign character ('-' or '+') then '0' padding
+ * starts after the sign.
+ *
+ * @param d_str String to pad
+ * @param width Number of characters for the padded string result
+ * @param output Device memory to copy the padded string into
+ */
 __device__ void zfill_impl(cudf::string_view d_str, cudf::size_type width, char* output)
 {
   auto length = d_str.length();

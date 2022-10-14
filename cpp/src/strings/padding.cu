@@ -38,17 +38,6 @@ namespace strings {
 namespace detail {
 namespace {
 
-__device__ size_type compute_padded_size(string_view d_str,
-                                         size_type width,
-                                         size_type fill_char_size)
-{
-  auto const length = d_str.length();
-  auto bytes        = d_str.size_bytes();
-  if (width > length)                            // no truncating;
-    bytes += fill_char_size * (width - length);  // add padding
-  return bytes;
-}
-
 struct compute_pad_output_length_fn {
   column_device_view d_strings;
   size_type width;
