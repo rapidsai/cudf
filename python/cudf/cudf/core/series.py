@@ -3594,31 +3594,6 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def millisecond(self):
-        """
-        The milliseconds of the datetime.
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> import cudf
-        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
-        ...         periods=3, freq="ms"))
-        >>> datetime_series
-        0    2000-01-01 00:00:00.000
-        1    2000-01-01 00:00:00.001
-        2    2000-01-01 00:00:00.002
-        dtype: datetime64[ns]
-        >>> datetime_series.dt.millisecond
-        0    0
-        1    1
-        2    2
-        dtype: int16
-        """
-        return self._get_dt_field("millisecond")
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
     def microsecond(self):
         """
         The microseconds of the datetime.

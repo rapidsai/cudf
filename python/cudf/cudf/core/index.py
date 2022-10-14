@@ -2053,27 +2053,6 @@ class DatetimeIndex(GenericIndex):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def millisecond(self):
-        """
-        The milliseconds of the datetime.
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> import cudf
-        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
-        ...             periods=3, freq="ms"))
-        >>> datetime_index
-        DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.001000',
-                       '2000-01-01 00:00:00.002000'],
-                      dtype='datetime64[ns]')
-        >>> datetime_index.millisecond
-        Int16Index([0, 1, 2], dtype='int16')
-        """  # noqa: E501
-        return self._get_dt_field("millisecond")
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
     def microsecond(self):
         """
         The microseconds of the datetime.
