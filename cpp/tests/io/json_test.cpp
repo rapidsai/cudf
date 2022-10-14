@@ -813,7 +813,6 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsOutOfOrder)
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
 
-/*
 // currently, the json reader is strict about having non-empty input.
 TEST_F(JsonReaderTest, EmptyFile)
 {
@@ -824,7 +823,9 @@ TEST_F(JsonReaderTest, EmptyFile)
   }
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .experimental(true);
   auto result = cudf::io::read_json(in_options);
 
   const auto view = result.tbl->view();
@@ -832,6 +833,7 @@ TEST_F(JsonReaderTest, EmptyFile)
 }
 
 // currently, the json reader is strict about having non-empty input.
+// experimental reader supports empty input
 TEST_F(JsonReaderTest, NoDataFile)
 {
   auto filepath = temp_env->get_temp_dir() + "NoDataFile.csv";
@@ -841,13 +843,14 @@ TEST_F(JsonReaderTest, NoDataFile)
   }
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .experimental(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
   const auto view = result.tbl->view();
   EXPECT_EQ(0, view.num_columns());
 }
-*/
 
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
