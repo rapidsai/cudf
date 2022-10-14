@@ -1583,6 +1583,8 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
     return {skip_rows, num_rows};
   }
 
+  // TODO: fix this.
+  // Need to check if the file actually has data.
   file_itm_data.has_data = true;
 
   // Descriptors for all the chunks that make up the selected columns
@@ -1819,27 +1821,26 @@ table_with_metadata reader::impl::read_chunk()
     [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
 
     // todo: fix this (empty output may be incorrect)
-    if (!file_itm_data.has_data) { return table_with_metadata{}; }
-
-    // - compute column sizes and allocate output buffers.
-    //   important:
-    //   for nested schemas, we have to do some further preprocessing to determine:
-    //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-    //    of
-    //      nesting and it's size is the row count)
-    //
-    // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-    // purposes of decoding.
-    // TODO: make this a parameter.
-    auto const chunked_read_size = 240000;
-    //      auto const chunked_read_size = 0;
-    preprocess_columns(file_itm_data.chunks,
-                       file_itm_data.pages_info,
-                       skip_rows_corrected,
-                       num_rows_corrected,
-                       true /*uses_custom_row_bounds*/,
-                       chunked_read_size);
-
+    if (file_itm_data.has_data) {
+      // - compute column sizes and allocate output buffers.
+      //   important:
+      //   for nested schemas, we have to do some further preprocessing to determine:
+      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+      //    of
+      //      nesting and it's size is the row count)
+      //
+      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+      // purposes of decoding.
+      // TODO: make this a parameter.
+      auto const chunked_read_size = 240000;
+      //      auto const chunked_read_size = 0;
+      preprocess_columns(file_itm_data.chunks,
+                         file_itm_data.pages_info,
+                         skip_rows_corrected,
+                         num_rows_corrected,
+                         true /*uses_custom_row_bounds*/,
+                         chunked_read_size);
+    }
     preprocessed = true;
   }
 
