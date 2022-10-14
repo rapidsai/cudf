@@ -9,7 +9,12 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import (
+    Buffer,
+    DeviceBufferLike,
+    as_device_buffer_like,
+    get_spill_lock,
+)
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -413,6 +418,10 @@ cdef class Column:
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
+
+        if spill_lock is None:
+            spill_lock = get_spill_lock()
+
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):

@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Mapping, Set, Union
+import functools
+import threading
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from cudf.core.buffer.buffer import (
     Buffer,
@@ -10,7 +22,7 @@ from cudf.core.buffer.buffer import (
     ensure_buffer_like,
 )
 from cudf.core.buffer.spill_manager import global_manager_get
-from cudf.core.buffer.spillable_buffer import SpillableBuffer
+from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 
 if TYPE_CHECKING:
     from cudf._lib.column import Column
@@ -148,3 +160,43 @@ def mark_columns_as_read_only_inplace(obj: Any) -> None:
                 mem = col.data.memoryview()
             col.set_base_data(as_device_buffer_like(mem, exposed=False))
             col._offset = 0
+
+
+_thread_spill_locks: Dict[int, Tuple[Optional[SpillLock], int]] = {}
+
+
+def get_spill_lock():
+    _id = threading.get_ident()
+    spill_lock, _ = _thread_spill_locks.get(_id, (None, 0))
+    return spill_lock
+
+
+def push_thread_spill_lock():
+    _id = threading.get_ident()
+    spill_lock, count = _thread_spill_locks.get(_id, (None, 0))
+    if spill_lock is None:
+        spill_lock = SpillLock()
+    _thread_spill_locks[_id] = (spill_lock, count + 1)
+
+
+def pop_thread_spill_lock():
+    _id = threading.get_ident()
+    spill_lock, count = _thread_spill_locks[_id]
+    if count == 1:
+        spill_lock = None
+    _thread_spill_locks[_id] = (spill_lock, count - 1)
+
+
+def with_spill_lock(read_only_columns=False, memory_usage=None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            push_thread_spill_lock()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                pop_thread_spill_lock()
+
+        return wrapper
+
+    return decorator

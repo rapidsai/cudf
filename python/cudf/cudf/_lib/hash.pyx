@@ -14,7 +14,7 @@ from cudf._lib.cpp.hash cimport hash as cpp_hash, hash_id as cpp_hash_id
 from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf.core.buffer.spillable_buffer import SpillLock
+from cudf.core.buffer import with_spill_lock
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
@@ -40,11 +40,9 @@ def hash_partition(list source_columns, object columns_to_hash,
     )
 
 
+@with_spill_lock()
 def hash(list source_columns, str method, int seed=0):
-    slock = SpillLock()
-    cdef table_view c_source_view = table_view_from_columns(
-        source_columns, spill_lock=slock
-    )
+    cdef table_view c_source_view = table_view_from_columns(source_columns)
     cdef unique_ptr[column] c_result
     cdef cpp_hash_id c_hash_function
     if method == "murmur3":

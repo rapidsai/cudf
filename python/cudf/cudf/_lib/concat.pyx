@@ -21,11 +21,10 @@ from cudf._lib.utils cimport (
     table_view_from_table,
 )
 
-from cudf.core.buffer import as_device_buffer_like
-from cudf.core.buffer.spillable_buffer import SpillLock
+from cudf.core.buffer import as_device_buffer_like, with_spill_lock
 
 
-cpdef concat_masks(object columns):
+def concat_masks(object columns):
     cdef device_buffer c_result
     cdef unique_ptr[device_buffer] c_unique_result
     cdef vector[column_view] c_views = make_column_views(columns)
@@ -38,7 +37,7 @@ cpdef concat_masks(object columns):
     )
 
 
-cpdef concat_columns(object columns):
+def concat_columns(object columns):
     cdef unique_ptr[column] c_result
     cdef vector[column_view] c_views = make_column_views(columns)
     with nogil:
@@ -46,14 +45,14 @@ cpdef concat_columns(object columns):
     return Column.from_unique_ptr(move(c_result))
 
 
-cpdef concat_tables(object tables, bool ignore_index=False):
+@with_spill_lock()
+def concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
     c_views.reserve(len(tables))
-    slock = SpillLock()
     for tbl in tables:
         c_views.push_back(
-            table_view_from_table(tbl, ignore_index, spill_lock=slock)
+            table_view_from_table(tbl, ignore_index)
         )
     with nogil:
         c_result = move(libcudf_concatenate_tables(c_views))

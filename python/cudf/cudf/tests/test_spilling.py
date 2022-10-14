@@ -2,7 +2,10 @@
 
 
 import gc
+import random
+import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple
 
 import cupy
@@ -16,7 +19,13 @@ import rmm
 import cudf
 import cudf.core.buffer.spill_manager
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import (
+    Buffer,
+    DeviceBufferLike,
+    as_device_buffer_like,
+    get_spill_lock,
+    with_spill_lock,
+)
 from cudf.core.buffer.spill_manager import (
     SpillManager,
     get_rmm_memory_resource_stack,
@@ -365,6 +374,37 @@ def test_ptr_restricted(manager: SpillManager):
     del slock2
     assert len(buf._spill_locks) == 0
     assert buf.spillable
+
+
+def test_get_spill_lock():
+    @with_spill_lock()
+    def f(sleep=False, nest=0):
+        if sleep:
+            time.sleep(random.random() / 100)
+        if nest:
+            return f(nest=nest - 1)
+        return get_spill_lock()
+
+    assert get_spill_lock() is None
+    slock = f()
+    assert isinstance(slock, SpillLock)
+    assert get_spill_lock() is None
+    slock = f(nest=2)
+    assert isinstance(slock, SpillLock)
+    assert get_spill_lock() is None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures_with_spill_lock = []
+        futures_without_spill_lock = []
+        for _ in range(100):
+            futures_with_spill_lock.append(
+                executor.submit(f, sleep=True, nest=1)
+            )
+            futures_without_spill_lock.append(
+                executor.submit(f, sleep=True, nest=1)
+            )
+        all(isinstance(f.result(), SpillLock) for f in futures_with_spill_lock)
+        all(f is None for f in futures_without_spill_lock)
 
 
 @pytest.mark.parametrize(

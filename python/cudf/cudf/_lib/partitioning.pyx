@@ -6,7 +6,7 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf.core.buffer.spillable_buffer import SpillLock
+from cudf.core.buffer import with_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -20,17 +20,15 @@ from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 cimport cudf._lib.cpp.types as libcudf_types
 
 
+@with_spill_lock()
 def partition(list source_columns, Column partition_map,
               object num_partitions):
     if num_partitions is None:
         num_partitions = cpp_distinct_count(partition_map, ignore_nulls=True)
     cdef int c_num_partitions = num_partitions
 
-    slock = SpillLock()
-    cdef table_view c_source_view = table_view_from_columns(
-        source_columns, spill_lock=slock
-    )
-    cdef column_view c_partition_map_view = partition_map.view(slock)
+    cdef table_view c_source_view = table_view_from_columns(source_columns)
+    cdef column_view c_partition_map_view = partition_map.view()
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     with nogil:
