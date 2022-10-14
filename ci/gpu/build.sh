@@ -287,7 +287,7 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitx
 # retest cuDF UDFs
 cd "$WORKSPACE/python/cudf/cudf"
 gpuci_logger "Python py.test retest cuDF UDFs"
-py.test -n 8 tests/test_udf_masked_ops.py --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests/test_udf_masked_ops.py
 
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
