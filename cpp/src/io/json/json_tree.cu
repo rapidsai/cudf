@@ -427,19 +427,15 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
+  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+  using hash_map_type =
+    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+
+  auto num_nodes  = d_tree.node_categories.size();
   auto num_fields = thrust::count(rmm::exec_policy(stream),
                                   d_tree.node_categories.begin(),
                                   d_tree.node_categories.end(),
                                   node_t::NC_FN);
-  // TODO two-level hashing:  one for field names
-  // and another for {node-level, node_category} + field hash for the entire path
-  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-  using hash_map_type =
-    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
-  auto num_nodes = d_tree.node_categories.size();
-  // std::cout << "num_nodes: " << num_nodes << std::endl;
-  // std::cout << "num_fields: " << num_fields << std::endl;
-  // std::cout << "hash_size: " << compute_hash_table_size(num_fields, 40) << std::endl;
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_fields, 40),
@@ -807,11 +803,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   auto num_nodes = d_tree.node_categories.size();
   rmm::device_uvector<size_type> node_type =
     hash_node_type_with_field_name(d_input, d_tree, stream);
-  // TODO two-level hashing:  one for field names
-  // and another for {node-level, node_category} + field hash for the entire path
-  // {node_level, node_type} recursively using parent_node_id. TODO d_equal, d_hash
-  // insert to hash_map
-  // tabulate column_ids.
+
   rmm::device_uvector<size_type> new_col_id(num_nodes, stream);
   rmm::device_uvector<size_type> new_parent_col_id(num_nodes, stream);
   {
@@ -820,6 +812,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
 
     // TODO two-level hashing:  one for field names
     // and another for {node-level, node_category} + field hash for the entire path
+    // {node_level, node_type} recursively using parent_node_id
     using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
     using hash_map_type =
       cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
@@ -872,8 +865,6 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
         return node_level[node_id1] == node_level[node_id2] and
                node_type[node_id1] == node_type[node_id2];
       };
-      // auto orig_node_id1 = node_id1;
-      // auto orig_node_id2 = node_id2;
       // if both nodes have same node types at all levels, it will go up until it has common parent
       // or root.
       while (node_id1 != parent_node_sentinel and node_id2 != parent_node_sentinel and
@@ -881,17 +872,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
         node_id1 = parent_node_ids[node_id1];
         node_id2 = parent_node_ids[node_id2];
       }
-      // path compression
-      // if (node_id1 == node_id2 && parent_node_ids[orig_node_id2] !=
-      // parent_node_ids[orig_node_id1]) { parent_node_ids[orig_node_id2] =
-      // parent_node_ids[orig_node_id1]; }
       return node_id1 == node_id2;
     };
-    // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
-    // hashing)
-    // auto iter = cudf::detail::make_counting_transform_iterator(
-    //   0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
-
     CUDF_PUSH_RANGE("insert");
     // key_map.insert(iter, iter + num_nodes, d_hasher, d_equal, stream.value());
     auto num_inserted = thrust::count_if(
@@ -904,17 +886,10 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
        uq_node_id = new_col_id.begin()] __device__(auto node_id) mutable {
         // typename hash_map_type::value_type const insert_pair{};
         auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hasher, d_equal);
-        uq_node_id[node_id] = (it.first)->first;
+        uq_node_id[node_id] = (it.first)->first;  // first.load(cuda::std::memory_order_relaxed);
         return it.second;
       });
     CUDF_POP_RANGE();
-    // auto get_hash_value = [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(
-    //                         auto node_id) -> size_type {
-    //   auto it = key_map.find(node_id, d_hasher, d_equal);
-    //   return (it == key_map.end()) ? size_type{-1}
-    //                                : it->second.load(cuda::std::memory_order_relaxed);
-    // };
-    // TODO overwrite the values with new column ids.
     auto num_columns = key_map.get_size();
     // std::cout<<"num_columns: "<<num_columns<<std::endl;
     // std::cout<<"num_inserted: "<<num_inserted<<std::endl;
@@ -923,32 +898,19 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
     CUDF_PUSH_RANGE("retrieve_all");
     key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
     CUDF_POP_RANGE();
-    CUDF_PUSH_RANGE("erase");
+    CUDF_PUSH_RANGE("sort");
     thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
     // key_map.erase(unique_keys.begin(), unique_keys.end(), d_hasher, d_equal, stream.value());
     stream.synchronize();
     CUDF_POP_RANGE();
 
-    CUDF_PUSH_RANGE("u-insert");
-    // auto col_id = cudf::detail::make_counting_transform_iterator(
-    //   0,
-    //   [key = unique_keys.begin()] __device__(size_type i) { return cuco::make_pair(key[i], i);
-    //   });
-    // this runtime is much smaller than num_nodes.
-    // key_map.insert(col_id, col_id + num_columns, d_hasher, thrust::equal_to<>{}, stream.value());
-    // TODO try thrust::equal_to for key_equal. not required since num_columns is small.
-    stream.synchronize();
-    CUDF_POP_RANGE();
-
-    CUDF_PUSH_RANGE("find");
+    CUDF_PUSH_RANGE("lower_bound");
     thrust::lower_bound(rmm::exec_policy(stream),
                         unique_keys.begin(),
                         unique_keys.end(),
                         new_col_id.begin(),
                         new_col_id.end(),
                         new_col_id.begin());
-    // convert field nodes to node indices, and other nodes to enum value.
-    // TODO replace all keys with sequence. how?
     stream.synchronize();
     CUDF_POP_RANGE();
     // print_vec(cudf::detail::make_std_vector_async(new_column_id, stream), "new_col_id", to_int);
