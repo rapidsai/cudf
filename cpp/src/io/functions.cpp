@@ -34,6 +34,8 @@
 #include <cudf/utilities/error.hpp>
 #include <io/orc/orc.hpp>
 
+#include <cudf/detail/iterator.cuh>
+
 namespace cudf {
 namespace io {
 // Returns builder for csv_reader_options
@@ -342,14 +344,19 @@ orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_sc
                                          uint32_t column_id,
                                          std::string column_name)
 {
-  std::vector<orc_column_schema> children;
   auto const& orc_col_schema = orc_schema[column_id];
-  for (auto i = 0ul; i < orc_col_schema.subtypes.size(); ++i) {
-    children.emplace_back(make_orc_column_schema(
-      orc_schema,
-      orc_col_schema.subtypes[i],
-      i < orc_col_schema.fieldNames.size() ? orc_col_schema.fieldNames[i] : ""));
-  }
+  std::vector<orc_column_schema> children;
+  children.reserve(orc_col_schema.subtypes.size());
+  std::transform(
+    orc_col_schema.subtypes.cbegin(),
+    orc_col_schema.subtypes.cend(),
+    cudf::detail::make_counting_transform_iterator(0,
+                                                   [&names = orc_col_schema.fieldNames](size_t i) {
+                                                     return i < names.size() ? names[i]
+                                                                             : std::string{};
+                                                   }),
+    std::back_inserter(children),
+    [&](auto& type, auto name) { return make_orc_column_schema(orc_schema, type, name); });
 
   return {std::move(column_name), orc_schema[column_id].kind, std::move(children)};
 }
