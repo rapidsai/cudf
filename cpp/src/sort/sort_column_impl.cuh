@@ -123,32 +123,22 @@ struct column_sorted_order_fn {
     }
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>() and
-                           is_faster_sort_supported<T>())>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>())>
   void operator()(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
                   null_order null_precedence,
                   rmm::cuda_stream_view stream)
   {
-    if (input.has_nulls()) {
-      sorted_order<T>(input, indices, ascending, null_precedence, stream);
+    if constexpr (is_faster_sort_supported<T>()) {
+      if (input.has_nulls()) {
+        sorted_order<T>(input, indices, ascending, null_precedence, stream);
+      } else {
+        faster_sort<T>(input, indices, ascending, stream);
+      }
     } else {
-      faster_sort<T>(input, indices, ascending, stream);
+      sorted_order<T>(input, indices, ascending, null_precedence, stream);
     }
-  }
-
-  template <typename T,
-            CUDF_ENABLE_IF(cudf::is_relationally_comparable<T, T>() and
-                           not is_faster_sort_supported<T>())>
-  void operator()(column_view const& input,
-                  mutable_column_view& indices,
-                  bool ascending,
-                  null_order null_precedence,
-                  rmm::cuda_stream_view stream)
-  {
-    sorted_order<T>(input, indices, ascending, null_precedence, stream);
   }
 
   template <typename T, CUDF_ENABLE_IF(not cudf::is_relationally_comparable<T, T>())>
