@@ -3630,7 +3630,7 @@ class StringMethods(ColumnMethods):
         Parameters
         ----------
         patterns : Series of Index
-            Patters to search for in the given Series/Index.
+            Patterns to search for in the given Series/Index.
 
         Returns
         -------
