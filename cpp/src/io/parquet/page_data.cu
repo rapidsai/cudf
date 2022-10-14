@@ -1860,11 +1860,8 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
         out_buf.create(size, stream, mr);
       }
 
-      // for nested hierarchies, compute per-page start offset.
-      // it would be better/safer to be checking (schema.max_repetition_level > 0) here, but there's
-      // no easy way to get at that info here. we'd have to move this function into reader_impl.cu
-      if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) ||
-          out_buf.type.id() == type_id::LIST) {
+      // for nested hierarchies, compute per-page start offset
+      if (input_col.has_repetition) {
         thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                       page_keys.begin(),
                                       page_keys.end(),
