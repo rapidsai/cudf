@@ -3623,7 +3623,7 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> SeriesOrIndex:
+    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
         """
         Find all first occurrences of patterns in the Series/Index.
 
