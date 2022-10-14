@@ -198,6 +198,7 @@ TEST_F(DataChunkSourceTest, BgzipSource)
 {
   auto const filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"bananarama"};
+  input.reserve(input.size() << 25);
   for (int i = 0; i < 24; i++) {
     input = input + input;
   }
@@ -216,13 +217,11 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsets)
 {
   auto const filename = temp_env->get_temp_filepath("bgzip_source_offsets");
   std::string input{"bananarama"};
+  input.reserve(input.size() << 25);
   for (int i = 0; i < 24; i++) {
     input = input + input;
   }
-  std::string padding_garbage{"garbage"};
-  for (int i = 0; i < 10; i++) {
-    padding_garbage = padding_garbage + padding_garbage;
-  }
+  std::string const padding_garbage(10000, 'g');
   std::string const data_garbage{"GARBAGE"};
   std::string const begininput{"begin of bananarama"};
   std::string const endinput{"end of bananarama"};
@@ -306,13 +305,11 @@ TEST_F(DataChunkSourceTest, BgzipCompressedSourceVirtualOffsets)
 {
   auto const filename = temp_env->get_temp_filepath("bgzip_source_compressed_offsets");
   std::string input{"bananarama"};
+  input.reserve(input.size() << 25);
   for (int i = 0; i < 24; i++) {
     input = input + input;
   }
-  std::string padding_garbage{"garbage"};
-  for (int i = 0; i < 10; i++) {
-    padding_garbage = padding_garbage + padding_garbage;
-  }
+  std::string const padding_garbage(10000, 'g');
   std::string const data_garbage{"GARBAGE"};
   std::string const begininput{"begin of bananarama"};
   std::string const endinput{"end of bananarama"};
