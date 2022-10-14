@@ -262,7 +262,6 @@ Time/date components
    DatetimeIndex.hour
    DatetimeIndex.minute
    DatetimeIndex.second
-   DatetimeIndex.millisecond
    DatetimeIndex.microsecond
    DatetimeIndex.nanosecond
    DatetimeIndex.day_of_year
