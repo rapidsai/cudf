@@ -223,7 +223,7 @@ struct orc_column_schema {
   orc_column_schema(std::string_view name,
                     orc::TypeKind type,
                     std::vector<orc_column_schema> children)
-    : _name{name}, _type_kind{type}, children{std::move(children)}
+    : _name{name}, _type_kind{type}, _children{std::move(children)}
   {
   }
 
@@ -232,7 +232,7 @@ struct orc_column_schema {
    *
    * @return Column name
    */
-  [[nodiscard]] std::string_view name() const { return _name; }
+  [[nodiscard]] auto name() const { return _name; }
 
   /**
    * @brief Returns ORC type of the column.
@@ -242,25 +242,44 @@ struct orc_column_schema {
   [[nodiscard]] auto type_kind() const { return _type_kind; }
 
   /**
+   * @brief Returns schemas of all child columns.
+   *
+   * @return Children schemas
+   */
+  [[nodiscard]] auto const& children() const& { return _children; }
+
+  /** @copydoc children
+   * Children array is moved out of the object (rvalues only).
+   *
+   */
+  [[nodiscard]] auto children() && { return std::move(_children); }
+
+  /**
    * @brief Returns schema of the child with the given index.
    *
    * @param idx child index
    *
    * @return Child schema
    */
-  [[nodiscard]] auto const& child(int idx) const { return children.at(idx); }
+  [[nodiscard]] auto const& child(int idx) const& { return children().at(idx); }
+
+  /** @copydoc child
+   * Child is moved out of the object (rvalues only).
+   *
+   */
+  [[nodiscard]] auto child(int idx) && { return std::move(children().at(idx)); }
 
   /**
    * @brief Returns the number of child columns.
    *
    * @return Children count
    */
-  [[nodiscard]] auto num_children() const { return children.size(); }
+  [[nodiscard]] auto num_children() const { return children().size(); }
 
  private:
   std::string _name;
   orc::TypeKind _type_kind;
-  std::vector<orc_column_schema> children;
+  std::vector<orc_column_schema> _children;
 };
 
 /**
@@ -280,7 +299,13 @@ struct orc_schema {
    *
    * @return Root column schema
    */
-  auto const& root() const { return _root; }
+  [[nodiscard]] auto const& root() const& { return _root; }
+
+  /** @copydoc root
+   * Root column schema is moved out of the object (rvalues only).
+   *
+   */
+  [[nodiscard]] auto root() && { return std::move(_root); }
 
  private:
   orc_column_schema _root;
