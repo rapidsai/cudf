@@ -133,6 +133,57 @@ std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Extracts millisecond fraction from any date time type and returns an int16_t
+ * cudf::column.
+ *
+ * A millisecond fraction is only the 3 digits that make up the millisecond portion of a duration.
+ * For example, the microsecond fraction of 1.234567890 seconds is 234.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t milliseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_millisecond_fraction(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Extracts microsecond fraction from any date time type and returns an int16_t
+ * cudf::column.
+ *
+ * A microsecond fraction is only the 3 digits that make up the microsecond portion of a duration.
+ * For example, the microsecond fraction of 1.234567890 seconds is 567.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t microseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_microsecond_fraction(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Extracts nanosecond fraction from any date time type and returns an int16_t
+ * cudf::column.
+ *
+ * A nanosecond fraction is only the 3 digits that make up the nanosecond portion of a duration.
+ * For example, the nanosecond fraction of 1.234567890 seconds is 890.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t nanoseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_nanosecond_fraction(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 /**
  * @addtogroup datetime_compute

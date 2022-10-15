@@ -15,6 +15,15 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     cdef unique_ptr[column] extract_hour(const column_view& column) except +
     cdef unique_ptr[column] extract_minute(const column_view& column) except +
     cdef unique_ptr[column] extract_second(const column_view& column) except +
+    cdef unique_ptr[column] extract_millisecond_fraction(
+        const column_view& column
+    ) except +
+    cdef unique_ptr[column] extract_microsecond_fraction(
+        const column_view& column
+    ) except +
+    cdef unique_ptr[column] extract_nanosecond_fraction(
+        const column_view& column
+    ) except +
 
     ctypedef enum rounding_frequency "cudf::datetime::rounding_frequency":
         DAY "cudf::datetime::rounding_frequency::DAY"
