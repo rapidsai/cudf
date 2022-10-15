@@ -135,6 +135,8 @@ public class Rmm {
    * the result will always be a lower bound on the amount allocated.
    */
   public static native long getTotalBytesAllocated();
+  public static native void pushThreadMemoryTracker();
+  public static native long popThreadMemoryTracker();
 
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).

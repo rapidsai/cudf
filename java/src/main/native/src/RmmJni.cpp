@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <stack>
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
@@ -50,7 +51,17 @@ constexpr char const *RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 class base_tracking_resource_adaptor : public device_memory_resource {
 public:
   virtual std::size_t get_total_allocated() = 0;
+  virtual void push_thread_memory_tracker() = 0;
+  virtual long pop_thread_memory_tracker() = 0;
 };
+
+struct memory_tracker {
+  long current_outstanding;
+  long max_outstanding;
+};
+
+thread_local std::stack<memory_tracker> memory_tracker_stack = std::stack<memory_tracker>();
+thread_local std::unordered_map<long, std::size_t> alloc_map;
 
 /**
  * @brief An RMM device memory resource that delegates to another resource
@@ -79,10 +90,49 @@ public:
 
   std::size_t get_total_allocated() override { return total_allocated.load(); }
 
+  void push_thread_memory_tracker() override { 
+    memory_tracker_stack.emplace();
+  }
+
+  long pop_thread_memory_tracker() override { 
+    auto top_tracker = memory_tracker_stack.top();
+    auto ret = top_tracker.max_outstanding;
+    memory_tracker_stack.pop();
+    if (memory_tracker_stack.empty()) {
+      alloc_map.clear();
+    } else {
+      // carry the max to the next level
+      memory_tracker_stack.top().max_outstanding += ret;
+    }
+    return ret;
+  }
+
 private:
+
   Upstream *const resource;
   std::size_t const size_align;
   std::atomic_size_t total_allocated{0};
+
+  void thread_allocated(long addr, std::size_t num_bytes) {
+    if (!memory_tracker_stack.empty()) {
+      alloc_map[addr] = num_bytes;                  
+      memory_tracker& tracker = memory_tracker_stack.top();
+      tracker.current_outstanding += num_bytes;
+      tracker.max_outstanding = 
+        std::max(tracker.current_outstanding, tracker.max_outstanding);
+    }
+  }
+
+  void thread_freed(long addr, std::size_t num_bytes) {
+    if (!memory_tracker_stack.empty()) {
+      auto it = alloc_map.find(addr);
+      if (it != alloc_map.end()) {
+        auto tracker = memory_tracker_stack.top();
+        tracker.current_outstanding -= it->second;
+        alloc_map.erase(it);
+      }
+    }
+  }
 
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     // adjust size of allocation based on specified size alignment
@@ -91,6 +141,7 @@ private:
     auto result = resource->allocate(num_bytes, stream);
     if (result) {
       total_allocated += num_bytes;
+      thread_allocated(reinterpret_cast<long>(result), num_bytes);
     }
     return result;
   }
@@ -102,6 +153,7 @@ private:
 
     if (p) {
       total_allocated -= size;
+      thread_freed(reinterpret_cast<long>(p), size);
     }
   }
 
@@ -128,6 +180,19 @@ std::unique_ptr<base_tracking_resource_adaptor> Tracking_memory_resource{};
 std::size_t get_total_bytes_allocated() {
   if (Tracking_memory_resource) {
     return Tracking_memory_resource->get_total_allocated();
+  }
+  return 0;
+}
+
+void push_thread_memory_tracker() {
+  if (Tracking_memory_resource) {
+    Tracking_memory_resource->push_thread_memory_tracker();
+  }
+}
+
+long pop_thread_memory_tracker() {
+  if (Tracking_memory_resource) {
+    return Tracking_memory_resource->pop_thread_memory_tracker();
   }
   return 0;
 }
@@ -453,6 +518,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jcl
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv *env, jclass) {
   return get_total_bytes_allocated();
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_pushThreadMemoryTracker(JNIEnv *env, jclass) {
+  push_thread_memory_tracker();
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_popThreadMemoryTracker(JNIEnv *env, jclass) {
+  return pop_thread_memory_tracker();
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclass clazz, jlong size,
