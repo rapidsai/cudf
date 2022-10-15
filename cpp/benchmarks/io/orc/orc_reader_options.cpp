@@ -30,12 +30,12 @@ constexpr int64_t data_size = 512 << 20;
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
-  auto const top_lvl_cols = cudf::io::read_orc_metadata(source).root_column.children;
+  auto const top_lvl_cols = cudf::io::read_orc_metadata(source).schema().root().children();
   std::vector<std::string> col_names;
   std::transform(top_lvl_cols.cbegin(),
                  top_lvl_cols.cend(),
                  std::back_inserter(col_names),
-                 [](auto const& col_meta) { return col_meta.name; });
+                 [](auto const& col_meta) { return col_meta.name(); });
   return col_names;
 }
 
@@ -84,7 +84,8 @@ void BM_orc_read_varying_options(nvbench::state& state,
       .use_np_dtypes(use_np_dtypes)
       .timestamp_type(ts_type);
 
-  auto const num_stripes = cudf::io::read_orc_metadata(source_sink.make_source_info()).num_stripes;
+  auto const num_stripes =
+    cudf::io::read_orc_metadata(source_sink.make_source_info()).num_stripes();
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
