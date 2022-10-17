@@ -3429,7 +3429,7 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
     "patterns, expected",
     [
         (
-            ["a", "s", "g", "i", "o", "r"],
+            lambda: ["a", "s", "g", "i", "o", "r"],
             [
                 [-1, 0, 5, 3, -1, 2],
                 [-1, -1, -1, -1, 1, -1],
@@ -3438,7 +3438,7 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
             ],
         ),
         (
-            ["a", "string", "g", "inn", "o", "r", "sea"],
+            lambda: cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"]),
             [
                 [-1, 0, 5, -1, -1, 2, -1],
                 [-1, -1, -1, -1, 1, -1, -1],
@@ -3450,7 +3450,7 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
 )
 def test_str_find_multiple(patterns, expected):
     s = cudf.Series(["strings", "to", "search", "in"])
-    t = cudf.Series(patterns)
+    t = patterns()
 
     expected = cudf.Series(expected)
 
@@ -3458,7 +3458,6 @@ def test_str_find_multiple(patterns, expected):
     # and expected is ListDtype(int64).
     # Currently there is no easy way to type-cast these to match.
     assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
-    assert_eq(s.str.find_multiple(patterns).to_pandas(), expected.to_pandas())
 
     s = cudf.Index(s)
     t = cudf.Index(t)
