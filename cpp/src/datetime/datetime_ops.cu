@@ -654,21 +654,21 @@ std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_millisecond_fraction(column, cudf::default_stream_value, mr);
+  return detail::extract_millisecond_fraction(column, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_microsecond_fraction(column, cudf::default_stream_value, mr);
+  return detail::extract_microsecond_fraction(column, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
                                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_nanosecond_fraction(column, cudf::default_stream_value, mr);
+  return detail::extract_nanosecond_fraction(column, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,

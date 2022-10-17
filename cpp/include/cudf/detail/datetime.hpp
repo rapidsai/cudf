@@ -102,7 +102,7 @@ std::unique_ptr<cudf::column> extract_second(
  */
 std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -113,7 +113,7 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  */
 std::unique_ptr<cudf::column> extract_microsecond_fraction(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -124,7 +124,7 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  */
 std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
