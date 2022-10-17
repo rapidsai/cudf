@@ -259,7 +259,9 @@ def scatter(list sources, Column scatter_map, list target_columns,
             (scatter_map >= -n_rows).all()
             and (scatter_map < n_rows).all()
         ):
-            raise ValueError("Scatter map index out of bounds.")
+            raise IndexError(
+                f"index out of bounds for column of size {n_rows}"
+            )
 
     if isinstance(sources[0], Column):
         return scatter_column(
