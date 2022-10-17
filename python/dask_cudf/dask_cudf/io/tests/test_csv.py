@@ -17,7 +17,8 @@ import dask_cudf
 
 
 @pytest.mark.skipif(
-    not dask_cudf.core._BACKEND_SUPPORT, reason="No backend-dispatch support"
+    not dask_cudf.core.DASK_BACKEND_SUPPORT,
+    reason="No backend-dispatch support",
 )
 def test_csv_roundtrip_backend_dispatch(tmp_path):
     # Test ddf.read_csv cudf-backend dispatch

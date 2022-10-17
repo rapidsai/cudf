@@ -18,7 +18,7 @@ import dask_cudf as dgd
 
 
 @pytest.mark.skipif(
-    not dgd.core._BACKEND_SUPPORT, reason="No backend-dispatch support"
+    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
 )
 def test_from_dict_backend_dispatch():
     # Test ddf.from_dict cudf-backend dispatch
