@@ -26,7 +26,8 @@
 
 #include <nvbench/nvbench.cuh>
 
-constexpr int64_t data_size = 512 << 20;
+constexpr int64_t data_size               = 512 << 20;
+constexpr int32_t chunked_read_num_chunks = 8;
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
@@ -53,7 +54,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto constexpr num_chunks = RowSelection == row_selection::ALL ? 1 : 8;
+  auto const num_chunks = RowSelection == row_selection::ALL ? 1 : chunked_read_num_chunks;
 
   auto const use_index     = UsesIndex == uses_index::YES;
   auto const use_np_dtypes = UsesNumpyDType == uses_numpy_dtype::YES;
