@@ -180,6 +180,7 @@ class reader::impl {
                         size_t total_rows,
                         bool uses_custom_row_bounds);
 
+
   /**
    * @brief Converts the page data and outputs to columns.
    *

@@ -57,9 +57,16 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 struct input_column_info {
   int schema_idx;
   std::string name;
+  bool has_repetition;
   // size == nesting depth. the associated real output
   // buffer index in the dest column for each level of nesting.
   std::vector<int> nesting;
+
+  input_column_info(int _schema_idx, std::string _name, bool _has_repetition)
+    : schema_idx(_schema_idx), name(_name), has_repetition(_has_repetition)
+  {
+  }
+
   auto nesting_depth() const { return nesting.size(); }
 };
 
@@ -98,11 +105,10 @@ struct PageNestingInfo {
 
   // set at initialization
   int32_t max_def_level;
-  int32_t max_rep_level;
-  cudf::type_id type;
+  int32_t max_rep_level;  
 
   // set during preprocessing
-  int32_t size;              // this page/nesting-level's size contribution to the output column
+  int32_t size;              // this page/nesting-level's row count contribution to the output column
   int32_t page_start_value;  // absolute output start index in output column data
 
   // set during data decoding
@@ -138,6 +144,7 @@ struct PageInfo {
   Encoding encoding;       // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
+  cudf::type_id type;     // type of this page. 
 
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the
@@ -151,6 +158,7 @@ struct PageInfo {
   int skipped_values;
   // # of values skipped in the actual data stream.
   int skipped_leaf_values;
+  int32_t str_bytes;         // for string columns only, the size in bytes
 
   // nesting information (input/output) for each page
   int num_nesting_levels;

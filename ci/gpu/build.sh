@@ -32,7 +32,7 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=0
+export INSTALL_DASK_MAIN=1
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
 export DASK_STABLE_VERSION="2022.9.2"
@@ -294,7 +294,7 @@ elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
 else
     cd "$WORKSPACE/python/cudf/cudf"
     gpuci_logger "Python py.test retest cuDF UDFs"
-    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+    py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests
 fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.

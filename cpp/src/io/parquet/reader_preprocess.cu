@@ -51,12 +51,16 @@ struct cumulative_row_sum {
 };
 
 struct row_size_functor {
+  __device__ size_t validity_size(size_t num_rows, bool nullable)
+  {
+    return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0;
+  }
+
   template <typename T>
   __device__ size_t operator()(size_t num_rows, bool nullable)
   {
     auto const element_size = sizeof(device_storage_type_t<T>);
-    return (element_size * num_rows) +
-           (nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0);
+    return (element_size * num_rows) + validity_size(num_rows, nullable);
   }
 };
 
@@ -64,21 +68,19 @@ template <>
 __device__ size_t row_size_functor::operator()<list_view>(size_t num_rows, bool nullable)
 {
   auto const offset_size = sizeof(offset_type);
-  return (offset_size * (num_rows + 1)) +
-         (nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0);
+  return (offset_size * (num_rows + 1)) + validity_size(num_rows, nullable);
 }
 
 template <>
 __device__ size_t row_size_functor::operator()<struct_view>(size_t num_rows, bool nullable)
 {
-  return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0;
+  return validity_size(num_rows, nullable);
 }
 
 template <>
 __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, bool nullable)
-{
-  // CUDF_FAIL("String types currently unsupported");
-  return 0;
+{  
+  return 0 + validity_size(num_rows, nullable);
 }
 
 struct get_cumulative_row_info {
@@ -93,7 +95,7 @@ struct get_cumulative_row_info {
     size_t const row_count = page.nesting[0].size;
     return cumulative_row_info{
       row_count,
-      cudf::type_dispatcher(data_type{page.nesting[0].type}, row_size_functor{}, row_count, false),
+      cudf::type_dispatcher(data_type{page.type}, row_size_functor{}, row_count, false),
       page.src_col_schema};
   }
 };
@@ -142,29 +144,29 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
                                 page_input,
                                 c_info.begin(),
                                 thrust::equal_to{},
-                                cumulative_row_sum{});
-  /*
+                                cumulative_row_sum{});  
+  // clang-format off
   stream.synchronize();
   pages.device_to_host(stream);
   std::vector<int> h_page_index(pages.size());
-  cudaMemcpyAsync(h_page_index.data(), page_index.begin(), sizeof(int) * pages.size(),
-  cudaMemcpyDeviceToHost, stream); stream.synchronize(); for(size_t idx=0; idx<pages.size(); idx++){
+  cudaMemcpyAsync(h_page_index.data(), page_index.begin(), sizeof(int) * pages.size(), cudaMemcpyDeviceToHost, stream); 
+  stream.synchronize(); 
+  for(size_t idx=0; idx<pages.size(); idx++){
     auto const& page = pages[h_page_index[idx]];
     if(page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY){
       continue;
     }
     gpu::PageNestingInfo pni;
     cudaMemcpy(&pni, &page.nesting[0], sizeof(gpu::PageNestingInfo), cudaMemcpyDeviceToHost);
-    printf("P(%lu): schema(%d), num_rows(%d), nesting size 0(%d)\n", idx, page.src_col_schema,
-  page.num_rows, pni.size);
+    printf("P(%lu): schema(%d), num_rows(%d), nesting size 0(%d)\n", idx, page.src_col_schema, page.num_rows, pni.size);
   }
   printf("---------\n");
   std::vector<cumulative_row_info> h_c_info(page_keys.size());
-  cudaMemcpy(h_c_info.data(), c_info.data(), sizeof(cumulative_row_info) * page_keys.size(),
-  cudaMemcpyDeviceToHost); for(size_t idx=0; idx<page_keys.size(); idx++){ printf("C(%lu): %lu,
-  %lu\n", idx, h_c_info[idx].row_count, h_c_info[idx].size_bytes);
+  cudaMemcpy(h_c_info.data(), c_info.data(), sizeof(cumulative_row_info) * page_keys.size(), cudaMemcpyDeviceToHost); 
+  for(size_t idx=0; idx<page_keys.size(); idx++){ 
+    printf("C(%lu): %lu, %lu\n", idx, h_c_info[idx].row_count, h_c_info[idx].size_bytes);
   }
-  */
+  // clang-format on  
 
   // sort by row count
   rmm::device_uvector<cumulative_row_info> c_info_sorted{c_info, stream};
@@ -185,25 +187,29 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
                                                     thrust::make_discard_iterator(),
                                                     key_offsets.begin());
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
+  // clang-format off
   /*
   stream.synchronize();
   printf("Num keys: %d\n", (int)num_unique_keys);
   std::vector<size_type> h_key_offsets(num_unique_keys);
-  cudaMemcpy(h_key_offsets.data(), key_offsets.data(), sizeof(size_type) * num_unique_keys,
-  cudaMemcpyDeviceToHost); for(size_t idx=0; idx<num_unique_keys; idx++){ printf("Offset sizes(%lu):
-  %d\n", idx, h_key_offsets[idx]);
+  cudaMemcpy(h_key_offsets.data(), key_offsets.data(), sizeof(size_type) * num_unique_keys, cudaMemcpyDeviceToHost); 
+  for(size_t idx=0; idx<num_unique_keys; idx++){ 
+    printf("Offset sizes(%lu): %d\n", idx, h_key_offsets[idx]);
   }
   */
+  // clang-format on  
 
   thrust::exclusive_scan(
     rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end() + 1, key_offsets.begin());
+  // clang-format off
   /*
   stream.synchronize();
-  cudaMemcpy(h_key_offsets.data(), key_offsets.data(), sizeof(size_type) * (num_unique_keys + 1),
-  cudaMemcpyDeviceToHost); for(size_t idx=0; idx<num_unique_keys+1; idx++){ printf("Offset
-  values(%lu): %d\n", idx, h_key_offsets[idx]);
+  cudaMemcpy(h_key_offsets.data(), key_offsets.data(), sizeof(size_type) * (num_unique_keys + 1), cudaMemcpyDeviceToHost); 
+  for(size_t idx=0; idx<num_unique_keys+1; idx++){ 
+    printf("Offset values(%lu): %d\n", idx, h_key_offsets[idx]);
   }
   */
+  // clang-format on
 
   // adjust the cumulative info such that for each row count, the size includes any pages that span
   // that row count. this is so that if we have this case:
@@ -230,11 +236,13 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
                   cudaMemcpyDeviceToHost,
                   stream);
   stream.synchronize();
+  // clang-format off
   /*
   for(size_t idx=0; idx<h_adjusted.size(); idx++){
     printf("A(%lu): %lu, %lu\n", idx, h_adjusted[idx].row_count, h_adjusted[idx].size_bytes);
   }
   */
+  // clang-format on
 
   // now we have an array of {row_count, real output bytes}. just walk through it and generate
   // splits.
@@ -265,6 +273,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
       auto const start_row = cur_row_count;
       cur_row_count        = h_adjusted[p].row_count;
       splits.push_back(gpu::chunked_read_info{start_row, cur_row_count - start_row});
+      //printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
       cur_pos         = p;
       cumulative_size = h_adjusted[p].size_bytes;
     }
@@ -565,24 +574,20 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 
           // allocate
           out_buf.create(size, _stream, _mr);
-        }
+        }      
 
-        // for nested hierarchies, compute per-page start offset.
-        // it would be better/safer to be checking (schema.max_repetition_level > 0) here, but
-        // there's no easy way to get at that info here. we'd have to move this function into
-        // reader_impl.cu
-        if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) ||
-            out_buf.type.id() == type_id::LIST) {
-          thrust::exclusive_scan_by_key(
-            rmm::exec_policy(_stream),
-            page_keys.begin(),
-            page_keys.end(),
-            size_input,
-            start_offset_output_iterator{pages.device_ptr(),
-                                         page_index.begin(),
-                                         0,
-                                         static_cast<int>(src_col_schema),
-                                         static_cast<int>(l_idx)});
+        // for nested hierarchies, compute per-page start offset
+        if (input_col.has_repetition) {
+            thrust::exclusive_scan_by_key(
+              rmm::exec_policy(_stream),
+              page_keys.begin(),
+              page_keys.end(),
+              size_input,
+              start_offset_output_iterator{pages.device_ptr(),
+                                          page_index.begin(),
+                                          0,
+                                          static_cast<int>(src_col_schema),
+                                          static_cast<int>(l_idx)});
         }
       }
     }

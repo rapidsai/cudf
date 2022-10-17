@@ -460,14 +460,8 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s* s, int target_po
   }
 }
 
-/**
- * @brief Output a string descriptor
- *
- * @param[in,out] s Page state input/output
- * @param[in] src_pos Source position
- * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
- */
-inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, void* dstv)
+
+inline __device__ std::pair<const char*, size_t> gpuGetStringData(volatile page_state_s* s, int src_pos)
 {
   const char* ptr = nullptr;
   size_t len      = 0;
@@ -490,6 +484,37 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
       len = s->str_len[src_pos & (non_zero_buffer_size - 1)];
     }
   }
+
+  return {ptr, len};
+}
+
+/**
+ * @brief Get the length of a string
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position 
+ * 
+ * @return The length of the string
+ */
+inline __device__ size_type gpuGetStringSize(volatile page_state_s* s, int src_pos)
+{
+  if(s->dtype_len == 4){
+    return 4;
+  }
+  auto [ptr, len] = gpuGetStringData(s, src_pos);
+  return len;
+}
+
+/**
+ * @brief Output a string descriptor
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
+ */
+inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, void* dstv)
+{
+  auto [ptr, len] = gpuGetStringData(s, src_pos);
   if (s->dtype_len == 4) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
@@ -1383,13 +1408,14 @@ __device__ void gpuDecodeLevels(page_state_s* s, int32_t target_leaf_count, int 
  * @param[in] bounds_set Whether or not s->row_index_lower_bound, s->first_row and s->num_rows
  * have been computed for this page (they will only be set in the second/trim pass).
  */
+template<bool is_string_column>
 static __device__ void gpuUpdatePageSizes(page_state_s* s,
                                           int32_t target_input_value_count,
                                           int t,
                                           bool bounds_set)
 {
   // max nesting depth of the column
-  int max_depth = s->col.max_nesting_depth;
+  int const max_depth = s->col.max_nesting_depth;
   // how many input level values we've processed in the page so far
   int input_value_count = s->input_value_count;
   // how many leaf values we've processed in the page so far
@@ -1402,47 +1428,64 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
     get_nesting_bounds(
       start_depth, end_depth, d, s, input_value_count, target_input_value_count, t);
 
-    // count rows and leaf values
-    int is_new_row                = start_depth == 0 ? 1 : 0;
-    uint32_t warp_row_count_mask  = ballot(is_new_row);
-    int is_new_leaf               = (d >= s->page.nesting[max_depth - 1].max_def_level) ? 1 : 0;
-    uint32_t warp_leaf_count_mask = ballot(is_new_leaf);
 
+    // count rows and leaf values
+    int const is_new_row                = start_depth == 0 ? 1 : 0;
+    uint32_t const warp_row_count_mask  = ballot(is_new_row);
+    int const is_new_leaf               = (d >= s->page.nesting[max_depth - 1].max_def_level) ? 1 : 0;
+    uint32_t const warp_leaf_count_mask = ballot(is_new_leaf);
     // is this thread within row bounds? on the first pass we don't know the bounds, so we will be
     // computing the full size of the column.  on the second pass, we will know our actual row
     // bounds, so the computation will cap sizes properly.
     int in_row_bounds = 1;
-    if (bounds_set) {
-      // absolute row index
-      int32_t thread_row_index =
-        input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
-      in_row_bounds = thread_row_index >= s->row_index_lower_bound &&
-                          thread_row_index < (s->first_row + s->num_rows)
-                        ? 1
-                        : 0;
+    auto const first_thread_in_range = [&](){
+      if (bounds_set) {
+        // absolute row index
+        int32_t thread_row_index =
+          input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
+        in_row_bounds = thread_row_index >= s->row_index_lower_bound &&
+                            thread_row_index < (s->first_row + s->num_rows)
+                          ? 1
+                          : 0;
 
-      uint32_t row_bounds_mask  = ballot(in_row_bounds);
-      int first_thread_in_range = __ffs(row_bounds_mask) - 1;
+        uint32_t const row_bounds_mask  = ballot(in_row_bounds);
+        int const first_thread_in_range = __ffs(row_bounds_mask) - 1;
 
-      // if we've found the beginning of the first row, mark down the position
-      // in the def/repetition buffer (skipped_values) and the data buffer (skipped_leaf_values)
-      if (!t && first_thread_in_range >= 0 && s->page.skipped_values < 0) {
-        // how many values we've skipped in the rep/def levels
-        s->page.skipped_values = input_value_count + first_thread_in_range;
-        // how many values we've skipped in the actual data stream
-        s->page.skipped_leaf_values =
-          input_leaf_count + __popc(warp_leaf_count_mask & ((1 << first_thread_in_range) - 1));
-      }
-    }
+        // if we've found the beginning of the first row, mark down the position
+        // in the def/repetition buffer (skipped_values) and the data buffer (skipped_leaf_values)
+        if (!t && first_thread_in_range >= 0 && s->page.skipped_values < 0) {
+          // how many values we've skipped in the rep/def levels
+          s->page.skipped_values = input_value_count + first_thread_in_range;
+          // how many values we've skipped in the actual data stream
+          s->page.skipped_leaf_values =
+            input_leaf_count + __popc(warp_leaf_count_mask & ((1 << first_thread_in_range) - 1));
+        }
+
+        return first_thread_in_range;
+      }       
+      return 0;
+    }();
 
     // increment counts across all nesting depths
     for (int s_idx = 0; s_idx < max_depth; s_idx++) {
       // if we are within the range of nesting levels we should be adding value indices for
-      int in_nesting_bounds = (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
+      int const in_nesting_bounds = (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
 
-      uint32_t count_mask = ballot(in_nesting_bounds);
+      uint32_t const count_mask = ballot(in_nesting_bounds);
       if (!t) { s->page.nesting[s_idx].size += __popc(count_mask); }
     }
+
+    // if this is a leaf in a string column, add the size    
+    /*
+    if constexpr(is_string_column){
+      if(is_new_leaf){
+        int const src_pos = input_leaf_count + __popc(warp_leaf_count_mask & ((1 << first_thread_in_range) - 1));
+        auto const len = gpuGetStringSize(s, src_pos);
+        auto const len = 4;
+        if (!t) { s->page.str_bytes += len; }
+      }
+    }
+    */ 
 
     input_value_count += min(32, (target_input_value_count - input_value_count));
     input_row_count += __popc(warp_row_count_mask);
@@ -1483,7 +1526,7 @@ __global__ void __launch_bounds__(block_size)
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
-
+  
   if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
     return;
   }
@@ -1491,10 +1534,10 @@ __global__ void __launch_bounds__(block_size)
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+  bool const is_string_column = (s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4;
 
-  // if this is a flat data type, compute the size directly from the number of values.
-  // NOTE: does not work for strings!
-  if (!has_repetition) {
+  // if this is a flat hierarchy (no lists) and is not a string column, compute the size directly from the number of values.  
+  if (!has_repetition && !is_string_column) {
     if (!t) {
       for (size_type idx = 0; idx < pp->num_nesting_levels; idx++) {
         pp->nesting[idx].size = pp->num_input_values;
@@ -1512,8 +1555,9 @@ __global__ void __launch_bounds__(block_size)
   if (!t) {
     s->page.skipped_values      = -1;
     s->page.skipped_leaf_values = -1;
+    s->page.str_bytes           = 0;
     s->input_row_count          = 0;
-    s->input_value_count        = 0;
+    s->input_value_count        = 0;    
 
     // if this isn't the trim pass, make sure we visit absolutely everything
     if (!trim_pass) {
@@ -1534,16 +1578,23 @@ __global__ void __launch_bounds__(block_size)
     while (!s->error && s->input_value_count < s->num_input_values) {
       // decode repetition and definition levels. these will attempt to decode at
       // least up to the target, but may decode a few more.
-      gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
+      if(has_repetition){
+        gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
+      }
       gpuDecodeStream(s->def, s, target_input_count, t, level_type::DEFINITION);
       __syncwarp();
 
       // we may have decoded different amounts from each stream, so only process what we've been
-      int actual_input_count =
-        min(s->lvl_count[level_type::REPETITION], s->lvl_count[level_type::DEFINITION]);
+      int actual_input_count = has_repetition ? min(s->lvl_count[level_type::REPETITION],
+                                                 s->lvl_count[level_type::DEFINITION])
+                                              : s->lvl_count[level_type::DEFINITION];
 
       // process what we got back
-      gpuUpdatePageSizes(s, actual_input_count, t, trim_pass);
+      if(is_string_column){
+        gpuUpdatePageSizes<true>(s, actual_input_count, t, trim_pass);
+      } else {
+        gpuUpdatePageSizes<false>(s, actual_input_count, t, trim_pass);
+      }
       target_input_count = actual_input_count + batch_size;
       __syncwarp();
     }
@@ -1697,144 +1748,6 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     __syncthreads();
   }
 }
-
-struct chunk_row_output_iter {
-  PageInfo* p;
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
-  using iterator_category = thrust::output_device_iterator_tag;
-
-  __host__ __device__ chunk_row_output_iter operator+(int i)
-  {
-    return chunk_row_output_iter{p + i};
-  }
-
-  __host__ __device__ void operator++() { p++; }
-
-  __device__ reference operator[](int i) { return p[i].chunk_row; }
-  __device__ reference operator*() { return p->chunk_row; }
-  __device__ void operator=(value_type v) { p->chunk_row = v; }
-};
-
-struct start_offset_output_iterator {
-  PageInfo* pages;
-  int* page_indices;
-  int cur_index;
-  int src_col_schema;
-  int nesting_depth;
-  int empty               = 0;
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
-  using iterator_category = thrust::output_device_iterator_tag;
-
-  __host__ __device__ start_offset_output_iterator operator+(int i)
-  {
-    return start_offset_output_iterator{
-      pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
-  }
-
-  __host__ __device__ void operator++() { cur_index++; }
-
-  __device__ reference operator[](int i) { return dereference(cur_index + i); }
-  __device__ reference operator*() { return dereference(cur_index); }
-
- private:
-  __device__ reference dereference(int index)
-  {
-    PageInfo const& p = pages[page_indices[index]];
-    if (p.src_col_schema != src_col_schema || p.flags & PAGEINFO_FLAGS_DICTIONARY) { return empty; }
-    return p.nesting[nesting_depth].page_start_value;
-  }
-};
-
-struct cumulative_row_info {
-  size_t row_count;   // cumulative row count
-  size_t size_bytes;  // cumulative size in bytes
-  int key;            // schema index
-};
-struct cumulative_row_sum {
-  cumulative_row_info operator()
-    __device__(cumulative_row_info const& a, cumulative_row_info const& b) const
-  {
-    return cumulative_row_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes, a.key};
-  }
-};
-
-struct row_size_functor {
-  template <typename T>
-  __device__ size_t operator()(size_t num_rows, bool nullable)
-  {
-    auto const element_size = sizeof(device_storage_type_t<T>);
-    return (element_size * num_rows) +
-           (nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0);
-  }
-};
-
-template <>
-__device__ size_t row_size_functor::operator()<list_view>(size_t num_rows, bool nullable)
-{
-  auto const offset_size = sizeof(offset_type);
-  return (offset_size * (num_rows + 1)) +
-         (nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0);
-}
-
-template <>
-__device__ size_t row_size_functor::operator()<struct_view>(size_t num_rows, bool nullable)
-{
-  return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0;
-}
-
-template <>
-__device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, bool nullable)
-{
-  // CUDF_FAIL("String types currently unsupported");
-  return 0;
-}
-
-struct get_cumulative_row_info {
-  PageInfo const* const pages;
-
-  cumulative_row_info operator() __device__(size_type index)
-  {
-    auto const& page = pages[index];
-    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
-      return cumulative_row_info{0, 0, page.src_col_schema};
-    }
-    size_t const row_count = page.nesting[0].size;
-    return cumulative_row_info{
-      row_count,
-      cudf::type_dispatcher(data_type{page.nesting[0].type}, row_size_functor{}, row_count, false),
-      page.src_col_schema};
-  }
-};
-
-struct row_total_size {
-  cumulative_row_info const* const c_info;
-  size_type const* const key_offsets;
-  size_t const num_keys;
-
-  __device__ cumulative_row_info operator()(cumulative_row_info const& i)
-  {
-    // sum sizes for each input column at this row
-    size_t sum = 0;
-    for (int idx = 0; idx < num_keys; idx++) {
-      auto const start = key_offsets[idx];
-      auto const end   = key_offsets[idx + 1];
-      auto iter        = cudf::detail::make_counting_transform_iterator(
-        0, [&] __device__(size_type i) { return c_info[start + i].row_count; });
-      auto const page_index =
-        (thrust::lower_bound(thrust::seq, iter, iter + (end - start), i.row_count) - iter) + start;
-      // printf("KI(%d): start(%d), end(%d), page_index(%d), size_bytes(%lu)\n", idx, start, end,
-      // (int)page_index, c_info[page_index].size_bytes);
-      sum += c_info[page_index].size_bytes;
-    }
-    return {i.row_count, sum};
-  }
-};
 
 void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       hostdevice_vector<ColumnChunkDesc> const& chunks,

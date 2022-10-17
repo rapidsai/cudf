@@ -684,8 +684,8 @@ class aggregate_reader_metadata {
         // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
         // data stored) so add me to the list.
         if (schema_elem.num_children == 0) {
-          input_column_info& input_col =
-            input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+          input_column_info& input_col = input_columns.emplace_back(
+            input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
           // set up child output column for one-level encoding list
           if (schema_elem.is_one_level_list()) {
@@ -1260,12 +1260,18 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
     auto& schema                          = _metadata->get_schema(src_col_schema);
     auto const per_page_nesting_info_size = std::max(
       schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
+    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id()); 
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
     for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
+
+      // this isn't the ideal place to be setting this value (it's not obvious this function would
+      // do it) but we don't have any other places that go host->device with the pages and I'd like to
+      // avoid another copy
+      pages[target_page_index + p_idx].type = type_id;
 
       src_info_index += per_page_nesting_info_size;
     }
@@ -1328,8 +1334,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
           pni[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
           pni[cur_depth].size          = 0;
-          pni[cur_depth].type =
-            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
         }
 
         // move up the hierarchy
@@ -1347,64 +1351,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
   // copy nesting info to the device
   page_nesting_info.host_to_device(_stream);
 }
-
-/**
- * @copydoc cudf::io::detail::parquet::preprocess_columns
- */
-/*
-void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                      hostdevice_vector<gpu::PageInfo>& pages,
-                                      size_t min_row,
-                                      size_t total_rows,
-                                      bool uses_custom_row_bounds,
-                                      size_type chunked_read_size)
-{
-  // iterate over all input columns and allocate any associated output
-  // buffers if they are not part of a list hierarchy. mark down
-  // if we have any list columns that need further processing.
-  bool has_lists = false;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col = _input_columns[idx];
-    size_t max_depth      = input_col.nesting_depth();
-
-    auto* cols = &_output_columns;
-    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
-      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-      cols          = &out_buf.children;
-
-      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
-      // to know how big this buffer actually is.
-      if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
-        has_lists = true;
-      }
-      // if we haven't already processed this column because it is part of a struct hierarchy
-      else if (out_buf.size == 0) {
-        // add 1 for the offset if this is a list column
-        out_buf.create(
-          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
-          _stream,
-          _mr);
-      }
-    }
-  }
-
-  // if we have columns containing lists, or if we're doing chunked reads,
-  // further preprocessing is necessary.
-  if (has_lists || chunked_read_size > 0) {
-    gpu::PreprocessColumnData(pages,
-                              chunks,
-                              _input_columns,
-                              _output_columns,
-                              total_rows,
-                              min_row,
-                              uses_custom_row_bounds,
-                              chunked_read_size,
-                              _stream,
-                              _mr);
-    _stream.synchronize();
-  }
-}
-*/
 
 /**
  * @copydoc cudf::io::detail::parquet::decode_page_data
@@ -1770,7 +1716,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
       // TODO: make this a parameter.
-      // auto const chunked_read_size = 240000;
+      //auto const chunked_read_size = 240000;
       auto const chunked_read_size = 0;
       auto chunk_reads             = preprocess_columns(
         chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, chunked_read_size);
