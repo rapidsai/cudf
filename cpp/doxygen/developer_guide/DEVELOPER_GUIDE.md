@@ -346,7 +346,7 @@ the device view can be obtained via function `column_device_view::create(column_
 data, a specialized device view for list columns can be constructed via
 `lists_column_device_view(column_device_view)`.
 
-# libcudf policies and design principles
+# libcudf Policies and Design Principles
 
 Some aspects of libcudf usage may be surprising to new users.
 As a performance-oriented library, many design decisions prioritize flexibility and performance in ways that require some additional work or input from client code.
@@ -357,32 +357,50 @@ We document these policies and the reasons behind them here:
 libcudf APIs generally do not perform deep introspection and validation of input data.
 There are numerous reasons for this:
 1. It violates the single responsibility principle: validation is separate from execution.
-2. Since libcudf data structures store data on the GPU, any validation incurs the minimal overhead of a kernel launch.
+2. Since libcudf data structures store data on the GPU, any validation incurs _at minimum_ the overhead of a kernel launch, and may in general be prohibitively expensive..
 3. API promises around data introspection often significantly complicate implementation.
 
 Users are therefore responsible for passing valid data into such APIs.
 _Note that this policy does not mean that libcudf performs no validation whatsoever_.
-libcudf APIs should still perform any validation that does not require introspection, such as checking whether input column/table sizes or dtypes are appropriate.
+libcudf APIs should still perform any validation that does not require introspection.
+To give some idea of what should or should not be validated, here are (non-exhaustive) lists of examples.
+
+**Things that libcudf should validate**:
+- Input column/table sizes or dtypes
+
+**Things that libcudf should not validate**:
+- Integer overflow
+- Ensuring that outputs will not exceed the 2GB size limit for a given set of inputs
 
 **TODO: What about checking null counts? The most likely path to fixing the implicit kernel invocation in `null_count` (which we have to remove in order to present a safe stream-ordered API) is forcing specification of the null count on construction, which would make checking null counts a cheap operation.**
 
-## libcudf will not sanitize nulls for nested types
+## libcudf expects nested types to have sanitized null masks
 
 Various libcudf APIs accepting columns of nested dtypes (such as `LIST` or `STRUCT`) may assume that these columns have been sanitized.
 In this context, sanitization refers to ensuring that the null elements in a column with a nested dtype are compatible with the elements of nested columns.
 Specifically:
-- Null elements of list columns should also be empty. They should not contain arbitrary data.
+- Null elements of list columns should also be empty. The starting offset of a null element should be equal to the ending offset.
 - Null elements of struct columns should also be null elements in the underlying structs.
+- Nulls should only ever be present at the level of the parent column. Child columns should never contain nulls.
+- Slice operations on nested columns do not propagate offsets to child columns.
 
 **TODO: Do we still need to ensure the above with the new nested comparators? Since the nested comparators no longer operate based on flattening struct columns, I suspect that we will no longer need to superimpose parent nulls. We'll need to check that, though.**
 
 libcudf APIs _should_ promise to never return "dirty" columns, i.e. columns containing unsanitized data.
 Therefore, the only problem is if users construct input columns that are not correctly sanitized and then pass those into libcudf APIs.
 
-## libcudf does not synchronize streams
+## libcudf does not synchronize CUDA streams
 
-libcudf APIs may not synchronize the used stream before returning.
-It is incumbent on calling code to perform any syncs needed before accessing returned data.
+libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
+Work in cudf occurs on `cudf::get_default_stream().value`, which defaults to the CUDA default stream (stream 0).
+Note that the stream 0 behavior differs if [per-thread default stream is enabled](https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html) via `CUDF_USE_PER_THREAD_DEFAULT_STREAM`.
+Any data provided to or returned by libcudf that uses a separate non-blocking stream requires synchronization with the default libcudf stream to ensure stream safety.
+
+## libcudf generally does not make ordering guarantees
+
+Functions like merge or groupby in libcudf make no guarantees about the order of entries in the output.
+Promising deterministic ordering is not, in general, conducive to fast parallel algorithms.
+Calling code is responsible for performing sorts after the fact if sorted outputs are needed.
 
 # libcudf++ API and Implementation
 
