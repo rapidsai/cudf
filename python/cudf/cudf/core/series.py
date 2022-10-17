@@ -3616,7 +3616,10 @@ class DatetimeProperties:
         dtype: int16
         """
         return Series(
-            data=(self.series._column.get_dt_field("millisecond") * 1000)
+            data=(
+                self.series._column.get_dt_field("millisecond")
+                * cudf.Scalar(1000, dtype="int32")
+            )
             + self.series._column.get_dt_field("microsecond"),
             index=self.series._index,
             name=self.series.name,

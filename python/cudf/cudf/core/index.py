@@ -2071,7 +2071,10 @@ class DatetimeIndex(GenericIndex):
         Int32Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
         return as_index(
-            (self._values.get_dt_field("millisecond") * 1000)
+            (
+                self._values.get_dt_field("millisecond")
+                * cudf.Scalar(1000, dtype="int32")
+            )
             + self._values.get_dt_field("microsecond"),
             name=self.name,
         )
