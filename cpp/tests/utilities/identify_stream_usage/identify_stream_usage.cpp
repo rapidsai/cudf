@@ -114,6 +114,8 @@ void check_stream_and_error(cudaStream_t stream)
  * @brief Container for CUDA APIs that have been overloaded using DEFINE_OVERLOAD.
  *
  * This variable must be initialized before everything else.
+ *
+ * @see find_originals for a description of the priorities
  */
 __attribute__((init_priority(1001))) std::unordered_map<std::string, void*> originals;
 
@@ -127,6 +129,8 @@ __attribute__((init_priority(1001))) std::unordered_map<std::string, void*> orig
  * Note that since this only defines the function, we do not need default
  * parameter values since those will be provided by the original declarations
  * in CUDA itself.
+ *
+ * @see find_originals for a description of the priorities
  *
  * @param function The function to overload.
  * @param signature The function signature (must include names, not just types).
