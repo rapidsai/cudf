@@ -3629,7 +3629,7 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        patterns : Series of Index
+        patterns : array-like, Sequence or Series
             Patterns to search for in the given Series/Index.
 
         Returns
@@ -3648,28 +3648,39 @@ class StringMethods(ColumnMethods):
         2     search
         3         in
         dtype: object
-        >>> t = cudf.Series(["a", "s", "g", "i", "o", "r"])
+        >>> t = cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"])
+        >>> t
+        0         a
+        1    string
+        2         g
+        3       inn
+        4         o
+        5         r
+        6       sea
+        dtype: object
         >>> s.str.find_multiple(t)
-        0       [-1, 0, 5, 3, -1, 2]
-        1    [-1, -1, -1, -1, 1, -1]
-        2      [2, 0, -1, -1, -1, 3]
-        3    [-1, -1, -1, 0, -1, -1]
+        0       [-1, 0, 5, -1, -1, 2, -1]
+        1     [-1, -1, -1, -1, 1, -1, -1]
+        2       [2, -1, -1, -1, -1, 3, 0]
+        3    [-1, -1, -1, -1, -1, -1, -1]
         dtype: list
         """
-        if not isinstance(patterns, (cudf.Series, cudf.Index)):
+        if can_convert_to_column(patterns):
+            patterns_column = column.as_column(patterns)
+        else:
             raise TypeError(
-                "patterns can only be a Series/Index, "
-                f"got: {type(patterns)}"
+                "patterns should be an array-like or a Series object, "
+                f"found {type(patterns)}"
             )
 
-        if not isinstance(patterns._column, StringColumn):
+        if not isinstance(patterns_column, StringColumn):
             raise TypeError(
                 "patterns can only be of 'string' dtype, "
-                f"got: {patterns.dtype}"
+                f"got: {patterns_column.dtype}"
             )
 
         return cudf.Series(
-            libstrings.find_multiple(self._column, patterns._column),
+            libstrings.find_multiple(self._column, patterns_column),
             index=self._parent.index
             if isinstance(self._parent, cudf.Series)
             else self._parent,
