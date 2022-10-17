@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -288,8 +288,8 @@ TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
   cudf::table_view input_table{{input}};
 
   // negative
-  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_neg, true), cudf::logic_error);
+  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_neg), cudf::logic_error);
 
   // overflow
-  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_overflow, true), cudf::logic_error);
+  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_overflow), cudf::logic_error);
 }
