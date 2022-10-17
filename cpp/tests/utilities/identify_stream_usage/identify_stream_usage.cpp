@@ -129,30 +129,23 @@ __attribute__((init_priority(1001))) std::unordered_map<std::string, void*> orig
  * in CUDA itself.
  *
  * @param function The function to overload.
- * @param ret_type The return type of the function
  * @param signature The function signature (must include names, not just types).
  * @parameter arguments The function arguments (names only, no types).
  */
-#define DEFINE_OVERLOAD(function, ret_type, signature, arguments, attributes) \
-  using function##_t = ret_type (*)(signature);                               \
-                                                                              \
-  attributes ret_type function(signature)                                     \
-  {                                                                           \
-    check_stream_and_error(stream);                                           \
-    return ((function##_t)originals[#function])(arguments);                   \
-  }                                                                           \
+#define DEFINE_OVERLOAD(function, signature, arguments)     \
+  using function##_t = cudaError_t (*)(signature);          \
+                                                            \
+  cudaError_t function(signature)                           \
+  {                                                         \
+    check_stream_and_error(stream);                         \
+    return ((function##_t)originals[#function])(arguments); \
+  }                                                         \
   __attribute__((constructor(1002))) void queue_##function() { originals[#function] = nullptr; }
 
 /**
  * @brief Helper macro to define macro arguments that contain a comma.
  */
 #define ARG(...) __VA_ARGS__
-
-#define DEFINE_OVERLOAD_HOST(function, ret_type, signature, arguments) \
-  DEFINE_OVERLOAD(function, ret_type, ARG(signature), ARG(arguments), __host__)
-
-#define DEFINE_OVERLOAD_HOST_DEVICE(function, ret_type, signature, arguments) \
-  DEFINE_OVERLOAD(function, ret_type, ARG(signature), ARG(arguments), __host__ __device__)
 
 // clang-format off
 /*
@@ -176,142 +169,119 @@ __attribute__((init_priority(1001))) std::unordered_map<std::string, void*> orig
 
 // Event APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT
-DEFINE_OVERLOAD_HOST_DEVICE(cudaEventRecord,
-                            cudaError_t,
-                            ARG(cudaEvent_t event, cudaStream_t stream),
-                            ARG(event, stream));
+DEFINE_OVERLOAD(cudaEventRecord, ARG(cudaEvent_t event, cudaStream_t stream), ARG(event, stream));
 
-DEFINE_OVERLOAD_HOST(cudaEventRecordWithFlags,
-                     cudaError_t,
-                     ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
-                     ARG(event, stream, flags));
+DEFINE_OVERLOAD(cudaEventRecordWithFlags,
+                ARG(cudaEvent_t event, cudaStream_t stream, unsigned int flags),
+                ARG(event, stream, flags));
 
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
-DEFINE_OVERLOAD_HOST(cudaLaunchKernel,
-                     cudaError_t,
-                     ARG(const void* func,
-                         dim3 gridDim,
-                         dim3 blockDim,
-                         void** args,
-                         size_t sharedMem,
-                         cudaStream_t stream),
-                     ARG(func, gridDim, blockDim, args, sharedMem, stream));
-DEFINE_OVERLOAD_HOST(cudaLaunchCooperativeKernel,
-                     cudaError_t,
-                     ARG(const void* func,
-                         dim3 gridDim,
-                         dim3 blockDim,
-                         void** args,
-                         size_t sharedMem,
-                         cudaStream_t stream),
-                     ARG(func, gridDim, blockDim, args, sharedMem, stream));
-DEFINE_OVERLOAD_HOST(cudaLaunchHostFunc,
-                     cudaError_t,
-                     ARG(cudaStream_t stream, cudaHostFn_t fn, void* userData),
-                     ARG(stream, fn, userData));
+DEFINE_OVERLOAD(cudaLaunchKernel,
+                ARG(const void* func,
+                    dim3 gridDim,
+                    dim3 blockDim,
+                    void** args,
+                    size_t sharedMem,
+                    cudaStream_t stream),
+                ARG(func, gridDim, blockDim, args, sharedMem, stream));
+DEFINE_OVERLOAD(cudaLaunchCooperativeKernel,
+                ARG(const void* func,
+                    dim3 gridDim,
+                    dim3 blockDim,
+                    void** args,
+                    size_t sharedMem,
+                    cudaStream_t stream),
+                ARG(func, gridDim, blockDim, args, sharedMem, stream));
+DEFINE_OVERLOAD(cudaLaunchHostFunc,
+                ARG(cudaStream_t stream, cudaHostFn_t fn, void* userData),
+                ARG(stream, fn, userData));
 
 // Memory transfer APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
-DEFINE_OVERLOAD_HOST(cudaMemPrefetchAsync,
-                     cudaError_t,
-                     ARG(const void* devPtr, size_t count, int dstDevice, cudaStream_t stream),
-                     ARG(devPtr, count, dstDevice, stream));
-DEFINE_OVERLOAD_HOST_DEVICE(cudaMemcpy2DAsync,
-                            cudaError_t,
-                            ARG(void* dst,
-                                size_t dpitch,
-                                const void* src,
-                                size_t spitch,
-                                size_t width,
-                                size_t height,
-                                cudaMemcpyKind kind,
-                                cudaStream_t stream),
-                            ARG(dst, dpitch, src, spitch, width, height, kind, stream));
-DEFINE_OVERLOAD_HOST(cudaMemcpy2DFromArrayAsync,
-                     cudaError_t,
-                     ARG(void* dst,
-                         size_t dpitch,
-                         cudaArray_const_t src,
-                         size_t wOffset,
-                         size_t hOffset,
-                         size_t width,
-                         size_t height,
-                         cudaMemcpyKind kind,
-                         cudaStream_t stream),
-                     ARG(dst, dpitch, src, wOffset, hOffset, width, height, kind, stream));
-DEFINE_OVERLOAD_HOST(cudaMemcpy2DToArrayAsync,
-                     cudaError_t,
-                     ARG(cudaArray_t dst,
-                         size_t wOffset,
-                         size_t hOffset,
-                         const void* src,
-                         size_t spitch,
-                         size_t width,
-                         size_t height,
-                         cudaMemcpyKind kind,
-                         cudaStream_t stream),
-                     ARG(dst, wOffset, hOffset, src, spitch, width, height, kind, stream));
-DEFINE_OVERLOAD_HOST_DEVICE(cudaMemcpy3DAsync,
-                            cudaError_t,
-                            ARG(const cudaMemcpy3DParms* p, cudaStream_t stream),
-                            ARG(p, stream));
-DEFINE_OVERLOAD_HOST(cudaMemcpy3DPeerAsync,
-                     cudaError_t,
-                     ARG(const cudaMemcpy3DPeerParms* p, cudaStream_t stream),
-                     ARG(p, stream));
-DEFINE_OVERLOAD_HOST_DEVICE(
+DEFINE_OVERLOAD(cudaMemPrefetchAsync,
+                ARG(const void* devPtr, size_t count, int dstDevice, cudaStream_t stream),
+                ARG(devPtr, count, dstDevice, stream));
+DEFINE_OVERLOAD(cudaMemcpy2DAsync,
+                ARG(void* dst,
+                    size_t dpitch,
+                    const void* src,
+                    size_t spitch,
+                    size_t width,
+                    size_t height,
+                    cudaMemcpyKind kind,
+                    cudaStream_t stream),
+                ARG(dst, dpitch, src, spitch, width, height, kind, stream));
+DEFINE_OVERLOAD(cudaMemcpy2DFromArrayAsync,
+                cudaError_t,
+                ARG(void* dst,
+                    size_t dpitch,
+                    cudaArray_const_t src,
+                    size_t wOffset,
+                    size_t hOffset,
+                    size_t width,
+                    size_t height,
+                    cudaMemcpyKind kind,
+                    cudaStream_t stream),
+                ARG(dst, dpitch, src, wOffset, hOffset, width, height, kind, stream));
+DEFINE_OVERLOAD(cudaMemcpy2DToArrayAsync,
+                ARG(cudaArray_t dst,
+                    size_t wOffset,
+                    size_t hOffset,
+                    const void* src,
+                    size_t spitch,
+                    size_t width,
+                    size_t height,
+                    cudaMemcpyKind kind,
+                    cudaStream_t stream),
+                ARG(dst, wOffset, hOffset, src, spitch, width, height, kind, stream));
+DEFINE_OVERLOAD(cudaMemcpy3DAsync,
+                ARG(const cudaMemcpy3DParms* p, cudaStream_t stream),
+                ARG(p, stream));
+DEFINE_OVERLOAD(cudaMemcpy3DPeerAsync,
+                ARG(const cudaMemcpy3DPeerParms* p, cudaStream_t stream),
+                ARG(p, stream));
+DEFINE_OVERLOAD(
   cudaMemcpyAsync,
-  cudaError_t,
   ARG(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream),
   ARG(dst, src, count, kind, stream));
-DEFINE_OVERLOAD_HOST(cudaMemcpyFromSymbolAsync,
-                     cudaError_t,
-                     ARG(void* dst,
-                         const void* symbol,
-                         size_t count,
-                         size_t offset,
-                         cudaMemcpyKind kind,
-                         cudaStream_t stream),
-                     ARG(dst, symbol, count, offset, kind, stream));
-DEFINE_OVERLOAD_HOST(cudaMemcpyToSymbolAsync,
-                     cudaError_t,
-                     ARG(const void* symbol,
-                         const void* src,
-                         size_t count,
-                         size_t offset,
-                         cudaMemcpyKind kind,
-                         cudaStream_t stream),
-                     ARG(symbol, src, count, offset, kind, stream));
-DEFINE_OVERLOAD_HOST_DEVICE(
+DEFINE_OVERLOAD(cudaMemcpyFromSymbolAsync,
+                ARG(void* dst,
+                    const void* symbol,
+                    size_t count,
+                    size_t offset,
+                    cudaMemcpyKind kind,
+                    cudaStream_t stream),
+                ARG(dst, symbol, count, offset, kind, stream));
+DEFINE_OVERLOAD(cudaMemcpyToSymbolAsync,
+                ARG(const void* symbol,
+                    const void* src,
+                    size_t count,
+                    size_t offset,
+                    cudaMemcpyKind kind,
+                    cudaStream_t stream),
+                ARG(symbol, src, count, offset, kind, stream));
+DEFINE_OVERLOAD(
   cudaMemset2DAsync,
-  cudaError_t,
   ARG(void* devPtr, size_t pitch, int value, size_t width, size_t height, cudaStream_t stream),
   ARG(devPtr, pitch, value, width, height, stream));
-DEFINE_OVERLOAD_HOST_DEVICE(
+DEFINE_OVERLOAD(
   cudaMemset3DAsync,
-  cudaError_t,
   ARG(cudaPitchedPtr pitchedDevPtr, int value, cudaExtent extent, cudaStream_t stream),
   ARG(pitchedDevPtr, value, extent, stream));
-DEFINE_OVERLOAD_HOST_DEVICE(cudaMemsetAsync,
-                            cudaError_t,
-                            ARG(void* devPtr, int value, size_t count, cudaStream_t stream),
-                            ARG(devPtr, value, count, stream));
+DEFINE_OVERLOAD(cudaMemsetAsync,
+                ARG(void* devPtr, int value, size_t count, cudaStream_t stream),
+                ARG(devPtr, value, count, stream));
 
 // Memory allocation APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY__POOLS.html#group__CUDART__MEMORY__POOLS
-DEFINE_OVERLOAD_HOST(cudaFreeAsync,
-                     cudaError_t,
-                     ARG(void* devPtr, cudaStream_t stream),
-                     ARG(devPtr, stream));
-DEFINE_OVERLOAD_HOST(cudaMallocAsync,
-                     cudaError_t,
-                     ARG(void** devPtr, size_t size, cudaStream_t stream),
-                     ARG(devPtr, size, stream));
-DEFINE_OVERLOAD_HOST(cudaMallocFromPoolAsync,
-                     cudaError_t,
-                     ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
-                     ARG(ptr, size, memPool, stream));
+DEFINE_OVERLOAD(cudaFreeAsync, ARG(void* devPtr, cudaStream_t stream), ARG(devPtr, stream));
+DEFINE_OVERLOAD(cudaMallocAsync,
+                ARG(void** devPtr, size_t size, cudaStream_t stream),
+                ARG(devPtr, size, stream));
+DEFINE_OVERLOAD(cudaMallocFromPoolAsync,
+                ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
+                ARG(ptr, size, memPool, stream));
 
 /**
  * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.
