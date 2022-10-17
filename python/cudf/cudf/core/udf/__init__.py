@@ -27,6 +27,7 @@ _supported_masked_types = (
     | {types.boolean}
 )
 _STRING_UDFS_ENABLED = False
+cudf_str_dtype = dtype(str)
 try:
     import strings_udf
 
@@ -44,42 +45,16 @@ try:
             udf_string,
         )
 
-        # add an overload of MaskedType.__init__(string_view, bool)
-        cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
-            masked_lowering.masked_constructor
-        )
-
-        # add an overload of pack_return(string_view)
-        cuda_lower(api.pack_return, strings_typing.string_view)(
-            masked_lowering.pack_return_scalar_impl
-        )
-
         _supported_masked_types |= {strings_typing.string_view}
-        utils.launch_arg_getters[dtype("O")] = to_string_view_array
-        utils.masked_array_types[dtype("O")] = string_view
+        utils.launch_arg_getters[cudf_str_dtype] = to_string_view_array
+        utils.output_col_getters[cudf_str_dtype] = from_udf_string_array
+        utils.masked_array_types[cudf_str_dtype] = string_view
+        row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes
+
         utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
         utils.ptx_files.append(ptxpath)
         utils.arg_handlers.append(str_view_arg_handler)
         utils.udf_return_type_map[string_view] = udf_string
-        row_function.itemsizes[dtype("O")] = string_view.size_bytes
-
-        def _return_arr_from_dtype(dt, size):
-            if dt == np.dtype("O"):
-                result = rmm.DeviceBuffer(size=size * udf_string.size_bytes)
-                return result
-            else:
-                return cp.empty(size, dtype=dt)
-
-        utils._return_arr_from_dtype = _return_arr_from_dtype
-
-        def _post_process_output_col(col, retty):
-            if retty == np.dtype("O"):
-                return from_udf_string_array(col)
-            else:
-                return as_column(col, retty)
-
-        utils._post_process_output_col = _post_process_output_col
-
         _STRING_UDFS_ENABLED = True
     else:
         del strings_udf
@@ -87,4 +62,6 @@ try:
 except ImportError as e:
     # allow cuDF to work without strings_udf
     pass
-masked_typing.register_masked_constructor(_supported_masked_types)
+
+masked_typing._register_masked_constructor_typing(_supported_masked_types)
+masked_lowering._register_masked_constructor_lowering(_supported_masked_types)

@@ -11,6 +11,8 @@ from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
+import rmm
+
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.masked_typing import MaskedType
@@ -33,6 +35,9 @@ precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 arg_handlers: List[Any] = []
 ptx_files: List[Any] = []
 udf_return_type_map: Dict[Any, Any] = {}
+masked_array_types: Dict[Any, Any] = {}
+launch_arg_getters: Dict[Any, Any] = {}
+output_col_getters: Dict[Any, Any] = {}
 
 
 @_cudf_nvtx_annotate
@@ -114,9 +119,6 @@ def _supported_cols_from_frame(frame):
         for colname, col in frame._data.items()
         if _is_jit_supported_type(col.dtype)
     }
-
-
-masked_array_types: Dict[Any, Any] = {}
 
 
 def _masked_array_type_from_col(col):
@@ -241,9 +243,6 @@ def _get_kernel(kernel_string, globals_, sig, func):
     return kernel
 
 
-launch_arg_getters: Dict[Any, Any] = {}
-
-
 def _get_input_args_from_frame(fr):
     args = []
     offsets = []
@@ -265,8 +264,14 @@ def _get_input_args_from_frame(fr):
 
 
 def _return_arr_from_dtype(dt, size):
+    extensionty = udf_return_type_map.get(masked_array_types.get(dt))
+    if extensionty:
+        return rmm.DeviceBuffer(size=size * extensionty.size_bytes)
     return cp.empty(size, dtype=dt)
 
 
 def _post_process_output_col(col, retty):
+    getter = output_col_getters.get(retty)
+    if getter:
+        col = getter(col)
     return as_column(col, retty)
