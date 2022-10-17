@@ -532,7 +532,7 @@ class output_builder {
 
   /**
    * @brief Returns the span consisting of all currently unused elements in the vector
-   * (`i >= size() and i < capaci:y()`).
+   * (`i >= size() and i < capacity()`).
    *
    * @param vector The vector.
    * @return The span of unused elements.
@@ -714,7 +714,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       found_last_offset = true;
       return end_loc + 1;
     }();
-    row_offset_storage.advance_output(new_offsets, stream);
+    row_offset_storage.advance_output(new_offsets, scan_stream);
     // determine if we found the first or last field offset for the byte range
     if (new_offsets > 0 and not first_row_offset) {
       first_row_offset = row_offset_storage.front_element(scan_stream);
@@ -731,7 +731,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       auto const split = begin + std::min<byte_offset>(output_size, char_output.head().size());
       thrust::copy(rmm::exec_policy_nosync(scan_stream), begin, split, char_output.head().begin());
       thrust::copy(rmm::exec_policy_nosync(scan_stream), split, end, char_output.tail().begin());
-      char_storage.advance_output(output_size, stream);
+      char_storage.advance_output(output_size, scan_stream);
     }
 
     cudaEventRecord(last_launch_event, scan_stream.value());
