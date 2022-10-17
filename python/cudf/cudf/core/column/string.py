@@ -3635,9 +3635,8 @@ class StringMethods(ColumnMethods):
         Returns
         -------
         Series
-            A Series with a list of all indices
-            if the pattern's first occurrence.
-            -1 if a pattern is not found.
+            A Series with a list of indices of each pattern's first occurrence.
+            If a pattern is not found, -1 is returned for that index.
 
         Examples
         --------
