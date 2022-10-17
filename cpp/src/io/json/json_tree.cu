@@ -526,14 +526,13 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   {
     CUDF_SCOPED_RANGE("new method");
 
-    // TODO two-level hashing:  one for field names
-    // and another for {node-level, node_category} + field hash for the entire path
-    // {node_level, node_type} recursively using parent_node_id
+    // Two-level hashing:
+    // one for field names -> node_type and
+    // another for {node-level, node_category} + field hash for the entire path
+    // which is {node_level, node_type} recursively using parent_node_id
     using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
     using hash_map_type =
       cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
-    // std::cout<<"num_nodes: "<<num_nodes<<std::endl;
-    // std::cout<<"hash_size: "<<compute_hash_table_size(num_nodes, 50)<<std::endl;
 
     constexpr size_type empty_node_index_sentinel = -1;
     hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
@@ -542,7 +541,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                           cuco::sentinel::erased_key{-2},
                           hash_table_allocator_type{default_allocator<char>{}, stream},
                           stream.value()};
-    // path compression is not used since extra write makes all map operations slow.
+    // path compression is not used since extra writes make all map operations slow.
     auto d_hasher1 = [node_level      = node_levels.begin(),
                       node_type       = node_type.begin(),
                       parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
@@ -590,7 +589,6 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
       return node_id1 == node_id2;
     };
     CUDF_PUSH_RANGE("insert");
-    // key_map.insert(iter, iter + num_nodes, d_hasher, d_equal, stream.value());
     auto num_inserted = thrust::count_if(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
@@ -643,14 +641,15 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
 /**
  * @brief Computes row indices of each node in the hierarchy.
  * 5. Generate row_offset.
- *   a. stable_sort by parent_col_id.
- *   b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
- *   c. propagate to non-list leaves from parent list node by recursion
+ *   a. filter only list childs
+ *   b. stable_sort by parent_col_id.
+ *   c. scan_by_key {parent_col_id} (done only on nodes who's parent is list)
+ *   d. propagate to non-list leaves from parent list node by recursion
  *
  * pre-condition:
  *  d_tree.node_categories, d_tree.parent_node_ids, parent_col_id are in order of node_id.
  * post-condition: row_offsets is in order of node_id.
- *  parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
+ *  parent_col_id is moved and reused inside this function.
  * @param parent_col_id parent node's column id
  * @param d_tree Tree representation of the JSON string
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -668,7 +667,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
   CUDF_POP_RANGE();
-  // sort, scan only list childs. (nodes who's parent is a list/root)
+  // filter only list childs. (nodes who's parent is a list/root)
   CUDF_PUSH_RANGE("remove_if");
   auto list_parent_end =
     thrust::remove_if(rmm::exec_policy(stream),
@@ -756,8 +755,9 @@ Algorithm:
   b. sort and use binary search to generate column ids.
   c. Translate parent node ids to parent column ids.
 4. Generate row_offset.
+  a. filter only list childs
   a. stable_sort by parent_col_id.
-  b. scan_by_key {parent_col_id} (required only on nodes whose parent is a list)
+  b. scan_by_key {parent_col_id} (done only on nodes whose parent is a list)
   c. propagate to non-list leaves from parent list node by recursion
 **/
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
@@ -769,7 +769,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
   CUDF_FUNC_RANGE();
   // 1. Convert node_category + field_name to node_type.
 
-  // scope limit this or mode inside generate_column_id
+  // TODO scope limit this or mode inside generate_column_id
   rmm::device_uvector<size_type> node_type =
     hash_node_type_with_field_name(d_input, d_tree, stream);
 
