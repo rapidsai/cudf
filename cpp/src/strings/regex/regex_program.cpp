@@ -33,6 +33,7 @@ std::unique_ptr<regex_program> regex_program::create(std::string_view pattern,
 }
 
 regex_program::regex_program()                      = default;
+regex_program::~regex_program()                     = default;
 regex_program::regex_program(regex_program&& other) = default;
 regex_program& regex_program::operator=(regex_program&& other) = default;
 

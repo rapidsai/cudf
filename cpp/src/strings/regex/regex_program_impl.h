@@ -24,9 +24,19 @@
 namespace cudf {
 namespace strings {
 
+/**
+ * @brief Implementation object for regex_program
+ *
+ * It encapsulates internal reprog object used for building its device equivalent
+ */
 struct regex_program::regex_program_impl {
   detail::reprog prog;
 
+  /**
+   * @brief Return device instance of reprog object
+   *
+   * @param stream CUDA stream to use for device memory allocations and copies
+   */
   auto create_prog_device(rmm::cuda_stream_view stream)
   {
     return detail::reprog_device::create(prog, stream);

@@ -30,9 +30,9 @@ namespace strings {
  */
 
 /**
- * @brief Regex program class.
+ * @brief Regex program class
  *
- * Create an instance from a regex pattern and use it to call
+ * Create an instance from a regex pattern and use it to call the appropriate
  * strings APIs. An instance can be reused.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns and APIs the support regex.
@@ -43,9 +43,11 @@ struct regex_program {
   /**
    * @brief Create a program from a pattern
    *
+   * @throw cudf::logic_error If pattern is found to be invalid or contain unsupported features
+   *
    * @param pattern Regex pattern
    * @param flags Regex flags for interpreting special characters in the pattern
-   * @param capture Control how capture groups in the pattern are used
+   * @param capture Controls how capture groups in the pattern are used
    * @return Instance of this object
    */
   static std::unique_ptr<regex_program> create(std::string_view pattern,
@@ -116,6 +118,8 @@ struct regex_program {
    * @return regex pattern as a string
    */
   std::size_t compute_working_memory_size(int32_t num_threads) const;
+
+  ~regex_program();
 
  private:
   regex_program();
