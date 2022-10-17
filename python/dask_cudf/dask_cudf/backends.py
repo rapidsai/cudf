@@ -438,9 +438,13 @@ try:
     class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         @staticmethod
         def from_dict(data, npartitions, orient="columns", **kwargs):
+            from dask_cudf import from_cudf
+
             if orient != "columns":
                 raise ValueError(f"orient={orient} is not supported")
-            return dd.from_pandas(
+            # TODO: Use cudf.from_dict
+            # (See: https://github.com/rapidsai/cudf/issues/11934)
+            return from_cudf(
                 cudf.DataFrame(data),
                 npartitions=npartitions,
             )
