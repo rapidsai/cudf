@@ -114,10 +114,10 @@ struct regex_program {
   /**
    * @brief Return the pattern used to create this instance
    *
-   * @param num_threads Number of parallel threads for computation
-   * @return regex pattern as a string
+   * @param num_strings Number of strings for computation
+   * @return Size of the working memory in bytes
    */
-  std::size_t compute_working_memory_size(int32_t num_threads) const;
+  std::size_t compute_working_memory_size(int32_t num_strings) const;
 
   ~regex_program();
 
