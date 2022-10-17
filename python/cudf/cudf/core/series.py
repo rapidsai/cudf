@@ -3613,7 +3613,7 @@ class DatetimeProperties:
         0    0
         1    1
         2    2
-        dtype: int16
+        dtype: int32
         """
         return Series(
             data=(
