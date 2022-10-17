@@ -46,10 +46,6 @@ namespace detail {
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws cudf::logic_error if `check_bounds == true` and an index exists in
- * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the target table. If `check_bounds == false`, the behavior is undefined.
- *
  * @param source The input columns containing values to be scattered into the
  * target columns
  * @param scatter_map A non-nullable column of integral indices that maps the
@@ -57,8 +53,6 @@ namespace detail {
  * to or less than the number of elements in the source columns.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
- * @param check_bounds Optionally perform bounds checking on the values of
- * `scatter_map` and throw an error if any of its values are out of bounds.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
@@ -67,7 +61,6 @@ std::unique_ptr<table> scatter(
   table_view const& source,
   column_view const& scatter_map,
   table_view const& target,
-  bool check_bounds                   = false,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -81,7 +74,6 @@ std::unique_ptr<table> scatter(
   table_view const& source,
   device_span<size_type const> const scatter_map,
   table_view const& target,
-  bool check_bounds                   = false,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -101,18 +93,12 @@ std::unique_ptr<table> scatter(
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
- * @throws cudf::logic_error if `check_bounds == true` and an index exists in
- * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the target table. If `check_bounds == false`, the behavior is undefined.
- *
  * @param source The input scalars containing values to be scattered into the
  * target columns
  * @param indices A non-nullable column of integral indices that indicate
  * the rows in the target table to be replaced by source.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
- * @param check_bounds Optionally perform bounds checking on the values of
- * `scatter_map` and throw an error if any of its values are out of bounds.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
@@ -121,7 +107,6 @@ std::unique_ptr<table> scatter(
   std::vector<std::reference_wrapper<const scalar>> const& source,
   column_view const& indices,
   table_view const& target,
-  bool check_bounds                   = false,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
