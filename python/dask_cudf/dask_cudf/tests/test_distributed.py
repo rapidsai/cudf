@@ -6,6 +6,7 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.distributed import Client
+from dask.utils_test import hlg_layer
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
@@ -77,3 +78,17 @@ def test_str_series_roundtrip():
 
             actual = dask_series.compute()
             assert_eq(actual, expected)
+
+
+def test_groupby_worker_aca():
+    with dask_cuda.LocalCUDACluster(n_workers=2) as cluster:
+        with Client(cluster):
+            df = cudf.DataFrame({"a": range(400), "b": [3, 1, 2, 4] * 100})
+            ddf = dask_cudf.from_cudf(df, npartitions=10)
+
+            with dask.config.set({"worker-aca": True}):
+                agg = ddf.groupby("b", sort=True).agg({"a": "mean"})
+
+            expect = df.groupby("b", sort=True).agg({"a": "mean"})
+            assert_eq(expect, agg.compute())
+            assert hlg_layer(agg.dask, "reduced")

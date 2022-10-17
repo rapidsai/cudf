@@ -1,16 +1,23 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from collections import defaultdict
 from typing import Set
 
 import numpy as np
 import pandas as pd
+from toolz import first
 
+from dask import config
+from dask.base import tokenize
 from dask.dataframe.core import (
     DataFrame as DaskDataFrame,
     aca,
+    new_dd_object,
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
+from dask.dataframe.utils import make_meta
+from dask.delayed import delayed
 from dask.utils import funcname
 
 import cudf
@@ -663,6 +670,22 @@ def groupby_agg(
     if sort and split_out > 1 and shuffle is None:
         shuffle = "tasks"
 
+    # Try reducing ddf down to a single partition per worker
+    ddf, new_kwargs = _worker_aca(
+        ddf,
+        chunk=chunk,
+        chunk_kwargs=chunk_kwargs,
+        combine=combine,
+        combine_kwargs=combine_kwargs,
+        split_out=split_out,
+        split_every=split_every,
+        ignore_index=True,
+        sort=False,
+    )
+    chunk = new_kwargs.pop("chunk", chunk)
+    chunk_kwargs = new_kwargs.pop("chunk", chunk_kwargs)
+    del new_kwargs
+
     # Check if we are using the shuffle-based algorithm
     if shuffle:
         # Shuffle-based aggregation
@@ -732,6 +755,139 @@ def _redirect_aggs(arg):
     if isinstance(arg, list):
         return [redirects.get(agg, agg) for agg in arg]
     return redirects.get(arg, arg)
+
+
+@_dask_cudf_nvtx_annotate
+def _worker_aca(ddf, **aca_kwargs):
+    """Perform local ACA aggregation on each worker
+
+    Only supported for distributed execution.
+
+    The output of this function will be a ``DataFrame``
+    collection with a single partition for each active
+    worker in the current distribued cluster, along with
+    updated key-word arguments needed for the global
+    ACA aggregation that should follow. The local
+    ACA will not perform the final 'aggregate' step,
+    because this local-worker ACA should always be
+    followed up by a global ACA operation.
+    """
+    if not config.get("worker-aca", False):
+        # Worker ACA is disabled
+        return ddf, aca_kwargs
+
+    try:
+        from dask.distributed import get_client, get_worker, wait
+
+        client = get_client()
+        worker_addresses = list(client.run(lambda: 42).keys())
+    except (ImportError, ValueError):
+        # Distributed is not installed, or we are not
+        # using a distributed cluster. Bail
+        client = None
+        worker_addresses = []
+
+    if len(worker_addresses) < aca_kwargs.get("split_out", 1):
+        # Cannot use worker ACA if split_out is
+        # larger than the total number of workers
+        return ddf, aca_kwargs
+
+    # Step 1 - Persist ddf and figure out which partitions are on
+    # each worker
+    ddf = ddf.persist()
+    wait(ddf)
+    in_keys = defaultdict(list)  # Map worker -> [list of keys]
+    for key, workers in client.who_has(ddf).items():
+        # Note, if multiple workers have the part, we pick the first worker
+        in_keys[first(workers)].append(key)
+
+    active_workers = set()  # All ranks that have a partition of `df`
+    for rank, worker in enumerate(worker_addresses):
+        nparts = len(in_keys.get(worker, ()))
+        if nparts > 0:
+            active_workers.add(rank)
+
+    # Step 2 - Run a local ACA aggregation on each worker
+    def _local_aca(
+        in_keys,
+        meta,
+        *args,
+        **kwargs,
+    ):
+        # Build graph to perform a local ACA aggregation
+        # on the current worker
+        name = f"reduced-{tokenize(in_keys, *args, **kwargs)}"
+        w = get_worker()
+        dsk = {
+            (name, i): w.data.get(part, meta) for i, part in enumerate(in_keys)
+        }
+
+        divs = [None] * (len(dsk) + 1)
+        ddf_local = new_dd_object(dsk, name, meta, divs)
+        return aca(
+            [ddf_local],
+            *args,
+            **kwargs,
+        ).compute(scheduler="synchronous")
+
+    chunk = aca_kwargs.pop("chunk")
+    chunk_kwargs = aca_kwargs.pop("chunk_kwargs", {})
+    combine = aca_kwargs.pop("combine")
+    combine_kwargs = aca_kwargs.pop("combine_kwargs", {})
+    aggregate = aca_kwargs.pop("aggregate", combine)
+    aggregate_kwargs = aca_kwargs.pop("aggregate_kwargs", combine_kwargs)
+    split_out = aca_kwargs.pop("split_out", 1)
+    result_futures = {}
+    for rank, worker in enumerate(worker_addresses):
+        if rank in active_workers:
+            result_futures[rank] = client.submit(
+                _local_aca,
+                in_keys[worker],
+                meta=ddf._meta,
+                workers=[worker],
+                **dict(
+                    chunk=chunk,
+                    chunk_kwargs=chunk_kwargs,
+                    combine=combine,
+                    combine_kwargs=combine_kwargs,
+                    # Make sure `aggregate` and `aggregate_kwargs`
+                    # are the same as `combine` and `combine_kwargs`
+                    # (we do not want the result to be "finalized")
+                    aggregate=combine,
+                    aggregate_kwargs=combine_kwargs,
+                    split_out=1,  # Result must fit in one partition
+                    **aca_kwargs,
+                ),
+            )
+    wait(list(result_futures.values()))
+
+    # Step 3 - Return a new "reduced" DataFrame, with
+    # a single partition for each (active) worker
+    dsk = {}
+    meta = None
+    name = f"reduced-{ddf._name}"
+    for i, part_future in result_futures.items():
+        dsk[(name, i)] = part_future
+        if meta is None:
+            # Get the meta from the first output partition
+            meta = delayed(make_meta)(part_future).compute()
+    assert meta is not None
+
+    divs = [None] * (len(dsk) + 1)
+    ddf = new_dd_object(dsk, name, meta, divs).persist()
+    return ddf, dict(
+        # Clear `chunk` and `chunk_kwargs`, so that the
+        # follow-up `aca` call will skip the operations
+        # that were already performed
+        chunk=lambda x, *args, **kwargs: x,
+        chunk_kwargs={},
+        combine=combine,
+        combine_kwargs=combine_kwargs,
+        aggregate=aggregate,
+        aggregate_kwargs=aggregate_kwargs,
+        split_out=split_out,
+        **aca_kwargs,
+    )
 
 
 @_dask_cudf_nvtx_annotate
