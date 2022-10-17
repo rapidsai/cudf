@@ -24,7 +24,7 @@
 #include <cuda_runtime.h>
 
 /**
- * @brief Print a backtrace and raise and error if stream is a default stream.
+ * @brief Print a backtrace and raise an error if stream is a default stream.
  */
 void check_stream_and_error(cudaStream_t stream)
 {
@@ -36,7 +36,7 @@ void check_stream_and_error(cudaStream_t stream)
   // 2. Using the cudf default stream would require linking against cudf, which
   //    adds unnecessary complexity to the build process (especially in CI)
   //    when this simple approach is sufficient.
-  if (stream == static_cast<cudaStream_t>(0) || (stream == cudaStreamLegacy) ||
+  if (stream == cudaStreamDefault || (stream == cudaStreamLegacy) ||
       (stream == cudaStreamPerThread)) {
 #ifdef __GNUC__
     // If we're on the wrong stream, print the stack trace from the current frame.
@@ -104,7 +104,7 @@ void check_stream_and_error(cudaStream_t stream)
     }
     free(strings);
 #else
-    std::cout << "Backtraces are only support on GNU systems." << std::endl;
+    std::cout << "Backtraces are only when built with a GNU compiler." << std::endl;
 #endif  // __GNUC__
     throw std::runtime_error("Found unexpected default stream!");
   }
@@ -213,7 +213,6 @@ DEFINE_OVERLOAD(cudaMemcpy2DAsync,
                     cudaStream_t stream),
                 ARG(dst, dpitch, src, spitch, width, height, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpy2DFromArrayAsync,
-                cudaError_t,
                 ARG(void* dst,
                     size_t dpitch,
                     cudaArray_const_t src,

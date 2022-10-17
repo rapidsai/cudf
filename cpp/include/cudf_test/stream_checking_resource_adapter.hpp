@@ -143,7 +143,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void verify_non_default_stream(rmm::cuda_stream_view const stream) const
   {
     auto cstream{stream.value()};
-    if (cstream == static_cast<cudaStream_t>(0) || (cstream == cudaStreamLegacy) ||
+    if (cstream == cudaStreamDefault || (cstream == cudaStreamLegacy) ||
         (cstream == cudaStreamPerThread)) {
       throw std::runtime_error("Attempted to perform an operation on a default stream!");
     }

@@ -60,7 +60,6 @@ option(
          stream to external libraries."
   OFF
 )
-option(CUDF_CUSTOM_DEFAULT_STREAM "Build cuDF with using a custom stream." OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -78,7 +77,6 @@ message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_C
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
-message(VERBOSE "CUDF: Build with custom default stream: ${CUDF_CUSTOM_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -629,10 +627,6 @@ if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   target_compile_definitions(
     cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
   )
-endif()
-
-if(CUDF_CUSTOM_DEFAULT_STREAM)
-  target_compile_definitions(cudf PUBLIC CUDF_CUSTOM_DEFAULT_STREAM)
 endif()
 
 # Disable NVTX if necessary
