@@ -3457,3 +3457,10 @@ def test_str_find_multiple_error():
         ),
     ):
         s.str.find_multiple("a")
+
+    t = cudf.Series([1, 2, 3])
+    with pytest.raises(
+        TypeError,
+        match=re.escape("patterns can only be of 'string' dtype, got: int64"),
+    ):
+        s.str.find_multiple(t)

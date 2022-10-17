@@ -3663,6 +3663,12 @@ class StringMethods(ColumnMethods):
                 f"got: {type(patterns)}"
             )
 
+        if not isinstance(patterns._column, StringColumn):
+            raise TypeError(
+                "patterns can only be of 'string' dtype, "
+                f"got: {patterns.dtype}"
+            )
+
         return cudf.Series(
             libstrings.find_multiple(self._column, patterns._column),
             index=self._parent.index
