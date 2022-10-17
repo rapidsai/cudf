@@ -477,19 +477,19 @@ class output_builder {
    * @param actual_size The number of elements that were written to the result of the previous
    *                    `next_output` call.
    */
-  void advance_output(size_type actual_size)
+  void advance_output(size_type actual_size, rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(actual_size <= _max_write_size, "Internal error");
     if (_chunks.size() < 2) {
       auto const new_size = _chunks.back().size() + actual_size;
-      inplace_resize(_chunks.back(), new_size);
+      inplace_resize(_chunks.back(), new_size, stream);
     } else {
       auto& tail              = _chunks.back();
       auto& prev              = _chunks.rbegin()[1];
       auto const prev_advance = std::min(actual_size, prev.capacity() - prev.size());
       auto const tail_advance = actual_size - prev_advance;
-      inplace_resize(prev, prev.size() + prev_advance);
-      inplace_resize(tail, tail.size() + tail_advance);
+      inplace_resize(prev, prev.size() + prev_advance, stream);
+      inplace_resize(tail, tail.size() + tail_advance, stream);
     }
     _size += actual_size;
   }
@@ -547,15 +547,17 @@ class output_builder {
    * @param vector The vector
    * @param new_size The new size. Must be smaller than the vector's capacity
    */
-  static void inplace_resize(rmm::device_uvector<T>& vector, size_type new_size)
+  static void inplace_resize(rmm::device_uvector<T>& vector,
+                             size_type new_size,
+                             rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(new_size <= vector.capacity(), "Internal error");
-    vector.resize(new_size, rmm::cuda_stream_view{});
+    vector.resize(new_size, stream);
   }
 
   /**
    * @brief Returns the span consisting of all currently unused elements in the vector
-   * (`i >= size() and i < capacity()`).
+   * (`i >= size() and i < capaci:y()`).
    *
    * @param vector The vector.
    * @return The span of unused elements.
@@ -717,7 +719,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     // while that is running, determine how many offsets we output (synchronizes)
     auto next_tile_offset =
       tile_offsets.get_inclusive_prefix(base_tile_idx + tiles_in_launch - 1, scan_stream);
-    offset_storage.advance_output(next_tile_offset.offset() - offset_storage.size());
+    offset_storage.advance_output(next_tile_offset.offset() - offset_storage.size(), stream);
     // determine if we found the first or last field offset for the byte range
     if (next_tile_offset.offset() > 0 and not first_offset) {
       first_offset = offset_storage.front_element(scan_stream);
@@ -733,7 +735,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       auto const split       = begin + std::min<int64_t>(output_size, char_output.head().size());
       thrust::copy(rmm::exec_policy_nosync(scan_stream), begin, split, char_output.head().begin());
       thrust::copy(rmm::exec_policy_nosync(scan_stream), split, end, char_output.tail().begin());
-      char_storage.advance_output(output_size);
+      char_storage.advance_output(output_size, stream);
     }
 
     cudaEventRecord(last_launch_event, scan_stream.value());
