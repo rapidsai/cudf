@@ -47,6 +47,7 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
+#include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -663,24 +664,37 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = d_tree.node_categories.size();
-  // TODO generate scatter_indices sequences here itself
   CUDF_PUSH_RANGE("seq");
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
   CUDF_POP_RANGE();
+  // sort, scan only list childs. (nodes who's parent is a list/root)
+  CUDF_PUSH_RANGE("remove_if");
+  auto list_parent_end =
+    thrust::remove_if(rmm::exec_policy(stream),
+                      thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()),
+                      thrust::make_zip_iterator(parent_col_id.end(), scatter_indices.end()),
+                      d_tree.parent_node_ids.begin(),
+                      [node_categories = d_tree.node_categories.begin()] __device__(auto pnid) {
+                        return !(pnid == parent_node_sentinel || node_categories[pnid] == NC_LIST);
+                      });
+  auto num_list_parent = thrust::distance(
+    thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
+  CUDF_POP_RANGE();
   CUDF_PUSH_RANGE("sort parent_col_id");
-  thrust::stable_sort_by_key(
-    rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
+  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                             parent_col_id.begin(),
+                             parent_col_id.begin() + num_list_parent,
+                             scatter_indices.begin());
   CUDF_POP_RANGE();
   rmm::device_uvector<size_type> row_offsets(num_nodes, stream, mr);
   CUDF_PUSH_RANGE("exscan");
   // TODO is it possible to generate list child_offsets too here?
-  thrust::exclusive_scan_by_key(
-    rmm::exec_policy(stream),
-    parent_col_id.begin(),  // TODO: is there any way to limit this to list parents alone?
-    parent_col_id.end(),
-    thrust::make_constant_iterator<size_type>(1),
-    row_offsets.begin());
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                parent_col_id.begin(),
+                                parent_col_id.begin() + num_list_parent,
+                                thrust::make_constant_iterator<size_type>(1),
+                                row_offsets.begin());
   CUDF_POP_RANGE();
 
   // Using scatter instead of sort.
@@ -688,7 +702,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   CUDF_PUSH_RANGE("scatter");
   thrust::scatter(rmm::exec_policy(stream),
                   row_offsets.begin(),
-                  row_offsets.end(),
+                  row_offsets.begin() + num_list_parent,
                   scatter_indices.begin(),
                   temp_storage.begin());
   row_offsets = std::move(temp_storage);
