@@ -348,8 +348,10 @@ data, a specialized device view for list columns can be constructed via
 
 # libcudf Policies and Design Principles
 
-Some aspects of libcudf usage may be surprising to new users.
-As a performance-oriented library, many design decisions prioritize flexibility and performance in ways that require some additional work or input from client code.
+`libcudf` is designed to provide GPU-accelerated algorithm primitives for solving a wide variety of problems that arise in data science.
+Our goal is to enable diverse use cases like Spark or Pandas to benefit from the performance of GPUs. 
+As a result, libcudf prioritizes performance and flexibility, which sometimes may come at the cost of convenience.
+While we welcome users to use libcudf directly, we design with the expectation that most users will be consuming libcudf through higher-level layers like Spark or cuDF Python that handle some of details that direct users of libcudf must handle on their own.
 We document these policies and the reasons behind them here:
 
 ## libcudf does not introspect data
@@ -389,7 +391,7 @@ Specifically:
 libcudf APIs _should_ promise to never return "dirty" columns, i.e. columns containing unsanitized data.
 Therefore, the only problem is if users construct input columns that are not correctly sanitized and then pass those into libcudf APIs.
 
-## libcudf does not synchronize CUDA streams
+## Treat libcudf APIs as if they were asynchronous
 
 libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
 Work in cudf occurs on `cudf::get_default_stream().value`, which defaults to the CUDA default stream (stream 0).
