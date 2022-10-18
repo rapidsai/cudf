@@ -396,7 +396,6 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   // intermediate data we will need for further chunked reads
-  gpu::chunk_intermediate_data id;
   if (has_lists || chunked_read_size > 0) {
     // computes:
     // PageNestingInfo::size for each level of nesting, for each page.
@@ -452,10 +451,10 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     //
     // We also need to preserve key-relative page ordering, so we need to use a stable sort.
-    id.page_keys     = rmm::device_uvector<int>(pages.size(), _stream);
-    id.page_index    = rmm::device_uvector<int>(pages.size(), _stream);
-    auto& page_keys  = id.page_keys;
-    auto& page_index = id.page_index;
+    _chunk_itm_data.page_keys  = rmm::device_uvector<int>(pages.size(), _stream);
+    _chunk_itm_data.page_index = rmm::device_uvector<int>(pages.size(), _stream);
+    auto& page_keys            = _chunk_itm_data.page_keys;
+    auto& page_index           = _chunk_itm_data.page_index;
     {
       thrust::transform(rmm::exec_policy(_stream),
                         pages.device_ptr(),
@@ -476,12 +475,10 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   }
 
   // compute splits if necessary.
-  std::vector<gpu::chunk_read_info> read_chunks =
-    chunked_read_size > 0 ? compute_splits(pages, id, num_rows, chunked_read_size, _stream)
-                          : std::vector<gpu::chunk_read_info>{{min_row, num_rows}};
-
-  _chunk_itm_data  = std::move(id);
-  _chunk_read_info = std::move(read_chunks);
+  _chunk_read_info =
+    chunked_read_size > 0
+      ? compute_splits(pages, _chunk_itm_data, num_rows, chunked_read_size, _stream)
+      : std::vector<gpu::chunk_read_info>{{min_row, num_rows}};
 }
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
