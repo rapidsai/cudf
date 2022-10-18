@@ -431,6 +431,19 @@ def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
 
 
+def _default_backend(func, *args, **kwargs):
+    # Utility to call a dask.dataframe function with
+    # the default ("pandas") backend
+
+    # NOTE: Some `CudfBackendEntrypoint` methods need to
+    # invoke the "pandas"-version of the same method, but
+    # with custom kwargs (e.g. `engine`). In these cases,
+    # an explicit "pandas" config context is needed to
+    # avoid a recursive loop
+    with config.set({"dataframe.backend": "pandas"}):
+        return func(*args, **kwargs)
+
+
 try:
 
     # Define "cudf" backend engine to be registered with Dask
@@ -455,11 +468,6 @@ try:
         <class 'dask_cudf.core.DataFrame'>
         """
 
-        # NOTE: Some `CudfBackendEntrypoint` methods invoke the
-        # corresponding method for "pandas" with custom kwargs
-        # (e.g. `engine`). In these cases, an explicit "pandas"
-        # config context is needed to avoid a recursive loop.
-
         @staticmethod
         def from_dict(data, npartitions, orient="columns", **kwargs):
             from dask_cudf import from_cudf
@@ -474,20 +482,38 @@ try:
             )
 
         @staticmethod
+        def from_dask_array(x, meta=None, **kwargs):
+            # The original `meta` and `type(x)` take precedence
+            if meta is None and isinstance(x._meta, cp.ndarray):
+                meta = cudf.DataFrame()
+            return _default_backend(dd.from_dask_array, x, meta=meta, **kwargs)
+
+        @staticmethod
+        def from_array(x, meta=None, **kwargs):
+            # The original `meta` and `type(x)` take precedence
+            if meta is None and isinstance(x, cp.ndarray):
+                meta = cudf.DataFrame()
+            return _default_backend(dd.from_array, x, meta=meta, **kwargs)
+
+        @staticmethod
         def read_parquet(*args, engine=None, **kwargs):
             from dask_cudf.io.parquet import CudfEngine
 
-            with config.set({"dataframe.backend": "pandas"}):
-                return dd.read_parquet(
-                    *args,
-                    engine=CudfEngine,
-                    **kwargs,
-                )
+            return _default_backend(
+                dd.read_parquet,
+                *args,
+                engine=CudfEngine,
+                **kwargs,
+            )
 
         @staticmethod
         def read_json(*args, engine=None, **kwargs):
-            with config.set({"dataframe.backend": "pandas"}):
-                return dd.read_json(*args, engine=cudf.read_json, **kwargs)
+            return _default_backend(
+                dd.read_json,
+                *args,
+                engine=cudf.read_json,
+                **kwargs,
+            )
 
         @staticmethod
         def read_orc(*args, **kwargs):
@@ -518,8 +544,9 @@ try:
                 "read_hdf is not yet implemented in cudf/dask_cudf. "
                 "Moving to cudf from pandas. Expect poor performance!"
             )
-            with config.set({"dataframe.backend": "pandas"}):
-                return from_dask_dataframe(dd.read_hdf(*args, **kwargs))
+            return from_dask_dataframe(
+                _default_backend(dd.read_hdf, *args, **kwargs)
+            )
 
 except ImportError:
     pass
