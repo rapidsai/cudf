@@ -81,10 +81,80 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedRead)
   cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
   cudf::test::fixed_width_column_wrapper<int64_t> b(values, values + num_rows);
 
+  auto filepath = std::string{"/tmp/chunked_splits_strings.parquet"};
   cudf::table_view t({a, b});
-  cudf::io::parquet_writer_options opts = cudf::io::parquet_writer_options::builder(
-    cudf::io::sink_info{"/tmp/chunked_splits.parquet"}, t);
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t);
   cudf::io::write_parquet(opts);
+
+  //========================================================================================
+  {
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    auto result = cudf::io::read_parquet(in_opts);
+    printf("Result size read full: %d\n\n\n\n\n", result.tbl->num_rows());
+  }
+
+  cudf::io::chunked_parquet_reader_options in_opts =
+    cudf::io::chunked_parquet_reader_options::builder(
+      cudf::io::source_info{"/tmp/chunked_splits.parquet"});
+
+  cudf::io::chunked_parquet_reader reader(in_opts);
+
+  int count{0};
+  while (reader.has_next()) {
+    printf("\n\nhas next %d\n\n", count++);
+
+    auto result = reader.read_chunk();
+    printf("Result size: %d\n\n\n\n\n", result.tbl->num_rows());
+  }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadString)
+{
+  // values the cudf parquet writer uses
+  // constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
+  // constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
+  std::mt19937 gen(6542);
+  std::bernoulli_distribution bn(0.7f);
+  auto values                        = thrust::make_counting_iterator(0);
+  constexpr cudf::size_type num_rows = 60000;
+  // ints                                            Page    total bytes   cumulative bytes
+  // 20000 rows of 4 bytes each                    = A0      80000         80000
+  // 20000 rows of 4 bytes each                    = A1      80000         160000
+  // 20000 rows of 4 bytes each                    = A2      80000         240000
+  cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
+  // strings                                         Page    total bytes   cumulative bytes
+  // 20000 rows of 1 char each    (20000  + 80004) = B0      100004        100004
+  // 20000 rows of 4 chars each   (80000  + 80004) = B1      160004        260008
+  // 20000 rows of 16 chars each  (320000 + 80004) = B2      400004        660012
+  std::vector<std::string> strings{"a", "bbbb", "cccccccccccccccc"};
+  auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i) {
+    if (i < 20000) { return strings[0]; }
+    if (i < 40000) { return strings[1]; }
+    return strings[2];
+  });
+  cudf::test::strings_column_wrapper b{str_iter, str_iter + num_rows};
+  // cumulative sizes
+  // A0 + B0 :  180004
+  // A1 + B1 :  420008
+  // A2 + B2 :  900012
+  //                                                    skip_rows / num_rows
+  // chunked_read_size of 500000  should give 2 chunks: {0, 40000},           {40000, 20000}
+  // chunked_read_size of 1000000 should give 1 chunks: {0, 60000},
+  auto write_tbl = cudf::table_view{{a, b}};
+  auto filepath  = std::string{"/tmp/chunked_splits_strings.parquet"};
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl);
+  cudf::io::write_parquet(out_opts);
+  //========================================================================================
+
+  {
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    auto result = cudf::io::read_parquet(in_opts);
+    printf("Result size read full: %d\n\n\n\n\n", result.tbl->num_rows());
+  }
 
   cudf::io::chunked_parquet_reader_options in_opts =
     cudf::io::chunked_parquet_reader_options::builder(
