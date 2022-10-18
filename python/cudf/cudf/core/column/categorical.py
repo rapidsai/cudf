@@ -104,7 +104,7 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.BaseIndex":
+    def categories(self) -> "cudf.core.index.GenericIndex":
         """
         The categories of this categorical.
         """
@@ -755,7 +755,7 @@ class CategoricalColumn(column.ColumnBase):
             )
 
         if to_add_categories > 0:
-            raise ValueError(
+            raise TypeError(
                 "Cannot setitem on a Categorical with a new "
                 "category, set the categories first"
             )

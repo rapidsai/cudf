@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/convert/convert_durations.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/wrappers/durations.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/strings/convert/convert_durations.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/wrappers/durations.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 #include <vector>
@@ -732,7 +731,7 @@ TEST_F(StringsDurationsTest, ZeroSizeStringsColumn)
   cudf::column_view zero_size_column(
     cudf::data_type{cudf::type_id::DURATION_SECONDS}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_durations(zero_size_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);

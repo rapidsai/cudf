@@ -207,8 +207,30 @@ std::unique_ptr<column> rank(
 /**
  * @brief Returns sorted order after sorting each segment in the table.
  *
- * If segment_offsets contains values larger than number of rows, behavior is undefined.
+ * If segment_offsets contains values larger than the number of rows, the behavior is undefined.
  * @throws cudf::logic_error if `segment_offsets` is not `size_type` column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * keys = { {9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
+ * offsets = {0, 3, 7, 10}
+ * result = cudf::segmented_sorted_order(keys, offsets);
+ * result is { 2,1,0, 6,5,4,3, 9,8,7 }
+ * @endcode
+ *
+ * If segment_offsets is empty or contains a single index, no values are sorted
+ * and the result is a sequence of integers from 0 to keys.size()-1.
+ *
+ * The segment_offsets are not required to include all indices. Any indices
+ * outside the specified segments will not be sorted.
+ *
+ * @code{.pseudo}
+ * Example: (offsets do not cover all indices)
+ * keys = { {9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
+ * offsets = {3, 7}
+ * result = cudf::segmented_sorted_order(keys, offsets);
+ * result is { 0,1,2, 6,5,4,3, 7,8,9 }
+ * @endcode
  *
  * @param keys The table that determines the ordering of elements in each segment
  * @param segment_offsets The column of `size_type` type containing start offset index for each
@@ -246,9 +268,33 @@ std::unique_ptr<column> stable_segmented_sorted_order(
 /**
  * @brief Performs a lexicographic segmented sort of a table
  *
- * If segment_offsets contains values larger than number of rows, behavior is undefined.
+ * If segment_offsets contains values larger than the number of rows, the behavior is undefined.
  * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
  * @throws cudf::logic_error if `segment_offsets` is not `size_type` column.
+ *
+ * @code{.pseudo}
+ * Example:
+ * keys = { {9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
+ * values = { {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'} }
+ * offsets = {0, 3, 7, 10}
+ * result = cudf::segmented_sort_by_key(keys, values, offsets);
+ * result is { 'c','b','a', 'g','f','e','d', 'j','i','h' }
+ * @endcode
+ *
+ * If segment_offsets is empty or contains a single index, no values are sorted
+ * and the result is a copy of the values.
+ *
+ * The segment_offsets are not required to include all indices. Any indices
+ * outside the specified segments will not be sorted.
+ *
+ * @code{.pseudo}
+ * Example: (offsets do not cover all indices)
+ * keys = { {9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
+ * values = { {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'} }
+ * offsets = {3, 7}
+ * result = cudf::segmented_sort_by_key(keys, values, offsets);
+ * result is { 'a','b','c', 'g','f','e','d', 'h','i','j' }
+ * @endcode
  *
  * @param values The table to reorder
  * @param keys The table that determines the ordering of elements in each segment

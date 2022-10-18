@@ -33,13 +33,9 @@ def hash_partition(list source_columns, object columns_to_hash,
             )
         )
 
-    # Note that the offsets (`c_result.second`) may be empty when
-    # the original table (`source_columns`) is empty. We need to
-    # return a list of zeros in this case.
     return (
         columns_from_unique_ptr(move(c_result.first)),
         list(c_result.second)
-        if c_result.second.size() else [0] * num_partitions
     )
 
 

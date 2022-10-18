@@ -728,7 +728,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::pair(empty_like(input), std::vector<size_type>{});
+    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
   }
 
   if (has_nulls(table_to_hash)) {
@@ -753,7 +753,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   CUDF_EXPECTS(not partition_map.has_nulls(), "Unexpected null values in partition_map.");
 
   if (num_partitions == 0 or t.num_rows() == 0) {
-    return std::pair(empty_like(t), std::vector<size_type>{});
+    // The output offsets vector must have size `num_partitions + 1` as per documentation.
+    return std::pair(empty_like(t), std::vector<size_type>(num_partitions + 1, 0));
   }
 
   return cudf::type_dispatcher(

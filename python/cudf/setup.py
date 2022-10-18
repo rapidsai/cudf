@@ -16,11 +16,11 @@ install_requires = [
     "cachetools",
     "cuda-python>=11.5,<11.7.1",
     "fsspec>=0.6.0",
-    "numba>=0.53.1",
+    "numba>=0.56.2",
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=1.0,<1.5.0dev0",
+    "pandas>=1.0,<1.6.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
 ]

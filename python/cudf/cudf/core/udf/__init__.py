@@ -15,8 +15,6 @@ from . import masked_lowering, masked_typing
 _units = ["ns", "ms", "us", "s"]
 _datetime_cases = {types.NPDatetime(u) for u in _units}
 _timedelta_cases = {types.NPTimedelta(u) for u in _units}
-
-
 _supported_masked_types = (
     types.integer_domain
     | types.real_domain
@@ -24,7 +22,6 @@ _supported_masked_types = (
     | _timedelta_cases
     | {types.boolean}
 )
-
 _STRING_UDFS_ENABLED = False
 try:
     import strings_udf
@@ -61,5 +58,4 @@ try:
 except ImportError as e:
     # allow cuDF to work without strings_udf
     pass
-
 masked_typing.register_masked_constructor(_supported_masked_types)
