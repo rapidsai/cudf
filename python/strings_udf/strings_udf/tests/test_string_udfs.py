@@ -17,12 +17,7 @@ from strings_udf._lib.cudf_jit_udf import (
     from_udf_string_array,
     to_string_view_array,
 )
-from strings_udf._typing import (
-    maybe_post_process_result,
-    str_view_arg_handler,
-    string_view,
-    udf_string,
-)
+from strings_udf._typing import str_view_arg_handler, string_view, udf_string
 
 if not strings_udf.ENABLED:
     pytest.skip("Strings UDF not enabled.", allow_module_level=True)
@@ -52,7 +47,6 @@ def get_kernel(func, dtype, size):
         if id < size:
             st = input_strings[id]
             result = func(st)
-            result = maybe_post_process_result(result)
             output_col[id] = result
 
     return kernel

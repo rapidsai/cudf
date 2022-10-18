@@ -105,26 +105,6 @@ class StrViewArgHandler:
 str_view_arg_handler = StrViewArgHandler()
 
 
-# a python object for numba to grab on to, just to have
-# something to replace with code
-def maybe_post_process_result(result):
-    pass
-
-
-@cuda_decl_registry.register_global(maybe_post_process_result)
-class MaybePostProcessResult(AbstractTemplate):
-    def generic(self, args, kws):
-        # a UDF may be typed to return a string_view in some edge cases
-        # 1. a string is returned unmodified from an input column
-        # 2. a view of a string variable is returned such as a substring
-        # in both cases the result must be promoted to udf_string to be
-        # returned. This requires a copy.
-        if len(args) == 1 and isinstance(args[0], StringView):
-            return nb_signature(udf_string, args[0])
-        else:
-            return nb_signature(args[0], args[0])
-
-
 # String functions
 @cuda_decl_registry.register_global(len)
 class StringLength(AbstractTemplate):
