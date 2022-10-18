@@ -61,6 +61,12 @@ constexpr int32_t NO_TRUNC_STATS = 0;
 // minimum scratch space required for encoding statistics
 constexpr size_t MIN_STATS_SCRATCH_SIZE = sizeof(__int128_t);
 
+// mask to determine lane id
+constexpr uint32_t WARP_MASK = cudf::detail::warp_size - 1;
+
+// currently 64k - 1
+constexpr uint32_t MAX_GRID_Y_SIZE = (1 << 16) - 1;
+
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
@@ -205,11 +211,11 @@ __global__ void __launch_bounds__(128)
                        device_2dspan<PageFragment const> fragments,
                        device_span<parquet_column_device_view const> col_desc)
 {
-  uint32_t const lane_id                  = threadIdx.x & 0x1f;
+  uint32_t const lane_id                  = threadIdx.x & WARP_MASK;
   uint32_t const column_id                = blockIdx.x;
   uint32_t const num_fragments_per_column = fragments.size().second;
 
-  uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x >> 5);
+  uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x / cudf::detail::warp_size);
   while (frag_id < num_fragments_per_column) {
     if (lane_id == 0) {
       statistics_group g;
@@ -2022,9 +2028,9 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
                        uint32_t fragment_size,
                        rmm::cuda_stream_view stream)
 {
-  int const num_columns              = frag.size().first;
-  int const num_fragments_per_column = frag.size().second;
-  auto const grid_y                  = std::min(num_fragments_per_column, (1 << 16) - 1);
+  auto const num_columns              = frag.size().first;
+  auto const num_fragments_per_column = frag.size().second;
+  auto const grid_y = std::min(static_cast<uint32_t>(num_fragments_per_column), MAX_GRID_Y_SIZE);
   dim3 const dim_grid(num_columns, grid_y);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
@@ -2039,7 +2045,7 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
   int const num_fragments_per_column = fragments.size().second;
   auto const y_dim =
     util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
-  auto const grid_y = std::min(y_dim, (1 << 16) - 1);
+  auto const grid_y = std::min(static_cast<uint32_t>(y_dim), MAX_GRID_Y_SIZE);
   dim3 const dim_grid(num_columns, grid_y);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
