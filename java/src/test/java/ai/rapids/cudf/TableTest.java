@@ -621,7 +621,7 @@ public class TableTest extends CudfTestBase {
     List<Byte> bin2 = asList(string2);
 
     try (Table binTable = new Table.TestBuilder()
-        .column(new ListType(true, new BasicType(false, DType.INT8)),
+        .column(new ListType(true, new BasicType(false, DType.UINT8)),
             bin1, bin2)
         .build();
          Table stringTable = new Table.TestBuilder()
