@@ -120,10 +120,10 @@ struct row_total_size {
 };
 
 std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo>& pages,
-                                                   gpu::chunk_intermediate_data const& id,
-                                                   size_type num_rows,
-                                                   size_type chunked_read_size,
-                                                   rmm::cuda_stream_view stream)
+                                                 gpu::chunk_intermediate_data const& id,
+                                                 size_type num_rows,
+                                                 size_type chunked_read_size,
+                                                 rmm::cuda_stream_view stream)
 {
   auto const& page_keys  = id.page_keys;
   auto const& page_index = id.page_index;
@@ -480,8 +480,8 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     chunked_read_size > 0 ? compute_splits(pages, id, num_rows, chunked_read_size, _stream)
                           : std::vector<gpu::chunk_read_info>{{min_row, num_rows}};
 
-  chunk_itm_data  = std::move(id);
-  chunk_read_info = std::move(read_chunks);
+  _chunk_itm_data  = std::move(id);
+  _chunk_read_info = std::move(read_chunks);
 }
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,

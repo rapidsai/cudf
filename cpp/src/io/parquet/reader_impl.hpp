@@ -268,11 +268,11 @@ class reader::impl {
   data_type _timestamp_type{type_id::EMPTY};
 
   // Variables used for chunked reading:
-  cudf::io::parquet::gpu::file_intermediate_data file_itm_data;
-  cudf::io::parquet::gpu::chunk_intermediate_data chunk_itm_data;
-  std::vector<cudf::io::parquet::gpu::chunk_read_info> chunk_read_info;
-  std::size_t current_read_chunk{0};
-  bool preprocessed{false};
+  cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
+  cudf::io::parquet::gpu::chunk_intermediate_data _chunk_itm_data;
+  std::vector<cudf::io::parquet::gpu::chunk_read_info> _chunk_read_info;
+  std::size_t _current_read_chunk{0};
+  bool _file_preprocessed{false};
 };
 
 }  // namespace parquet

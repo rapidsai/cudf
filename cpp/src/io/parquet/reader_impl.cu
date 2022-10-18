@@ -1621,12 +1621,12 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
 
   // TODO: fix this.
   // Need to check if the file actually has data.
-  file_itm_data.has_data = true;
+  _file_itm_data.has_data = true;
 
   // Descriptors for all the chunks that make up the selected columns
   const auto num_input_columns = _input_columns.size();
   const auto num_chunks        = selected_row_groups.size() * num_input_columns;
-  file_itm_data.chunks         = hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
+  _file_itm_data.chunks        = hostdevice_vector<gpu::ColumnChunkDesc>(0, num_chunks, _stream);
 
   // Association between each column chunk and its source
   std::vector<size_type> chunk_source_map(num_chunks);
@@ -1646,7 +1646,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
     auto const row_group_start  = rg.start_row;
     auto const row_group_source = rg.source_index;
     auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
-    auto const io_chunk_idx     = file_itm_data.chunks.size();
+    auto const io_chunk_idx     = _file_itm_data.chunks.size();
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -1662,12 +1662,12 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
                         schema.converted_type,
                         schema.type_length);
 
-      column_chunk_offsets[file_itm_data.chunks.size()] =
+      column_chunk_offsets[_file_itm_data.chunks.size()] =
         (col_meta.dictionary_page_offset != 0)
           ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
           : col_meta.data_page_offset;
 
-      file_itm_data.chunks.push_back(
+      _file_itm_data.chunks.push_back(
         gpu::ColumnChunkDesc(col_meta.total_compressed_size,
                              nullptr,
                              col_meta.num_values,
@@ -1689,7 +1689,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
                              col.schema_idx));
 
       // Map each column chunk to its column index and its source index
-      chunk_source_map[file_itm_data.chunks.size() - 1] = row_group_source;
+      chunk_source_map[_file_itm_data.chunks.size() - 1] = row_group_source;
 
       if (col_meta.codec != Compression::UNCOMPRESSED) {
         total_decompressed_size += col_meta.total_uncompressed_size;
@@ -1697,9 +1697,9 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
     }
     // Read compressed chunk data to device memory
     read_rowgroup_tasks.push_back(read_column_chunks(page_data,
-                                                     file_itm_data.chunks,
+                                                     _file_itm_data.chunks,
                                                      io_chunk_idx,
-                                                     file_itm_data.chunks.size(),
+                                                     _file_itm_data.chunks.size(),
                                                      column_chunk_offsets,
                                                      chunk_source_map));
 
@@ -1711,19 +1711,19 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
   assert(remaining_rows <= 0);
 
   // Process dataset chunk pages into output columns
-  const auto total_pages   = count_page_headers(file_itm_data.chunks);
-  file_itm_data.pages_info = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
+  const auto total_pages    = count_page_headers(_file_itm_data.chunks);
+  _file_itm_data.pages_info = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
   if (total_pages > 0) {
     rmm::device_buffer decomp_page_data;
 
     // decoding of column/page information
-    decode_page_headers(file_itm_data.chunks, file_itm_data.pages_info);
+    decode_page_headers(_file_itm_data.chunks, _file_itm_data.pages_info);
     if (total_decompressed_size > 0) {
-      decomp_page_data = decompress_page_data(file_itm_data.chunks, file_itm_data.pages_info);
+      decomp_page_data = decompress_page_data(_file_itm_data.chunks, _file_itm_data.pages_info);
       // Free compressed data
-      for (size_t c = 0; c < file_itm_data.chunks.size(); c++) {
-        if (file_itm_data.chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+      for (size_t c = 0; c < _file_itm_data.chunks.size(); c++) {
+        if (_file_itm_data.chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
           page_data[c].reset();
         }
       }
@@ -1748,7 +1748,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
     // note : even for flat schemas, we allocate 1 level of "nesting" info
 
     allocate_nesting_info(
-      file_itm_data.chunks, file_itm_data.pages_info, file_itm_data.page_nesting_info);
+      _file_itm_data.chunks, _file_itm_data.pages_info, _file_itm_data.page_nesting_info);
   }
 
   return {skip_rows, num_rows};
@@ -1760,7 +1760,7 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     // return empty
   }
 
-  auto const& read_info = chunk_read_info[current_read_chunk++];
+  auto const& read_info = _chunk_read_info[_current_read_chunk++];
   table_metadata out_metadata;
 
   // output cudf columns as determined by the top level schema
@@ -1771,9 +1771,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
   fflush(stdout);
 
   // allocate outgoing columns
-  allocate_columns(file_itm_data.chunks,
-                   file_itm_data.pages_info,
-                   chunk_itm_data,
+  allocate_columns(_file_itm_data.chunks,
+                   _file_itm_data.pages_info,
+                   _chunk_itm_data,
                    read_info.skip_rows,
                    read_info.num_rows,
                    uses_custom_row_bounds);
@@ -1784,9 +1784,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
   printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows, (int)read_info.num_rows);
 
   // decoding column data
-  decode_page_data(file_itm_data.chunks,
-                   file_itm_data.pages_info,
-                   file_itm_data.page_nesting_info,
+  decode_page_data(_file_itm_data.chunks,
+                   _file_itm_data.pages_info,
+                   _file_itm_data.page_nesting_info,
                    read_info.skip_rows,
                    read_info.num_rows);
 
@@ -1847,7 +1847,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     preprocess_file(skip_rows, num_rows, row_group_list);
 
   // todo: fix this (empty output may be incorrect)
-  if (!file_itm_data.has_data) { return table_with_metadata{}; }
+  if (!_file_itm_data.has_data) { return table_with_metadata{}; }
 
   // - compute column sizes and allocate output buffers.
   //   important:
@@ -1861,8 +1861,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // TODO: make this a parameter.
   auto const chunked_read_size = 240000;
   //      auto const chunked_read_size = 0;
-  preprocess_columns(file_itm_data.chunks,
-                     file_itm_data.pages_info,
+  preprocess_columns(_file_itm_data.chunks,
+                     _file_itm_data.pages_info,
                      skip_rows_corrected,
                      num_rows_corrected,
                      uses_custom_row_bounds,
@@ -1876,14 +1876,14 @@ table_with_metadata reader::impl::read_chunk()
   printf("line %d\n", __LINE__);
   fflush(stdout);
 
-  if (!preprocessed) {
+  if (!_file_preprocessed) {
     printf("line %d\n", __LINE__);
     fflush(stdout);
 
     [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
 
     // todo: fix this (empty output may be incorrect)
-    if (file_itm_data.has_data) {
+    if (_file_itm_data.has_data) {
       // - compute column sizes and allocate output buffers.
       //   important:
       //   for nested schemas, we have to do some further preprocessing to determine:
@@ -1896,14 +1896,14 @@ table_with_metadata reader::impl::read_chunk()
       // TODO: make this a parameter.
       auto const chunked_read_size = 240000;
       //      auto const chunked_read_size = 0;
-      preprocess_columns(file_itm_data.chunks,
-                         file_itm_data.pages_info,
+      preprocess_columns(_file_itm_data.chunks,
+                         _file_itm_data.pages_info,
                          skip_rows_corrected,
                          num_rows_corrected,
                          true /*uses_custom_row_bounds*/,
                          chunked_read_size);
     }
-    preprocessed = true;
+    _file_preprocessed = true;
 
     printf("line %d\n", __LINE__);
     fflush(stdout);
@@ -1916,11 +1916,11 @@ table_with_metadata reader::impl::read_chunk()
 
 bool reader::impl::has_next()
 {
-  printf("prepr: %d\n", (int)preprocessed);
+  printf("prepr: %d\n", (int)_file_preprocessed);
   printf("line %d\n", __LINE__);
   fflush(stdout);
 
-  if (!preprocessed) {
+  if (!_file_preprocessed) {
     printf("line %d\n", __LINE__);
     fflush(stdout);
     [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
@@ -1928,7 +1928,7 @@ bool reader::impl::has_next()
     printf("line %d\n", __LINE__);
     fflush(stdout);
     // todo: fix this (empty output may be incorrect)
-    if (file_itm_data.has_data) {
+    if (_file_itm_data.has_data) {
       printf("line %d\n", __LINE__);
       fflush(stdout);
 
@@ -1944,8 +1944,8 @@ bool reader::impl::has_next()
       // TODO: make this a parameter.
       auto const chunked_read_size = 240000;
       //      auto const chunked_read_size = 0;
-      preprocess_columns(file_itm_data.chunks,
-                         file_itm_data.pages_info,
+      preprocess_columns(_file_itm_data.chunks,
+                         _file_itm_data.pages_info,
                          skip_rows_corrected,
                          num_rows_corrected,
                          true /*uses_custom_row_bounds*/,
@@ -1954,14 +1954,14 @@ bool reader::impl::has_next()
       printf("line %d\n", __LINE__);
       fflush(stdout);
     }
-    preprocessed = true;
+    _file_preprocessed = true;
     printf("line %d\n", __LINE__);
     fflush(stdout);
   }
 
   printf("line %d\n", __LINE__);
   fflush(stdout);
-  return current_read_chunk < chunk_read_info.size();
+  return _current_read_chunk < _chunk_read_info.size();
 }
 
 // Forward to implementation
