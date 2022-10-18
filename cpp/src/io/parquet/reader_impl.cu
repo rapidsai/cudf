@@ -1260,7 +1260,7 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
     auto& schema                          = _metadata->get_schema(src_col_schema);
     auto const per_page_nesting_info_size = std::max(
       schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id()); 
+    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id());
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
@@ -1269,8 +1269,8 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
       pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
 
       // this isn't the ideal place to be setting this value (it's not obvious this function would
-      // do it) but we don't have any other places that go host->device with the pages and I'd like to
-      // avoid another copy
+      // do it) but we don't have any other places that go host->device with the pages and I'd like
+      // to avoid another copy
       pages[target_page_index + p_idx].type = type_id;
 
       src_info_index += per_page_nesting_info_size;
@@ -1361,23 +1361,6 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
                                     size_t min_row,
                                     size_t total_rows)
 {
-  auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
-    return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
-  };
-
-  // Count the number of string dictionary entries
-  // NOTE: Assumes first page in the chunk is always the dictionary page
-  size_t total_str_dict_indexes = 0;
-  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
-    if (is_dict_chunk(chunks[c])) { total_str_dict_indexes += pages[page_count].num_input_values; }
-    page_count += chunks[c].max_num_pages;
-  }
-
-  // Build index for string dictionaries since they can't be indexed
-  // directly due to variable-sized elements
-  auto str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-    total_str_dict_indexes, _stream);
-
   // TODO (dm): hd_vec should have begin and end iterator members
   size_t sum_max_depths =
     std::accumulate(chunks.host_ptr(),
@@ -1395,15 +1378,10 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   auto chunk_offsets       = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
-  for (size_t c = 0, page_count = 0, str_ofs = 0, chunk_off = 0; c < chunks.size(); c++) {
+  for (size_t c = 0, page_count = 0, chunk_off = 0; c < chunks.size(); c++) {
     input_column_info const& input_col = _input_columns[chunks[c].src_col_index];
     CUDF_EXPECTS(input_col.schema_idx == chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
-
-    if (is_dict_chunk(chunks[c])) {
-      chunks[c].str_dict_index = str_dict_index.data() + str_ofs;
-      str_ofs += pages[page_count].num_input_values;
-    }
 
     size_t max_depth = _metadata->get_output_nesting_depth(chunks[c].src_col_schema);
     chunk_offsets.push_back(chunk_off);
@@ -1475,10 +1453,6 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   chunks.host_to_device(_stream);
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
-
-  if (total_str_dict_indexes > 0) {
-    gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), _stream);
-  }
 
   gpu::DecodePageData(pages, chunks, total_rows, min_row, _stream);
   pages.device_to_host(_stream);
@@ -1716,7 +1690,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
       // TODO: make this a parameter.
-      //auto const chunked_read_size = 240000;
+      // auto const chunked_read_size = 240000;
+      // auto const chunked_read_size = 1000000;
       auto const chunked_read_size = 0;
       auto chunk_reads             = preprocess_columns(
         chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, chunked_read_size);

@@ -18,6 +18,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -79,8 +80,11 @@ __device__ size_t row_size_functor::operator()<struct_view>(size_t num_rows, boo
 
 template <>
 __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, bool nullable)
-{  
-  return 0 + validity_size(num_rows, nullable);
+{
+  // only returns the size of offsets and validity. the size of the actual string chars
+  // is tracked seperately.
+  auto const offset_size = sizeof(offset_type);
+  return (offset_size * (num_rows + 1)) + validity_size(num_rows, nullable);
 }
 
 struct get_cumulative_row_info {
@@ -95,7 +99,10 @@ struct get_cumulative_row_info {
     size_t const row_count = page.nesting[0].size;
     return cumulative_row_info{
       row_count,
-      cudf::type_dispatcher(data_type{page.type}, row_size_functor{}, row_count, false),
+      // note: the size of the actual char bytes for strings is tracked in the `str_bytes` field, so
+      // the row_size_functor{} itself is only returning the size of offsets+validity
+      cudf::type_dispatcher(data_type{page.type}, row_size_functor{}, row_count, false) +
+        page.str_bytes,
       page.src_col_schema};
   }
 };
@@ -144,8 +151,9 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
                                 page_input,
                                 c_info.begin(),
                                 thrust::equal_to{},
-                                cumulative_row_sum{});  
+                                cumulative_row_sum{});
   // clang-format off
+  /*
   stream.synchronize();
   pages.device_to_host(stream);
   std::vector<int> h_page_index(pages.size());
@@ -158,7 +166,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
     }
     gpu::PageNestingInfo pni;
     cudaMemcpy(&pni, &page.nesting[0], sizeof(gpu::PageNestingInfo), cudaMemcpyDeviceToHost);
-    printf("P(%lu): schema(%d), num_rows(%d), nesting size 0(%d)\n", idx, page.src_col_schema, page.num_rows, pni.size);
+    printf("P(%lu): schema(%d), num_rows(%d), nesting size 0(%d), str_bytes(%d)\n", idx, page.src_col_schema, page.num_rows, pni.size, page.str_bytes);
   }
   printf("---------\n");
   std::vector<cumulative_row_info> h_c_info(page_keys.size());
@@ -166,6 +174,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
   for(size_t idx=0; idx<page_keys.size(); idx++){ 
     printf("C(%lu): %lu, %lu\n", idx, h_c_info[idx].row_count, h_c_info[idx].size_bytes);
   }
+  */
   // clang-format on  
 
   // sort by row count
@@ -187,7 +196,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
                                                     thrust::make_discard_iterator(),
                                                     key_offsets.begin());
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
-  // clang-format off
+  // clang-format off  
   /*
   stream.synchronize();
   printf("Num keys: %d\n", (int)num_unique_keys);
@@ -195,7 +204,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
   cudaMemcpy(h_key_offsets.data(), key_offsets.data(), sizeof(size_type) * num_unique_keys, cudaMemcpyDeviceToHost); 
   for(size_t idx=0; idx<num_unique_keys; idx++){ 
     printf("Offset sizes(%lu): %d\n", idx, h_key_offsets[idx]);
-  }
+  }  
   */
   // clang-format on  
 
@@ -207,7 +216,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
   cudaMemcpy(h_key_offsets.data(), key_offsets.data(), sizeof(size_type) * (num_unique_keys + 1), cudaMemcpyDeviceToHost); 
   for(size_t idx=0; idx<num_unique_keys+1; idx++){ 
     printf("Offset values(%lu): %d\n", idx, h_key_offsets[idx]);
-  }
+  } 
   */
   // clang-format on
 
@@ -273,7 +282,7 @@ std::vector<gpu::chunked_read_info> compute_splits(hostdevice_vector<gpu::PageIn
       auto const start_row = cur_row_count;
       cur_row_count        = h_adjusted[p].row_count;
       splits.push_back(gpu::chunked_read_info{start_row, cur_row_count - start_row});
-      //printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
+      // printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
       cur_pos         = p;
       cumulative_size = h_adjusted[p].size_bytes;
     }
@@ -408,8 +417,50 @@ reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks
     if (has_lists) { break; }
   }
 
-  // intermediate data we will need for further chunked reads
   gpu::chunked_intermediate_data id;
+
+  // generate string dict indices if necessary
+  {
+    auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
+      return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
+    };
+
+    // Count the number of string dictionary entries
+    // NOTE: Assumes first page in the chunk is always the dictionary page
+    size_t total_str_dict_indexes = 0;
+    for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
+      if (is_dict_chunk(chunks[c])) {
+        total_str_dict_indexes += pages[page_count].num_input_values;
+      }
+      page_count += chunks[c].max_num_pages;
+    }
+
+    // Build index for string dictionaries since they can't be indexed
+    // directly due to variable-sized elements
+    id.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+      total_str_dict_indexes, _stream);
+
+    // Update chunks with pointers to string dict indices
+    for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {
+      input_column_info const& input_col = _input_columns[chunks[c].src_col_index];
+      CUDF_EXPECTS(input_col.schema_idx == chunks[c].src_col_schema,
+                   "Column/page schema index mismatch");
+      if (is_dict_chunk(chunks[c])) {
+        chunks[c].str_dict_index = id.str_dict_index.data() + str_ofs;
+        str_ofs += pages[page_count].num_input_values;
+      }
+
+      // column_data_base will always point to leaf data, even for nested types.
+      page_count += chunks[c].max_num_pages;
+    }
+
+    if (total_str_dict_indexes > 0) {
+      chunks.host_to_device(_stream);
+      gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), _stream);
+    }
+  }
+
+  // intermediate data we will need for further chunked reads
   if (has_lists || chunked_read_size > 0) {
     // computes:
     // PageNestingInfo::size for each level of nesting, for each page.
@@ -574,20 +625,20 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 
           // allocate
           out_buf.create(size, _stream, _mr);
-        }      
+        }
 
         // for nested hierarchies, compute per-page start offset
         if (input_col.has_repetition) {
-            thrust::exclusive_scan_by_key(
-              rmm::exec_policy(_stream),
-              page_keys.begin(),
-              page_keys.end(),
-              size_input,
-              start_offset_output_iterator{pages.device_ptr(),
-                                          page_index.begin(),
-                                          0,
-                                          static_cast<int>(src_col_schema),
-                                          static_cast<int>(l_idx)});
+          thrust::exclusive_scan_by_key(
+            rmm::exec_policy(_stream),
+            page_keys.begin(),
+            page_keys.end(),
+            size_input,
+            start_offset_output_iterator{pages.device_ptr(),
+                                         page_index.begin(),
+                                         0,
+                                         static_cast<int>(src_col_schema),
+                                         static_cast<int>(l_idx)});
         }
       }
     }
@@ -616,6 +667,60 @@ cudf::io::parquet_reader_options::builder(cudf::io::source_info{"parquet/tmp/chu
   auto result = cudf::io::read_parquet(in_opts);
 }
 */
+
+/*
+{
+    // values the cudf parquet writer uses
+    // constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
+    // constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
+
+    std::mt19937 gen(6542);
+    std::bernoulli_distribution bn(0.7f);
+    auto values = thrust::make_counting_iterator(0);
+
+    constexpr size_type num_rows = 60000;
+
+    // ints                                            Page    total bytes   cumulative bytes
+    // 20000 rows of 4 bytes each                    = A0      80000         80000
+    // 20000 rows of 4 bytes each                    = A1      80000         160000
+    // 20000 rows of 4 bytes each                    = A2      80000         240000
+    cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
+
+    // strings                                         Page    total bytes   cumulative bytes
+    // 20000 rows of 1 char each    (20000  + 80004) = B0      100004        100004
+    // 20000 rows of 4 chars each   (80000  + 80004) = B1      160004        260008
+    // 20000 rows of 16 chars each  (320000 + 80004) = B2      400004        660012
+    std::vector<std::string> strings { "a", "bbbb", "cccccccccccccccc" };
+    auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i){
+      if(i < 20000){
+        return strings[0];
+      }
+      if(i < 40000){
+        return strings[1];
+      }
+      return strings[2];
+    });
+    cudf::test::strings_column_wrapper b{str_iter, str_iter + num_rows};
+
+    // cumulative sizes
+    // A0 + B0 :  180004
+    // A1 + B1 :  420008
+    // A2 + B2 :  900012
+    //                                                    skip_rows / num_rows
+    // chunked_read_size of 500000  should give 2 chunks: {0, 40000},           {40000, 20000}
+    // chunked_read_size of 1000000 should give 1 chunks: {0, 60000},
+
+    auto write_tbl = table_view{{a, b}};
+    auto filepath = std::string{"parquet/tmp/chunked_splits_strings.parquet"};
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl);
+    cudf::io::write_parquet(out_opts);
+
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    auto result   = cudf::io::read_parquet(in_opts);
+  }
+  */
 
 }  // namespace parquet
 }  // namespace detail

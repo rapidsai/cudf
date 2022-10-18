@@ -105,10 +105,10 @@ struct PageNestingInfo {
 
   // set at initialization
   int32_t max_def_level;
-  int32_t max_rep_level;  
+  int32_t max_rep_level;
 
   // set during preprocessing
-  int32_t size;              // this page/nesting-level's row count contribution to the output column
+  int32_t size;  // this page/nesting-level's row count contribution to the output column
   int32_t page_start_value;  // absolute output start index in output column data
 
   // set during data decoding
@@ -144,7 +144,7 @@ struct PageInfo {
   Encoding encoding;       // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
-  cudf::type_id type;     // type of this page. 
+  cudf::type_id type;                  // type of this page.
 
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the
@@ -158,7 +158,7 @@ struct PageInfo {
   int skipped_values;
   // # of values skipped in the actual data stream.
   int skipped_leaf_values;
-  int32_t str_bytes;         // for string columns only, the size in bytes
+  int32_t str_bytes;  // for string columns only, the size in for all the chars in the string
 
   // nesting information (input/output) for each page
   int num_nesting_levels;
@@ -247,8 +247,11 @@ struct ColumnChunkDesc {
 struct chunked_intermediate_data {
   rmm::device_uvector<int> page_keys;
   rmm::device_uvector<int> page_index;
+  rmm::device_uvector<string_index_pair> str_dict_index;
   chunked_intermediate_data()
-    : page_keys(0, rmm::cuda_stream_default), page_index(0, rmm::cuda_stream_default)
+    : page_keys(0, rmm::cuda_stream_default),
+      page_index(0, rmm::cuda_stream_default),
+      str_dict_index(0, rmm::cuda_stream_default)
   {
   }
 };
