@@ -144,7 +144,7 @@ rapids_find_package(
 )
 
 # add third party dependencies using CPM
-rapids_cpm_init()
+rapids_cpm_init(OVERRIDE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/versions.json)
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find nvCOMP
@@ -779,6 +779,10 @@ install(
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
                   ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
+
+if(DLPACK_INCLUDE_DIR)
+  install(DIRECTORY ${DLPACK_INCLUDE_DIR}/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
 
 install(
   TARGETS cudftestutil
