@@ -385,8 +385,6 @@ Specifically:
 - For compound columns, nulls should only be present at the level of the parent column. Child columns should not contain nulls.
 - Slice operations on nested columns do not propagate offsets to child columns.
 
-**TODO: Do we still need to ensure the above with the new nested comparators? Since the nested comparators no longer operate based on flattening struct columns, I suspect that we will no longer need to superimpose parent nulls. We'll need to check that, though.**
-
 libcudf APIs _should_ promise to never return "dirty" columns, i.e. columns containing unsanitized data.
 Therefore, the only problem is if users construct input columns that are not correctly sanitized and then pass those into libcudf APIs.
 
