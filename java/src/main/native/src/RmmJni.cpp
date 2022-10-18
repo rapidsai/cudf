@@ -150,7 +150,7 @@ public:
     if (cls == nullptr) {
       throw cudf::jni::jni_exception("class not found");
     }
-    on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(JZ)Z");
+    on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(JI)Z");
     if (on_alloc_fail_method == nullptr) {
       use_old_alloc_fail_interface = true;
       on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(J)Z");
@@ -216,12 +216,12 @@ private:
     }
   }
 
-  bool on_alloc_fail(std::size_t num_bytes, bool is_retry) {
+  bool on_alloc_fail(std::size_t num_bytes, int retry_count) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     jboolean result = false;
     if (!use_old_alloc_fail_interface) {
       result = env->CallBooleanMethod(handler_obj, on_alloc_fail_method, 
-          static_cast<jlong>(num_bytes), static_cast<jboolean>(is_retry));
+          static_cast<jlong>(num_bytes), static_cast<jint>(retry_count));
 
     } else {
       result = env->CallBooleanMethod(handler_obj, on_alloc_fail_method, 
@@ -254,19 +254,19 @@ private:
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     std::size_t total_before;
     void *result;
-    bool is_retry = false;
+    // a positive retry_count signifies that the `on_alloc_fail`
+    // callback is being invoked while re-attempting an allocation
+    // that had previously failed.
+    int retry_count = 0;
     while (true) {
       try {
         total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
       } catch (rmm::out_of_memory const &e) {
-        if (!on_alloc_fail(num_bytes, is_retry)) {
+        if (!on_alloc_fail(num_bytes, retry_count++)) {
           throw;
         }
-        // tells the handling code that this failure was on a 
-        // retry
-        is_retry = true;
       }
     }
     auto total_after = get_total_bytes_allocated();

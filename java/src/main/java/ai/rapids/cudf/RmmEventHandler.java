@@ -27,20 +27,20 @@ public interface RmmEventHandler {
    */
   default boolean onAllocFailure(long sizeRequested) {
     // this should not be called since it was the previous interface,
-    // and it was abstract before.
-    return false;
+    // and it was abstract before, throwing by default for good measure.
+    throw new UnsupportedOperationException(
+        "Unexpected invocation of deprecated onAllocFailure without retry count.");
   }
 
   /**
    * Invoked on a memory allocation failure.
    * @param sizeRequested number of bytes that failed to allocate
-   * @param isRetry whether this failure happened while retrying an allocation
-   *                that had previously failed
+   * @param retryCount number of times this allocation has been retried after failure
    * @return true if the memory allocation should be retried or false if it should fail
    */
-  default boolean onAllocFailure(long sizeRequested, boolean isRetry) {
+  default boolean onAllocFailure(long sizeRequested, int retryCount) {
     // newer code should override this implementation of `onAllocFailure` to handle
-    // the `isRetry` flag. Otherwise, we call the prior implementation to not
+    // `retryCount`. Otherwise, we call the prior implementation to not
     // break existing code.
     return onAllocFailure(sizeRequested);
   }
