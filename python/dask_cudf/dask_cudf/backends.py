@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import warnings
 from collections.abc import Iterator
 
 import cupy as cp
@@ -436,6 +437,29 @@ try:
     from dask.dataframe.backends import DataFrameBackendEntrypoint
 
     class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
+        """Backend-entrypoint class for Dask-DataFrame
+
+        This class is registered under the name "cudf" for the
+        ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
+        Dask-DataFrame will use the methods defined in this class
+        in place of ``dask.dataframe.<creation-method>`` when the
+        'dataframe.backend' configuration is set to "cudf":
+
+        Examples
+        --------
+        >>> import dask
+        >>> import dask.dataframe as dd
+        >>> with dask.config.set({"dataframe.backend": "cudf"}):
+        ...     ddf = dd.from_dict({"a": range(10)})
+        >>> type(ddf)
+        <class 'dask_cudf.core.DataFrame'>
+        """
+
+        # NOTE: Some `CudfBackendEntrypoint` methods invoke the
+        # corresponding method for "pandas" with custom kwargs
+        # (e.g. `engine`). In these cases, an explicit "pandas"
+        # config context is needed to avoid a recursive loop.
+
         @staticmethod
         def from_dict(data, npartitions, orient="columns", **kwargs):
             from dask_cudf import from_cudf
@@ -490,6 +514,10 @@ try:
             from dask_cudf import from_dask_dataframe
 
             # HDF5 reader not yet implemented in cudf
+            warnings.warn(
+                "read_hdf is not yet implemented in cudf/dask_cudf. "
+                "Moving to cudf from pandas. Expect poor performance!"
+            )
             with config.set({"dataframe.backend": "pandas"}):
                 return from_dask_dataframe(dd.read_hdf(*args, **kwargs))
 
