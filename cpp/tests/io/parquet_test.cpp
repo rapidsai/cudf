@@ -81,7 +81,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedRead)
   cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
   cudf::test::fixed_width_column_wrapper<int64_t> b(values, values + num_rows);
 
-  auto filepath = std::string{"/tmp/chunked_splits_strings.parquet"};
+  auto filepath = std::string{"/tmp/chunked_splits.parquet"};
   cudf::table_view t({a, b});
   cudf::io::parquet_writer_options opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t);
@@ -96,8 +96,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedRead)
   }
 
   cudf::io::chunked_parquet_reader_options in_opts =
-    cudf::io::chunked_parquet_reader_options::builder(
-      cudf::io::source_info{"/tmp/chunked_splits.parquet"});
+    cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath});
 
   cudf::io::chunked_parquet_reader reader(in_opts);
 
@@ -157,8 +156,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadString)
   }
 
   cudf::io::chunked_parquet_reader_options in_opts =
-    cudf::io::chunked_parquet_reader_options::builder(
-      cudf::io::source_info{"/tmp/chunked_splits.parquet"});
+    cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath});
 
   cudf::io::chunked_parquet_reader reader(in_opts);
 
