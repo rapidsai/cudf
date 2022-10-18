@@ -46,6 +46,9 @@ def maybe_patch_numba_linker(driver_version):
 
 def get_ptx_file():
     dev = cuda.get_current_device()
+
+    # Load the highest compute capability file available that is less than
+    # the current device's.
     cc = int("".join(str(x) for x in dev.compute_capability))
     files = glob.glob(os.path.join(os.path.dirname(__file__), "shim_*.ptx"))
     if len(files) == 0:
@@ -92,5 +95,3 @@ if cp.returncode == 0:
     driver_version = tuple(versions[:2])
     maybe_patch_numba_linker(driver_version)
     ptxpath = get_ptx_file()
-    # Load the highest compute capability file available that is less than
-    # the current device's.
