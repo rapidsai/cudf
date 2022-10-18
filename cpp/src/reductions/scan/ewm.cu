@@ -167,8 +167,11 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
                     [] __device__(bool valid) -> bool { return 1 - valid; });
 
   // null mask {0, 1, 0, 1, 1, 0} leads to output array {0, 0, 1, 0, 0, 2}
-  thrust::inclusive_scan_by_key(
-    rmm::exec_policy(stream), output.begin(), output.end() - 1, output.begin(), output.begin() + 1);
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                output.begin(),
+                                std::prev(output.end()),
+                                output.begin(),
+                                std::next(output.begin()));
   return output;
 }
 
