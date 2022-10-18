@@ -25,7 +25,9 @@ namespace cudf {
 namespace strings {
 namespace udf {
 
-// global variables for character-type flags and case conversion
+/**
+ * @brief Global variables for character-type flags and case conversion
+ */
 struct chars_tables {
   cudf::strings::detail::character_flags_table_type* flags_table;
   cudf::strings::detail::character_cases_table_type* cases_table;

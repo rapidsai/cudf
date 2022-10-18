@@ -33,22 +33,26 @@ namespace udf {
 namespace detail {
 namespace {
 
-struct free_udf_string_fn {
-  cudf::strings::udf::udf_string* d_strings;
-  __device__ void operator()(cudf::size_type idx) { d_strings[idx].clear(); }
-};
-
-void free_udf_string_array(void* d_buffer, std::size_t buffer_size, rmm::cuda_stream_view stream)
+/**
+ * @brief Frees udf_strings device memory
+ *
+ * @param d_buffer Array of udf_strings
+ */
+void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
+                           cudf::size_type size,
+                           rmm::cuda_stream_view stream)
 {
-  auto const size =
-    static_cast<cudf::size_type>(buffer_size / sizeof(cudf::strings::udf::udf_string));
-  auto d_strings = reinterpret_cast<cudf::strings::udf::udf_string*>(d_buffer);
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
                      size,
-                     free_udf_string_fn{d_strings});
+                     [d_strings] __device__(auto idx) { d_strings[idx].clear(); });
 }
 
+/**
+ * @brief Functor wraps string_view objects around udf_string objects
+ *
+ * No string data is copied.
+ */
 struct udf_string_to_string_view_transform_fn {
   __device__ cudf::string_view operator()(cudf::strings::udf::udf_string const& dstr)
   {
@@ -58,6 +62,11 @@ struct udf_string_to_string_view_transform_fn {
 
 }  // namespace
 
+/**
+ * @copydoc to_string_view_array
+ *
+ * @param stream CUDA stream used for allocating/copying device memory and launching kernels
+ */
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input,
                                                          rmm::cuda_stream_view stream)
 {
@@ -67,26 +76,27 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
                 .release()));
 }
 
-std::unique_ptr<cudf::column> column_from_udf_string_array(void* d_buffer,
-                                                           std::size_t buffer_size,
+/**
+ * @copydoc column_from_udf_string_array
+
+ * @param stream CUDA stream used for allocating/copying device memory and launching kernels
+ */
+std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
+                                                           cudf::size_type size,
                                                            rmm::cuda_stream_view stream)
 {
-  auto const size =
-    static_cast<cudf::size_type>(buffer_size / sizeof(cudf::strings::udf::udf_string));
-  auto d_input = reinterpret_cast<cudf::strings::udf::udf_string*>(d_buffer);
-
   // create string_views of the udf_strings
   auto indices = rmm::device_uvector<cudf::string_view>(size, stream);
   thrust::transform(rmm::exec_policy(stream),
-                    d_input,
-                    d_input + size,
+                    d_strings,
+                    d_strings + size,
                     indices.data(),
                     udf_string_to_string_view_transform_fn{});
 
   auto results = cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream);
 
   // free the individual udf_string elements
-  free_udf_string_array(d_buffer, buffer_size, stream);
+  free_udf_string_array(d_strings, size, stream);
 
   // return new column
   return results;
@@ -94,14 +104,17 @@ std::unique_ptr<cudf::column> column_from_udf_string_array(void* d_buffer,
 
 }  // namespace detail
 
+// external APIs
+
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {
   return detail::to_string_view_array(input, rmm::cuda_stream_default);
 }
 
-std::unique_ptr<cudf::column> column_from_udf_string_array(void* d_buffer, std::size_t buffer_size)
+std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
+                                                           cudf::size_type size)
 {
-  return detail::column_from_udf_string_array(d_buffer, buffer_size, rmm::cuda_stream_default);
+  return detail::column_from_udf_string_array(d_strings, size, rmm::cuda_stream_default);
 }
 
 }  // namespace udf

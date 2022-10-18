@@ -27,7 +27,7 @@ namespace strings {
 namespace udf {
 
 /**
- * @brief Converts a string into an integer.
+ * @brief Converts a string into an integer
  *
  * The '+' and '-' are allowed but only at the beginning of the string.
  * The string is expected to contain base-10 [0-9] characters only.
@@ -59,7 +59,7 @@ __device__ inline udf_string to_string(int64_t value)
 }
 
 /**
- * @brief Converts a string into a double.
+ * @brief Converts a string into a double
  *
  * Support scientific notation as well.
  * Overflow goes to inf or -inf and underflow may go to 0.

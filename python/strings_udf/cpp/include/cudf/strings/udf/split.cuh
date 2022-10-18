@@ -68,7 +68,7 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
 }
 
 /**
- * @brief Split string using given target array.
+ * @brief Split string using given target array
  *
  * @param d_str String to split
  * @param tgt Character array encoded in UTF-8 used for identifying split points
@@ -86,7 +86,7 @@ __device__ inline int split(cudf::string_view const d_str,
 }
 
 /**
- * @brief Split string using given target array.
+ * @brief Split string using given target array
  *
  * @param d_str String to split
  * @param tgt Null-terminated character array encoded in UTF-8 used for identifying split points
@@ -102,7 +102,7 @@ __device__ inline int split(cudf::string_view const d_str,
 }
 
 /**
- * @brief Split string on whitespace.
+ * @brief Split string on whitespace
  *
  * This will create tokens by splitting on one or more consecutive whitespace characters
  * found in `d_str`.
@@ -125,7 +125,7 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str, cudf::str
 }
 
 /**
- * @brief Join an array of strings with a separator.
+ * @brief Join an array of strings with a separator
  *
  * @code{.cpp}
  * auto separator = cudf::string_view{"::", 2};
@@ -156,7 +156,7 @@ __device__ inline udf_string join(cudf::string_view const separator,
 }
 
 /**
- * @brief Join an array of strings with a separator.
+ * @brief Join an array of strings with a separator
  *
  * @param separator Null-terminated UTF-8 string
  * @param bytes Number of bytes to read from `separator`
@@ -173,7 +173,7 @@ __device__ inline udf_string join(char const* separator,
 }
 
 /**
- * @brief Join an array of strings with a separator.
+ * @brief Join an array of strings with a separator
  *
  * @param separator Null-terminated UTF-8 string
  * @param input An array of strings to join
