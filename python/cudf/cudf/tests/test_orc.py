@@ -736,6 +736,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [2, 100, 6000000])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -1554,7 +1555,6 @@ def test_names_in_struct_dtype_nesting(datadir):
     assert edf.dtypes.equals(got.dtypes)
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 def test_writer_lists_structs(list_struct_buff):
     df_in = cudf.read_orc(list_struct_buff)
 
@@ -1566,7 +1566,6 @@ def test_writer_lists_structs(list_struct_buff):
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "data",
     [
@@ -1667,7 +1666,6 @@ def test_empty_statistics():
         assert stats[0]["i"].get("sum") == 1
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "equivalent_columns",
     [
@@ -1746,8 +1744,10 @@ def test_writer_protobuf_large_rowindexentry():
 
 
 @pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
-def test_orc_writer_nvcomp(list_struct_buff, compression):
-    expected = cudf.read_orc(list_struct_buff)
+def test_orc_writer_nvcomp(compression):
+    expected = cudf.datasets.randomdata(
+        nrows=12345, dtypes={"a": int, "b": str, "c": float}, seed=1
+    )
 
     buff = BytesIO()
     try:
@@ -1880,3 +1880,13 @@ def test_orc_reader_apache_negative_timestamp(datadir):
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
+
+
+def test_statistics_string_sum():
+    strings = ["a string", "another string!"]
+    buff = BytesIO()
+    df = cudf.DataFrame({"str": strings})
+    df.to_orc(buff)
+
+    file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
+    assert_eq(file_stats[0]["str"].get("sum"), sum(len(s) for s in strings))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,26 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
+#pragma once
 
-#include <gmock/gmock.h>
+#include <cudf/column/column_view.hpp>
+
+#include <rmm/device_buffer.hpp>
+
+#include <memory>
 
 namespace cudf {
-namespace test {
-void expect_strings_empty(cudf::column_view strings_column)
-{
-  EXPECT_EQ(type_id::STRING, strings_column.type().id());
-  EXPECT_EQ(0, strings_column.size());
-  EXPECT_EQ(0, strings_column.null_count());
-  EXPECT_EQ(0, strings_column.num_children());
-}
+namespace strings {
+namespace udf {
 
-}  // namespace test
+/**
+ * @brief Return a cudf::string_view array for the given strings column
+ *
+ * @param input Strings column to convert to a string_view array.
+ * @throw cudf::logic_error if input is not a strings column.
+ */
+std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input);
+
+}  // namespace udf
+}  // namespace strings
 }  // namespace cudf

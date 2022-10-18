@@ -1196,7 +1196,7 @@ class Frame(BinaryOperand, Scannable):
         return self
 
     @_cudf_nvtx_annotate
-    def isnull(self):
+    def isna(self):
         """
         Identify missing values.
 
@@ -1236,7 +1236,7 @@ class Frame(BinaryOperand, Scannable):
         0     5                        <NA>  Alfred       <NA>
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
-        >>> df.isnull()
+        >>> df.isna()
              age   born   name    toy
         0  False   True  False   True
         1  False  False  False  False
@@ -1252,7 +1252,7 @@ class Frame(BinaryOperand, Scannable):
         3     Inf
         4    -Inf
         dtype: float64
-        >>> ser.isnull()
+        >>> ser.isna()
         0    False
         1    False
         2     True
@@ -1265,17 +1265,17 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
-        >>> idx.isnull()
-        GenericIndex([False, False, True, True, False, False], dtype='bool')
+        >>> idx.isna()
+        array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for isnull
-    isna = isnull
+    # Alias for isna
+    isnull = isna
 
     @_cudf_nvtx_annotate
-    def notnull(self):
+    def notna(self):
         """
         Identify non-missing values.
 
@@ -1315,7 +1315,7 @@ class Frame(BinaryOperand, Scannable):
         0     5                        <NA>  Alfred       <NA>
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
-        >>> df.notnull()
+        >>> df.notna()
              age   born  name    toy
         0   True  False  True  False
         1   True   True  True   True
@@ -1331,7 +1331,7 @@ class Frame(BinaryOperand, Scannable):
         3     Inf
         4    -Inf
         dtype: float64
-        >>> ser.notnull()
+        >>> ser.notna()
         0     True
         1     True
         2    False
@@ -1344,14 +1344,14 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
-        >>> idx.notnull()
-        GenericIndex([True, True, False, False, True, True], dtype='bool')
+        >>> idx.notna()
+        array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for notnull
-    notna = notnull
+    # Alias for notna
+    notnull = notna
 
     @_cudf_nvtx_annotate
     def searchsorted(
