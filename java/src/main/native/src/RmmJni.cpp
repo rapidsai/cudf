@@ -220,12 +220,13 @@ private:
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     jboolean result = false;
     if (!use_old_alloc_fail_interface) {
-      result = env->CallBooleanMethod(handler_obj, on_alloc_fail_method, 
-          static_cast<jlong>(num_bytes), static_cast<jint>(retry_count));
+      result =
+          env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes),
+                                 static_cast<jint>(retry_count));
 
     } else {
-      result = env->CallBooleanMethod(handler_obj, on_alloc_fail_method, 
-          static_cast<jlong>(num_bytes));
+      result =
+          env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
     }
     if (env->ExceptionCheck()) {
       throw std::runtime_error("onAllocFailure handler threw an exception");
