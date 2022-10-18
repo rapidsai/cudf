@@ -272,24 +272,3 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
   // input_table.has_nulls() == true
   EXPECT_THROW(auto ret = cudf::repeat(input_table, count), cudf::logic_error);
 }
-
-TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
-{
-  auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
-
-  auto count_neg = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    thrust::make_constant_iterator(-1, 0), thrust::make_constant_iterator(-1, 100));
-
-  auto value          = std::numeric_limits<cudf::size_type>::max() / 10;
-  auto count_overflow = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    thrust::make_constant_iterator(value, 0), thrust::make_constant_iterator(value, 100));
-
-  cudf::table_view input_table{{input}};
-
-  // negative
-  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_neg), cudf::logic_error);
-
-  // overflow
-  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_overflow), cudf::logic_error);
-}
