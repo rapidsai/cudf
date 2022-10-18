@@ -1911,7 +1911,7 @@ table_with_metadata reader::impl::read_chunk()
 
   printf("line %d\n", __LINE__);
   fflush(stdout);
-  return read_chunk_internal(false);
+  return read_chunk_internal(true);
 }
 
 bool reader::impl::has_next()
