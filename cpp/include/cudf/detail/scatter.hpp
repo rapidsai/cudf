@@ -45,6 +45,8 @@ namespace detail {
  *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
+ * If any values in `scatter_map` are outside of the interval [-n, n) where `n`
+ * is the number of rows in the `target` table, behavior is undefined.
  *
  * @param source The input columns containing values to be scattered into the
  * target columns
