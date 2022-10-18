@@ -73,11 +73,15 @@ public class RmmTest {
   public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
+    AtomicInteger amountRetried = new AtomicInteger();
 
     RmmEventHandler handler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, boolean isRetry) {
         int count = invokedCount.incrementAndGet();
+        if (isRetry) {
+          amountRetried.getAndIncrement();
+        }
         amountRequested.set(sizeRequested);
         return count != 3;
       }
@@ -100,6 +104,7 @@ public class RmmTest {
     }
 
     assertEquals(3, invokedCount.get());
+    assertEquals(2, amountRetried.get());
     assertEquals(requested, amountRequested.get());
 
     // verify after a failure we can still allocate something more reasonable

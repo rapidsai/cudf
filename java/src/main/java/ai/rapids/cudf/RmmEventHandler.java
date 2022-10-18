@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,9 +22,28 @@ public interface RmmEventHandler {
   /**
    * Invoked on a memory allocation failure.
    * @param sizeRequested number of bytes that failed to allocate
+   * @deprecated deprecated in favor of onAllocFailure(long, boolean)
    * @return true if the memory allocation should be retried or false if it should fail
    */
-  boolean onAllocFailure(long sizeRequested);
+  default boolean onAllocFailure(long sizeRequested) {
+    // this should not be called since it was the previous interface,
+    // and it was abstract before.
+    return false;
+  }
+
+  /**
+   * Invoked on a memory allocation failure.
+   * @param sizeRequested number of bytes that failed to allocate
+   * @param isRetry whether this failure happened while retrying an allocation
+   *                that had previously failed
+   * @return true if the memory allocation should be retried or false if it should fail
+   */
+  default boolean onAllocFailure(long sizeRequested, boolean isRetry) {
+    // newer code should override this implementation of `onAllocFailure` to handle
+    // the `isRetry` flag. Otherwise, we call the prior implementation to not
+    // break existing code.
+    return onAllocFailure(sizeRequested);
+  }
 
   /**
    * Get the memory thresholds that will trigger {@link #onAllocThreshold(long)}
