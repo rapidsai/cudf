@@ -76,9 +76,22 @@ struct extract_component_operator {
 
     if (time_since_midnight.count() < 0) { time_since_midnight += days(1); }
 
-    auto hrs_  = duration_cast<hours>(time_since_midnight);
-    auto mins_ = duration_cast<minutes>(time_since_midnight - hrs_);
-    auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
+    auto const hrs_  = [&] { return duration_cast<hours>(time_since_midnight); };
+    auto const mins_ = [&] { return duration_cast<minutes>(time_since_midnight) - hrs_(); };
+    auto const secs_ = [&] {
+      return duration_cast<seconds>(time_since_midnight) - hrs_() - mins_();
+    };
+    auto const millisecs_ = [&] {
+      return duration_cast<milliseconds>(time_since_midnight) - hrs_() - mins_() - secs_();
+    };
+    auto const microsecs_ = [&] {
+      return duration_cast<microseconds>(time_since_midnight) - hrs_() - mins_() - secs_() -
+             millisecs_();
+    };
+    auto const nanosecs_ = [&] {
+      return duration_cast<nanoseconds>(time_since_midnight) - hrs_() - mins_() - secs_() -
+             millisecs_() - microsecs_();
+    };
 
     switch (Component) {
       case datetime_component::YEAR:
@@ -89,9 +102,12 @@ struct extract_component_operator {
         return static_cast<unsigned>(year_month_day(days_since_epoch).day());
       case datetime_component::WEEKDAY:
         return year_month_weekday(days_since_epoch).weekday().iso_encoding();
-      case datetime_component::HOUR: return hrs_.count();
-      case datetime_component::MINUTE: return mins_.count();
-      case datetime_component::SECOND: return secs_.count();
+      case datetime_component::HOUR: return hrs_().count();
+      case datetime_component::MINUTE: return mins_().count();
+      case datetime_component::SECOND: return secs_().count();
+      case datetime_component::MILLISECOND: return millisecs_().count();
+      case datetime_component::MICROSECOND: return microsecs_().count();
+      case datetime_component::NANOSECOND: return nanosecs_().count();
       default: return 0;
     }
   }
@@ -495,6 +511,33 @@ std::unique_ptr<column> extract_second(column_view const& column,
     cudf::type_id::INT16>(column, stream, mr);
 }
 
+std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  return detail::apply_datetime_op<
+    detail::extract_component_operator<detail::datetime_component::MILLISECOND>,
+    cudf::type_id::INT16>(column, stream, mr);
+}
+
+std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  return detail::apply_datetime_op<
+    detail::extract_component_operator<detail::datetime_component::MICROSECOND>,
+    cudf::type_id::INT16>(column, stream, mr);
+}
+
+std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  return detail::apply_datetime_op<
+    detail::extract_component_operator<detail::datetime_component::NANOSECOND>,
+    cudf::type_id::INT16>(column, stream, mr);
+}
+
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
@@ -605,6 +648,27 @@ std::unique_ptr<column> extract_second(column_view const& column,
 {
   CUDF_FUNC_RANGE();
   return detail::extract_second(column, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> extract_millisecond_fraction(column_view const& column,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_millisecond_fraction(column, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> extract_microsecond_fraction(column_view const& column,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_microsecond_fraction(column, cudf::default_stream_value, mr);
+}
+
+std::unique_ptr<column> extract_nanosecond_fraction(column_view const& column,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_nanosecond_fraction(column, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,

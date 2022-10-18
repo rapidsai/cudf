@@ -61,6 +61,7 @@ from cudf._lib.strings.find import (
     startswith,
     startswith_multiple,
 )
+from cudf._lib.strings.find_multiple import find_multiple
 from cudf._lib.strings.findall import findall
 from cudf._lib.strings.json import GetJsonObjectOptions, get_json_object
 from cudf._lib.strings.padding import (
