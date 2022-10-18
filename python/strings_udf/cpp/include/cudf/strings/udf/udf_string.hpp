@@ -19,14 +19,30 @@
 
 #include <cuda_runtime.h>
 
+// This header contains all class and function declarations so that it
+// can be included in a .cpp file which only has declaration requirements
+// (i.e. sizeof, conditionally-comparable, explicit conversions, etc).
+// The definitions are coded in udf_string.cuh which is to be included
+// in .cu files that use this class in kernel calls.
+
 namespace cudf {
 namespace strings {
 namespace udf {
 
+/**
+ * @brief Device string class for use with user-defined functions
+ *
+ * This class manages a device buffer of UTF-8 encoded characters
+ * for string manipulation in a device kernel.
+ *
+ * It's methods and behavior are modelled after std::string but
+ * with special consideration for UTF-8 encoded strings and for
+ * use within a cuDF UDF.
+ */
 class udf_string {
  public:
   /**
-   * @brief Represents unknown character position or length.
+   * @brief Represents unknown character position or length
    */
   static constexpr cudf::size_type npos = static_cast<cudf::size_type>(-1);
 
@@ -41,7 +57,7 @@ class udf_string {
   udf_string() = default;
 
   /**
-   * @brief Create a string using existing device memory.
+   * @brief Create a string using existing device memory
    *
    * The given memory is copied into the instance returned.
    *
@@ -51,7 +67,7 @@ class udf_string {
   __device__ udf_string(char const* data, cudf::size_type bytes);
 
   /**
-   * @brief Create a string object from a null-terminated character array.
+   * @brief Create a string object from a null-terminated character array
    *
    * The given memory is copied into the instance returned.
    *
@@ -61,7 +77,7 @@ class udf_string {
   __device__ udf_string(char const* data);
 
   /**
-   * @brief Create a string object from a cudf::string_view.
+   * @brief Create a string object from a cudf::string_view
    *
    * The input string data is copied into the instance returned.
    *
@@ -70,7 +86,7 @@ class udf_string {
   __device__ udf_string(cudf::string_view const str);
 
   /**
-   * @brief Create a string object with `count` copies of character `chr`.
+   * @brief Create a string object with `count` copies of character `chr`
    *
    * @param count Number of times to copy `chr`
    * @param chr Character from which to create the string
@@ -78,7 +94,7 @@ class udf_string {
   __device__ udf_string(cudf::size_type count, cudf::char_utf8 chr);
 
   /**
-   * @brief Create a string object from another instance.
+   * @brief Create a string object from another instance
    *
    * The string data is copied from the `src` into the instance returned.
    *
@@ -87,7 +103,7 @@ class udf_string {
   __device__ udf_string(udf_string const& src);
 
   /**
-   * @brief Create a string object from a move reference.
+   * @brief Create a string object from a move reference
    *
    * The string data is moved from `src` into the instance returned.
    * The `src` will have no content.
@@ -104,41 +120,34 @@ class udf_string {
   __device__ udf_string& operator=(char const*);
 
   /**
-   * @brief Return the number of bytes in this string.
+   * @brief Return the number of bytes in this string
    */
   __device__ cudf::size_type size_bytes() const;
 
   /**
-   * @brief Return the number of characters in this string.
+   * @brief Return the number of characters in this string
    */
   __device__ cudf::size_type length() const;
 
   /**
-   * @brief Return the maximum number of bytes a udf_string can hold.
+   * @brief Return the maximum number of bytes a udf_string can hold
    */
   __device__ cudf::size_type max_size() const;
 
   /**
-   * @brief Return the internal pointer to the character array for this object.
+   * @brief Return the internal pointer to the character array for this object
    */
   __device__ char* data();
   __device__ char const* data() const;
 
   /**
-   * @brief Returns true if there are no characters in this string.
+   * @brief Returns true if there are no characters in this string
    */
   __device__ bool is_empty() const;
 
   /**
-   * @brief Returns true if `data()==nullptr`
-   *
-   * This is experimental and may be removed in the futre.
-   */
-  __device__ bool is_null() const;
-
-  /**
    * @brief Returns an iterator that can be used to navigate through
-   *        the UTF-8 characters in this string.
+   *        the UTF-8 characters in this string
    *
    * This returns a `cudf::string_view::const_iterator` which is read-only.
    */
@@ -146,7 +155,7 @@ class udf_string {
   __device__ cudf::string_view::const_iterator end() const;
 
   /**
-   * @brief Returns the character at the specified position.
+   * @brief Returns the character at the specified position
    *
    * This will return 0 if `pos >= length()`.
    *
@@ -156,7 +165,7 @@ class udf_string {
   __device__ cudf::char_utf8 at(cudf::size_type pos) const;
 
   /**
-   * @brief Returns the character at the specified index.
+   * @brief Returns the character at the specified index
    *
    * This will return 0 if `pos >= length()`.
    * Note this is read-only. Use replace() to modify a character.
@@ -167,7 +176,7 @@ class udf_string {
   __device__ cudf::char_utf8 operator[](cudf::size_type pos) const;
 
   /**
-   * @brief Return the byte offset for a given character position.
+   * @brief Return the byte offset for a given character position
    *
    * The byte offset for the character at `pos` such that
    * `data() + byte_offset(pos)` points to the memory location
@@ -238,14 +247,14 @@ class udf_string {
   __device__ bool operator>=(cudf::string_view const rhs) const;
 
   /**
-   * @brief Remove all bytes from this string.
+   * @brief Remove all bytes from this string
    *
    * All pointers, references, and iterators are invalidated.
    */
   __device__ void clear();
 
   /**
-   * @brief Resizes string to contain `count` bytes.
+   * @brief Resizes string to contain `count` bytes
    *
    * If `count > size_bytes()` then zero-padding is added.
    * If `count < size_bytes()` then the string is truncated to size `count`.
@@ -257,7 +266,7 @@ class udf_string {
   __device__ void resize(cudf::size_type count);
 
   /**
-   * @brief Reserve `count` bytes in this string.
+   * @brief Reserve `count` bytes in this string
    *
    * If `count > capacity()`, new memory is allocated and `capacity()` will
    * be greater than or equal to `count`.
@@ -268,12 +277,12 @@ class udf_string {
   __device__ void reserve(cudf::size_type count);
 
   /**
-   * @brief Returns the number of bytes that the string has allocated.
+   * @brief Returns the number of bytes that the string has allocated
    */
   __device__ cudf::size_type capacity() const;
 
   /**
-   * @brief Reduces internal allocation to just `size_bytes()`.
+   * @brief Reduces internal allocation to just `size_bytes()`
    *
    * All pointers, references, and iterators may be invalidated.
    */
@@ -313,7 +322,7 @@ class udf_string {
   __device__ udf_string& assign(char const* str, cudf::size_type bytes);
 
   /**
-   * @brief Append a string to the end of this string.
+   * @brief Append a string to the end of this string
    *
    * @param str String to append
    * @return This string with the appended argument
@@ -321,7 +330,7 @@ class udf_string {
   __device__ udf_string& operator+=(cudf::string_view const str);
 
   /**
-   * @brief Append a character to the end of this string.
+   * @brief Append a character to the end of this string
    *
    * @param str Character to append
    * @return This string with the appended argument
@@ -330,7 +339,7 @@ class udf_string {
 
   /**
    * @brief Append a null-terminated device memory character array
-   * to the end of this string.
+   * to the end of this string
    *
    * @param str String to append
    * @return This string with the appended argument
@@ -338,7 +347,7 @@ class udf_string {
   __device__ udf_string& operator+=(char const* str);
 
   /**
-   * @brief Append a null-terminated character array to the end of this string.
+   * @brief Append a null-terminated character array to the end of this string
    *
    * @param str String to append
    * @return This string with the appended argument
@@ -346,7 +355,7 @@ class udf_string {
   __device__ udf_string& append(char const* str);
 
   /**
-   * @brief Append a character array to the end of this string.
+   * @brief Append a character array to the end of this string
    *
    * @param str Character array to append
    * @param bytes Number of bytes from `str` to append.
@@ -355,7 +364,7 @@ class udf_string {
   __device__ udf_string& append(char const* str, cudf::size_type bytes);
 
   /**
-   * @brief Append a string to the end of this string.
+   * @brief Append a string to the end of this string
    *
    * @param str String to append
    * @return This string with the appended argument
@@ -373,7 +382,7 @@ class udf_string {
   __device__ udf_string& append(cudf::char_utf8 chr, cudf::size_type count = 1);
 
   /**
-   * @brief Insert a string into the character position specified.
+   * @brief Insert a string into the character position specified
    *
    * There is no effect if `pos < 0 or pos > length()`.
    *
@@ -384,7 +393,7 @@ class udf_string {
   __device__ udf_string& insert(cudf::size_type pos, cudf::string_view const str);
 
   /**
-   * @brief Insert a null-terminated character array into the character position specified.
+   * @brief Insert a null-terminated character array into the character position specified
    *
    * There is no effect if `pos < 0 or pos > length()`.
    *
@@ -395,7 +404,7 @@ class udf_string {
   __device__ udf_string& insert(cudf::size_type pos, char const* data);
 
   /**
-   * @brief Insert a character array into the character position specified.
+   * @brief Insert a character array into the character position specified
    *
    * There is no effect if `pos < 0 or pos > length()`.
    *
@@ -407,7 +416,7 @@ class udf_string {
   __device__ udf_string& insert(cudf::size_type pos, char const* data, cudf::size_type bytes);
 
   /**
-   * @brief Insert a character one or more times into the character position specified.
+   * @brief Insert a character one or more times into the character position specified
    *
    * There is no effect if `pos < 0 or pos > length()`.
    *
@@ -419,7 +428,7 @@ class udf_string {
   __device__ udf_string& insert(cudf::size_type pos, cudf::size_type count, cudf::char_utf8 chr);
 
   /**
-   * @brief Returns a substring of this string.
+   * @brief Returns a substring of this string
    *
    * An empty string is returned if `pos < 0 or pos >= length()`.
    *
@@ -432,7 +441,7 @@ class udf_string {
   __device__ udf_string substr(cudf::size_type pos, cudf::size_type count = npos) const;
 
   /**
-   * @brief Replace a range of characters with a given string.
+   * @brief Replace a range of characters with a given string
    *
    * Replaces characters in range `[pos, pos + count]` with `str`.
    * There is no effect if `pos < 0 or pos > length()`.
@@ -447,7 +456,7 @@ class udf_string {
                                  cudf::string_view const str);
 
   /**
-   * @brief Replace a range of characters with a null-terminated character array.
+   * @brief Replace a range of characters with a null-terminated character array
    *
    * Replaces characters in range `[pos, pos + count)` with `data`.
    * There is no effect if `pos < 0 or pos > length()`.
@@ -460,7 +469,7 @@ class udf_string {
   __device__ udf_string& replace(cudf::size_type pos, cudf::size_type count, char const* data);
 
   /**
-   * @brief Replace a range of characters with a given character array.
+   * @brief Replace a range of characters with a given character array
    *
    * Replaces characters in range `[pos, pos + count)` with `[data, data + bytes)`.
    * There is no effect if `pos < 0 or pos > length()`.
@@ -477,7 +486,7 @@ class udf_string {
                                  cudf::size_type bytes);
 
   /**
-   * @brief Replace a range of characters with a character one or more times.
+   * @brief Replace a range of characters with a character one or more times
    *
    * Replaces characters in range `[pos, pos + count)` with `chr` `chr_count` times.
    * There is no effect if `pos < 0 or pos > length()`.
@@ -494,7 +503,7 @@ class udf_string {
                                  cudf::char_utf8 chr);
 
   /**
-   * @brief Removes specified characters from this string.
+   * @brief Removes specified characters from this string
    *
    * Removes `min(count, length() - pos)` characters starting at `pos`.
    * There is no effect if `pos < 0 or pos >= length()`.

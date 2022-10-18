@@ -178,8 +178,6 @@ __device__ inline char const* udf_string::data() const { return m_data; }
 
 __device__ inline bool udf_string::is_empty() const { return m_bytes == 0; }
 
-__device__ inline bool udf_string::is_null() const { return m_data == nullptr; }
-
 __device__ inline cudf::string_view::const_iterator udf_string::begin() const
 {
   return cudf::string_view::const_iterator(cudf::string_view(m_data, m_bytes), 0);
