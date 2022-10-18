@@ -332,7 +332,7 @@ TEST_F(ByteCastTest, StringValues)
 {
   cudf::test::strings_column_wrapper const strings_col(
     {"", "The quick", " brown fox...", "!\"#$%&\'()*+,-./", "0123456789:;<=>?@", "[\\]^_`{|}~"});
-  cudf::test::lists_column_wrapper<int8_t> const strings_expected(
+  cudf::test::lists_column_wrapper<uint8_t> const strings_expected(
     {{},
      {0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x69, 0x63, 0x6b},
      {0x20, 0x62, 0x72, 0x6f, 0x77, 0x6e, 0x20, 0x66, 0x6f, 0x78, 0x2e, 0x2e, 0x2e},
