@@ -63,7 +63,7 @@ dependencies:
   - myst-nb
   - scipy
   - dask-cuda=22.12.*
-  - mimesis<4.1
+  - mimesis>=4.1.0
   - packaging
   - protobuf>=3.20.1,<3.21.0a0
   - nvtx>=0.2.1
