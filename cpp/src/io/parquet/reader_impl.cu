@@ -1810,10 +1810,7 @@ table_with_metadata reader::impl::read_chunk()
                                 _timestamp_type.id());
   }
 
-  //  if (!_file_preprocessed) {
-  if (true) {
-    printf("preprocessing from the beginning ===================line %d\n", __LINE__);
-
+  if (!_file_preprocessed) {
     [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
 
     // todo: fix this (empty output may be incorrect)
