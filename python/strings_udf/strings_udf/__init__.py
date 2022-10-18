@@ -16,7 +16,8 @@ __version__ = _version.get_versions()["version"]
 
 logger = get_logger()
 
-strings_udf_ptx_version = (11, 5)
+# tracks the version of CUDA used to build the c++ and PTX components
+STRINGS_UDF_PTX_VERSION = (11, 5)
 
 
 def _get_appropriate_file(sms, cc):
@@ -31,7 +32,7 @@ def maybe_patch_numba_linker(driver_version):
     # Numba thinks cubinlinker is only needed if the driver is older than the ctk
     # but when strings_udf is present, it might also need to patch because the PTX
     # file strings_udf relies on may be newer than the driver as well
-    if driver_version < strings_udf_ptx_version:
+    if driver_version < STRINGS_UDF_PTX_VERSION:
         logger.debug(
             "Driver version %s.%s needs patching due to strings_udf"
             % driver_version
@@ -43,15 +44,7 @@ def maybe_patch_numba_linker(driver_version):
             logger.debug("Cannot patch Numba Linker - unsupported version")
 
 
-# adapted from PTXCompiler
-cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
-# must have a driver to proceed
-if cp.returncode == 0:
-    versions = [int(s) for s in cp.stdout.strip().split()]
-    driver_version = tuple(versions[:2])
-    maybe_patch_numba_linker(driver_version)
-    # Load the highest compute capability file available that is less than
-    # the current device's.
+def get_ptx_file():
     dev = cuda.get_current_device()
     cc = int("".join(str(x) for x in dev.compute_capability))
     files = glob.glob(os.path.join(os.path.dirname(__file__), "shim_*.ptx"))
@@ -89,3 +82,17 @@ if cp.returncode == 0:
         ptxpath = suffix_a_sm[1]
     else:
         ptxpath = regular_result[1]
+
+    return ptxpath
+
+
+# adapted from PTXCompiler
+cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
+# must have a driver to proceed
+if cp.returncode == 0:
+    versions = [int(s) for s in cp.stdout.strip().split()]
+    driver_version = tuple(versions[:2])
+    maybe_patch_numba_linker(driver_version)
+    ptxpath = get_ptx_file()
+    # Load the highest compute capability file available that is less than
+    # the current device's.
