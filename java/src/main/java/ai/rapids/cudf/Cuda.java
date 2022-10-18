@@ -596,4 +596,10 @@ public class Cuda {
    * no effect.
    */
   public static native void profilerStop();
+
+  /**
+   * Synchronizes the whole device using cudaDeviceSynchronize.
+   * @note this is very expensive and should almost never be used
+   */
+  public static native void deviceSynchronize();
 }

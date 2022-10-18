@@ -14,8 +14,8 @@ the details of CUDA programming.
    :caption: Contents:
 
    user_guide/index
-   basics/index
    api_docs/index
+   developer_guide/index
 
 
 Indices and tables

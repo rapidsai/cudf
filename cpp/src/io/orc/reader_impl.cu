@@ -19,12 +19,13 @@
  * @brief cuDF-IO ORC reader class implementation
  */
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
+
 #include "reader_impl.hpp"
 #include "timezone.cuh"
 
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
@@ -261,32 +262,32 @@ auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
+__global__ void decompress_check_kernel(device_span<compression_result const> results,
                                         bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    if (stats[tid].status != 0) {
+  if (tid < results.size()) {
+    if (results[tid].status != compression_status::SUCCESS) {
       *any_block_failure = true;  // Doesn't need to be atomic
     }
   }
 }
 
-void decompress_check(device_span<decompress_status> stats,
+void decompress_check(device_span<compression_result> results,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
-  if (stats.empty()) { return; }  // early exit for empty stats
+  if (results.empty()) { return; }  // early exit for empty results
 
   dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
-  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
+  dim3 grid(cudf::util::div_rounding_up_safe(results.size(), static_cast<size_t>(block.x)));
+  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(results, any_block_failure);
 }
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   const std::vector<rmm::device_buffer>& stripe_data,
-  const OrcDecompressor* decompressor,
+  OrcDecompressor const& decompressor,
   std::vector<orc_stream_info>& stream_info,
   size_t num_stripes,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
@@ -302,16 +303,21 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
-    compinfo.insert(gpu::CompressedStreamInfo(
+    compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<const uint8_t*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
   }
   compinfo.host_to_device(stream);
 
+  // Workaround for ZSTD. It is possible to have compression ratios > 2048:1,
+  // so the heuristic in gpuParseCompressedStripeData() to estimate the size for
+  // small blocks can be too low. Disable the estimation for ZSTD.
+  auto allow_block_size_estimate = (decompressor.compression() != compression_type::ZSTD);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
-                                 decompressor->GetBlockSize(),
-                                 decompressor->GetLog2MaxCompressionRatio(),
+                                 decompressor.GetBlockSize(),
+                                 decompressor.GetLog2MaxCompressionRatio(),
+                                 allow_block_size_estimate,
                                  stream);
   compinfo.device_to_host(stream, true);
 
@@ -331,7 +337,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<decompress_status> inflate_stats(num_compressed_blocks, stream);
+  rmm::device_uvector<compression_result> inflate_res(num_compressed_blocks, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               inflate_res.begin(),
+               inflate_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;
@@ -343,8 +353,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
     compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
     compinfo[i].dec_out_ctl       = inflate_out.data() + start_pos;
-    compinfo[i].decstatus   = {inflate_stats.data() + start_pos, compinfo[i].num_compressed_blocks};
-    compinfo[i].copy_in_ctl = inflate_in.data() + start_pos_uncomp;
+    compinfo[i].dec_res      = {inflate_res.data() + start_pos, compinfo[i].num_compressed_blocks};
+    compinfo[i].copy_in_ctl  = inflate_in.data() + start_pos_uncomp;
     compinfo[i].copy_out_ctl = inflate_out.data() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
@@ -357,8 +367,9 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   compinfo.host_to_device(stream);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
-                                 decompressor->GetBlockSize(),
-                                 decompressor->GetLog2MaxCompressionRatio(),
+                                 decompressor.GetBlockSize(),
+                                 decompressor.GetLog2MaxCompressionRatio(),
+                                 allow_block_size_estimate,
                                  stream);
 
   // Dispatch batches of blocks to decompress
@@ -366,26 +377,47 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(),
                                                             num_compressed_blocks};
     device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
-    switch (decompressor->GetKind()) {
-      case orc::ZLIB:
-        gpuinflate(
-          inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
+    switch (decompressor.compression()) {
+      case compression_type::ZLIB:
+        // See https://github.com/rapidsai/cudf/issues/11812
+        if (false) {
+          nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
+                                     inflate_in_view,
+                                     inflate_out_view,
+                                     inflate_res,
+                                     max_uncomp_block_size,
+                                     total_decomp_size,
+                                     stream);
+        } else {
+          gpuinflate(
+            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
+        }
         break;
-      case orc::SNAPPY:
+      case compression_type::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
                                      inflate_out_view,
-                                     inflate_stats,
+                                     inflate_res,
                                      max_uncomp_block_size,
+                                     total_decomp_size,
                                      stream);
         } else {
-          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_stats, stream);
+          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
         }
+        break;
+      case compression_type::ZSTD:
+        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                                   inflate_in_view,
+                                   inflate_out_view,
+                                   inflate_res,
+                                   max_uncomp_block_size,
+                                   total_decomp_size,
+                                   stream);
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
-    decompress_check(inflate_stats, any_block_failure.device_ptr(), stream);
+    decompress_check(inflate_res, any_block_failure.device_ptr(), stream);
   }
   if (num_uncompressed_blocks > 0) {
     device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
@@ -852,16 +884,17 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
                    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
-                   return make_column(col_buffer, &schema_info.back(), stream, _mr);
+                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream, _mr);
                  });
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     _sources(std::move(sources)),
-    _metadata{_sources},
+    _metadata{_sources, stream},
     selected_columns{_metadata.select_columns(options.get_columns())}
 {
   // Override output timestamp resolution if requested
@@ -920,7 +953,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     return {std::make_unique<table>(), std::move(out_metadata)};
 
   // Select only stripes required (aka row groups)
-  const auto selected_stripes = _metadata.select_stripes(stripes, skip_rows, num_rows);
+  const auto selected_stripes = _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
 
   auto const tz_table = compute_timezone_table(selected_stripes, stream);
 
@@ -1164,16 +1197,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
         // Setup row group descriptors if using indexes
         if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
-          auto decomp_data =
-            decompress_stripe_data(chunks,
-                                   stripe_data,
-                                   _metadata.per_file_metadata[0].decompressor.get(),
-                                   stream_info,
-                                   total_num_stripes,
-                                   row_groups,
-                                   _metadata.get_row_index_stride(),
-                                   level == 0,
-                                   stream);
+          auto decomp_data = decompress_stripe_data(chunks,
+                                                    stripe_data,
+                                                    *_metadata.per_file_metadata[0].decompressor,
+                                                    stream_info,
+                                                    total_num_stripes,
+                                                    row_groups,
+                                                    _metadata.get_row_index_stride(),
+                                                    level == 0,
+                                                    stream);
           stripe_data.clear();
           stripe_data.push_back(std::move(decomp_data));
         } else {
@@ -1262,11 +1294,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   out_metadata.schema_info = std::move(schema_info);
 
-  for (const auto& meta : _metadata.per_file_metadata) {
-    for (const auto& kv : meta.ff.metadata) {
-      out_metadata.user_data.insert({kv.name, kv.value});
-    }
-  }
+  std::transform(_metadata.per_file_metadata.cbegin(),
+                 _metadata.per_file_metadata.cend(),
+                 std::back_inserter(out_metadata.per_file_user_data),
+                 [](auto& meta) {
+                   std::unordered_map<std::string, std::string> kv_map;
+                   std::transform(meta.ff.metadata.cbegin(),
+                                  meta.ff.metadata.cend(),
+                                  std::inserter(kv_map, kv_map.end()),
+                                  [](auto const& kv) {
+                                    return std::pair{kv.name, kv.value};
+                                  });
+                   return kv_map;
+                 });
+  out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
@@ -1277,7 +1319,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
 {
-  _impl = std::make_unique<impl>(std::move(sources), options, mr);
+  _impl = std::make_unique<impl>(std::move(sources), options, stream, mr);
 }
 
 // Destructor within this translation unit

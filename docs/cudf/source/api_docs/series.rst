@@ -18,6 +18,7 @@ Attributes
 .. autosummary::
    :toctree: api/
 
+   Series.axes
    Series.index
    Series.values
    Series.data
@@ -117,6 +118,7 @@ Computations / descriptive stats
    Series.all
    Series.any
    Series.autocorr
+   Series.between
    Series.clip
    Series.corr
    Series.count
@@ -183,13 +185,17 @@ Missing data handling
 .. autosummary::
    :toctree: api/
 
+   Series.backfill
+   Series.bfill
    Series.dropna
+   Series.ffill
    Series.fillna
    Series.isna
    Series.isnull
    Series.nans_to_nulls
    Series.notna
    Series.notnull
+   Series.pad
    Series.replace
 
 Reshaping, sorting
@@ -198,11 +204,9 @@ Reshaping, sorting
    :toctree: api/
 
    Series.argsort
-   Series.interleave_columns
    Series.sort_values
    Series.sort_index
    Series.explode
-   Series.scatter_by_map
    Series.searchsorted
    Series.repeat
    Series.transpose
@@ -306,21 +310,6 @@ Timedelta properties
 .. include:: string_handling.rst
 
 
-..
-    The following is needed to ensure the generated pages are created with the
-    correct template (otherwise they would be created in the Series/Index class page)
-
-..
-    .. currentmodule:: cudf
-    .. autosummary::
-       :toctree: api/
-       :template: autosummary/accessor.rst
-
-       Series.str
-       Series.cat
-       Series.dt
-       Index.str
-
 .. _api.series.cat:
 
 Categorical accessor
@@ -345,42 +334,27 @@ the ``Series.cat`` accessor.
 
 
 .. _api.series.list:
-
-List handling
-~~~~~~~~~~~~~
-
-``Series.list`` can be used to access the values of the series as
-lists and apply list methods to it. These can be accessed like
-``Series.list.<function/property>``.
-
-.. currentmodule:: cudf.core.column.lists.ListMethods
-.. autosummary::
-   :toctree: api/
-
-   concat
-   contains
-   get
-   len
-   sort_values
-   take
-   unique
+.. include:: list_handling.rst
 
 
 .. _api.series.struct:
+.. include:: struct_handling.rst
 
-Struct handling
-~~~~~~~~~~~~~~~
 
-``Series.struct`` can be used to access the values of the series as
-Structs and apply struct methods to it. These can be accessed like
-``Series.struct.<function/property>``.
+..
+    The following is needed to ensure the generated pages are created with the
+    correct template (otherwise they would be created in the Series/Index class page)
 
-.. currentmodule:: cudf.core.column.struct.StructMethods
-.. autosummary::
-   :toctree: api/
+..
+    .. currentmodule:: cudf
+    .. autosummary::
+       :toctree: api/
+       :template: autosummary/accessor.rst
 
-   field
-   explode
+       Series.str
+       Series.cat
+       Series.dt
+       Index.str
 
 
 Serialization / IO / conversion

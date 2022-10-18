@@ -23,8 +23,10 @@ target_compile_options(
 )
 
 target_link_libraries(
-  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
+  cudf_datagen
+  PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main benchmark::benchmark
+         nvbench::nvbench Threads::Threads cudf cudftestutil
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
@@ -41,7 +43,7 @@ add_library(
   cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
                                synchronization/synchronization.cpp io/cuio_common.cpp
 )
-target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
+target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -68,6 +70,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -96,6 +99,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -160,11 +164,12 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
+ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/sort_lists.cpp sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -181,7 +186,9 @@ ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
   reduction/reduce.cpp reduction/scan.cpp
 )
-ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
+ConfigureNVBench(
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -194,17 +201,14 @@ ConfigureBench(FILL_BENCH filling/repeat.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH
-  groupby/group_sum.cu
-  groupby/group_nth.cu
-  groupby/group_shift.cu
-  groupby/group_struct.cu
-  groupby/group_no_requests.cu
-  groupby/group_scan.cu
-  groupby/group_rank_benchmark.cu
+  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
+  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
 
-ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank_benchmark.cu)
+ConfigureNVBench(
+  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
+  groupby/group_struct_keys.cpp
+)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -219,28 +223,28 @@ ConfigureBench(MERGE_BENCH merge/merge.cpp)
 ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask.cpp)
 
 # ##################################################################################################
-# * parquet writer chunks benchmark ---------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks.cpp)
+# * parquet writer benchmark ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp io/parquet/parquet_writer_chunks.cpp
+)
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_READER_BENCH io/parquet/parquet_reader.cpp)
+ConfigureNVBench(
+  PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
+)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_READER_BENCH io/orc/orc_reader.cpp)
+ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
-ConfigureBench(CSV_READER_BENCH io/csv/csv_reader.cpp)
-
-# ##################################################################################################
-# * parquet writer benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
+ConfigureNVBench(CSV_READER_NVBENCH io/csv/csv_reader_input.cpp io/csv/csv_reader_options.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
-ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
+ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
@@ -277,6 +281,7 @@ ConfigureBench(
   string/factory.cu
   string/filter.cpp
   string/find.cpp
+  string/like.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
@@ -286,13 +291,17 @@ ConfigureBench(
   string/url_decode.cu
 )
 
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
+
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json.cu)
+ConfigureNVBench(FST_NVBENCH io/fst.cu)
+ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
-ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
+ConfigureNVBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
 
 add_custom_target(
   run_benchmarks

@@ -10,6 +10,7 @@ from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
+from cudf.core.missing import NA
 
 
 class StructColumn(ColumnBase):
@@ -30,31 +31,6 @@ class StructColumn(ColumnBase):
         else:
             return len(self.base_children[0])
 
-    @classmethod
-    def from_arrow(cls, data):
-        size = len(data)
-        dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
-
-        mask = data.buffers()[0]
-        if mask is not None:
-            mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
-
-        offset = data.offset
-        null_count = data.null_count
-        children = tuple(
-            cudf.core.column.as_column(data.field(i))
-            for i in range(data.type.num_fields)
-        )
-        return StructColumn(
-            data=None,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def to_arrow(self):
         children = [
             pa.nulls(len(child))
@@ -71,9 +47,7 @@ class StructColumn(ColumnBase):
         )
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
-            buffers = (nbuf,)
+            buffers = (pa.py_buffer(self.mask.memoryview()),)
         else:
             buffers = (None,)
 
@@ -102,7 +76,7 @@ class StructColumn(ColumnBase):
         if isinstance(value, dict):
             # filling in fields not in dict
             for field in self.dtype.fields:
-                value[field] = value.get(field, cudf.NA)
+                value[field] = value.get(field, NA)
 
             value = cudf.Scalar(value, self.dtype)
         super().__setitem__(key, value)
@@ -138,7 +112,13 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
-        if isinstance(dtype, StructDtype):
+        from cudf.core.column import IntervalColumn
+        from cudf.core.dtypes import IntervalDtype
+
+        # Check IntervalDtype first because it's a subclass of StructDtype
+        if isinstance(dtype, IntervalDtype):
+            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+        elif isinstance(dtype, StructDtype):
             return build_struct_column(
                 names=dtype.fields.keys(),
                 children=tuple(

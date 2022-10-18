@@ -1,5 +1,8 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+import math
+import shutil
+import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
@@ -16,6 +19,31 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
+BYTE_SIZES = {
+    "kb": 1000,
+    "mb": 1000000,
+    "gb": 1000000000,
+    "tb": 1000000000000,
+    "pb": 1000000000000000,
+    "kib": 1024,
+    "mib": 1048576,
+    "gib": 1073741824,
+    "tib": 1099511627776,
+    "pib": 1125899906842624,
+    "b": 1,
+    "": 1,
+    "k": 1000,
+    "m": 1000000,
+    "g": 1000000000,
+    "t": 1000000000000,
+    "p": 1000000000000000,
+    "ki": 1024,
+    "mi": 1048576,
+    "gi": 1073741824,
+    "ti": 1099511627776,
+    "pi": 1125899906842624,
+}
+
 
 @_cudf_nvtx_annotate
 def _write_parquet(
@@ -28,6 +56,8 @@ def _write_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     partitions_info=None,
     **kwargs,
 ):
@@ -54,6 +84,8 @@ def _write_parquet(
         "int96_timestamps": int96_timestamps,
         "row_group_size_bytes": row_group_size_bytes,
         "row_group_size_rows": row_group_size_rows,
+        "max_page_size_bytes": max_page_size_bytes,
+        "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
@@ -206,12 +238,15 @@ def _process_dataset(
         filters = pq._filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
+    # TODO: Remove the if len(paths) workaround after following bug is fixed:
+    # https://issues.apache.org/jira/browse/ARROW-16438
     dataset = ds.dataset(
-        paths,
+        source=paths[0] if len(paths) == 1 else paths,
         filesystem=fs,
         format="parquet",
         partitioning="hive",
     )
+
     file_list = dataset.files
     if len(file_list) == 0:
         raise FileNotFoundError(f"{paths} could not be resolved to any files")
@@ -276,7 +311,7 @@ def _process_dataset(
             path = file_fragment.path
 
             # Extract hive-partition keys, and make sure they
-            # are orederd the same as they are in `partition_categories`
+            # are ordered the same as they are in `partition_categories`
             if partition_categories:
                 raw_keys = ds._get_partition_keys(
                     file_fragment.partition_expression
@@ -328,8 +363,6 @@ def read_parquet(
     columns=None,
     filters=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
@@ -404,7 +437,7 @@ def read_parquet(
             fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
-        tmp_source, compression = ioutils.get_filepath_or_buffer(
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
@@ -442,8 +475,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        skiprows=skiprows,
-        num_rows=num_rows,
         strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
@@ -532,8 +563,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    skiprows=None,
-    num_rows=None,
     strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
@@ -546,8 +575,6 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            skiprows=skiprows,
-            num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
@@ -575,6 +602,8 @@ def to_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     *args,
     **kwargs,
 ):
@@ -604,6 +633,8 @@ def to_parquet(
                     "int96_timestamps": int96_timestamps,
                     "row_group_size_bytes": row_group_size_bytes,
                     "row_group_size_rows": row_group_size_rows,
+                    "max_page_size_bytes": max_page_size_bytes,
+                    "max_page_size_rows": max_page_size_rows,
                 }
             )
             return write_to_dataset(
@@ -633,6 +664,8 @@ def to_parquet(
             int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
             row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
             **kwargs,
         )
 
@@ -672,6 +705,23 @@ def _generate_filename():
     return uuid4().hex + ".parquet"
 
 
+def _get_estimated_file_size(df):
+    # NOTE: This is purely a guesstimation method
+    # and the y = mx+c has been arrived
+    # after extensive experimentation of parquet file size
+    # vs dataframe sizes.
+    df_mem_usage = df.memory_usage().sum()
+    # Parquet file size of a dataframe with all unique values
+    # seems to be 1/1.5 times as that of on GPU for >10000 rows
+    # and 0.6 times else-wise.
+    # Y(file_size) = M(0.6) * X(df_mem_usage) + C(705)
+    file_size = int((df_mem_usage * 0.6) + 705)
+    # 1000 Bytes accounted for row-group metadata.
+    # A parquet file takes roughly ~810 Bytes of metadata per column.
+    file_size = file_size + 1000 + (810 * df.shape[1])
+    return file_size
+
+
 @_cudf_nvtx_annotate
 def _get_partitioned(
     df,
@@ -684,17 +734,10 @@ def _get_partitioned(
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
     fs.mkdirs(root_path, exist_ok=True)
-    if not (set(df._data) - set(partition_cols)):
-        raise ValueError("No data left to save outside partition columns")
 
-    part_names, part_offsets, _, grouped_df = df.groupby(
-        partition_cols
-    )._grouped()
-    if not preserve_index:
-        grouped_df.reset_index(drop=True, inplace=True)
-    grouped_df.drop(columns=partition_cols, inplace=True)
-    # Copy the entire keys df in one operation rather than using iloc
-    part_names = part_names.to_pandas().to_frame(index=False)
+    part_names, grouped_df, part_offsets = _get_groups_and_offsets(
+        df, partition_cols, preserve_index
+    )
 
     full_paths = []
     metadata_file_paths = []
@@ -712,71 +755,175 @@ def _get_partitioned(
     return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
 
 
+@_cudf_nvtx_annotate
+def _get_groups_and_offsets(
+    df,
+    partition_cols,
+    preserve_index=False,
+    **kwargs,
+):
+
+    if not (set(df._data) - set(partition_cols)):
+        raise ValueError("No data left to save outside partition columns")
+
+    part_names, part_offsets, _, grouped_df = df.groupby(
+        partition_cols
+    )._grouped()
+    if not preserve_index:
+        grouped_df.reset_index(drop=True, inplace=True)
+    grouped_df.drop(columns=partition_cols, inplace=True)
+    # Copy the entire keys df in one operation rather than using iloc
+    part_names = part_names.to_pandas().to_frame(index=False)
+
+    return part_names, grouped_df, part_offsets
+
+
 ParquetWriter = libparquet.ParquetWriter
 
 
+def _parse_bytes(s):
+    """Parse byte string to numbers
+
+    Utility function vendored from Dask.
+
+    >>> _parse_bytes('100')
+    100
+    >>> _parse_bytes('100 MB')
+    100000000
+    >>> _parse_bytes('100M')
+    100000000
+    >>> _parse_bytes('5kB')
+    5000
+    >>> _parse_bytes('5.4 kB')
+    5400
+    >>> _parse_bytes('1kiB')
+    1024
+    >>> _parse_bytes('1e6')
+    1000000
+    >>> _parse_bytes('1e6 kB')
+    1000000000
+    >>> _parse_bytes('MB')
+    1000000
+    >>> _parse_bytes(123)
+    123
+    >>> _parse_bytes('5 foos')
+    Traceback (most recent call last):
+        ...
+    ValueError: Could not interpret 'foos' as a byte unit
+    """
+    if isinstance(s, (int, float)):
+        return int(s)
+    s = s.replace(" ", "")
+    if not any(char.isdigit() for char in s):
+        s = "1" + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    try:
+        n = float(prefix)
+    except ValueError as e:
+        raise ValueError(
+            "Could not interpret '%s' as a number" % prefix
+        ) from e
+
+    try:
+        multiplier = BYTE_SIZES[suffix.lower()]
+    except KeyError as e:
+        raise ValueError(
+            "Could not interpret '%s' as a byte unit" % suffix
+        ) from e
+
+    result = n * multiplier
+    return int(result)
+
+
 class ParquetDatasetWriter:
+    """
+    Write a parquet file or dataset incrementally
+
+    Parameters
+    ----------
+    path : str
+        A local directory path or S3 URL. Will be used as root directory
+        path while writing a partitioned dataset.
+    partition_cols : list
+        Column names by which to partition the dataset
+        Columns are partitioned in the order they are given
+    index : bool, default None
+        If ``True``, include the dataframe's index(es) in the file output.
+        If ``False``, they will not be written to the file. If ``None``,
+        index(es) other than RangeIndex will be saved as columns.
+    compression : {'snappy', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
+        Level at which column statistics should be included in file.
+    max_file_size : int or str, default None
+        A file size that cannot be exceeded by the writer.
+        It is in bytes, if the input is int.
+        Size can also be a str in form or "10 MB", "1 GB", etc.
+        If this parameter is used, it is mandatory to pass
+        `file_name_prefix`.
+    file_name_prefix : str
+        This is a prefix to file names generated only when
+        `max_file_size` is specified.
+
+
+    Examples
+    --------
+    Using a context
+
+    >>> df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
+    >>> df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
+    >>> with ParquetDatasetWriter("./dataset", partition_cols=["a"]) as cw:
+    ...     cw.write_table(df1)
+    ...     cw.write_table(df2)
+
+    By manually calling ``close()``
+
+    >>> cw = ParquetDatasetWriter("./dataset", partition_cols=["a"])
+    >>> cw.write_table(df1)
+    >>> cw.write_table(df2)
+    >>> cw.close()
+
+    Both the methods will generate the same directory structure
+
+    .. code-block:: none
+
+        dataset/
+            a=1
+                <filename>.parquet
+            a=2
+                <filename>.parquet
+            a=3
+                <filename>.parquet
+
+    """
+
     @_cudf_nvtx_annotate
     def __init__(
         self,
         path,
         partition_cols,
         index=None,
-        compression=None,
+        compression="snappy",
         statistics="ROWGROUP",
+        max_file_size=None,
+        file_name_prefix=None,
+        **kwargs,
     ) -> None:
-        """
-        Write a parquet file or dataset incrementally
+        if isinstance(path, str) and path.startswith("s3://"):
+            self.fs_meta = {"is_s3": True, "actual_path": path}
+            self.path = tempfile.TemporaryDirectory().name
+        else:
+            self.fs_meta = {}
+            self.path = path
 
-        Parameters
-        ----------
-        path : str
-            File path or Root Directory path. Will be used as Root Directory
-            path while writing a partitioned dataset.
-        partition_cols : list
-            Column names by which to partition the dataset
-            Columns are partitioned in the order they are given
-        index : bool, default None
-            If ``True``, include the dataframe’s index(es) in the file output.
-            If ``False``, they will not be written to the file. If ``None``,
-            index(es) other than RangeIndex will be saved as columns.
-        compression : {'snappy', None}, default 'snappy'
-            Name of the compression to use. Use ``None`` for no compression.
-        statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
-            Level at which column statistics should be included in file.
-
-
-        Examples
-        ________
-        Using a context
-
-        >>> df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
-        >>> df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
-        >>> with ParquetDatasetWriter("./dataset", partition_cols=["a"]) as cw:
-        ...     cw.write_table(df1)
-        ...     cw.write_table(df2)
-
-        By manually calling ``close()``
-
-        >>> cw = ParquetDatasetWriter("./dataset", partition_cols=["a"])
-        >>> cw.write_table(df1)
-        >>> cw.write_table(df2)
-        >>> cw.close()
-
-        Both the methods will generate the same directory structure
-
-        .. code-block:: bash
-
-            dataset/
-                a=1
-                    <filename>.parquet
-                a=2
-                    <filename>.parquet
-                a=3
-                    <filename>.parquet
-
-        """
-        self.path = path
         self.common_args = {
             "index": index,
             "compression": compression,
@@ -791,27 +938,110 @@ class ParquetDatasetWriter:
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
-        self.filename = None
+        self.kwargs = kwargs
+        self.filename = file_name_prefix
+        self.max_file_size = max_file_size
+        if max_file_size is not None:
+            if file_name_prefix is None:
+                raise ValueError(
+                    "file_name_prefix cannot be None if max_file_size is "
+                    "passed"
+                )
+            self.max_file_size = _parse_bytes(max_file_size)
+
+        self._file_sizes: Dict[str, int] = {}
 
     @_cudf_nvtx_annotate
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
         """
-        (
-            paths,
-            metadata_file_paths,
-            grouped_df,
-            offsets,
-            self.filename,
-        ) = _get_partitioned(
-            df,
-            self.path,
-            self.partition_cols,
+        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+            df=df,
+            partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],
-            filename=self.filename,
         )
+        fs = ioutils._ensure_filesystem(None, self.path)
+        fs.mkdirs(self.path, exist_ok=True)
 
+        full_paths = []
+        metadata_file_paths = []
+        full_offsets = [0]
+
+        for idx, keys in enumerate(part_names.itertuples(index=False)):
+            subdir = fs.sep.join(
+                [
+                    f"{name}={val}"
+                    for name, val in zip(self.partition_cols, keys)
+                ]
+            )
+            prefix = fs.sep.join([self.path, subdir])
+            fs.mkdirs(prefix, exist_ok=True)
+            current_offset = (part_offsets[idx], part_offsets[idx + 1])
+            num_chunks = 1
+            parts = 1
+
+            if self.max_file_size is not None:
+                # get the current partition
+                start, end = current_offset
+                sliced_df = grouped_df[start:end]
+
+                current_file_size = _get_estimated_file_size(sliced_df)
+                if current_file_size > self.max_file_size:
+                    # if the file is too large, compute metadata for
+                    # smaller chunks
+                    parts = math.ceil(current_file_size / self.max_file_size)
+                    new_offsets = list(
+                        range(start, end, int((end - start) / parts))
+                    )[1:]
+                    new_offsets.append(end)
+                    num_chunks = len(new_offsets)
+                    parts = len(new_offsets)
+                    full_offsets.extend(new_offsets)
+                else:
+                    full_offsets.append(end)
+
+                curr_file_num = 0
+                num_chunks = 0
+                while num_chunks < parts:
+                    new_file_name = f"{self.filename}_{curr_file_num}.parquet"
+                    new_full_path = fs.sep.join([prefix, new_file_name])
+
+                    # Check if the same `new_file_name` exists and
+                    # generate a `new_file_name`
+                    while new_full_path in self._file_sizes and (
+                        self._file_sizes[new_full_path]
+                        + (current_file_size / parts)
+                    ) > (self.max_file_size):
+                        curr_file_num += 1
+                        new_file_name = (
+                            f"{self.filename}_{curr_file_num}.parquet"
+                        )
+                        new_full_path = fs.sep.join([prefix, new_file_name])
+
+                    self._file_sizes[new_full_path] = self._file_sizes.get(
+                        new_full_path, 0
+                    ) + (current_file_size / parts)
+                    full_paths.append(new_full_path)
+                    metadata_file_paths.append(
+                        fs.sep.join([subdir, new_file_name])
+                    )
+                    num_chunks += 1
+                    curr_file_num += 1
+            else:
+                self.filename = self.filename or _generate_filename()
+                full_path = fs.sep.join([prefix, self.filename])
+                full_paths.append(full_path)
+                metadata_file_paths.append(
+                    fs.sep.join([subdir, self.filename])
+                )
+                full_offsets.append(current_offset[1])
+
+        paths, metadata_file_paths, offsets = (
+            full_paths,
+            metadata_file_paths,
+            full_offsets,
+        )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
 
@@ -837,18 +1067,19 @@ class ParquetDatasetWriter:
             ]
             cw.write_table(grouped_df, this_cw_part_info)
 
-        # Create new cw for unhandled paths encountered in this write_table
-        new_paths, part_info, meta_paths = zip(*new_cw_paths)
-        self._chunked_writers.append(
-            (
-                ParquetWriter(new_paths, **self.common_args),
-                new_paths,
-                meta_paths,
+        if new_cw_paths:
+            # Create new cw for unhandled paths encountered in this write_table
+            new_paths, part_info, meta_paths = zip(*new_cw_paths)
+            self._chunked_writers.append(
+                (
+                    ParquetWriter(new_paths, **self.common_args),
+                    new_paths,
+                    meta_paths,
+                )
             )
-        )
-        new_cw_idx = len(self._chunked_writers) - 1
-        self.path_cw_map.update({k: new_cw_idx for k in new_paths})
-        self._chunked_writers[-1][0].write_table(grouped_df, part_info)
+            new_cw_idx = len(self._chunked_writers) - 1
+            self.path_cw_map.update({k: new_cw_idx for k in new_paths})
+            self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
     @_cudf_nvtx_annotate
     def close(self, return_metadata=False):
@@ -861,6 +1092,15 @@ class ParquetDatasetWriter:
             cw.close(metadata_file_path=meta_path if return_metadata else None)
             for cw, _, meta_path in self._chunked_writers
         ]
+
+        if self.fs_meta.get("is_s3", False):
+            local_path = self.path
+            s3_path = self.fs_meta["actual_path"]
+            s3_file, _ = ioutils._get_filesystem_and_paths(
+                s3_path, **self.kwargs
+            )
+            s3_file.put(local_path, s3_path, recursive=True)
+            shutil.rmtree(self.path)
 
         if return_metadata:
             return (

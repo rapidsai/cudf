@@ -5,13 +5,14 @@ import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
+import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
-import versioneer
-
 install_requires = ["cudf", "cython"]
+
+extras_require = {"test": ["pytest", "pytest-xdist"]}
 
 cython_files = ["cudf_kafka/_lib/*.pyx"]
 
@@ -94,7 +95,6 @@ setup(
         "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
-    setup_requires=["Cython>=0.29,<0.30"],
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
@@ -109,6 +109,6 @@ setup(
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
-    extras_require={"test": ["pytest", "pytest-xdist"]},
+    extras_require=extras_require,
     zip_safe=False,
 )

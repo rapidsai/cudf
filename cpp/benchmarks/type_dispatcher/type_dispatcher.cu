@@ -24,8 +24,8 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <type_traits>
@@ -188,10 +188,10 @@ void type_dispatcher_benchmark(::benchmark::State& state)
   std::vector<rmm::device_buffer> h_vec(n_cols);
   std::vector<TypeParam*> h_vec_p(n_cols);
   std::transform(h_vec.begin(), h_vec.end(), h_vec_p.begin(), [source_size](auto& col) {
-    col.resize(source_size * sizeof(TypeParam), rmm::cuda_stream_default);
+    col.resize(source_size * sizeof(TypeParam), cudf::default_stream_value);
     return static_cast<TypeParam*>(col.data());
   });
-  rmm::device_uvector<TypeParam*> d_vec(n_cols, rmm::cuda_stream_default);
+  rmm::device_uvector<TypeParam*> d_vec(n_cols, cudf::default_stream_value);
 
   if (dispatching_type == NO_DISPATCHING) {
     CUDF_CUDA_TRY(cudaMemcpy(

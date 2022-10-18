@@ -18,8 +18,8 @@
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 namespace cudf {
 namespace io {
@@ -360,19 +360,19 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
 {
   if (bytestream_readbyte(bs, pos) > 0x7f) {
     uint32_t next32 = bytestream_readu32(bs, pos + 1);
-    uint32_t zbit   = __ffs((~next32) & 0x80808080);
+    uint32_t zbit   = __ffs((~next32) & 0x8080'8080);
     if (sizeof(T) <= 4 || zbit) {
       return 1 + (zbit >> 3);  // up to 5x7 bits
     } else {
       next32 = bytestream_readu32(bs, pos + 5);
-      zbit   = __ffs((~next32) & 0x80808080);
+      zbit   = __ffs((~next32) & 0x8080'8080);
       if (zbit) {
         return 5 + (zbit >> 3);  // up to 9x7 bits
       } else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f)) {
         return 10;  // up to 70 bits
       } else {
         uint64_t next64 = bytestream_readu64(bs, pos + 10);
-        zbit            = __ffsll((~next64) & 0x8080808080808080ull);
+        zbit            = __ffsll((~next64) & 0x8080'8080'8080'8080ull);
         if (zbit) {
           return 10 + (zbit >> 3);  // Up to 18x7 bits (126)
         } else {
@@ -405,10 +405,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
       v = (v & 0x3fff) | (b << 14);
       if (b > 0x7f) {
         b = bytestream_readbyte(bs, pos++);
-        v = (v & 0x1fffff) | (b << 21);
+        v = (v & 0x1f'ffff) | (b << 21);
         if (b > 0x7f) {
           b = bytestream_readbyte(bs, pos++);
-          v = (v & 0x0fffffff) | (b << 28);
+          v = (v & 0x0fff'ffff) | (b << 28);
           if constexpr (sizeof(T) > 4) {
             uint32_t lo = v;
             uint64_t hi;
@@ -421,10 +421,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
                 v = (v & 0x3ff) | (b << 10);
                 if (b > 0x7f) {
                   b = bytestream_readbyte(bs, pos++);
-                  v = (v & 0x1ffff) | (b << 17);
+                  v = (v & 0x1'ffff) | (b << 17);
                   if (b > 0x7f) {
                     b = bytestream_readbyte(bs, pos++);
-                    v = (v & 0xffffff) | (b << 24);
+                    v = (v & 0xff'ffff) | (b << 24);
                     if (b > 0x7f) {
                       pos++;  // last bit is redundant (extra byte implies bit63 is 1)
                     }
@@ -745,17 +745,21 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
             uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
             if constexpr (sizeof(T) <= 4) {
-              uint32_t baseval, mask;
+              uint32_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask                = (1 << (bw * 8 - 1)) - 1;
-              rle->baseval.u32[r] = (baseval > mask) ? (-(int32_t)(baseval & mask)) : baseval;
+              uint32_t const mask = (1u << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u32[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int32_t>(baseval & mask)
+                                      : baseval;
             } else {
-              uint64_t baseval, mask;
+              uint64_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask = 1;
-              mask <<= (bw * 8) - 1;
-              mask -= 1;
-              rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
+              uint64_t const mask = (1ul << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u64[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int64_t>(baseval & mask)
+                                      : baseval;
             }
             rle->m2_pw_byte3[r] = (pw << 8) | byte3;
             pos += bw;
@@ -1208,7 +1212,7 @@ __global__ void __launch_bounds__(block_size)
           // Need to arrange the bytes to apply mask properly.
           uint32_t bits = (i + 32 <= skippedrows) ? s->vals.u32[i >> 5]
                                                   : (__byte_perm(s->vals.u32[i >> 5], 0, 0x0123) &
-                                                     (0xffffffffu << (0x20 - skippedrows + i)));
+                                                     (0xffff'ffffu << (0x20 - skippedrows + i)));
           skip_count += __popc(bits);
         }
         skip_count = warp_reduce(temp_storage.wr_storage[t / 32]).Sum(skip_count);
@@ -1758,12 +1762,16 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              uint64_t nanos  = secondary_val;
+              int64_t nanos   = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               if (!tz_table.ttimes.empty()) {
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
-              if (seconds < 0 && nanos != 0) { seconds -= 1; }
+              // Adjust seconds only for negative timestamps with positive nanoseconds.
+              // Alternative way to represent negative timestamps is with negative nanoseconds
+              // in which case the adjustment in not needed.
+              // Comparing with 999999 instead of zero to match the apache writer.
+              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
 
               duration_ns d_ns{nanos};
               duration_s d_s{seconds};

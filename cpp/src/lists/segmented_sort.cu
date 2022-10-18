@@ -26,6 +26,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -45,6 +46,17 @@ namespace lists {
 namespace detail {
 
 struct SegmentedSortColumn {
+  /**
+   * @brief Compile time check for allowing radix sort for column type.
+   *
+   * Floating point is not included here because of the special handling of NaNs.
+   */
+  template <typename T>
+  static constexpr bool is_radix_sort_supported()
+  {
+    return std::is_integral<T>();
+  }
+
   template <typename KeyT, typename ValueT, typename OffsetIteratorT>
   void SortPairsAscending(KeyT const* keys_in,
                           KeyT* keys_out,
@@ -132,7 +144,7 @@ struct SegmentedSortColumn {
   }
 
   template <typename T>
-  std::enable_if_t<not is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<not is_radix_sort_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
     column_view const& segment_offsets,
     order column_order,
@@ -151,7 +163,7 @@ struct SegmentedSortColumn {
   }
 
   template <typename T>
-  std::enable_if_t<is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_radix_sort_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
     column_view const& offsets,
     order column_order,
@@ -252,14 +264,14 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                     });
   // for numeric columns, calls Faster segmented radix sort path
   // for non-numeric columns, calls segmented_sort_by_key.
-  auto output_child = type_dispatcher(input.child().type(),
-                                      SegmentedSortColumn{},
-                                      input.get_sliced_child(stream),
-                                      output_offset->view(),
-                                      column_order,
-                                      null_precedence,
-                                      stream,
-                                      mr);
+  auto output_child = type_dispatcher<dispatch_storage_type>(input.child().type(),
+                                                             SegmentedSortColumn{},
+                                                             input.get_sliced_child(stream),
+                                                             output_offset->view(),
+                                                             column_order,
+                                                             null_precedence,
+                                                             stream,
+                                                             mr);
 
   auto null_mask = cudf::detail::copy_bitmask(input.parent(), stream, mr);
 
@@ -316,7 +328,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_lists(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+  return detail::sort_lists(input, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
@@ -326,7 +338,7 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::stable_sort_lists(
-    input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    input, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 }  // namespace lists

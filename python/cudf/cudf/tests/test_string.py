@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.testing._utils import (
@@ -875,6 +875,34 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
 
 
 @pytest.mark.parametrize(
+    "pat,esc,expect",
+    [
+        ("abc", "", [True, False, False, False, False, False]),
+        ("b%", "/", [False, True, False, False, False, False]),
+        ("%b", ":", [False, True, False, False, False, False]),
+        ("%b%", "*", [True, True, False, False, False, False]),
+        ("___", "", [True, True, True, False, False, False]),
+        ("__/%", "/", [False, False, True, False, False, False]),
+        ("55/____", "/", [False, False, False, True, False, False]),
+        ("%:%%", ":", [False, False, True, False, False, False]),
+        ("55*_100", "*", [False, False, False, True, False, False]),
+        ("abc", "abc", [True, False, False, False, False, False]),
+    ],
+)
+def test_string_like(pat, esc, expect):
+
+    expectation = does_not_raise()
+    if len(esc) > 1:
+        expectation = pytest.raises(ValueError)
+
+    with expectation:
+        gs = cudf.Series(["abc", "bab", "99%", "55_100", "", "556100"])
+        got = gs.str.like(pat, esc)
+        expect = cudf.Series(expect)
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [["hello", "world", None, "", "!"]],
 )
@@ -921,6 +949,16 @@ def test_string_replace(
         got = gs.str.replace(pat, repl, case=case, flags=flags, regex=regex)
 
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("pat", ["A*", "F?H?"])
+def test_string_replace_zero_length(ps_gs, pat):
+    ps, gs = ps_gs
+
+    expect = ps.str.replace(pat, "_", regex=True)
+    got = gs.str.replace(pat, "_", regex=True)
+
+    assert_eq(expect, got)
 
 
 def test_string_lower(ps_gs):
@@ -1727,8 +1765,14 @@ def test_strings_filling_tests(data, width, fillchar):
     [
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
-        ["+23", "³", "⅕", ""],
-        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["³", "⅕", ""],
+        pytest.param(
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/20868",
+            ),
+        ),
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
@@ -1869,34 +1913,9 @@ def test_string_findall(pat, flags):
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)
 
-    # TODO: Update this test to remove "expand=False" when removing the expand
-    # parameter from Series.str.findall.
-    assert_eq(
-        ps.str.findall(pat, flags), gs.str.findall(pat, flags, expand=False)
-    )
-
-
-@pytest.mark.filterwarnings("ignore:The expand parameter is deprecated")
-def test_string_findall_expand_True():
-    # TODO: Remove this test when removing the expand parameter from
-    # Series.str.findall.
-    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
-    ps = pd.Series(test_data)
-    gs = cudf.Series(test_data)
-
-    assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
-    assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
-    assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
-    assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
-    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
-    assert_eq(
-        ps.str.findall("on$", re.MULTILINE)[3][0],
-        gs.str.findall("on$", re.MULTILINE)[0][3],
-    )
-    assert_eq(
-        ps.str.findall("o.*k", re.DOTALL)[3][0],
-        gs.str.findall("o.*k", re.DOTALL)[0][3],
-    )
+    expected = ps.str.findall(pat, flags)
+    actual = gs.str.findall(pat, flags)
+    assert_eq(expected, actual)
 
 
 def test_string_replace_multi():
@@ -1994,10 +2013,32 @@ def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    assert_eq(
-        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
-    )
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
+    if pat is None:
+        assert_exceptions_equal(
+            lfunc=ps.str.startswith,
+            rfunc=gs.str.startswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+        assert_exceptions_equal(
+            lfunc=ps.str.endswith,
+            rfunc=gs.str.endswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+    else:
+        assert_eq(
+            ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+        )
+        assert_eq(
+            ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False
+        )
 
 
 @pytest.mark.parametrize(
@@ -3117,6 +3158,157 @@ def test_string_get_json_object_invalid_JSONPath(json_path):
 
     with pytest.raises(ValueError):
         gs.str.get_json_object(json_path)
+
+
+def test_string_get_json_object_allow_single_quotes():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            'author':"Nigel Rees",
+                            "title":'Sayings of the Century',
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            'title':"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=True
+        ),
+        cudf.Series(["Nigel Rees"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=True
+        ),
+        cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"]),
+    )
+
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+
+
+def test_string_get_json_object_strip_quotes_from_single_strings():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(["Nigel Rees"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['"Nigel Rees"']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+
+
+def test_string_get_json_object_missing_fields_as_nulls():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(["null"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(['[null,"fiction"]']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series(['["fiction"]']),
+    )
 
 
 def test_str_join_lists_error():

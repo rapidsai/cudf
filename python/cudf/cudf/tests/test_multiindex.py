@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_130
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import assert_eq, assert_exceptions_equal, assert_neq
@@ -118,6 +118,30 @@ def test_multiindex_series_assignment():
         levels=[["a", "b"], ["c", "d"]], codes=[[0, 1, 0], [1, 0, 1]]
     )
     assert_eq(ps, gs)
+
+
+def test_multiindex_swaplevel():
+    midx = cudf.MultiIndex(
+        levels=[
+            ["lama", "cow", "falcon"],
+            ["speed", "weight", "length"],
+            ["first", "second"],
+        ],
+        codes=[
+            [0, 0, 0, 1, 1, 1, 2, 2, 2],
+            [0, 1, 2, 0, 1, 2, 0, 1, 2],
+            [0, 0, 0, 0, 0, 0, 1, 1, 1],
+        ],
+        names=["Col1", "Col2", "Col3"],
+    )
+    pd_midx = midx.to_pandas()
+
+    assert_eq(pd_midx.swaplevel(-1, -2), midx.swaplevel(-1, -2))
+    assert_eq(pd_midx.swaplevel(2, 1), midx.swaplevel(2, 1))
+    assert_eq(midx.swaplevel(2, 1), midx.swaplevel(1, 2))
+    assert_eq(pd_midx.swaplevel(0, 2), midx.swaplevel(0, 2))
+    assert_eq(pd_midx.swaplevel(2, 0), midx.swaplevel(2, 0))
+    assert_eq(midx.swaplevel(1, 1), midx.swaplevel(1, 1))
 
 
 def test_string_index():
@@ -1031,7 +1055,7 @@ def test_multicolumn_loc(pdf, pdfIndex):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):

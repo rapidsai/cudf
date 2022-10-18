@@ -1,2 +1,0 @@
-# Ignore cmake builds from local machine that might have occurred before attempting Docker build. Including these files will cause CMake cache conflict issues
-/cpp/build

@@ -16,9 +16,11 @@
 
 #include "binary_ops.hpp"
 #include "operation.cuh"
+#include "struct_binary_ops.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 
@@ -37,25 +39,22 @@ namespace compiled {
 
 namespace {
 /**
- * @brief Converts scalar to column_device_view with single element.
+ * @brief Converts scalar to column_view with single element.
  *
- * @return pair with column_device_view and column containing any auxilary data to create
- * column_view from scalar
+ * @return pair with column_view and column containing any auxiliary data to create column_view from
+ * scalar
  */
-struct scalar_as_column_device_view {
-  using return_type = typename std::pair<decltype(column_device_view::create(column_view{})),
-                                         std::unique_ptr<column>>;
-  template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
-  return_type operator()(scalar const& s,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource*)
+struct scalar_as_column_view {
+  using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
+  template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
+  return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v =
       column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
-    return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
+    return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
-  template <typename T, std::enable_if_t<(!is_fixed_width<T>())>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Unsupported type");
@@ -63,10 +62,8 @@ struct scalar_as_column_device_view {
 };
 // specialization for cudf::string_view
 template <>
-scalar_as_column_device_view::return_type
-scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
-                                                            rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr)
+scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::string_view>(
+  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   using T                  = cudf::string_view;
   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
@@ -87,24 +84,33 @@ scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
                            cudf::UNKNOWN_NULL_COUNT,
                            0,
                            {offsets_column->view(), chars_column_v});
-  return std::pair{column_device_view::create(col_v, stream), std::move(offsets_column)};
+  return std::pair{col_v, std::move(offsets_column)};
+}
+
+// specializing for struct column
+template <>
+scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struct_view>(
+  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+{
+  auto col = make_column_from_scalar(s, 1, stream, mr);
+  return std::pair{col->view(), std::move(col)};
 }
 
 /**
- * @brief Converts scalar to column_device_view with single element.
+ * @brief Converts scalar to column_view with single element.
  *
  * @param scal    scalar to convert
  * @param stream  CUDA stream used for device memory operations and kernel launches.
  * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_device_view and column containing any auxilary data to create
+ * @return        pair with column_view and column containing any auxiliary data to create
  * column_view from scalar
  */
-auto scalar_to_column_device_view(
+auto scalar_to_column_view(
   scalar const& scal,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return type_dispatcher(scal.type(), scalar_as_column_device_view{}, scal, stream, mr);
+  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
 }
 
 // This functor does the actual comparison between string column value and a scalar string
@@ -300,9 +306,9 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
     *lhs_device_view, *rhs_device_view, op, output_type, lhs.size(), stream, mr);
 }
 
-void operator_dispatcher(mutable_column_device_view& out,
-                         column_device_view const& lhs,
-                         column_device_view const& rhs,
+void operator_dispatcher(mutable_column_view& out,
+                         column_view const& lhs,
+                         column_view const& rhs,
                          bool is_lhs_scalar,
                          bool is_rhs_scalar,
                          binary_operator op,
@@ -319,6 +325,7 @@ case binary_operator::FLOOR_DIV:            apply_binary_op<ops::FloorDiv>(out, 
 case binary_operator::MOD:                  apply_binary_op<ops::Mod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::PYMOD:                apply_binary_op<ops::PyMod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::POW:                  apply_binary_op<ops::Pow>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::INT_POW:               apply_binary_op<ops::IntPow>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::EQUAL:
 case binary_operator::NOT_EQUAL:
 if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
@@ -358,10 +365,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd = column_device_view::create(lhs, stream);
-  auto rhsd = column_device_view::create(rhs, stream);
-  auto outd = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, false, false, op, stream);
+  operator_dispatcher(out, lhs, rhs, false, false, op, stream);
 }
 // scalar_vector
 void binary_operation(mutable_column_view& out,
@@ -370,10 +374,8 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto [lhsd, aux] = scalar_to_column_device_view(lhs, stream);
-  auto rhsd        = column_device_view::create(rhs, stream);
-  auto outd        = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, true, false, op, stream);
+  auto [lhsv, aux] = scalar_to_column_view(lhs, stream);
+  operator_dispatcher(out, lhsv, rhs, true, false, op, stream);
 }
 // vector_scalar
 void binary_operation(mutable_column_view& out,
@@ -382,12 +384,83 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd        = column_device_view::create(lhs, stream);
-  auto [rhsd, aux] = scalar_to_column_device_view(rhs, stream);
-  auto outd        = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
+  auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
+  operator_dispatcher(out, lhs, rhsv, false, true, op, stream);
 }
 
+namespace detail {
+void apply_sorting_struct_binary_op(mutable_column_view& out,
+                                    column_view const& lhs,
+                                    column_view const& rhs,
+                                    bool is_lhs_scalar,
+                                    bool is_rhs_scalar,
+                                    binary_operator op,
+                                    rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT,
+               "Both columns must be struct columns");
+  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(lhs) and
+                 !cudf::structs::detail::is_or_has_nested_lists(rhs),
+               "List type is not supported");
+  // Struct child column type and structure mismatches are caught within the two_table_comparator
+  switch (op) {
+    case binary_operator::EQUAL: [[fallthrough]];
+    case binary_operator::NULL_EQUALS: [[fallthrough]];
+    case binary_operator::NOT_EQUAL:
+      detail::apply_struct_equality_op(
+        out,
+        lhs,
+        rhs,
+        is_lhs_scalar,
+        is_rhs_scalar,
+        op,
+        cudf::experimental::row::equality::nan_equal_physical_equality_comparator{},
+        stream);
+      break;
+    case binary_operator::LESS:
+      detail::apply_struct_binary_op<ops::Less>(
+        out,
+        lhs,
+        rhs,
+        is_lhs_scalar,
+        is_rhs_scalar,
+        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        stream);
+      break;
+    case binary_operator::GREATER:
+      detail::apply_struct_binary_op<ops::Greater>(
+        out,
+        lhs,
+        rhs,
+        is_lhs_scalar,
+        is_rhs_scalar,
+        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        stream);
+      break;
+    case binary_operator::LESS_EQUAL:
+      detail::apply_struct_binary_op<ops::LessEqual>(
+        out,
+        lhs,
+        rhs,
+        is_lhs_scalar,
+        is_rhs_scalar,
+        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        stream);
+      break;
+    case binary_operator::GREATER_EQUAL:
+      detail::apply_struct_binary_op<ops::GreaterEqual>(
+        out,
+        lhs,
+        rhs,
+        is_lhs_scalar,
+        is_rhs_scalar,
+        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
+        stream);
+      break;
+    default: CUDF_FAIL("Unsupported operator for structs");
+  }
+}
+}  // namespace detail
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf

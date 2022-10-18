@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include <strings/regex/regex.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
-
-#include <strings/regex/regex.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -39,17 +39,16 @@ using backref_type = thrust::pair<size_type, size_type>;
  *
  * The logic includes computing the size of each string and also writing the output.
  */
-template <typename Iterator, int stack_size>
+template <typename Iterator>
 struct backrefs_fn {
   column_device_view const d_strings;
-  reprog_device prog;
   string_view const d_repl;  // string replacement template
   Iterator backrefs_begin;
   Iterator backrefs_end;
   int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
@@ -65,7 +64,7 @@ struct backrefs_fn {
     size_type end     = nchars;  // last character position (exclusive)
 
     // copy input to output replacing strings as we go
-    while (prog.find<stack_size>(idx, d_str, begin, end) > 0)  // inits the begin/end vars
+    while (prog.find(prog_idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
       auto spos = d_str.byte_offset(begin);           // get offset for the
       auto epos = d_str.byte_offset(end);             // character position values;
@@ -84,7 +83,7 @@ struct backrefs_fn {
             lpos_template += copy_length;
           }
           // extract the specific group's string for this backref's index
-          auto extracted = prog.extract<stack_size>(idx, d_str, begin, end, backref.first - 1);
+          auto extracted = prog.extract(prog_idx, d_str, begin, end, backref.first - 1);
           if (!extracted || (extracted.value().second <= extracted.value().first)) {
             return;  // no value for this backref number; that is ok
           }

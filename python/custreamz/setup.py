@@ -1,10 +1,11 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import versioneer
 from setuptools import find_packages, setup
 
-import versioneer
-
 install_requires = ["cudf_kafka", "cudf"]
+
+extras_require = {"test": ["pytest", "pytest-xdist"]}
 
 setup(
     name="custreamz",
@@ -26,6 +27,6 @@ setup(
     packages=find_packages(include=["custreamz", "custreamz.*"]),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
+    extras_require=extras_require,
     zip_safe=False,
-    extras_require={"test": ["pytest", "pytest-xdist"]},
 )

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
@@ -179,16 +179,18 @@ def test_cuda_array_interface_pytorch():
     got = cudf.Series(tensor)
 
     assert_eq(got, series)
-    from cudf.core.buffer import Buffer
-
-    buffer = Buffer(cupy.ones(10, dtype=np.bool_))
+    buffer = cudf.core.buffer.as_device_buffer_like(
+        cupy.ones(10, dtype=np.bool_)
+    )
     tensor = torch.tensor(buffer)
     got = cudf.Series(tensor, dtype=np.bool_)
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    with pytest.raises(RuntimeError):
-        torch.tensor(cudf.core.Index())
+    index = cudf.Index([])
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+    assert_eq(got, index)
 
     index = cudf.core.index.RangeIndex(start=0, stop=100)
     tensor = torch.tensor(index)
@@ -196,11 +198,11 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(index))
 
-    index = cudf.core.index.GenericIndex([1, 2, 8, 6])
+    index = cudf.Index([1, 2, 8, 6])
     tensor = torch.tensor(index)
-    got = cudf.Series(tensor)
+    got = cudf.Index(tensor)
 
-    assert_eq(got, cudf.Series(index))
+    assert_eq(got, index)
 
     str_series = cudf.Series(["a", "g"])
 

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/hashing.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -34,25 +35,24 @@ std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function               = hash_id::HASH_MURMUR3,
   uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
   uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-template <template <typename> class hash_function>
-std::unique_ptr<column> serial_murmur_hash3_32(
+std::unique_ptr<column> spark_murmur_hash3_32(
   table_view const& input,
   uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /* Copyright 2005-2014 Daniel James.
@@ -73,7 +73,7 @@ std::unique_ptr<column> md5_hash(
  */
 constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 {
-  return lhs ^ (rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2));
+  return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2));
 }
 
 /* Copyright 2005-2014 Daniel James.
@@ -94,7 +94,7 @@ constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  */
 constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
-  return lhs ^ (rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2));
+  return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
 
 }  // namespace detail

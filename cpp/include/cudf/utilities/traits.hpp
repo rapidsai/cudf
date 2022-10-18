@@ -16,8 +16,9 @@
 
 #pragma once
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -31,6 +32,7 @@ namespace cudf {
  * @file
  */
 
+/// Utility metafunction that maps a sequence of any types to the type void.
 template <typename...>
 using void_t = void;
 
@@ -47,12 +49,15 @@ using void_t = void;
  */
 #define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
 
+/// Checks if two types are comparable using less operator (i.e. <).
 template <typename L, typename R>
 using less_comparable = decltype(std::declval<L>() < std::declval<R>());
 
+/// Checks if two types are comparable using greater operator (i.e. >).
 template <typename L, typename R>
 using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
 
+/// Checks if two types are comparable using equality operator (i.e. ==).
 template <typename L, typename R>
 using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
 
@@ -86,12 +91,15 @@ struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::tru
 };
 }  // namespace detail
 
+/// Checks if types have a common type
 template <typename... Ts>
 using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type;
 
+/// Helper variable template for has_common_type<>::value
 template <typename... Ts>
 constexpr inline bool has_common_type_v = detail::has_common_type_impl<void, Ts...>::value;
 
+/// Checks if a type is a timestamp type.
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,
@@ -99,6 +107,7 @@ using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
 
+/// Checks if a type is a duration type.
 template <typename T>
 using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
@@ -124,19 +133,6 @@ constexpr inline bool is_relationally_comparable()
   return detail::is_relationally_comparable_impl<L, R>::value;
 }
 
-namespace detail {
-/**
- * @brief Helper functor to check if a specified type `T` supports relational comparisons.
- */
-struct unary_relationally_comparable_functor {
-  template <typename T>
-  inline bool operator()() const
-  {
-    return cudf::is_relationally_comparable<T, T>();
-  }
-};
-}  // namespace detail
-
 /**
  * @brief Checks whether `data_type` `type` supports relational comparisons.
  *
@@ -144,10 +140,7 @@ struct unary_relationally_comparable_functor {
  * @return true If `type` supports relational comparisons.
  * @return false If `type` does not support relational comparisons.
  */
-inline bool is_relationally_comparable(data_type type)
-{
-  return type_dispatcher(type, detail::unary_relationally_comparable_functor{});
-}
+bool is_relationally_comparable(data_type type);
 
 /**
  * @brief Indicates whether objects of types `L` and `R` can be compared
@@ -167,19 +160,6 @@ constexpr inline bool is_equality_comparable()
   return detail::is_equality_comparable_impl<L, R>::value;
 }
 
-namespace detail {
-/**
- * @brief Helper functor to check if a specified type `T` supports equality comparisons.
- */
-struct unary_equality_comparable_functor {
-  template <typename T>
-  bool operator()() const
-  {
-    return cudf::is_equality_comparable<T, T>();
-  }
-};
-}  // namespace detail
-
 /**
  * @brief Checks whether `data_type` `type` supports equality comparisons.
  *
@@ -187,10 +167,7 @@ struct unary_equality_comparable_functor {
  * @return true If `type` supports equality comparisons.
  * @return false If `type` does not support equality comparisons.
  */
-inline bool is_equality_comparable(data_type type)
-{
-  return cudf::type_dispatcher(type, detail::unary_equality_comparable_functor{});
-}
+bool is_equality_comparable(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a numeric type.
@@ -205,14 +182,6 @@ constexpr inline bool is_numeric()
   return cuda::std::is_arithmetic<T>();
 }
 
-struct is_numeric_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_numeric<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a numeric `data_type`.
  *
@@ -224,10 +193,7 @@ struct is_numeric_impl {
  * @return true `type` is numeric
  * @return false `type` is not numeric
  */
-constexpr inline bool is_numeric(data_type type)
-{
-  return cudf::type_dispatcher(type, is_numeric_impl{});
-}
+bool is_numeric(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a index type.
@@ -246,14 +212,6 @@ constexpr inline bool is_index_type()
   return std::is_integral_v<T> and not std::is_same_v<T, bool>;
 }
 
-struct is_index_type_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_index_type<T>();
-  }
-};
-
 /**
  * @brief Indicates whether the type `type` is a index type.
  *
@@ -265,10 +223,7 @@ struct is_index_type_impl {
  * @return true `type` is index type
  * @return false `type` is not index type
  */
-constexpr inline bool is_index_type(data_type type)
-{
-  return cudf::type_dispatcher(type, is_index_type_impl{});
-}
+bool is_index_type(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a unsigned numeric type.
@@ -283,13 +238,6 @@ constexpr inline bool is_unsigned()
   return std::is_unsigned_v<T>;
 }
 
-struct is_unsigned_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_unsigned<T>();
-  }
-};
 /**
  * @brief Indicates whether `type` is a unsigned numeric `data_type`.
  *
@@ -299,10 +247,7 @@ struct is_unsigned_impl {
  * @return true `type` is unsigned numeric
  * @return false `type` is signed numeric
  */
-constexpr inline bool is_unsigned(data_type type)
-{
-  return cudf::type_dispatcher(type, is_unsigned_impl{});
-}
+bool is_unsigned(data_type type);
 
 /**
  * @brief Indicates whether the `Iterator` value type is unsigned.
@@ -329,14 +274,6 @@ constexpr inline bool is_floating_point()
   return std::is_floating_point_v<T>;
 }
 
-struct is_floating_point_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_floating_point<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a floating point `data_type`.
  *
@@ -346,9 +283,19 @@ struct is_floating_point_impl {
  * @return true `type` is floating point
  * @return false `type` is not floating point
  */
-constexpr inline bool is_floating_point(data_type type)
+bool is_floating_point(data_type type);
+
+/**
+ * @brief Indicates whether `T` is a std::byte type.
+ *
+ * @tparam T The type to verify
+ * @return true `type` is std::byte
+ * @return false `type` is not std::byte
+ */
+template <typename T>
+constexpr inline bool is_byte()
 {
-  return cudf::type_dispatcher(type, is_floating_point_impl{});
+  return std::is_same_v<std::remove_cv_t<T>, std::byte>;
 }
 
 /**
@@ -364,14 +311,6 @@ constexpr inline bool is_boolean()
   return std::is_same_v<T, bool>;
 }
 
-struct is_boolean_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_boolean<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a Boolean `data_type`.
  *
@@ -379,10 +318,7 @@ struct is_boolean_impl {
  * @return true `type` is a Boolean
  * @return false `type` is not a Boolean
  */
-constexpr inline bool is_boolean(data_type type)
-{
-  return cudf::type_dispatcher(type, is_boolean_impl{});
-}
+bool is_boolean(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a timestamp type.
@@ -397,14 +333,6 @@ constexpr inline bool is_timestamp()
   return is_timestamp_t<T>::value;
 }
 
-struct is_timestamp_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_timestamp<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a timestamp `data_type`.
  *
@@ -414,10 +342,7 @@ struct is_timestamp_impl {
  * @return true `type` is a timestamp
  * @return false `type` is not a timestamp
  */
-constexpr inline bool is_timestamp(data_type type)
-{
-  return cudf::type_dispatcher(type, is_timestamp_impl{});
-}
+bool is_timestamp(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a fixed-point type.
@@ -433,14 +358,6 @@ constexpr inline bool is_fixed_point()
          std::is_same_v<numeric::decimal128, T>;
 }
 
-struct is_fixed_point_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_fixed_point<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a fixed point `data_type`.
  *
@@ -448,10 +365,7 @@ struct is_fixed_point_impl {
  * @return true `type` is a fixed point type
  * @return false `type` is not a fixed point type
  */
-constexpr inline bool is_fixed_point(data_type type)
-{
-  return cudf::type_dispatcher(type, is_fixed_point_impl{});
-}
+bool is_fixed_point(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a duration type.
@@ -466,14 +380,6 @@ constexpr inline bool is_duration()
   return is_duration_t<T>::value;
 }
 
-struct is_duration_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_duration<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a duration `data_type`.
  *
@@ -483,10 +389,7 @@ struct is_duration_impl {
  * @return true `type` is a duration
  * @return false `type` is not a duration
  */
-constexpr inline bool is_duration(data_type type)
-{
-  return cudf::type_dispatcher(type, is_duration_impl{});
-}
+bool is_duration(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a chrono type.
@@ -501,14 +404,6 @@ constexpr inline bool is_chrono()
   return is_duration<T>() || is_timestamp<T>();
 }
 
-struct is_chrono_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_chrono<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a chrono `data_type`.
  *
@@ -519,10 +414,7 @@ struct is_chrono_impl {
  * @return true `type` is a chrono type
  * @return false `type` is not a chrono type
  */
-constexpr inline bool is_chrono(data_type type)
-{
-  return cudf::type_dispatcher(type, is_chrono_impl{});
-}
+bool is_chrono(data_type type);
 
 /**
  * @brief Indicates whether `T` is layout compatible with its "representation" type.
@@ -534,11 +426,13 @@ constexpr inline bool is_chrono(data_type type)
  * As further example, `duration_ns` is distinct from its concrete `int64_t` representation type,
  * but they are layout compatible.
  *
+ * @return true if `T` is layout compatible with its "representation" type
  */
 template <typename T>
 constexpr bool is_rep_layout_compatible()
 {
-  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>() or
+         cudf::is_byte<T>();
 }
 
 /**
@@ -554,14 +448,6 @@ constexpr inline bool is_dictionary()
   return std::is_same_v<dictionary32, T>;
 }
 
-struct is_dictionary_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_dictionary<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a dictionary `data_type`.
  *
@@ -569,10 +455,8 @@ struct is_dictionary_impl {
  * @return true `type` is a dictionary type
  * @return false `type` is not a dictionary type
  */
-constexpr inline bool is_dictionary(data_type type)
-{
-  return cudf::type_dispatcher(type, is_dictionary_impl{});
-}
+bool is_dictionary(data_type type);
+
 /**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
@@ -590,14 +474,6 @@ constexpr inline bool is_fixed_width()
   return cudf::is_numeric<T>() || cudf::is_chrono<T>() || cudf::is_fixed_point<T>();
 }
 
-struct is_fixed_width_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_fixed_width<T>();
-  }
-};
-
 /**
  * @brief Indicates whether elements of `type` are fixed-width.
  *
@@ -607,10 +483,7 @@ struct is_fixed_width_impl {
  * @return true `type` is fixed-width
  * @return false  `type` is variable-width
  */
-constexpr inline bool is_fixed_width(data_type type)
-{
-  return cudf::type_dispatcher(type, is_fixed_width_impl{});
-}
+bool is_fixed_width(data_type type);
 
 class string_view;
 
@@ -633,14 +506,6 @@ constexpr inline bool is_compound()
          std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>;
 }
 
-struct is_compound_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_compound<T>();
-  }
-};
-
 /**
  * @brief Indicates whether elements of `type` are compound.
  *
@@ -653,10 +518,7 @@ struct is_compound_impl {
  * @return true `type` is a compound type
  * @return false `type` is a simple type
  */
-constexpr inline bool is_compound(data_type type)
-{
-  return cudf::type_dispatcher(type, is_compound_impl{});
-}
+bool is_compound(data_type type);
 
 /**
  * @brief Indicates whether `T` is a nested type.
@@ -675,14 +537,6 @@ constexpr inline bool is_nested()
   return std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>;
 }
 
-struct is_nested_impl {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return is_nested<T>();
-  }
-};
-
 /**
  * @brief Indicates whether `type` is a nested type
  *
@@ -694,45 +548,7 @@ struct is_nested_impl {
  * @return true `type` is a nested type
  * @return false `type` is not a nested type
  */
-constexpr inline bool is_nested(data_type type)
-{
-  return cudf::type_dispatcher(type, is_nested_impl{});
-}
-
-template <typename FromType>
-struct is_bit_castable_to_impl {
-  template <typename ToType, std::enable_if_t<is_compound<ToType>()>* = nullptr>
-  constexpr bool operator()()
-  {
-    return false;
-  }
-
-  template <typename ToType, std::enable_if_t<not is_compound<ToType>()>* = nullptr>
-  constexpr bool operator()()
-  {
-    if (not cuda::std::is_trivially_copyable_v<FromType> ||
-        not cuda::std::is_trivially_copyable_v<ToType>) {
-      return false;
-    }
-    constexpr auto from_size = sizeof(cudf::device_storage_type_t<FromType>);
-    constexpr auto to_size   = sizeof(cudf::device_storage_type_t<ToType>);
-    return from_size == to_size;
-  }
-};
-
-struct is_bit_castable_from_impl {
-  template <typename FromType, std::enable_if_t<is_compound<FromType>()>* = nullptr>
-  constexpr bool operator()(data_type)
-  {
-    return false;
-  }
-
-  template <typename FromType, std::enable_if_t<not is_compound<FromType>()>* = nullptr>
-  constexpr bool operator()(data_type to)
-  {
-    return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});
-  }
-};
+bool is_nested(data_type type);
 
 /**
  * @brief Indicates whether `from` is bit-castable to `to`.
@@ -747,10 +563,7 @@ struct is_bit_castable_from_impl {
  * @param to The `data_type` to convert to
  * @return `true` if the types are castable
  */
-constexpr bool is_bit_castable(data_type from, data_type to)
-{
-  return type_dispatcher(from, is_bit_castable_from_impl{}, to);
-}
+bool is_bit_castable(data_type from, data_type to);
 
 template <typename From, typename To>
 struct is_convertible : std::is_convertible<From, To> {

@@ -24,7 +24,7 @@ from cudf.testing._utils import (
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     id_vars = []
@@ -87,7 +87,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     for i in range(num_cols):
@@ -139,7 +139,7 @@ def test_df_stack_reset_index():
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
@@ -176,7 +176,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 def test_tile(nulls, num_cols, num_rows, dtype, count):
 
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
@@ -269,7 +269,7 @@ def test_df_merge_sorted(nparts, keys, na_position, ascending):
     expect = df.sort_values(
         keys_1, na_position=na_position, ascending=ascending
     )
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs, keys=keys, na_position=na_position, ascending=ascending
     )
     if keys:
@@ -290,7 +290,9 @@ def test_df_merge_sorted_index(nparts, index, ascending):
     )
 
     expect = df.sort_index(ascending=ascending)
-    result = cudf.merge_sorted(dfs, by_index=True, ascending=ascending)
+    result = cudf.core.reshape._merge_sorted(
+        dfs, by_index=True, ascending=ascending
+    )
 
     assert_eq(expect.index, result.index)
 
@@ -317,7 +319,7 @@ def test_df_merge_sorted_ignore_index(keys, na_position, ascending):
     expect = df.sort_values(
         keys_1, na_position=na_position, ascending=ascending
     )
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs,
         keys=keys,
         na_position=na_position,
@@ -347,7 +349,7 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
     )
 
     expect = df.sort_values(na_position=na_position, ascending=ascending)
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs, na_position=na_position, ascending=ascending
     )
 
@@ -402,6 +404,33 @@ def test_pivot_multi_values():
     assert_eq(
         pdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
         gdf.pivot(index="foo", columns="bar", values=["baz", "zoo"]),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "values", ["z", "z123", ["z123"], ["z", "z123", "123z"]]
+)
+def test_pivot_values(values):
+    data = [
+        ["A", "a", 0, 0, 0],
+        ["A", "b", 1, 1, 1],
+        ["A", "c", 2, 2, 2],
+        ["B", "a", 0, 0, 0],
+        ["B", "b", 1, 1, 1],
+        ["B", "c", 2, 2, 2],
+        ["C", "a", 0, 0, 0],
+        ["C", "b", 1, 1, 1],
+        ["C", "c", 2, 2, 2],
+    ]
+    columns = ["x", "y", "z", "z123", "123z"]
+    pdf = pd.DataFrame(data, columns=columns)
+    cdf = cudf.DataFrame(data, columns=columns)
+    expected = pd.pivot(pdf, index="x", columns="y", values=values)
+    actual = cudf.pivot(cdf, index="x", columns="y", values=values)
+    assert_eq(
+        expected,
+        actual,
         check_dtype=False,
     )
 
@@ -527,3 +556,95 @@ def test_pivot_duplicate_error():
         gdf.pivot(index="a", columns="b")
     with pytest.raises(ValueError):
         gdf.pivot(index="b", columns="a")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "A": ["one", "one", "two", "three"] * 6,
+            "B": ["A", "B", "C"] * 8,
+            "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+            "D": np.random.randn(24),
+            "E": np.random.randn(24),
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
+@pytest.mark.parametrize("fill_value", [0])
+def test_pivot_table_simple(data, aggfunc, fill_value):
+    pdf = pd.DataFrame(data)
+    expected = pd.pivot_table(
+        pdf,
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    cdf = cudf.DataFrame(data)
+    actual = cudf.pivot_table(
+        cdf,
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    assert_eq(expected, actual, check_dtype=False)
+
+
+def test_crosstab_simple():
+    a = np.array(
+        [
+            "foo",
+            "foo",
+            "foo",
+            "foo",
+            "bar",
+            "bar",
+            "bar",
+            "bar",
+            "foo",
+            "foo",
+            "foo",
+        ],
+        dtype=object,
+    )
+    b = np.array(
+        [
+            "one",
+            "one",
+            "one",
+            "two",
+            "one",
+            "one",
+            "one",
+            "two",
+            "two",
+            "two",
+            "one",
+        ],
+        dtype=object,
+    )
+    c = np.array(
+        [
+            "dull",
+            "dull",
+            "shiny",
+            "dull",
+            "dull",
+            "shiny",
+            "shiny",
+            "dull",
+            "shiny",
+            "shiny",
+            "shiny",
+        ],
+        dtype=object,
+    )
+    expected = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
+    actual = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
+    assert_eq(expected, actual, check_dtype=False)

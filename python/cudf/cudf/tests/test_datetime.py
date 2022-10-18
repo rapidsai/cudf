@@ -13,6 +13,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -656,7 +657,12 @@ def test_to_datetime_errors(data):
         gd_data = pd_data
 
     assert_exceptions_equal(
-        pd.to_datetime, cudf.to_datetime, ([pd_data],), ([gd_data],)
+        pd.to_datetime,
+        cudf.to_datetime,
+        ([pd_data],),
+        ([gd_data],),
+        compare_error_message=False,
+        expected_error_message="Given date string not likely a datetime.",
     )
 
 
@@ -1463,7 +1469,7 @@ date_range_test_freq = [
     pytest.param(
         {"hours": 10, "days": 57, "nanoseconds": 3},
         marks=pytest.mark.xfail(
-            True,
+            condition=PANDAS_LT_140,
             reason="Pandas ignoring nanoseconds component. "
             "https://github.com/pandas-dev/pandas/issues/44393",
         ),
@@ -1550,6 +1556,8 @@ def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
+        if "nanoseconds" in freq:
+            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 
@@ -2004,3 +2012,31 @@ def test_last(idx, offset):
     got = g.last(offset=offset)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "2020-01-31",
+            "2020-02-15",
+            "2020-02-29",
+            "2020-03-15",
+            "2020-03-31",
+            "2020-04-15",
+            "2020-04-30",
+        ],
+        [43534, 43543, 37897, 2000],
+    ],
+)
+@pytest.mark.parametrize("dtype", [None, "datetime64[ns]"])
+def test_datetime_constructor(data, dtype):
+    expected = pd.DatetimeIndex(data=data, dtype=dtype)
+    actual = cudf.DatetimeIndex(data=data, dtype=dtype)
+
+    assert_eq(expected, actual)
+
+    expected = pd.DatetimeIndex(data=pd.Series(data), dtype=dtype)
+    actual = cudf.DatetimeIndex(data=cudf.Series(data), dtype=dtype)
+
+    assert_eq(expected, actual)

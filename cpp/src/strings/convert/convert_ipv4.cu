@@ -23,6 +23,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -109,7 +110,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ipv4_to_integers(strings, rmm::cuda_stream_default, mr);
+  return detail::ipv4_to_integers(strings, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -263,14 +264,14 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_ipv4(integers, rmm::cuda_stream_default, mr);
+  return detail::integers_to_ipv4(integers, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_ipv4(strings, rmm::cuda_stream_default, mr);
+  return detail::is_ipv4(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

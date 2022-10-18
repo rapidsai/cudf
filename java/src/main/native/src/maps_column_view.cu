@@ -79,16 +79,32 @@ maps_column_view::get_values_for(scalar const &lookup_key, rmm::cuda_stream_view
   return get_values_for_impl(*this, lookup_key, stream, mr);
 }
 
-std::unique_ptr<column> maps_column_view::contains(scalar const &lookup_key,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource *mr) const {
-  CUDF_EXPECTS(lookup_key.type().id() == keys_.child().type().id(),
+template <typename KeyT>
+std::unique_ptr<column> contains_impl(maps_column_view const &maps_view, KeyT const &lookup_keys,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource *mr) {
+  auto const keys = maps_view.keys();
+  CUDF_EXPECTS(lookup_keys.type().id() == keys.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
-  auto const contains = lists::detail::contains(keys_, lookup_key, stream);
-
+  auto const contains = lists::detail::contains(keys, lookup_keys, stream);
   // Replace nulls with BOOL8{false};
   auto const scalar_false = numeric_scalar<bool>{false, true, stream};
   return detail::replace_nulls(contains->view(), scalar_false, stream, mr);
+}
+
+std::unique_ptr<column> maps_column_view::contains(column_view const &lookup_keys,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource *mr) const {
+  CUDF_EXPECTS(lookup_keys.size() == size(),
+               "Lookup keys must have the same size as the map column.");
+
+  return contains_impl(*this, lookup_keys, stream, mr);
+}
+
+std::unique_ptr<column> maps_column_view::contains(scalar const &lookup_key,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource *mr) const {
+  return contains_impl(*this, lookup_key, stream, mr);
 }
 
 } // namespace cudf::jni

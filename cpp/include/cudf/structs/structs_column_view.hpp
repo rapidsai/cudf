@@ -30,19 +30,40 @@ namespace cudf {
  * @{
  */
 
+/**
+ * @brief Given a column view of struct type, an instance of this class
+ * provides a wrapper on this compound column for struct operations.
+ */
 class structs_column_view : public column_view {
  public:
   // Foundation members:
-  structs_column_view(structs_column_view const&) = default;
-  structs_column_view(structs_column_view&&)      = default;
+  structs_column_view(structs_column_view const&) = default;  ///< Copy constructor
+  structs_column_view(structs_column_view&&)      = default;  ///< Move constructor
   ~structs_column_view()                          = default;
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return The reference to this structs column
+   */
   structs_column_view& operator=(structs_column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return The reference to this structs column
+   */
   structs_column_view& operator=(structs_column_view&&) = default;
 
-  explicit structs_column_view(column_view const& rhs);
+  /**
+   * @brief Construct a new structs column view object from a column view.
+   *
+   * @param col The column view to wrap
+   */
+  explicit structs_column_view(column_view const& col);
 
   /**
    * @brief Returns the parent column.
+   *
+   * @return The parent column
    */
   [[nodiscard]] column_view parent() const;
 
@@ -64,6 +85,9 @@ class structs_column_view : public column_view {
    * on struct columns should be using `get_sliced_child()` instead of `child()`.
    *
    * @throw cudf::logic error if this is an empty column
+   *
+   * @param index The index of the child column to return
+   * @return The child column sliced relative to the parent's offset and size
    */
   [[nodiscard]] column_view get_sliced_child(int index) const;
 };         // class structs_column_view;

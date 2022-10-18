@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
 include(../fetch_rapids.cmake)
 include(rapids-cmake)
@@ -25,9 +25,15 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.06.00
+  VERSION 22.10.00
   LANGUAGES C CXX CUDA
 )
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
+  message(
+    FATAL_ERROR
+      "libcudf requires CUDA Toolkit 11.5+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+  )
+endif()
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
@@ -42,12 +48,18 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
+option(
+  CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  "Build cuDF with per-thread default stream, including passing the per-thread default
+         stream to external libraries."
+  OFF
+)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -64,7 +76,7 @@ message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
-message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -146,7 +158,8 @@ include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
+include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
@@ -162,7 +175,7 @@ include(cmake/thirdparty/get_kvikio.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies cuco KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -189,27 +202,26 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/binary_ops.cu
-  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
+  src/binaryop/compiled/Add.cu
   src/binaryop/compiled/BitwiseAnd.cu
   src/binaryop/compiled/BitwiseOr.cu
   src/binaryop/compiled/BitwiseXor.cu
-  src/binaryop/compiled/Less.cu
-  src/binaryop/compiled/Greater.cu
-  src/binaryop/compiled/LessEqual.cu
-  src/binaryop/compiled/GreaterEqual.cu
   src/binaryop/compiled/Div.cu
-  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/FloorDiv.cu
+  src/binaryop/compiled/Greater.cu
+  src/binaryop/compiled/GreaterEqual.cu
+  src/binaryop/compiled/IntPow.cu
+  src/binaryop/compiled/Less.cu
+  src/binaryop/compiled/LessEqual.cu
   src/binaryop/compiled/LogBase.cu
   src/binaryop/compiled/LogicalAnd.cu
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
-  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullLogicalAnd.cu
+  src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -220,6 +232,8 @@ add_library(
   src/binaryop/compiled/ShiftRightUnsigned.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
+  src/binaryop/compiled/binary_ops.cu
+  src/binaryop/compiled/equality_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -229,7 +243,6 @@ add_library(
   src/column/column_factories.cpp
   src/column/column_factories.cu
   src/column/column_view.cpp
-  src/comms/ipc/ipc.cpp
   src/copying/concatenate.cu
   src/copying/contiguous_split.cu
   src/copying/copy.cpp
@@ -292,6 +305,7 @@ add_library(
   src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmur_hash.cu
+  src/hash/spark_murmur_hash.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -313,8 +327,12 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/json_column.cu
   src/io/json/json_gpu.cu
+  src/io/json/json_tree.cu
+  src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
+  src/io/json/experimental/read_json.cpp
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -336,6 +354,8 @@ add_library(
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
+  src/io/text/data_chunk_source_factories.cpp
+  src/io/text/bgzip_data_chunk_source.cu
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -371,7 +391,7 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
-  src/lists/drop_list_duplicates.cu
+  src/lists/dremel.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
@@ -379,6 +399,10 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/lists/set_operations.cu
+  src/lists/stream_compaction/apply_boolean_mask.cu
+  src/lists/stream_compaction/distinct.cu
+  src/lists/utilities.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
@@ -420,14 +444,19 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/rolling_collect_list.cu
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
-  src/rolling/rolling_collect_list.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/search.cu
+  src/search/contains_column.cu
+  src/search/contains_scalar.cu
+  src/search/contains_table.cu
+  src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
@@ -438,8 +467,10 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
+  src/stream_compaction/distinct_reduce.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
@@ -469,6 +500,7 @@ add_library(
   src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
+  src/strings/like.cu
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
@@ -479,7 +511,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
@@ -530,7 +561,21 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/traits.cpp
   src/utilities/type_checks.cpp
+)
+
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
+set_source_files_properties(
+  src/binaryop/binaryop.cpp
+  src/jit/cache.cpp
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
+  src/rolling/grouped_rolling.cu
+  src/rolling/rolling.cu
+  src/transform/transform.cpp
+  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
 set_target_properties(
@@ -578,8 +623,10 @@ if(JITIFY_USE_CACHE)
 endif()
 
 # Per-thread default stream
-if(PER_THREAD_DEFAULT_STREAM)
-  target_compile_definitions(cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+  target_compile_definitions(
+    cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  )
 endif()
 
 # Disable NVTX if necessary
@@ -617,16 +664,6 @@ else()
   # Make sure to export to consumers what runtime we used
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
-
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -677,7 +714,11 @@ target_compile_options(
                       "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 
-target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
+target_link_libraries(
+  cudftestutil
+  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
 
 target_include_directories(
   cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
@@ -692,6 +733,8 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+  # Always print verbose output when tests fail if run using `make test`.
+  list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
 endif()
 
@@ -714,6 +757,11 @@ if(CUDF_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
 endif()
 
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
+endif()
+
 # ##################################################################################################
 # * install targets -------------------------------------------------------------------------------
 rapids_cmake_install_lib_dir(lib_dir)
@@ -730,7 +778,7 @@ install(
 )
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(
@@ -785,13 +833,6 @@ set(common_code_string
 if(NOT TARGET cudf::Thrust)
   thrust_create_target(cudf::Thrust FROM_OPTIONS)
 endif()
-]=]
-)
-
-set(install_code_string
-    [=[
-set(ArrowCUDA_DIR "${Arrow_DIR}")
-find_dependency(ArrowCUDA)
 ]=]
 )
 

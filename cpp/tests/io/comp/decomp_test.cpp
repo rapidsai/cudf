@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
+
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -45,7 +46,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
                   const uint8_t* compressed,
                   size_t compressed_size)
   {
-    auto stream = rmm::cuda_stream_default;
+    auto stream = cudf::default_stream_value;
     rmm::device_buffer src{compressed, compressed_size, stream};
     rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
@@ -57,7 +58,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     inf_out[0] = dst;
     inf_out.host_to_device(stream);
 
-    hostdevice_vector<cudf::io::decompress_status> inf_stat(1, stream);
+    hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
     inf_stat[0] = {};
     inf_stat.host_to_device(stream);
 
@@ -65,7 +66,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     cudaMemcpyAsync(
       decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value());
     inf_stat.device_to_host(stream, true);
-    ASSERT_EQ(inf_stat[0].status, 0);
+    ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }
 };
 
@@ -75,13 +76,13 @@ struct DecompressTest : public cudf::test::BaseFixture {
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::decompress_status> d_inf_stat)
+                device_span<cudf::io::compression_result> d_inf_stat)
   {
     cudf::io::gpuinflate(d_inf_in,
                          d_inf_out,
                          d_inf_stat,
                          cudf::io::gzip_header_included::YES,
-                         rmm::cuda_stream_default);
+                         cudf::default_stream_value);
   }
 };
 
@@ -91,9 +92,9 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::decompress_status> d_inf_stat)
+                device_span<cudf::io::compression_result> d_inf_stat)
   {
-    cudf::io::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, rmm::cuda_stream_default);
+    cudf::io::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::default_stream_value);
   }
 };
 
@@ -103,17 +104,17 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::decompress_status> d_inf_stat)
+                device_span<cudf::io::compression_result> d_inf_stat)
   {
     rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
-                                 rmm::cuda_stream_default};
+                                 cudf::default_stream_value};
 
     cudf::io::gpu_debrotli(d_inf_in,
                            d_inf_out,
                            d_inf_stat,
                            d_scratch.data(),
                            d_scratch.size(),
-                           rmm::cuda_stream_default);
+                           cudf::default_stream_value);
   }
 };
 

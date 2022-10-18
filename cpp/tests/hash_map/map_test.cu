@@ -20,8 +20,8 @@
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -56,13 +56,13 @@ struct InsertTest : public cudf::test::BaseFixture {
     // prevent overflow of small types
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
-    pairs.resize(input_size, rmm::cuda_stream_default);
+    pairs.resize(input_size, cudf::default_stream_value);
     map = std::move(map_type::create(compute_hash_table_size(size)));
-    rmm::cuda_stream_default.synchronize();
+    cudf::default_stream_value.synchronize();
   }
 
   const cudf::size_type size{10000};
-  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), rmm::cuda_stream_default};
+  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), cudf::default_stream_value};
   std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
 
@@ -140,16 +140,18 @@ TYPED_TEST(InsertTest, UniqueKeysUniqueValues)
 {
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
-  thrust::tabulate(
-    rmm::exec_policy(), this->pairs.begin(), this->pairs.end(), unique_pair_generator<pair_type>{});
+  thrust::tabulate(rmm::exec_policy(cudf::default_stream_value),
+                   this->pairs.begin(),
+                   this->pairs.end(),
+                   unique_pair_generator<pair_type>{});
   // All pairs should be new inserts
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                              this->pairs.begin(),
                              this->pairs.end(),
                              insert_pair<map_type, pair_type>{*this->map}));
 
   // All pairs should be present in the map
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                              this->pairs.begin(),
                              this->pairs.end(),
                              find_pair<map_type, pair_type>{*this->map}));
@@ -159,23 +161,23 @@ TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues)
 {
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
-  thrust::tabulate(rmm::exec_policy(),
+  thrust::tabulate(rmm::exec_policy(cudf::default_stream_value),
                    this->pairs.begin(),
                    this->pairs.end(),
                    identical_pair_generator<pair_type>{});
   // Insert a single pair
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                              this->pairs.begin(),
                              this->pairs.begin() + 1,
                              insert_pair<map_type, pair_type>{*this->map}));
   // Identical inserts should all return false (no new insert)
-  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                               this->pairs.begin(),
                               this->pairs.end(),
                               insert_pair<map_type, pair_type>{*this->map}));
 
   // All pairs should be present in the map
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                              this->pairs.begin(),
                              this->pairs.end(),
                              find_pair<map_type, pair_type>{*this->map}));
@@ -185,30 +187,30 @@ TYPED_TEST(InsertTest, IdenticalKeysUniqueValues)
 {
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
-  thrust::tabulate(rmm::exec_policy(),
+  thrust::tabulate(rmm::exec_policy(cudf::default_stream_value),
                    this->pairs.begin(),
                    this->pairs.end(),
                    identical_key_generator<pair_type>{});
 
   // Insert a single pair
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                              this->pairs.begin(),
                              this->pairs.begin() + 1,
                              insert_pair<map_type, pair_type>{*this->map}));
 
   // Identical key inserts should all return false (no new insert)
-  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                               this->pairs.begin() + 1,
                               this->pairs.end(),
                               insert_pair<map_type, pair_type>{*this->map}));
 
   // Only first pair is present in map
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                              this->pairs.begin(),
                              this->pairs.begin() + 1,
                              find_pair<map_type, pair_type>{*this->map}));
 
-  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(),
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
                               this->pairs.begin() + 1,
                               this->pairs.end(),
                               find_pair<map_type, pair_type>{*this->map}));

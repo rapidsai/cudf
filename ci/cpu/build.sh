@@ -26,6 +26,10 @@ export GPUCI_CONDA_RETRY_SLEEP=30
 export CMAKE_GENERATOR="Ninja"
 export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
 
+# Whether to keep `dask/label/dev` channel in the env. If INSTALL_DASK_MAIN=0,
+# `dask/label/dev` channel is removed.
+export INSTALL_DASK_MAIN=0
+
 # Switch to project root; also root of repo checkout
 cd "$WORKSPACE"
 
@@ -49,12 +53,13 @@ conda activate rapids
 if [ "$SOURCE_BRANCH" = "main" ]; then
   conda config --system --remove channels rapidsai-nightly
   conda config --system --remove channels dask/label/dev
+elif [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
+  # Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
+  conda config --system --remove channels dask/label/dev
 fi
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
 
 gpuci_logger "Check conda environment"
 conda info
@@ -63,6 +68,9 @@ conda list --show-channel-urls
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
+
+# TODO: Move boa install to gpuci/rapidsai
+gpuci_mamba_retry install boa
 
 ################################################################################
 # BUILD - Conda package builds
@@ -78,7 +86,22 @@ fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
-  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
+
+  # BUILD_LIBCUDF == 1 means this job is being run on the cpu_build jobs
+  # that is where we must also build the strings_udf package
+  mkdir -p ${CONDA_BLD_DIR}/strings_udf/work
+  STRINGS_UDF_BUILD_DIR=${CONDA_BLD_DIR}/strings_udf/work
+  gpuci_logger "Build conda pkg for cudf (python 3.8), for strings_udf"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/cudf ${CONDA_BUILD_ARGS} --python=3.8
+  gpuci_logger "Build conda pkg for cudf (python 3.9), for strings_udf"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/cudf ${CONDA_BUILD_ARGS} --python=3.9
+
+  gpuci_logger "Build conda pkg for strings_udf (python 3.8)"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} -c ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.8
+  gpuci_logger "Build conda pkg for strings_udf (python 3.9)"
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} -c ${STRINGS_UDF_BUILD_DIR} -c ${CONDA_BLD_DIR} conda/recipes/strings_udf $CONDA_BUILD_ARGS --python=3.9
+
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
   gpuci_logger "sccache stats"
@@ -97,16 +120,20 @@ fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for dask-cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for cudf_kafka"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for custreamz"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  
+  gpuci_logger "Build conda pkg for strings_udf"
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+
 fi
 ################################################################################
 # UPLOAD - Conda packages

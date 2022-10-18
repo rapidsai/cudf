@@ -1,8 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pickle
 from functools import cached_property
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
@@ -14,7 +13,7 @@ from cudf._lib.lists import (
     concatenate_rows,
     contains_scalar,
     count_elements,
-    drop_list_duplicates,
+    distinct,
     extract_element_column,
     extract_element_scalar,
     index_of_column,
@@ -28,10 +27,10 @@ from cudf.api.types import (
     is_list_dtype,
     is_scalar,
 )
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
+from cudf.core.missing import NA
 
 
 class ListColumn(ColumnBase):
@@ -71,9 +70,9 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[0][
-                current_offset
-            ]
+            current_offset = current_base_child.base_children[
+                0
+            ].element_indexing(current_offset)
             n += child0_size
             current_base_child = current_base_child.base_children[1]
 
@@ -93,7 +92,7 @@ class ListColumn(ColumnBase):
         if isinstance(value, cudf.Scalar):
             if value.dtype != self.dtype:
                 raise TypeError("list nesting level mismatch")
-        elif value is cudf.NA:
+        elif value is NA:
             value = cudf.Scalar(value, dtype=self.dtype)
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
@@ -148,8 +147,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
+            nbuf = pa.py_buffer(self.mask.memoryview())
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -166,63 +164,10 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["null_count"] = self.null_count
-        header["size"] = self.size
-        header["dtype"], dtype_frames = self.dtype.serialize()
-        header["dtype_frames_count"] = len(dtype_frames)
-        frames.extend(dtype_frames)
-
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-
-        # Get null mask
-        if header["null_count"] > 0:
-            mask = Buffer(frames[-1])
-        else:
-            mask = None
-
-        # Deserialize dtype
-        dtype = pickle.loads(header["dtype"]["type-serialized"]).deserialize(
-            header["dtype"], frames[: header["dtype_frames_count"]]
-        )
-
-        # Deserialize child columns
-        children = []
-        f = header["dtype_frames_count"]
-        for h in header["subheaders"]:
-            fcount = h["frame_count"]
-            child_frames = frames[f : f + fcount]
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, child_frames))
-            f += fcount
-
-        # Materialize list column
-        return column.build_column(
-            data=None,
-            dtype=dtype,
-            mask=mask,
-            children=tuple(children),
-            size=header["size"],
-        )
+    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+        super().set_base_children(value)
+        _, values = value
+        self._dtype = cudf.ListDtype(element_type=values.dtype)
 
     @property
     def __cuda_array_interface__(self):
@@ -414,7 +359,7 @@ class ListMethods(ColumnMethods):
             index = as_column(index)
             out = extract_element_column(self._column, as_column(index))
 
-        if not (default is None or default is cudf.NA):
+        if not (default is None or default is NA):
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
             out_of_bounds_mask = (np.negative(index) > lengths) | (
@@ -662,9 +607,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            drop_list_duplicates(
-                self._column, nulls_equal=True, nans_all_equal=True
-            )
+            distinct(self._column, nulls_equal=True, nans_all_equal=True)
         )
 
     def sort_values(

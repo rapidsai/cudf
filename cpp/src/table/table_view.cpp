@@ -98,6 +98,22 @@ table_view scatter_columns(table_view const& source,
   return table_view{updated_columns};
 }
 
+std::vector<column_view> get_nullable_columns(table_view const& table)
+{
+  std::vector<column_view> result;
+  for (auto const& col : table) {
+    if (col.nullable()) { result.push_back(col); }
+    for (auto it = col.child_begin(); it != col.child_end(); ++it) {
+      auto const& child = *it;
+      if (child.size() == col.size()) {
+        auto const child_result = get_nullable_columns(table_view{{child}});
+        result.insert(result.end(), child_result.begin(), child_result.end());
+      }
+    }
+  }
+  return result;
+}
+
 namespace detail {
 
 template <typename TableView>
@@ -117,6 +133,12 @@ template bool is_relationally_comparable<table_view>(table_view const& lhs, tabl
 // Explicit template instantiation for a table of mutable views
 template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
                                                              mutable_table_view const& rhs);
+
+bool has_nested_columns(table_view const& table)
+{
+  return std::any_of(
+    table.begin(), table.end(), [](column_view const& col) { return is_nested(col.type()); });
+}
 
 }  // namespace detail
 }  // namespace cudf

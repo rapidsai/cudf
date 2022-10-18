@@ -18,6 +18,8 @@ Rolling window functions
    Rolling.count
    Rolling.sum
    Rolling.mean
+   Rolling.var
+   Rolling.std
    Rolling.min
    Rolling.max
    Rolling.apply

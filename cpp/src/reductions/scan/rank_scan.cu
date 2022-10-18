@@ -53,7 +53,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
 {
   auto comp = cudf::experimental::row::equality::self_comparator(table_view{{order_by}}, stream);
   auto const device_comparator =
-    comp.device_comparator(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
+    comp.equal_to(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();

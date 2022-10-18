@@ -18,17 +18,20 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
+#include <thrust/device_vector.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 
 #include <algorithm>
 #include <iostream>
@@ -205,8 +208,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                              result.second->element(i, rmm::cuda_stream_default)});
+      result_pairs.push_back({result.first->element(i, cudf::default_stream_value),
+                              result.second->element(i, cudf::default_stream_value)});
     }
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
@@ -255,7 +258,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> reference_pairs(
       reference.first->size());
 
-    thrust::transform(thrust::device,
+    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                       result.first->begin(),
                       result.first->end(),
                       result.second->begin(),
@@ -263,7 +266,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                       [] __device__(cudf::size_type first, cudf::size_type second) {
                         return thrust::make_pair(first, second);
                       });
-    thrust::transform(thrust::device,
+    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                       reference.first->begin(),
                       reference.first->end(),
                       reference.second->begin(),
@@ -272,11 +275,15 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                         return thrust::make_pair(first, second);
                       });
 
-    thrust::sort(thrust::device, result_pairs.begin(), result_pairs.end());
-    thrust::sort(thrust::device, reference_pairs.begin(), reference_pairs.end());
+    thrust::sort(
+      rmm::exec_policy(cudf::default_stream_value), result_pairs.begin(), result_pairs.end());
+    thrust::sort(
+      rmm::exec_policy(cudf::default_stream_value), reference_pairs.begin(), reference_pairs.end());
 
-    EXPECT_TRUE(thrust::equal(
-      thrust::device, reference_pairs.begin(), reference_pairs.end(), result_pairs.begin()));
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::default_stream_value),
+                              reference_pairs.begin(),
+                              reference_pairs.end(),
+                              result_pairs.begin()));
   }
 
   void compare_to_hash_join(ColumnVector<T> left_data, ColumnVector<T> right_data)
@@ -684,7 +691,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      resulting_indices.push_back(result->element(i, rmm::cuda_stream_default));
+      resulting_indices.push_back(result->element(i, cudf::default_stream_value));
     }
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
@@ -695,9 +702,13 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
                              std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& reference)
   {
-    thrust::sort(thrust::device, result->begin(), result->end());
-    thrust::sort(thrust::device, reference->begin(), reference->end());
-    EXPECT_TRUE(thrust::equal(thrust::device, result->begin(), result->end(), reference->begin()));
+    thrust::sort(rmm::exec_policy(cudf::default_stream_value), result->begin(), result->end());
+    thrust::sort(
+      rmm::exec_policy(cudf::default_stream_value), reference->begin(), reference->end());
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::default_stream_value),
+                              result->begin(),
+                              result->end(),
+                              reference->begin()));
   }
 
   /*

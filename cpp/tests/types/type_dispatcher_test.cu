@@ -16,13 +16,13 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 struct DispatcherTest : public cudf::test::BaseFixture {
@@ -70,9 +70,10 @@ __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
   auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1);
-  dispatch_test_kernel<<<1, 1>>>(cudf::type_to_id<TypeParam>(), result.data());
+  dispatch_test_kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>(
+    cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
-  EXPECT_EQ(true, result.front_element(rmm::cuda_stream_default));
+  EXPECT_EQ(true, result.front_element(cudf::default_stream_value));
 }
 
 struct IdDispatcherTest : public DispatcherTest, public testing::WithParamInterface<cudf::type_id> {
@@ -130,10 +131,10 @@ __global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2
 TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
   auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1);
-  double_dispatch_test_kernel<<<1, 1>>>(
+  double_dispatch_test_kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>(
     cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
-  EXPECT_EQ(true, result.front_element(rmm::cuda_stream_default));
+  EXPECT_EQ(true, result.front_element(cudf::default_stream_value));
 }
 
 struct IdDoubleDispatcherTest : public DispatcherTest,

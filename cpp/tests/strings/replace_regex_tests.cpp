@@ -149,11 +149,42 @@ TEST_F(StringsReplaceRegexTest, MultiReplacement)
 
 TEST_F(StringsReplaceRegexTest, WordBoundary)
 {
-  cudf::test::strings_column_wrapper input({"aba bcd\naba", "zéz", "A1B2-é3", "e é"});
+  cudf::test::strings_column_wrapper input({"aba bcd\naba", "zéz", "A1B2-é3", "e é", "_", "a_b"});
   auto results =
     cudf::strings::replace_re(cudf::strings_column_view(input), "\\b", cudf::string_scalar("X"));
-  cudf::test::strings_column_wrapper expected(
-    {"XabaX XbcdX\nXabaX", "XzézX", "XA1B2X-Xé3X", "XeX XéX"});
+  auto expected = cudf::test::strings_column_wrapper(
+    {"XabaX XbcdX\nXabaX", "XzézX", "XA1B2X-Xé3X", "XeX XéX", "X_X", "Xa_bX"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "\\B", cudf::string_scalar("X"));
+  expected = cudf::test::strings_column_wrapper(
+    {"aXbXa bXcXd\naXbXa", "zXéXz", "AX1XBX2-éX3", "e é", "_", "aX_Xb"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
+TEST_F(StringsReplaceRegexTest, Alternation)
+{
+  cudf::test::strings_column_wrapper input(
+    {"16  6  brr  232323  1  hello  90", "123 ABC 00 2022", "abé123  4567  89xyz"});
+  auto results = cudf::strings::replace_re(
+    cudf::strings_column_view(input), "(^|\\s)\\d+(\\s|$)", cudf::string_scalar("_"));
+  auto expected =
+    cudf::test::strings_column_wrapper({"__ brr __ hello _", "_ABC_2022", "abé123 _ 89xyz"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results = cudf::strings::replace_re(
+    cudf::strings_column_view(input), "(\\s|^)\\d+($|\\s)", cudf::string_scalar("_"));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
+TEST_F(StringsReplaceRegexTest, ZeroLengthMatch)
+{
+  cudf::test::strings_column_wrapper input({"DD", "zéz", "DsDs", ""});
+  auto repl     = cudf::string_scalar("_");
+  auto results  = cudf::strings::replace_re(cudf::strings_column_view(input), "D*", repl);
+  auto expected = cudf::test::strings_column_wrapper({"__", "_z_é_z_", "__s__s_", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results  = cudf::strings::replace_re(cudf::strings_column_view(input), "D?s?", repl);
+  expected = cudf::test::strings_column_wrapper({"___", "_z_é_z_", "___", "_"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 

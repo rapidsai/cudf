@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "gpuinflate.h"
+#include "gpuinflate.hpp"
 
 #include <cudf/utilities/span.hpp>
 
@@ -25,13 +25,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <optional>
+
 namespace cudf::io::nvcomp {
 
 struct batched_args {
-  rmm::device_uvector<void const*> compressed_data_ptrs;
-  rmm::device_uvector<size_t> compressed_data_sizes;
-  rmm::device_uvector<void*> uncompressed_data_ptrs;
-  rmm::device_uvector<size_t> uncompressed_data_sizes;
+  rmm::device_uvector<void const*> input_data_ptrs;
+  rmm::device_uvector<size_t> input_data_sizes;
+  rmm::device_uvector<void*> output_data_ptrs;
+  rmm::device_uvector<size_t> output_data_sizes;
 };
 
 /**
@@ -46,10 +48,28 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
                                         rmm::cuda_stream_view stream);
 
 /**
- * @brief Convert nvcomp statuses into cuIO compression statuses.
+ * @brief Convert nvcomp statuses and output sizes into cuIO compression results.
  */
-void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
-                    device_span<size_t const> actual_uncompressed_sizes,
-                    device_span<decompress_status> cudf_stats,
-                    rmm::cuda_stream_view stream);
+void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
+                                device_span<size_t const> actual_output_sizes,
+                                device_span<compression_result> results,
+                                rmm::cuda_stream_view stream);
+
+/**
+ * @brief Fill the result array based on the actual output sizes.
+ */
+void update_compression_results(device_span<size_t const> actual_output_sizes,
+                                device_span<compression_result> results,
+                                rmm::cuda_stream_view stream);
+
+/**
+ * @brief Mark unsupported input chunks for skipping.
+ *
+ * Returns the size of the largest remaining input chunk.
+ */
+size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
+                               device_span<compression_result> results,
+                               std::optional<size_t> max_valid_input_size,
+                               rmm::cuda_stream_view stream);
+
 }  // namespace cudf::io::nvcomp

@@ -36,6 +36,10 @@ Parquet
    read_parquet
    DataFrame.to_parquet
    cudf.io.parquet.read_parquet_metadata
+   :template: autosummary/class_with_autosummary.rst
+
+   cudf.io.parquet.ParquetDatasetWriter
+
 
 ORC
 ~~~

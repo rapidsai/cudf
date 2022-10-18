@@ -11,7 +11,9 @@ import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
+from cudf.api.types import is_bool, is_float, is_integer
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
 
@@ -268,7 +270,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    val = cudf.api.types.pandas_dtype(type(val)).type(val)
+    val = _maybe_convert_to_default_type(
+        cudf.api.types.pandas_dtype(type(val))
+    ).type(val)
 
     if dtype is not None:
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
@@ -466,12 +470,19 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     to_numpy_ops = {
         "__add__": _ADD_TYPES,
+        "__radd__": _ADD_TYPES,
         "__sub__": _SUB_TYPES,
+        "__rsub__": _SUB_TYPES,
         "__mul__": _MUL_TYPES,
+        "__rmul__": _MUL_TYPES,
         "__floordiv__": _FLOORDIV_TYPES,
+        "__rfloordiv__": _FLOORDIV_TYPES,
         "__truediv__": _TRUEDIV_TYPES,
+        "__rtruediv__": _TRUEDIV_TYPES,
         "__mod__": _MOD_TYPES,
+        "__rmod__": _MOD_TYPES,
         "__pow__": _POW_TYPES,
+        "__rpow__": _POW_TYPES,
     }
     allowed = to_numpy_ops.get(op, op)
 
@@ -591,7 +602,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, cudf.NA}:
+    if from_dtype in {None, NA}:
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)
@@ -637,6 +648,65 @@ def _can_cast(from_dtype, to_dtype):
             return False
     else:
         return np.can_cast(from_dtype, to_dtype)
+
+
+def _maybe_convert_to_default_type(dtype):
+    """Convert `dtype` to default if specified by user.
+
+    If not specified, return as is.
+    """
+    if cudf.get_option("default_integer_bitwidth"):
+        if cudf.api.types.is_signed_integer_dtype(dtype):
+            return cudf.dtype(
+                f'i{cudf.get_option("default_integer_bitwidth")//8}'
+            )
+        elif cudf.api.types.is_unsigned_integer_dtype(dtype):
+            return cudf.dtype(
+                f'u{cudf.get_option("default_integer_bitwidth")//8}'
+            )
+    if cudf.get_option(
+        "default_float_bitwidth"
+    ) and cudf.api.types.is_float_dtype(dtype):
+        return cudf.dtype(f'f{cudf.get_option("default_float_bitwidth")//8}')
+
+    return dtype
+
+
+def _dtype_can_hold_range(rng: range, dtype: np.dtype) -> bool:
+    if not len(rng):
+        return True
+    return np.can_cast(rng[0], dtype) and np.can_cast(rng[-1], dtype)
+
+
+def _dtype_can_hold_element(dtype: np.dtype, element) -> bool:
+    if dtype.kind in {"i", "u"}:
+        if isinstance(element, range):
+            if _dtype_can_hold_range(element, dtype):
+                return True
+            return False
+
+        elif is_integer(element) or (
+            is_float(element) and element.is_integer()
+        ):
+            info = np.iinfo(dtype)
+            if info.min <= element <= info.max:
+                return True
+            return False
+
+    elif dtype.kind == "f":
+        if is_integer(element) or is_float(element):
+            casted = dtype.type(element)
+            if np.isnan(casted) or casted == element:
+                return True
+            # otherwise e.g. overflow see TestCoercionFloat32
+            return False
+
+    elif dtype.kind == "b":
+        if is_bool(element):
+            return True
+        return False
+
+    raise NotImplementedError(f"Unsupported dtype: {dtype}")
 
 
 # Type dispatch loops similar to what are found in `np.add.types`

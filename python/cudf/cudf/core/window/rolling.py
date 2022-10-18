@@ -10,6 +10,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
 from cudf.core import column
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
@@ -235,12 +236,21 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             following_window = None
             window = self.window
         elif isinstance(self.window, BaseIndexer):
-            start, end = self.window.get_window_bounds(
-                num_values=len(self.obj),
-                min_periods=self.min_periods,
-                center=self.center,
-                closed=None,
-            )
+            if PANDAS_GE_150:
+                start, end = self.window.get_window_bounds(
+                    num_values=len(self.obj),
+                    min_periods=self.min_periods,
+                    center=self.center,
+                    closed=None,
+                    step=None,
+                )
+            else:
+                start, end = self.window.get_window_bounds(
+                    num_values=len(self.obj),
+                    min_periods=self.min_periods,
+                    center=self.center,
+                    closed=None,
+                )
             start = as_column(start, dtype="int32")
             end = as_column(end, dtype="int32")
 
@@ -308,20 +318,54 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         return self._apply_agg(op)
 
     def var(self, ddof=1):
+        """Calculate the rolling variance.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+            Delta Degrees of Freedom.  The divisor used in calculations
+            is ``N - ddof``, where ``N`` represents the number of
+            elements.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
         self.agg_params["ddof"] = ddof
         return self._apply_agg("var")
 
     def std(self, ddof=1):
+        """Calculate the rolling standard deviation.
+
+        Parameters
+        ----------
+        ddof : int, default 1
+            Delta Degrees of Freedom.  The divisor used in calculations
+            is ``N - ddof``, where ``N`` represents the number of
+            elements.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
         self.agg_params["ddof"] = ddof
         return self._apply_agg("std")
 
     def count(self):
+        """Calculate the rolling count of non NaN observations.
+
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
         return self._apply_agg("count")
 
     def apply(self, func, *args, **kwargs):
         """
-        Counterpart of `pandas.core.window.Rolling.apply
-        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.window.rolling.Rolling.apply.html>`_.
+        Calculate the rolling custom aggregation function.
 
         Parameters
         ----------
@@ -332,18 +376,40 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         kwargs
             unsupported
 
-        See also
+        See Also
         --------
-        cudf.Series.applymap : Apply an elementwise function to
+        cudf.Series.apply: Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.Series.applymap`
+        The supported Python features are listed in
+
+        https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html
+
+        with these exceptions:
+
+        * Math functions in `cmath` are not supported since `libcudf` does not
+          have complex number support and output of `cmath` functions are most
+          likely complex numbers.
+
+        * These five functions in `math` are not supported since numba
+          generates multiple PTX functions from them:
+
+          * math.sin()
+          * math.cos()
+          * math.tan()
+          * math.gamma()
+          * math.lgamma()
+
+        * Series with string dtypes are not supported.
+
+        * Global variables need to be re-defined explicitly inside
+          the udf, as numba considers them to be compile-time constants
+          and there is no known way to obtain value of the global variable.
 
         Examples
         --------
-
         >>> import cudf
         >>> def count_if_gt_3(window):
         ...     count = 0
@@ -455,7 +521,7 @@ class RollingGroupby(Rolling):
     """
     Grouped rolling window calculation.
 
-    See also
+    See Also
     --------
     cudf.core.window.Rolling
     """

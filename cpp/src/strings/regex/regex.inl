@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-#include <strings/utf8.cuh>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
+
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace strings {
@@ -45,10 +46,9 @@ struct alignas(8) relist {
   /**
    * @brief Compute the aligned memory allocation size.
    */
-  constexpr inline static std::size_t alloc_size(int32_t insts)
+  constexpr inline static std::size_t alloc_size(int32_t insts, int32_t num_threads)
   {
-    return cudf::util::round_up_unsafe<size_t>(data_size_for(insts) + sizeof(relist),
-                                               sizeof(ranges[0]));
+    return cudf::util::round_up_unsafe<size_t>(data_size_for(insts) * num_threads, sizeof(restate));
   }
 
   struct alignas(16) restate {
@@ -57,16 +57,16 @@ struct alignas(8) relist {
     int32_t reserved;
   };
 
-  __device__ __forceinline__ relist(int16_t insts, u_char* data = nullptr)
-    : masksize(cudf::util::div_rounding_up_unsafe(insts, 8))
+  __device__ __forceinline__
+  relist(int16_t insts, int32_t num_threads, u_char* gp_ptr, int32_t index)
+    : masksize(cudf::util::div_rounding_up_unsafe(insts, 8)), stride(num_threads)
   {
-    auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
-    ranges   = reinterpret_cast<int2*>(ptr);
-    ptr += insts * sizeof(ranges[0]);
-    inst_ids = reinterpret_cast<int16_t*>(ptr);
-    ptr += insts * sizeof(inst_ids[0]);
-    mask = ptr;
-    reset();
+    auto const rdata_size = sizeof(ranges[0]);
+    auto const idata_size = sizeof(inst_ids[0]);
+    ranges                = reinterpret_cast<decltype(ranges)>(gp_ptr + (index * rdata_size));
+    inst_ids =
+      reinterpret_cast<int16_t*>(gp_ptr + (rdata_size * stride * insts) + (index * idata_size));
+    mask = gp_ptr + ((rdata_size + idata_size) * stride * insts) + (index * masksize);
   }
 
   __device__ __forceinline__ void reset()
@@ -79,15 +79,15 @@ struct alignas(8) relist {
   {
     if (readMask(id)) { return false; }
     writeMask(id);
-    inst_ids[size] = static_cast<int16_t>(id);
-    ranges[size]   = int2{begin, end};
+    inst_ids[size * stride] = static_cast<int16_t>(id);
+    ranges[size * stride]   = int2{begin, end};
     ++size;
     return true;
   }
 
   __device__ __forceinline__ restate get_state(int16_t idx) const
   {
-    return restate{ranges[idx], inst_ids[idx]};
+    return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
 
   __device__ __forceinline__ int16_t get_size() const { return size; }
@@ -95,7 +95,7 @@ struct alignas(8) relist {
  private:
   int16_t size{};
   int16_t const masksize;
-  int32_t reserved;
+  int32_t const stride;
   int2* __restrict__ ranges;       // pair per instruction
   int16_t* __restrict__ inst_ids;  // one per instruction
   u_char* __restrict__ mask;       // bit per instruction
@@ -142,24 +142,25 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
                                                          uint8_t const* codepoint_flags) const
 {
   for (int i = 0; i < count; ++i) {
-    if ((ch >= literals[i * 2]) && (ch <= literals[(i * 2) + 1])) { return true; }
+    auto const literal = literals[i];
+    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
   }
 
   if (!builtins) return false;
   uint32_t codept = utf8_to_codepoint(ch);
-  if (codept > 0x00FFFF) return false;
+  if (codept > 0x00'FFFF) return false;
   int8_t fl = codepoint_flags[codept];
-  if ((builtins & 1) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
+  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
     return true;
-  if ((builtins & 2) && IS_SPACE(fl))  // \s
+  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
     return true;
-  if ((builtins & 4) && IS_DIGIT(fl))  // \d
+  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
     return true;
-  if ((builtins & 8) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
+  if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
     return true;
-  if ((builtins & 16) && !IS_SPACE(fl))  // \S
+  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
     return true;
-  if ((builtins & 32) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
+  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
     return true;
   //
   return false;
@@ -175,6 +176,49 @@ __device__ __forceinline__ reclass_device reprog_device::get_class(int32_t id) c
 __device__ __forceinline__ bool reprog_device::is_empty() const
 {
   return insts_counts() == 0 || get_inst(0).type == END;
+}
+
+__device__ __forceinline__ void reprog_device::store(void* buffer) const
+{
+  if (_prog_size > MAX_SHARED_MEM) { return; }
+
+  auto ptr = static_cast<u_char*>(buffer);
+
+  // create instance inside the given buffer
+  auto result = new (ptr) reprog_device(*this);
+
+  // add the insts array
+  ptr += sizeof(reprog_device);
+  auto insts     = reinterpret_cast<reinst*>(ptr);
+  result->_insts = insts;
+  for (int idx = 0; idx < _insts_count; ++idx)
+    *insts++ = _insts[idx];
+
+  // add the startinst_ids array
+  ptr += cudf::util::round_up_unsafe(_insts_count * sizeof(_insts[0]), sizeof(_startinst_ids[0]));
+  auto ids               = reinterpret_cast<int32_t*>(ptr);
+  result->_startinst_ids = ids;
+  for (int idx = 0; idx < _starts_count; ++idx)
+    *ids++ = _startinst_ids[idx];
+
+  // add the classes array
+  ptr += cudf::util::round_up_unsafe(_starts_count * sizeof(int32_t), sizeof(_classes[0]));
+  auto classes     = reinterpret_cast<reclass_device*>(ptr);
+  result->_classes = classes;
+  // fill in each class
+  auto d_ptr = reinterpret_cast<reclass_range*>(classes + _classes_count);
+  for (int idx = 0; idx < _classes_count; ++idx) {
+    classes[idx]          = _classes[idx];
+    classes[idx].literals = d_ptr;
+    for (int jdx = 0; jdx < _classes[idx].count; ++jdx)
+      *d_ptr++ = _classes[idx].literals[jdx];
+  }
+}
+
+__device__ __forceinline__ reprog_device reprog_device::load(reprog_device const prog, void* buffer)
+{
+  return (prog._prog_size > MAX_SHARED_MEM) ? reprog_device(prog)
+                                            : reinterpret_cast<reprog_device*>(buffer)[0];
 }
 
 /**
@@ -219,7 +263,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           auto const fidx = dstr.find(startchar, pos);
-          if (fidx < 0) { return match; }
+          if (fidx == string_view::npos) { return match; }
           pos = fidx + (jnk.starttype == BOL);
           break;
         }
@@ -280,15 +324,11 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
             break;
           case BOW:
           case NBOW: {
-            auto const codept      = utf8_to_codepoint(c);
-            auto const last_c      = pos > 0 ? dstr[pos - 1] : 0;
-            auto const last_codept = utf8_to_codepoint(last_c);
-
-            bool const cur_alphaNumeric =
-              (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool const last_alphaNumeric =
-              (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if ((cur_alphaNumeric == last_alphaNumeric) != (inst.type == BOW)) {
+            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto const word_class   = reclass_device{CCLASS_W};
+            bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
+            bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
+            if ((curr_is_word == prev_is_word) != (inst.type == BOW)) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
@@ -352,62 +392,40 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
   return match;
 }
 
-template <int stack_size>
-__device__ __forceinline__ int32_t reprog_device::find(int32_t idx,
+__device__ __forceinline__ int32_t reprog_device::find(int32_t const thread_idx,
                                                        string_view const dstr,
                                                        cudf::size_type& begin,
                                                        cudf::size_type& end) const
 {
-  int32_t rtn = call_regexec<stack_size>(idx, dstr, begin, end);
+  auto const rtn = call_regexec(thread_idx, dstr, begin, end);
   if (rtn <= 0) begin = end = -1;
   return rtn;
 }
 
-template <int stack_size>
-__device__ __forceinline__ match_result reprog_device::extract(cudf::size_type idx,
+__device__ __forceinline__ match_result reprog_device::extract(int32_t const thread_idx,
                                                                string_view const dstr,
                                                                cudf::size_type begin,
                                                                cudf::size_type end,
                                                                cudf::size_type const group_id) const
 {
   end = begin + 1;
-  return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1) > 0
-           ? match_result({begin, end})
-           : thrust::nullopt;
+  return call_regexec(thread_idx, dstr, begin, end, group_id + 1) > 0 ? match_result({begin, end})
+                                                                      : thrust::nullopt;
 }
 
-template <int stack_size>
-__device__ __forceinline__ int32_t reprog_device::call_regexec(int32_t idx,
+__device__ __forceinline__ int32_t reprog_device::call_regexec(int32_t const thread_idx,
                                                                string_view const dstr,
                                                                cudf::size_type& begin,
                                                                cudf::size_type& end,
                                                                cudf::size_type const group_id) const
 {
-  u_char data1[stack_size], data2[stack_size];
+  auto gp_ptr = reinterpret_cast<u_char*>(_buffer);
+  relist list1(static_cast<int16_t>(_max_insts), _thread_count, gp_ptr, thread_idx);
 
-  relist list1(static_cast<int16_t>(_insts_count), data1);
-  relist list2(static_cast<int16_t>(_insts_count), data2);
+  gp_ptr += relist::alloc_size(_max_insts, _thread_count);
+  relist list2(static_cast<int16_t>(_max_insts), _thread_count, gp_ptr, thread_idx);
 
   reljunk jnk(&list1, &list2, get_inst(_startinst_id));
-  return regexec(dstr, jnk, begin, end, group_id);
-}
-
-template <>
-__device__ __forceinline__ int32_t
-reprog_device::call_regexec<RX_STACK_ANY>(int32_t idx,
-                                          string_view const dstr,
-                                          cudf::size_type& begin,
-                                          cudf::size_type& end,
-                                          cudf::size_type const group_id) const
-{
-  auto const relists_size = relist::alloc_size(_insts_count);
-  auto* listmem           = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
-  listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
-
-  auto* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
-  auto* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
-
-  reljunk jnk(list1, list2, get_inst(_startinst_id));
   return regexec(dstr, jnk, begin, end, group_id);
 }
 

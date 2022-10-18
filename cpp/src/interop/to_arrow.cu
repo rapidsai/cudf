@@ -25,10 +25,12 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
@@ -152,7 +154,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(count,
+  thrust::for_each(rmm::exec_policy(cudf::default_stream_value),
+                   count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
                      auto const out_idx = in_idx * 2;
@@ -413,8 +416,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-
-  return detail::to_arrow(input, metadata, rmm::cuda_stream_default, ar_mr);
+  return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
 }
 
 }  // namespace cudf
