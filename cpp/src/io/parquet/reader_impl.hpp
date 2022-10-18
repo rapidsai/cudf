@@ -273,6 +273,8 @@ class reader::impl {
   std::vector<cudf::io::parquet::gpu::chunk_read_info> _chunk_read_info;
   std::size_t _current_read_chunk{0};
   bool _file_preprocessed{false};
+
+  parquet_reader_options const& _options;
 };
 
 }  // namespace parquet

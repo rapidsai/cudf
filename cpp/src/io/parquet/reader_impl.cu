@@ -1500,7 +1500,21 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   printf("read total_rows = %d, min_row = %d\n", (int)total_rows, (int)min_row);
   fflush(stdout);
 
+  printf("pages size= %d, chunk size = %d, pages = %zu\n",
+         (int)pages.size(),
+         (int)chunks.size(),
+         (size_t)pages.device_ptr());
+  fflush(stdout);
+
   gpu::DecodePageData(pages, chunks, total_rows, min_row, _stream);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
+  _stream.synchronize();
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
   _stream.synchronize();
@@ -1580,7 +1594,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _stream(stream), _mr(mr), _sources(std::move(sources))
+  : _stream(stream), _mr(mr), _sources(std::move(sources)), _options(options)
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
@@ -1873,11 +1887,22 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
 table_with_metadata reader::impl::read_chunk()
 {
+  {
+    // TODO: this be called once, then _output_columns is saved as a template and copied to the
+    // output each time.
+    std::tie(_input_columns, _output_columns, _output_column_schemas) =
+      _metadata->select_columns(_options.get_columns(),
+                                _options.is_enabled_use_pandas_metadata(),
+                                _strings_to_categorical,
+                                _timestamp_type.id());
+  }
+
   printf("line %d\n", __LINE__);
   fflush(stdout);
 
-  if (!_file_preprocessed) {
-    printf("line %d\n", __LINE__);
+  //  if (!_file_preprocessed) {
+  if (true) {
+    printf("preprocessing from the beginning ===================line %d\n", __LINE__);
     fflush(stdout);
 
     [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
