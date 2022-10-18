@@ -274,6 +274,8 @@ class reader::impl {
   std::size_t _current_read_chunk{0};
   bool _file_preprocessed{false};
 
+  // TODO: Remove below
+  std::size_t chunked_read_size = 490000;
   parquet_reader_options const& _options;
 };
 

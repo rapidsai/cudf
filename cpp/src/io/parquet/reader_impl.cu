@@ -1786,7 +1786,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // - for nested schemas, output buffer offset values per-page, per nesting-level for the
   // purposes of decoding.
   // TODO: make this a parameter.
-  auto const chunked_read_size = 240000;
+
   //      auto const chunked_read_size = 0;
   preprocess_columns(_file_itm_data.chunks,
                      _file_itm_data.pages_info,
@@ -1828,7 +1828,7 @@ table_with_metadata reader::impl::read_chunk()
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
       // TODO: make this a parameter.
-      auto const chunked_read_size = 240000;
+
       //      auto const chunked_read_size = 0;
       preprocess_columns(_file_itm_data.chunks,
                          _file_itm_data.pages_info,
@@ -1862,7 +1862,7 @@ bool reader::impl::has_next()
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
       // TODO: make this a parameter.
-      auto const chunked_read_size = 240000;
+
       //      auto const chunked_read_size = 0;
       preprocess_columns(_file_itm_data.chunks,
                          _file_itm_data.pages_info,
