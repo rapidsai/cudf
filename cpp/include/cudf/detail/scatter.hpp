@@ -95,6 +95,9 @@ std::unique_ptr<table> scatter(
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
+ * If any values in `indices` are outside of the interval [-n, n) where `n`
+ * is the number of rows in the `target` table, behavior is undefined.
+ *
  * @param source The input scalars containing values to be scattered into the
  * target columns
  * @param indices A non-nullable column of integral indices that indicate
