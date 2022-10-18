@@ -348,11 +348,13 @@ data, a specialized device view for list columns can be constructed via
 
 # libcudf Policies and Design Principles
 
-`libcudf` is designed to provide GPU-accelerated algorithm primitives for solving a wide variety of problems that arise in data science.
-Our goal is to enable diverse use cases like Spark or Pandas to benefit from the performance of GPUs. 
-As a result, libcudf prioritizes performance and flexibility, which sometimes may come at the cost of convenience.
+`libcudf` is designed to provide thread-safe, single-GPU accelerated algorithm primitives for solving a wide variety of problems that arise in data science.
+APIs are written to execute on the default GPU, which can be controlled by the caller through standard CUDA device APIs or environment variables like `CUDA_VISIBLE_DEVICES`.
+Our goal is to enable diverse use cases like Spark or Pandas to benefit from the performance of GPUs, and libcudf relies on these higher-level layers like Spark or Dask to orchestrate multi-GPU tasks.
+
+To best satisfy these use-cases, libcudf prioritizes performance and flexibility, which sometimes may come at the cost of convenience.
 While we welcome users to use libcudf directly, we design with the expectation that most users will be consuming libcudf through higher-level layers like Spark or cuDF Python that handle some of details that direct users of libcudf must handle on their own.
-We document these policies and the reasons behind them here:
+We document these policies and the reasons behind them here.
 
 ## libcudf does not introspect data
 
