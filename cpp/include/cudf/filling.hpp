@@ -103,7 +103,8 @@ std::unique_ptr<column> fill(
  * ```
  * @p count should not have null values; should not contain negative values;
  * and the sum of count elements should not overflow the size_type's limit.
- * It is undefined behavior if @p count has negative values or the sum overflows.
+ * The behavior of this function is undefined if @p count has negative values
+ * or the sum overflows.
  *
  * @throws cudf::logic_error if the data type of @p count is not size_type.
  * @throws cudf::logic_error if @p input_table and @p count have different
