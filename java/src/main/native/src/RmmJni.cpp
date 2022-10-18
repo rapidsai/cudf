@@ -255,7 +255,7 @@ private:
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     std::size_t total_before;
     void *result;
-    // a positive retry_count signifies that the `on_alloc_fail`
+    // a non-zero retry_count signifies that the `on_alloc_fail`
     // callback is being invoked while re-attempting an allocation
     // that had previously failed.
     int retry_count = 0;
