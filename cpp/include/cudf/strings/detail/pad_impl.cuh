@@ -82,7 +82,7 @@ __device__ void pad_impl(cudf::string_view d_str,
   if constexpr (side == side_type::BOTH) {
     auto const pad_size = width - length;
     // an odd width will right-justify
-    auto right_pad = (width & 1) ? pad_size / 2 : (pad_size - pad_size / 2);
+    auto right_pad = (width % 2) ? pad_size / 2 : (pad_size - pad_size / 2);
     auto left_pad  = pad_size - right_pad;  // e.g. width=7: "++foxx+"; width=6: "+fox++"
     while (left_pad-- > 0) {
       output += from_char_utf8(fill_char, output);
