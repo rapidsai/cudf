@@ -443,7 +443,7 @@ try:
         ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
         Dask-DataFrame will use the methods defined in this class
         in place of ``dask.dataframe.<creation-method>`` when the
-        'dataframe.backend' configuration is set to "cudf":
+        "dataframe.backend" configuration is set to "cudf":
 
         Examples
         --------
