@@ -249,6 +249,7 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+  rmm::device_buffer decomp_page_data;
   bool has_data{false};
 };
 

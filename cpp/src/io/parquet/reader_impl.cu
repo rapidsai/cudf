@@ -1669,12 +1669,11 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
   _file_itm_data.pages_info = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
   if (total_pages > 0) {
-    rmm::device_buffer decomp_page_data;
-
     // decoding of column/page information
     decode_page_headers(_file_itm_data.chunks, _file_itm_data.pages_info);
     if (total_decompressed_size > 0) {
-      decomp_page_data = decompress_page_data(_file_itm_data.chunks, _file_itm_data.pages_info);
+      _file_itm_data.decomp_page_data =
+        decompress_page_data(_file_itm_data.chunks, _file_itm_data.pages_info);
       // Free compressed data
       for (size_t c = 0; c < _file_itm_data.chunks.size(); c++) {
         if (_file_itm_data.chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
