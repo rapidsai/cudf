@@ -257,8 +257,8 @@ struct file_intermediate_data {
 
 // TODO: rename?
 struct chunk_intermediate_data {
-  rmm::device_uvector<int> page_keys{0, rmm::cuda_stream_default};
-  rmm::device_uvector<int> page_index{0, rmm::cuda_stream_default};
+  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
+  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
   rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
 };
 
