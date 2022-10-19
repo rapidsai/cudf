@@ -19,8 +19,6 @@
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-#include <mutex>
-
 namespace cudf {
 
 namespace detail {
@@ -32,26 +30,6 @@ namespace detail {
  * thread default stream.
  */
 extern rmm::cuda_stream_view default_stream_value;
-
-/**
- * @brief Lock for setting the stream.
- */
-inline std::mutex& stream_lock()
-{
-  static std::mutex _stream_lock;
-  return _stream_lock;
-}
-
-/**
- * @brief Lock for setting the stream.
- *
- * @param new_default_stream The stream view to use as the new cudf default.
- */
-inline void set_default_stream(rmm::cuda_stream_view new_default_stream)
-{
-  std::lock_guard<std::mutex> lock{stream_lock()};
-  default_stream_value = new_default_stream;
-}
 
 }  // namespace detail
 

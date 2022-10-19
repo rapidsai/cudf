@@ -42,9 +42,5 @@ bool is_ptds_enabled()
 #endif
 }
 
-rmm::cuda_stream_view const get_default_stream()
-{
-  std::lock_guard<std::mutex> lock{detail::stream_lock()};
-  return detail::default_stream_value;
-}
+rmm::cuda_stream_view const get_default_stream() { return detail::default_stream_value; }
 }  // namespace cudf
