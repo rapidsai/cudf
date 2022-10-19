@@ -45,6 +45,7 @@
 #include <fstream>
 #include <type_traits>
 
+namespace {
 // Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
@@ -53,26 +54,11 @@ using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
 using strings_col = cudf::test::strings_column_wrapper;
 
-struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {
-};
-
-TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
+auto run_test(std::string const& filepath, std::size_t byte_limit)
 {
-  auto constexpr num_rows = 40000;
-  auto const filepath     = temp_env->get_temp_filepath("chunked_read_simple.parquet");
-
-  auto const values = thrust::make_counting_iterator(0);
-  auto const a      = int32s_col(values, values + num_rows);
-  auto const b      = int64s_col(values, values + num_rows);
-  auto const input  = cudf::table_view{{a, b}};
-
-  auto const write_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input).build();
-  cudf::io::write_parquet(write_opts);
-
   auto const read_opts =
     cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .byte_limit(240000)
+      .byte_limit(byte_limit)
       .build();
   auto reader = cudf::io::chunked_parquet_reader(read_opts);
 
@@ -89,16 +75,39 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
     ++num_chunks;
   }
 
+  return std::pair(std::move(result), num_chunks);
+}
+
+}  // namespace
+
+struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
+{
+  auto constexpr num_rows = 40'000;
+  auto const filepath     = temp_env->get_temp_filepath("chunked_read_simple.parquet");
+
+  auto const values = thrust::make_counting_iterator(0);
+  auto const a      = int32s_col(values, values + num_rows);
+  auto const b      = int64s_col(values, values + num_rows);
+  auto const input  = cudf::table_view{{a, b}};
+
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input).build();
+  cudf::io::write_parquet(write_opts);
+
+  auto constexpr byte_limit       = 240'000;
+  auto const [result, num_chunks] = run_test(filepath, byte_limit);
   EXPECT_EQ(num_chunks, 2);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 {
-  auto constexpr num_rows = 60000;
+  auto constexpr num_rows = 60'000;
   auto const filepath     = temp_env->get_temp_filepath("chunked_read_with_strings.parquet");
-
-  auto const values = thrust::make_counting_iterator(0);
+  auto const values       = thrust::make_counting_iterator(0);
 
   // ints                                            Page    total bytes   cumulative bytes
   // 20000 rows of 4 bytes each                    = A0      80000         80000
@@ -133,32 +142,14 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   //                                             skip_rows / num_rows
   // byte_limit==500000  should give 2 chunks: {0, 40000}, {40000, 20000}
   // byte_limit==1000000 should give 1 chunks: {0, 60000},
-
-  auto const do_test = [&](auto const byte_limit, auto const expected_num_chunks) {
-    auto const read_opts =
-      cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath})
-        .byte_limit(byte_limit)
-        .build();
-    auto reader = cudf::io::chunked_parquet_reader(read_opts);
-
-    auto num_chunks = 0;
-    auto result     = std::make_unique<cudf::table>();
-
-    while (reader.has_next()) {
-      auto chunk = reader.read_chunk();
-      if (num_chunks == 0) {
-        result = std::move(chunk.tbl);
-      } else {
-        result =
-          cudf::concatenate(std::vector<cudf::table_view>{result->view(), chunk.tbl->view()});
-      }
-      ++num_chunks;
-    }
-
-    EXPECT_EQ(num_chunks, expected_num_chunks);
+  {
+    auto const [result, num_chunks] = run_test(filepath, 500'000);
+    EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
-  };
-
-  do_test(500000, 2);
-  do_test(1000000, 1);
+  }
+  {
+    auto const [result, num_chunks] = run_test(filepath, 1'000'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
+  }
 }
