@@ -35,6 +35,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_dtype,
     is_scalar,
+    is_string_dtype,
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
@@ -214,16 +215,9 @@ class _SeriesIlocIndexer(_FrameIndexer):
             value = column.as_column(value)
 
         if (
-            not isinstance(
-                self._frame._column.dtype,
-                (
-                    # Casting only for string and non-decimal numeric
-                    # columns
-                    cudf.core.dtypes.DecimalDtype,
-                    cudf.CategoricalDtype,
-                    cudf.ListDtype,
-                    cudf.StructDtype,
-                ),
+            (
+                _is_non_decimal_numeric_dtype(self._frame._column.dtype)
+                or is_string_dtype(self._frame._column.dtype)
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
