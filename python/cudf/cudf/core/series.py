@@ -889,7 +889,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
-""",
+""",  # noqa: E501
             example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
@@ -1206,7 +1206,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             and not is_decimal_dtype(preprocess.dtype)
             and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
-            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
+            preprocess._column,
+            cudf.core.column.timedelta.TimeDeltaColumn,
         ):
             output = repr(
                 preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
@@ -2997,7 +2998,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def digitize(self, bins, right=False):
-        """Return the indices of the bins to which each value in series belongs.
+        """Return the indices of the bins to which each value belongs.
 
         Notes
         -----
@@ -3590,6 +3591,64 @@ class DatetimeProperties:
         dtype: int16
         """
         return self._get_dt_field("second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def microsecond(self):
+        """
+        The microseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="us"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000000
+        1    2000-01-01 00:00:00.000001
+        2    2000-01-01 00:00:00.000002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.microsecond
+        0    0
+        1    1
+        2    2
+        dtype: int32
+        """
+        return Series(
+            data=(
+                self.series._column.get_dt_field("millisecond")
+                * cudf.Scalar(1000, dtype="int32")
+            )
+            + self.series._column.get_dt_field("microsecond"),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def nanosecond(self):
+        """
+        The nanoseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="ns"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000000000
+        1    2000-01-01 00:00:00.000000001
+        2    2000-01-01 00:00:00.000000002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.nanosecond
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
+        return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

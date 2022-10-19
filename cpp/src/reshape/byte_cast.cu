@@ -101,11 +101,21 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
   auto strings_count = input_strings.size();
   if (strings_count == 0) return cudf::empty_like(input_column);
 
-  auto contents = std::make_unique<column>(input_column, stream, mr)->release();
+  auto col_content = std::make_unique<column>(input_column, stream, mr)->release();
+  auto contents =
+    col_content.children[strings_column_view::chars_column_index].release()->release();
+  auto data      = contents.data.release();
+  auto null_mask = contents.null_mask.release();
+  auto uint8_col = std::make_unique<column>(data_type{type_id::UINT8},
+                                            data->size(),
+                                            std::move(*data),
+                                            std::move(*null_mask),
+                                            UNKNOWN_NULL_COUNT);
+
   return make_lists_column(
     input_column.size(),
-    std::move(contents.children[cudf::strings_column_view::offsets_column_index]),
-    std::move(contents.children[cudf::strings_column_view::chars_column_index]),
+    std::move(col_content.children[cudf::strings_column_view::offsets_column_index]),
+    std::move(uint8_col),
     input_column.null_count(),
     detail::copy_bitmask(input_column, stream, mr),
     stream,

@@ -321,10 +321,7 @@ inline size_type __device__ row_to_value_idx(size_type idx,
     } else {
       auto list_col = cudf::detail::lists_column_device_view(col);
       auto child    = list_col.child();
-      if (parquet_col.output_as_byte_array &&
-          (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
-        break;
-      }
+      if (parquet_col.output_as_byte_array && child.type().id() == type_id::UINT8) { break; }
       idx = list_col.offset_at(idx);
       col = child;
     }
