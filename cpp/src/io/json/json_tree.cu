@@ -505,7 +505,119 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 }
 
 /**
+ * @note Two level hashing algorithm
+ * 1. Convert node_category+fieldname to node_type. (passed as argument)
+ *   a. Create a hashmap to hash field name and assign unique node id as values.
+ *   b. Convert the node categories to node types.
+ *      Node type is defined as node category enum value if it is not a field node,
+ *      otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
+ * 2. Set operation on entire path of each node
+ *   a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent
+ *      until root.
+ *   b. While creating hashmap, transform node id to unique node ids that are inserted into the
+ *      hash map This mimicks set operation with hash map. This unique node ids are set ids.
+ *   c. Return this converted set ids, which are the hash map keys/values, and unique set ids.
+ **/
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_node_path(
+  device_span<TreeDepthT const> node_levels,
+  device_span<size_type const> node_type,
+  device_span<NodeIndexT const> parent_node_ids,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  auto num_nodes = parent_node_ids.size();
+  rmm::device_uvector<size_type> col_id(num_nodes, stream);
+
+  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+  using hash_map_type =
+    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+
+  constexpr size_type empty_node_index_sentinel = -1;
+  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
+                        cuco::sentinel::empty_key{empty_node_index_sentinel},
+                        cuco::sentinel::empty_value{empty_node_index_sentinel},
+                        cuco::sentinel::erased_key{-2},
+                        hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value()};
+  // path compression is not used since extra writes make all map operations slow.
+  auto d_hasher = [node_level      = node_levels.begin(),
+                   node_type       = node_type.begin(),
+                   parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
+    auto hash =
+      cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
+                                 cudf::detail::default_hash<size_type>{}(node_type[node_id]));
+    node_id = parent_node_ids[node_id];
+    while (node_id != parent_node_sentinel) {
+      hash = cudf::detail::hash_combine(
+        hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));
+      hash = cudf::detail::hash_combine(
+        hash, cudf::detail::default_hash<size_type>{}(node_type[node_id]));
+      node_id = parent_node_ids[node_id];
+    }
+    return hash;
+  };
+
+  CUDF_PUSH_RANGE("hasher");
+  rmm::device_uvector<hash_value_type> node_hash(num_nodes, stream);
+  thrust::tabulate(rmm::exec_policy(stream), node_hash.begin(), node_hash.end(), d_hasher);
+  auto d_hashed_cache = [node_hash = node_hash.begin()] __device__(auto node_id) {
+    return node_hash[node_id];
+  };
+  CUDF_POP_RANGE();
+
+  auto d_equal = [node_level      = node_levels.begin(),
+                  node_type       = node_type.begin(),
+                  parent_node_ids = parent_node_ids.begin(),
+                  d_hashed_cache] __device__(auto node_id1, auto node_id2) {
+    if (node_id1 == node_id2) return true;
+    if (d_hashed_cache(node_id1) != d_hashed_cache(node_id2)) return false;
+    auto is_equal_level = [node_level, node_type](auto node_id1, auto node_id2) {
+      if (node_id1 == node_id2) return true;
+      return node_level[node_id1] == node_level[node_id2] and
+             node_type[node_id1] == node_type[node_id2];
+    };
+    // if both nodes have same node types at all levels, it will check until it has common parent
+    // or root.
+    while (node_id1 != parent_node_sentinel and node_id2 != parent_node_sentinel and
+           node_id1 != node_id2 and is_equal_level(node_id1, node_id2)) {
+      node_id1 = parent_node_ids[node_id1];
+      node_id2 = parent_node_ids[node_id2];
+    }
+    return node_id1 == node_id2;
+  };
+  CUDF_PUSH_RANGE("insert");
+  auto num_inserted = thrust::count_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(num_nodes),
+    [d_hashed_cache,
+     d_equal,
+     view       = key_map.get_device_mutable_view(),
+     uq_node_id = col_id.begin()] __device__(auto node_id) mutable {
+      // typename hash_map_type::value_type const insert_pair{};
+      auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hashed_cache, d_equal);
+      uq_node_id[node_id] = (it.first)->first;  // first.load(cuda::std::memory_order_relaxed);
+      return it.second;
+    });
+  CUDF_POP_RANGE();
+  auto num_columns = num_inserted;  // key_map.get_size() is not updated.
+  rmm::device_uvector<size_type> unique_keys(num_columns, stream);
+  CUDF_PUSH_RANGE("retrieve_all");
+  key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
+  CUDF_POP_RANGE();
+  return {std::move(col_id), std::move(unique_keys)};
+}
+
+/**
  * @brief Generates column id and parent column id for each node
+ *
+ * 1. Generate col_id:
+ *    a. Set operation on entire path of each node, translate each node id to set id.
+ *       (two level hashing)
+ *    b. gather unique set ids.
+ *    c. sort and use binary search to generate column ids.
+ *    d. Translate parent node ids to parent column ids.
  *
  * @param node_type Unique id to identify node type, field with different name has different id.
  * @param parent_indices Parent node indices in the sorted node_level order
@@ -514,133 +626,55 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
  * @return column_id, parent_column_id
  */
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
-  device_span<TreeDepthT> node_levels,
-  device_span<size_type> node_type,
-  device_span<NodeIndexT> parent_node_ids,
+  device_span<SymbolT const> d_input,
+  tree_meta_t const& d_tree,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto num_nodes = parent_node_ids.size();
-  rmm::device_uvector<size_type> col_id(num_nodes, stream);
-  {
-    CUDF_SCOPED_RANGE("new method");
+  auto num_nodes = d_tree.node_categories.size();
 
-    // Two-level hashing:
-    // one for field names -> node_type and
-    // another for {node-level, node_category} + field hash for the entire path
-    // which is {node_level, node_type} recursively using parent_node_id
-    using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-    using hash_map_type =
-      cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  // Two-level hashing:
+  // one for field names -> node_type and,
+  // another for {node_level, node_category} + field hash for the entire path
+  // which is {node_level, node_type} recursively using parent_node_id
+  auto [col_id, unique_keys] = [&]() {
+    // Convert node_category + field_name to node_type.
+    rmm::device_uvector<size_type> node_type =
+      hash_node_type_with_field_name(d_input, d_tree, stream);
 
-    constexpr size_type empty_node_index_sentinel = -1;
-    hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                          cuco::sentinel::empty_key{empty_node_index_sentinel},
-                          cuco::sentinel::empty_value{empty_node_index_sentinel},
-                          cuco::sentinel::erased_key{-2},
-                          hash_table_allocator_type{default_allocator<char>{}, stream},
-                          stream.value()};
-    // path compression is not used since extra writes make all map operations slow.
-    auto d_hasher1 = [node_level      = node_levels.begin(),
-                      node_type       = node_type.begin(),
-                      parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
-      auto hash =
-        cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
-                                   cudf::detail::default_hash<size_type>{}(node_type[node_id]));
-      node_id = parent_node_ids[node_id];
-      while (node_id != parent_node_sentinel) {
-        hash = cudf::detail::hash_combine(
-          hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));
-        hash = cudf::detail::hash_combine(
-          hash, cudf::detail::default_hash<size_type>{}(node_type[node_id]));
-        node_id = parent_node_ids[node_id];
-      }
-      return hash;
-    };
+    // hash entire path from node to root.
+    return hash_node_path(d_tree.node_levels, node_type, d_tree.parent_node_ids, stream, mr);
+  }();
 
-    CUDF_PUSH_RANGE("hasher");
-    rmm::device_uvector<hash_value_type> node_hash(num_nodes, stream);
-    thrust::tabulate(rmm::exec_policy(stream), node_hash.begin(), node_hash.end(), d_hasher1);
-    auto d_hasher = [node_hash = node_hash.begin()] __device__(auto node_id) {
-      return node_hash[node_id];
-    };
-    stream.synchronize();
-    CUDF_POP_RANGE();
+  CUDF_PUSH_RANGE("sort");
+  thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
+  CUDF_POP_RANGE();
 
-    auto d_equal = [node_level      = node_levels.begin(),
-                    node_type       = node_type.begin(),
-                    parent_node_ids = parent_node_ids.begin(),
-                    d_hasher] __device__(auto node_id1, auto node_id2) {
-      if (node_id1 == node_id2) return true;
-      if (d_hasher(node_id1) != d_hasher(node_id2)) return false;
-      auto is_equal_level = [node_level, node_type](auto node_id1, auto node_id2) {
-        if (node_id1 == node_id2) return true;
-        return node_level[node_id1] == node_level[node_id2] and
-               node_type[node_id1] == node_type[node_id2];
-      };
-      // if both nodes have same node types at all levels, it will check until it has common parent
-      // or root.
-      while (node_id1 != parent_node_sentinel and node_id2 != parent_node_sentinel and
-             node_id1 != node_id2 and is_equal_level(node_id1, node_id2)) {
-        node_id1 = parent_node_ids[node_id1];
-        node_id2 = parent_node_ids[node_id2];
-      }
-      return node_id1 == node_id2;
-    };
-    CUDF_PUSH_RANGE("insert");
-    auto num_inserted = thrust::count_if(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_nodes),
-      [d_hasher,
-       d_equal,
-       view       = key_map.get_device_mutable_view(),
-       uq_node_id = col_id.begin()] __device__(auto node_id) mutable {
-        // typename hash_map_type::value_type const insert_pair{};
-        auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hasher, d_equal);
-        uq_node_id[node_id] = (it.first)->first;  // first.load(cuda::std::memory_order_relaxed);
-        return it.second;
-      });
-    CUDF_POP_RANGE();
-    auto num_columns = num_inserted;  // key_map.get_size() is not updated.
-    rmm::device_uvector<size_type> unique_keys(num_columns, stream);
-    CUDF_PUSH_RANGE("retrieve_all");
-    key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
-    CUDF_POP_RANGE();
-    CUDF_PUSH_RANGE("sort");
-    thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
-    stream.synchronize();
-    CUDF_POP_RANGE();
-
-    CUDF_PUSH_RANGE("lower_bound");
-    thrust::lower_bound(rmm::exec_policy(stream),
-                        unique_keys.begin(),
-                        unique_keys.end(),
-                        col_id.begin(),
-                        col_id.end(),
-                        col_id.begin());
-    stream.synchronize();
-    CUDF_POP_RANGE();
-  }
+  CUDF_PUSH_RANGE("lower_bound");
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      unique_keys.begin(),
+                      unique_keys.end(),
+                      col_id.begin(),
+                      col_id.end(),
+                      col_id.begin());
+  CUDF_POP_RANGE();
   rmm::device_uvector<size_type> parent_col_id(num_nodes, stream);
   CUDF_PUSH_RANGE("translate");
   thrust::transform(rmm::exec_policy(stream),
-                    parent_node_ids.begin(),
-                    parent_node_ids.end(),
+                    d_tree.parent_node_ids.begin(),
+                    d_tree.parent_node_ids.end(),
                     parent_col_id.begin(),
                     [col_id = col_id.begin()] __device__(auto node_id) {
                       return node_id >= 0 ? col_id[node_id] : parent_node_sentinel;
                     });
-  stream.synchronize();
-  CUDF_POP_RANGE();
 
   return {std::move(col_id), std::move(parent_col_id)};
 }
 
 /**
  * @brief Computes row indices of each node in the hierarchy.
- * 5. Generate row_offset.
+ * 2. Generate row_offset.
  *   a. filter only list childs
  *   b. stable_sort by parent_col_id.
  *   c. scan_by_key {parent_col_id} (done only on nodes who's parent is list)
@@ -740,21 +774,12 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 This algorithm assigns a unique column id to each node in the tree.
 The row offset is the row index of the node in that column id.
 Algorithm:
-1. Convert node_category+fieldname to node_type.
-  a. Create a hashmap to hash field name and assign unique node id as values.
-  b. Convert the node categories to node types.
-     Node type is defined as node category enum value if it is not a field node,
-     otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
-2. Set operation on entire path of each node
-  a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent until
-     root.
-  b. While creating hashmap, transform node id to unique node ids that are inserted into the
-     hash map This mimicks set operation with hash map.
-3. Generate col_id:
-  a. gather unique node ids from hash map.
-  b. sort and use binary search to generate column ids.
-  c. Translate parent node ids to parent column ids.
-4. Generate row_offset.
+1. Generate col_id:
+  a. Set operation on entire path of each node, translate each node id to set id.
+  b. gather unique set ids.
+  c. sort and use binary search to generate column ids.
+  d. Translate parent node ids to parent column ids.
+2. Generate row_offset.
   a. filter only list childs
   a. stable_sort by parent_col_id.
   b. scan_by_key {parent_col_id} (done only on nodes whose parent is a list)
@@ -767,17 +792,8 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // 1. Convert node_category + field_name to node_type.
+  auto [new_col_id, new_parent_col_id] = generate_column_id(d_input, d_tree, stream, mr);
 
-  // TODO scope limit this or mode inside generate_column_id
-  rmm::device_uvector<size_type> node_type =
-    hash_node_type_with_field_name(d_input, d_tree, stream);
-
-  // 3. Generate col_id.
-  auto [new_col_id, new_parent_col_id] =
-    generate_column_id(d_tree.node_levels, node_type, d_tree.parent_node_ids, stream, mr);
-
-  // 4. Generate row_offset.
   auto row_offsets = compute_row_offsets(std::move(new_parent_col_id), d_tree, stream, mr);
   return std::tuple{std::move(new_col_id), std::move(row_offsets)};
 }
