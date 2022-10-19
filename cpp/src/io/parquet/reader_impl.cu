@@ -1547,6 +1547,13 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               _timestamp_type.id());
+
+  // If the options passed in is an instance of `chunked_parquet_reader_options`, extract the
+  // `byte_limit` parameter.
+  if (auto const chunked_options = dynamic_cast<chunked_parquet_reader_options const*>(&options);
+      chunked_options) {
+    _chunk_read_limit = chunked_options->get_byte_limit();
+  }
 }
 
 std::pair<size_type, size_type> reader::impl::preprocess_file(
@@ -1787,13 +1794,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // purposes of decoding.
   // TODO: make this a parameter.
 
-  //      auto const chunked_read_size = 0;
+  //      auto const _chunk_read_limit = 0;
   preprocess_columns(_file_itm_data.chunks,
                      _file_itm_data.pages_info,
                      skip_rows_corrected,
                      num_rows_corrected,
                      uses_custom_row_bounds,
-                     chunked_read_size);
+                     _chunk_read_limit);
 
   return read_chunk_internal(uses_custom_row_bounds);
 }
@@ -1824,15 +1831,12 @@ table_with_metadata reader::impl::read_chunk()
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      // TODO: make this a parameter.
-
-      //      auto const chunked_read_size = 0;
       preprocess_columns(_file_itm_data.chunks,
                          _file_itm_data.pages_info,
                          skip_rows_corrected,
                          num_rows_corrected,
                          true /*uses_custom_row_bounds*/,
-                         chunked_read_size);
+                         _chunk_read_limit);
     }
     _file_preprocessed = true;
   }
@@ -1860,13 +1864,13 @@ bool reader::impl::has_next()
       // purposes of decoding.
       // TODO: make this a parameter.
 
-      //      auto const chunked_read_size = 0;
+      //      auto const _chunk_read_limit = 0;
       preprocess_columns(_file_itm_data.chunks,
                          _file_itm_data.pages_info,
                          skip_rows_corrected,
                          num_rows_corrected,
                          true /*uses_custom_row_bounds*/,
-                         chunked_read_size);
+                         _chunk_read_limit);
     }
     _file_preprocessed = true;
   }

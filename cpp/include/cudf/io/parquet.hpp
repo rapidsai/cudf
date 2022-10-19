@@ -90,6 +90,11 @@ class parquet_reader_options {
   explicit parquet_reader_options() = default;
 
   /**
+   * @brief Default destructor, needs to be virtual for polymorphism.
+   */
+  virtual ~parquet_reader_options() = default;
+
+  /**
    * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
    *
    * @param src Source information to read parquet file

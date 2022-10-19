@@ -97,6 +97,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedRead)
 
   cudf::io::chunked_parquet_reader_options in_opts =
     cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath});
+  in_opts.set_byte_limit(240000);
 
   cudf::io::chunked_parquet_reader reader(in_opts);
 
@@ -157,6 +158,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadString)
 
   cudf::io::chunked_parquet_reader_options in_opts =
     cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath});
+  in_opts.set_byte_limit(500000);
 
   cudf::io::chunked_parquet_reader reader(in_opts);
 

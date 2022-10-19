@@ -271,11 +271,11 @@ class reader::impl {
   cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
   cudf::io::parquet::gpu::chunk_intermediate_data _chunk_itm_data;
   std::vector<cudf::io::parquet::gpu::chunk_read_info> _chunk_read_info;
+  std::size_t _chunk_read_limit{0};
   std::size_t _current_read_chunk{0};
   bool _file_preprocessed{false};
 
   // TODO: Remove below
-  std::size_t chunked_read_size = 490000;
   parquet_reader_options const& _options;
 };
 
