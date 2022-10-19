@@ -58,7 +58,6 @@ def get_ptx_file():
             "installed cudf and strings_udf."
         )
 
-    suffix_a_sm = None
     regular_sms = []
 
     for f in files:
@@ -67,7 +66,7 @@ def get_ptx_file():
         if sm_number.endswith("a"):
             processed_sm_number = int(sm_number.rstrip("a"))
             if processed_sm_number == cc:
-                suffix_a_sm = (processed_sm_number, f)
+                return f
         else:
             regular_sms.append((int(sm_number), f))
 
@@ -76,13 +75,11 @@ def get_ptx_file():
     if regular_sms:
         regular_result = _get_appropriate_file(regular_sms, cc)
 
-    if suffix_a_sm is None and regular_result is None:
+    if regular_result is None:
         raise RuntimeError(
             "This strings_udf installation is missing the necessary PTX "
             f"files that are <={cc}."
         )
-    elif suffix_a_sm is not None:
-        return suffix_a_sm[1]
     else:
         return regular_result[1]
 
