@@ -1784,31 +1784,29 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     auto [skip_rows_corrected, num_rows_corrected] =
       preprocess_file(skip_rows, num_rows, row_group_list);
 
-    // todo: fix this (empty output may be incorrect)
-    if (!_file_itm_data.has_data) { return table_with_metadata{}; }
+    if (_file_itm_data.has_data) {
+      // - compute column sizes and allocate output buffers.
+      //   important:
+      //   for nested schemas, we have to do some further preprocessing to determine:
+      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+      //    of
+      //      nesting and it's size is the row count)
+      //
+      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+      // purposes of decoding.
+      // TODO: make this a parameter.
 
-    // - compute column sizes and allocate output buffers.
-    //   important:
-    //   for nested schemas, we have to do some further preprocessing to determine:
-    //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-    //    of
-    //      nesting and it's size is the row count)
-    //
-    // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-    // purposes of decoding.
-    // TODO: make this a parameter.
+      //      auto const _chunk_read_limit = 0;
+      preprocess_columns(_file_itm_data.chunks,
+                         _file_itm_data.pages_info,
+                         skip_rows_corrected,
+                         num_rows_corrected,
+                         uses_custom_row_bounds,
+                         _chunk_read_limit);
 
-    //      auto const _chunk_read_limit = 0;
-    preprocess_columns(_file_itm_data.chunks,
-                       _file_itm_data.pages_info,
-                       skip_rows_corrected,
-                       num_rows_corrected,
-                       uses_custom_row_bounds,
-                       _chunk_read_limit);
-
-    CUDF_EXPECTS(_chunk_read_info.size() == 1,
-                 "Reading the whole file should yield only one chunk.");
-
+      CUDF_EXPECTS(_chunk_read_info.size() == 1,
+                   "Reading the whole file should yield only one chunk.");
+    }
     _file_preprocessed = true;
   }
 
