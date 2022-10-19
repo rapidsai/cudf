@@ -85,6 +85,31 @@ struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
 {
+  auto constexpr num_rows = 400;
+  auto const filepath     = temp_env->get_temp_filepath("chunked_read_simple.parquet");
+
+  auto const values = thrust::make_counting_iterator(0);
+  auto const a      = int32s_col(values, values + num_rows);
+  auto const b      = int64s_col(values, values + num_rows);
+  auto const input  = cudf::table_view{{a, b}};
+
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input).build();
+  cudf::io::write_parquet(write_opts);
+
+  auto constexpr byte_limit       = 0;
+  auto const [result, num_chunks] = run_test(filepath, byte_limit);
+  EXPECT_EQ(num_chunks, 1);
+
+  cudf::test::print(a);
+  cudf::test::print(result->get_column(0).view());
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
+}
+
+#if 0
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
+{
   auto constexpr num_rows = 40'000;
   auto const filepath     = temp_env->get_temp_filepath("chunked_read_simple.parquet");
 
@@ -100,6 +125,9 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
   auto constexpr byte_limit       = 240'000;
   auto const [result, num_chunks] = run_test(filepath, byte_limit);
   EXPECT_EQ(num_chunks, 2);
+
+  cudf::test::print(result->get_column(0).view());
+
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
 
@@ -153,3 +181,5 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
   }
 }
+
+#endif
