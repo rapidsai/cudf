@@ -24,6 +24,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/io/datasource.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
@@ -246,10 +247,11 @@ struct ColumnChunkDesc {
 
 // TODO: rename?
 struct file_intermediate_data {
+  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  rmm::device_buffer decomp_page_data;
   hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
-  rmm::device_buffer decomp_page_data;
   bool has_data{false};
 };
 

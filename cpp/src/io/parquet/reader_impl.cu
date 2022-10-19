@@ -1586,7 +1586,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
   std::vector<size_type> chunk_source_map(num_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<std::unique_ptr<datasource::buffer>> page_data(num_chunks);
+  _file_itm_data.raw_page_data = std::vector<std::unique_ptr<datasource::buffer>>(num_chunks);
 
   // Keep track of column chunk file offsets
   std::vector<size_t> column_chunk_offsets(num_chunks);
@@ -1650,7 +1650,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
       }
     }
     // Read compressed chunk data to device memory
-    read_rowgroup_tasks.push_back(read_column_chunks(page_data,
+    read_rowgroup_tasks.push_back(read_column_chunks(_file_itm_data.raw_page_data,
                                                      _file_itm_data.chunks,
                                                      io_chunk_idx,
                                                      _file_itm_data.chunks.size(),
@@ -1677,7 +1677,8 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
       // Free compressed data
       for (size_t c = 0; c < _file_itm_data.chunks.size(); c++) {
         if (_file_itm_data.chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
-          page_data[c].reset();
+          _file_itm_data.raw_page_data[c].reset();
+          // TODO: Check if this is called
         }
       }
     }
