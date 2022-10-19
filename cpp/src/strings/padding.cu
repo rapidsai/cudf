@@ -20,8 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/pad_impl.cuh>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -38,6 +37,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
+
 struct compute_pad_output_length_fn {
   column_device_view d_strings;
   size_type width;
@@ -47,11 +47,7 @@ struct compute_pad_output_length_fn {
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
-    size_type bytes   = d_str.size_bytes();
-    size_type length  = d_str.length();
-    if (width > length)                            // no truncating
-      bytes += fill_char_size * (width - length);  // add padding
-    return bytes;
+    return compute_padded_size(d_str, width, fill_char_size);
   }
 };
 
@@ -96,13 +92,10 @@ std::unique_ptr<column> pad(
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
-        if (d_strings.is_null(idx)) return;
-        string_view d_str = d_strings.element<string_view>(idx);
-        auto length       = d_str.length();
-        char* ptr         = d_chars + d_offsets[idx];
-        while (length++ < width)
-          ptr += from_char_utf8(d_fill_char, ptr);
-        copy_string(ptr, d_str);
+        if (d_strings.is_valid(idx)) {
+          pad_impl<side_type::LEFT>(
+            d_strings.element<string_view>(idx), width, d_fill_char, d_chars + d_offsets[idx]);
+        }
       });
   } else if (side == side_type::RIGHT) {
     thrust::for_each_n(
@@ -110,13 +103,10 @@ std::unique_ptr<column> pad(
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
-        if (d_strings.is_null(idx)) return;
-        string_view d_str = d_strings.element<string_view>(idx);
-        auto length       = d_str.length();
-        char* ptr         = d_chars + d_offsets[idx];
-        ptr               = copy_string(ptr, d_str);
-        while (length++ < width)
-          ptr += from_char_utf8(d_fill_char, ptr);
+        if (d_strings.is_valid(idx)) {
+          pad_impl<side_type::RIGHT>(
+            d_strings.element<string_view>(idx), width, d_fill_char, d_chars + d_offsets[idx]);
+        }
       });
   } else if (side == side_type::BOTH) {
     thrust::for_each_n(
@@ -124,18 +114,10 @@ std::unique_ptr<column> pad(
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
-        if (d_strings.is_null(idx)) return;
-        string_view d_str = d_strings.element<string_view>(idx);
-        char* ptr         = d_chars + d_offsets[idx];
-        auto pad          = static_cast<int32_t>(width - d_str.length());
-        auto right_pad    = (width & 1) ? pad / 2 : (pad - pad / 2);  // odd width = right-justify
-        auto left_pad =
-          pad - right_pad;  // e.g. width=7 gives "++foxx+" while width=6 gives "+fox++"
-        while (left_pad-- > 0)
-          ptr += from_char_utf8(d_fill_char, ptr);
-        ptr = copy_string(ptr, d_str);
-        while (right_pad-- > 0)
-          ptr += from_char_utf8(d_fill_char, ptr);
+        if (d_strings.is_valid(idx)) {
+          pad_impl<side_type::BOTH>(
+            d_strings.element<string_view>(idx), width, d_fill_char, d_chars + d_offsets[idx]);
+        }
       });
   }
 
@@ -174,19 +156,10 @@ std::unique_ptr<column> zfill(
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      input.size(),
                      [d_strings, width, d_offsets, d_chars] __device__(size_type idx) {
-                       if (d_strings.is_null(idx)) return;
-                       auto d_str   = d_strings.element<string_view>(idx);
-                       auto length  = d_str.length();
-                       auto in_ptr  = d_str.data();
-                       auto out_ptr = d_chars + d_offsets[idx];
-                       // if the string starts with a sign, output the sign first
-                       if (!d_str.empty() && (*in_ptr == '-' || *in_ptr == '+')) {
-                         *out_ptr++ = *in_ptr++;
-                         d_str      = string_view{in_ptr, d_str.size_bytes() - 1};
+                       if (d_strings.is_valid(idx)) {
+                         zfill_impl(
+                           d_strings.element<string_view>(idx), width, d_chars + d_offsets[idx]);
                        }
-                       while (length++ < width)
-                         *out_ptr++ = '0';  // prepend zero char
-                       copy_string(out_ptr, d_str);
                      });
 
   return make_strings_column(input.size(),

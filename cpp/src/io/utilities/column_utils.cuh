@@ -64,7 +64,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
     iter,
     iter + parent_table_device_view.num_columns(),
     [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(
-      size_type index) mutable {
+      size_type index) {
       col_desc[index].parent_column = parent_col_view.begin() + index;
       column_device_view col        = parent_col_view.column(index);
       // traverse till leaf column
@@ -74,7 +74,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
                              : col.child(0);
         // stop early if writing a byte array
         if (col_desc[index].stats_dtype == dtype_byte_array &&
-            (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
+            child.type().id() == type_id::UINT8) {
           break;
         }
         col = child;

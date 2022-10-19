@@ -889,7 +889,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
-""",
+""",  # noqa: E501
             example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
@@ -2998,7 +2998,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def digitize(self, bins, right=False):
-        """Return the indices of the bins to which each value in series belongs.
+        """Return the indices of the bins to which each value belongs.
 
         Notes
         -----

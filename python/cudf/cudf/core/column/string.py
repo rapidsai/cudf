@@ -3623,6 +3623,70 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
+    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
+        """
+        Find all first occurrences of patterns in the Series/Index.
+
+        Parameters
+        ----------
+        patterns : array-like, Sequence or Series
+            Patterns to search for in the given Series/Index.
+
+        Returns
+        -------
+        Series
+            A Series with a list of indices of each pattern's first occurrence.
+            If a pattern is not found, -1 is returned for that index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["strings", "to", "search", "in"])
+        >>> s
+        0    strings
+        1         to
+        2     search
+        3         in
+        dtype: object
+        >>> t = cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"])
+        >>> t
+        0         a
+        1    string
+        2         g
+        3       inn
+        4         o
+        5         r
+        6       sea
+        dtype: object
+        >>> s.str.find_multiple(t)
+        0       [-1, 0, 5, -1, -1, 2, -1]
+        1     [-1, -1, -1, -1, 1, -1, -1]
+        2       [2, -1, -1, -1, -1, 3, 0]
+        3    [-1, -1, -1, -1, -1, -1, -1]
+        dtype: list
+        """
+        if can_convert_to_column(patterns):
+            patterns_column = column.as_column(patterns)
+        else:
+            raise TypeError(
+                "patterns should be an array-like or a Series object, "
+                f"found {type(patterns)}"
+            )
+
+        if not isinstance(patterns_column, StringColumn):
+            raise TypeError(
+                "patterns can only be of 'string' dtype, "
+                f"got: {patterns_column.dtype}"
+            )
+
+        return cudf.Series(
+            libstrings.find_multiple(self._column, patterns_column),
+            index=self._parent.index
+            if isinstance(self._parent, cudf.Series)
+            else self._parent,
+            name=self._parent.name,
+        )
+
     def isempty(self) -> SeriesOrIndex:
         """
         Check whether each string is an empty string.
