@@ -91,6 +91,22 @@ TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
+TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange2)
+{
+  auto delimiter  = std::string(":");
+  auto host_input = std::string("abcdefg:");
+
+  auto expected = strings_column_wrapper{"abcdefg:"};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(
+    *source,
+    delimiter,
+    cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size() - 1)});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
 TEST_F(MultibyteSplitTest, LargeInputSparse)
 {
   auto host_input    = std::string(1024 * 1024 * 32, '.');
@@ -155,6 +171,22 @@ TEST_F(MultibyteSplitTest, DelimiterErasure)
 
   cudf::io::text::parse_options options;
   options.strip_delimiters = true;
+  auto source              = cudf::io::text::make_source(host_input);
+  auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, DelimiterErasureByteRange)
+{
+  auto delimiter = "\r\n";
+
+  auto host_input = std::string("line\r\nanother line\r\nthird line\r\n");
+  auto expected   = strings_column_wrapper{"line", "another line", "third line"};
+
+  cudf::io::text::parse_options options;
+  options.strip_delimiters = true;
+  options.byte_range       = cudf::io::text::byte_range_info(0, host_input.size() - 1);
   auto source              = cudf::io::text::make_source(host_input);
   auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
 

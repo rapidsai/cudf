@@ -761,7 +761,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto global_offsets = row_offset_storage.gather(stream, mr);
 
   bool const insert_begin = *first_row_offset == 0;
-  bool const insert_end   = not last_row_offset.has_value() or last_row_offset == chunk_offset;
+  // insert a value at the end either if we found no delimiter past the byte range (to complete the
+  // last row), or if we found a delimiter at the very end (to add an empty row for the entry after
+  // the delimiter)
+  bool const insert_end = not last_row_offset.has_value() or
+                          (last_row_offset == chunk_offset and chunk_offset <= byte_range_end);
   rmm::device_uvector<int32_t> offsets{
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
@@ -782,10 +786,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       [ofs        = offsets.data(),
        chars      = chars.data(),
        delim_size = static_cast<size_type>(delimiter.size()),
-       last_row   = static_cast<size_type>(string_count) - 1] __device__(size_type row) {
+       last_row   = static_cast<size_type>(string_count) - 1,
+       insert_end] __device__(size_type row) {
         auto const begin = ofs[row];
         auto const len   = ofs[row + 1] - begin;
-        if (row == last_row) {
+        if (row == last_row && insert_end) {
           return thrust::make_pair(chars + begin, len);
         } else {
           return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
