@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cuda_runtime.h>
+
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
 #include <stdexcept>
 #include <unordered_map>
-
-#include <cuda_runtime.h>
 
 /**
  * @brief Print a backtrace and raise an error if stream is a default stream.
@@ -285,6 +288,23 @@ DEFINE_OVERLOAD(cudaMallocAsync,
 DEFINE_OVERLOAD(cudaMallocFromPoolAsync,
                 ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
                 ARG(ptr, size, memPool, stream));
+
+namespace cudf {
+
+/**
+ * @brief Get the current default stream
+ *
+ * Overload the default function to return a new stream here.
+ *
+ * @return The current default stream.
+ */
+rmm::cuda_stream_view const get_default_stream()
+{
+  static rmm::cuda_stream stream{};
+  return {stream};
+}
+
+}  // namespace cudf
 
 /**
  * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.
