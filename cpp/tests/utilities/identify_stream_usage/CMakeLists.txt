@@ -14,11 +14,23 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
+if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
+  file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.12/RAPIDS.cmake
+       ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
+  )
+endif()
+include(${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
+
 project(
   IDENTIFY_STREAM_USAGE
   VERSION 0.0.1
   LANGUAGES CXX CUDA
 )
+
+include(rapids-cpm)
+include(${rapids-cmake-dir}/cpm/rmm.cmake)
+rapids_cpm_init()
+rapids_cpm_rmm()
 
 set(CMAKE_CUDA_RUNTIME_LIBRARY SHARED)
 add_library(identify_stream_usage SHARED identify_stream_usage.cpp)
@@ -26,7 +38,7 @@ add_library(identify_stream_usage SHARED identify_stream_usage.cpp)
 find_package(CUDAToolkit REQUIRED)
 
 set_target_properties(identify_stream_usage PROPERTIES CUDA_RUNTIME_LIBRARY SHARED)
-target_link_libraries(identify_stream_usage PUBLIC CUDA::cudart)
+target_link_libraries(identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
 
 set_target_properties(
   identify_stream_usage
