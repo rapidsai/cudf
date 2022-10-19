@@ -848,7 +848,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
-                                          size_t num_rows)
+                                          size_t num_rows,
+                                          int page_idx = 0)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -944,15 +945,30 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // first row within the page to output
       if (page_start_row >= min_row) {
         s->first_row = 0;
+        if(page_idx == 1){
+          printf("A: %lu, %lu\n", page_start_row, min_row);
+        }
       } else {
         s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
+        if(page_idx == 1){
+          printf("B: %lu, %lu, %d\n", min_row, page_start_row, s->page.num_rows);
+        }
       }
       // # of rows within the page to output
       s->num_rows = s->page.num_rows;
+      if(page_idx == 1){
+        printf("X: %lu, %d, %d, %lu, %lu, %d\n", page_start_row, s->first_row, s->num_rows, min_row, num_rows, s->page.num_rows);
+      }
       if ((page_start_row + s->first_row) + s->num_rows > min_row + num_rows) {
         s->num_rows =
           (int32_t)max((int64_t)(min_row + num_rows - (page_start_row + s->first_row)), INT64_C(0));
+        if(page_idx == 1){
+          printf("C: %lu, %d, %d, %lu, %lu\n", page_start_row, s->first_row, s->num_rows, min_row, num_rows);
+        }          
       }
+      if(page_idx == 1){
+        printf("FF: %d, %d, %d\n", s->first_row, s->num_rows, s->page.num_rows);
+      }  
 
       // during the decoding step we need to offset the global output buffers
       // for each level of nesting so that we write to the section this page
@@ -1436,33 +1452,28 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
     // computing the full size of the column.  on the second pass, we will know our actual row
     // bounds, so the computation will cap sizes properly.
     int in_row_bounds                = 1;
-    auto const first_thread_in_range = [&]() {
-      if (bounds_set) {
-        // absolute row index
-        int32_t thread_row_index =
-          input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
-        in_row_bounds = thread_row_index >= s->row_index_lower_bound &&
-                            thread_row_index < (s->first_row + s->num_rows)
-                          ? 1
-                          : 0;
+    if (bounds_set) {
+      // absolute row index
+      int32_t thread_row_index =
+        input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
+      in_row_bounds = thread_row_index >= s->row_index_lower_bound &&
+                          thread_row_index < (s->first_row + s->num_rows)
+                        ? 1
+                        : 0;
 
-        uint32_t const row_bounds_mask  = ballot(in_row_bounds);
-        int const first_thread_in_range = __ffs(row_bounds_mask) - 1;
+      uint32_t const row_bounds_mask  = ballot(in_row_bounds);
+      int const first_thread_in_range = __ffs(row_bounds_mask) - 1;
 
-        // if we've found the beginning of the first row, mark down the position
-        // in the def/repetition buffer (skipped_values) and the data buffer (skipped_leaf_values)
-        if (!t && first_thread_in_range >= 0 && s->page.skipped_values < 0) {
-          // how many values we've skipped in the rep/def levels
-          s->page.skipped_values = input_value_count + first_thread_in_range;
-          // how many values we've skipped in the actual data stream
-          s->page.skipped_leaf_values =
-            input_leaf_count + __popc(warp_leaf_count_mask & ((1 << first_thread_in_range) - 1));
-        }
-
-        return first_thread_in_range;
+      // if we've found the beginning of the first row, mark down the position
+      // in the def/repetition buffer (skipped_values) and the data buffer (skipped_leaf_values)
+      if (!t && first_thread_in_range >= 0 && s->page.skipped_values < 0) {
+        // how many values we've skipped in the rep/def levels
+        s->page.skipped_values = input_value_count + first_thread_in_range;
+        // how many values we've skipped in the actual data stream
+        s->page.skipped_leaf_values =
+          input_leaf_count + __popc(warp_leaf_count_mask & ((1 << first_thread_in_range) - 1));
       }
-      return 0;
-    }();
+    }
 
     // increment counts across all nesting depths
     for (int s_idx = 0; s_idx < max_depth; s_idx++) {
@@ -1515,120 +1526,6 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   }
 }
 
-#if 0
-/**
- * @brief Kernel for computing per-page column size information for all nesting levels.
- *
- * This function will write out the size field for each level of nesting.
- *
- * @param pages List of pages
- * @param chunks List of column chunks
- * @param min_row Row index to start reading at
- * @param num_rows Maximum number of rows to read. Pass as INT_MAX to guarantee reading all rows.
- * @param trim_pass Whether or not this is the trim pass.  We first have to compute
- * the full size information of every page before we come through in a second (trim) pass
- * to determine what subset of rows in this page we should be reading.
- */
-__global__ void __launch_bounds__(block_size)
-  gpuComputePageSizes(PageInfo* pages,
-                      device_span<ColumnChunkDesc const> chunks,
-                      size_t min_row,
-                      size_t num_rows,
-                      bool trim_pass)
-{
-  __shared__ __align__(16) page_state_s state_g;
-
-  page_state_s* const s = &state_g;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
-  PageInfo* pp          = &pages[page_idx];
-  
-  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
-    return;
-  }
-
-  // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
-  // containing lists anywhere within).
-  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
-  bool const is_string_column = (s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4;
-
-  if(!t){
-    printf("is_string_column: %d\n", (int)is_string_column);
-  }
-
-  // if this is a flat hierarchy (no lists) and is not a string column, compute the size directly from the number of values.  
-  if (!has_repetition && !is_string_column) {
-    if (!t) {
-      for (size_type idx = 0; idx < pp->num_nesting_levels; idx++) {
-        pp->nesting[idx].size = pp->num_input_values;
-      }
-    }
-    return;
-  }
-
-  // zero sizes
-  int d = 0;
-  while (d < s->page.num_nesting_levels) {
-    if (d + t < s->page.num_nesting_levels) { s->page.nesting[d + t].size = 0; }
-    d += blockDim.x;
-  }
-  if (!t) {
-    s->page.skipped_values      = -1;
-    s->page.skipped_leaf_values = -1;
-    s->page.str_bytes           = 0;
-    s->input_row_count          = 0;
-    s->input_value_count        = 0;    
-
-    // if this isn't the trim pass, make sure we visit absolutely everything
-    if (!trim_pass) {
-      s->first_row             = 0;
-      s->num_rows              = INT_MAX;
-      s->row_index_lower_bound = -1;
-    }
-  }
-  __syncthreads();
-
-  // optimization : it might be useful to have a version of gpuDecodeStream that could go wider than
-  // 1 warp.  Currently it only uses 1 warp so that it can overlap work with the value decoding step
-  // when in the actual value decoding kernel. However, during this preprocess step we have no such
-  // limits -  we could go as wide as block_size
-  if (t < 32) {
-    constexpr int batch_size = 32;
-    int target_input_count   = batch_size;
-    while (!s->error && s->input_value_count < s->num_input_values) {      
-      // decode repetition and definition levels. these will attempt to decode at
-      // least up to the target, but may decode a few more.
-      if(has_repetition){
-        gpuDecodeStream(s->rep, s, target_input_count, t, level_type::REPETITION);
-      }
-      gpuDecodeStream(s->def, s, target_input_count, t, level_type::DEFINITION);
-      __syncwarp();
-
-      // we may have decoded different amounts from each stream, so only process what we've been
-      int actual_input_count = has_repetition ? min(s->lvl_count[level_type::REPETITION],
-                                                  s->lvl_count[level_type::DEFINITION])
-                                              : s->lvl_count[level_type::DEFINITION];
-
-      // process what we got back
-      if(is_string_column){
-        gpuUpdatePageSizes<true>(s, actual_input_count, t, trim_pass);
-      } else {
-        gpuUpdatePageSizes<false>(s, actual_input_count, t, trim_pass);
-      }
-      
-      target_input_count = actual_input_count + batch_size;
-      __syncwarp();
-    }
-  }
-  // update # rows in the actual page
-  if (!t) {
-    pp->num_rows            = s->page.nesting[0].size;
-    pp->skipped_values      = s->page.skipped_values;
-    pp->skipped_leaf_values = s->page.skipped_leaf_values;
-  }
-}
-#endif
-
 /**
  * @brief Kernel for computing per-page column size information for all nesting levels.
  *
@@ -1656,7 +1553,7 @@ __global__ void __launch_bounds__(block_size)
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
-  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX)) {
+  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX, page_idx)) {
     return;
   }
 
