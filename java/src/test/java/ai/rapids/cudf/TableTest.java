@@ -6952,7 +6952,7 @@ public class TableTest extends CudfTestBase {
             .decimal32Column(-3, 1, -2, 2, 4, 3)
             .decimal64Column(-8, 100001L, -200002L, 200002L, 400004L, 300003L)
             .build();
-         Table result = srcTable.scatter(scatterMap, targetTable, false)) {
+         Table result = srcTable.scatter(scatterMap, targetTable)) {
       assertTablesAreEqual(expected, result);
     }
   }
@@ -6970,7 +6970,7 @@ public class TableTest extends CudfTestBase {
             .column(0, -2, 0, -4, 0)
             .column("A", "BB", "A", "BBBB", "A")
             .build();
-         Table result = Table.scatter(new Scalar[] { s1, s2 }, scatterMap, targetTable, false)) {
+         Table result = Table.scatter(new Scalar[] { s1, s2 }, scatterMap, targetTable)) {
        assertTablesAreEqual(expected, result);
      }
   }
