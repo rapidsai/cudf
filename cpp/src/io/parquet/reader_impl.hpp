@@ -100,6 +100,13 @@ class reader::impl {
   bool has_next();
 
  private:
+  // TODO
+  void preprocess_file_and_columns(size_type skip_rows,
+                                   size_type num_rows,
+                                   bool uses_custom_row_bounds,
+                                   const std::vector<std::vector<size_type>>& row_group_list);
+
+  // TODO
   table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
 
   /**

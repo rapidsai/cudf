@@ -1556,6 +1556,46 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   }
 }
 
+void reader::impl::preprocess_file_and_columns(
+  size_type skip_rows,
+  size_type num_rows,
+  bool uses_custom_row_bounds,
+  std::vector<std::vector<size_type>> const& row_group_list)
+{
+  if (_file_preprocessed) { return; }
+
+  auto [skip_rows_corrected, num_rows_corrected] =
+    preprocess_file(skip_rows, num_rows, row_group_list);
+
+  if (_file_itm_data.has_data) {
+    // - compute column sizes and allocate output buffers.
+    //   important:
+    //   for nested schemas, we have to do some further preprocessing to determine:
+    //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+    //    of
+    //      nesting and it's size is the row count)
+    //
+    // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+    // purposes of decoding.
+    // TODO: make this a parameter.
+
+    //      auto const _chunk_read_limit = 0;
+    preprocess_columns(_file_itm_data.chunks,
+                       _file_itm_data.pages_info,
+                       skip_rows_corrected,
+                       num_rows_corrected,
+                       uses_custom_row_bounds,
+                       _chunk_read_limit);
+
+    if (_chunk_read_limit == 0) {
+      CUDF_EXPECTS(_chunk_read_info.size() == 1,
+                   "Reading the whole file should yield only one chunk.");
+    }
+  }
+
+  _file_preprocessed = true;
+}
+
 std::pair<size_type, size_type> reader::impl::preprocess_file(
   size_type skip_rows,
   size_type num_rows,
@@ -1780,36 +1820,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 {
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
 
-  if (!_file_preprocessed) {
-    auto [skip_rows_corrected, num_rows_corrected] =
-      preprocess_file(skip_rows, num_rows, row_group_list);
-
-    if (_file_itm_data.has_data) {
-      // - compute column sizes and allocate output buffers.
-      //   important:
-      //   for nested schemas, we have to do some further preprocessing to determine:
-      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-      //    of
-      //      nesting and it's size is the row count)
-      //
-      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-      // purposes of decoding.
-      // TODO: make this a parameter.
-
-      //      auto const _chunk_read_limit = 0;
-      preprocess_columns(_file_itm_data.chunks,
-                         _file_itm_data.pages_info,
-                         skip_rows_corrected,
-                         num_rows_corrected,
-                         uses_custom_row_bounds,
-                         _chunk_read_limit);
-
-      CUDF_EXPECTS(_chunk_read_info.size() == 1,
-                   "Reading the whole file should yield only one chunk.");
-    }
-    _file_preprocessed = true;
-  }
-
+  preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds, row_group_list);
   return read_chunk_internal(uses_custom_row_bounds);
 }
 
@@ -1825,64 +1836,13 @@ table_with_metadata reader::impl::read_chunk()
                                 _timestamp_type.id());
   }
 
-  if (!_file_preprocessed) {
-    [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
-
-    // todo: fix this (empty output may be incorrect)
-    if (_file_itm_data.has_data) {
-      // - compute column sizes and allocate output buffers.
-      //   important:
-      //   for nested schemas, we have to do some further preprocessing to determine:
-      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-      //    of
-      //      nesting and it's size is the row count)
-      //
-      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-      // purposes of decoding.
-      preprocess_columns(_file_itm_data.chunks,
-                         _file_itm_data.pages_info,
-                         skip_rows_corrected,
-                         num_rows_corrected,
-                         true /*uses_custom_row_bounds*/,
-                         _chunk_read_limit);
-    }
-    _file_preprocessed = true;
-  }
-
+  preprocess_file_and_columns(0, -1, true, {});
   return read_chunk_internal(true);
 }
 
 bool reader::impl::has_next()
 {
-  printf("prepr: %d\n", (int)_file_preprocessed);
-
-  if (!_file_preprocessed) {
-    [[maybe_unused]] auto [skip_rows_corrected, num_rows_corrected] = preprocess_file(0, -1, {});
-
-    // todo: fix this (empty output may be incorrect)
-    if (_file_itm_data.has_data) {
-      // - compute column sizes and allocate output buffers.
-      //   important:
-      //   for nested schemas, we have to do some further preprocessing to determine:
-      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-      //    of
-      //      nesting and it's size is the row count)
-      //
-      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-      // purposes of decoding.
-      // TODO: make this a parameter.
-
-      //      auto const _chunk_read_limit = 0;
-      preprocess_columns(_file_itm_data.chunks,
-                         _file_itm_data.pages_info,
-                         skip_rows_corrected,
-                         num_rows_corrected,
-                         true /*uses_custom_row_bounds*/,
-                         _chunk_read_limit);
-    }
-    _file_preprocessed = true;
-  }
-
+  preprocess_file_and_columns(0, -1, true, {});
   return _current_read_chunk < _chunk_read_info.size();
 }
 
