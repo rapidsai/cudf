@@ -30,6 +30,7 @@
 #include <cudf/io/text/detail/tile_state.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -776,50 +777,24 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                     });
   auto string_count = offsets.size() - 1;
   if (strip_delimiters) {
-    rmm::device_uvector<int32_t> new_offsets{offsets.size(), stream, mr};
-    auto const it = cudf::detail::make_counting_transform_iterator(
-      int32_t{0},
+    auto it = cudf::detail::make_counting_transform_iterator(
+      0,
       [ofs        = offsets.data(),
-       delim_size = static_cast<int32_t>(delimiter.size()),
-       last_row   = static_cast<int32_t>(string_count) - 1,
-       insert_end] __device__(int32_t i) {
-        // if we inserted a virtual delimiter at the end, we musn't strip it
-        if (i == last_row && insert_end) {
-          return ofs[i + 1] - ofs[i];
+       chars      = chars.data(),
+       delim_size = static_cast<size_type>(delimiter.size()),
+       last_row   = static_cast<size_type>(string_count) - 1] __device__(size_type row) {
+        auto const begin = ofs[row];
+        auto const len   = ofs[row + 1] - begin;
+        if (row == last_row) {
+          return thrust::make_pair(chars + begin, len);
         } else {
-          return std::max(ofs[i + 1] - ofs[i] - delim_size, 0);
-        }
+          return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
+        };
       });
-    new_offsets.set_element_to_zero_async(0, stream);
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), it, it + offsets.size() - 1, new_offsets.begin() + 1);
-    auto const new_char_count = static_cast<std::size_t>(new_offsets.back_element(stream));
-    rmm::device_uvector<char> new_chars{new_char_count, stream, mr};
-    // copy the chars over in striped accesses of slice_size chars, 8 chars per thread on avg
-    auto const slice_size  = cudf::util::div_rounding_up_safe(new_char_count, string_count * 8);
-    auto const counting_it = thrust::make_counting_iterator(std::size_t{});
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       counting_it,
-                       string_count * slice_size,
-                       [chars     = chars.data(),
-                        new_chars = new_chars.data(),
-                        ofs       = offsets.data(),
-                        new_ofs   = new_offsets.data(),
-                        slice_size] __device__(std::size_t i) {
-                         auto const row       = i / slice_size;
-                         auto const stripe    = i % slice_size;
-                         auto const in_begin  = ofs[row];
-                         auto const out_begin = new_ofs[row];
-                         auto const out_size  = new_ofs[row + 1] - out_begin;
-                         for (int32_t i = stripe; i < out_size; i += slice_size) {
-                           new_chars[out_begin + i] = chars[in_begin + i];
-                         }
-                       });
-    offsets = std::move(new_offsets);
-    chars   = std::move(new_chars);
+    return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
+  } else {
+    return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars));
   }
-
-  return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars));
 }
 
 }  // namespace detail
