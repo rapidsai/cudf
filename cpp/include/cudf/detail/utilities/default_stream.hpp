@@ -29,7 +29,7 @@ namespace detail {
  * Use this value to ensure the correct stream is used when compiled with per
  * thread default stream.
  */
-extern rmm::cuda_stream_view default_stream_value;
+extern rmm::cuda_stream_view const default_stream_value;
 
 }  // namespace detail
 
