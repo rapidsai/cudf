@@ -942,33 +942,23 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
-      // first row within the page to output
-      if (page_start_row >= min_row) {
-        s->first_row = 0;
-        if(page_idx == 1){
-          printf("A: %lu, %lu\n", page_start_row, min_row);
+      // NOTE: s->page.num_rows, s->col.chunk_row, s->first_row and s->num_rows will be 
+      // invalid/bogus during first pass of the preprocess step for nested types. this is ok
+      // because we ignore these values in that stage.
+      {
+        // first row within the page to output
+        if (page_start_row >= min_row) {
+          s->first_row = 0;
+        } else {
+          s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
         }
-      } else {
-        s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
-        if(page_idx == 1){
-          printf("B: %lu, %lu, %d\n", min_row, page_start_row, s->page.num_rows);
+        // # of rows within the page to output
+        s->num_rows = s->page.num_rows;
+        if ((page_start_row + s->first_row) + s->num_rows > min_row + num_rows) {
+          s->num_rows =
+            (int32_t)max((int64_t)(min_row + num_rows - (page_start_row + s->first_row)), INT64_C(0));
         }
       }
-      // # of rows within the page to output
-      s->num_rows = s->page.num_rows;
-      if(page_idx == 1){
-        printf("X: %lu, %d, %d, %lu, %lu, %d\n", page_start_row, s->first_row, s->num_rows, min_row, num_rows, s->page.num_rows);
-      }
-      if ((page_start_row + s->first_row) + s->num_rows > min_row + num_rows) {
-        s->num_rows =
-          (int32_t)max((int64_t)(min_row + num_rows - (page_start_row + s->first_row)), INT64_C(0));
-        if(page_idx == 1){
-          printf("C: %lu, %d, %d, %lu, %lu\n", page_start_row, s->first_row, s->num_rows, min_row, num_rows);
-        }          
-      }
-      if(page_idx == 1){
-        printf("FF: %d, %d, %d\n", s->first_row, s->num_rows, s->page.num_rows);
-      }  
 
       // during the decoding step we need to offset the global output buffers
       // for each level of nesting so that we write to the section this page
