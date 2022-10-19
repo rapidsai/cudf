@@ -35,7 +35,7 @@ class udf_string;
  * No string data is copied so the input column controls the lifetime of the
  * underlying strings.
  *
- * New device memory is allocated and returned to hold just  the string_view instances.
+ * New device memory is allocated and returned to hold just the string_view instances.
  *
  * @param input Strings column to convert to a string_view array.
  * @return Array of string_view objects in device memory
@@ -51,7 +51,7 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
  * device memory buffers.
  *
  * @param d_strings Pointer to device memory of udf_string objects
- * @param size The number of elements in the buffer array
+ * @param size The number of elements in the d_strings array
  * @return A strings column copy of the udf_string objects
  */
 std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
