@@ -56,51 +56,6 @@
 
 #include <limits>
 
-#define _CONCAT_(x, y) x##y
-#define CONCAT(x, y)   _CONCAT_(x, y)
-
-#define NVTX3_PUSH_RANGE_IN(D, tag)                                                            \
-  ::nvtx3::registered_message<D> const CONCAT(nvtx3_range_name__, __LINE__){std::string(tag)}; \
-  ::nvtx3::event_attributes const CONCAT(nvtx3_range_attr__,                                   \
-                                         __LINE__){CONCAT(nvtx3_range_name__, __LINE__)};      \
-  nvtxDomainRangePushEx(::nvtx3::domain::get<D>(), CONCAT(nvtx3_range_attr__, __LINE__).get());
-
-#define NVTX3_POP_RANGE(D) nvtxDomainRangePop(::nvtx3::domain::get<D>());
-
-#define CUDF_PUSH_RANGE(tag) NVTX3_PUSH_RANGE_IN(cudf::libcudf_domain, tag)
-#define CUDF_POP_RANGE()     NVTX3_POP_RANGE(cudf::libcudf_domain)
-#define NVTX3_SCOPED_RANGE_IN(D, tag)                                                     \
-  ::nvtx3::registered_message<D> const CONCAT(nvtx3_scope_name__, __LINE__){tag};         \
-  ::nvtx3::event_attributes const CONCAT(nvtx3_scope_attr__,                              \
-                                         __LINE__){CONCAT(nvtx3_scope_name__, __LINE__)}; \
-  ::nvtx3::domain_thread_range<D> const CONCAT(nvtx3_range__,                             \
-                                               __LINE__){CONCAT(nvtx3_scope_attr__, __LINE__)};
-
-#define CUDF_SCOPED_RANGE(tag) NVTX3_SCOPED_RANGE_IN(cudf::libcudf_domain, tag)
-
-auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
-auto print_vec = [](auto const& cpu, auto const name, auto converter) {
-  for (auto const& v : cpu)
-    printf("%3s,", converter(v).c_str());
-  std::cout << name << std::endl;
-};
-
-template <typename T>
-auto translate_col_id(T const& col_id)
-{
-  using value_type = typename T::value_type;
-  std::unordered_map<value_type, value_type> col_id_map;
-  std::vector<value_type> new_col_ids(col_id.size());
-  value_type unique_id = 0;
-  for (auto id : col_id) {
-    if (col_id_map.count(id) == 0) { col_id_map[id] = unique_id++; }
-  }
-  for (size_t i = 0; i < col_id.size(); i++) {
-    new_col_ids[i] = col_id_map[col_id[i]];
-  }
-  return new_col_ids;
-}
-
 namespace cudf::io::json {
 namespace detail {
 
@@ -469,7 +424,6 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
-  CUDF_PUSH_RANGE("insert_if");
   auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
                               auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
   key_map.insert_if(iter,
@@ -479,14 +433,13 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                     d_hasher,
                     d_equal,
                     stream.value());
-  CUDF_POP_RANGE();
+
   auto get_hash_value =
     [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(auto node_id) -> size_type {
     auto it = key_map.find(node_id, d_hasher, d_equal);
     return (it == key_map.end()) ? size_type{0} : it->second.load(cuda::std::memory_order_relaxed);
   };
 
-  CUDF_PUSH_RANGE("tabulate");
   // convert field nodes to node indices, and other nodes to enum value.
   rmm::device_uvector<size_type> node_type(num_nodes, stream);
   thrust::tabulate(rmm::exec_policy(stream),
@@ -500,7 +453,6 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                      else
                        return static_cast<size_type>(node_categories[node_id]);
                    });
-  CUDF_POP_RANGE();
   return node_type;
 }
 
@@ -558,13 +510,11 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
     return hash;
   };
 
-  CUDF_PUSH_RANGE("hasher");
   rmm::device_uvector<hash_value_type> node_hash(num_nodes, stream);
   thrust::tabulate(rmm::exec_policy(stream), node_hash.begin(), node_hash.end(), d_hasher);
   auto d_hashed_cache = [node_hash = node_hash.begin()] __device__(auto node_id) {
     return node_hash[node_id];
   };
-  CUDF_POP_RANGE();
 
   auto d_equal = [node_level      = node_levels.begin(),
                   node_type       = node_type.begin(),
@@ -586,7 +536,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
     }
     return node_id1 == node_id2;
   };
-  CUDF_PUSH_RANGE("insert");
+
+  // insert and convert node ids to unique set ids
   auto num_inserted = thrust::count_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -600,12 +551,11 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
       uq_node_id[node_id] = (it.first)->first;  // first.load(cuda::std::memory_order_relaxed);
       return it.second;
     });
-  CUDF_POP_RANGE();
+
   auto num_columns = num_inserted;  // key_map.get_size() is not updated.
   rmm::device_uvector<size_type> unique_keys(num_columns, stream);
-  CUDF_PUSH_RANGE("retrieve_all");
   key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
-  CUDF_POP_RANGE();
+
   return {std::move(col_id), std::move(unique_keys)};
 }
 
@@ -647,20 +597,15 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
     return hash_node_path(d_tree.node_levels, node_type, d_tree.parent_node_ids, stream, mr);
   }();
 
-  CUDF_PUSH_RANGE("sort");
   thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
-  CUDF_POP_RANGE();
-
-  CUDF_PUSH_RANGE("lower_bound");
   thrust::lower_bound(rmm::exec_policy(stream),
                       unique_keys.begin(),
                       unique_keys.end(),
                       col_id.begin(),
                       col_id.end(),
                       col_id.begin());
-  CUDF_POP_RANGE();
+
   rmm::device_uvector<size_type> parent_col_id(num_nodes, stream);
-  CUDF_PUSH_RANGE("translate");
   thrust::transform(rmm::exec_policy(stream),
                     d_tree.parent_node_ids.begin(),
                     d_tree.parent_node_ids.end(),
@@ -697,12 +642,11 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = d_tree.node_categories.size();
-  CUDF_PUSH_RANGE("seq");
+
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-  CUDF_POP_RANGE();
+
   // filter only list childs. (nodes who's parent is a list/root)
-  CUDF_PUSH_RANGE("remove_if");
   auto list_parent_end =
     thrust::remove_if(rmm::exec_policy(stream),
                       thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()),
@@ -713,35 +657,30 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
                       });
   auto num_list_parent = thrust::distance(
     thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
-  CUDF_POP_RANGE();
-  CUDF_PUSH_RANGE("sort parent_col_id");
+
   thrust::stable_sort_by_key(rmm::exec_policy(stream),
                              parent_col_id.begin(),
                              parent_col_id.begin() + num_list_parent,
                              scatter_indices.begin());
-  CUDF_POP_RANGE();
+
   rmm::device_uvector<size_type> row_offsets(num_nodes, stream, mr);
-  CUDF_PUSH_RANGE("exscan");
   // TODO is it possible to generate list child_offsets too here?
+  // write only 1st child offset to parent node id child_offsets?
   thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                 parent_col_id.begin(),
                                 parent_col_id.begin() + num_list_parent,
                                 thrust::make_constant_iterator<size_type>(1),
                                 row_offsets.begin());
-  CUDF_POP_RANGE();
 
   // Using scatter instead of sort.
   auto& temp_storage = parent_col_id;  // reuse parent_col_id as temp storage
-  CUDF_PUSH_RANGE("scatter");
   thrust::scatter(rmm::exec_policy(stream),
                   row_offsets.begin(),
                   row_offsets.begin() + num_list_parent,
                   scatter_indices.begin(),
                   temp_storage.begin());
   row_offsets = std::move(temp_storage);
-  CUDF_POP_RANGE();
 
-  CUDF_PUSH_RANGE("propagate");
   // Propagate row offsets to non-list leaves from list's immediate children node by recursion
   thrust::transform_if(
     rmm::exec_policy(stream),
@@ -765,7 +704,6 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
       return parent_node_id != parent_node_sentinel and
              !(node_categories[parent_node_id] == node_t::NC_LIST);
     });
-  CUDF_POP_RANGE();
   return row_offsets;
 }
 
