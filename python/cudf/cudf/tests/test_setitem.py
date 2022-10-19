@@ -333,7 +333,7 @@ def test_series_setitem_upcasting_string_column():
 
 def test_series_setitem_upcasting_string_value():
     sr = cudf.Series([0, 0, 0], dtype=int)
-    # This is a distinction with pandas, which let's you instead make an
+    # This is a distinction with pandas, which lets you instead make an
     # object column with ["10", 0, 0]
     sr[0] = "10"
     assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
