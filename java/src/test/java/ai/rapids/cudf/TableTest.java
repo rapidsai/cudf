@@ -2690,17 +2690,6 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testRepeatColumnBad() {
-    try (Table t = new Table.TestBuilder()
-            .column(1, 2)
-            .column("a", "b")
-            .build();
-         ColumnVector repeats = ColumnVector.fromBytes((byte)2, (byte)-1)) {
-      assertThrows(CudfException.class, () -> t.repeat(repeats));
-    }
-  }
-
-  @Test
   void testInterleaveIntColumns() {
     try (Table t = new Table.TestBuilder()
           .column(1,2,3,4,5)
