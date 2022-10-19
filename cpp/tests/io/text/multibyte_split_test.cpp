@@ -146,6 +146,36 @@ TEST_F(MultibyteSplitTest, OverlappingMatchErasure)
   // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out); // this use case it not yet supported.
 }
 
+TEST_F(MultibyteSplitTest, DelimiterErasure)
+{
+  auto delimiter = "\r\n";
+
+  auto host_input = std::string("line\r\nanother line\r\nthird line\r\n");
+  auto expected   = strings_column_wrapper{"line", "another line", "third line", ""};
+
+  cudf::io::text::parse_options options;
+  options.strip_delimiters = true;
+  auto source              = cudf::io::text::make_source(host_input);
+  auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, DelimiterErasureOverlap)
+{
+  auto delimiter = "::";
+
+  auto host_input = std::string("::a:::b::c::::d");
+  auto expected   = strings_column_wrapper{"", "a", "", "b", "c", "", "", "d"};
+
+  cudf::io::text::parse_options options;
+  options.strip_delimiters = true;
+  auto source              = cudf::io::text::make_source(host_input);
+  auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
 TEST_F(MultibyteSplitTest, HandpickedInput)
 {
   auto delimiters = "::|";

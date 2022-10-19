@@ -847,6 +847,18 @@ def test_read_text_in_memory(datadir):
     assert_eq(expected, actual)
 
 
+def test_read_text_in_memory_strip_delimiter(datadir):
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(["x", "y", "z"])
+
+    actual = cudf.read_text(
+        StringIO("x::y::z"), delimiter="::", strip_delimiters=True
+    )
+
+    assert_eq(expected, actual)
+
+
 def test_read_text_bgzip(datadir):
     chess_file_compressed = str(datadir) + "/chess.pgn.gz"
     chess_file = str(datadir) + "/chess.pgn"
