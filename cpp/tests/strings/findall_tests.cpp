@@ -20,6 +20,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/strings/findall.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -35,8 +36,10 @@ TEST_F(StringsFindallTests, FindallTest)
   cudf::test::strings_column_wrapper input(
     {"3-A", "4-May 5-Day 6-Hay", "12-Dec-2021-Jan", "Feb-March", "4 ABC", "", "", "25-9000-Hal"},
     valids);
+  auto sv = cudf::strings_column_view(input);
 
-  auto results = cudf::strings::findall(cudf::strings_column_view(input), "(\\d+)-(\\w+)");
+  auto pattern = std::string("(\\d+)-(\\w+)");
+  auto results = cudf::strings::findall(sv, pattern);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"3-A"},
@@ -49,6 +52,9 @@ TEST_F(StringsFindallTests, FindallTest)
                 LCW{"25-9000"}},
                valids);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  auto prog = cudf::strings::regex_program::create(pattern);
+  results   = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsFindallTests, Multiline)
@@ -56,9 +62,13 @@ TEST_F(StringsFindallTests, Multiline)
   cudf::test::strings_column_wrapper input({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
   auto view = cudf::strings_column_view(input);
 
-  auto results = cudf::strings::findall(view, "(^abc$)", cudf::strings::regex_flags::MULTILINE);
+  auto pattern = std::string("(^abc$)");
+  auto results = cudf::strings::findall(view, pattern, cudf::strings::regex_flags::MULTILINE);
   using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"abc", "abc"}, LCW{"abc"}, LCW{"abc"}, LCW{}, LCW{"abc"}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  auto prog = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+  results   = cudf::strings::findall(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
@@ -67,9 +77,13 @@ TEST_F(StringsFindallTests, DotAll)
   cudf::test::strings_column_wrapper input({"abc\nfa\nef", "fff\nabbc\nfff", "abcdef", ""});
   auto view = cudf::strings_column_view(input);
 
-  auto results = cudf::strings::findall(view, "(b.*f)", cudf::strings::regex_flags::DOTALL);
+  auto pattern = std::string("(b.*f)");
+  auto results = cudf::strings::findall(view, pattern, cudf::strings::regex_flags::DOTALL);
   using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"bc\nfa\nef"}, LCW{"bbc\nfff"}, LCW{"bcdef"}, LCW{}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  auto prog = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DOTALL);
+  results   = cudf::strings::findall(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
