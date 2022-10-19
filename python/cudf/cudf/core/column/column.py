@@ -854,7 +854,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if dtype == self.dtype:
+        if self.dtype == dtype:
             return self
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
