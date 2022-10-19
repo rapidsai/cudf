@@ -212,6 +212,9 @@ TEST(SpanTest, CanConstructFromHostContainers)
   (void)host_span<int const>(h_vector_c);
 }
 
+// This test is the only place in libcudf's test suite where using a
+// thrust::device_vector (and therefore the CUDA default stream) is acceptable
+// since we are explicitly testing conversions from thrust::device_vector.
 TEST(SpanTest, CanConstructFromDeviceContainers)
 {
   auto d_thrust_vector = thrust::device_vector<int>(1);
