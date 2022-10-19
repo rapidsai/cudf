@@ -27,6 +27,10 @@ function(find_and_configure_dlpack VERSION)
   )
 
   if(DEFINED dlpack_SOURCE_DIR)
+    set(dlpack_SOURCE_DIR 
+        "${dlpack_SOURCE_DIR}"
+        PARENT_SCOPE)
+
     # otherwise find_package(DLPACK) will set this variable
     set(DLPACK_INCLUDE_DIR
         "${dlpack_SOURCE_DIR}/include"
