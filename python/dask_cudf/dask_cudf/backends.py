@@ -482,20 +482,6 @@ try:
             )
 
         @staticmethod
-        def from_dask_array(x, meta=None, **kwargs):
-            # The original `meta` and `type(x)` take precedence
-            if meta is None and isinstance(x._meta, cp.ndarray):
-                meta = cudf.DataFrame()
-            return _default_backend(dd.from_dask_array, x, meta=meta, **kwargs)
-
-        @staticmethod
-        def from_array(x, meta=None, **kwargs):
-            # The original `meta` and `type(x)` take precedence
-            if meta is None and isinstance(x, cp.ndarray):
-                meta = cudf.DataFrame()
-            return _default_backend(dd.from_array, x, meta=meta, **kwargs)
-
-        @staticmethod
         def read_parquet(*args, engine=None, **kwargs):
             from dask_cudf.io.parquet import CudfEngine
 
