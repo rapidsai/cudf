@@ -5347,7 +5347,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Return values at the given quantile.
 
-        This API is now deprecated. Please use ``DataFrame.qauntile``
+        This API is now deprecated. Please use ``DataFrame.quantile``
         with ``method='table'``.
 
         Parameters
