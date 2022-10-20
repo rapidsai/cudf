@@ -476,8 +476,8 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     auto const will_trim_later = uses_custom_row_bounds || chunked_read_size > 0;
     gpu::ComputePageSizes(pages,
                           chunks,
-                          !will_trim_later ? min_row : 0,
-                          !will_trim_later ? num_rows : INT_MAX,
+                          will_trim_later ? min_row : 0,
+                          will_trim_later ? num_rows : INT_MAX,
                           !will_trim_later,
                           _stream);
 
