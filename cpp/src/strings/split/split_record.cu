@@ -266,8 +266,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
 template <Dir dir>
 std::unique_ptr<column> split_record(
   strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
+  string_scalar const& delimiter = string_scalar(""),
+  size_type maxsplit             = -1,
+  // TODO: Move before delimiter?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

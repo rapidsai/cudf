@@ -112,6 +112,10 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
  */
+// TODO: Should this class be namespaced in cudf? Not super important since we
+// plan to replace it with cuco anyway, but for now it's being exposed into the
+// global namespace.
+// TODO: For the present should we remove default streams here?
 template <typename Key,
           typename Element,
           typename Hasher    = cudf::detail::default_hash<Key>,

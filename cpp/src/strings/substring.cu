@@ -110,8 +110,9 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
+  // TODO: Move before start?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 

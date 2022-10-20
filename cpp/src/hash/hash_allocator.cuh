@@ -26,6 +26,8 @@
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+// TODO: Should all of this be namespaced in cudf?
+// TODO: Should we remove the default streams in this class?
 template <class T>
 struct managed_allocator {
   using value_type                    = T;

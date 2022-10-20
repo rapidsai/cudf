@@ -793,8 +793,9 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
 
 std::unique_ptr<table> split(
   strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
+  string_scalar const& delimiter = string_scalar(""),
+  size_type maxsplit             = -1,
+  // TODO: Move before delimiter?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -818,8 +819,9 @@ std::unique_ptr<table> split(
 
 std::unique_ptr<table> rsplit(
   strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
+  string_scalar const& delimiter = string_scalar(""),
+  size_type maxsplit             = -1,
+  // TODO: Move before delimiter?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

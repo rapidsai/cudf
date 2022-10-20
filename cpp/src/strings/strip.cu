@@ -71,8 +71,9 @@ struct strip_fn {
 
 std::unique_ptr<column> strip(
   strings_column_view const& input,
-  side_type side                      = side_type::BOTH,
-  string_scalar const& to_strip       = string_scalar(""),
+  side_type side                = side_type::BOTH,
+  string_scalar const& to_strip = string_scalar(""),
+  // TODO: Move before side?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

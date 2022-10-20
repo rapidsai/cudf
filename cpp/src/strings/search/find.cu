@@ -105,8 +105,9 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
 std::unique_ptr<column> find(
   strings_column_view const& strings,
   string_scalar const& target,
-  size_type start                     = 0,
-  size_type stop                      = -1,
+  size_type start = 0,
+  size_type stop  = -1,
+  // TODO: Move before start?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -125,8 +126,9 @@ std::unique_ptr<column> find(
 std::unique_ptr<column> rfind(
   strings_column_view const& strings,
   string_scalar const& target,
-  size_type start                     = 0,
-  size_type stop                      = -1,
+  size_type start = 0,
+  size_type stop  = -1,
+  // TODO: Move before start?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
