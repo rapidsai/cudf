@@ -25,16 +25,16 @@ namespace cudf {
 
 namespace detail {
 std::unique_ptr<column> scan(column_view const& input,
-                             std::unique_ptr<scan_aggregation> const& agg,
+                             scan_aggregation const& agg,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  if (agg->kind == aggregation::RANK) {
+  if (agg.kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
                  "Rank aggregation operator requires an inclusive scan");
-    auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(*agg);
+    auto const& rank_agg = static_cast<cudf::detail::rank_aggregation const&>(agg);
     if (rank_agg._method == rank_method::MIN) {
       if (rank_agg._percentage == rank_percentage::NONE) {
         return inclusive_rank_scan(input, stream, mr);
@@ -55,7 +55,7 @@ std::unique_ptr<column> scan(column_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> scan(column_view const& input,
-                             std::unique_ptr<scan_aggregation> const& agg,
+                             scan_aggregation const& agg,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::mr::device_memory_resource* mr)
