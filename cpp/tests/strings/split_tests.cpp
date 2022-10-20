@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/split/partition.hpp>
-#include <cudf/strings/split/split.hpp>
-#include <cudf/strings/split/split_re.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
+#include <cudf/strings/split/partition.hpp>
+#include <cudf/strings/split/split.hpp>
+#include <cudf/strings/split/split_re.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -316,21 +317,28 @@ TEST_F(StringsSplitTest, SplitRegex)
   auto sv = cudf::strings_column_view(input);
 
   {
-    auto result = cudf::strings::split_re(sv, "\\s+");
+    auto pattern = std::string("\\s+");
+    auto result  = cudf::strings::split_re(sv, pattern);
 
     cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""}, validity);
     cudf::test::strings_column_wrapper col1({"Héllo", "", "some", "String", ""}, {1, 0, 1, 1, 0});
     cudf::test::strings_column_wrapper col2({"thesé", "", "", "", ""}, {1, 0, 1, 0, 0});
     auto expected = cudf::table_view({col0, col1, col2});
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_re(sv, *prog);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
 
     // rsplit == split when using default parameters
-    result = cudf::strings::rsplit_re(sv, "\\s+");
+    result = cudf::strings::rsplit_re(sv, pattern);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    result = cudf::strings::rsplit_re(sv, *prog);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
   }
 
   {
-    auto result = cudf::strings::split_re(sv, "[eé]");
+    auto pattern = std::string("[eé]");
+    auto result  = cudf::strings::split_re(sv, pattern);
 
     cudf::test::strings_column_wrapper col0({" H", "", "ar", "t", ""}, validity);
     cudf::test::strings_column_wrapper col1({"llo th", "", " som", "st String", ""},
@@ -339,9 +347,14 @@ TEST_F(StringsSplitTest, SplitRegex)
     cudf::test::strings_column_wrapper col3({"", "", "", "", ""}, {1, 0, 0, 0, 0});
     auto expected = cudf::table_view({col0, col1, col2, col3});
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_re(sv, *prog);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
 
     // rsplit == split when using default parameters
-    result = cudf::strings::rsplit_re(sv, "[eé]");
+    result = cudf::strings::rsplit_re(sv, pattern);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    result = cudf::strings::rsplit_re(sv, *prog);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
   }
 }
@@ -356,20 +369,27 @@ TEST_F(StringsSplitTest, SplitRecordRegex)
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   {
-    auto result = cudf::strings::split_record_re(sv, "\\s+");
+    auto pattern = std::string("\\s+");
+    auto result  = cudf::strings::split_record_re(sv, pattern);
 
     LCW expected(
       {LCW{"", "Héllo", "thesé"}, LCW{}, LCW{"are", "some", ""}, LCW{"tést", "String"}, LCW{""}},
       validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_record_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
     // rsplit == split when using default parameters
-    result = cudf::strings::rsplit_record_re(sv, "\\s+");
+    result = cudf::strings::rsplit_record_re(sv, pattern);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+    result = cudf::strings::rsplit_record_re(sv, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
   }
 
   {
-    auto result = cudf::strings::split_record_re(sv, "[eé]");
+    auto pattern = std::string("[eé]");
+    auto result  = cudf::strings::split_record_re(sv, pattern);
 
     LCW expected({LCW{" H", "llo th", "s", ""},
                   LCW{},
@@ -378,9 +398,14 @@ TEST_F(StringsSplitTest, SplitRecordRegex)
                   LCW{""}},
                  validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_record_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
     // rsplit == split when using default parameters
-    result = cudf::strings::rsplit_record_re(sv, "[eé]");
+    result = cudf::strings::rsplit_record_re(sv, pattern);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+    result = cudf::strings::rsplit_record_re(sv, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
   }
 }
@@ -393,37 +418,51 @@ TEST_F(StringsSplitTest, SplitRegexWithMaxSplit)
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
   auto sv = cudf::strings_column_view(input);
   {
-    auto result = cudf::strings::split_re(sv, "\\s+", 1);
+    auto pattern = std::string("\\s+");
+    auto result  = cudf::strings::split_re(sv, pattern, 1);
 
     cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""}, {1, 0, 1, 1, 1});
     cudf::test::strings_column_wrapper col1({"Héllo\tthesé", "", "some  ", "String", ""},
                                             {1, 0, 1, 1, 0});
     auto expected = cudf::table_view({col0, col1});
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_re(sv, *prog, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
 
     // split everything is the same output as maxsplit==2 for the test input column here
-    result         = cudf::strings::split_re(sv, "\\s+", 2);
-    auto expected2 = cudf::strings::split_re(sv, "\\s+");
+    result         = cudf::strings::split_re(sv, pattern, 2);
+    auto expected2 = cudf::strings::split_re(sv, pattern);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected2->view());
+    result = cudf::strings::split_re(sv, *prog, 3);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected2->view());
   }
   {
-    auto result = cudf::strings::split_record_re(sv, "\\s", 1);
+    auto pattern = std::string("\\s");
+    auto result  = cudf::strings::split_record_re(sv, pattern, 1);
 
     using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
     LCW expected1(
       {LCW{"", "Héllo\tthesé"}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{""}},
       validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected1);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_record_re(sv, *prog, 1);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected1);
 
-    result = cudf::strings::split_record_re(sv, "\\s", 2);
+    result = cudf::strings::split_record_re(sv, pattern, 2);
     LCW expected2(
       {LCW{"", "Héllo", "thesé"}, LCW{}, LCW{"are", "some", " "}, LCW{"tést", "String"}, LCW{""}},
       validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected2);
+    result = cudf::strings::split_record_re(sv, *prog, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected2);
 
     // split everything is the same output as maxsplit==3 for the test input column here
-    result         = cudf::strings::split_record_re(sv, "\\s", 3);
-    auto expected0 = cudf::strings::split_record_re(sv, "\\s");
+    result         = cudf::strings::split_record_re(sv, pattern, 3);
+    auto expected0 = cudf::strings::split_record_re(sv, pattern);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected0->view());
+    result = cudf::strings::split_record_re(sv, *prog, 3);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected0->view());
   }
 }
@@ -433,7 +472,8 @@ TEST_F(StringsSplitTest, SplitRegexWordBoundary)
   cudf::test::strings_column_wrapper input({"a", "ab", "-+", "e\né"});
   auto sv = cudf::strings_column_view(input);
   {
-    auto result = cudf::strings::split_re(sv, "\\b");
+    auto pattern = std::string("\\b");
+    auto result  = cudf::strings::split_re(sv, pattern);
 
     cudf::test::strings_column_wrapper col0({"", "", "-+", ""});
     cudf::test::strings_column_wrapper col1({"a", "ab", "", "e"}, {1, 1, 0, 1});
@@ -442,12 +482,19 @@ TEST_F(StringsSplitTest, SplitRegexWordBoundary)
     cudf::test::strings_column_wrapper col4({"", "", "", ""}, {0, 0, 0, 1});
     auto expected = cudf::table_view({col0, col1, col2, col3, col4});
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_re(sv, *prog);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
   }
   {
-    auto result = cudf::strings::split_record_re(sv, "\\B");
+    auto pattern = std::string("\\B");
+    auto result  = cudf::strings::split_record_re(sv, pattern);
 
     using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
     LCW expected({LCW{"a"}, LCW{"a", "b"}, LCW{"", "-", "+", ""}, LCW{"e\né"}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+    auto prog = cudf::strings::regex_program::create(pattern);
+    result    = cudf::strings::split_record_re(sv, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
   }
 }
@@ -551,26 +598,35 @@ TEST_F(StringsSplitTest, RSplitRegexWithMaxSplit)
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
   auto sv = cudf::strings_column_view(input);
 
+  auto pattern = std::string("\\s+");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+
   {
-    auto result = cudf::strings::rsplit_re(sv, "\\s+", 1);
+    auto result = cudf::strings::rsplit_re(sv, pattern, 1);
 
     cudf::test::strings_column_wrapper col0({" Héllo", "", "are some", "tést", ""}, validity);
     cudf::test::strings_column_wrapper col1({"thesé", "", "", "String", ""}, {1, 0, 1, 1, 0});
     auto expected = cudf::table_view({col0, col1});
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+    result = cudf::strings::rsplit_re(sv, *prog, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
   }
   {
-    auto result = cudf::strings::rsplit_record_re(sv, "\\s+", 1);
+    auto result = cudf::strings::rsplit_record_re(sv, pattern, 1);
 
     using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
     LCW expected(
       {LCW{" Héllo", "thesé"}, LCW{}, LCW{"are some", ""}, LCW{"tést", "String"}, LCW{""}},
       validity);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+    result = cudf::strings::rsplit_record_re(sv, *prog, 1);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
     // split everything is the same output as any maxsplit > 2 for the test input column here
-    result         = cudf::strings::rsplit_record_re(sv, "\\s+", 3);
-    auto expected0 = cudf::strings::rsplit_record_re(sv, "\\s+");
+    result         = cudf::strings::rsplit_record_re(sv, pattern, 3);
+    auto expected0 = cudf::strings::rsplit_record_re(sv, pattern);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected0->view());
+    result = cudf::strings::rsplit_record_re(sv, *prog, 3);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected0->view());
   }
 }
