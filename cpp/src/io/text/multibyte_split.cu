@@ -751,9 +751,9 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   join_stream(streams, stream);
 
   // if the input was empty, we didn't find a delimiter at all,
-  // or the first delimiter was also the last (but not the last in the file): empty output
+  // or the first delimiter was also the last: empty output
   if (chunk_offset == 0 or not first_row_offset.has_value() or
-      (first_row_offset == last_row_offset and first_row_offset < byte_range_end)) {
+      first_row_offset == last_row_offset) {
     return make_empty_column(type_id::STRING);
   }
 
@@ -761,12 +761,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto global_offsets = row_offset_storage.gather(stream, mr);
 
   // insert an offset at the beginning if we started at the beginning of the input
-  bool const insert_begin = *first_row_offset == 0;
-  // insert an offset at the end either if we found no delimiter past the byte range (to complete
-  // the last row), or if we found a delimiter at the very end (to add an empty row for the entry
-  // after the delimiter)
-  bool const insert_end = not last_row_offset.has_value() or
-                          (last_row_offset == chunk_offset and chunk_offset <= byte_range_end);
+  bool const insert_begin = first_row_offset.value_or(0) == 0;
+  // insert an offset at the end if we have not terminated the last row
+  bool const insert_end =
+    not(last_row_offset.has_value() or global_offsets.back_element(stream) == chunk_offset);
   rmm::device_uvector<int32_t> offsets{
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
