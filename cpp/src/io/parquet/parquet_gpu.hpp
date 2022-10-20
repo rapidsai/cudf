@@ -441,6 +441,7 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       size_t num_rows,
                       size_t min_row,
                       bool trim_pass,
+                      bool compute_string_sizes,
                       rmm::cuda_stream_view stream);
 
 /**
