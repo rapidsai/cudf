@@ -176,7 +176,7 @@ Resource ownership is an essential concept in libcudf. In short, an "owning" obj
 resource (such as device memory). It acquires that resource during construction and releases the
 resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)). A "non-owning"
 object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
-detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
+detail see the [`libcudf` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
 libcudf functions typically take views as input (`column_view` or `table_view`)
 and produce `unique_ptr`s to owning objects as output. For example,
@@ -403,7 +403,7 @@ Functions like merge or groupby in libcudf make no guarantees about the order of
 Promising deterministic ordering is not, in general, conducive to fast parallel algorithms.
 Calling code is responsible for performing sorts after the fact if sorted outputs are needed.
 
-# libcudf++ API and Implementation
+# libcudf API and Implementation
 
 ## Streams
 
