@@ -2,10 +2,10 @@
 
 import math
 import warnings
-from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
+from packaging.version import parse as parse_version
 from tlz import partition_all
 
 import dask
@@ -31,7 +31,11 @@ from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
 from dask_cudf.sorting import _get_shuffle_type
 
-DASK_VERSION = LooseVersion(dask.__version__)
+DASK_BACKEND_SUPPORT = parse_version(dask.__version__) >= parse_version(
+    "2022.10.0"
+)
+# TODO: Remove DASK_BACKEND_SUPPORT throughout codebase
+# when dask_cudf is pinned to dask>=2022.10.0
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -736,7 +740,7 @@ def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
 
 
-for name in [
+for name in (
     "add",
     "sub",
     "mul",
@@ -751,16 +755,13 @@ for name in [
     "rfloordiv",
     "rmod",
     "rpow",
-]:
+):
     meth = getattr(cudf.DataFrame, name)
-    kwargs = {"original": cudf.DataFrame} if DASK_VERSION >= "2.11.1" else {}
-    DataFrame._bind_operator_method(name, meth, **kwargs)
+    DataFrame._bind_operator_method(name, meth, original=cudf.Series)
 
     meth = getattr(cudf.Series, name)
-    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
-    Series._bind_operator_method(name, meth, **kwargs)
+    Series._bind_operator_method(name, meth, original=cudf.Series)
 
-for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+for name in ("lt", "gt", "le", "ge", "ne", "eq"):
     meth = getattr(cudf.Series, name)
-    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
-    Series._bind_comparison_method(name, meth, **kwargs)
+    Series._bind_comparison_method(name, meth, original=cudf.Series)
