@@ -1330,39 +1330,37 @@ def test_parquet_reader_v2(tmpdir, simple_pdf):
             ]
         },
         # Struct of Lists
-        pytest.param(
-            {
-                "Real estate records": [
-                    None,
-                    {
-                        "Status": "NRI",
-                        "Ownerships": {
-                            "land_unit": [None, 2, None],
-                            "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
-                        },
+        {
+            "Real estate records": [
+                None,
+                {
+                    "Status": "NRI",
+                    "Ownerships": {
+                        "land_unit": [None, 2, None],
+                        "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
                     },
-                    {
-                        "Status": None,
-                        "Ownerships": {
-                            "land_unit": [4, 5],
-                            "flats": [[7, 8], []],
-                        },
+                },
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [4, 5],
+                        "flats": [[7, 8], []],
                     },
-                    {
-                        "Status": "RI",
-                        "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {
+                    "Status": "RI",
+                    "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {"Status": "RI", "Ownerships": None},
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [7, 8, 9],
+                        "flats": [[], [], []],
                     },
-                    {"Status": "RI", "Ownerships": None},
-                    {
-                        "Status": None,
-                        "Ownerships": {
-                            "land_unit": [7, 8, 9],
-                            "flats": [[], [], []],
-                        },
-                    },
-                ]
-            },
-        ),
+                },
+            ]
+        },
     ],
 )
 def test_parquet_reader_nested_v2(tmpdir, data):
