@@ -54,7 +54,7 @@ using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
 using strings_col = cudf::test::strings_column_wrapper;
 
-auto run_test(std::string const& filepath, std::size_t byte_limit)
+auto chunked_read(std::string const& filepath, std::size_t byte_limit)
 {
   auto const read_opts =
     cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -97,8 +97,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input).build();
   cudf::io::write_parquet(write_opts);
 
-  auto constexpr byte_limit       = 240'000;
-  auto const [result, num_chunks] = run_test(filepath, byte_limit);
+  auto const [result, num_chunks] = chunked_read(filepath, 240'000);
   EXPECT_EQ(num_chunks, 2);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
@@ -144,12 +143,12 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   // byte_limit==500000  should give 2 chunks: {0, 40000}, {40000, 20000}
   // byte_limit==1000000 should give 1 chunks: {0, 60000},
   {
-    auto const [result, num_chunks] = run_test(filepath, 500'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 500'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
   }
   {
-    auto const [result, num_chunks] = run_test(filepath, 1'000'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 1'000'000);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
   }
