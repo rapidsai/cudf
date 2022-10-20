@@ -19,7 +19,6 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <stack>
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
