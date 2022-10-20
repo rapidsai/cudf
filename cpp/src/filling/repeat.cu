@@ -103,7 +103,6 @@ namespace cudf {
 namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
-                              bool check_count,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
@@ -112,18 +111,11 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   if (input_table.num_rows() == 0) { return cudf::empty_like(input_table); }
 
-  if (check_count) { cudf::type_dispatcher(count.type(), count_checker{count}, stream); }
-
   auto count_iter = cudf::detail::indexalator_factory::make_input_iterator(count);
 
   rmm::device_uvector<cudf::size_type> offsets(count.size(), stream);
   thrust::inclusive_scan(
     rmm::exec_policy(stream), count_iter, count_iter + count.size(), offsets.begin());
-
-  if (check_count) {
-    CUDF_EXPECTS(thrust::is_sorted(rmm::exec_policy(stream), offsets.begin(), offsets.end()),
-                 "count has negative values or the resulting table has too many rows.");
-  }
 
   size_type output_size{offsets.back_element(stream)};
   rmm::device_uvector<size_type> indices(output_size, stream);
@@ -162,11 +154,10 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
-                              bool check_count,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, check_count, cudf::default_stream_value, mr);
+  return detail::repeat(input_table, count, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,

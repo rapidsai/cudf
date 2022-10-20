@@ -198,7 +198,6 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
     table_view{std::vector<column_view>{gathered_defaults->release()[0]->view()}},
     scatter_map,
     table_view{std::vector<column_view>{output_with_nulls->release()[0]->view()}},
-    false,
     stream,
     mr);
   return std::move(scattered_results->release()[0]);

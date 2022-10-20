@@ -390,23 +390,12 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   table_view const& target,
-  bool check_bounds                   = false,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
 
   using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
-
-  if (check_bounds) {
-    auto const begin = -target.num_rows();
-    auto const end   = target.num_rows();
-    auto bounds      = bounds_checker<MapType>{begin, end};
-    CUDF_EXPECTS(
-      std::distance(scatter_map_begin, scatter_map_end) ==
-        thrust::count_if(rmm::exec_policy(stream), scatter_map_begin, scatter_map_end, bounds),
-      "Scatter map index out of bounds");
-  }
 
   CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
                "scatter map size should be <= to number of rows in source");

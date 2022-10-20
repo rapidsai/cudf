@@ -610,7 +610,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Use the resulting scatter map to materialize the output
     auto output = detail::scatter(
-      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, stream, mr);
+      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::pair(std::move(output), std::move(partition_offsets));
@@ -698,7 +698,7 @@ struct dispatch_map_type {
 
     // Scatter the rows into their partitions
     auto scattered =
-      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, stream, mr);
+      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, stream, mr);
 
     return std::pair(std::move(scattered), std::move(partition_offsets));
   }

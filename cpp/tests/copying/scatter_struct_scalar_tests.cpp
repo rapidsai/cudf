@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ TYPED_TEST_SUITE(TypedStructScalarScatterTest, FixedWidthTypes);
 
 column scatter_single_scalar(scalar const& slr, column_view scatter_map, column_view target)
 {
-  auto result = scatter({slr}, scatter_map, table_view{{target}}, false);
+  auto result = scatter({slr}, scatter_map, table_view{{target}});
   return result->get_column(0);
 }
 
