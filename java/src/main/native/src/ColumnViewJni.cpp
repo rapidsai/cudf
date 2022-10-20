@@ -263,10 +263,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
     cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
     return release_as_jlong(
-        cudf::reduce(*col,
-                     std::unique_ptr<cudf::reduce_aggregation>(
-                         dynamic_cast<cudf::reduce_aggregation *>(agg->clone().release())),
-                     out_dtype));
+        cudf::reduce(*col, *dynamic_cast<cudf::reduce_aggregation *>(agg), out_dtype));
   }
   CATCH_STD(env, 0);
 }
@@ -321,10 +318,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
     auto scan_type = is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE;
     auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
     return release_as_jlong(
-        cudf::scan(*col,
-                   std::unique_ptr<cudf::scan_aggregation>(
-                       dynamic_cast<cudf::scan_aggregation *>(agg->clone().release())),
-                   scan_type, null_policy));
+        cudf::scan(*col, *dynamic_cast<cudf::scan_aggregation *>(agg), scan_type, null_policy));
   }
   CATCH_STD(env, 0);
 }
