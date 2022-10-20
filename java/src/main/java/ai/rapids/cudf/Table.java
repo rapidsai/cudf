@@ -1681,9 +1681,6 @@ public final class Table implements AutoCloseable {
    * repetitions of each row is defined by the corresponding value in counts.
    * @param counts the number of times to repeat each row. Cannot have nulls, must be an
    *               Integer type, and must have one entry for each row in the table.
-   * @param checkCount should counts be checked for errors before processing. Be careful if you
-   *                   disable this because if you pass in bad data you might just get back an
-   *                   empty table or bad data.
    * @return the new Table.
    * @throws CudfException on any error.
    */
@@ -2360,8 +2357,6 @@ public final class Table implements AutoCloseable {
    * @param source The input scalars containing values to be scattered into the target table.
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
    * @param target The table into which the values from source are to be scattered out-of-place.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
-   *                    an exception if any of its values are out of bounds.
    * @return A new table which is the result of out-of-place scattering the source values into the
    *         target table.
    */
