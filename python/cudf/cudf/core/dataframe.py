@@ -5212,7 +5212,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         q=0.5,
         axis=0,
         numeric_only=True,
-        interpolation="linear",
+        interpolation=None,
         columns=None,
         exact=True,
         method="single",
@@ -5232,7 +5232,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
-            Default ``linear``.
+            Default is ``linear`` for ``method="single"``, and ``nearest``
+            for ``method="table"``.
         columns : list of str
             List of column names to include.
         exact : boolean
@@ -5295,29 +5296,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if isinstance(q, numbers.Number):
             q_is_number = True
-            # q = [float(q)]
+            qs = [float(q)]
         elif pd.api.types.is_list_like(q):
             q_is_number = False
+            qs = q
         else:
             msg = "`q` must be either a single element or list"
             raise TypeError(msg)
 
         if method == "table":
-            q = [float(q)] if q_is_number else q
-            result = self._quantile_table(q, interpolation.upper())
+            interpolation = interpolation or "nearest"
+            result = self._quantile_table(qs, interpolation.upper())
 
             if q_is_number:
                 result = result.transpose()
                 return Series(
-                    data=result._columns[0], index=result.index, name=q[0]
+                    data=result._columns[0], index=result.index, name=q
                 )
-            else:
-                result.index = as_index(q)
-                return result
         else:
             # Ensure that qs is non-scalar so that we always get a column back.
+            interpolation = interpolation or "linear"
             result = {}
-            qs = [q] if is_scalar(q) else q
             for k in data_df._data.names:
                 if k in columns:
                     ser = data_df[k]
@@ -5339,9 +5338,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result.index = data_df._data.to_pandas_index()
                 result.name = q
                 return result
-            else:
-                result.index = list(map(float, qs))
-                return result
+
+        result.index = list(map(float, qs))
+        return result
 
     @_cudf_nvtx_annotate
     def quantiles(self, q=0.5, interpolation="nearest"):
@@ -5371,7 +5370,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         return self.quantile(q=q, interpolation=interpolation, method="table")
-
 
     @_cudf_nvtx_annotate
     def isin(self, values):
