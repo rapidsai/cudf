@@ -1601,7 +1601,7 @@ std::pair<size_type, size_type> reader::impl::preprocess_file(
   size_type num_rows,
   const std::vector<std::vector<size_type>>& row_group_list)
 {
-  printf("\n\n\n\npreprocess========================\n");
+  //  printf("\n\n\n\npreprocess========================\n");
 
   // Select only row groups required
   // Note: `skip_rows` and `num_rows` will be modified in this function.
@@ -1768,7 +1768,8 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
                    read_info.num_rows,
                    uses_custom_row_bounds);
 
-  printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows, (int)read_info.num_rows);
+  //  printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows,
+  //  (int)read_info.num_rows);
 
   // decoding column data
   decode_page_data(_file_itm_data.chunks,
