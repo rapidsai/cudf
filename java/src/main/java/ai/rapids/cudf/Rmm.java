@@ -171,7 +171,7 @@ public class Rmm {
     resetLocalMaximumOutstandingInternal(0L);
   }
 
-  public static native void resetLocalMaximumOutstandingNative(long initialValue);
+  public static native void resetLocalMaximumOutstandingInternal(long initialValue);
 
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
