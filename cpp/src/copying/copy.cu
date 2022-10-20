@@ -180,7 +180,6 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
     gather_map,
     table_view{std::vector<column_view>{rhs}},
-    false,
     stream,
     mr);
 
@@ -208,12 +207,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                    static_cast<cudf::size_type>(scatter_map_size),
                                                    scatter_map.begin()};
 
-  auto result = cudf::detail::scatter(scatter_source,
-                                      scatter_map_column_view,
-                                      table_view{std::vector<column_view>{rhs}},
-                                      false,
-                                      stream,
-                                      mr);
+  auto result = cudf::detail::scatter(
+    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, stream, mr);
 
   return std::move(result->release()[0]);
 }

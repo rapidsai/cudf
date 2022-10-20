@@ -2979,8 +2979,7 @@ Java_ai_rapids_cudf_Table_convertToRowsFixedWidthOptimized(JNIEnv *env, jclass, 
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_scatterTable(JNIEnv *env, jclass,
                                                                     jlong j_input, jlong j_map,
-                                                                    jlong j_target,
-                                                                    jboolean check_bounds) {
+                                                                    jlong j_target) {
   JNI_NULL_CHECK(env, j_input, "input table is null", 0);
   JNI_NULL_CHECK(env, j_map, "map column is null", 0);
   JNI_NULL_CHECK(env, j_target, "target table is null", 0);
@@ -2989,15 +2988,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_scatterTable(JNIEnv *env,
     auto const input = reinterpret_cast<cudf::table_view const *>(j_input);
     auto const map = reinterpret_cast<cudf::column_view const *>(j_map);
     auto const target = reinterpret_cast<cudf::table_view const *>(j_target);
-    return convert_table_for_return(env, cudf::scatter(*input, *map, *target, check_bounds));
+    return convert_table_for_return(env, cudf::scatter(*input, *map, *target));
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_scatterScalars(JNIEnv *env, jclass,
                                                                       jlongArray j_input,
-                                                                      jlong j_map, jlong j_target,
-                                                                      jboolean check_bounds) {
+                                                                      jlong j_map, jlong j_target) {
   JNI_NULL_CHECK(env, j_input, "input scalars array is null", 0);
   JNI_NULL_CHECK(env, j_map, "map column is null", 0);
   JNI_NULL_CHECK(env, j_target, "target table is null", 0);
@@ -3009,7 +3007,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_scatterScalars(JNIEnv *en
                    [](auto &scalar) { return std::ref(*scalar); });
     auto const map = reinterpret_cast<cudf::column_view const *>(j_map);
     auto const target = reinterpret_cast<cudf::table_view const *>(j_target);
-    return convert_table_for_return(env, cudf::scatter(input, *map, *target, check_bounds));
+    return convert_table_for_return(env, cudf::scatter(input, *map, *target));
   }
   CATCH_STD(env, 0);
 }
@@ -3094,15 +3092,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatStaticCount(JNIEnv 
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatColumnCount(JNIEnv *env, jclass,
                                                                          jlong input_jtable,
-                                                                         jlong count_jcol,
-                                                                         jboolean check_count) {
+                                                                         jlong count_jcol) {
   JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
   JNI_NULL_CHECK(env, count_jcol, "count column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto const input = reinterpret_cast<cudf::table_view const *>(input_jtable);
     auto const count = reinterpret_cast<cudf::column_view const *>(count_jcol);
-    return convert_table_for_return(env, cudf::repeat(*input, *count, check_count));
+    return convert_table_for_return(env, cudf::repeat(*input, *count));
   }
   CATCH_STD(env, 0);
 }
