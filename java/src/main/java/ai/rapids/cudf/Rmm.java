@@ -155,7 +155,7 @@ public class Rmm {
    * @param initialValue an initial value (in Bytes) to use for this local counter
    */
   public static void resetLocalMaximumOutstanding(long initialValue) {
-    resetLocalMaximumOutstanding(initialValue);
+    resetLocalMaximumOutstandingInternal(initialValue);
   }
 
   /**
