@@ -305,7 +305,10 @@ def test_series_setitem_upcasting(dtype, indices):
     sr = pd.Series([0, 0, 0], dtype=dtype)
     cr = cudf.from_pandas(sr)
     assert_eq(sr, cr)
-    new_value = np.float64(10.5)
+    # Must be a non-integral floating point value that can't be losslessly
+    # converted to float32, otherwise pandas will try and match the source
+    # column dtype.
+    new_value = np.float64(np.pi)
     col_ref = cr._column
     sr[indices] = new_value
     cr[indices] = new_value
