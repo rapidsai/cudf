@@ -403,7 +403,7 @@ Functions like merge or groupby in libcudf make no guarantees about the order of
 Promising deterministic ordering is not, in general, conducive to fast parallel algorithms.
 Calling code is responsible for performing sorts after the fact if sorted outputs are needed.
 
-# libcudf++ API and Implementation
+# libcudf API and Implementation
 
 ## Streams
 

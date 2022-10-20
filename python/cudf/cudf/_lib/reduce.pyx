@@ -35,7 +35,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
-    Top level Cython reduce function wrapping libcudf++ reductions.
+    Top level Cython reduce function wrapping libcudf reductions.
 
     Parameters
     ----------
@@ -91,7 +91,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
 def scan(scan_op, Column incol, inclusive, **kwargs):
     """
-    Top level Cython scan function wrapping libcudf++ scans.
+    Top level Cython scan function wrapping libcudf scans.
 
     Parameters
     ----------
@@ -122,7 +122,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
 
 def minmax(Column incol):
     """
-    Top level Cython minmax function wrapping libcudf++ minmax.
+    Top level Cython minmax function wrapping libcudf minmax.
 
     Parameters
     ----------
