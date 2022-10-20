@@ -337,7 +337,7 @@ __global__ void __launch_bounds__(128)
       __syncwarp();
       uint32_t fragment_data_size =
         (ck_g.use_dictionary)
-          ? frag_g.num_leaf_values * 2  // Assume worst-case of 2-bytes per dictionary index
+          ? frag_g.num_leaf_values * util::div_rounding_up_unsafe(ck_g.dict_rle_bits, 8)
           : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
       size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
