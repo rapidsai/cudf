@@ -18,12 +18,14 @@ repos:
                 # Explicitly specify the pyproject.toml at the repo root, not per-project.
                 args: ["--config", "pyproject.toml"]
       - repo: https://github.com/PyCQA/flake8
-        rev: 3.8.3
+        rev: 5.0.4
         hooks:
               - id: flake8
                 args: ["--config=setup.cfg"]
-                files: python/.*\.(py|pyx|pxd)$
+                files: python/.*$
                 types: [file]
+                types_or: [python, cython]
+                additional_dependencies: ["flake8-force"]
       - repo: https://github.com/pre-commit/mirrors-mypy
         rev: 'v0.971'
         hooks:

@@ -31,7 +31,7 @@ extras_require = {
         "pytest-benchmark",
         "pytest-xdist",
         "hypothesis",
-        "mimesis",
+        "mimesis>=4.1.0",
         "fastavro>=0.22.9",
         "python-snappy>=0.6.0",
         "pyorc",

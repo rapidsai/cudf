@@ -649,6 +649,24 @@ def test_json_nested_data():
     assert df.to_arrow().equals(pa_table_pdf)
 
 
+def test_json_empty_types():
+    json_str = """ {}
+    {"a": [], "b": {}}
+    {"a": []}
+    {"b": {}}
+    {"c": {"d": []}}
+    {"e": [{}]}
+    """
+    df = cudf.read_json(
+        StringIO(json_str),
+        engine="cudf_experimental",
+        orient="records",
+        lines=True,
+    )
+    pdf = pd.read_json(StringIO(json_str), orient="records", lines=True)
+    assert_eq(df, pdf)
+
+
 def test_json_types_data():
     # 0:<0:string,1:float>
     # 1:list<int>

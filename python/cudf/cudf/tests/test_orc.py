@@ -736,6 +736,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [2, 100, 6000000])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -1554,7 +1555,6 @@ def test_names_in_struct_dtype_nesting(datadir):
     assert edf.dtypes.equals(got.dtypes)
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 def test_writer_lists_structs(list_struct_buff):
     df_in = cudf.read_orc(list_struct_buff)
 
@@ -1566,7 +1566,6 @@ def test_writer_lists_structs(list_struct_buff):
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "data",
     [
@@ -1667,7 +1666,6 @@ def test_empty_statistics():
         assert stats[0]["i"].get("sum") == 1
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "equivalent_columns",
     [

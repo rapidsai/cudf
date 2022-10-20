@@ -57,9 +57,16 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 struct input_column_info {
   int schema_idx;
   std::string name;
+  bool has_repetition;
   // size == nesting depth. the associated real output
   // buffer index in the dest column for each level of nesting.
   std::vector<int> nesting;
+
+  input_column_info(int _schema_idx, std::string _name, bool _has_repetition)
+    : schema_idx(_schema_idx), name(_name), has_repetition(_has_repetition)
+  {
+  }
+
   auto nesting_depth() const { return nesting.size(); }
 };
 
@@ -314,10 +321,7 @@ inline size_type __device__ row_to_value_idx(size_type idx,
     } else {
       auto list_col = cudf::detail::lists_column_device_view(col);
       auto child    = list_col.child();
-      if (parquet_col.output_as_byte_array &&
-          (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
-        break;
-      }
+      if (parquet_col.output_as_byte_array && child.type().id() == type_id::UINT8) { break; }
       idx = list_col.offset_at(idx);
       col = child;
     }
