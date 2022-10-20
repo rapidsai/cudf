@@ -147,7 +147,7 @@ public class Rmm {
 
   /**
    * Resets a local maximum counter of RMM memory used to keep track of usage between
-   * sections code while debugging.
+   * code sections while debugging.
    *
    * @param initialValue an initial value (in Bytes) to use for this local counter
    */
@@ -157,7 +157,7 @@ public class Rmm {
 
   /**
    * Resets a local maximum counter of RMM memory used to keep track of usage between
-   * sections code while debugging.
+   * code sections while debugging.
    *
    * This resets the counter to 0 Bytes.
    */
