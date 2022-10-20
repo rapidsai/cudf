@@ -206,7 +206,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   // clang-format on
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end() + 1, key_offsets.begin());
+    rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
   // clang-format off
   /*
   stream.synchronize();
