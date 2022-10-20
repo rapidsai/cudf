@@ -2202,8 +2202,13 @@ TEST_F(CollectSetTest, BasicRollingWindowWithNaNs)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
 
-  auto const result_fixed_window = rolling_collect_set(
-    input_column, 2, 1, 1, *make_collect_set_aggregation<rolling_aggregation>());
+  auto const result_fixed_window =
+    rolling_collect_set(input_column,
+                        2,
+                        1,
+                        1,
+                        *make_collect_set_aggregation<rolling_aggregation>(
+                          null_policy::INCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_fixed_window->view());
 
   auto const result_with_nulls_excluded =
@@ -2211,7 +2216,8 @@ TEST_F(CollectSetTest, BasicRollingWindowWithNaNs)
                         2,
                         1,
                         1,
-                        *make_collect_set_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
+                        *make_collect_set_aggregation<rolling_aggregation>(
+                          null_policy::EXCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 
