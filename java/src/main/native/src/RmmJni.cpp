@@ -86,33 +86,33 @@ public:
 
   std::size_t get_total_allocated() override { return total_allocated.load(); }
 
-  std::size_t get_max_total_allocated() override { return max_outstanding; }
+  std::size_t get_max_total_allocated() override { return max_total_allocated; }
 
   void reset_local_max_total_allocated(std::size_t initial_value) override {
     local_allocated = 0;
-    local_max_outstanding = initial_value;
+    local_max_total_allocated = initial_value;
   }
 
-  std::size_t get_local_max_total_allocated() override { return local_max_outstanding; }
+  std::size_t get_local_max_total_allocated() override { return local_max_total_allocated; }
 
 private:
   Upstream *const resource;
   std::size_t const size_align;
-  // sum of what is currently outstanding
+  // sum of what is currently allocated
   std::atomic_size_t total_allocated{0};
 
-  // the maximum outstanding for the lifetime of this class
-  std::size_t max_outstanding{0};
+  // the maximum total allocated for the lifetime of this class
+  std::size_t max_total_allocated{0};
 
   // the local sum of what is currently outstanding from the last
-  // `reset_local_max_outstanding` call. This can be negative.
+  // `reset_local_max_total_allocated` call. This can be negative.
   std::atomic_long local_allocated{0};
 
-  // the maximum maximum outstanding relative to the last
-  // `reset_local_max_outstanding` call.
-  long local_max_outstanding{0};
+  // the maximum total allocated relative to the last
+  // `reset_local_max_total_allocated` call.
+  long local_max_total_allocated{0};
 
-  std::mutex max_outstanding_mutex;
+  std::mutex max_total_allocated_mutex;
 
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     // adjust size of allocation based on specified size alignment
@@ -123,9 +123,9 @@ private:
       total_allocated += num_bytes;
       local_allocated += num_bytes;
 
-      std::scoped_lock lock(max_outstanding_mutex);
-      max_outstanding = std::max(total_allocated.load(), max_outstanding);
-      local_max_outstanding = std::max(local_allocated.load(), local_max_outstanding);
+      std::scoped_lock lock(max_total_allocated_mutex);
+      max_total_allocated = std::max(total_allocated.load(), max_total_allocated);
+      local_max_total_allocated = std::max(local_allocated.load(), local_max_total_allocated);
     }
     return result;
   }
