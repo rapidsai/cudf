@@ -51,8 +51,7 @@ __device__ inline udf_string to_string(int64_t value)
     result.append("0");
     return result;
   }
-  auto digits = cudf::strings::detail::count_digits(value);
-  result.resize(digits);
+  result.resize(cudf::strings::detail::count_digits(value));
   cudf::strings::detail::integer_to_string(value, result.data());
   return result;
 }
