@@ -5215,6 +5215,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         interpolation="linear",
         columns=None,
         exact=True,
+        method="single",
     ):
         """
         Return values at the given quantile.
@@ -5236,6 +5237,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             List of column names to include.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
+        method : {`single`, `table`}, default `single`
+            Whether to compute quantiles per-column ('single') or over all
+            columns ('table'). When 'table', the only allowed interpolation
+            methods are 'nearest', 'lower', and 'higher'.
 
         Returns
         -------
@@ -5288,33 +5293,54 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if columns is None:
             columns = data_df._data.names
 
-        # Ensure that qs is non-scalar so that we always get a column back.
-        qs = [q] if is_scalar(q) else q
-        result = {}
-        for k in data_df._data.names:
-            if k in columns:
-                ser = data_df[k]
-                res = ser.quantile(
-                    qs,
-                    interpolation=interpolation,
-                    exact=exact,
-                    quant_index=False,
-                )._column
-                if len(res) == 0:
-                    res = column.column_empty_like(
-                        qs, dtype=ser.dtype, masked=True, newsize=len(qs)
-                    )
-                result[k] = res
-
-        result = DataFrame._from_data(result)
-        if isinstance(q, numbers.Number) and numeric_only:
-            result = result.fillna(np.nan).iloc[0]
-            result.index = data_df._data.to_pandas_index()
-            result.name = q
-            return result
+        if isinstance(q, numbers.Number):
+            q_is_number = True
+            # q = [float(q)]
+        elif pd.api.types.is_list_like(q):
+            q_is_number = False
         else:
-            result.index = list(map(float, qs))
-            return result
+            msg = "`q` must be either a single element or list"
+            raise TypeError(msg)
+
+        qs = [q] if is_scalar(q) else q
+        if method == "table":
+            result = self._quantiles(qs, interpolation.upper())
+
+            if q_is_number:
+                result = result.transpose()
+                return Series(
+                    data=result._columns[0], index=result.index, name=q[0]
+                )
+            else:
+                result.index = as_index(q)
+                return result
+        else:
+            # Ensure that qs is non-scalar so that we always get a column back.
+            result = {}
+            for k in data_df._data.names:
+                if k in columns:
+                    ser = data_df[k]
+                    res = ser.quantile(
+                        qs,
+                        interpolation=interpolation,
+                        exact=exact,
+                        quant_index=False,
+                    )._column
+                    if len(res) == 0:
+                        res = column.column_empty_like(
+                            qs, dtype=ser.dtype, masked=True, newsize=len(qs)
+                        )
+                    result[k] = res
+            result = DataFrame._from_data(result)
+
+            if q_is_number and numeric_only:
+                result = result.fillna(np.nan).iloc[0]
+                result.index = data_df._data.to_pandas_index()
+                result.name = q
+                return result
+            else:
+                result.index = list(map(float, qs))
+                return result
 
     @_cudf_nvtx_annotate
     def quantiles(self, q=0.5, interpolation="nearest"):
@@ -5334,25 +5360,35 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if isinstance(q, numbers.Number):
-            q_is_number = True
-            q = [float(q)]
-        elif pd.api.types.is_list_like(q):
-            q_is_number = False
-        else:
-            msg = "`q` must be either a single element or list"
-            raise TypeError(msg)
+        warnings.warn(
+            "DataFrame.quantiles is not deprecated. "
+            "Please use DataFrame.quantile with `method='table'`.",
+            FutureWarning,
+        )
+        import pdb
 
-        result = self._quantiles(q, interpolation.upper())
+        pdb.set_trace()
+        return self.quantile(q=q, interpolation=interpolation, method="table")
 
-        if q_is_number:
-            result = result.transpose()
-            return Series(
-                data=result._columns[0], index=result.index, name=q[0]
-            )
-        else:
-            result.index = as_index(q)
-            return result
+        # if isinstance(q, numbers.Number):
+        #     q_is_number = True
+        #     q = [float(q)]
+        # elif pd.api.types.is_list_like(q):
+        #     q_is_number = False
+        # else:
+        #     msg = "`q` must be either a single element or list"
+        #     raise TypeError(msg)
+
+        # result = self._quantiles(q, interpolation.upper())
+
+        # if q_is_number:
+        #     result = result.transpose()
+        #     return Series(
+        #         data=result._columns[0], index=result.index, name=q[0]
+        #     )
+        # else:
+        #     result.index = as_index(q)
+        #     return result
 
     @_cudf_nvtx_annotate
     def isin(self, values):
