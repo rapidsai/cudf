@@ -135,8 +135,54 @@ public class Rmm {
    * the result will always be a lower bound on the amount allocated.
    */
   public static native long getTotalBytesAllocated();
-  public static native void pushThreadMemoryTracker();
-  public static native long popThreadMemoryTracker();
+
+  /**
+   * Returns the maximum amount of RMM memory (Bytes) outstanding during the
+   * lifetime of the process.
+   *
+   * Note that this result is meaningful when a single thread is using the GPU, or
+   * when we have joined all threads and CUDA synchronized with all streams.
+   */
+  public static native long getMaximumOutstanding();
+
+  /**
+   * Resets a local maximum counter of RMM memory used to keep track of usage between
+   * sections code while debugging.
+   *
+   * Note that this result is meaningful when a single thread is using the GPU, or
+   * when we have joined all threads and CUDA synchronized with all streams.
+   *
+   * @param initialValue an initial value (in Bytes) to use for this local counter
+   */
+  public static void resetLocalMaximumOutstanding(long initialValue) {
+    resetLocalMaximumOutstanding(initialValue);
+  }
+
+  /**
+   * Resets a local maximum counter of RMM memory used to keep track of usage between
+   * sections code while debugging.
+   *
+   * Note that this result is meaningful when a single thread is using the GPU, or
+   * when we have joined all threads and CUDA synchronized with all streams.
+   *
+   * This resets the counter to 0 Bytes.
+   */
+  public static void resetLocalMaximumOutstanding() {
+    resetLocalMaximumOutstandingInternal(0L);
+  }
+
+  public static native void resetLocalMaximumOutstandingNative(long initialValue);
+
+  /**
+   * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
+   * `resetLocalMaximumOutstanding` call was issued (it is "local" because it's the
+   * maximum amount seen between reset and get calls).
+   *
+   * Note that this result is meaningful when a single thread is using the GPU, or
+   * when we have joined all threads and CUDA synchronized with all streams.
+   * @return
+   */
+  public static native long getLocalMaximumOutstanding();
 
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
