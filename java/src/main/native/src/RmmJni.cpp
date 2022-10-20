@@ -90,11 +90,9 @@ public:
 
   std::size_t get_total_allocated() override { return total_allocated.load(); }
 
-  void push_thread_memory_tracker() override { 
-    memory_tracker_stack.emplace();
-  }
+  void push_thread_memory_tracker() override { memory_tracker_stack.emplace(); }
 
-  long pop_thread_memory_tracker() override { 
+  long pop_thread_memory_tracker() override {
     auto top_tracker = memory_tracker_stack.top();
     auto ret = top_tracker.max_outstanding;
     memory_tracker_stack.pop();
@@ -108,18 +106,16 @@ public:
   }
 
 private:
-
   Upstream *const resource;
   std::size_t const size_align;
   std::atomic_size_t total_allocated{0};
 
   void thread_allocated(long addr, std::size_t num_bytes) {
     if (!memory_tracker_stack.empty()) {
-      alloc_map[addr] = num_bytes;                  
-      memory_tracker& tracker = memory_tracker_stack.top();
+      alloc_map[addr] = num_bytes;
+      memory_tracker &tracker = memory_tracker_stack.top();
       tracker.current_outstanding += num_bytes;
-      tracker.max_outstanding = 
-        std::max(tracker.current_outstanding, tracker.max_outstanding);
+      tracker.max_outstanding = std::max(tracker.current_outstanding, tracker.max_outstanding);
     }
   }
 
