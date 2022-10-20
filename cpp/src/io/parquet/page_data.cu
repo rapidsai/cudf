@@ -848,8 +848,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
-                                          size_t num_rows,
-                                          int page_idx = 0)
+                                          size_t num_rows)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -945,18 +944,19 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // NOTE: s->page.num_rows, s->col.chunk_row, s->first_row and s->num_rows will be 
       // invalid/bogus during first pass of the preprocess step for nested types. this is ok
       // because we ignore these values in that stage.
-      {
-        // first row within the page to output
-        if (page_start_row >= min_row) {
+      { 
+        auto const max_row = min_row + num_rows;
+        
+        // if we are totally outside the range of the input, do nothing
+        if((page_start_row > max_row) || (page_start_row + s->page.num_rows < min_row)){
           s->first_row = 0;
-        } else {
-          s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
+          s->num_rows = 0;
         }
-        // # of rows within the page to output
-        s->num_rows = s->page.num_rows;
-        if ((page_start_row + s->first_row) + s->num_rows > min_row + num_rows) {
-          s->num_rows =
-            (int32_t)max((int64_t)(min_row + num_rows - (page_start_row + s->first_row)), INT64_C(0));
+        // otherwise
+        else {
+          s->first_row = page_start_row >= min_row ? 0 : min_row - page_start_row;
+          auto const max_page_rows = s->page.num_rows - s->first_row;
+          s->num_rows = (page_start_row + s->first_row) + max_page_rows <= max_row ? max_page_rows : max_row - (page_start_row + s->first_row);
         }
       }
 
@@ -1091,8 +1091,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       } else {
         s->input_value_count        = 0;
         s->input_leaf_count         = 0;
-        s->page.skipped_values      = -1;
-        s->page.skipped_leaf_values = -1;
+        s->page.skipped_values      = -1;   // magic number to indicate it hasn't been set for use inside UpdatePageSizes
+        s->page.skipped_leaf_values = 0;
       }
     }
 
@@ -1473,7 +1473,6 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
       uint32_t const count_mask = ballot(in_nesting_bounds);
       if (!t) {
         s->page.nesting[s_idx].size += __popc(count_mask);
-        // printf("New size (%d): %d\n", s_idx, s->page.nesting[s_idx].size);
       }
 
       // string lengths, if applicable
@@ -1484,8 +1483,6 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
             if (is_new_leaf) {
               int const src_pos  = input_leaf_count + __popc(warp_leaf_count_mask & ((1 << t) - 1));
               auto const str_len = gpuGetStringSize(s, src_pos);
-              // printf("S(%d): len(%d), src_pos(%d), input_leaf_count(%d)\n", t, str_len, src_pos,
-              // input_leaf_count);
               return str_len;
             }
             return 0;
@@ -1534,27 +1531,28 @@ __global__ void __launch_bounds__(block_size)
                       device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
                       size_t num_rows,
-                      bool trim_pass)
+                      bool compute_num_rows_pass,
+                      bool compute_string_sizes)
 {
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s* const s = &state_g;
-  int page_idx          = blockIdx.x;
+  int  page_idx         = blockIdx.x;
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
-  if (!setupLocalPageInfo(s, pp, chunks, trim_pass ? min_row : 0, trim_pass ? num_rows : INT_MAX, page_idx)) {
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows)) {
     return;
   }
 
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
   bool const has_repetition   = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
-  bool const is_string_column = (s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4;
+  compute_string_sizes = compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);  
 
   // if this is a flat hierarchy (no lists) and is not a string column, compute the size directly
   // from the number of values.
-  if (!has_repetition && !is_string_column) {
+  if (!has_repetition && !compute_string_sizes) {
     if (!t) {
       // note: doing this for all nesting level because we can still have structs even if we don't
       // have lists.
@@ -1563,7 +1561,7 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     return;
-  }
+  }  
 
   // zero sizes
   int d = 0;
@@ -1573,13 +1571,13 @@ __global__ void __launch_bounds__(block_size)
   }
   if (!t) {
     s->page.skipped_values      = -1;
-    s->page.skipped_leaf_values = -1;
+    s->page.skipped_leaf_values = 0;
     s->page.str_bytes           = 0;
     s->input_row_count          = 0;
     s->input_value_count        = 0;
 
-    // if this isn't the trim pass, make sure we visit absolutely everything
-    if (!trim_pass) {
+    // if we're computing the number of rows, make sure we visit absolutely everything
+    if (compute_num_rows_pass) {
       s->first_row             = 0;
       s->num_rows              = INT_MAX;
       s->row_index_lower_bound = -1;
@@ -1610,7 +1608,7 @@ __global__ void __launch_bounds__(block_size)
       actual_input_count     = min(actual_input_count, s->num_input_values);
 
       // process what we got back
-      if (is_string_column) {
+      if (compute_string_sizes) {
         auto src_target_pos = target_input_count;
         // TODO: compute this in another warp like the decode step does
         if (s->dict_base) {
@@ -1620,9 +1618,9 @@ __global__ void __launch_bounds__(block_size)
         }
         if (!t) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
 
-        gpuUpdatePageSizes<true>(s, actual_input_count, t, trim_pass);
+        gpuUpdatePageSizes<true>(s, actual_input_count, t, !compute_num_rows_pass);
       } else {
-        gpuUpdatePageSizes<false>(s, actual_input_count, t, trim_pass);
+        gpuUpdatePageSizes<false>(s, actual_input_count, t, !compute_num_rows_pass);
       }
 
       // target_input_count = actual_input_count + batch_size;
@@ -1632,7 +1630,9 @@ __global__ void __launch_bounds__(block_size)
   }
   // update # rows in the actual page
   if (!t) {
-    pp->num_rows            = s->page.nesting[0].size;
+    if(compute_num_rows_pass){
+      pp->num_rows           = s->page.nesting[0].size;
+    }
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
     pp->str_bytes           = s->page.str_bytes;
@@ -1786,6 +1786,7 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
                       size_t min_row,
                       size_t num_rows,
                       bool trim_pass,
+                      bool compute_string_sizes,
                       rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
@@ -1797,7 +1798,7 @@ void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
   // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
   // the starting and ending read values to account for these bounds.
   gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks, min_row, num_rows, trim_pass);
+    pages.device_ptr(), chunks, min_row, num_rows, trim_pass, compute_string_sizes);
 }
 
 /**
