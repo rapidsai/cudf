@@ -10,7 +10,7 @@
         },
         {
           "file" : "${current_json_dir}/thrust_transform_iter_with_reduce_by_key.diff",
-          "issue" : "Support transform iterator with reduce by key [https://github.com/NVIDIA/thrust/pull/1805]",
+          "issue" : "Support transform_output_iterator as output of reduce by key [https://github.com/NVIDIA/thrust/pull/1805]",
           "fixed_in" : "2.1"
         },
         {
