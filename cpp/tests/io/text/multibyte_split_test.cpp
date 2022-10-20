@@ -421,6 +421,22 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRangesSingleByte)
   }
 }
 
+TEST_F(MultibyteSplitTest, SingletonRangeAtEnd)
+{
+  // we want a delimiter at the end of the file to create a new empty row. To make concatenation of
+  // disjoint byte ranges work, we need to make sure this property is preserved even if the byte
+  // range contains only the last delimiter
+  using namespace cudf::io::text;
+  auto host_input = std::string("ab:cd:");
+  auto delimiter  = std::string(":");
+  auto source     = make_source(host_input);
+  auto expected   = strings_column_wrapper{""};
+
+  auto out = multibyte_split(*source, delimiter, byte_range_info{5, 1});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
 TEST_F(MultibyteSplitTest, EmptyInput)
 {
   using namespace cudf::io::text;
