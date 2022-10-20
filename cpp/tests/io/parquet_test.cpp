@@ -1048,6 +1048,24 @@ TEST_F(ParquetWriterTest, HostBuffer)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
+TEST_F(ParquetWriterTest, ManyFragments)
+{
+  srand(31337);
+  auto const expected = create_random_fixed_table<int>(10, 6'000'000, false);
+
+  auto const filepath = temp_env->get_temp_filepath("ManyFragments.parquet");
+  cudf::io::parquet_writer_options const args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .max_page_size_bytes(8 * 1024);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options const read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+}
+
 TEST_F(ParquetWriterTest, NonNullable)
 {
   srand(31337);
