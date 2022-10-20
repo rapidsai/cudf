@@ -38,7 +38,7 @@ namespace detail {
  *                           `agg` is not Min or Max.
  *
  * @param input The input column view for the scan.
- * @param agg Aggregation operator applied by the scan.
+ * @param agg Aggregation operator applied by the scan
  * @param null_handling Exclude null values when computing the result if null_policy::EXCLUDE.
  *                      Include nulls if null_policy::INCLUDE. Any operation with a null results in
  *                      a null.
