@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import confluent_kafka as ck
 import pytest
 
