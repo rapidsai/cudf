@@ -17,6 +17,23 @@ import cudf
 import dask_cudf as dgd
 
 
+@pytest.mark.skipif(
+    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
+)
+def test_from_dict_backend_dispatch():
+    # Test ddf.from_dict cudf-backend dispatch
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    expect = cudf.DataFrame(data)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict(data, npartitions=2)
+    assert isinstance(ddf, dgd.DataFrame)
+    dd.assert_eq(expect, ddf)
+
+
 def test_from_cudf():
     np.random.seed(0)
 
