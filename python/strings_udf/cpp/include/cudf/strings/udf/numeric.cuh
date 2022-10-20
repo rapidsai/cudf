@@ -51,8 +51,7 @@ __device__ inline udf_string to_string(int64_t value)
     result.append("0");
     return result;
   }
-  auto const d_value = static_cast<double>(abs(value));
-  auto digits        = static_cast<int32_t>(log10(d_value)) + 1 + (value < 0);
+  auto digits = cudf::strings::detail::count_digits(value);
   result.resize(digits);
   cudf::strings::detail::integer_to_string(value, result.data());
   return result;

@@ -166,7 +166,7 @@ __device__ inline udf_string to_upper(chars_tables const tables, string_view d_s
  * @param d_str Input string to convert
  * @return New string containing the converted characters
  */
-__device__ inline udf_string swapcase(chars_tables const tables, string_view d_str)
+__device__ inline udf_string swap_case(chars_tables const tables, string_view d_str)
 {
   cudf::strings::detail::character_flags_table_type case_flag =
     cudf::strings::detail::IS_LOWER(0xFF) | cudf::strings::detail::IS_UPPER(0xFF);
