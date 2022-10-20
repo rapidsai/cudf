@@ -36,24 +36,32 @@ using namespace cudf::io;
 void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
   pages.device_to_host(_stream, true);
-  for(size_t idx=0; idx<pages.size(); idx++){
+  for (size_t idx = 0; idx < pages.size(); idx++) {
     auto const& p = pages[idx];
     // skip dictionary pages
-    if(p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY){
-      continue;
-    }    
-    printf("P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d)\n",
-           idx, p.src_col_schema, p.chunk_row, p.num_rows, p.skipped_values, p.skipped_leaf_values);
+    if (p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
+    printf(
+      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d)\n",
+      idx,
+      p.src_col_schema,
+      p.chunk_row,
+      p.num_rows,
+      p.skipped_values,
+      p.skipped_leaf_values);
   }
 }
 
 void print_chunks(hostdevice_vector<gpu::ColumnChunkDesc>& chunks, rmm::cuda_stream_view _stream)
 {
   chunks.device_to_host(_stream, true);
-  for(size_t idx=0; idx<chunks.size(); idx++){
+  for (size_t idx = 0; idx < chunks.size(); idx++) {
     auto const& c = chunks[idx];
     printf("C(%lu, s:%d): num_values(%lu), start_row(%lu), num_rows(%u)\n",
-           idx, c.src_col_schema, c.num_values, c.start_row, c.num_rows);
+           idx,
+           c.src_col_schema,
+           c.num_values,
+           c.start_row,
+           c.num_rows);
   }
 }
 
@@ -230,7 +238,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   // clang-format on
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end() + 1, key_offsets.begin());
+    rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
   // clang-format off
   /*
   stream.synchronize();
@@ -502,9 +510,9 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                           chunks,
                           0,
                           INT_MAX,
-                          true,                    // compute num_rows     
-                          chunked_read_size > 0,   // compute string sizes
-                          _stream);    
+                          true,                   // compute num_rows
+                          chunked_read_size > 0,  // compute string sizes
+                          _stream);
 
     // computes:
     // PageInfo::chunk_row for all pages
@@ -558,7 +566,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
     // retrieve pages back
     pages.device_to_host(_stream, true);
 
-    //print_pages(pages, _stream);
+    // print_pages(pages, _stream);
   }
 
   // compute splits if necessary.
@@ -581,15 +589,15 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
   // specified artifical bounds).
   if (uses_custom_row_bounds) {
-    gpu::ComputePageSizes(pages, 
-                          chunks, 
-                          min_row, 
-                          num_rows, 
-                          false,      // num_rows is already computed
-                          false,      // no need to compute string sizes
+    gpu::ComputePageSizes(pages,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          false,  // num_rows is already computed
+                          false,  // no need to compute string sizes
                           _stream);
-    //print_pages(pages, _stream);
-  }  
+    // print_pages(pages, _stream);
+  }
 
   // iterate over all input columns and allocate any associated output
   // buffers if they are not part of a list hierarchy. mark down
