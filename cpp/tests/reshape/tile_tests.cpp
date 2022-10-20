@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-using namespace cudf::test;
-
 template <typename T>
-struct TileTest : public BaseFixture {
+struct TileTest : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_SUITE(TileTest, cudf::test::AllTypes);
@@ -47,7 +45,7 @@ TYPED_TEST(TileTest, NoRows)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T> in_a({});
+  cudf::test::fixed_width_column_wrapper<T> in_a({});
   cudf::table_view in(std::vector<cudf::column_view>{in_a});
 
   auto expected = in;
@@ -61,10 +59,10 @@ TYPED_TEST(TileTest, OneColumn)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1});
   cudf::table_view in(std::vector<cudf::column_view>{in_a});
 
-  fixed_width_column_wrapper<T, int32_t> expected_a({-1, 0, 1, -1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> expected_a({-1, 0, 1, -1, 0, 1});
   cudf::table_view expected(std::vector<cudf::column_view>{expected_a});
 
   auto actual = cudf::tile(in, 2);
@@ -76,10 +74,11 @@ TYPED_TEST(TileTest, OneColumnNullable)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1}, {1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1}, {1, 0, 0});
   cudf::table_view in(std::vector<cudf::column_view>{in_a});
 
-  fixed_width_column_wrapper<T, int32_t> expected_a({-1, 0, 1, -1, 0, 1}, {1, 0, 0, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> expected_a({-1, 0, 1, -1, 0, 1},
+                                                                {1, 0, 0, 1, 0, 0});
   cudf::table_view expected(std::vector<cudf::column_view>{expected_a});
 
   auto actual = cudf::tile(in, 2);
@@ -91,7 +90,7 @@ TYPED_TEST(TileTest, OneColumnNegativeCount)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1}, {1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1}, {1, 0, 0});
   cudf::table_view in(std::vector<cudf::column_view>{in_a});
 
   EXPECT_THROW(cudf::tile(in, -1), cudf::logic_error);
@@ -101,13 +100,13 @@ TYPED_TEST(TileTest, OneColumnZeroCount)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1}, {1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> in_a({-1, 0, 1}, {1, 0, 0});
   cudf::table_view in(std::vector<cudf::column_view>{in_a});
 
   std::vector<T> vals{};
   std::vector<bool> mask{};
 
-  fixed_width_column_wrapper<T> expected_a(vals.begin(), vals.end(), mask.begin());
+  cudf::test::fixed_width_column_wrapper<T> expected_a(vals.begin(), vals.end(), mask.begin());
 
   cudf::table_view expected(std::vector<cudf::column_view>{expected_a});
 

@@ -73,11 +73,13 @@ public class RmmTest {
   public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
+    AtomicInteger timesRetried = new AtomicInteger();
 
     RmmEventHandler handler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         int count = invokedCount.incrementAndGet();
+        timesRetried.set(retryCount);
         amountRequested.set(sizeRequested);
         return count != 3;
       }
@@ -100,6 +102,7 @@ public class RmmTest {
     }
 
     assertEquals(3, invokedCount.get());
+    assertEquals(2, timesRetried.get());
     assertEquals(requested, amountRequested.get());
 
     // verify after a failure we can still allocate something more reasonable
@@ -114,7 +117,7 @@ public class RmmTest {
     // installing an event handler the first time should not be an error
     Rmm.setEventHandler(new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return false;
       }
     });
@@ -122,7 +125,7 @@ public class RmmTest {
     // installing a second event handler is an error
     RmmEventHandler otherHandler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return true;
       }
     };
@@ -138,7 +141,7 @@ public class RmmTest {
     // create an event handler that will always retry
     RmmEventHandler retryHandler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return true;
       }
     };
@@ -165,7 +168,7 @@ public class RmmTest {
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return false;
       }
 
@@ -228,7 +231,7 @@ public class RmmTest {
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return false;
       }
 
@@ -308,7 +311,7 @@ public class RmmTest {
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         throw new AllocFailException();
       }
 
