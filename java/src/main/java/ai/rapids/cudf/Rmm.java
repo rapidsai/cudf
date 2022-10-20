@@ -149,9 +149,6 @@ public class Rmm {
    * Resets a local maximum counter of RMM memory used to keep track of usage between
    * sections code while debugging.
    *
-   * Note that this result is meaningful when a single thread is using the GPU, or
-   * when we have joined all threads and CUDA synchronized with all streams.
-   *
    * @param initialValue an initial value (in Bytes) to use for this local counter
    */
   public static void resetLocalMaximumOutstanding(long initialValue) {
@@ -161,9 +158,6 @@ public class Rmm {
   /**
    * Resets a local maximum counter of RMM memory used to keep track of usage between
    * sections code while debugging.
-   *
-   * Note that this result is meaningful when a single thread is using the GPU, or
-   * when we have joined all threads and CUDA synchronized with all streams.
    *
    * This resets the counter to 0 Bytes.
    */
@@ -180,7 +174,11 @@ public class Rmm {
    *
    * Note that this result is meaningful when a single thread is using the GPU, or
    * when we have joined all threads and CUDA synchronized with all streams.
-   * @return
+   *
+   * If the memory used is net negative (for example if only frees happened since
+   * reset, and we reset to 0), then result will be 0 until we reset
+   *
+   * @return the local maximum in Bytes
    */
   public static native long getLocalMaximumOutstanding();
 

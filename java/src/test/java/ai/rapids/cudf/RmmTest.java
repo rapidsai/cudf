@@ -70,6 +70,89 @@ public class RmmTest {
       RmmAllocationMode.CUDA_DEFAULT,
       RmmAllocationMode.POOL,
       RmmAllocationMode.ARENA})
+  public void testMaxOutstanding(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getMaximumOutstanding());
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024)) {
+      assertEquals(1024, Rmm.getMaximumOutstanding());
+    }
+    assertEquals(0, Rmm.getTotalBytesAllocated());
+    assertEquals(1024, Rmm.getMaximumOutstanding());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
+  public void testLocalMaxOutstanding(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getMaximumOutstanding());
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+      assertEquals(2048, Rmm.getLocalMaximumOutstanding());
+    }
+    assertEquals(0, Rmm.getTotalBytesAllocated());
+    assertEquals(2048, Rmm.getLocalMaximumOutstanding());
+
+    Rmm.resetLocalMaximumOutstanding(0);
+    assertEquals(0, Rmm.getLocalMaximumOutstanding());
+    assertEquals(2048, Rmm.getMaximumOutstanding());
+
+    DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+    ignored.close();
+    assertEquals(1024, Rmm.getLocalMaximumOutstanding());
+    assertEquals(2048, Rmm.getMaximumOutstanding());
+    assertEquals(0, Rmm.getTotalBytesAllocated());
+
+    // a non-zero value is the new minimum
+    DeviceMemoryBuffer ignored2 = Rmm.alloc(1024);
+    ignored2.close();
+    Rmm.resetLocalMaximumOutstanding(10000);
+    assertEquals(10000, Rmm.getLocalMaximumOutstanding());
+    assertEquals(2048, Rmm.getMaximumOutstanding());
+
+    try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
+      Rmm.resetLocalMaximumOutstanding(1024);
+      try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
+        assertEquals(20480, Rmm.getLocalMaximumOutstanding());
+        assertEquals(21504, Rmm.getMaximumOutstanding());
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
+  public void testLocalMaxOutstandingNegative(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getMaximumOutstanding());
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+      assertEquals(2048, Rmm.getLocalMaximumOutstanding());
+      Rmm.resetLocalMaximumOutstanding();
+      assertEquals(0, Rmm.getLocalMaximumOutstanding());
+    }
+    // because we allocated a net -2048 Bytes since reset
+    assertEquals(0, Rmm.getLocalMaximumOutstanding());
+    DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+    ignored.close();
+    assertEquals(0, Rmm.getLocalMaximumOutstanding());
+
+    // if we allocate 2KB and then 256B we start seeing a positive local maximum
+    try (DeviceMemoryBuffer ignored2 = Rmm.alloc(2048);
+         DeviceMemoryBuffer ignored3 = Rmm.alloc(256)) {
+      assertEquals(256, Rmm.getLocalMaximumOutstanding());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
   public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();

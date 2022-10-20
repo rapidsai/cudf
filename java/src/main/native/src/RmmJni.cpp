@@ -85,22 +85,23 @@ public:
 
   std::size_t get_total_allocated() override { return total_allocated.load(); }
 
-  std::size_t get_max_outstanding() override { return max_outstanding.load(); }
+  std::size_t get_max_outstanding() override { return max_outstanding; }
 
   void reset_local_max_outstanding(std::size_t initial_value) override {
     local_max_outstanding = initial_value;
-    local_allocated = initial_value;
+    // keep track of where we currently are when the reset call is issued
+    local_allocated = total_allocated;
   }
 
-  std::size_t get_local_max_outstanding() override { return local_max_outstanding.load(); }
+  std::size_t get_local_max_outstanding() override { return local_max_outstanding; }
 
 private:
   Upstream *const resource;
   std::size_t const size_align;
   std::atomic_size_t total_allocated{0};
-  std::atomic_size_t max_outstanding{0};
-  std::atomic_size_t local_allocated{0};
-  std::atomic_size_t local_max_outstanding{0};
+  std::size_t max_outstanding{0};
+  std::size_t local_allocated{0};
+  std::size_t local_max_outstanding{0};
 
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     // adjust size of allocation based on specified size alignment
@@ -109,11 +110,15 @@ private:
     auto result = resource->allocate(num_bytes, stream);
     if (result) {
       total_allocated += num_bytes;
-      local_allocated += num_bytes;
 
-      // Note: this is not thread safe.
-      max_outstanding.store(std::max(total_allocated, max_outstanding));
-      local_max_outstanding.store(std::max(local_allocated, local_max_outstanding));
+      // Note: none of the below is thread safe. It is only meaningful when
+      // a single thread is used.
+      max_outstanding = std::max(total_allocated.load(), max_outstanding);
+
+      // `total_allocated - local_allocated` can be negative in the case where we free
+      // after we call `reset_local_max_outstanding`
+      std::size_t local_diff = std::max(static_cast<long>(total_allocated - local_allocated), 0L);
+      local_max_outstanding = std::max(local_diff, local_max_outstanding);
     }
     return result;
   }
@@ -125,7 +130,6 @@ private:
 
     if (p) {
       total_allocated -= size;
-      local_allocated -= size;
     }
   }
 
