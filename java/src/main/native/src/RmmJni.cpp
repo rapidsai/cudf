@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <mutex>
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
@@ -51,11 +52,11 @@ class base_tracking_resource_adaptor : public device_memory_resource {
 public:
   virtual std::size_t get_total_allocated() = 0;
 
-  virtual std::size_t get_max_outstanding() = 0;
+  virtual std::size_t get_max_total_allocated() = 0;
 
-  virtual void reset_local_max_outstanding(std::size_t initial_value) = 0;
+  virtual void reset_local_max_total_allocated(std::size_t initial_value) = 0;
 
-  virtual std::size_t get_local_max_outstanding() = 0;
+  virtual std::size_t get_local_max_total_allocated() = 0;
 };
 
 /**
@@ -85,23 +86,33 @@ public:
 
   std::size_t get_total_allocated() override { return total_allocated.load(); }
 
-  std::size_t get_max_outstanding() override { return max_outstanding; }
+  std::size_t get_max_total_allocated() override { return max_outstanding; }
 
-  void reset_local_max_outstanding(std::size_t initial_value) override {
+  void reset_local_max_total_allocated(std::size_t initial_value) override {
+    local_allocated = 0;
     local_max_outstanding = initial_value;
-    // keep track of where we currently are when the reset call is issued
-    local_allocated = total_allocated;
   }
 
-  std::size_t get_local_max_outstanding() override { return local_max_outstanding; }
+  std::size_t get_local_max_total_allocated() override { return local_max_outstanding; }
 
 private:
   Upstream *const resource;
   std::size_t const size_align;
+  // sum of what is currently outstanding
   std::atomic_size_t total_allocated{0};
+
+  // the maximum outstanding for the lifetime of this class
   std::size_t max_outstanding{0};
-  std::size_t local_allocated{0};
-  std::size_t local_max_outstanding{0};
+
+  // the local sum of what is currently outstanding from the last
+  // `reset_local_max_outstanding` call. This can be negative.
+  std::atomic_long local_allocated{0};
+
+  // the maximum maximum outstanding relative to the last
+  // `reset_local_max_outstanding` call.
+  long local_max_outstanding{0};
+
+  std::mutex max_outstanding_mutex;
 
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     // adjust size of allocation based on specified size alignment
@@ -110,15 +121,11 @@ private:
     auto result = resource->allocate(num_bytes, stream);
     if (result) {
       total_allocated += num_bytes;
+      local_allocated += num_bytes;
 
-      // Note: none of the below is thread safe. It is only meaningful when
-      // a single thread is used.
+      std::scoped_lock lock(max_outstanding_mutex);
       max_outstanding = std::max(total_allocated.load(), max_outstanding);
-
-      // `total_allocated - local_allocated` can be negative in the case where we free
-      // after we call `reset_local_max_outstanding`
-      std::size_t local_diff = std::max(static_cast<long>(total_allocated - local_allocated), 0L);
-      local_max_outstanding = std::max(local_diff, local_max_outstanding);
+      local_max_outstanding = std::max(local_allocated.load(), local_max_outstanding);
     }
     return result;
   }
@@ -130,6 +137,7 @@ private:
 
     if (p) {
       total_allocated -= size;
+      local_allocated -= size;
     }
   }
 
@@ -160,22 +168,22 @@ std::size_t get_total_bytes_allocated() {
   return 0;
 }
 
-std::size_t get_max_outstanding() {
+std::size_t get_max_total_allocated() {
   if (Tracking_memory_resource) {
-    return Tracking_memory_resource->get_max_outstanding();
+    return Tracking_memory_resource->get_max_total_allocated();
   }
   return 0;
 }
 
-void reset_local_max_outstanding(std::size_t initial_value) {
+void reset_local_max_total_allocated(std::size_t initial_value) {
   if (Tracking_memory_resource) {
-    return Tracking_memory_resource->reset_local_max_outstanding(initial_value);
+    return Tracking_memory_resource->reset_local_max_total_allocated(initial_value);
   }
 }
 
-std::size_t get_local_max_outstanding() {
+std::size_t get_local_max_total_allocated() {
   if (Tracking_memory_resource) {
-    return Tracking_memory_resource->get_local_max_outstanding();
+    return Tracking_memory_resource->get_local_max_total_allocated();
   }
   return 0;
 }
@@ -503,17 +511,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv *e
   return get_total_bytes_allocated();
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getMaximumOutstanding(JNIEnv *env, jclass) {
-  return get_max_outstanding();
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getMaximumTotalBytesAllocated(JNIEnv *env, jclass) {
+  return get_max_total_allocated();
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetLocalMaximumOutstandingInternal(
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetLocalMaximumBytesAllocatedInternal(
     JNIEnv *env, jclass, long initialValue) {
-  reset_local_max_outstanding(initialValue);
+  reset_local_max_total_allocated(initialValue);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getLocalMaximumOutstanding(JNIEnv *env, jclass) {
-  return get_local_max_outstanding();
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getLocalMaximumBytesAllocated(JNIEnv *env, jclass) {
+  return get_local_max_total_allocated();
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclass clazz, jlong size,

@@ -143,7 +143,7 @@ public class Rmm {
    * Note that this result is meaningful when a single thread is using the GPU, or
    * when we have joined all threads and CUDA synchronized with all streams.
    */
-  public static native long getMaximumOutstanding();
+  public static native long getMaximumTotalBytesAllocated();
 
   /**
    * Resets a local maximum counter of RMM memory used to keep track of usage between
@@ -151,8 +151,8 @@ public class Rmm {
    *
    * @param initialValue an initial value (in Bytes) to use for this local counter
    */
-  public static void resetLocalMaximumOutstanding(long initialValue) {
-    resetLocalMaximumOutstandingInternal(initialValue);
+  public static void resetLocalMaximumBytesAllocated(long initialValue) {
+    resetLocalMaximumBytesAllocatedInternal(initialValue);
   }
 
   /**
@@ -161,11 +161,11 @@ public class Rmm {
    *
    * This resets the counter to 0 Bytes.
    */
-  public static void resetLocalMaximumOutstanding() {
-    resetLocalMaximumOutstandingInternal(0L);
+  public static void resetLocalMaximumBytesAllocated() {
+    resetLocalMaximumBytesAllocatedInternal(0L);
   }
 
-  public static native void resetLocalMaximumOutstandingInternal(long initialValue);
+  private static native void resetLocalMaximumBytesAllocatedInternal(long initialValue);
 
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
@@ -180,7 +180,7 @@ public class Rmm {
    *
    * @return the local maximum in Bytes
    */
-  public static native long getLocalMaximumOutstanding();
+  public static native long getLocalMaximumBytesAllocated();
 
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).

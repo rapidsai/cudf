@@ -72,12 +72,12 @@ public class RmmTest {
       RmmAllocationMode.ARENA})
   public void testMaxOutstanding(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
-    assertEquals(0, Rmm.getMaximumOutstanding());
+    assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
     try (DeviceMemoryBuffer ignored = Rmm.alloc(1024)) {
-      assertEquals(1024, Rmm.getMaximumOutstanding());
+      assertEquals(1024, Rmm.getMaximumTotalBytesAllocated());
     }
     assertEquals(0, Rmm.getTotalBytesAllocated());
-    assertEquals(1024, Rmm.getMaximumOutstanding());
+    assertEquals(1024, Rmm.getMaximumTotalBytesAllocated());
   }
 
   @ParameterizedTest
@@ -87,36 +87,36 @@ public class RmmTest {
       RmmAllocationMode.ARENA})
   public void testLocalMaxOutstanding(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
-    assertEquals(0, Rmm.getMaximumOutstanding());
+    assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
     try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
          DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
-      assertEquals(2048, Rmm.getLocalMaximumOutstanding());
+      assertEquals(2048, Rmm.getLocalMaximumBytesAllocated());
     }
     assertEquals(0, Rmm.getTotalBytesAllocated());
-    assertEquals(2048, Rmm.getLocalMaximumOutstanding());
+    assertEquals(2048, Rmm.getLocalMaximumBytesAllocated());
 
-    Rmm.resetLocalMaximumOutstanding(0);
-    assertEquals(0, Rmm.getLocalMaximumOutstanding());
-    assertEquals(2048, Rmm.getMaximumOutstanding());
+    Rmm.resetLocalMaximumBytesAllocated();
+    assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
 
     DeviceMemoryBuffer ignored = Rmm.alloc(1024);
     ignored.close();
-    assertEquals(1024, Rmm.getLocalMaximumOutstanding());
-    assertEquals(2048, Rmm.getMaximumOutstanding());
+    assertEquals(1024, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
     assertEquals(0, Rmm.getTotalBytesAllocated());
 
     // a non-zero value is the new minimum
     DeviceMemoryBuffer ignored2 = Rmm.alloc(1024);
     ignored2.close();
-    Rmm.resetLocalMaximumOutstanding(10000);
-    assertEquals(10000, Rmm.getLocalMaximumOutstanding());
-    assertEquals(2048, Rmm.getMaximumOutstanding());
+    Rmm.resetLocalMaximumBytesAllocated(10000);
+    assertEquals(10000, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
 
     try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
-      Rmm.resetLocalMaximumOutstanding(1024);
+      Rmm.resetLocalMaximumBytesAllocated(1024);
       try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
-        assertEquals(20480, Rmm.getLocalMaximumOutstanding());
-        assertEquals(21504, Rmm.getMaximumOutstanding());
+        assertEquals(20480, Rmm.getLocalMaximumBytesAllocated());
+        assertEquals(21504, Rmm.getMaximumTotalBytesAllocated());
       }
     }
   }
@@ -128,23 +128,23 @@ public class RmmTest {
       RmmAllocationMode.ARENA})
   public void testLocalMaxOutstandingNegative(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
-    assertEquals(0, Rmm.getMaximumOutstanding());
+    assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
     try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
          DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
-      assertEquals(2048, Rmm.getLocalMaximumOutstanding());
-      Rmm.resetLocalMaximumOutstanding();
-      assertEquals(0, Rmm.getLocalMaximumOutstanding());
+      assertEquals(2048, Rmm.getLocalMaximumBytesAllocated());
+      Rmm.resetLocalMaximumBytesAllocated();
+      assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
     }
     // because we allocated a net -2048 Bytes since reset
-    assertEquals(0, Rmm.getLocalMaximumOutstanding());
+    assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
     DeviceMemoryBuffer ignored = Rmm.alloc(1024);
     ignored.close();
-    assertEquals(0, Rmm.getLocalMaximumOutstanding());
+    assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
 
     // if we allocate 2KB and then 256B we start seeing a positive local maximum
     try (DeviceMemoryBuffer ignored2 = Rmm.alloc(2048);
          DeviceMemoryBuffer ignored3 = Rmm.alloc(256)) {
-      assertEquals(256, Rmm.getLocalMaximumOutstanding());
+      assertEquals(256, Rmm.getLocalMaximumBytesAllocated());
     }
   }
 
