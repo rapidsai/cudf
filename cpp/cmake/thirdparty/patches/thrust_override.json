@@ -6,7 +6,7 @@
         {
           "file" : "Thrust/install_rules.diff",
           "issue" : "Thrust 1.X installs incorrect files [https://github.com/NVIDIA/thrust/issues/1790]",
-          "fixed_in" : "2.0"
+          "fixed_in" : "2.0.0"
         },
         {
           "file" : "${current_json_dir}/thrust_transform_iter_with_reduce_by_key.diff",
