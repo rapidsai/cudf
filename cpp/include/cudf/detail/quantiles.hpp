@@ -32,9 +32,10 @@ namespace detail {
 std::unique_ptr<column> quantile(
   column_view const& input,
   std::vector<double> const& q,
-  interpolation interp                = interpolation::LINEAR,
-  column_view const& ordered_indices  = {},
-  bool exact                          = true,
+  interpolation interp               = interpolation::LINEAR,
+  column_view const& ordered_indices = {},
+  bool exact                         = true,
+  // TODO: Move above interp?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -50,8 +51,9 @@ std::unique_ptr<table> quantiles(
   cudf::sorted is_input_sorted                   = sorted::NO,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+  // TODO: Move above interp?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::percentile_approx(tdigest_column_view const&, column_view const&,
@@ -62,7 +64,7 @@ std::unique_ptr<table> quantiles(
 std::unique_ptr<column> percentile_approx(
   tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

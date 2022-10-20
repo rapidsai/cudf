@@ -34,7 +34,7 @@ std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
   cudf::string_scalar const& json_path,
   get_json_object_options options,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

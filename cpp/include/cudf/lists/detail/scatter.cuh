@@ -96,7 +96,7 @@ std::unique_ptr<column> scatter_impl(
   MapIterator scatter_map_end,
   column_view const& source,
   column_view const& target,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(column_types_equal(source, target), "Mismatched column types.");
@@ -169,7 +169,7 @@ std::unique_ptr<column> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   column_view const& target,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const num_rows = target.size();
@@ -226,7 +226,7 @@ std::unique_ptr<column> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   column_view const& target,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const num_rows = target.size();
