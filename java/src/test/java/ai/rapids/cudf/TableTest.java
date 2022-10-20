@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
+  private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
@@ -722,6 +723,23 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testChunkedReadParquet() {
+    try (ParquetChunkedReader reader = new ParquetChunkedReader(240000,
+        TEST_PARQUET_FILE_CHUNKED_READ)) {
+      int numChunks = 0;
+      long totalRows = 0;
+      while(reader.hasNext()) {
+        ++numChunks;
+        try(Table chunk = reader.readChunk()) {
+          totalRows += chunk.getRowCount();
+        }
+      }
+      assertEquals(2, numChunks);
+      assertEquals(40000, totalRows);
     }
   }
 
@@ -5798,8 +5816,8 @@ public class TableTest extends CudfTestBase {
       case 2: return Scalar.fromDecimal(scale, unscaledValue);
       case 3: return Scalar.fromDecimal(scale, Long.valueOf(unscaledValue));
       case 4: return Scalar.fromDecimal(scale, big(unscaledValue));
-      default: 
-        throw new IllegalStateException("Unexpected order by column index: " 
+      default:
+        throw new IllegalStateException("Unexpected order by column index: "
                                         + orderby_col_idx);
     }
   }
@@ -5809,11 +5827,11 @@ public class TableTest extends CudfTestBase {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-        .decimal32Column(-1, 4000, 3000, 2000, 1000, 
-                             4000, 3000, 2000, 1000, 
+        .decimal32Column(-1, 4000, 3000, 2000, 1000,
+                             4000, 3000, 2000, 1000,
                              4000, 3000, 2000, 1000) // Decimal OBY Key
-        .decimal64Column(-1, 4000l, 3000l, 2000l, 1000l, 
-                             4000l, 3000l, 2000l, 1000l, 
+        .decimal64Column(-1, 4000l, 3000l, 2000l, 1000l,
+                             4000l, 3000l, 2000l, 1000l,
                              4000l, 3000l, 2000l, 1000l) // Decimal OBY Key
         .decimal128Column(-1, RoundingMode.UNNECESSARY,
                               big(4000), big(3000), big(2000), big(1000),
@@ -5822,13 +5840,13 @@ public class TableTest extends CudfTestBase {
         .column(9, 1, 5, 7, 2, 8, 9, 7, 6, 6, 0, 8) // Agg Column
         .build()) {
 
-      // Columns 2,3,4 are decimal order-by columns of type DECIMAL32, DECIMAL64, 
+      // Columns 2,3,4 are decimal order-by columns of type DECIMAL32, DECIMAL64,
       // and DECIMAL128 respectively, with similarly ordered values.
       // In the following loop, each decimal type is tested as the order-by column,
       // producing the same results with similar range bounds.
       for (int decimal_oby_col_idx = 2; decimal_oby_col_idx <= 4; ++decimal_oby_col_idx) {
-        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), 
-                                             OrderByArg.asc(1), 
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0),
+                                             OrderByArg.asc(1),
                                              OrderByArg.asc(decimal_oby_col_idx));
             ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
           ColumnVector sortedAggColumn = sorted.getColumn(5);
