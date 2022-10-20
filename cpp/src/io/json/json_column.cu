@@ -723,10 +723,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
-table_with_metadata device_parse_nested_json2(device_span<SymbolT const> d_input,
-                                              cudf::io::json_reader_options const& options,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
+                                             cudf::io::json_reader_options const& options,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -851,7 +851,7 @@ table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
   // Allocate device memory for the JSON input & copy over to device
   rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
-  return device_parse_nested_json2(device_span<SymbolT const>{d_input}, options, stream, mr);
+  return device_parse_nested_json(device_span<SymbolT const>{d_input}, options, stream, mr);
 }
 }  // namespace detail
 }  // namespace cudf::io::json

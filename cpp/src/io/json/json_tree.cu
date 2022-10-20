@@ -467,7 +467,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
  *   a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent
  *      until root.
  *   b. While creating hashmap, transform node id to unique node ids that are inserted into the
- *      hash map This mimicks set operation with hash map. This unique node ids are set ids.
+ *      hash map. This mimicks set operation with hash map. This unique node ids are set ids.
  *   c. Return this converted set ids, which are the hash map keys/values, and unique set ids.
  **/
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_node_path(
@@ -479,7 +479,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 {
   CUDF_FUNC_RANGE();
   auto num_nodes = parent_node_ids.size();
-  rmm::device_uvector<size_type> col_id(num_nodes, stream);
+  rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
@@ -569,8 +569,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
  *    c. sort and use binary search to generate column ids.
  *    d. Translate parent node ids to parent column ids.
  *
- * @param node_type Unique id to identify node type, field with different name has different id.
- * @param parent_indices Parent node indices in the sorted node_level order
+ * All inputs and outputs are in node_id order.
+ * @param d_input JSON string in device memory
+ * @param d_tree Tree representation of the JSON
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column_id, parent_column_id
@@ -584,10 +585,10 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   CUDF_FUNC_RANGE();
   auto num_nodes = d_tree.node_categories.size();
 
-  // Two-level hashing:
-  // one for field names -> node_type and,
-  // another for {node_level, node_category} + field hash for the entire path
-  // which is {node_level, node_type} recursively using parent_node_id
+  // Two level hashing:
+  //   one for field names -> node_type and,
+  //   another for {node_level, node_category} + field hash for the entire path
+  //    which is {node_level, node_type} recursively using parent_node_id
   auto [col_id, unique_keys] = [&]() {
     // Convert node_category + field_name to node_type.
     rmm::device_uvector<size_type> node_type =
@@ -605,7 +606,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                       col_id.end(),
                       col_id.begin());
 
-  rmm::device_uvector<size_type> parent_col_id(num_nodes, stream);
+  rmm::device_uvector<size_type> parent_col_id(num_nodes, stream, mr);
   thrust::transform(rmm::exec_policy(stream),
                     d_tree.parent_node_ids.begin(),
                     d_tree.parent_node_ids.end(),
@@ -636,7 +637,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
  * @return row_offsets
  */
 rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndexT>&& parent_col_id,
-                                                   tree_meta_t& d_tree,
+                                                   tree_meta_t const& d_tree,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
@@ -725,7 +726,7 @@ Algorithm:
 **/
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
-                              tree_meta_t& d_tree,
+                              tree_meta_t const& d_tree,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
