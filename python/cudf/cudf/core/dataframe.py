@@ -5302,9 +5302,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             msg = "`q` must be either a single element or list"
             raise TypeError(msg)
 
-        qs = [q] if is_scalar(q) else q
         if method == "table":
-            result = self._quantiles(qs, interpolation.upper())
+            q = [float(q)] if q_is_number else q
+            result = self._quantile_table(q, interpolation.upper())
 
             if q_is_number:
                 result = result.transpose()
@@ -5317,6 +5317,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             # Ensure that qs is non-scalar so that we always get a column back.
             result = {}
+            qs = [q] if is_scalar(q) else q
             for k in data_df._data.names:
                 if k in columns:
                     ser = data_df[k]
@@ -5347,6 +5348,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Return values at the given quantile.
 
+        This API is now deprecated. Please use ``DataFrame.qauntile``
+        with ``method='table'``.
+
         Parameters
         ----------
         q : float or array-like
@@ -5365,30 +5369,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             "Please use DataFrame.quantile with `method='table'`.",
             FutureWarning,
         )
-        import pdb
 
-        pdb.set_trace()
         return self.quantile(q=q, interpolation=interpolation, method="table")
 
-        # if isinstance(q, numbers.Number):
-        #     q_is_number = True
-        #     q = [float(q)]
-        # elif pd.api.types.is_list_like(q):
-        #     q_is_number = False
-        # else:
-        #     msg = "`q` must be either a single element or list"
-        #     raise TypeError(msg)
-
-        # result = self._quantiles(q, interpolation.upper())
-
-        # if q_is_number:
-        #     result = result.transpose()
-        #     return Series(
-        #         data=result._columns[0], index=result.index, name=q[0]
-        #     )
-        # else:
-        #     result.index = as_index(q)
-        #     return result
 
     @_cudf_nvtx_annotate
     def isin(self, values):

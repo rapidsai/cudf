@@ -20,7 +20,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.quantiles cimport (
     quantile as cpp_quantile,
-    quantiles as cpp_quantiles,
+    quantiles as cpp_quantile_table,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -74,7 +74,7 @@ def quantile(
     return Column.from_unique_ptr(move(c_result))
 
 
-def quantiles(list source_columns,
+def quantile_table(list source_columns,
               vector[double] q,
               object interp,
               object is_input_sorted,
@@ -108,7 +108,7 @@ def quantiles(list source_columns,
 
     with nogil:
         c_result = move(
-            cpp_quantiles(
+            cpp_quantile_table(
                 c_input,
                 c_q,
                 c_interp,

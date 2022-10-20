@@ -953,7 +953,7 @@ class Frame(BinaryOperand, Scannable):
         return self[out_cols]
 
     @_cudf_nvtx_annotate
-    def _quantiles(
+    def _quantile_table(
         self,
         q,
         interpolation="LINEAR",
@@ -972,7 +972,7 @@ class Frame(BinaryOperand, Scannable):
         ]
 
         return self._from_columns_like_self(
-            libcudf.quantiles.quantiles(
+            libcudf.quantiles.quantile_table(
                 [*self._columns],
                 q,
                 interpolation,
