@@ -5,4 +5,5 @@ libcudf examples.
 
 Current examples:
 
-- Basic: example that demonstrates basic use case with libcudf and building a custom application with libcudf.
+- Basic: example that demonstrates basic use case with libcudf and building a custom application with libcudf
+- Strings: examples using libcudf with strings columns and creating custom kernels for strings
