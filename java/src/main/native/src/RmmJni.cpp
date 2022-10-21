@@ -54,9 +54,9 @@ public:
 
   virtual std::size_t get_max_total_allocated() = 0;
 
-  virtual void reset_local_max_total_allocated(std::size_t initial_value) = 0;
+  virtual void reset_scoped_max_total_allocated(std::size_t initial_value) = 0;
 
-  virtual std::size_t get_local_max_total_allocated() = 0;
+  virtual std::size_t get_scoped_max_total_allocated() = 0;
 };
 
 /**
@@ -88,12 +88,12 @@ public:
 
   std::size_t get_max_total_allocated() override { return max_total_allocated; }
 
-  void reset_local_max_total_allocated(std::size_t initial_value) override {
-    local_allocated = 0;
-    local_max_total_allocated = initial_value;
+  void reset_scoped_max_total_allocated(std::size_t initial_value) override {
+    scoped_allocated = 0;
+    scoped_max_total_allocated = initial_value;
   }
 
-  std::size_t get_local_max_total_allocated() override { return local_max_total_allocated; }
+  std::size_t get_scoped_max_total_allocated() override { return scoped_max_total_allocated; }
 
 private:
   Upstream *const resource;
@@ -104,13 +104,13 @@ private:
   // the maximum total allocated for the lifetime of this class
   std::size_t max_total_allocated{0};
 
-  // the local sum of what is currently outstanding from the last
-  // `reset_local_max_total_allocated` call. This can be negative.
-  std::atomic_long local_allocated{0};
+  // the sum of what is currently outstanding from the last
+  // `reset_scoped_max_total_allocated` call. This can be negative.
+  std::atomic_long scoped_allocated{0};
 
   // the maximum total allocated relative to the last
-  // `reset_local_max_total_allocated` call.
-  long local_max_total_allocated{0};
+  // `reset_scoped_max_total_allocated` call.
+  long scoped_max_total_allocated{0};
 
   std::mutex max_total_allocated_mutex;
 
@@ -121,11 +121,11 @@ private:
     auto result = resource->allocate(num_bytes, stream);
     if (result) {
       total_allocated += num_bytes;
-      local_allocated += num_bytes;
+      scoped_allocated += num_bytes;
 
       std::scoped_lock lock(max_total_allocated_mutex);
       max_total_allocated = std::max(total_allocated.load(), max_total_allocated);
-      local_max_total_allocated = std::max(local_allocated.load(), local_max_total_allocated);
+      scoped_max_total_allocated = std::max(scoped_allocated.load(), scoped_max_total_allocated);
     }
     return result;
   }
@@ -137,7 +137,7 @@ private:
 
     if (p) {
       total_allocated -= size;
-      local_allocated -= size;
+      scoped_allocated -= size;
     }
   }
 
@@ -175,15 +175,15 @@ std::size_t get_max_total_allocated() {
   return 0;
 }
 
-void reset_local_max_total_allocated(std::size_t initial_value) {
+void reset_scoped_max_total_allocated(std::size_t initial_value) {
   if (Tracking_memory_resource) {
-    return Tracking_memory_resource->reset_local_max_total_allocated(initial_value);
+    return Tracking_memory_resource->reset_scoped_max_total_allocated(initial_value);
   }
 }
 
-std::size_t get_local_max_total_allocated() {
+std::size_t get_scoped_max_total_allocated() {
   if (Tracking_memory_resource) {
-    return Tracking_memory_resource->get_local_max_total_allocated();
+    return Tracking_memory_resource->get_scoped_max_total_allocated();
   }
   return 0;
 }
@@ -515,13 +515,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getMaximumTotalBytesAllocated(JN
   return get_max_total_allocated();
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetLocalMaximumBytesAllocatedInternal(
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetScopedMaximumBytesAllocatedInternal(
     JNIEnv *env, jclass, long initialValue) {
-  reset_local_max_total_allocated(initialValue);
+  reset_scoped_max_total_allocated(initialValue);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getLocalMaximumBytesAllocated(JNIEnv *env, jclass) {
-  return get_local_max_total_allocated();
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getScopedMaximumBytesAllocated(JNIEnv *env, jclass) {
+  return get_scoped_max_total_allocated();
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclass clazz, jlong size,

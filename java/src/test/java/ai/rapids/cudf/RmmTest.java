@@ -85,37 +85,37 @@ public class RmmTest {
       RmmAllocationMode.CUDA_DEFAULT,
       RmmAllocationMode.POOL,
       RmmAllocationMode.ARENA})
-  public void testLocalMaxOutstanding(int rmmAllocMode) {
+  public void testScopedMaxOutstanding(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
     assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
     try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
          DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
-      assertEquals(2048, Rmm.getLocalMaximumBytesAllocated());
+      assertEquals(2048, Rmm.getScopedMaximumBytesAllocated());
     }
     assertEquals(0, Rmm.getTotalBytesAllocated());
-    assertEquals(2048, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getScopedMaximumBytesAllocated());
 
-    Rmm.resetLocalMaximumBytesAllocated();
-    assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
+    Rmm.resetScopedMaximumBytesAllocated();
+    assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
     assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
 
     DeviceMemoryBuffer ignored = Rmm.alloc(1024);
     ignored.close();
-    assertEquals(1024, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(1024, Rmm.getScopedMaximumBytesAllocated());
     assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
     assertEquals(0, Rmm.getTotalBytesAllocated());
 
     // a non-zero value is the new minimum
     DeviceMemoryBuffer ignored2 = Rmm.alloc(1024);
     ignored2.close();
-    Rmm.resetLocalMaximumBytesAllocated(10000);
-    assertEquals(10000, Rmm.getLocalMaximumBytesAllocated());
+    Rmm.resetScopedMaximumBytesAllocated(10000);
+    assertEquals(10000, Rmm.getScopedMaximumBytesAllocated());
     assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
 
     try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
-      Rmm.resetLocalMaximumBytesAllocated(1024);
+      Rmm.resetScopedMaximumBytesAllocated(1024);
       try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
-        assertEquals(20480, Rmm.getLocalMaximumBytesAllocated());
+        assertEquals(20480, Rmm.getScopedMaximumBytesAllocated());
         assertEquals(21504, Rmm.getMaximumTotalBytesAllocated());
       }
     }
@@ -126,25 +126,25 @@ public class RmmTest {
       RmmAllocationMode.CUDA_DEFAULT,
       RmmAllocationMode.POOL,
       RmmAllocationMode.ARENA})
-  public void testLocalMaxOutstandingNegative(int rmmAllocMode) {
+  public void testScopedMaxOutstandingNegative(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
     assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
     try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
          DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
-      assertEquals(2048, Rmm.getLocalMaximumBytesAllocated());
-      Rmm.resetLocalMaximumBytesAllocated();
-      assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
+      assertEquals(2048, Rmm.getScopedMaximumBytesAllocated());
+      Rmm.resetScopedMaximumBytesAllocated();
+      assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
     }
     // because we allocated a net -2048 Bytes since reset
-    assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
     DeviceMemoryBuffer ignored = Rmm.alloc(1024);
     ignored.close();
-    assertEquals(0, Rmm.getLocalMaximumBytesAllocated());
+    assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
 
     // if we allocate 2KB and then 256B we start seeing a positive local maximum
     try (DeviceMemoryBuffer ignored2 = Rmm.alloc(2048);
          DeviceMemoryBuffer ignored3 = Rmm.alloc(256)) {
-      assertEquals(256, Rmm.getLocalMaximumBytesAllocated());
+      assertEquals(256, Rmm.getScopedMaximumBytesAllocated());
     }
   }
 

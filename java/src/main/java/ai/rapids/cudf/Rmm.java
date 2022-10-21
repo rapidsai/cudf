@@ -146,30 +146,30 @@ public class Rmm {
   public static native long getMaximumTotalBytesAllocated();
 
   /**
-   * Resets a local maximum counter of RMM memory used to keep track of usage between
+   * Resets a scoped maximum counter of RMM memory used to keep track of usage between
    * code sections while debugging.
    *
-   * @param initialValue an initial value (in Bytes) to use for this local counter
+   * @param initialValue an initial value (in Bytes) to use for this scoped counter
    */
-  public static void resetLocalMaximumBytesAllocated(long initialValue) {
-    resetLocalMaximumBytesAllocatedInternal(initialValue);
+  public static void resetScopedMaximumBytesAllocated(long initialValue) {
+    resetScopedMaximumBytesAllocatedInternal(initialValue);
   }
 
   /**
-   * Resets a local maximum counter of RMM memory used to keep track of usage between
+   * Resets a scoped maximum counter of RMM memory used to keep track of usage between
    * code sections while debugging.
    *
    * This resets the counter to 0 Bytes.
    */
-  public static void resetLocalMaximumBytesAllocated() {
-    resetLocalMaximumBytesAllocatedInternal(0L);
+  public static void resetScopedMaximumBytesAllocated() {
+    resetScopedMaximumBytesAllocatedInternal(0L);
   }
 
-  private static native void resetLocalMaximumBytesAllocatedInternal(long initialValue);
+  private static native void resetScopedMaximumBytesAllocatedInternal(long initialValue);
 
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
-   * `resetLocalMaximumOutstanding` call was issued (it is "local" because it's the
+   * `resetScopedMaximumOutstanding` call was issued (it is "scoped" because it's the
    * maximum amount seen between reset and get calls).
    *
    * Note that this result is meaningful when a single thread is using the GPU, or
@@ -178,9 +178,12 @@ public class Rmm {
    * If the memory used is net negative (for example if only frees happened since
    * reset, and we reset to 0), then result will be 0 until we reset
    *
-   * @return the local maximum in Bytes
+   * If `resetScopedMaximumBytesAllocated` is never called, the scope is the whole
+   * program and it should be equivalent to `getMaximumTotalBytesAllocated`
+   *
+   * @return the scoped maximum bytes allocated
    */
-  public static native long getLocalMaximumBytesAllocated();
+  public static native long getScopedMaximumBytesAllocated();
 
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
