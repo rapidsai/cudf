@@ -139,9 +139,6 @@ public class Rmm {
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding during the
    * lifetime of the process.
-   *
-   * Note that this result is meaningful when a single thread is using the GPU, or
-   * when we have joined all threads and CUDA synchronized with all streams.
    */
   public static native long getMaximumTotalBytesAllocated();
 
@@ -170,16 +167,13 @@ public class Rmm {
   /**
    * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
    * `resetScopedMaximumOutstanding` call was issued (it is "scoped" because it's the
-   * maximum amount seen between reset and get calls).
-   *
-   * Note that this result is meaningful when a single thread is using the GPU, or
-   * when we have joined all threads and CUDA synchronized with all streams.
+   * maximum amount seen since the last reset).
    *
    * If the memory used is net negative (for example if only frees happened since
-   * reset, and we reset to 0), then result will be 0 until we reset
+   * reset, and we reset to 0), then result will be 0.
    *
    * If `resetScopedMaximumBytesAllocated` is never called, the scope is the whole
-   * program and it should be equivalent to `getMaximumTotalBytesAllocated`
+   * program and is equivalent to `getMaximumTotalBytesAllocated`.
    *
    * @return the scoped maximum bytes allocated
    */
