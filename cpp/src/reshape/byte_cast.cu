@@ -80,17 +80,18 @@ struct byte_list_conversion {
 
     rmm::device_buffer null_mask = detail::copy_bitmask(input_column, stream, mr);
 
-    auto const result =  make_lists_column(input_column.size(),
-                                           std::move(offsets_column),
-                                           std::move(byte_column),
-                                           input_column.null_count(),
-                                           std::move(null_mask),
-                                           stream,
-                                           mr);
+    auto const result = make_lists_column(input_column.size(),
+                                          std::move(offsets_column),
+                                          std::move(byte_column),
+                                          input_column.null_count(),
+                                          std::move(null_mask),
+                                          stream,
+                                          mr);
 
     // If any nulls are present, the corresponding lists must be purged so that
     // the result is sanitized.
-    return result->null_count() > 0 ? cudf::detail::purge_nonempty_nulls(result, stream, mr) : result;
+    return result->null_count() > 0 ? cudf::detail::purge_nonempty_nulls(result, stream, mr)
+                                    : result;
   }
 };
 
