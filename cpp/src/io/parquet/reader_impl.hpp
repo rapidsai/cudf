@@ -283,7 +283,7 @@ class reader::impl {
   bool _file_preprocessed{false};
 
   // TODO: Remove below
-  parquet_reader_options const& _options;
+  parquet_reader_options const _options;
 };
 
 }  // namespace parquet
