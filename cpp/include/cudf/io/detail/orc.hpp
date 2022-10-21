@@ -75,7 +75,7 @@ class reader {
    * @return The set of columns along with table metadata
    */
   table_with_metadata read(orc_reader_options const& options,
-                           rmm::cuda_stream_view stream = cudf::default_stream_value);
+                           rmm::cuda_stream_view stream = cudf::get_default_stream());
 };
 
 /**

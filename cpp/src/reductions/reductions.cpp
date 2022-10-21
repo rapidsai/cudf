@@ -143,7 +143,7 @@ std::unique_ptr<scalar> reduce(
   std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
@@ -186,7 +186,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, std::nullopt, cudf::default_stream_value, mr);
+  return detail::reduce(col, agg, output_dtype, std::nullopt, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
@@ -196,6 +196,6 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, init, cudf::default_stream_value, mr);
+  return detail::reduce(col, agg, output_dtype, init, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

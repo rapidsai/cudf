@@ -28,7 +28,7 @@
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
  public:
-  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
+  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
 };
 
 template <typename T>

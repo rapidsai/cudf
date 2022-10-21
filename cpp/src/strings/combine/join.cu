@@ -135,7 +135,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_strings(strings, separator, narep, cudf::default_stream_value, mr);
+  return detail::join_strings(strings, separator, narep, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

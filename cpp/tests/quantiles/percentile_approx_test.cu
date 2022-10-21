@@ -234,7 +234,7 @@ void simple_test(data_type input_type, std::vector<std::pair<int, int>> params)
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+  thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                keys->mutable_view().template begin<int>(),
                keys->mutable_view().template end<int>(),
                0);
@@ -257,7 +257,7 @@ void grouped_test(data_type input_type, std::vector<std::pair<int, int>> params)
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
   auto i = thrust::make_counting_iterator(0);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     i,
                     i + values->size(),
                     keys->mutable_view().template begin<int>(),
@@ -282,7 +282,7 @@ void simple_with_nulls_test(data_type input_type, std::vector<std::pair<int, int
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+  thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                keys->mutable_view().template begin<int>(),
                keys->mutable_view().template end<int>(),
                0);
@@ -304,7 +304,7 @@ void grouped_with_nulls_test(data_type input_type, std::vector<std::pair<int, in
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
   auto i = thrust::make_counting_iterator(0);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     i,
                     i + values->size(),
                     keys->mutable_view().template begin<int>(),
