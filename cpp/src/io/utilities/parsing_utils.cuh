@@ -118,7 +118,8 @@ struct parse_options {
 
 /**
  * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
+ * for integral types. Handles hexadecimal digits, both uppercase and lowercase
+ * for integral types and only decimal digits for floating point types.
  * If the character is not a valid numeric digit then `0` is returned and
  * valid_flag is set to false.
  *
@@ -127,33 +128,14 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, bool as_hex = false, CUDF_ENABLE_IF(std::is_integral_v<T>)>
+template <typename T, bool as_hex = false>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
-  if constexpr (as_hex) {
+  if constexpr (as_hex and std::is_integral_v<T>) {
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
   }
-
-  *valid_flag = false;
-  return 0;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. If the character is not
- * a valid numeric digit then `0` is returned and valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T, bool as_hex = false, CUDF_ENABLE_IF(!std::is_integral_v<T>)>
-constexpr uint8_t decode_digit(char c, bool* valid_flag)
-{
-  if (c >= '0' && c <= '9') return c - '0';
 
   *valid_flag = false;
   return 0;
