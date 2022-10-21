@@ -309,16 +309,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
   compinfo.host_to_device(stream);
 
-  // Workaround for ZSTD. It is possible to have compression ratios > 2048:1,
-  // so the heuristic in gpuParseCompressedStripeData() to estimate the size for
-  // small blocks can be too low. Disable the estimation for ZSTD.
-  auto allow_block_size_estimate = (decompressor.compression() != compression_type::ZSTD);
-  gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                 compinfo.size(),
-                                 decompressor.GetBlockSize(),
-                                 decompressor.GetLog2MaxCompressionRatio(),
-                                 allow_block_size_estimate,
-                                 stream);
+  gpu::ParseCompressedStripeData(
+    compinfo.device_ptr(), compinfo.size(), decompressor.GetBlockSize(), stream);
   compinfo.device_to_host(stream, true);
 
   // Count the exact number of compressed blocks
@@ -365,12 +357,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
       std::max(max_uncomp_block_size, compinfo[i].max_uncompressed_block_size);
   }
   compinfo.host_to_device(stream);
-  gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                 compinfo.size(),
-                                 decompressor.GetBlockSize(),
-                                 decompressor.GetLog2MaxCompressionRatio(),
-                                 allow_block_size_estimate,
-                                 stream);
+  gpu::ParseCompressedStripeData(
+    compinfo.device_ptr(), compinfo.size(), decompressor.GetBlockSize(), stream);
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {

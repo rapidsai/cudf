@@ -368,24 +368,12 @@ size_t ProtobufWriter::write(const Metadata& s)
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_blockSize(blockSize)
 {
   switch (kind) {
-    case NONE:
-      _compression   = compression_type::NONE;
-      m_log2MaxRatio = 0;
-      break;
-    case ZLIB:
-      _compression   = compression_type::ZLIB;
-      m_log2MaxRatio = 11;  // < 2048:1
-      break;
-    case SNAPPY:
-      _compression   = compression_type::SNAPPY;
-      m_log2MaxRatio = 5;  // < 32:1
-      break;
+    case NONE: _compression = compression_type::NONE; break;
+    case ZLIB: _compression = compression_type::ZLIB; break;
+    case SNAPPY: _compression = compression_type::SNAPPY; break;
     case LZO: _compression = compression_type::LZO; break;
     case LZ4: _compression = compression_type::LZ4; break;
-    case ZSTD:
-      m_log2MaxRatio = 11;
-      _compression   = compression_type::ZSTD;
-      break;
+    case ZSTD: _compression = compression_type::ZSTD; break;
     default: CUDF_FAIL("Invalid compression type");
   }
 }
