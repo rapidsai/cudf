@@ -27,7 +27,7 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         bool exact,
     ) except +
 
-    cdef unique_ptr[table] quantile_table (
+    cdef unique_ptr[table] quantiles (
         table_view source_table,
         vector[double] q,
         interpolation interp,

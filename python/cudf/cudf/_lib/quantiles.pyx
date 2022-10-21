@@ -116,7 +116,7 @@ def quantile_table(
                 c_interp,
                 c_is_input_sorted,
                 c_column_order,
-                c_null_precedence
+                c_null_precedence,
             )
         )
 
