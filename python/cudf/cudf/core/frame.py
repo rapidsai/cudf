@@ -1412,7 +1412,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df.searchsorted(values_df, ascending=False)
         array([4, 4, 4, 0], dtype=int32)
         """
-        # Call libcudf++ search_sorted primitive
+        # Call libcudf search_sorted primitive
 
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")

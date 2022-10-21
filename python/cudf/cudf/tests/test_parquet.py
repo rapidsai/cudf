@@ -1296,6 +1296,80 @@ def test_parquet_reader_struct_sol_table(tmpdir, params):
     assert expect.equals(got.to_arrow())
 
 
+def test_parquet_reader_v2(tmpdir, simple_pdf):
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    simple_pdf.to_parquet(pdf_fname, data_page_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # Structs
+        {
+            "being": [
+                None,
+                {"human?": True, "Deets": {"Name": "Carrot", "Age": 27}},
+                {"human?": None, "Deets": {"Name": "Angua", "Age": 25}},
+                {"human?": False, "Deets": {"Name": "Cheery", "Age": 31}},
+                {"human?": False, "Deets": None},
+                {"human?": None, "Deets": {"Name": "Mr", "Age": None}},
+            ]
+        },
+        # List of Structs
+        {
+            "family": [
+                [None, {"human?": True, "deets": {"weight": 2.4, "age": 27}}],
+                [
+                    {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                    {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                    {"human?": False, "deets": None},
+                ],
+                [],
+                [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+            ]
+        },
+        # Struct of Lists
+        {
+            "Real estate records": [
+                None,
+                {
+                    "Status": "NRI",
+                    "Ownerships": {
+                        "land_unit": [None, 2, None],
+                        "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
+                    },
+                },
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [4, 5],
+                        "flats": [[7, 8], []],
+                    },
+                },
+                {
+                    "Status": "RI",
+                    "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {"Status": "RI", "Ownerships": None},
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [7, 8, 9],
+                        "flats": [[], [], []],
+                    },
+                },
+            ]
+        },
+    ],
+)
+def test_parquet_reader_nested_v2(tmpdir, data):
+    expect = pd.DataFrame(data)
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    expect.to_parquet(pdf_fname, data_page_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), expect)
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_parquet_writer_cpu_pyarrow(
     tmpdir, pdf_day_timestamps, gdf_day_timestamps

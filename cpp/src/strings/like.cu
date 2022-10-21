@@ -147,7 +147,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::like(input, pattern, escape_character, cudf::default_stream_value, mr);
+  return detail::like(input, pattern, escape_character, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

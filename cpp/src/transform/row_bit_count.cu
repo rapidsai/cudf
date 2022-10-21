@@ -539,7 +539,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
 std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, cudf::default_stream_value, mr);
+  return detail::row_bit_count(t, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
