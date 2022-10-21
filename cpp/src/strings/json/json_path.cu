@@ -909,7 +909,6 @@ __launch_bounds__(block_size) __global__
   size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
   size_type stride = blockDim.x * gridDim.x;
 
-  if (out_valid_count.has_value()) { *(out_valid_count.value()) = 0; }
   size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffff'ffffu, tid < col.size());
@@ -1048,7 +1047,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, options, cudf::default_stream_value, mr);
+  return detail::get_json_object(col, json_path, options, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

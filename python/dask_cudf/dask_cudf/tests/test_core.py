@@ -17,6 +17,23 @@ import cudf
 import dask_cudf as dgd
 
 
+@pytest.mark.skipif(
+    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
+)
+def test_from_dict_backend_dispatch():
+    # Test ddf.from_dict cudf-backend dispatch
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    expect = cudf.DataFrame(data)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict(data, npartitions=2)
+    assert isinstance(ddf, dgd.DataFrame)
+    dd.assert_eq(expect, ddf)
+
+
 def test_from_cudf():
     np.random.seed(0)
 
@@ -841,3 +858,19 @@ def test_correct_meta():
 
     assert isinstance(emb, dd.DataFrame)
     assert isinstance(emb._meta, pd.DataFrame)
+
+
+def test_categorical_dtype_round_trip():
+    s = cudf.Series(4 * ["foo"], dtype="category")
+    assert s.dtype.ordered is False
+
+    ds = dgd.from_cudf(s, npartitions=2)
+    pds = dd.from_pandas(s.to_pandas(), npartitions=2)
+    dd.assert_eq(ds, pds)
+    assert ds.dtype.ordered is False
+
+    # Below validations are required, see:
+    # https://github.com/rapidsai/cudf/issues/11487#issuecomment-1208912383
+    actual = ds.compute()
+    expected = pds.compute()
+    assert actual.dtype.ordered == expected.dtype.ordered

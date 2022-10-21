@@ -114,7 +114,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
   CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
   // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
@@ -153,7 +153,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
 {
   CUDF_FUNC_RANGE();
   return detail::replace_with_backrefs(
-    strings, pattern, replacement, flags, cudf::default_stream_value, mr);
+    strings, pattern, replacement, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

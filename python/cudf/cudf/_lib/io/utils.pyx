@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
@@ -30,7 +30,7 @@ import cudf
 from cudf.api.types import is_struct_dtype
 
 
-# Converts the Python source input to libcudf++ IO source_info
+# Converts the Python source input to libcudf IO source_info
 # with the appropriate type and source values
 cdef source_info make_source_info(list src) except*:
     if not src:
@@ -40,6 +40,7 @@ cdef source_info make_source_info(list src) except*:
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
     cdef Datasource csrc
+    cdef vector[datasource*] c_datasources
     empty_buffer = False
     if isinstance(src[0], bytes):
         empty_buffer = True
@@ -58,8 +59,9 @@ cdef source_info make_source_info(list src) except*:
     # TODO (ptaylor): Might need to update this check if accepted input types
     #                 change when UCX and/or cuStreamz support is added.
     elif isinstance(src[0], Datasource):
-        csrc = src[0]
-        return source_info(csrc.get_datasource())
+        for csrc in src:
+            c_datasources.push_back(csrc.get_datasource())
+        return source_info(c_datasources)
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH
         if not all(os.path.isfile(file) for file in src):
@@ -78,7 +80,7 @@ cdef source_info make_source_info(list src) except*:
 
     return source_info(c_host_buffers)
 
-# Converts the Python sink input to libcudf++ IO sink_info.
+# Converts the Python sink input to libcudf IO sink_info.
 cdef sink_info make_sinks_info(
     list src, vector[unique_ptr[data_sink]] & sink
 ) except*:
@@ -127,7 +129,7 @@ cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
     return info
 
 
-# Adapts a python io.IOBase object as a libcudf++ IO data_sink. This lets you
+# Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
 # write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
 cdef cppclass iobase_data_sink(data_sink):
     object buf

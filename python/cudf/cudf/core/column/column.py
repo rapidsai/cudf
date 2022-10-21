@@ -62,6 +62,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 from cudf.core.dtypes import (
@@ -82,6 +83,11 @@ from cudf.utils.dtypes import (
     pandas_dtypes_to_np_dtypes,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
+
+if PANDAS_GE_150:
+    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
+else:
+    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 T = TypeVar("T", bound="ColumnBase")
 # TODO: This workaround allows type hints for `slice`, since `slice` is a
@@ -233,7 +239,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], [["None"]],)[
+        return libcudf.interop.to_arrow([self], [("None", self.dtype)])[
             "None"
         ].chunk(0)
 
@@ -290,9 +296,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(
-            array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
-        ):
+        elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data)[0]
@@ -514,7 +518,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if step == 1:
+        if step == 1 and not isinstance(
+            self, (cudf.core.column.StructColumn, cudf.core.column.ListColumn)
+        ):
+            # NOTE: List & Struct dtypes aren't supported by both
+            # inplace & out-of-place fill. Hence we need to use scatter for
+            # these two types.
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
@@ -562,21 +571,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        try:
-            if is_bool_dtype(key.dtype):
-                return libcudf.copying.boolean_mask_scatter(
-                    [value], [self], key
-                )[0]._with_type_metadata(self.dtype)
-            else:
-                return libcudf.copying.scatter([value], key, [self])[
-                    0
-                ]._with_type_metadata(self.dtype)
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
+        if is_bool_dtype(key.dtype):
+            return libcudf.copying.boolean_mask_scatter([value], [self], key)[
+                0
+            ]._with_type_metadata(self.dtype)
+        else:
+            return libcudf.copying.scatter([value], key, [self])[
+                0
+            ]._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
         self, num_keys: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
@@ -793,6 +795,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
         of given label.
+
         Parameters
         ----------
         label : Scalar
@@ -1027,7 +1030,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self) -> ColumnBase:
+    def unique(self, preserve_order=False) -> ColumnBase:
         """
         Get unique values in the data
         """
@@ -1036,6 +1039,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # Few things to note before we can do this optimization is
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
+        if preserve_order:
+            ind = as_column(cupy.arange(0, len(self)))
+
+            # dedup based on the column of data only
+            ind, col = drop_duplicates([ind, self], keys=[1])
+
+            # sort col based on ind
+            map = ind.argsort()
+            return col.take(map)
 
         return drop_duplicates([self], keep="first")[0]
 
@@ -1474,7 +1486,7 @@ def build_categorical_column(
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-    ordered: bool = None,
+    ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
@@ -1490,7 +1502,7 @@ def build_categorical_column(
         Null mask
     size : int, optional
     offset : int, optional
-    ordered : bool
+    ordered : bool, default False
         Indicates whether the categories are ordered
     """
     codes_dtype = min_unsigned_type(len(categories))
@@ -1581,6 +1593,14 @@ def build_list_column(
     offset: int, optional
     """
     dtype = ListDtype(element_type=elements.dtype)
+    if size is None:
+        if indices.size == 0:
+            size = 0
+        else:
+            # one less because the last element of offsets is the number of
+            # bytes in the data buffer
+            size = indices.size - 1
+        size = size - offset
 
     result = build_column(
         data=None,

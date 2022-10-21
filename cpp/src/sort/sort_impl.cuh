@@ -127,18 +127,32 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   auto comp =
     experimental::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
-  auto comparator = comp.less(nullate::DYNAMIC{has_nested_nulls(input)});
-
-  if (stable) {
-    thrust::stable_sort(rmm::exec_policy(stream),
-                        mutable_indices_view.begin<size_type>(),
-                        mutable_indices_view.end<size_type>(),
-                        comparator);
+  if (cudf::detail::has_nested_columns(input)) {
+    auto comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
+    if (stable) {
+      thrust::stable_sort(rmm::exec_policy(stream),
+                          mutable_indices_view.begin<size_type>(),
+                          mutable_indices_view.end<size_type>(),
+                          comparator);
+    } else {
+      thrust::sort(rmm::exec_policy(stream),
+                   mutable_indices_view.begin<size_type>(),
+                   mutable_indices_view.end<size_type>(),
+                   comparator);
+    }
   } else {
-    thrust::sort(rmm::exec_policy(stream),
-                 mutable_indices_view.begin<size_type>(),
-                 mutable_indices_view.end<size_type>(),
-                 comparator);
+    auto comparator = comp.less<false>(nullate::DYNAMIC{has_nested_nulls(input)});
+    if (stable) {
+      thrust::stable_sort(rmm::exec_policy(stream),
+                          mutable_indices_view.begin<size_type>(),
+                          mutable_indices_view.end<size_type>(),
+                          comparator);
+    } else {
+      thrust::sort(rmm::exec_policy(stream),
+                   mutable_indices_view.begin<size_type>(),
+                   mutable_indices_view.end<size_type>(),
+                   comparator);
+    }
   }
   // protection for temporary d_column_order and d_null_precedence
   stream.synchronize();

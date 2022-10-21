@@ -28,6 +28,7 @@ strings and apply several methods to it. These can be accessed like
    filter_tokens
    find
    findall
+   find_multiple
    get
    get_json_object
    hex_to_int
@@ -55,6 +56,7 @@ strings and apply several methods to it. These can be accessed like
    istitle
    join
    len
+   like
    ljust
    lower
    lstrip

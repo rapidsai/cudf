@@ -235,9 +235,8 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
   auto out_col      = detail::allocate_like(views.front(), output_size, policy, stream, mr);
-  out_col->set_null_count(0);  // prevent null count from being materialized
-  auto out_view   = out_col->mutable_view();
-  auto d_out_view = mutable_column_device_view::create(out_view, stream);
+  auto out_view     = out_col->mutable_view();
+  auto d_out_view   = mutable_column_device_view::create(out_view, stream);
 
   rmm::device_scalar<size_type> d_valid_count(0, stream);
 
@@ -253,7 +252,11 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
     *d_out_view,
     d_valid_count.data());
 
-  if (has_nulls) { out_col->set_null_count(output_size - d_valid_count.value(stream)); }
+  if (has_nulls) {
+    out_col->set_null_count(output_size - d_valid_count.value(stream));
+  } else {
+    out_col->set_null_count(0);  // prevent null count from being materialized
+  }
 
   return out_col;
 }
@@ -273,8 +276,7 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
   auto col = cudf::detail::allocate_like(views.front(), total_element_count, policy, stream, mr);
 
-  col->set_null_count(0);             // prevent null count from being materialized...
-  auto m_view = col->mutable_view();  // ...when we take a mutable view
+  auto m_view = col->mutable_view();
 
   auto count = 0;
   for (auto& v : views) {
@@ -285,6 +287,8 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
   // If concatenated column is nullable, proceed to calculate it
   if (has_nulls) {
     cudf::detail::concatenate_masks(views, (col->mutable_view()).null_mask(), stream);
+  } else {
+    col->set_null_count(0);  // prevent null count from being materialized
   }
 
   return col;
@@ -524,9 +528,8 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
   return std::make_unique<table>(std::move(concat_columns));
 }
 
-}  // namespace detail
-
 rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   bool const has_nulls =
@@ -540,13 +543,21 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
     rmm::device_buffer null_mask =
       create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
-    detail::concatenate_masks(
-      views, static_cast<bitmask_type*>(null_mask.data()), cudf::default_stream_value);
+    detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), stream);
 
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{0, cudf::default_stream_value, mr};
+  return rmm::device_buffer{0, stream, mr};
+}
+
+}  // namespace detail
+
+rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::concatenate_masks(views, cudf::get_default_stream(), mr);
 }
 
 // Concatenates the elements from a vector of column_views
@@ -554,14 +565,14 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, cudf::default_stream_value, mr);
+  return detail::concatenate(columns_to_concat, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, cudf::default_stream_value, mr);
+  return detail::concatenate(tables_to_concat, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

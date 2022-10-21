@@ -245,14 +245,14 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_keys(dictionary_column, keys, cudf::default_stream_value, mr);
+  return detail::set_keys(dictionary_column, keys, cudf::get_default_stream(), mr);
 }
 
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::match_dictionaries(input, cudf::default_stream_value, mr);
+  return detail::match_dictionaries(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace dictionary

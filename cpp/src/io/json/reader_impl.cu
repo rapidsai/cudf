@@ -432,6 +432,18 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                            return it->second;
                          });
           return sorted_dtypes;
+        },
+        [&](const std::map<std::string, schema_element>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(column_names),
+                         std::cend(column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second.type;
+                         });
+          return sorted_dtypes;
         }},
       reader_opts.get_dtypes());
   } else {
@@ -480,7 +492,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
 
 table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                           std::vector<data_type> const& dtypes,
-                                          std::vector<std::string> const& column_names,
+                                          std::vector<std::string>&& column_names,
                                           col_map_type* column_map,
                                           device_span<uint64_t const> rec_starts,
                                           device_span<char const> data,
@@ -552,8 +564,8 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 
   std::vector<column_name_info> column_infos;
   column_infos.reserve(column_names.size());
-  std::transform(column_names.cbegin(),
-                 column_names.cend(),
+  std::transform(std::make_move_iterator(column_names.begin()),
+                 std::make_move_iterator(column_names.end()),
                  std::back_inserter(column_infos),
                  [](auto const& col_name) { return column_name_info{col_name}; });
 
@@ -563,8 +575,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
-                             {column_names, column_infos}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {{}, column_infos}};
 }
 
 /**
@@ -636,8 +647,14 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
 
   CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(
-    parse_opts.view(), dtypes, column_names, column_map.get(), rec_starts, d_data, stream, mr);
+  return convert_data_to_table(parse_opts.view(),
+                               dtypes,
+                               std::move(column_names),
+                               column_map.get(),
+                               rec_starts,
+                               d_data,
+                               stream,
+                               mr);
 }
 
 }  // namespace json

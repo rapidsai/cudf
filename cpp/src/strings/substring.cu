@@ -110,7 +110,7 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::cuda_stream_view stream           = cudf::default_stream_value,
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
@@ -143,7 +143,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, start, stop, step, cudf::default_stream_value, mr);
+  return detail::slice_strings(strings, start, stop, step, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -362,6 +362,31 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
     d_column, strings.null_count(), starts_iter, stops_iter, stream, mr);
 }
 
+std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+                                      strings_column_view const& delimiters,
+                                      size_type count,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(strings.size() == delimiters.size(),
+               "Strings and delimiters column sizes do not match");
+  auto delimiters_dev_view_ptr = cudf::column_device_view::create(delimiters.parent(), stream);
+  auto delimiters_dev_view     = *delimiters_dev_view_ptr;
+  return (delimiters_dev_view.nullable())
+           ? detail::slice_strings(
+               strings,
+               cudf::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
+               count,
+               stream,
+               mr)
+           : detail::slice_strings(
+               strings,
+               cudf::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
+               count,
+               stream,
+               mr);
+}
+
 }  // namespace detail
 
 // external API
@@ -373,7 +398,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::slice_strings(
-    strings, starts_column, stops_column, cudf::default_stream_value, mr);
+    strings, starts_column, stops_column, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
@@ -385,7 +410,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   return detail::slice_strings(strings,
                                cudf::detail::make_pair_iterator<string_view>(delimiter),
                                count,
-                               cudf::default_stream_value,
+                               cudf::get_default_stream(),
                                mr);
 }
 
@@ -394,26 +419,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       size_type count,
                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(strings.size() == delimiters.size(),
-               "Strings and delimiters column sizes do not match");
-
   CUDF_FUNC_RANGE();
-  auto delimiters_dev_view_ptr =
-    cudf::column_device_view::create(delimiters.parent(), cudf::default_stream_value);
-  auto delimiters_dev_view = *delimiters_dev_view_ptr;
-  return (delimiters_dev_view.nullable())
-           ? detail::slice_strings(
-               strings,
-               cudf::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
-               count,
-               cudf::default_stream_value,
-               mr)
-           : detail::slice_strings(
-               strings,
-               cudf::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
-               count,
-               cudf::default_stream_value,
-               mr);
+  return detail::slice_strings(strings, delimiters, count, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

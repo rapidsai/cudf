@@ -71,7 +71,7 @@ void apply_struct_binary_op(mutable_column_view& out,
                             bool is_lhs_scalar,
                             bool is_rhs_scalar,
                             PhysicalElementComparator comparator = {},
-                            rmm::cuda_stream_view stream         = cudf::default_stream_value)
+                            rmm::cuda_stream_view stream         = cudf::get_default_stream())
 {
   auto const compare_orders = std::vector<order>(
     lhs.size(),
@@ -93,9 +93,17 @@ void apply_struct_binary_op(mutable_column_view& out,
       out.end<bool>(),
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
   };
-  is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
-    ? tabulate_device_operator(table_comparator.less_equivalent(comparator_nulls, comparator))
-    : tabulate_device_operator(table_comparator.less(comparator_nulls, comparator));
+  if (cudf::detail::has_nested_columns(tlhs) || cudf::detail::has_nested_columns(trhs)) {
+    is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
+      ? tabulate_device_operator(
+          table_comparator.less_equivalent<true>(comparator_nulls, comparator))
+      : tabulate_device_operator(table_comparator.less<true>(comparator_nulls, comparator));
+  } else {
+    is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
+      ? tabulate_device_operator(
+          table_comparator.less_equivalent<false>(comparator_nulls, comparator))
+      : tabulate_device_operator(table_comparator.less<false>(comparator_nulls, comparator));
+  }
 }
 
 template <typename PhysicalEqualityComparator =
@@ -107,7 +115,7 @@ void apply_struct_equality_op(mutable_column_view& out,
                               bool is_rhs_scalar,
                               binary_operator op,
                               PhysicalEqualityComparator comparator = {},
-                              rmm::cuda_stream_view stream          = cudf::default_stream_value)
+                              rmm::cuda_stream_view stream          = cudf::get_default_stream())
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
                  op == binary_operator::NULL_EQUALS,

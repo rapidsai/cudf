@@ -861,7 +861,7 @@ class ParquetDatasetWriter:
         index(es) other than RangeIndex will be saved as columns.
     compression : {'snappy', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
-    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
     max_file_size : int or str, default None
         A file size that cannot be exceeded by the writer.
@@ -911,7 +911,7 @@ class ParquetDatasetWriter:
         path,
         partition_cols,
         index=None,
-        compression=None,
+        compression="snappy",
         statistics="ROWGROUP",
         max_file_size=None,
         file_name_prefix=None,

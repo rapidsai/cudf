@@ -12,15 +12,15 @@ dependencies:
   - cxx-compiler
   - clang=11.1.0
   - clang-tools=11.1.0
-  - cupy>=9.5.0,<11.0.0a0
-  - rmm=22.10.*
-  - cmake>=3.20.1,!=3.23.0
+  - cupy>=9.5.0,<12.0.0a0
+  - rmm=22.12.*
+  - cmake>=3.23.1
   - cmake_setuptools>=0.1.3
   - scikit-build>=0.13.1
   - python>=3.8,<3.10
-  - numba>=0.54
+  - numba>=0.56.2
   - numpy
-  - pandas>=1.0,<1.5.0dev0
+  - pandas>=1.0,<1.6.0dev0
   - pyarrow=9
   - fastavro>=0.22.9
   - python-snappy>=0.6.0
@@ -36,20 +36,15 @@ dependencies:
   - nbsphinx
   - numpydoc
   - ipython
-  - pandoc=<2.0.0
+  - pandoc<=2.0.0
   - cudatoolkit=11.5
-  - cuda-python >=11.5,<11.7.1
+  - cuda-python>=11.5,<11.7.1
   - pip
-  - flake8=3.8.3
-  - black=22.3.0
-  - isort=5.10.1
-  - mypy=0.782
   - doxygen=1.8.20
-  - pydocstyle=6.1.1
   - typing_extensions
   - pre-commit
-  - dask>=2022.7.1
-  - distributed>=2022.7.1
+  - dask>=2022.9.2
+  - distributed>=2022.9.2
   - streamz
   - arrow-cpp=9
   - dlpack>=0.5,<0.6.0a0
@@ -61,14 +56,15 @@ dependencies:
   - sphinx-autobuild
   - myst-nb
   - scipy
-  - dask-cuda=22.10.*
-  - mimesis<4.1
+  - dask-cuda=22.12.*
+  - mimesis>=4.1.0
   - packaging
   - protobuf>=3.20.1,<3.21.0a0
   - nvtx>=0.2.1
   - cachetools
   - transformers<=4.10.3
   - pydata-sphinx-theme
+  - pyorc
   - librdkafka=1.7.0
   - python-confluent-kafka=1.7.0
   - moto>=3.1.6
@@ -78,10 +74,7 @@ dependencies:
   - s3fs>=2022.3.0
   - werkzeug<2.2.0 # Temporary transient dependency pinning to avoid URL-LIB3 + moto timeouts
   - pytorch<1.12.0
-  - pip:
-      - git+https://github.com/python-streamz/streamz.git@master
-      - pyorc
-  - ptxcompiler  # [linux64]
+  - cubinlinker  # [linux64]
   - gcc_linux-64=9.* # [linux64]
   - sysroot_linux-64==2.17 # [linux64]
   - nvcc_linux-64=11.5
@@ -89,3 +82,5 @@ dependencies:
   # - gcc_linux-aarch64=9.* # [aarch64]
   # - sysroot_linux-aarch64==2.17 # [aarch64]
   # - nvcc_linux-aarch64=11.5 # [aarch64]
+  - pip:
+      - git+https://github.com/python-streamz/streamz.git@master

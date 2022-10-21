@@ -104,7 +104,7 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.BaseIndex":
+    def categories(self) -> "cudf.core.index.GenericIndex":
         """
         The categories of this categorical.
         """
@@ -123,7 +123,7 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool:
         """
         Whether the categories have an ordered relationship.
         """
@@ -135,7 +135,6 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         inplace : bool, default False
             Whether or not to add the categories inplace
             or return a copy of this categorical with
@@ -192,7 +191,6 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         inplace : bool, default False
             Whether or not to set the ordered attribute
             in-place or return a copy of this
@@ -266,10 +264,8 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         new_categories : category or list-like of category
             The new categories to be included.
-
         inplace : bool, default False
             Whether or not to add the categories inplace
             or return a copy of this categorical with
@@ -353,10 +349,8 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         removals : category or list-like of category
             The categories which should be removed.
-
         inplace : bool, default False
             Whether or not to remove the categories
             inplace or return a copy of this categorical
@@ -461,20 +455,16 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         new_categories : list-like
             The categories in new order.
-
         ordered : bool, default None
             Whether or not the categorical is treated as
             a ordered categorical. If not given, do
             not change the ordered information.
-
         rename : bool, default False
             Whether or not the `new_categories` should be
             considered as a rename of the old categories
             or as reordered categories.
-
         inplace : bool, default False
             Whether or not to reorder the categories in-place
             or return a copy of this categorical with
@@ -540,21 +530,16 @@ class CategoricalAccessor(ColumnMethods):
 
         Parameters
         ----------
-
         new_categories : Index-like
             The categories in new order.
-
         ordered : bool, optional
             Whether or not the categorical is treated
             as a ordered categorical. If not given, do
             not change the ordered information.
-
-
         inplace : bool, default False
             Whether or not to reorder the categories
             inplace or return a copy of this categorical
             with reordered categories.
-
 
         Returns
         -------
@@ -744,7 +729,7 @@ class CategoricalColumn(column.ColumnBase):
         return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool:
         return self.dtype.ordered
 
     @ordered.setter
@@ -770,7 +755,7 @@ class CategoricalColumn(column.ColumnBase):
             )
 
         if to_add_categories > 0:
-            raise ValueError(
+            raise TypeError(
                 "Cannot setitem on a Categorical with a new "
                 "category, set the categories first"
             )
@@ -960,8 +945,8 @@ class CategoricalColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view
 
-    def unique(self) -> CategoricalColumn:
-        codes = self.as_numerical.unique()
+    def unique(self, preserve_order=False) -> CategoricalColumn:
+        codes = self.as_numerical.unique(preserve_order=preserve_order)
         return column.build_categorical_column(
             categories=self.categories,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -1331,7 +1316,9 @@ class CategoricalColumn(column.ColumnBase):
         head = next((obj for obj in objs if obj.valid_count), objs[0])
 
         # Combine and de-dupe the categories
-        cats = column.concat_columns([o.categories for o in objs]).unique()
+        cats = column.concat_columns([o.categories for o in objs]).unique(
+            preserve_order=True
+        )
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
         codes = [o.codes for o in objs]
 
@@ -1471,10 +1458,8 @@ class CategoricalColumn(column.ColumnBase):
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
             # drop_duplicates() instead of unique() to preserve order
-            new_cats = (
-                cudf.Series(new_cats)
-                .drop_duplicates(ignore_index=True)
-                ._column
+            new_cats = cudf.Series(new_cats)._column.unique(
+                preserve_order=True
             )
 
         cur_codes = self.codes
@@ -1585,7 +1570,6 @@ def _create_empty_categorical_column(
 def pandas_categorical_as_column(
     categorical: ColumnLike, codes: ColumnLike = None
 ) -> CategoricalColumn:
-
     """Creates a CategoricalColumn from a pandas.Categorical
 
     If ``codes`` is defined, use it instead of ``categorical.codes``

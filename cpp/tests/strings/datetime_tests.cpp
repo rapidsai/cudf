@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -285,11 +284,13 @@ TEST_F(StringsDatetimeTest, IsTimestamp)
                                              "2020-02-30 01:32:03 01AM +0000",
                                              "2020-00-31 01:32:03 1AM +0000",
                                              "2020-02-00 02:32:03 2AM +0000",
+                                             "2022-08-24 02:32:60 2AM +0000",
                                              "2020-2-9 9:12:13 9AM +1111"};
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S %I%p %z");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *results, cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1});
+    *results,
+    cudf::test::fixed_width_column_wrapper<bool>{1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1});
 }
 
 TEST_F(StringsDatetimeTest, FromTimestamp)
@@ -429,12 +430,14 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfYear)
 
 // Format names used for some specifiers in from_timestamps
 // clang-format off
-cudf::test::strings_column_wrapper format_names({"AM", "PM",
-  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-  "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-  "January", "February", "March", "April", "May", "June", "July",
-  "August", "September", "October", "November", "December",
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
+cudf::test::strings_column_wrapper format_names() {
+  return cudf::test::strings_column_wrapper({"AM", "PM",
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
+}
 // clang-format on
 
 TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
@@ -491,8 +494,9 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfWeekOfYear)
      "[Fri 01, Jan 1982  5  00  5  00  1981  53]", "[Sat 02, Jan 1982  6  00  6  00  1981  53]",
      "[Sun 03, Jan 1982  0  00  7  01  1981  53]"});
 
-  auto results = cudf::strings::from_timestamps(
-    timestamps, "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]", cudf::strings_column_view(format_names));
+  auto results = cudf::strings::from_timestamps(timestamps,
+                                                "[%a %d, %b %Y  %w  %W  %u  %U  %G  %V]",
+                                                cudf::strings_column_view(format_names()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -527,7 +531,7 @@ TEST_F(StringsDatetimeTest, FromTimestampWeekdayMonthYear)
                                                "[Monday December 06, 2021: 02 AM]"});
 
   auto results = cudf::strings::from_timestamps(
-    timestamps, "[%A %B %d, %Y: %I %p]", cudf::strings_column_view(format_names));
+    timestamps, "[%A %B %d, %Y: %I %p]", cudf::strings_column_view(format_names()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -548,7 +552,7 @@ TEST_F(StringsDatetimeTest, FromTimestampAllSpecifiers)
   auto results = cudf::strings::from_timestamps(
     input,
     "[%d/%m/%y/%Y %H:%I:%M:%S.%f %z:%Z %j %u %U %W %V %G %p %a %A %b %B]",
-    cudf::strings_column_view(format_names));
+    cudf::strings_column_view(format_names()));
 
   // clang-format off
   cudf::test::strings_column_wrapper expected({
@@ -571,7 +575,7 @@ TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
   cudf::column_view zero_size_column(
     cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_timestamps(zero_size_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);

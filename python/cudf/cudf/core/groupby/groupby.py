@@ -8,11 +8,13 @@ from collections import abc
 from functools import cached_property
 from typing import Any, Iterable, List, Tuple, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_list_like
@@ -69,6 +71,12 @@ sort : bool, default False
     ``False`` for better performance. Note this does not influence
     the order of observations within each group. Groupby preserves
     the order of rows within each group.
+group_keys : bool, optional
+    When calling apply and the ``by`` argument produces a like-indexed
+    result, add group keys to index to identify pieces. By default group
+    keys are not included when the result's index (and column) labels match
+    the inputs, and are included otherwise. This argument has no effect if
+    the result produced is not like-indexed with respect to the input.
 {ret}
 Examples
 --------
@@ -135,6 +143,32 @@ Parrot       25.0
 Type
 Wild         185.0
 Captive      210.0
+
+>>> df = cudf.DataFrame({{'A': 'a a b'.split(),
+...                      'B': [1,2,3],
+...                      'C': [4,6,5]}})
+>>> g1 = df.groupby('A', group_keys=False)
+>>> g2 = df.groupby('A', group_keys=True)
+
+Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
+differ in their ``group_keys`` argument. Calling `apply` in various ways,
+we can get different grouping results:
+
+>>> g1[['B', 'C']].apply(lambda x: x / x.sum())
+          B    C
+0  0.333333  0.4
+1  0.666667  0.6
+2  1.000000  1.0
+
+In the above, the groups are not part of the index. We can have them included
+by using ``g2`` where ``group_keys=True``:
+
+>>> g2[['B', 'C']].apply(lambda x: x / x.sum())
+            B    C
+A
+a 0  0.333333  0.4
+  1  0.666667  0.6
+b 2  1.000000  1.0
 """
 )
 
@@ -174,7 +208,14 @@ class GroupBy(Serializable, Reducible, Scannable):
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
+        self,
+        obj,
+        by=None,
+        level=None,
+        sort=False,
+        as_index=True,
+        dropna=True,
+        group_keys=True,
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -210,6 +251,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._level = level
         self._sort = sort
         self._dropna = dropna
+        self._group_keys = group_keys
 
         if isinstance(by, _Grouping):
             by._obj = self.obj
@@ -504,6 +546,88 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result[sizes > n]
 
+    def ngroup(self, ascending=True):
+        """
+        Number each group from 0 to the number of groups - 1.
+
+        This is the enumerative complement of cumcount. Note that the
+        numbers given to the groups match the order in which the groups
+        would be seen when iterating over the groupby object, not the
+        order they are first observed.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If False, number in reverse, from number of group - 1 to 0.
+
+        Returns
+        -------
+        Series
+            Unique numbers for each group.
+
+        See Also
+        --------
+        .cumcount : Number the rows in each group.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({"A": list("aaabba")})
+        >>> df
+           A
+        0  a
+        1  a
+        2  a
+        3  b
+        4  b
+        5  a
+        >>> df.groupby('A').ngroup()
+        0    0
+        1    0
+        2    0
+        3    1
+        4    1
+        5    0
+        dtype: int64
+        >>> df.groupby('A').ngroup(ascending=False)
+        0    1
+        1    1
+        2    1
+        3    0
+        4    0
+        5    1
+        dtype: int64
+        >>> df.groupby(["A", [1,1,2,3,2,1]]).ngroup()
+        0    0
+        1    0
+        2    1
+        3    3
+        4    2
+        5    0
+        dtype: int64
+        """
+        num_groups = len(index := self.grouping.keys.unique())
+        _, has_null_group = bitmask_or([*index._columns])
+
+        if ascending:
+            if has_null_group:
+                group_ids = cudf.Series._from_data(
+                    {None: cp.arange(-1, num_groups - 1)}
+                )
+            else:
+                group_ids = cudf.Series._from_data(
+                    {None: cp.arange(num_groups)}
+                )
+        else:
+            group_ids = cudf.Series._from_data(
+                {None: cp.arange(num_groups - 1, -1, -1)}
+            )
+
+        if has_null_group:
+            group_ids.iloc[0] = cudf.NA
+
+        group_ids._index = index
+        return self._broadcast(group_ids)
+
     def serialize(self):
         header = {}
         frames = []
@@ -545,6 +669,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             [*self.obj._index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        if isinstance(self.grouping.keys, cudf.MultiIndex):
+            grouped_keys.names = self.grouping.keys.names
+        else:
+            grouped_keys.name = self.grouping.keys.name
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
@@ -607,7 +735,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         object : the return type of ``func``.
 
-        See also
+        See Also
         --------
         cudf.Series.pipe
             Apply a function with arguments to a series.
@@ -707,7 +835,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
-        group_names, offsets, _, grouped_values = self._grouped()
+        group_names, offsets, group_keys, grouped_values = self._grouped()
 
         ngroups = len(offsets) - 1
         if ngroups > self._MAX_GROUPS_BEFORE_WARN:
@@ -726,14 +854,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
-        elif isinstance(chunk_results[0], cudf.Series):
-            if isinstance(self.obj, cudf.DataFrame):
+        else:
+            if isinstance(chunk_results[0], cudf.Series) and isinstance(
+                self.obj, cudf.DataFrame
+            ):
                 result = cudf.concat(chunk_results, axis=1).T
                 result.index.names = self.grouping.names
             else:
                 result = cudf.concat(chunk_results)
-        else:
-            result = cudf.concat(chunk_results)
+                if self._group_keys:
+                    index_data = group_keys._data.copy(deep=True)
+                    index_data[None] = grouped_values.index._column
+                    result.index = cudf.MultiIndex._from_data(index_data)
 
         if self._sort:
             result = result.sort_index()
@@ -877,6 +1009,29 @@ class GroupBy(Serializable, Reducible, Scannable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    def _broadcast(self, values):
+        """
+        Broadcast the results of an aggregation to the group
+
+        Parameters
+        ----------
+        values: Series
+            A Series representing the results of an aggregation.  The
+            index of the Series must be the (unique) values
+            representing the group keys.
+
+        Returns
+        -------
+        A Series of the same size and with the same index as
+        ``self.obj``.
+        """
+        if not values.index.equals(self.grouping.keys):
+            values = values._align_to_index(
+                self.grouping.keys, how="right", allow_non_unique=True
+            )
+            values.index = self.obj.index
+        return values
+
     def transform(self, function):
         """Apply an aggregation, then broadcast the result to the group size.
 
@@ -907,7 +1062,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           3  5
           4  5
 
-        See also
+        See Also
         --------
         agg
         """
@@ -918,19 +1073,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "Currently, `transform()` supports only aggregations."
             ) from e
 
-        if not result.index.equals(self.grouping.keys):
-            result = result._align_to_index(
-                self.grouping.keys, how="right", allow_non_unique=True
-            )
-            result.index = self.obj.index
-        return result
+        return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
         """
         Returns a `RollingGroupby` object that enables rolling window
         calculations on the groups.
 
-        See also
+        See Also
         --------
         cudf.core.window.Rolling
         """
@@ -1171,7 +1321,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _cov_or_corr(self, func, method_name):
         """
-        internal function that is called by either corr() or cov()
+        Internal function that is called by either corr() or cov()
         for sort groupby correlation and covariance computations,
         respectively.
         """
@@ -1582,7 +1732,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys,
+            dropna=self._dropna,
+            sort=self._sort,
+            group_keys=self._group_keys,
         )
 
 

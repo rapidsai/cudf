@@ -130,6 +130,13 @@ class list_device_view {
   [[nodiscard]] __device__ inline size_type size() const { return _size; }
 
   /**
+   * @brief Returns the row index of this list in the original lists column.
+   *
+   * @return The row index of this list
+   */
+  [[nodiscard]] __device__ inline size_type row_index() const { return _row_index; }
+
+  /**
    * @brief Fetches the lists_column_device_view that contains this list.
    *
    * @return The lists_column_device_view that contains this list

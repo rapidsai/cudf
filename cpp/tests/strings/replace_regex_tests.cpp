@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/replace_re.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/strings/replace_re.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -159,6 +159,20 @@ TEST_F(StringsReplaceRegexTest, WordBoundary)
     cudf::strings::replace_re(cudf::strings_column_view(input), "\\B", cudf::string_scalar("X"));
   expected = cudf::test::strings_column_wrapper(
     {"aXbXa bXcXd\naXbXa", "zXéXz", "AX1XBX2-éX3", "e é", "_", "aX_Xb"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
+TEST_F(StringsReplaceRegexTest, Alternation)
+{
+  cudf::test::strings_column_wrapper input(
+    {"16  6  brr  232323  1  hello  90", "123 ABC 00 2022", "abé123  4567  89xyz"});
+  auto results = cudf::strings::replace_re(
+    cudf::strings_column_view(input), "(^|\\s)\\d+(\\s|$)", cudf::string_scalar("_"));
+  auto expected =
+    cudf::test::strings_column_wrapper({"__ brr __ hello _", "_ABC_2022", "abé123 _ 89xyz"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results = cudf::strings::replace_re(
+    cudf::strings_column_view(input), "(\\s|^)\\d+($|\\s)", cudf::string_scalar("_"));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 

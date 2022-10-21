@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import operator
 import pickle
 import warnings
@@ -131,6 +132,8 @@ class Frame(BinaryOperand, Scannable):
         self,
         columns: List[ColumnBase],
         column_names: Optional[abc.Iterable[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -139,7 +142,7 @@ class Frame(BinaryOperand, Scannable):
         if column_names is None:
             column_names = self._column_names
         frame = self.__class__._from_columns(columns, column_names)
-        return frame._copy_type_metadata(self)
+        return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     def _mimic_inplace(
         self: T, result: T, inplace: bool = False
@@ -724,7 +727,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         Use ``.pipe`` when chaining together functions that expect
         Series, DataFrames or GroupBy objects. Instead of writing
 
@@ -1013,8 +1015,8 @@ class Frame(BinaryOperand, Scannable):
             )
 
         column_names = data.column_names
-        pandas_dtypes = None
-        np_dtypes = None
+        pandas_dtypes = {}
+        np_dtypes = {}
         if isinstance(data.schema.pandas_metadata, dict):
             metadata = data.schema.pandas_metadata
             pandas_dtypes = {
@@ -1086,42 +1088,45 @@ class Frame(BinaryOperand, Scannable):
 
         # There are some special cases that need to be handled
         # based on metadata.
-        if pandas_dtypes:
-            for name in result:
-                dtype = None
-                if (
-                    len(result[name]) == 0
-                    and pandas_dtypes[name] == "categorical"
-                ):
-                    # When pandas_dtype is a categorical column and the size
-                    # of column is 0(i.e., empty) then we will have an
-                    # int8 column in result._data[name] returned by libcudf,
-                    # which needs to be type-casted to 'category' dtype.
-                    dtype = "category"
-                elif (
-                    pandas_dtypes[name] == "empty"
-                    and np_dtypes[name] == "object"
-                ):
-                    # When a string column has all null values, pandas_dtype is
-                    # is specified as 'empty' and np_dtypes as 'object',
-                    # hence handling this special case to type-cast the empty
-                    # float column to str column.
-                    dtype = np_dtypes[name]
-                elif pandas_dtypes[
-                    name
-                ] == "object" and cudf.api.types.is_struct_dtype(
-                    np_dtypes[name]
-                ):
-                    # Incase of struct column, libcudf is not aware of names of
-                    # struct fields, hence renaming the struct fields is
-                    # necessary by extracting the field names from arrow
-                    # struct types.
-                    result[name] = result[name]._rename_fields(
-                        [field.name for field in data[name].type]
-                    )
+        for name in result:
+            if (
+                len(result[name]) == 0
+                and pandas_dtypes.get(name) == "categorical"
+            ):
+                # When pandas_dtype is a categorical column and the size
+                # of column is 0 (i.e., empty) then we will have an
+                # int8 column in result._data[name] returned by libcudf,
+                # which needs to be type-casted to 'category' dtype.
+                result[name] = result[name].as_categorical_column("category")
+            elif (
+                pandas_dtypes.get(name) == "empty"
+                and np_dtypes.get(name) == "object"
+            ):
+                # When a string column has all null values, pandas_dtype is
+                # is specified as 'empty' and np_dtypes as 'object',
+                # hence handling this special case to type-cast the empty
+                # float column to str column.
+                result[name] = result[name].as_string_column(cudf.dtype("str"))
+            elif name in data.column_names and isinstance(
+                data[name].type,
+                (pa.StructType, pa.ListType, pa.Decimal128Type),
+            ):
+                # In case of struct column, libcudf is not aware of names of
+                # struct fields, hence renaming the struct fields is
+                # necessary by extracting the field names from arrow
+                # struct types.
 
-                if dtype is not None:
-                    result[name] = result[name].astype(dtype)
+                # In case of decimal column, libcudf is not aware of the
+                # decimal precision.
+
+                # In case of list column, there is a possibility of nested
+                # list columns to have struct or decimal columns inside them.
+
+                # All of these cases are handled by calling the
+                # _with_type_metadata method on the column.
+                result[name] = result[name]._with_type_metadata(
+                    cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
+                )
 
         return cls._from_data({name: result[name] for name in column_names})
 
@@ -1146,7 +1151,7 @@ class Frame(BinaryOperand, Scannable):
         index: [[1,2,3]]
         """
         return pa.Table.from_pydict(
-            {name: col.to_arrow() for name, col in self._data.items()}
+            {str(name): col.to_arrow() for name, col in self._data.items()}
         )
 
     def _positions_from_column_names(self, column_names):
@@ -1161,23 +1166,37 @@ class Frame(BinaryOperand, Scannable):
             if name in set(column_names)
         ]
 
-    def _copy_type_metadata(self: T, other: T) -> T:
+    def _copy_type_metadata(
+        self: T,
+        other: T,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+    ) -> T:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
+
+        If override_dtypes is provided, any non-None entry
+        will be used in preference to the relevant column of other to
+        provide the new dtype.
+
         See `ColumnBase._with_type_metadata` for more information.
         """
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
+        if override_dtypes is None:
+            override_dtypes = itertools.repeat(None)
+        dtypes = (
+            dtype if dtype is not None else col.dtype
+            for (dtype, col) in zip(override_dtypes, other._data.values())
+        )
+        for (name, col), dtype in zip(self._data.items(), dtypes):
             self._data.set_by_label(
-                name, col._with_type_metadata(other_col.dtype), validate=False
+                name, col._with_type_metadata(dtype), validate=False
             )
 
         return self
 
     @_cudf_nvtx_annotate
-    def isnull(self):
+    def isna(self):
         """
         Identify missing values.
 
@@ -1202,7 +1221,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         Show which entries in a DataFrame are NA.
 
         >>> import cudf
@@ -1218,7 +1236,7 @@ class Frame(BinaryOperand, Scannable):
         0     5                        <NA>  Alfred       <NA>
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
-        >>> df.isnull()
+        >>> df.isna()
              age   born   name    toy
         0  False   True  False   True
         1  False  False  False  False
@@ -1234,7 +1252,7 @@ class Frame(BinaryOperand, Scannable):
         3     Inf
         4    -Inf
         dtype: float64
-        >>> ser.isnull()
+        >>> ser.isna()
         0    False
         1    False
         2     True
@@ -1247,17 +1265,17 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
-        >>> idx.isnull()
-        GenericIndex([False, False, True, True, False, False], dtype='bool')
+        >>> idx.isna()
+        array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for isnull
-    isna = isnull
+    # Alias for isna
+    isnull = isna
 
     @_cudf_nvtx_annotate
-    def notnull(self):
+    def notna(self):
         """
         Identify non-missing values.
 
@@ -1282,7 +1300,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         Show which entries in a DataFrame are NA.
 
         >>> import cudf
@@ -1298,7 +1315,7 @@ class Frame(BinaryOperand, Scannable):
         0     5                        <NA>  Alfred       <NA>
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
-        >>> df.notnull()
+        >>> df.notna()
              age   born  name    toy
         0   True  False  True  False
         1   True   True  True   True
@@ -1314,7 +1331,7 @@ class Frame(BinaryOperand, Scannable):
         3     Inf
         4    -Inf
         dtype: float64
-        >>> ser.notnull()
+        >>> ser.notna()
         0     True
         1     True
         2    False
@@ -1327,14 +1344,14 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
-        >>> idx.notnull()
-        GenericIndex([True, True, False, False, True, True], dtype='bool')
+        >>> idx.notna()
+        array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for notnull
-    notna = notnull
+    # Alias for notna
+    notnull = notna
 
     @_cudf_nvtx_annotate
     def searchsorted(
@@ -1395,7 +1412,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df.searchsorted(values_df, ascending=False)
         array([4, 4, 4, 0], dtype=int32)
         """
-        # Call libcudf++ search_sorted primitive
+        # Call libcudf search_sorted primitive
 
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -1976,7 +1993,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2035,7 +2051,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2147,7 +2162,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2200,11 +2214,10 @@ class Frame(BinaryOperand, Scannable):
         Return unbiased variance of the DataFrame.
 
         Normalized by N-1 by default. This can be changed using the
-        ddof argument
+        ddof argument.
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2254,7 +2267,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         axis: {index (0), columns(1)}
             Axis for the function to be applied on.
         skipna: bool, default True
@@ -2376,7 +2388,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be True, as for an
@@ -2416,7 +2427,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         skipna: bool, default True
             Exclude NA/null values. If the entire row/column is NA and
             skipna is True, then the result will be False, as for an
@@ -2482,7 +2492,6 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-
         skipna : bool, default True
             Exclude NA/null values when computing the result.
 
@@ -2601,7 +2610,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         **Series**
 
         >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
@@ -2666,7 +2674,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         **DataFrame**
 
         >>> import cudf
@@ -2716,7 +2723,6 @@ class Frame(BinaryOperand, Scannable):
 
         Examples
         --------
-
         **Series**
 
         >>> import cudf, numpy as np
