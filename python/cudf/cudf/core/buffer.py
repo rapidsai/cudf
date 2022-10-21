@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import math
 import pickle
+import weakref
 from typing import (
     Any,
     Dict,
@@ -125,6 +127,16 @@ def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
     return Buffer(obj)
 
 
+class BufferWeakref(object):
+    def __init__(self, ptr, size) -> None:
+        self.ptr = ptr
+        self.size = size
+
+
+def custom_weakref_callback(ref):
+    pass
+
+
 class Buffer(Serializable):
     """
     A Buffer represents device memory.
@@ -150,10 +162,15 @@ class Buffer(Serializable):
     _ptr: int
     _size: int
     _owner: object
+    _refs = {}
 
     def __init__(
         self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
+        self._weak_ref = None
+        self._temp_ref = None
+        self._zero_copied = False
+
         if isinstance(data, int):
             if size is None:
                 raise ValueError(
@@ -164,6 +181,7 @@ class Buffer(Serializable):
             self._ptr = data
             self._size = size
             self._owner = owner
+            self._update_ref()
         else:
             if size is not None or owner is not None:
                 raise ValueError(
@@ -173,10 +191,11 @@ class Buffer(Serializable):
 
             # `data` is a buffer-like object
             buf: Any = data
-            if isinstance(buf, rmm.DeviceBuffer):
+            if isinstance(buf, (Buffer, rmm.DeviceBuffer)):
                 self._ptr = buf.ptr
                 self._size = buf.size
                 self._owner = buf
+                self._update_ref()
                 return
             iface = getattr(buf, "__cuda_array_interface__", None)
             if iface:
@@ -184,12 +203,14 @@ class Buffer(Serializable):
                 self._ptr = ptr
                 self._size = size
                 self._owner = buf
+                self._update_ref()
                 return
             ptr, size = get_ptr_and_size(np.asarray(buf).__array_interface__)
             buf = rmm.DeviceBuffer(ptr=ptr, size=size)
             self._ptr = buf.ptr
             self._size = buf.size
             self._owner = buf
+            self._update_ref()
 
     def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
@@ -200,6 +221,70 @@ class Buffer(Serializable):
         return self.__class__(
             data=self.ptr + start, size=stop - start, owner=self.owner
         )
+
+    def _is_cai_zero_copied(self):
+        return self._zero_copied
+
+    def _update_ref(self):
+        if (self._ptr, self._size) not in Buffer._refs:
+            Buffer._refs[(self._ptr, self._size)] = BufferWeakref(
+                self._ptr, self._size
+            )
+        self._temp_ref = Buffer._refs[(self._ptr, self._size)]
+
+    def get_ref(self):
+        if self._temp_ref is None:
+            self._update_ref()
+        return self._temp_ref
+
+    def has_a_weakref(self):
+        weakref_count = weakref.getweakrefcount(self.get_ref())
+
+        if weakref_count == 1:
+            return (
+                not weakref.getweakrefs(self.get_ref())[0]()
+                is not self.get_ref()
+            )
+        else:
+            return weakref_count > 0
+
+    def get_weakref(self):
+        return weakref.ref(self.get_ref(), custom_weakref_callback)
+
+    def copy(self, deep: bool = True):
+        if deep:
+            if (
+                cudf.get_option("copy_on_write")
+                and not self._is_cai_zero_copied()
+            ):
+                copied_buf = Buffer.__new__(Buffer)
+                copied_buf._ptr = self._ptr
+                copied_buf._size = self._size
+                copied_buf._owner = self._owner
+                copied_buf._temp_ref = None
+                copied_buf._weak_ref = None
+                copied_buf._zero_copied = False
+
+                if self._weak_ref is None:
+                    self._weak_ref = copied_buf.get_weakref()
+                    copied_buf._weak_ref = self.get_weakref()
+                else:
+                    if self.has_a_weakref():
+                        copied_buf._weak_ref = self._weak_ref
+                        self._weak_ref = copied_buf.get_weakref()
+                    else:
+                        self._weak_ref = copied_buf.get_weakref()
+                        copied_buf._weak_ref = self.get_weakref()
+                return copied_buf
+            else:
+                owner_copy = copy.copy(self._owner)
+                return Buffer(data=None, size=None, owner=owner_copy)
+        else:
+            shallow_copy = Buffer.__new__(Buffer)
+            shallow_copy._ptr = self._ptr
+            shallow_copy._size = self._size
+            shallow_copy._owner = self._owner
+            return shallow_copy
 
     @property
     def size(self) -> int:
@@ -218,7 +303,7 @@ class Buffer(Serializable):
         return self._owner
 
     @property
-    def __cuda_array_interface__(self) -> dict:
+    def _cai(self) -> dict:
         return {
             "data": (self.ptr, False),
             "shape": (self.size,),
@@ -227,14 +312,21 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def _detach(self):
-        # make a deep copy of existing DeviceBuffer
-        # and replace pointer to it.
-        current_buf = rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
-        new_buf = current_buf.copy()
-        self._ptr = new_buf.ptr
-        self._size = new_buf.size
-        self._owner = new_buf
+    @property
+    def __cuda_array_interface__(self) -> dict:
+        self._detach_refs()
+        self._zero_copied = True
+        return self._cai
+
+    def _detach_refs(self):
+        if not self._zero_copied and self.has_a_weakref():
+            # make a deep copy of existing DeviceBuffer
+            # and replace pointer to it.
+            current_buf = rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
+            new_buf = current_buf.copy()
+            self._ptr = new_buf.ptr
+            self._size = new_buf.size
+            self._owner = new_buf
 
     def memoryview(self) -> memoryview:
         host_buf = bytearray(self.size)
@@ -245,7 +337,7 @@ class Buffer(Serializable):
         header = {}  # type: Dict[Any, Any]
         header["type-serialized"] = pickle.dumps(type(self))
         header["constructor-kwargs"] = {}
-        header["desc"] = self.__cuda_array_interface__.copy()
+        header["desc"] = self._cai.copy()
         header["desc"]["strides"] = (1,)
         header["frame_count"] = 1
         frames = [self]
@@ -258,11 +350,11 @@ class Buffer(Serializable):
         ), "Only expecting to deserialize Buffer with a single frame."
         buf = cls(frames[0], **header["constructor-kwargs"])
 
-        if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
+        if header["desc"]["shape"] != buf._cai["shape"]:
             raise ValueError(
                 f"Received a `Buffer` with the wrong size."
                 f" Expected {header['desc']['shape']}, "
-                f"but got {buf.__cuda_array_interface__['shape']}"
+                f"but got {buf._cai['shape']}"
             )
 
         return buf

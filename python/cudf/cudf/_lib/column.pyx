@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import weakref
+from types import SimpleNamespace
 
 import cupy as cp
 import numpy as np
@@ -228,9 +229,12 @@ cdef class Column:
         )
         if value is None:
             mask = None
-        elif hasattr(value, "__cuda_array_interface__"):
+        elif isinstance(value, Buffer) or hasattr(value, "__cuda_array_interface__"):
+            if isinstance(value, Buffer):
+                value = SimpleNamespace(__cuda_array_interface__=value._cai, owner=value if value._owner is None else value._owner)
             if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
+                    # TODO : PREM
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')
             mask = as_device_buffer_like(value)
@@ -320,14 +324,10 @@ cdef class Column:
         self._base_children = value
 
     def has_a_weakref(self):
-        weakref_count = weakref.getweakrefcount(self.base_data)
+        return self.base_data.has_a_weakref() or (self.base_mask.has_a_weakref() if self.base_mask else False)
 
-        if weakref_count == 1:
-            return not (
-                weakref.getweakrefs(self.base_data)[0]() is self.base_data
-            )
-        else:
-            return weakref_count > 0
+    def _is_cai_zero_copied(self):
+        return self._zero_copied or (self.base_data is not None and self.base_data._is_cai_zero_copied()) or (self.base_mask is not None and self.base_mask._is_cai_zero_copied())
 
     def _detach_refs(self):
         if not self._zero_copied and self.has_a_weakref():

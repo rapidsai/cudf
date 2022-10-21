@@ -5250,16 +5250,8 @@ class StringColumn(column.ColumnBase):
         self._start_offset = None
         self._end_offset = None
 
-    def get_weakref(self):
-        return weakref.ref(self, column.custom_weakref_callback)
-
     def has_a_weakref(self):
-        weakref_count = weakref.getweakrefcount(self)
-
-        if weakref_count == 1:
-            return not (weakref.getweakrefs(self)[0]() is self)
-        else:
-            return weakref_count > 0
+        return any(child.has_a_weakref() for child in self.children)
 
     def copy(self, deep: bool = True):
         """String Columns are immutable, so a deep/shallow copy

@@ -6216,17 +6216,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         col = cudf.core.column.build_struct_column(
             names=field_names,
             children=tuple(
-                [
-                    col.copy(deep=cudf.get_option("copy_on_write"))
-                    for col in self._data.columns
-                ]
+                [col.copy(deep=True) for col in self._data.columns]
             ),
             size=len(self),
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                {name: col.copy(deep=True)}
-            ),
+            cudf.core.column_accessor.ColumnAccessor({name: col}),
             index=self.index,
             name=name,
         )

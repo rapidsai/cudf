@@ -1265,9 +1265,6 @@ class CategoricalColumn(column.ColumnBase):
         out = out.set_mask(self.mask)
         return out
 
-    def get_weakref(self):
-        return weakref.ref(self.codes.base_data, custom_weakref_callback)
-
     @cached_property
     def memory_usage(self) -> int:
         return self.categories.memory_usage + self.codes.memory_usage

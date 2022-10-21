@@ -113,8 +113,8 @@ class NumericalColumn(NumericalBaseColumn):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data_array_view.dtype):
-                item = self.data_array_view.dtype.type(item)
+            if np.can_cast(item, self.dtype):
+                item = self.dtype.type(item)
             else:
                 return False
         except (TypeError, ValueError):
@@ -569,6 +569,7 @@ class NumericalColumn(NumericalBaseColumn):
     def _find_value(
         self, value: ScalarLike, closest: bool, find: Callable, compare: str
     ) -> int:
+        # TODO : PREM
         value = to_cudf_compatible_scalar(value)
         if not is_number(value):
             raise ValueError("Expected a numeric value")

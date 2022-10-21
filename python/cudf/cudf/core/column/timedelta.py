@@ -131,7 +131,7 @@ class TimeDeltaColumn(ColumnBase):
         mask = None
         if self.nullable:
             mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
+        data = pa.py_buffer(self.as_numerical.values_host)
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,

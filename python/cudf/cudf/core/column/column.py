@@ -124,7 +124,35 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self._detach_refs()
         self._zero_copied = True
 
-        return cuda.as_cuda_array(self.data).view(self.dtype)
+        return self._data_array_view
+
+    @property
+    def _data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        """
+        View the data as a device array object
+        """
+        return cuda.as_cuda_array(
+            SimpleNamespace(
+                __cuda_array_interface__=self.data._cai,
+                owner=self.data
+                if self.data._owner is None
+                else self.data._owner,
+            )
+        ).view(self.dtype)
+
+    @property
+    def _mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        """
+        View the mask as a device array
+        """
+        return cuda.as_cuda_array(
+            SimpleNamespace(
+                __cuda_array_interface__=self.mask._cai,
+                owner=self.mask
+                if self.mask._owner is None
+                else self.mask._owner,
+            )
+        ).view(mask_dtype)
 
     @property
     def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
@@ -169,7 +197,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return self.data_array_view.copy_to_host()
+        return self._data_array_view.copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":
@@ -372,12 +400,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view
 
+    @property
+    def _nullmask(self) -> DeviceBufferLike:
+        """The gpu buffer for the null-mask"""
+        if not self.nullable:
+            raise ValueError("Column has no null mask")
+        return self._mask_array_view
+
     def force_deep_copy(self: T) -> T:
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
-
-    def get_weakref(self):
-        return weakref.ref(self.base_data, custom_weakref_callback)
 
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
@@ -385,29 +417,27 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         copies the references of the data and mask.
         """
         if deep:
-            if cudf.get_option("copy_on_write"):
+            if (
+                cudf.get_option("copy_on_write")
+                and not self._is_cai_zero_copied()
+            ):
                 copied_col = cast(
                     T,
                     build_column(
-                        self.base_data,
+                        self.base_data
+                        if self.base_data is None
+                        else self.base_data.copy(deep=deep),
                         self.dtype,
-                        mask=self.base_mask,
+                        mask=self.base_mask
+                        if self.base_mask is None
+                        else self.base_mask.copy(deep=deep),
                         size=self.size,
                         offset=self.offset,
-                        children=self.base_children,
+                        children=tuple(
+                            col.copy(deep=True) for col in self.base_children
+                        ),
                     ),
                 )
-
-                if self._weak_ref is None:
-                    self._weak_ref = copied_col.get_weakref()
-                    copied_col._weak_ref = self.get_weakref()
-                else:
-                    if self.has_a_weakref():
-                        copied_col._weak_ref = self._weak_ref
-                        self._weak_ref = copied_col.get_weakref()
-                    else:
-                        self._weak_ref = copied_col.get_weakref()
-                        copied_col._weak_ref = self.get_weakref()
                 return copied_col
             else:
                 result = libcudf.copying.copy_column(self)
@@ -1279,11 +1309,12 @@ def column_empty_like(
     ):
         column = cast("cudf.core.column.CategoricalColumn", column)
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
+
         return build_column(
             data=None,
             dtype=dtype,
             mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            children=(column_empty_like(codes, dtype=codes.dtype),),
             size=codes.size,
         )
 

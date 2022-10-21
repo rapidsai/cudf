@@ -1444,7 +1444,7 @@ class Frame(BinaryOperand, Scannable):
 
         # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
-        result = cupy.asarray(outcol.data_array_view)
+        result = cupy.asarray(outcol._data_array_view)
         if scalar_flag:
             return result[0].item()
         else:
@@ -1697,8 +1697,8 @@ class Frame(BinaryOperand, Scannable):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        lmask = as_column(left_column.nullmask)
-                        rmask = as_column(right_column.nullmask)
+                        lmask = as_column(left_column._nullmask)
+                        rmask = as_column(right_column._nullmask)
                         output_mask = (lmask | rmask).data
                         left_column = left_column.fillna(fill_value)
                         right_column = right_column.fillna(fill_value)
@@ -1752,7 +1752,7 @@ class Frame(BinaryOperand, Scannable):
             cupy_inputs = []
             for inp in (left, right) if ufunc.nin == 2 else (left,):
                 if isinstance(inp, ColumnBase) and inp.has_nulls():
-                    new_mask = as_column(inp.nullmask)
+                    new_mask = as_column(inp._nullmask)
 
                     # TODO: This is a hackish way to perform a bitwise and
                     # of bitmasks. Once we expose

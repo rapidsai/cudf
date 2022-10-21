@@ -155,7 +155,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         source_data = {}
         for i, (column_name, col) in enumerate(codes._data.items()):
-            if -1 in col.values:
+            if -1 in col:
                 level = cudf.DataFrame(
                     {column_name: [None] + list(levels[i])},
                     index=range(-1, len(levels[i])),
