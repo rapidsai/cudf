@@ -520,7 +520,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetScopedMaximumBytesAllocatedI
   reset_scoped_max_total_allocated(initialValue);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getScopedMaximumBytesAllocated(JNIEnv *env, jclass) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getScopedMaximumBytesAllocated(JNIEnv *env,
+                                                                               jclass) {
   return get_scoped_max_total_allocated();
 }
 
