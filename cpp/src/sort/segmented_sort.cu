@@ -203,7 +203,7 @@ struct column_fast_sort_fn {
  * @brief Performs faster sort on eligible columns
  *
  * Check the `is_fast_sort_supported()==true` on the input column before using this function.
- * 
+ *
  * @param input Column to sort
  * @param segment_offsets Identifies segments to sort within
  * @param column_order Sort ascending or descending
