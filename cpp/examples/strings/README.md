@@ -1,4 +1,4 @@
-# libcudf C++ application using strings columns
+# libcudf C++ examples using strings columns
 
 This C++ example demonstrates using libcudf APIs to access and create
 strings columns.
