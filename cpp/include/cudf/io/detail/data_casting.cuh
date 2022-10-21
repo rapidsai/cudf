@@ -381,17 +381,18 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type] __device__(size_type row) {
       if (col.is_null(row)) { return; }
-      // If this is a string value, remove quotes
-      auto [in_begin, in_end] = trim_quotes(
-        str_tuples[row].first, str_tuples[row].first + str_tuples[row].second, options.quotechar);
+      auto const in = str_tuples[row];
 
-      auto const is_null_literal = serialized_trie_contains(
-        options.trie_na, {in_begin, static_cast<size_t>(in_end - in_begin)});
+      auto const is_null_literal =
+        serialized_trie_contains(options.trie_na, {in.first, static_cast<size_t>(in.second)});
 
       if (is_null_literal) {
         col.set_null(row);
         return;
       }
+
+      // If this is a string value, remove quotes
+      auto [in_begin, in_end] = trim_quotes(in.first, in.first + in.second, options.quotechar);
 
       auto const is_parsed = cudf::type_dispatcher(col_type,
                                                    ConvertFunctor{},
