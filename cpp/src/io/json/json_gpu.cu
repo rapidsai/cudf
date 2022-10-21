@@ -255,13 +255,16 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
     auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
+    const bool is_quoted =
+      *(desc.value_begin - 1) == opts.quotechar && *desc.value_end == opts.quotechar;
 
     current = desc.value_end + 1;
 
     using string_index_pair = thrust::pair<const char*, size_type>;
 
     // Empty fields are not legal values
-    if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
+    if (!serialized_trie_contains(opts.trie_na,
+                                  {desc.value_begin - is_quoted, value_len + is_quoted * 2})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_index_pair*>(output_columns[desc.column]);
