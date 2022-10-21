@@ -848,7 +848,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
-                                          size_t num_rows)
+                                          size_t num_rows,
+                                          bool decode_step)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -965,7 +966,11 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // is responsible for.
       // - for flat schemas, we can do this directly by using row counts
       // - for nested schemas, these offsets are computed during the preprocess step
-      if (s->col.column_data_base != nullptr) {
+      //
+      // NOTE: in a chunked read situation, s->col.column_data_base and s->col.valid_map_base
+      // will be aliased to memory that has been freed when we get here in the non-decode step, so
+      // we cannot check against nullptr.  we'll just check a flag directly.
+      if (decode_step) {
         int max_depth = s->col.max_nesting_depth;
         for (int idx = 0; idx < max_depth; idx++) {
           PageNestingInfo* pni = &s->page.nesting[idx];
@@ -981,6 +986,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           }
 
           pni->data_out = static_cast<uint8_t*>(s->col.column_data_base[idx]);
+
           if (pni->data_out != nullptr) {
             // anything below max depth with a valid data pointer must be a list, so the
             // element size is the size of the offset type.
@@ -1086,7 +1092,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
 
       // if we're in the decoding step, jump directly to the first
       // value we care about
-      if (s->col.column_data_base != nullptr) {
+      if (decode_step) {
         s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
       } else {
         s->input_value_count        = 0;
@@ -1541,7 +1547,7 @@ __global__ void __launch_bounds__(block_size)
   int t                 = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows)) {
+  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) {
     return;
   }
 
@@ -1561,7 +1567,7 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     return;
-  }  
+  }
 
   // zero sizes
   int d = 0;
@@ -1662,7 +1668,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   int t                 = threadIdx.x;
   int out_thread0;
 
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows)) { return; }
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
