@@ -5364,7 +5364,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame
         """
         warnings.warn(
-            "DataFrame.quantiles is not deprecated. "
+            "DataFrame.quantiles is now deprecated. "
             "Please use DataFrame.quantile with `method='table'`.",
             FutureWarning,
         )
