@@ -31,7 +31,7 @@ namespace {
 
 auto collect_set(cudf::column_view const& input, std::unique_ptr<reduce_aggregation> const& agg)
 {
-  auto const result_scalar = cudf::reduce(input, agg, data_type{type_id::LIST});
+  auto const result_scalar = cudf::reduce(input, *agg, data_type{type_id::LIST});
 
   // The results of `collect_set` are unordered thus we need to sort them for comparison.
   auto const result_sorted_table =
@@ -63,20 +63,20 @@ TYPED_TEST(CollectTestFixedWidth, CollectList)
   // null_include without nulls
   fw_wrapper col(values.begin(), values.end());
   auto const ret = cudf::reduce(
-    col, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    col, *make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, dynamic_cast<list_scalar*>(ret.get())->view());
 
   // null_include with nulls
   fw_wrapper col_with_null(values.begin(), values.end(), null_mask.begin());
   auto const ret1 = cudf::reduce(
-    col_with_null, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    col_with_null, *make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_with_null, dynamic_cast<list_scalar*>(ret1.get())->view());
 
   // null_exclude with nulls
   fw_wrapper col_null_filtered{{5, 0, -111, 0, 64, 99, -16}};
   auto const ret2 =
     cudf::reduce(col_with_null,
-                 make_collect_list_aggregation<reduce_aggregation>(null_policy::EXCLUDE),
+                 *make_collect_list_aggregation<reduce_aggregation>(null_policy::EXCLUDE),
                  data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_null_filtered, dynamic_cast<list_scalar*>(ret2.get())->view());
 }
@@ -128,7 +128,7 @@ TYPED_TEST(CollectTestFixedWidth, MergeLists)
   auto const lists1    = lists_col{{1, 2, 3}, {}, {}, {4}, {5, 6, 7}, {8, 9}, {}};
   auto const expected1 = fw_wrapper{{1, 2, 3, 4, 5, 6, 7, 8, 9}};
   auto const ret1      = cudf::reduce(
-    lists1, make_merge_lists_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    lists1, *make_merge_lists_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, dynamic_cast<list_scalar*>(ret1.get())->view());
 
   // test with nulls
@@ -145,7 +145,7 @@ TYPED_TEST(CollectTestFixedWidth, MergeLists)
   auto const expected2 = fw_wrapper{{1, 2, 3, 0, 4, 0, 5, 0, 0, 0, 6, 7, 8, 9},
                                     {1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1}};
   auto const ret2      = cudf::reduce(
-    lists2, make_merge_lists_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    lists2, *make_merge_lists_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, dynamic_cast<list_scalar*>(ret2.get())->view());
 }
 
@@ -278,14 +278,14 @@ TEST_F(CollectTest, CollectStrings)
 
   // collect_list including nulls
   auto const ret1 = cudf::reduce(
-    s_col, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    s_col, *make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col, dynamic_cast<list_scalar*>(ret1.get())->view());
 
   // collect_list excluding nulls
   auto const expected2 = str_col{"a", "a", "b", "b", "c", "d", "e", "e"};
   auto const ret2 =
     cudf::reduce(s_col,
-                 make_collect_list_aggregation<reduce_aggregation>(null_policy::EXCLUDE),
+                 *make_collect_list_aggregation<reduce_aggregation>(null_policy::EXCLUDE),
                  data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, dynamic_cast<list_scalar*>(ret2.get())->view());
 
@@ -313,7 +313,7 @@ TEST_F(CollectTest, CollectStrings)
   auto const expected5 = str_col{{"a", "a", "b", "b", "null", "c", "null", "d", "null", "e"},
                                  {1, 1, 1, 1, 0, 1, 0, 1, 0, 1}};
   auto const ret5      = cudf::reduce(
-    strings, make_merge_lists_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    strings, *make_merge_lists_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, dynamic_cast<list_scalar*>(ret5.get())->view());
 
   // merge_sets with null_equal
@@ -336,7 +336,7 @@ TEST_F(CollectTest, CollectEmptys)
   // test collect empty columns
   auto empty = int_col{};
   auto ret   = cudf::reduce(
-    empty, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    empty, *make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<list_scalar*>(ret.get())->view());
 
   ret = collect_set(empty, make_collect_set_aggregation<reduce_aggregation>());
@@ -345,7 +345,7 @@ TEST_F(CollectTest, CollectEmptys)
   // test collect all null columns
   auto all_nulls = int_col{{1, 2, 3, 4, 5}, {0, 0, 0, 0, 0}};
   ret            = cudf::reduce(
-    all_nulls, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+    all_nulls, *make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<list_scalar*>(ret.get())->view());
 
   ret = collect_set(all_nulls, make_collect_set_aggregation<reduce_aggregation>());

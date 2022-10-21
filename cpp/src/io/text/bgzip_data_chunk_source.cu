@@ -170,7 +170,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       h_compressed_offsets.resize(1);
       h_decompressed_offsets.resize(1);
       // shrinking doesn't allocate/free, so we don't need to worry about streams
-      auto stream = cudf::default_stream_value;
+      auto stream = cudf::get_default_stream();
       d_compressed_blocks.resize(0, stream);
       d_decompressed_blocks.resize(0, stream);
       d_compressed_offsets.resize(0, stream);
@@ -256,8 +256,8 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
                           uint64_t virtual_begin,
                           uint64_t virtual_end)
     : _data_stream(std::move(input_stream)),
-      _prev_blocks{cudf::default_stream_value},  // here we can use the default stream because
-      _curr_blocks{cudf::default_stream_value},  // we only initialize empty device_uvectors
+      _prev_blocks{cudf::get_default_stream()},  // here we can use the default stream because
+      _curr_blocks{cudf::get_default_stream()},  // we only initialize empty device_uvectors
       _local_end{virtual_end & 0xFFFFu},
       _compressed_pos{virtual_begin >> 16},
       _compressed_end{virtual_end >> 16}

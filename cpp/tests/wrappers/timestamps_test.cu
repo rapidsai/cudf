@@ -38,7 +38,7 @@
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
+  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
   cudf::size_type size() { return cudf::size_type(100); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
@@ -93,9 +93,9 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
   auto primitive_col =
     fixed_width_column_wrapper<Rep>(chrono_col_data.begin(), chrono_col_data.end());
 
-  rmm::device_uvector<int32_t> indices(this->size(), cudf::default_stream_value);
-  thrust::sequence(rmm::exec_policy(cudf::default_stream_value), indices.begin(), indices.end());
-  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::default_stream_value),
+  rmm::device_uvector<int32_t> indices(this->size(), cudf::get_default_stream());
+  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), indices.begin(), indices.end());
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
                              indices.begin(),
                              indices.end(),
                              compare_chrono_elements_to_primitive_representation<T>{
@@ -147,11 +147,11 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
   auto chrono_rhs_col =
     generate_timestamps<T>(this->size(), time_point_ms(start_rhs), time_point_ms(stop_rhs));
 
-  rmm::device_uvector<int32_t> indices(this->size(), cudf::default_stream_value);
-  thrust::sequence(rmm::exec_policy(cudf::default_stream_value), indices.begin(), indices.end());
+  rmm::device_uvector<int32_t> indices(this->size(), cudf::get_default_stream());
+  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), indices.begin(), indices.end());
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::default_stream_value),
+    rmm::exec_policy(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS,
@@ -159,7 +159,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_rhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::default_stream_value),
+    rmm::exec_policy(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER,
@@ -167,7 +167,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::default_stream_value),
+    rmm::exec_policy(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS_EQUAL,
@@ -175,7 +175,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
-    rmm::exec_policy(cudf::default_stream_value),
+    rmm::exec_policy(cudf::get_default_stream()),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER_EQUAL,

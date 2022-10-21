@@ -641,7 +641,7 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unary_operation(input, op, cudf::default_stream_value, mr);
+  return detail::unary_operation(input, op, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

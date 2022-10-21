@@ -390,7 +390,7 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   table_view const& target,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();

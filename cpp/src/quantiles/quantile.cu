@@ -189,7 +189,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantile(input, q, interp, ordered_indices, exact, cudf::default_stream_value, mr);
+  return detail::quantile(input, q, interp, ordered_indices, exact, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
