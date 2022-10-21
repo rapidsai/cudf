@@ -159,7 +159,7 @@ class concurrent_unordered_map {
    * storage
    */
   static auto create(size_type capacity,
-                     rmm::cuda_stream_view stream     = cudf::default_stream_value,
+                     rmm::cuda_stream_view stream     = cudf::get_default_stream(),
                      const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
                      const Hasher& hash_function      = hasher(),
@@ -422,7 +422,7 @@ class concurrent_unordered_map {
   }
 
   void assign_async(const concurrent_unordered_map& other,
-                    rmm::cuda_stream_view stream = cudf::default_stream_value)
+                    rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
@@ -440,7 +440,7 @@ class concurrent_unordered_map {
                                   stream.value()));
   }
 
-  void clear_async(rmm::cuda_stream_view stream = cudf::default_stream_value)
+  void clear_async(rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     constexpr int block_size = 128;
     init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
@@ -455,7 +455,7 @@ class concurrent_unordered_map {
     }
   }
 
-  void prefetch(const int dev_id, rmm::cuda_stream_view stream = cudf::default_stream_value)
+  void prefetch(const int dev_id, rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
@@ -475,7 +475,7 @@ class concurrent_unordered_map {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void destroy(rmm::cuda_stream_view stream = cudf::default_stream_value)
+  void destroy(rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
     delete this;
@@ -516,7 +516,7 @@ class concurrent_unordered_map {
                            const Hasher& hash_function,
                            const Equality& equal,
                            const allocator_type& allocator,
-                           rmm::cuda_stream_view stream = cudf::default_stream_value)
+                           rmm::cuda_stream_view stream = cudf::get_default_stream())
     : m_hf(hash_function),
       m_equal(equal),
       m_allocator(allocator),

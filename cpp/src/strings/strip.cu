@@ -73,7 +73,7 @@ std::unique_ptr<column> strip(
   strings_column_view const& input,
   side_type side                      = side_type::BOTH,
   string_scalar const& to_strip       = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
@@ -104,7 +104,7 @@ std::unique_ptr<column> strip(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::strip(input, side, to_strip, cudf::default_stream_value, mr);
+  return detail::strip(input, side, to_strip, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

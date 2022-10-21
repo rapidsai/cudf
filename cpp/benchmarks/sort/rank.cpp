@@ -37,7 +37,7 @@ static void BM_rank(benchmark::State& state, bool nulls)
   auto keys = create_random_column(cudf::type_to_id<Type>(), row_count{n_rows}, profile);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
 
     auto result = cudf::rank(keys->view(),
                              cudf::rank_method::FIRST,
