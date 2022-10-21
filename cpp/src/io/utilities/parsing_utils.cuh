@@ -574,6 +574,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
+    // TODO what's invalid input
     bool all_digits_valid = true;
     static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
       [&opts, &all_digits_valid, output_type, begin, end]() -> device_storage_type_t<T> {
@@ -647,6 +648,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
+    // TODO what's invalid input
     if constexpr (cudf::is_timestamp<T>()) {
       static_cast<T*>(out_buffer)[row] = to_timestamp<T>(begin, end, opts.dayfirst);
     } else if constexpr (cudf::is_duration<T>()) {
