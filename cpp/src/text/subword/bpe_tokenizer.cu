@@ -565,7 +565,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_pair_encoding(input, merges_table, separator, cudf::default_stream_value, mr);
+  return detail::byte_pair_encoding(input, merges_table, separator, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

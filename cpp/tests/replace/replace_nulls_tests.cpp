@@ -176,8 +176,8 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
   std::unique_ptr<cudf::scalar> repl =
-    cudf::make_string_scalar("rep", cudf::default_stream_value, mr());
-  repl->set_valid_async(true, cudf::default_stream_value);
+    cudf::make_string_scalar("rep", cudf::get_default_stream(), mr());
+  repl->set_valid_async(true, cudf::get_default_stream());
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
   cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};

@@ -162,8 +162,14 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
   thrust::copy(rmm::exec_policy(stream), keys.begin(), keys.end(), keys_buffer1.begin());
   thrust::sequence(rmm::exec_policy(stream), order_buffer1.begin(), order_buffer1.end());
 
-  cub::DeviceRadixSort::SortPairs(
-    d_temp_storage.data(), temp_storage_bytes, keys_buffer, order_buffer, keys.size());
+  cub::DeviceRadixSort::SortPairs(d_temp_storage.data(),
+                                  temp_storage_bytes,
+                                  keys_buffer,
+                                  order_buffer,
+                                  keys.size(),
+                                  0,
+                                  sizeof(KeyType) * 8,
+                                  stream.value());
 
   return std::pair{keys_buffer.Current() == keys_buffer1.data() ? std::move(keys_buffer1)
                                                                 : std::move(keys_buffer2),

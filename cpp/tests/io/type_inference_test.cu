@@ -17,6 +17,7 @@
 #include <io/utilities/trie.cuh>
 #include <io/utilities/type_inference.cuh>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 
@@ -39,7 +40,7 @@ struct TypeInference : public cudf::test::BaseFixture {
 
 TEST_F(TypeInference, Basic)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -52,11 +53,13 @@ TEST_F(TypeInference, Basic)
 
   auto const string_offset = std::vector<int32_t>{1, 4, 7};
   auto const string_length = std::vector<std::size_t>{2, 2, 1};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -70,7 +73,7 @@ TEST_F(TypeInference, Basic)
 
 TEST_F(TypeInference, Null)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -83,11 +86,13 @@ TEST_F(TypeInference, Null)
 
   auto const string_offset = std::vector<int32_t>{1, 1, 4};
   auto const string_length = std::vector<std::size_t>{0, 2, 1};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -102,7 +107,7 @@ TEST_F(TypeInference, Null)
 
 TEST_F(TypeInference, AllNull)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -115,11 +120,13 @@ TEST_F(TypeInference, AllNull)
 
   auto const string_offset = std::vector<int32_t>{1, 1, 1};
   auto const string_length = std::vector<std::size_t>{0, 0, 4};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -133,7 +140,7 @@ TEST_F(TypeInference, AllNull)
 
 TEST_F(TypeInference, String)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -146,11 +153,13 @@ TEST_F(TypeInference, String)
 
   auto const string_offset = std::vector<int32_t>{1, 8, 12};
   auto const string_length = std::vector<std::size_t>{6, 3, 4};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -164,7 +173,7 @@ TEST_F(TypeInference, String)
 
 TEST_F(TypeInference, Bool)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -177,11 +186,13 @@ TEST_F(TypeInference, Bool)
 
   auto const string_offset = std::vector<int32_t>{1, 6, 12};
   auto const string_length = std::vector<std::size_t>{4, 5, 5};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -195,7 +206,7 @@ TEST_F(TypeInference, Bool)
 
 TEST_F(TypeInference, Timestamp)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -208,11 +219,13 @@ TEST_F(TypeInference, Timestamp)
 
   auto const string_offset = std::vector<int32_t>{1, 10};
   auto const string_length = std::vector<std::size_t>{8, 9};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -227,7 +240,7 @@ TEST_F(TypeInference, Timestamp)
 
 TEST_F(TypeInference, InvalidInput)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto options       = parse_options{',', '\n', '\"'};
   options.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -240,11 +253,13 @@ TEST_F(TypeInference, InvalidInput)
 
   auto const string_offset = std::vector<int32_t>{1, 3, 5, 7, 9};
   auto const string_length = std::vector<std::size_t>{1, 1, 1, 1, 1};
-  rmm::device_vector<int32_t> d_string_offset{string_offset};
-  rmm::device_vector<std::size_t> d_string_length{string_length};
+  auto const d_string_offset =
+    cudf::detail::make_device_uvector_async(string_offset, cudf::get_default_stream());
+  auto const d_string_length =
+    cudf::detail::make_device_uvector_async(string_length, cudf::get_default_stream());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -256,3 +271,5 @@ TEST_F(TypeInference, InvalidInput)
   // Invalid input is inferred as string for now
   EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::STRING});
 }
+
+CUDF_TEST_PROGRAM_MAIN()

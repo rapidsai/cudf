@@ -108,7 +108,7 @@ std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings
 
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {
-  return detail::to_string_view_array(input, rmm::cuda_stream_default);
+  return detail::to_string_view_array(input, cudf::get_default_stream());
 }
 
 std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
