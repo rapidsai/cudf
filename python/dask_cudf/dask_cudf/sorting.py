@@ -48,7 +48,10 @@ def _quantile(a, q):
     n = len(a)
     if not len(a):
         return None, n
-    return (a.quantile(q=q.tolist(), interpolation="nearest", method="table"), n)
+    return (
+        a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
+        n,
+    )
 
 
 @_dask_cudf_nvtx_annotate

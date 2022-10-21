@@ -74,12 +74,14 @@ def quantile(
     return Column.from_unique_ptr(move(c_result))
 
 
-def quantile_table(list source_columns,
-              vector[double] q,
-              object interp,
-              object is_input_sorted,
-              list column_order,
-              list null_precedence):
+def quantile_table(
+    list source_columns,
+    vector[double] q,
+    object interp,
+    object is_input_sorted,
+    list column_order,
+    list null_precedence,
+):
     cdef table_view c_input = table_view_from_columns(source_columns)
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(
