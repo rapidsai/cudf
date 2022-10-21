@@ -216,7 +216,10 @@ def set_allocator(
     """
     warnings.warn(
         "The cudf.set_allocator function is deprecated and will be removed in "
-        "a future release. Please use rmm.reinitialize instead.",
+        "a future release. Please use rmm.reinitialize "
+        "(https://docs.rapids.ai/api/rmm/stable/api.html#rmm.reinitialize) "
+        'instead. Note that `cudf.set_allocator(allocator="managed")` is '
+        "equivalent to `rmm.reinitialize(managed_memory=True)`.",
         FutureWarning,
     )
 
