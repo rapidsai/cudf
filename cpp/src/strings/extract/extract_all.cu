@@ -173,7 +173,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
-  return detail::extract_all_record(strings, *h_prog, cudf::default_stream_value, mr);
+  return detail::extract_all_record(strings, *h_prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
@@ -181,7 +181,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, prog, cudf::default_stream_value, mr);
+  return detail::extract_all_record(strings, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

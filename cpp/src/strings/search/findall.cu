@@ -140,7 +140,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::findall(input, *h_prog, cudf::default_stream_value, mr);
+  return detail::findall(input, *h_prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> findall(strings_column_view const& input,
@@ -148,7 +148,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, prog, cudf::default_stream_value, mr);
+  return detail::findall(input, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -101,13 +101,12 @@ struct replace_regex_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> replace_re(
-  strings_column_view const& input,
-  regex_program const& prog,
-  string_scalar const& replacement,
-  std::optional<size_type> max_replace_count,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> replace_re(strings_column_view const& input,
+                                   regex_program const& prog,
+                                   string_scalar const& replacement,
+                                   std::optional<size_type> max_replace_count,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -145,7 +144,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
   CUDF_FUNC_RANGE();
   auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
   return detail::replace_re(
-    strings, *h_prog, replacement, max_replace_count, cudf::default_stream_value, mr);
+    strings, *h_prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> replace_re(strings_column_view const& strings,
@@ -156,7 +155,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace_re(
-    strings, prog, replacement, max_replace_count, cudf::default_stream_value, mr);
+    strings, prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

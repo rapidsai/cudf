@@ -307,7 +307,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_rows(input, null_policy, cudf::default_stream_value, mr);
+  return detail::concatenate_rows(input, null_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace lists

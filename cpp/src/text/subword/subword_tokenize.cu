@@ -270,7 +270,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  cudf::default_stream_value,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 

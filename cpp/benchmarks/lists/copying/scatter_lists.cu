@@ -40,7 +40,7 @@ class ScatterLists : public cudf::benchmark {
 template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)
 {
-  auto stream = cudf::default_stream_value;
+  auto stream = cudf::get_default_stream();
   auto mr     = rmm::mr::get_current_device_resource();
 
   const size_type base_size{(size_type)state.range(0)};

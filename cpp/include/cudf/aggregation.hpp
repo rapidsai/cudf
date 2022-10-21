@@ -589,8 +589,9 @@ std::unique_ptr<Base> make_merge_lists_aggregation();
  * @return A MERGE_SETS aggregation object
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = null_equality::EQUAL,
-                                                  nan_equality nans_equal = nan_equality::UNEQUAL);
+std::unique_ptr<Base> make_merge_sets_aggregation(
+  null_equality nulls_equal = null_equality::EQUAL,
+  nan_equality nans_equal   = nan_equality::ALL_EQUAL);
 
 /**
  * @brief Factory to create a MERGE_M2 aggregation

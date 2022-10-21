@@ -132,7 +132,7 @@ void print_tree(tree_meta_t2 const& cpu_tree)
 }
 void print_tree(tree_meta_t const& d_gpu_tree)
 {
-  auto const cpu_tree = to_cpu_tree(d_gpu_tree, rmm::cuda_stream_default);
+  auto const cpu_tree = to_cpu_tree(d_gpu_tree, cudf::get_default_stream());
   print_tree(cpu_tree);
 }
 
@@ -161,7 +161,7 @@ bool compare_vector(std::vector<T> const& cpu_vec,
                     rmm::device_uvector<T> const& d_vec,
                     std::string const& name)
 {
-  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::default_stream_value);
+  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::get_default_stream());
   return compare_vector(cpu_vec, gpu_vec, name);
 }
 
@@ -173,7 +173,7 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_levels.size());
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_begin.size());
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_end.size());
-  auto gpu_tree = to_cpu_tree(d_gpu_tree, cudf::default_stream_value);
+  auto gpu_tree = to_cpu_tree(d_gpu_tree, cudf::get_default_stream());
   bool mismatch = false;
 
 #define COMPARE_MEMBER(member)                                                       \
@@ -535,7 +535,7 @@ struct JsonTest : public cudf::test::BaseFixture {
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   // Test input
   std::string const input = R"(  [{)"
@@ -632,7 +632,7 @@ TEST_F(JsonTest, TreeRepresentation)
 
 TEST_F(JsonTest, TreeRepresentation2)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   // Test input: value end with comma, space, close-brace ", }"
   std::string const input =
     // 0         1         2         3         4         5         6         7         8         9
@@ -707,7 +707,7 @@ TEST_F(JsonTest, TreeRepresentation2)
 
 TEST_F(JsonTest, TreeRepresentation3)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   // Test input: Json lines with same TreeRepresentation2 input
   std::string const input =
     R"(  {}
@@ -790,7 +790,7 @@ INSTANTIATE_TEST_SUITE_P(JsonLines,
 TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 {
   auto [json_lines, input] = GetParam();
-  auto stream              = cudf::default_stream_value;
+  auto stream              = cudf::get_default_stream();
   cudf::io::json_reader_options options{};
   options.enable_lines(json_lines);
 

@@ -134,7 +134,7 @@ std::unique_ptr<column> contains_re(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::contains_re(strings, *h_prog, cudf::default_stream_value, mr);
+  return detail::contains_re(strings, *h_prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
@@ -142,7 +142,7 @@ std::unique_ptr<column> contains_re(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, prog, cudf::default_stream_value, mr);
+  return detail::contains_re(strings, prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
@@ -152,7 +152,7 @@ std::unique_ptr<column> matches_re(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::matches_re(strings, *h_prog, cudf::default_stream_value, mr);
+  return detail::matches_re(strings, *h_prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
@@ -160,7 +160,7 @@ std::unique_ptr<column> matches_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, prog, cudf::default_stream_value, mr);
+  return detail::matches_re(strings, prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
@@ -170,7 +170,7 @@ std::unique_ptr<column> count_re(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
-  return detail::count_re(strings, *h_prog, cudf::default_stream_value, mr);
+  return detail::count_re(strings, *h_prog, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
@@ -178,7 +178,7 @@ std::unique_ptr<column> count_re(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, prog, cudf::default_stream_value, mr);
+  return detail::count_re(strings, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

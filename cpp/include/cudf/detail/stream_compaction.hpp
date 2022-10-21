@@ -36,7 +36,7 @@ std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -49,7 +49,7 @@ std::unique_ptr<table> drop_nans(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -60,7 +60,7 @@ std::unique_ptr<table> drop_nans(
 std::unique_ptr<table> apply_boolean_mask(
   table_view const& input,
   column_view const& boolean_mask,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -73,7 +73,7 @@ std::unique_ptr<table> unique(
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -87,7 +87,7 @@ std::unique_ptr<table> distinct(
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -116,7 +116,7 @@ std::unique_ptr<table> stable_distinct(
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -138,7 +138,7 @@ rmm::device_uvector<size_type> get_distinct_indices(
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -149,7 +149,7 @@ rmm::device_uvector<size_type> get_distinct_indices(
 cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
                              nan_policy nan_handling,
-                             rmm::cuda_stream_view stream = cudf::default_stream_value);
+                             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @copydoc cudf::unique_count(table_view const&, null_equality)
@@ -158,7 +158,7 @@ cudf::size_type unique_count(column_view const& input,
  */
 cudf::size_type unique_count(table_view const& input,
                              null_equality nulls_equal    = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = cudf::default_stream_value);
+                             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @copydoc cudf::distinct_count(column_view const&, null_policy, nan_policy)
@@ -168,7 +168,7 @@ cudf::size_type unique_count(table_view const& input,
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
                                nan_policy nan_handling,
-                               rmm::cuda_stream_view stream = cudf::default_stream_value);
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @copydoc cudf::distinct_count(table_view const&, null_equality)
@@ -177,7 +177,7 @@ cudf::size_type distinct_count(column_view const& input,
  */
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal    = null_equality::EQUAL,
-                               rmm::cuda_stream_view stream = cudf::default_stream_value);
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 }  // namespace detail
 }  // namespace cudf

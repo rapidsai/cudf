@@ -92,7 +92,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input_column, indices_type, cudf::default_stream_value, mr);
+  return detail::encode(input_column, indices_type, cudf::get_default_stream(), mr);
 }
 
 }  // namespace dictionary
