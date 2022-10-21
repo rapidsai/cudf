@@ -570,9 +570,10 @@ class path_state : private parser {
               op.type          = path_operator_type::CHILD;
               op.expected_type = OBJECT;
             } else {
-              op.type  = path_operator_type::CHILD_INDEX;
-              op.index = cudf::io::parse_numeric<int>(
-                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts, -1);
+              op.type          = path_operator_type::CHILD_INDEX;
+              auto const value = cudf::io::parse_numeric<int>(
+                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts);
+              op.index = value.value_or(-1);
               CUDF_EXPECTS(op.index >= 0, "Invalid numeric index specified in JSONPath");
               op.expected_type = ARRAY;
             }
