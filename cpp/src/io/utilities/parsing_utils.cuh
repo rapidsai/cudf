@@ -117,8 +117,8 @@ struct parse_options {
 };
 
 /**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase
+ * @brief Returns the numeric value of an ASCII/UTF-8 character.
+ * Handles hexadecimal digits, both uppercase and lowercase
  * for integral types and only decimal digits for floating point types.
  * If the character is not a valid numeric digit then `0` is returned and
  * valid_flag is set to false.
