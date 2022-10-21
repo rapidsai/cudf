@@ -232,7 +232,7 @@ namespace binops {
 std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 namespace compiled {
@@ -255,7 +255,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_lhs_scalar,
                                     bool is_rhs_scalar,
                                     binary_operator op,
-                                    rmm::cuda_stream_view stream = cudf::default_stream_value);
+                                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 }  // namespace detail
 }  // namespace compiled
 }  // namespace binops

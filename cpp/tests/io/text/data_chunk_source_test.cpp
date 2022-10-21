@@ -45,7 +45,7 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   {
     // full contents
     auto reader      = source.create_reader();
-    auto const chunk = reader->get_next_chunk(content.size(), rmm::cuda_stream_default);
+    auto const chunk = reader->get_next_chunk(content.size(), cudf::get_default_stream());
     ASSERT_EQ(chunk->size(), content.size());
     ASSERT_EQ(chunk_to_host(*chunk), content);
   }
@@ -53,15 +53,15 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
     // skipping contents
     auto reader = source.create_reader();
     reader->skip_bytes(4);
-    auto const chunk = reader->get_next_chunk(content.size(), rmm::cuda_stream_default);
+    auto const chunk = reader->get_next_chunk(content.size(), cudf::get_default_stream());
     ASSERT_EQ(chunk->size(), content.size() - 4);
     ASSERT_EQ(chunk_to_host(*chunk), content.substr(4));
   }
   {
     // reading multiple chunks, starting with a small one
     auto reader       = source.create_reader();
-    auto const chunk1 = reader->get_next_chunk(5, rmm::cuda_stream_default);
-    auto const chunk2 = reader->get_next_chunk(content.size() - 5, rmm::cuda_stream_default);
+    auto const chunk1 = reader->get_next_chunk(5, cudf::get_default_stream());
+    auto const chunk2 = reader->get_next_chunk(content.size() - 5, cudf::get_default_stream());
     ASSERT_EQ(chunk1->size(), 5);
     ASSERT_EQ(chunk2->size(), content.size() - 5);
     ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, 5));
@@ -70,9 +70,9 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   {
     // reading multiple chunks
     auto reader       = source.create_reader();
-    auto const chunk1 = reader->get_next_chunk(content.size() / 2, rmm::cuda_stream_default);
+    auto const chunk1 = reader->get_next_chunk(content.size() / 2, cudf::get_default_stream());
     auto const chunk2 =
-      reader->get_next_chunk(content.size() - content.size() / 2, rmm::cuda_stream_default);
+      reader->get_next_chunk(content.size() - content.size() / 2, cudf::get_default_stream());
     ASSERT_EQ(chunk1->size(), content.size() / 2);
     ASSERT_EQ(chunk2->size(), content.size() - content.size() / 2);
     ASSERT_EQ(chunk_to_host(*chunk1), content.substr(0, content.size() / 2));
@@ -81,17 +81,17 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   {
     // reading too many bytes
     auto reader      = source.create_reader();
-    auto const chunk = reader->get_next_chunk(content.size() + 10, rmm::cuda_stream_default);
+    auto const chunk = reader->get_next_chunk(content.size() + 10, cudf::get_default_stream());
     ASSERT_EQ(chunk->size(), content.size());
     ASSERT_EQ(chunk_to_host(*chunk), content);
-    auto next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
+    auto next_chunk = reader->get_next_chunk(1, cudf::get_default_stream());
     ASSERT_EQ(next_chunk->size(), 0);
   }
   {
     // skipping past the end
     auto reader = source.create_reader();
     reader->skip_bytes(content.size() + 10);
-    auto const next_chunk = reader->get_next_chunk(1, rmm::cuda_stream_default);
+    auto const next_chunk = reader->get_next_chunk(1, cudf::get_default_stream());
     ASSERT_EQ(next_chunk->size(), 0);
   }
 }

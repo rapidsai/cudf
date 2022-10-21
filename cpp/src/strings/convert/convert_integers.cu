@@ -209,7 +209,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, cudf::default_stream_value, mr);
+  return detail::is_integer(strings, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
@@ -217,7 +217,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, int_type, cudf::default_stream_value, mr);
+  return detail::is_integer(strings, int_type, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -310,7 +310,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(strings, output_type, cudf::default_stream_value, mr);
+  return detail::to_integers(strings, output_type, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -431,7 +431,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, cudf::default_stream_value, mr);
+  return detail::from_integers(integers, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

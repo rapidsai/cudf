@@ -287,7 +287,7 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(input, null_policy, cudf::default_stream_value, mr);
+  return detail::concatenate_list_elements(input, null_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace lists

@@ -136,7 +136,7 @@ std::unique_ptr<column> contains_re(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, pattern, flags, cudf::default_stream_value, mr);
+  return detail::contains_re(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
@@ -145,7 +145,7 @@ std::unique_ptr<column> matches_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, pattern, flags, cudf::default_stream_value, mr);
+  return detail::matches_re(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
@@ -154,7 +154,7 @@ std::unique_ptr<column> count_re(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, pattern, flags, cudf::default_stream_value, mr);
+  return detail::count_re(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
