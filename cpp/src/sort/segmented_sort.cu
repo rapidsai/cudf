@@ -44,7 +44,7 @@ enum class sort_method { STABLE, UNSTABLE };
  */
 struct column_fast_sort_fn {
   /**
-   * @brief Run time check for faster sort eligible column
+   * @brief Run-time check for faster sort on an eligible column
    */
   static bool is_fast_sort_supported(column_view const& col)
   {
@@ -53,7 +53,7 @@ struct column_fast_sort_fn {
   }
 
   /**
-   * @brief Compile time check for allowing radix sort for column type.
+   * @brief Compile-time check for supporting radix sort for column type
    */
   template <typename T>
   static constexpr bool is_radix_sort_supported()
@@ -154,6 +154,7 @@ struct column_fast_sort_fn {
                   bool ascending,
                   rmm::cuda_stream_view stream)
   {
+    // CUB's radix sort requires an output, typed buffer; it will not accept a discard iterator
     auto temp_col =
       cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream);
     mutable_column_view output_view = temp_col->mutable_view();
@@ -219,6 +220,8 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
   auto sorted_indices = cudf::make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
   mutable_column_view indices_view = sorted_indices->mutable_view();
+  // Unfortunately, CUB's radix sort requires a buffer for the indices and will not accept
+  // a counting iterator in its place so we must pre-fill it here.
   thrust::sequence(
     rmm::exec_policy(stream), indices_view.begin<size_type>(), indices_view.end<size_type>(), 0);
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),

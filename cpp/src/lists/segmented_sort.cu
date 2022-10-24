@@ -34,13 +34,17 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
-std::unique_ptr<column> sort_lists(lists_column_view const& input,
-                                   order column_order,
-                                   null_order null_precedence,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+namespace {
+
+/**
+ * @brief Create output offsets for segmented sort
+ *
+ * This creates a normalized set of offsets from the offsets child column of the input.
+ */
+std::unique_ptr<column> build_output_offsets(lists_column_view const& input,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return empty_like(input.parent());
   auto output_offset = make_numeric_column(
     input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
   thrust::transform(rmm::exec_policy(stream),
@@ -50,8 +54,22 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                     [first = input.offsets_begin()] __device__(auto offset_index) {
                       return offset_index - *first;
                     });
+  return output_offset;
+}
 
-  auto const child              = input.get_sliced_child(stream);
+}  // namespace
+
+std::unique_ptr<column> sort_lists(lists_column_view const& input,
+                                   order column_order,
+                                   null_order null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) return empty_like(input.parent());
+
+  auto output_offset = build_output_offsets(input, stream, mr);
+  auto const child   = input.get_sliced_child(stream);
+
   auto const sorted_child_table = segmented_sort_by_key(table_view{{child}},
                                                         table_view{{child}},
                                                         output_offset->view(),
@@ -77,17 +95,9 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
 {
   if (input.is_empty()) { return empty_like(input.parent()); }
 
-  auto output_offset = make_numeric_column(
-    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream),
-                    input.offsets_begin(),
-                    input.offsets_end(),
-                    output_offset->mutable_view().template begin<size_type>(),
-                    [first = input.offsets_begin()] __device__(auto offset_index) {
-                      return offset_index - *first;
-                    });
+  auto output_offset = build_output_offsets(input, stream, mr);
+  auto const child   = input.get_sliced_child(stream);
 
-  auto const child              = input.get_sliced_child(stream);
   auto const sorted_child_table = stable_segmented_sort_by_key(table_view{{child}},
                                                                table_view{{child}},
                                                                output_offset->view(),
