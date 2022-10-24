@@ -18,7 +18,7 @@ All data types in cuDF are [nullable](missing-data).
 | Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                        |
 | Category             | {py:func}`cudf.CategoricalDtype`                                                                  |
 | String               | `'object'` or `'string'`                                                                          |
-| Decimal              | {py:func}`cudf.Decimal32Dtype`, {py:func}`cudf.Decimal64Dtype`, {py:func}`cudf.Decimal64Dtype`    |
+| Decimal              | {py:func}`cudf.Decimal32Dtype`, {py:func}`cudf.Decimal64Dtype`, {py:func}`cudf.Decimal128Dtype`   |
 | List                 | {py:func}`cudf.ListDtype`                                                                         |
 | Struct               | {py:func}`cudf.StructDtype`                                                                       |
 

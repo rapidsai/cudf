@@ -655,7 +655,10 @@ decimal_dtype_template = textwrap.dedent(
 
         Examples
         --------
-        {example}
+        >>> import cudf
+        >>> decimal{size}_dtype = cudf.Decimal{size}Dtype(precision=9, scale=2)
+        >>> decimal{size}_dtype
+        Decimal{size}Dtype(precision=9, scale=2)
     """  # noqa: E501
 )
 
@@ -794,12 +797,6 @@ class DecimalDtype(_BaseDtype):
 @doc_apply(
     decimal_dtype_template.format(
         size="32",
-        example="""
-        >>> import cudf
-        >>> decimal32_dtype = cudf.Decimal32Dtype(precision=9, scale=2)
-        >>> decimal32_dtype
-        Decimal32Dtype(precision=9, scale=2)
-        """,
     )
 )
 class Decimal32Dtype(DecimalDtype):
@@ -811,12 +808,6 @@ class Decimal32Dtype(DecimalDtype):
 @doc_apply(
     decimal_dtype_template.format(
         size="64",
-        example="""
-        >>> import cudf
-        >>> decimal64_dtype = cudf.Decimal64Dtype(precision=15, scale=3)
-        >>> decimal64_dtype
-        Decimal64Dtype(precision=15, scale=3)
-        """,
     )
 )
 class Decimal64Dtype(DecimalDtype):
@@ -828,12 +819,6 @@ class Decimal64Dtype(DecimalDtype):
 @doc_apply(
     decimal_dtype_template.format(
         size="128",
-        example="""
-        >>> import cudf
-        >>> decimal128_dtype = cudf.Decimal128Dtype(precision=32, scale=4)
-        >>> decimal128_dtype
-        Decimal128Dtype(precision=32, scale=4)
-        """,
     )
 )
 class Decimal128Dtype(DecimalDtype):
