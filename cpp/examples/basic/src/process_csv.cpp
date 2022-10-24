@@ -80,8 +80,8 @@ int main(int argc, char** argv)
   // This is the default memory resource for libcudf for allocating device memory.
   rmm::mr::cuda_memory_resource cuda_mr{};
   // Construct a memory pool using the CUDA memory resource
-  // Using a memory pool for device memory allocations is important for good performance in libcudf
-  // Defaults to allocating half of the available GPU memory
+  // Using a memory pool for device memory allocations is important for good performance in libcudf.
+  // The pool defaults to allocating half of the available GPU memory.
   rmm::mr::pool_memory_resource mr{&cuda_mr};
 
   // Set the pool resource to be used by default for all device memory allocations
