@@ -205,6 +205,9 @@ def with_spill_lock(*, read_only_columns=False):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            if global_manager_get() is None:
+                # Quick return, if spilling is disabled.
+                return func(*args, **kwargs)
             if read_only_columns:
                 mark_columns_as_read_only_inplace((args, kwargs))
             push_thread_spill_lock()
