@@ -6,16 +6,28 @@ from datetime import datetime, timezone
 
 import pytest
 
+import dask
 from dask import dataframe as dd
 
 import cudf
 
 import dask_cudf
 
-# import pyarrow.orc as orc
-
 cur_dir = os.path.dirname(__file__)
 sample_orc = os.path.join(cur_dir, "data/orc/sample.orc")
+
+
+@pytest.mark.skipif(
+    not dask_cudf.core.DASK_BACKEND_SUPPORT,
+    reason="No backend-dispatch support",
+)
+def test_read_orc_backend_dispatch():
+    # Test ddf.read_orc cudf-backend dispatch
+    df1 = cudf.read_orc(sample_orc)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        df2 = dd.read_orc(sample_orc)
+    assert isinstance(df2, dask_cudf.DataFrame)
+    dd.assert_eq(df1, df2, check_index=False)
 
 
 def test_read_orc_defaults():

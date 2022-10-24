@@ -52,7 +52,7 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
   requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
 }

@@ -104,6 +104,9 @@ enum node_t : NodeT {
  */
 enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
 
+// Default name for a list's child column
+constexpr auto list_child_name{"element"};
+
 /**
  * @brief Intermediate representation of data from a nested JSON input
  */

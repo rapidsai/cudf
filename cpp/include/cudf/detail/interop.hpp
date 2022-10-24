@@ -34,7 +34,7 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -44,7 +44,7 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 // Creating arrow as per given type_id and buffer arguments
@@ -104,7 +104,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
-                                       rmm::cuda_stream_view stream = cudf::default_stream_value,
+                                       rmm::cuda_stream_view stream = cudf::get_default_stream(),
                                        arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
 
 /**
@@ -114,7 +114,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  */
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

@@ -54,24 +54,23 @@ def fill(Column destination, int begin, int end, DeviceScalar value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def repeat(list inp, object count, bool check_count=False):
+def repeat(list inp, object count):
     if isinstance(count, Column):
-        return _repeat_via_column(inp, count, check_count)
+        return _repeat_via_column(inp, count)
     else:
         return _repeat_via_size_type(inp, count)
 
 
-def _repeat_via_column(list inp, Column count, bool check_count):
+def _repeat_via_column(list inp, Column count):
     cdef table_view c_inp = table_view_from_columns(inp)
     cdef column_view c_count = count.view()
-    cdef bool c_check_count = check_count
+    cdef bool c_check_count = False
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_filling.repeat(
             c_inp,
             c_count,
-            c_check_count
         ))
 
     return columns_from_unique_ptr(move(c_result))

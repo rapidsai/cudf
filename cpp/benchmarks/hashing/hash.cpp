@@ -35,7 +35,7 @@ static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls h
     data->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::hash(data->view(), hid);
   }
 }

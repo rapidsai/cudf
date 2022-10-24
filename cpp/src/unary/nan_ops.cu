@@ -94,14 +94,14 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
 std::unique_ptr<column> is_nan(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_nan(input, cudf::default_stream_value, mr);
+  return detail::is_nan(input, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_not_nan(input, cudf::default_stream_value, mr);
+  return detail::is_not_nan(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
