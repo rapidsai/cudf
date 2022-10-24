@@ -86,13 +86,6 @@ parquet_reader_options_builder parquet_reader_options::builder(source_info const
   return parquet_reader_options_builder{src};
 }
 
-// Returns builder for parquet_reader_options
-chunked_parquet_reader_options_builder chunked_parquet_reader_options::builder(
-  source_info const& src)
-{
-  return chunked_parquet_reader_options_builder{src};
-}
-
 // Returns builder for parquet_writer_options
 parquet_writer_options_builder parquet_writer_options::builder(sink_info const& sink,
                                                                table_view const& table)
@@ -475,10 +468,14 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 /**
  * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
  */
-chunked_parquet_reader::chunked_parquet_reader(chunked_parquet_reader_options const& options,
+chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
+                                               parquet_reader_options const& options,
                                                rmm::mr::device_memory_resource* mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(
-      make_datasources(options.get_source()), options, cudf::detail::default_stream_value, mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            make_datasources(options.get_source()),
+                                                            options,
+                                                            cudf::get_default_stream(),
+                                                            mr)}
 {
 }
 
@@ -495,17 +492,7 @@ bool chunked_parquet_reader::has_next() { return reader->has_next(); }
 /**
  * @copydoc cudf::io::chunked_parquet_reader::read_chunk
  */
-table_with_metadata chunked_parquet_reader::read_chunk()
-{
-  // On the first call, a preprocessing step is called which may be expensive before a table is
-  // returned. All subsequent calls are essentially just doing incremental column allocation and row
-  // decoding (using all the data stored from the preprocessing step).
-
-  // In each call to this function, the internal `skip_rows` state is updated such that the next
-  // call will skip the rows returned by the previous call, making sure that the sequence of
-  // returned tables are continuous and form a complete dataset as reading the entire file at once.
-  return reader->read_chunk();
-}
+table_with_metadata chunked_parquet_reader::read_chunk() { return reader->read_chunk(); }
 
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer

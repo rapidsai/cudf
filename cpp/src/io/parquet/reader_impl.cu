@@ -1571,13 +1571,6 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               _timestamp_type.id());
-
-  // If the options passed in is an instance of `chunked_parquet_reader_options`, extract the
-  // `byte_limit` parameter.
-  if (auto const chunked_options = dynamic_cast<chunked_parquet_reader_options const*>(&options);
-      chunked_options) {
-    _chunk_read_limit = chunked_options->get_byte_limit();
-  }
 }
 
 void reader::impl::preprocess_file_and_columns(
@@ -1895,15 +1888,17 @@ table_with_metadata reader::read(parquet_reader_options const& options)
 }
 
 // Forward to implementation
-chunked_reader::chunked_reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                               chunked_parquet_reader_options const& options,
+chunked_reader::chunked_reader(std::size_t chunk_read_limit,
+                               std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                               parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
   : reader(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
-           dynamic_cast<parquet_reader_options const&>(options),
+           options,
            stream,
            mr)
 {
+  _impl->set_chunk_read_limit(chunk_read_limit);
 }
 
 // Destructor within this translation unit

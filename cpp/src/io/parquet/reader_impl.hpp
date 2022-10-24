@@ -83,6 +83,13 @@ class reader::impl {
                            std::vector<std::vector<size_type>> const& row_group_indices);
 
   /**
+   * @brief set_chunk_read_limit
+   * // TODO
+   * @param chunk_read_limit
+   */
+  void set_chunk_read_limit(std::size_t chunk_read_limit) { _chunk_read_limit = chunk_read_limit; }
+
+  /**
    * TODO
    *
    * @brief read_chunk
