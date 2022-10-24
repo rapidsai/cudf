@@ -478,7 +478,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 chunked_parquet_reader::chunked_parquet_reader(chunked_parquet_reader_options const& options,
                                                rmm::mr::device_memory_resource* mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
-      make_datasources(options.get_source()), options, cudf::default_stream_value, mr)}
+      make_datasources(options.get_source()), options, cudf::detail::default_stream_value, mr)}
 {
 }
 
