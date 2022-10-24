@@ -73,7 +73,7 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=(),
+        object children=()
     ):
 
         self._size = size
@@ -327,7 +327,11 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    def has_a_weakref(self):
+    def has_a_weakref(self) -> bool:
+        """
+        Determines if the column has a weak reference.
+        """
+
         return (
             self.base_data.has_a_weakref() or
             (
@@ -337,7 +341,10 @@ cdef class Column:
             )
         )
 
-    def _is_cai_zero_copied(self):
+    def _is_cai_zero_copied(self) -> bool:
+        """
+        Determines if the column is zero copied.
+        """
         return (
             self._zero_copied or
             (
@@ -351,7 +358,11 @@ cdef class Column:
         )
 
     def _detach_refs(self):
-        if not self._zero_copied and self.has_a_weakref():
+        """
+        Detaches a column from it's current Buffers by making
+        a true deep-copy.
+        """
+        if not self._is_cai_zero_copied() and self.has_a_weakref():
             new_col = self.force_deep_copy()
 
             self._offset = new_col.offset

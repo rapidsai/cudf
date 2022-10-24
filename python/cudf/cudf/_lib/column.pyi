@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import weakref
 from typing import Dict, Optional, Tuple, TypeVar
 
 from cudf._typing import Dtype, DtypeObj, ScalarLike

@@ -61,7 +61,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     Given a mask buffer, returns a boolean column representng bit 0 -> False
     and 1 -> True within range of [begin_bit, end_bit),
     """
-    if not isinstance(mask_buffer, (cudf.core.buffer.Buffer, cudf.core.buffer.DeviceBufferLike)):
+    if not isinstance(mask_buffer, (
+       cudf.core.buffer.Buffer, cudf.core.buffer.DeviceBufferLike
+       )):
         raise TypeError("mask_buffer is not an instance of "
                         "cudf.core.buffer.DeviceBufferLike")
     cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
