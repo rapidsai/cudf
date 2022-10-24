@@ -569,21 +569,20 @@ class NumericalColumn(NumericalBaseColumn):
     def _find_value(
         self, value: ScalarLike, closest: bool, find: Callable, compare: str
     ) -> int:
-        # TODO : PREM
         value = to_cudf_compatible_scalar(value)
         if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
             found = find(
-                self.data_array_view,
+                self._data_array_view,
                 value,
                 mask=self.mask,
             )
         if found == -1:
             if self.is_monotonic_increasing and closest:
                 found = find(
-                    self.data_array_view,
+                    self._data_array_view,
                     value,
                     mask=self.mask,
                     compare=compare,

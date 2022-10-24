@@ -55,6 +55,13 @@ class DeviceBufferLike(Protocol):
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
 
+    @property
+    def _cai(self) -> Mapping:
+        """"""
+
+    def copy(self, deep: bool = True) -> DeviceBufferLike:
+        """Make a copy of Buffer."""
+
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
 
@@ -162,7 +169,7 @@ class Buffer(Serializable):
     _ptr: int
     _size: int
     _owner: object
-    _refs = {}
+    _refs: dict = {}
 
     def __init__(
         self, data: Union[int, Any], *, size: int = None, owner: object = None

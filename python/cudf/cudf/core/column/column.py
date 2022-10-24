@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pickle
 import warnings
-import weakref
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
@@ -133,10 +132,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         return cuda.as_cuda_array(
             SimpleNamespace(
-                __cuda_array_interface__=self.data._cai,
-                owner=self.data
-                if self.data._owner is None
-                else self.data._owner,
+                __cuda_array_interface__=self.data._cai
+                if self.data is not None
+                else None,
+                owner=self.data,
             )
         ).view(self.dtype)
 
@@ -147,10 +146,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         return cuda.as_cuda_array(
             SimpleNamespace(
-                __cuda_array_interface__=self.mask._cai,
-                owner=self.mask
-                if self.mask._owner is None
-                else self.mask._owner,
+                __cuda_array_interface__=self.mask._cai
+                if self.mask is not None
+                else None,
+                owner=self.mask,
             )
         ).view(mask_dtype)
 
