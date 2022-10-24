@@ -154,14 +154,22 @@ class CategoricalDtype(_BaseDtype):
     Categories (2, object): ['b' < 'a']
     """
 
-    ordered: bool
-
     def __init__(self, categories=None, ordered: bool = False) -> None:
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 
     @property
     def categories(self) -> "cudf.core.index.BaseIndex":
+        """
+        An ``Index`` containing the unique categories allowed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> dtype.categories
+        StringIndex(['b' 'a'], dtype='object')
+        """
         if self._categories is None:
             return cudf.core.index.as_index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
@@ -180,13 +188,50 @@ class CategoricalDtype(_BaseDtype):
     def str(self):
         return "|O08"
 
+    @property
+    def ordered(self) -> bool:
+        """
+        Whether the categories have an ordered relationship.
+        """
+        return self.ordered
+
+    @ordered.setter
+    def ordered(self, value) -> None:
+        self.ordered = value
+
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
+        """
+        Convert a ``pandas.CategrocialDtype`` to ``cudf.CategoricalDtype``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> pd_dtype = pd.CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> pd_dtype
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
+        >>> cudf_dtype
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        """
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
 
     def to_pandas(self) -> pd.CategoricalDtype:
+        """
+        Convert a ``cudf.CategoricalDtype`` to ``pandas.CategoricalDtype``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> dtype
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> dtype.to_pandas()
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        """
         if self._categories is None:
             categories = None
         else:
@@ -258,6 +303,9 @@ class CategoricalDtype(_BaseDtype):
             categories_header, categories_frames
         )
         return klass(categories=categories, ordered=ordered)
+
+    def __repr__(self):
+        return self.to_pandas().__repr__()
 
 
 class ListDtype(_BaseDtype):
