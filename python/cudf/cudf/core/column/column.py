@@ -404,6 +404,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return self._mask_array_view
 
     def force_deep_copy(self: T) -> T:
+        """
+        A method to force create a deep-copy of
+        a Column irrespective of `copy-on-write`
+        is enable/disabled.
+        """
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
 
@@ -420,10 +425,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 copied_col = cast(
                     T,
                     build_column(
-                        self.base_data
+                        data=self.base_data
                         if self.base_data is None
                         else self.base_data.copy(deep=deep),
-                        self.dtype,
+                        dtype=self.dtype,
                         mask=self.base_mask
                         if self.base_mask is None
                         else self.base_mask.copy(deep=deep),
@@ -436,8 +441,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
                 return copied_col
             else:
-                result = libcudf.copying.copy_column(self)
-                return cast(T, result._with_type_metadata(self.dtype))
+                return self.force_deep_copy()
         else:
             return cast(
                 T,
