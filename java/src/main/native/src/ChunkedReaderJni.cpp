@@ -100,17 +100,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
                                                   static_cast<std::size_t>(buffer_length)) :
                             cudf::io::source_info(filename.get());
 
-    // TODO: use builder
-    auto read_opts = cudf::io::chunked_parquet_reader_options::builder(source)
-                         .byte_limit(chunk_size_byte_limit)
-                         .build();
+    auto opts_builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-      read_opts.set_columns(n_filter_col_names.as_cpp_vector());
+      opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());
     }
-    read_opts.enable_convert_strings_to_categories(false);
-    read_opts.set_timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)));
+    auto const read_opts = opts_builder.convert_strings_to_categories(false)
+                               .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
+                               .build();
 
-    return reinterpret_cast<jlong>(new cudf::io::chunked_parquet_reader(read_opts));
+    return reinterpret_cast<jlong>(new cudf::io::chunked_parquet_reader(
+        static_cast<std::size_t>(chunk_size_byte_limit), read_opts));
   }
   CATCH_STD(env, 0);
 }
