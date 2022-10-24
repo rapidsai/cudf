@@ -1387,9 +1387,9 @@ class csv_writer_options {
   [[nodiscard]] table_view const& get_table() const { return _table; }
 
   /**
-   * @brief Returns optional associated metadata.
+   * @brief Returns names of the columns.
    *
-   * @return Optional associated metadata
+   * @return Names of the columns in the output file
    */
   [[nodiscard]] std::vector<std::string> const& get_names() const { return _names; }
 
