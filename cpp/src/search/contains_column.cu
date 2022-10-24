@@ -155,7 +155,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needles, cudf::default_stream_value, mr);
+  return detail::contains(haystack, needles, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -274,7 +274,7 @@ void copy_range_in_place(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range_in_place(
-    source, target, source_begin, source_end, target_begin, cudf::default_stream_value);
+    source, target, source_begin, source_end, target_begin, cudf::get_default_stream());
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,
@@ -286,7 +286,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range(
-    source, target, source_begin, source_end, target_begin, cudf::default_stream_value, mr);
+    source, target, source_begin, source_end, target_begin, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

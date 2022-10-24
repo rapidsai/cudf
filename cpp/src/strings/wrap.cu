@@ -137,7 +137,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, cudf::default_stream_value, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -308,7 +308,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    cudf::default_stream_value,
+                                    cudf::get_default_stream(),
                                     mr);
 }
 
@@ -327,7 +327,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     string_narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    cudf::default_stream_value,
+                                    cudf::get_default_stream(),
                                     mr);
 }
 

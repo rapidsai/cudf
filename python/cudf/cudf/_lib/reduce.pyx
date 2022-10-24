@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cython.operator import dereference
+
 import cudf
 from cudf.api.types import is_decimal_dtype
 
@@ -36,7 +38,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
-    Top level Cython reduce function wrapping libcudf++ reductions.
+    Top level Cython reduce function wrapping libcudf reductions.
 
     Parameters
     ----------
@@ -74,9 +76,11 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
     with nogil:
-        c_result = move(
-            cpp_reduce(c_incol_view, cython_agg.c_obj, c_out_dtype)
-        )
+        c_result = move(cpp_reduce(
+            c_incol_view,
+            dereference(cython_agg.c_obj),
+            c_out_dtype
+        ))
 
     if is_decimal_type_id(c_result.get()[0].type().id()):
         scale = -c_result.get()[0].type().scale()
@@ -91,7 +95,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
 def scan(scan_op, Column incol, inclusive, **kwargs):
     """
-    Top level Cython scan function wrapping libcudf++ scans.
+    Top level Cython scan function wrapping libcudf scans.
 
     Parameters
     ----------
@@ -111,9 +115,11 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
         scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE
 
     with nogil:
-        c_result = move(
-            cpp_scan(c_incol_view, cython_agg.c_obj, c_inclusive)
-        )
+        c_result = move(cpp_scan(
+            c_incol_view,
+            dereference(cython_agg.c_obj),
+            c_inclusive
+        ))
 
     py_result = Column.from_unique_ptr(move(c_result))
     return py_result
@@ -121,7 +127,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
 
 def minmax(Column incol):
     """
-    Top level Cython minmax function wrapping libcudf++ minmax.
+    Top level Cython minmax function wrapping libcudf minmax.
 
     Parameters
     ----------

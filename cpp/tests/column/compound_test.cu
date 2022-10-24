@@ -65,13 +65,13 @@ struct checker_for_level2 {
 
 TEST_F(CompoundColumnTest, ChildrenLevel1)
 {
-  rmm::device_uvector<int32_t> data(1000, cudf::default_stream_value);
-  thrust::sequence(rmm::exec_policy(cudf::default_stream_value), data.begin(), data.end(), 1);
+  rmm::device_uvector<int32_t> data(1000, cudf::get_default_stream());
+  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), data.begin(), data.end(), 1);
 
   auto null_mask = cudf::create_null_mask(100, cudf::mask_state::UNALLOCATED);
-  rmm::device_buffer data1{data.data() + 100, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data2{data.data() + 200, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data3{data.data() + 300, 100 * sizeof(int32_t), cudf::default_stream_value};
+  rmm::device_buffer data1{data.data() + 100, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data2{data.data() + 200, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data3{data.data() + 300, 100 * sizeof(int32_t), cudf::get_default_stream()};
   auto child1 =
     std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                    100,
@@ -105,14 +105,14 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
 
   {
     auto column = cudf::column_device_view::create(parent->view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::get_default_stream()),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level1<cudf::column_device_view>{*column}));
   }
   {
     auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::get_default_stream()),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level1<cudf::mutable_column_device_view>{*column}));
@@ -121,16 +121,16 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
 
 TEST_F(CompoundColumnTest, ChildrenLevel2)
 {
-  rmm::device_uvector<int32_t> data(1000, cudf::default_stream_value);
-  thrust::sequence(rmm::exec_policy(cudf::default_stream_value), data.begin(), data.end(), 1);
+  rmm::device_uvector<int32_t> data(1000, cudf::get_default_stream());
+  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()), data.begin(), data.end(), 1);
 
   auto null_mask = cudf::create_null_mask(100, cudf::mask_state::UNALLOCATED);
-  rmm::device_buffer data11{data.data() + 100, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data12{data.data() + 200, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data13{data.data() + 300, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data21{data.data() + 400, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data22{data.data() + 500, 100 * sizeof(int32_t), cudf::default_stream_value};
-  rmm::device_buffer data23{data.data() + 600, 100 * sizeof(int32_t), cudf::default_stream_value};
+  rmm::device_buffer data11{data.data() + 100, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data12{data.data() + 200, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data13{data.data() + 300, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data21{data.data() + 400, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data22{data.data() + 500, 100 * sizeof(int32_t), cudf::get_default_stream()};
+  rmm::device_buffer data23{data.data() + 600, 100 * sizeof(int32_t), cudf::get_default_stream()};
   auto gchild11 =
     std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                    100,
@@ -202,14 +202,14 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
 
   {
     auto column = cudf::column_device_view::create(parent->view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::get_default_stream()),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level2<cudf::column_device_view>{*column}));
   }
   {
     auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
-    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::default_stream_value),
+    EXPECT_TRUE(thrust::any_of(rmm::exec_policy(cudf::get_default_stream()),
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level2<cudf::mutable_column_device_view>{*column}));

@@ -85,7 +85,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                      : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, cudf::default_stream_value, mr);
+    source_table, gather_map, bounds_policy, index_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

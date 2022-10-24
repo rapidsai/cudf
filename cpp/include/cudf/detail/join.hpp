@@ -91,7 +91,7 @@ struct hash_join {
    */
   hash_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
-            rmm::cuda_stream_view stream = cudf::default_stream_value);
+            rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @copydoc cudf::hash_join::inner_join
