@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.10.00
+  VERSION 22.12.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -356,6 +356,7 @@ add_library(
   src/io/text/byte_range_info.cpp
   src/io/text/data_chunk_source_factories.cpp
   src/io/text/bgzip_data_chunk_source.cu
+  src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -693,7 +694,6 @@ add_library(
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
   tests/utilities/table_utilities.cu
-  tests/strings/utilities.cpp
 )
 
 set_target_properties(

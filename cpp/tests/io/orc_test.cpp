@@ -42,8 +42,6 @@
 #define ZSTD_SUPPORTED 0
 #endif
 
-namespace cudf_io = cudf::io;
-
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
   typename std::conditional<std::is_same_v<T, cudf::string_view>,
@@ -182,9 +180,9 @@ struct SkipRowTest {
       sequence, sequence + file_num_rows);
     table_view input_table({input_col});
 
-    cudf_io::orc_writer_options out_opts =
-      cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, input_table);
-    cudf_io::write_orc(out_opts);
+    cudf::io::orc_writer_options out_opts =
+      cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input_table);
+    cudf::io::write_orc(out_opts);
 
     auto begin_sequence = sequence, end_sequence = sequence;
     if (skip_rows < file_num_rows) {
@@ -203,12 +201,12 @@ struct SkipRowTest {
     auto filepath =
       temp_env->get_temp_filepath("SkipRowTest" + std::to_string(test_calls++) + ".orc");
     auto expected_result = get_expected_result(filepath, skip_rows, file_num_rows, read_num_rows);
-    cudf_io::orc_reader_options in_opts =
-      cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+    cudf::io::orc_reader_options in_opts =
+      cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
         .use_index(false)
         .skip_rows(skip_rows)
         .num_rows(read_num_rows);
-    auto result = cudf_io::read_orc(in_opts);
+    auto result = cudf::io::read_orc(in_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
   }
 
@@ -218,11 +216,11 @@ struct SkipRowTest {
       temp_env->get_temp_filepath("SkipRowTest" + std::to_string(test_calls++) + ".orc");
     auto expected_result =
       get_expected_result(filepath, skip_rows, file_num_rows, file_num_rows - skip_rows);
-    cudf_io::orc_reader_options in_opts =
-      cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+    cudf::io::orc_reader_options in_opts =
+      cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
         .use_index(false)
         .skip_rows(skip_rows);
-    auto result = cudf_io::read_orc(in_opts);
+    auto result = cudf::io::read_orc(in_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
   }
 };
@@ -239,13 +237,13 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcSingleColumn.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -261,13 +259,13 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcSingleColumnWithNulls.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -283,15 +281,15 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps)
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcTimestamps.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .use_index(false)
       .timestamp_type(this->type());
-  auto result = cudf_io::read_orc(in_opts);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -309,15 +307,15 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcTimestampsWithNulls.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .use_index(false)
       .timestamp_type(this->type());
-  auto result = cudf_io::read_orc(in_opts);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -333,15 +331,15 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampOverflow)
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .use_index(false)
       .timestamp_type(this->type());
-  auto result = cudf_io::read_orc(in_opts);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -381,7 +379,7 @@ TEST_F(OrcWriterTest, MultiColumn)
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7, col8, col9});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("bools");
   expected_metadata.column_metadata[1].set_name("int8s");
   expected_metadata.column_metadata[2].set_name("int16s");
@@ -394,14 +392,14 @@ TEST_F(OrcWriterTest, MultiColumn)
   expected_metadata.column_metadata[9].set_name("structs");
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -449,7 +447,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   struct_col col8{{ages_col}, {0, 1, 1, 0, 1, 1, 0, 1, 1, 0}};
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7, col8});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("bools");
   expected_metadata.column_metadata[1].set_name("int8s");
   expected_metadata.column_metadata[2].set_name("int16s");
@@ -461,14 +459,14 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   expected_metadata.column_metadata[8].set_name("structs");
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumnWithNulls.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -484,15 +482,15 @@ TEST_F(OrcWriterTest, ReadZeroRows)
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcSingleColumn.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .use_index(false)
       .num_rows(0);
-  auto result = cudf_io::read_orc(in_opts);
+  auto result = cudf::io::read_orc(in_opts);
 
   EXPECT_EQ(0, result.tbl->num_rows());
   EXPECT_EQ(1, result.tbl->num_columns());
@@ -513,20 +511,20 @@ TEST_F(OrcWriterTest, Strings)
 
   table_view expected({col0, col1, col2});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
   expected_metadata.column_metadata[1].set_name("col_string");
   expected_metadata.column_metadata[2].set_name("col_another");
 
   auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -560,7 +558,7 @@ TEST_F(OrcWriterTest, SlicedTable)
 
   table_view expected({col0, col1, col2, col3, col4, col5});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
   expected_metadata.column_metadata[1].set_name("col_string");
   expected_metadata.column_metadata[2].set_name("col_another");
@@ -571,14 +569,14 @@ TEST_F(OrcWriterTest, SlicedTable)
   auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows)});
 
   auto filepath = temp_env->get_temp_filepath("SlicedTable.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected_slice)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected_slice)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -592,19 +590,20 @@ TEST_F(OrcWriterTest, HostBuffer)
 
   table_view expected{{col}};
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
 
   std::vector<char> out_buffer;
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info(&out_buffer), expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info(out_buffer.data(), out_buffer.size()))
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(
+      cudf::io::source_info(out_buffer.data(), out_buffer.size()))
       .use_index(false);
-  const auto result = cudf_io::read_orc(in_opts);
+  const auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -625,14 +624,14 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   table_view expected({timestamps_ns});
 
   auto filepath = temp_env->get_temp_filepath("OrcNegTimestamp.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
 
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     expected.column(0), result.tbl->view().column(0), cudf::test::debug_output_level::ALL_ERRORS);
@@ -647,13 +646,13 @@ TEST_F(OrcWriterTest, Slice)
   cudf::table_view tbl{result};
 
   auto filepath = temp_env->get_temp_filepath("Slice.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto read_table = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto read_table = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(read_table.tbl->view(), tbl);
 }
@@ -664,13 +663,13 @@ TEST_F(OrcChunkedWriterTest, SingleTable)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedSingle.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(*table1);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
@@ -684,13 +683,13 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   auto full_table = cudf::concatenate(std::vector<table_view>({*table1, *table2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedSimple.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
@@ -704,13 +703,13 @@ TEST_F(OrcChunkedWriterTest, LargeTables)
   auto full_table = cudf::concatenate(std::vector<table_view>({*table1, *table2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedLarge.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
@@ -730,17 +729,17 @@ TEST_F(OrcChunkedWriterTest, ManyTables)
   auto expected = cudf::concatenate(table_views);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedManyTables.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer writer(opts);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer writer(opts);
   std::for_each(table_views.begin(), table_views.end(), [&writer](table_view const& tbl) {
     writer.write(tbl);
   });
   writer.close();
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
@@ -760,20 +759,20 @@ TEST_F(OrcChunkedWriterTest, Metadata)
 
   table_view expected({col0, col1, col2});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
   expected_metadata.column_metadata[1].set_name("col_string");
   expected_metadata.column_metadata[2].set_name("col_another");
 
   auto filepath = temp_env->get_temp_filepath("ChunkedMetadata.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath})
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath})
       .metadata(&expected_metadata);
-  cudf_io::orc_chunked_writer(opts).write(expected).write(expected);
+  cudf::io::orc_chunked_writer(opts).write(expected).write(expected);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
@@ -793,13 +792,13 @@ TEST_F(OrcChunkedWriterTest, Strings)
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStrings.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(tbl1).write(tbl2);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(tbl1).write(tbl2);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
@@ -811,9 +810,9 @@ TEST_F(OrcChunkedWriterTest, MismatchedTypes)
   auto table2 = create_random_fixed_table<float>(4, 4, true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedMismatchedTypes.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer writer(opts);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
 }
@@ -824,9 +823,9 @@ TEST_F(OrcChunkedWriterTest, ChunkedWritingAfterClosing)
   auto table1 = create_random_fixed_table<int>(4, 4, true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedWritingAfterClosing.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer writer(opts);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   writer.close();
   EXPECT_THROW(writer.write(*table1), cudf::logic_error);
@@ -839,9 +838,9 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   auto table2 = create_random_fixed_table<int>(3, 4, true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedMismatchedStructure.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer writer(opts);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
 }
@@ -855,13 +854,13 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   auto full_table = cudf::concatenate(std::vector<table_view>({*table2, *table1, *table2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStripes.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{1, 0, 1}});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).stripes({{1, 0, 1}});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
@@ -872,15 +871,15 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStripesError.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(*table1);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{0, 1}});
-  EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).stripes({{0, 1}});
+  EXPECT_THROW(cudf::io::read_orc(read_opts), cudf::logic_error);
   read_opts.set_stripes({{-1}});
-  EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_orc(read_opts), cudf::logic_error);
 }
 
 TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
@@ -915,13 +914,13 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(tbl1).write(tbl2);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(tbl1).write(tbl2);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
@@ -958,13 +957,13 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  cudf_io::orc_chunked_writer(opts).write(tbl1).write(tbl2);
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(tbl1).write(tbl2);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
@@ -1002,30 +1001,30 @@ TEST_F(OrcStatisticsTest, Basic)
 
   auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
 
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_orc(out_opts);
 
-  auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 
   auto const expected_column_names =
     std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4"};
   EXPECT_EQ(stats.column_names, expected_column_names);
 
-  auto validate_statistics = [&](std::vector<cudf_io::column_statistics> const& stats) {
+  auto validate_statistics = [&](std::vector<cudf::io::column_statistics> const& stats) {
     auto& s0 = stats[0];
     EXPECT_EQ(*s0.number_of_values, 9ul);
 
     auto& s1 = stats[1];
     EXPECT_EQ(*s1.number_of_values, 4ul);
-    auto& ts1 = std::get<cudf_io::integer_statistics>(s1.type_specific_stats);
+    auto& ts1 = std::get<cudf::io::integer_statistics>(s1.type_specific_stats);
     EXPECT_EQ(*ts1.minimum, 1);
     EXPECT_EQ(*ts1.maximum, 7);
     EXPECT_EQ(*ts1.sum, 16);
 
     auto& s2 = stats[2];
     EXPECT_EQ(*s2.number_of_values, 4ul);
-    auto& ts2 = std::get<cudf_io::double_statistics>(s2.type_specific_stats);
+    auto& ts2 = std::get<cudf::io::double_statistics>(s2.type_specific_stats);
     EXPECT_EQ(*ts2.minimum, 1.);
     EXPECT_EQ(*ts2.maximum, 7.);
     // No sum ATM, filed #7087
@@ -1033,18 +1032,18 @@ TEST_F(OrcStatisticsTest, Basic)
 
     auto& s3 = stats[3];
     EXPECT_EQ(*s3.number_of_values, 9ul);
-    auto& ts3 = std::get<cudf_io::string_statistics>(s3.type_specific_stats);
+    auto& ts3 = std::get<cudf::io::string_statistics>(s3.type_specific_stats);
     EXPECT_EQ(*ts3.minimum, "Friday");
     EXPECT_EQ(*ts3.maximum, "Wednesday");
     EXPECT_EQ(*ts3.sum, 58ul);
 
     auto& s4 = stats[4];
     EXPECT_EQ(*s4.number_of_values, 9ul);
-    EXPECT_EQ(std::get<cudf_io::bucket_statistics>(s4.type_specific_stats).count[0], 8ul);
+    EXPECT_EQ(std::get<cudf::io::bucket_statistics>(s4.type_specific_stats).count[0], 8ul);
 
     auto& s5 = stats[5];
     EXPECT_EQ(*s5.number_of_values, 4ul);
-    auto& ts5 = std::get<cudf_io::timestamp_statistics>(s5.type_specific_stats);
+    auto& ts5 = std::get<cudf::io::timestamp_statistics>(s5.type_specific_stats);
     EXPECT_EQ(*ts5.minimum_utc, 1000);
     EXPECT_EQ(*ts5.maximum_utc, 7000);
     ASSERT_FALSE(ts5.minimum);
@@ -1070,18 +1069,18 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   auto sliced_col = cudf::slice(static_cast<cudf::column_view>(col), indices);
   cudf::table_view tbl{sliced_col};
 
-  cudf_io::table_input_metadata expected_metadata(tbl);
+  cudf::io::table_input_metadata expected_metadata(tbl);
   expected_metadata.column_metadata[0].set_name("col_string");
 
   auto filepath = temp_env->get_temp_filepath("OrcStrings.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -1093,13 +1092,13 @@ TEST_F(OrcReaderTest, SingleInputs)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
   auto filepath1 = temp_env->get_temp_filepath("SimpleTable1.orc");
-  cudf_io::orc_writer_options write_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath1}, table1->view());
-  cudf_io::write_orc(write_opts);
+  cudf::io::orc_writer_options write_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath1}, table1->view());
+  cudf::io::write_orc(write_opts);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{{filepath1}});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{{filepath1}});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
@@ -1125,11 +1124,11 @@ TEST_F(OrcReaderTest, zstdCompressionRegression)
 
   auto source =
     cudf::io::source_info(reinterpret_cast<const char*>(input_buffer), sizeof(input_buffer));
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(source).use_index(false);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(source).use_index(false);
 
   cudf::io::table_with_metadata result;
-  CUDF_EXPECT_NO_THROW(result = cudf_io::read_orc(in_opts));
+  CUDF_EXPECT_NO_THROW(result = cudf::io::read_orc(in_opts));
   EXPECT_EQ(1920800, result.tbl->num_rows());
 }
 
@@ -1143,21 +1142,21 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
   auto const filepath1 = temp_env->get_temp_filepath("SimpleTable1.orc");
   {
-    cudf_io::orc_writer_options out_opts =
-      cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath1}, table1->view());
-    cudf_io::write_orc(out_opts);
+    cudf::io::orc_writer_options out_opts =
+      cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath1}, table1->view());
+    cudf::io::write_orc(out_opts);
   }
 
   auto const filepath2 = temp_env->get_temp_filepath("SimpleTable2.orc");
   {
-    cudf_io::orc_writer_options out_opts =
-      cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath2}, table2->view());
-    cudf_io::write_orc(out_opts);
+    cudf::io::orc_writer_options out_opts =
+      cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath2}, table2->view());
+    cudf::io::write_orc(out_opts);
   }
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{{filepath1, filepath2}});
-  auto result = cudf_io::read_orc(read_opts);
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{{filepath1, filepath2}});
+  auto result = cudf::io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
@@ -1180,14 +1179,14 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
   cudf::table_view tbl({static_cast<cudf::column_view>(col)});
 
   auto filepath = temp_env->get_temp_filepath("Decimal64.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
 
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(tbl.column(0), result.tbl->view().column(0));
 }
@@ -1211,14 +1210,14 @@ TEST_F(OrcWriterTest, Decimal32)
   cudf::table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("Decimal32.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
 
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, result.tbl->view().column(0));
 }
@@ -1248,15 +1247,15 @@ TEST_F(OrcStatisticsTest, Overflow)
 
   auto filepath = temp_env->get_temp_filepath("OrcStatsOverflow.orc");
 
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
-  cudf_io::write_orc(out_opts);
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+  cudf::io::write_orc(out_opts);
 
-  auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 
   auto check_sum_exist = [&](int idx, bool expected) {
     auto const& s  = stats.file_stats[idx];
-    auto const& ts = std::get<cudf_io::integer_statistics>(s.type_specific_stats);
+    auto const& ts = std::get<cudf::io::integer_statistics>(s.type_specific_stats);
     EXPECT_EQ(ts.sum.has_value(), expected);
   };
   check_sum_exist(1, false);
@@ -1311,8 +1310,8 @@ TEST_F(OrcStatisticsTest, HasNull)
     0x4F, 0x52, 0x43, 0x17,
   };
 
-  auto const stats = cudf_io::read_parsed_orc_statistics(
-    cudf_io::source_info{reinterpret_cast<char const*>(nulls_orc.data()), nulls_orc.size()});
+  auto const stats = cudf::io::read_parsed_orc_statistics(
+    cudf::io::source_info{reinterpret_cast<char const*>(nulls_orc.data()), nulls_orc.size()});
 
   EXPECT_EQ(stats.file_stats[1].has_null, true);
   EXPECT_EQ(stats.file_stats[2].has_null, false);
@@ -1343,35 +1342,35 @@ TEST_P(OrcWriterTestStripes, StripeSize)
   auto validate = [&](std::vector<char> const& orc_buffer) {
     auto const expected_stripe_num =
       std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
-    auto const stats = cudf_io::read_parsed_orc_statistics(
-      cudf_io::source_info(orc_buffer.data(), orc_buffer.size()));
+    auto const stats = cudf::io::read_parsed_orc_statistics(
+      cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
     EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
 
-    cudf_io::orc_reader_options in_opts =
-      cudf_io::orc_reader_options::builder(
-        cudf_io::source_info(orc_buffer.data(), orc_buffer.size()))
+    cudf::io::orc_reader_options in_opts =
+      cudf::io::orc_reader_options::builder(
+        cudf::io::source_info(orc_buffer.data(), orc_buffer.size()))
         .use_index(false);
-    auto result = cudf_io::read_orc(in_opts);
+    auto result = cudf::io::read_orc(in_opts);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   };
 
   {
     std::vector<char> out_buffer_chunked;
-    cudf_io::chunked_orc_writer_options opts =
-      cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info(&out_buffer_chunked))
+    cudf::io::chunked_orc_writer_options opts =
+      cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info(&out_buffer_chunked))
         .stripe_size_rows(size_rows)
         .stripe_size_bytes(size_bytes);
-    cudf_io::orc_chunked_writer(opts).write(expected->view());
+    cudf::io::orc_chunked_writer(opts).write(expected->view());
     validate(out_buffer_chunked);
   }
   {
     std::vector<char> out_buffer;
-    cudf_io::orc_writer_options out_opts =
-      cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), expected->view())
+    cudf::io::orc_writer_options out_opts =
+      cudf::io::orc_writer_options::builder(cudf::io::sink_info(&out_buffer), expected->view())
         .stripe_size_rows(size_rows)
         .stripe_size_bytes(size_bytes);
-    cudf_io::write_orc(out_opts);
+    cudf::io::write_orc(out_opts);
     validate(out_buffer);
   }
 }
@@ -1392,15 +1391,15 @@ TEST_F(OrcWriterTest, StripeSizeInvalid)
   std::vector<char> out_buffer;
 
   EXPECT_THROW(
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info(&out_buffer), unused_table->view())
       .stripe_size_rows(511),
     cudf::logic_error);
   EXPECT_THROW(
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info(&out_buffer), unused_table->view())
       .stripe_size_bytes(63 << 10),
     cudf::logic_error);
   EXPECT_THROW(
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info(&out_buffer), unused_table->view())
       .row_index_stride(511),
     cudf::logic_error);
 }
@@ -1438,18 +1437,18 @@ TEST_F(OrcWriterTest, TestMap)
 
   table_view expected({*list_col});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_list_column_as_map();
 
   auto filepath = temp_env->get_temp_filepath("MapColumn.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
+  auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
@@ -1466,22 +1465,22 @@ TEST_F(OrcReaderTest, NestedColumnSelection)
   struct_col s_col{child_col1, child_col2};
   table_view expected({s_col});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("struct_s");
   expected_metadata.column_metadata[0].child(0).set_name("field_a");
   expected_metadata.column_metadata[0].child(1).set_name("field_b");
 
   auto filepath = temp_env->get_temp_filepath("OrcNestedSelection.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .use_index(false)
       .columns({"struct_s.field_b"});
-  auto result = cudf_io::read_orc(in_opts);
+  auto result = cudf::io::read_orc(in_opts);
 
   // Verify that only one child column is included in the output table
   ASSERT_EQ(1, result.tbl->view().column(0).num_children());
@@ -1503,20 +1502,20 @@ TEST_F(OrcReaderTest, DecimalOptions)
   dec128_col col{col_data, col_data + num_rows, mask};
   table_view expected({col});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("dec");
 
   auto filepath = temp_env->get_temp_filepath("OrcDecimalOptions.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options valid_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options valid_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .decimal128_columns({"dec", "fake_name"});
   // Should not throw, even with "fake name"
-  EXPECT_NO_THROW(cudf_io::read_orc(valid_opts));
+  EXPECT_NO_THROW(cudf::io::read_orc(valid_opts));
 }
 
 TEST_F(OrcWriterTest, DecimalOptionsNested)
@@ -1547,24 +1546,24 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
 
   table_view expected({*map_list_col});
 
-  cudf_io::table_input_metadata expected_metadata(expected);
+  cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("maps");
   expected_metadata.column_metadata[0].set_list_column_as_map();
   expected_metadata.column_metadata[0].child(1).child(0).child(0).set_name("dec64");
   expected_metadata.column_metadata[0].child(1).child(0).child(1).set_name("dec128");
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(&expected_metadata);
-  cudf_io::write_orc(out_opts);
+  cudf::io::write_orc(out_opts);
 
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
       .use_index(false)
       // One less level of nesting because children of map columns are the child struct's children
       .decimal128_columns({"maps.0.dec64"});
-  auto result = cudf_io::read_orc(in_opts);
+  auto result = cudf::io::read_orc(in_opts);
 
   // Both columns should be read as decimal128
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0).child(1).child(0).child(0),
@@ -1577,14 +1576,15 @@ TEST_F(OrcReaderTest, EmptyColumnsParam)
   auto const expected = create_random_fixed_table<int>(2, 4, false);
 
   std::vector<char> out_buffer;
-  cudf_io::orc_writer_options args =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected);
-  cudf_io::write_orc(args);
+  cudf::io::orc_writer_options args =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, *expected);
+  cudf::io::write_orc(args);
 
-  cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{out_buffer.data(), out_buffer.size()})
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .columns({});
-  auto const result = cudf_io::read_orc(read_opts);
+  auto const result = cudf::io::read_orc(read_opts);
 
   EXPECT_EQ(result.tbl->num_columns(), 0);
   EXPECT_EQ(result.tbl->num_rows(), 0);

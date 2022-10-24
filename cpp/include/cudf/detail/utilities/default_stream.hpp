@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,23 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
+#pragma once
 
-#include <gmock/gmock.h>
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace test {
-void expect_strings_empty(cudf::column_view strings_column)
-{
-  EXPECT_EQ(type_id::STRING, strings_column.type().id());
-  EXPECT_EQ(0, strings_column.size());
-  EXPECT_EQ(0, strings_column.null_count());
-  EXPECT_EQ(0, strings_column.num_children());
-}
 
-}  // namespace test
+namespace detail {
+
+/**
+ * @brief Default stream for cudf
+ *
+ * Use this value to ensure the correct stream is used when compiled with per
+ * thread default stream.
+ */
+extern rmm::cuda_stream_view const default_stream_value;
+
+}  // namespace detail
+
 }  // namespace cudf

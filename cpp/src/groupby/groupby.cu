@@ -196,7 +196,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, cudf::default_stream_value, mr);
+  return dispatch_aggregation(requests, cudf::get_default_stream(), mr);
 }
 
 // Compute scan requests
@@ -214,13 +214,13 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return sort_scan(requests, cudf::default_stream_value, mr);
+  return sort_scan(requests, cudf::get_default_stream(), mr);
 }
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto grouped_keys = helper().sorted_keys(stream, mr);
 
   auto const& group_offsets       = helper().group_offsets(stream);
@@ -252,7 +252,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                "Size mismatch between num_columns and replace_policies.");
 
   if (values.is_empty()) { return std::pair(empty_like(_keys), empty_like(values)); }
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   auto const& group_labels = helper().group_labels(stream);
   std::vector<std::unique_ptr<column>> results;
@@ -298,7 +298,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                 [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
     "values and fill_value should have the same type.");
 
-  auto stream = cudf::default_stream_value;
+  auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);
   std::transform(

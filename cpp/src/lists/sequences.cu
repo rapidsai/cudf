@@ -214,7 +214,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, sizes, cudf::default_stream_value, mr);
+  return detail::sequences(starts, sizes, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
@@ -223,7 +223,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, steps, sizes, cudf::default_stream_value, mr);
+  return detail::sequences(starts, steps, sizes, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf::lists

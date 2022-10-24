@@ -248,7 +248,7 @@ struct scan_dispatcher {
 
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
-  std::unique_ptr<scan_aggregation> const& agg,
+  scan_aggregation const& agg,
   null_policy null_handling,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
