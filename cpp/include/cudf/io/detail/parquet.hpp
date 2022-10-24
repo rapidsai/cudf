@@ -36,7 +36,6 @@ namespace io {
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
-class chunked_parquet_reader_options;
 class chunked_parquet_writer_options;
 
 namespace detail {
@@ -96,8 +95,9 @@ class chunked_reader : reader {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit chunked_reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                          chunked_parquet_reader_options const& options,
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
