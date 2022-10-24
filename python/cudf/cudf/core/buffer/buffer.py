@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import pickle
-import warnings
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -138,14 +137,6 @@ class Buffer(Serializable):
     def __init__(
         self, data: Union[int, Any], *, size: int = None, owner: object = None
     ):
-        if isinstance(data, int):
-            warnings.warn(
-                "Creating a Buffer() from an integer is deprecated and will "
-                "raise in a future version, use as_device_buffer_like() "
-                "instead.",
-                FutureWarning,
-            )
-
         buf = ensure_buffer_like(data=data, size=size, owner=owner)
         if isinstance(buf, rmm.DeviceBuffer):
             self._ptr = buf.ptr
