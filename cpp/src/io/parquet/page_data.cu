@@ -1675,7 +1675,9 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
           gpuOutputInt96Timestamp(s, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
-            // Reading INT32 TIME_MILLIS in 64-bit DURATION_MILLISECONDS
+            // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+            // TIME_MILLIS is the only duration type stored as int32:
+            // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
             gpuOutputFast(s, val_src_pos, static_cast<uint32_t*>(dst));
           } else if (s->ts_scale) {
             gpuOutputInt64Timestamp(s, val_src_pos, static_cast<int64_t*>(dst));
