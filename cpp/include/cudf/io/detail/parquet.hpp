@@ -36,7 +36,6 @@ namespace io {
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
-class chunked_parquet_reader_options;
 class chunked_parquet_writer_options;
 
 namespace detail {
