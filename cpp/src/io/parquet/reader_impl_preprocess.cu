@@ -17,6 +17,8 @@
 #include "reader_impl.hpp"
 #include "reader_impl_helpers.cuh"
 
+#include <io/utilities/time_utils.cuh>
+
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -25,14 +27,59 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/iterator_categories.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 
 namespace cudf::io::detail::parquet {
 
-// Import functionality that's independent of legacy code
-using namespace cudf::io::parquet;
-using namespace cudf::io;
+namespace {
+
+/**
+ * @brief Function that returns the required the number of bits to store a value
+ */
+template <typename T = uint8_t>
+T required_bits(uint32_t max_level)
+{
+  return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
+}
+
+/**
+ * @brief Converts cuDF units to Parquet units.
+ *
+ * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ */
+std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
+                                                     type_id timestamp_type_id,
+                                                     parquet::Type physical,
+                                                     int8_t converted,
+                                                     int32_t length)
+{
+  int32_t type_width = (physical == parquet::FIXED_LEN_BYTE_ARRAY) ? length : 0;
+  int32_t clock_rate = 0;
+  if (column_type_id == type_id::INT8 or column_type_id == type_id::UINT8) {
+    type_width = 1;  // I32 -> I8
+  } else if (column_type_id == type_id::INT16 or column_type_id == type_id::UINT16) {
+    type_width = 2;  // I32 -> I16
+  } else if (column_type_id == type_id::INT32) {
+    type_width = 4;  // str -> hash32
+  } else if (is_chrono(data_type{column_type_id})) {
+    clock_rate = to_clockrate(timestamp_type_id);
+  }
+
+  int8_t converted_type = converted;
+  if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
+      not cudf::is_fixed_point(data_type{column_type_id})) {
+    converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
+  }
+  return std::make_tuple(type_width, clock_rate, converted_type);
+}
 
 #if defined(PREPROCESS_DEBUG)
 void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view _stream)
@@ -67,8 +114,6 @@ void print_chunks(hostdevice_vector<gpu::ColumnChunkDesc>& chunks, rmm::cuda_str
   }
 }
 #endif  // PREPROCESS_DEBUG
-
-namespace {
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count

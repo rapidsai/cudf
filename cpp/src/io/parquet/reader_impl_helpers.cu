@@ -14,46 +14,17 @@
  * limitations under the License.
  */
 
-// TODO: cleanup
-#include "reader_impl.hpp"
 #include "reader_impl_helpers.cuh"
 
-#include "compact_protocol_reader.hpp"
+#include <cudf/io/datasource.hpp>
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
-
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/fill.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/logical.h>
-#include <thrust/transform.h>
-#include <thrust/tuple.h>
-
-#include <algorithm>
-#include <array>
-#include <numeric>
 #include <regex>
 
 namespace cudf::io::detail::parquet {
-// Import functionality that's independent of legacy code
-using namespace cudf::io::parquet;
-using namespace cudf::io;
 
-parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const& logical)
+namespace {
+
+ConvertedType logical_type_to_converted_type(LogicalType const& logical)
 {
   if (logical.isset.STRING) {
     return parquet::UTF8;
@@ -94,6 +65,8 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
   }
   return parquet::UNKNOWN;
 }
+
+}  // namespace
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -189,35 +162,26 @@ type_id to_type_id(SchemaElement const& schema,
   return type_id::EMPTY;
 }
 
-/**
- * @brief Converts cuDF units to Parquet units.
- *
- * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
- */
-std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
-                                                     type_id timestamp_type_id,
-                                                     parquet::Type physical,
-                                                     int8_t converted,
-                                                     int32_t length)
+metadata::metadata(datasource* source)
 {
-  int32_t type_width = (physical == parquet::FIXED_LEN_BYTE_ARRAY) ? length : 0;
-  int32_t clock_rate = 0;
-  if (column_type_id == type_id::INT8 or column_type_id == type_id::UINT8) {
-    type_width = 1;  // I32 -> I8
-  } else if (column_type_id == type_id::INT16 or column_type_id == type_id::UINT16) {
-    type_width = 2;  // I32 -> I16
-  } else if (column_type_id == type_id::INT32) {
-    type_width = 4;  // str -> hash32
-  } else if (is_chrono(data_type{column_type_id})) {
-    clock_rate = to_clockrate(timestamp_type_id);
-  }
+  constexpr auto header_len = sizeof(file_header_s);
+  constexpr auto ender_len  = sizeof(file_ender_s);
 
-  int8_t converted_type = converted;
-  if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      not cudf::is_fixed_point(data_type{column_type_id})) {
-    converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
-  }
-  return std::make_tuple(type_width, clock_rate, converted_type);
+  const auto len           = source->size();
+  const auto header_buffer = source->host_read(0, header_len);
+  const auto header        = reinterpret_cast<const file_header_s*>(header_buffer->data());
+  const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
+  const auto ender         = reinterpret_cast<const file_ender_s*>(ender_buffer->data());
+  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
+  CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
+               "Corrupted header or footer");
+  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
+               "Incorrect footer length");
+
+  const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
+  CompactProtocolReader cp(buffer->data(), ender->footer_len);
+  CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
@@ -455,7 +419,7 @@ std::vector<aggregate_reader_metadata::row_group_info> aggregate_reader_metadata
  * @return input column information, output column information, list of output column schema
  * indices
  */
-std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<int>>
+std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
 aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
                                           bool include_index,
                                           bool strings_to_categorical,
@@ -467,8 +431,9 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                    schema_elem.children_idx.cend(),
                    [&](size_t col_schema_idx) { return get_schema(col_schema_idx).name == name; });
 
-    return (col_schema_idx != schema_elem.children_idx.end()) ? static_cast<int>(*col_schema_idx)
-                                                              : -1;
+    return (col_schema_idx != schema_elem.children_idx.end())
+             ? static_cast<size_type>(*col_schema_idx)
+             : -1;
   };
 
   std::vector<column_buffer> output_columns;

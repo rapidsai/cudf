@@ -22,18 +22,10 @@
 #include "reader_impl.hpp"
 #include "reader_impl_helpers.cuh"
 
-#include "compact_protocol_reader.hpp"
-
-#include <io/comp/gpuinflate.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -41,24 +33,28 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/fill.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/transform.h>
-#include <thrust/tuple.h>
-
-#include <algorithm>
-#include <array>
-#include <numeric>
-#include <regex>
 
 namespace cudf {
 namespace io {
 namespace detail {
 namespace parquet {
-// Import functionality that's independent of legacy code
-using namespace cudf::io::parquet;
-using namespace cudf::io;
+
+namespace {
+
+inline void decompress_check(device_span<compression_result const> results,
+                             rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              results.begin(),
+                              results.end(),
+                              [] __device__(auto const& res) {
+                                return res.status == compression_status::SUCCESS;
+                              }),
+               "Error during decompression");
+}
+
+}  // namespace
 
 /**
  * @brief Generate depth remappings for repetition and definition levels.

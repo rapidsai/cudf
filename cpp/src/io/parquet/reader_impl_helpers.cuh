@@ -14,45 +14,24 @@
  * limitations under the License.
  */
 
-// TODO: cleanup
-#include "reader_impl.hpp"
+#pragma once
 
 #include "compact_protocol_reader.hpp"
+#include "parquet_gpu.hpp"
 
 #include <io/comp/gpuinflate.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/table.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/fill.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/logical.h>
-#include <thrust/transform.h>
-#include <thrust/tuple.h>
-
-#include <algorithm>
-#include <array>
-#include <numeric>
-#include <regex>
+#include <tuple>
+#include <vector>
 
 namespace cudf::io::detail::parquet {
-// Import functionality that's independent of legacy code
-using namespace cudf::io::parquet;
-using namespace cudf::io;
 
-parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const& logical);
+using namespace cudf::io::parquet;
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -72,62 +51,10 @@ inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
 }
 
 /**
- * @brief Function that returns the required the number of bits to store a value
- */
-template <typename T = uint8_t>
-T required_bits(uint32_t max_level)
-{
-  return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
-}
-
-/**
- * @brief Converts cuDF units to Parquet units.
- *
- * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
- */
-std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
-                                                     type_id timestamp_type_id,
-                                                     parquet::Type physical,
-                                                     int8_t converted,
-                                                     int32_t length);
-
-inline void decompress_check(device_span<compression_result const> results,
-                             rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              results.begin(),
-                              results.end(),
-                              [] __device__(auto const& res) {
-                                return res.status == compression_status::SUCCESS;
-                              }),
-               "Error during decompression");
-}
-
-/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
-  explicit metadata(datasource* source)
-  {
-    constexpr auto header_len = sizeof(file_header_s);
-    constexpr auto ender_len  = sizeof(file_ender_s);
-
-    const auto len           = source->size();
-    const auto header_buffer = source->host_read(0, header_len);
-    const auto header        = reinterpret_cast<const file_header_s*>(header_buffer->data());
-    const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
-    const auto ender         = reinterpret_cast<const file_ender_s*>(ender_buffer->data());
-    CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-    CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
-                 "Corrupted header or footer");
-    CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
-                 "Incorrect footer length");
-
-    const auto buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-    CompactProtocolReader cp(buffer->data(), ender->footer_len);
-    CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
-    CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
-  }
+  explicit metadata(datasource* source);
 };
 
 class aggregate_reader_metadata {
@@ -254,7 +181,7 @@ class aggregate_reader_metadata {
    * indices
    */
   [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<int>>
+    tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
     select_columns(std::optional<std::vector<std::string>> const& use_names,
                    bool include_index,
                    bool strings_to_categorical,
