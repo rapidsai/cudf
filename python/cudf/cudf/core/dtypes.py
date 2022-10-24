@@ -156,7 +156,7 @@ class CategoricalDtype(_BaseDtype):
 
     def __init__(self, categories=None, ordered: bool = False) -> None:
         self._categories = self._init_categories(categories)
-        self.ordered = ordered
+        self._ordered = ordered
 
     @property
     def categories(self) -> "cudf.core.index.BaseIndex":
@@ -193,11 +193,11 @@ class CategoricalDtype(_BaseDtype):
         """
         Whether the categories have an ordered relationship.
         """
-        return self.ordered
+        return self._ordered
 
     @ordered.setter
     def ordered(self, value) -> None:
-        self.ordered = value
+        self._ordered = value
 
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
