@@ -15,6 +15,7 @@
  */
 
 #include "reader_impl.hpp"
+#include "reader_impl_helpers.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
