@@ -142,7 +142,7 @@ static void BM_join(state_type& state, Join JoinFunc)
   // Benchmark the inner join operation
   if constexpr (std::is_same_v<state_type, benchmark::State> and (not is_conditional)) {
     for (auto _ : state) {
-      cuda_event_timer raii(state, true, cudf::default_stream_value);
+      cuda_event_timer raii(state, true, cudf::get_default_stream());
 
       auto result = JoinFunc(probe_table.select(columns_to_join),
                              build_table.select(columns_to_join),
@@ -168,7 +168,7 @@ static void BM_join(state_type& state, Join JoinFunc)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 
     for (auto _ : state) {
-      cuda_event_timer raii(state, true, cudf::default_stream_value);
+      cuda_event_timer raii(state, true, cudf::get_default_stream());
 
       auto result =
         JoinFunc(probe_table, build_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);

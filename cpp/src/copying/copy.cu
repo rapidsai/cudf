@@ -410,7 +410,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -419,7 +419,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -428,7 +428,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -437,7 +437,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::default_stream_value, mr);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

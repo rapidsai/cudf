@@ -150,11 +150,18 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
   } else if (encoding == Encoding::RLE) {
-    if (cur + 4 < end) {
-      uint32_t run;
+    // V2 only uses RLE encoding, so only perform check here
+    if (s->page.def_lvl_bytes || s->page.rep_lvl_bytes) {
+      len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
+    } else if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
-      run                     = get_vlq32(cur, end);
+    } else {
+      len      = 0;
+      s->error = 2;
+    }
+    if (!s->error) {
+      uint32_t run            = get_vlq32(cur, end);
       s->initial_rle_run[lvl] = run;
       if (!(run & 1)) {
         int v = (cur < end) ? cur[0] : 0;
@@ -167,9 +174,6 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
       }
       s->lvl_start[lvl] = cur;
       if (cur > end) { s->error = 2; }
-    } else {
-      len      = 0;
-      s->error = 2;
     }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
@@ -180,7 +184,7 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->error = 3;
     len      = 0;
   }
-  return (uint32_t)len;
+  return static_cast<uint32_t>(len);
 }
 
 /**
@@ -980,7 +984,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (s->col.max_level[level_type::REPETITION] == 0) {
             output_offset = page_start_row >= min_row ? page_start_row - min_row : 0;
           }
-          // for schemas with lists, we've already got the exactly value precomputed
+          // for schemas with lists, we've already got the exact value precomputed
           else {
             output_offset = pni->page_start_value;
           }
@@ -1556,11 +1560,13 @@ __global__ void __launch_bounds__(block_size)
   bool const has_repetition   = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
   compute_string_sizes = compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);  
 
-  // if this is a flat hierarchy (no lists) and is not a string column, compute the size directly
-  // from the number of values.
-  if (!has_repetition && !compute_string_sizes) {
+  // reasons we might want to early out:
+  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need to do 
+  //   the expensive work of traversing the level data to determine sizes.  we can just compute it directly.
+  // - if this is the trim pass and we have no rows to output for this page.
+  if (!has_repetition && !compute_string_sizes) {    
     if (!t) {
-      // note: doing this for all nesting level because we can still have structs even if we don't
+      // note: doing this for all nesting levels because we can still have structs even if we don't
       // have lists.
       for (size_type idx = 0; idx < pp->num_nesting_levels; idx++) {
         pp->nesting[idx].size = pp->num_input_values;
@@ -1588,6 +1594,10 @@ __global__ void __launch_bounds__(block_size)
       s->num_rows              = INT_MAX;
       s->row_index_lower_bound = -1;
     }
+  }
+  // if we have no work to do for this page.
+  if(!compute_num_rows_pass && s->num_rows == 0){
+    return;
   }
   __syncthreads();
 
@@ -1669,6 +1679,11 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   int out_thread0;
 
   if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+
+  // if we have no rows to do (eg, in a skip_rows/num_rows case)
+  if(s->num_rows == 0){
+    return;
+  }
 
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;

@@ -78,7 +78,7 @@ std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cross_join(left, right, cudf::default_stream_value, mr);
+  return detail::cross_join(left, right, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

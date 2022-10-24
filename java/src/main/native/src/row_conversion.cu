@@ -1885,7 +1885,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
                    return make_lists_column(
                        batch_info.row_batches[batch].row_count, std::move(offsets), std::move(data),
-                       0, rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
+                       0, rmm::device_buffer{0, cudf::get_default_stream(), mr}, stream, mr);
                  });
 
   return ret;

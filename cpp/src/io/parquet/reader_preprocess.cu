@@ -33,6 +33,7 @@ namespace cudf::io::detail::parquet {
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
+#if defined(PREPROCESS_DEBUG)
 void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
   pages.device_to_host(_stream, true);
@@ -64,6 +65,7 @@ void print_chunks(hostdevice_vector<gpu::ColumnChunkDesc>& chunks, rmm::cuda_str
            c.num_rows);
   }
 }
+#endif  // PREPROCESS_DEBUG
 
 namespace {
 
@@ -490,32 +492,24 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   // intermediate data we will need for further chunked reads
   if (has_lists || chunked_read_size > 0) {
     // computes:
-    // PageNestingInfo::size for each level of nesting, for each page.
-    // This computes the size for the entire page, not taking row bounds into account.
-    /*
-    gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(),
-      chunks,
-      // if uses_custom_row_bounds is false, include all possible rows.
-      uses_custom_row_bounds ? min_row : 0,
-      uses_custom_row_bounds ? num_rows : INT_MAX,
-      !uses_custom_row_bounds);
-    */
-    // we will be applying a later trim pass if skip_rows/num_rows is being used, which can happen
+    // PageNestingInfo::num_rows for each page. the true number of rows (taking repetition into account), not
+    // just the number of values.
+    // PageNestingInfo::size for each level of nesting, for each page. 
+    //
+    // we will be applying a later "trim" pass if skip_rows/num_rows is being used, which can happen
     // if:
     // - user has passed custom row bounds
     // - if we will be doing a chunked read
-    auto const will_trim_later = uses_custom_row_bounds || chunked_read_size > 0;
     gpu::ComputePageSizes(pages,
                           chunks,
-                          0,
-                          INT_MAX,
+                          0,                      // 0-max size_t. process all possible rows
+                          std::numeric_limits<size_t>::max(),
                           true,                   // compute num_rows
                           chunked_read_size > 0,  // compute string sizes
                           _stream);
 
     // computes:
-    // PageInfo::chunk_row for all pages
+    // PageInfo::chunk_row (the absolute start row index) for all pages
     // Note: this is doing some redundant work for pages in flat hierarchies.  chunk_row has already
     // been computed during header decoding. the overall amount of work here is very small though.
     auto key_input  = thrust::make_transform_iterator(pages.device_ptr(), get_page_chunk_idx{});
@@ -585,7 +579,8 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 {
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
-  // PageInfo::skipped_values, which tells us where to start decoding in the input.
+  // PageInfo::skipped_values, which tells us where to start decoding in the input to respect the 
+  // user bounds.
   // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
   // specified artifical bounds).
   if (uses_custom_row_bounds) {
@@ -682,80 +677,3 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 }
 
 }  // namespace cudf::io::detail::parquet
-
-/*
-{
-  std::mt19937 gen(6542);
-  std::bernoulli_distribution bn(0.7f);
-  //auto valids =
-//    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = thrust::make_counting_iterator(0);
-
-  constexpr size_type num_rows = 40000;
-  cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
-  cudf::test::fixed_width_column_wrapper<int64_t> b(values, values + num_rows);
-
-  cudf::table_view t({a, b});
-  cudf::io::parquet_writer_options opts =
-cudf::io::parquet_writer_options::builder(cudf::io::sink_info{"parquet/tmp/chunked_splits.parquet"},
-t); cudf::io::write_parquet(opts);
-
-  cudf::io::parquet_reader_options in_opts =
-cudf::io::parquet_reader_options::builder(cudf::io::source_info{"parquet/tmp/chunked_splits.parquet"});
-  auto result = cudf::io::read_parquet(in_opts);
-}
-*/
-
-/*
-{
-    // values the cudf parquet writer uses
-    // constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
-    // constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
-
-    std::mt19937 gen(6542);
-    std::bernoulli_distribution bn(0.7f);
-    auto values = thrust::make_counting_iterator(0);
-
-    constexpr size_type num_rows = 60000;
-
-    // ints                                            Page    total bytes   cumulative bytes
-    // 20000 rows of 4 bytes each                    = A0      80000         80000
-    // 20000 rows of 4 bytes each                    = A1      80000         160000
-    // 20000 rows of 4 bytes each                    = A2      80000         240000
-    cudf::test::fixed_width_column_wrapper<int> a(values, values + num_rows);
-
-    // strings                                         Page    total bytes   cumulative bytes
-    // 20000 rows of 1 char each    (20000  + 80004) = B0      100004        100004
-    // 20000 rows of 4 chars each   (80000  + 80004) = B1      160004        260008
-    // 20000 rows of 16 chars each  (320000 + 80004) = B2      400004        660012
-    std::vector<std::string> strings { "a", "bbbb", "cccccccccccccccc" };
-    auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i){
-      if(i < 20000){
-        return strings[0];
-      }
-      if(i < 40000){
-        return strings[1];
-      }
-      return strings[2];
-    });
-    cudf::test::strings_column_wrapper b{str_iter, str_iter + num_rows};
-
-    // cumulative sizes
-    // A0 + B0 :  180004
-    // A1 + B1 :  420008
-    // A2 + B2 :  900012
-    //                                                    skip_rows / num_rows
-    // chunked_read_size of 500000  should give 2 chunks: {0, 40000},           {40000, 20000}
-    // chunked_read_size of 1000000 should give 1 chunks: {0, 60000},
-
-    auto write_tbl = table_view{{a, b}};
-    auto filepath = std::string{"parquet/tmp/chunked_splits_strings.parquet"};
-    cudf::io::parquet_writer_options out_opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, write_tbl);
-    cudf::io::write_parquet(out_opts);
-
-    cudf::io::parquet_reader_options in_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-    auto result   = cudf::io::read_parquet(in_opts);
-  }
-  */

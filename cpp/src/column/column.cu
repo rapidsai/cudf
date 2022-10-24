@@ -144,7 +144,7 @@ size_type column::null_count() const
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::detail::null_count(
-      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), cudf::default_stream_value);
+      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), cudf::get_default_stream());
   }
   return _null_count;
 }
@@ -182,7 +182,7 @@ void column::set_null_count(size_type new_null_count)
 namespace {
 struct create_column_from_view {
   cudf::column_view view;
-  rmm::cuda_stream_view stream{cudf::default_stream_value};
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
   rmm::mr::device_memory_resource* mr;
 
   template <typename ColumnType,

@@ -450,7 +450,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input_table, cudf::default_stream_value, mr);
+  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
