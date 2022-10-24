@@ -183,8 +183,13 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
-  rmm::device_uvector<cudf::size_type> nullcnt(input.size(), stream);
-
+  rmm::device_uvector<cudf::size_type> nullcnt = [&input, stream] () -> rmm::device_uvector<cudf::size_type> {
+    if (input.has_nulls()) {
+      return null_roll_up(input, stream);
+    } else {
+      return rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    }
+  }();
   if (input.has_nulls()) {
     nullcnt = null_roll_up(input, stream);
 
@@ -258,8 +263,13 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
-  rmm::device_uvector<size_type> nullcnt(input.size(), stream);
-
+  rmm::device_uvector<cudf::size_type> nullcnt = [&input, stream] () -> rmm::device_uvector<cudf::size_type> {
+    if (input.has_nulls()) {
+      return null_roll_up(input, stream);
+    } else {
+      return rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    }
+  }();
   // denominators are all 1 so dont need to be computed
   // pairs are all (beta, 1-beta x_i) except for the first one
 
@@ -341,34 +351,28 @@ std::unique_ptr<column> ewma(std::unique_ptr<cudf::scan_aggregation> const& agg,
 
 struct ewma_functor {
   template <typename T>
-  std::unique_ptr<column> operator()(std::unique_ptr<cudf::scan_aggregation> const& agg,
+  std::enable_if_t<!is_floating_point<T>(), std::unique_ptr<column>>
+  operator()(std::unique_ptr<cudf::scan_aggregation> const& agg,
                                      column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Unsupported type for EWMA.");
   }
+  
+  template <typename T>
+  std::enable_if_t<is_floating_point<T>(), std::unique_ptr<column>>
+  operator()(
+    std::unique_ptr<cudf::scan_aggregation> const& agg,
+    column_view const& input,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    return ewma<T>(agg, input, stream, mr);
+  }
 };
 
-template <>
-std::unique_ptr<column> ewma_functor::operator()<float>(
-  std::unique_ptr<cudf::scan_aggregation> const& agg,
-  column_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  return ewma<float>(agg, input, stream, mr);
-}
 
-template <>
-std::unique_ptr<column> ewma_functor::operator()<double>(
-  std::unique_ptr<cudf::scan_aggregation> const& agg,
-  column_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  return ewma<double>(agg, input, stream, mr);
-}
 
 std::unique_ptr<column> ewma(column_view const& input,
                              std::unique_ptr<cudf::scan_aggregation> const& agg,
