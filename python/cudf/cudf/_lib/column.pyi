@@ -23,7 +23,6 @@ class Column:
     _children: Tuple[ColumnBase, ...]
     _base_children: Tuple[ColumnBase, ...]
     _distinct_count: Dict[bool, int]
-    _weak_ref: Optional[weakref.ref]
 
     def __init__(
         self,

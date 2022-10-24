@@ -74,7 +74,6 @@ cdef class Column:
         int offset=0,
         object null_count=None,
         object children=(),
-        object weak_ref=None,
     ):
 
         self._size = size
@@ -85,7 +84,6 @@ cdef class Column:
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
-        self._weak_ref = weak_ref
         self._zero_copied = False
 
     @property
@@ -214,7 +212,6 @@ cdef class Column:
             # `self.memory_usage` was never called before, So ignore.
             pass
         self._null_count = None
-        self._weak_ref = None
 
     def set_mask(self, value):
         """
@@ -363,7 +360,6 @@ cdef class Column:
             self.set_base_data(new_col.base_data)
             self.set_base_children(new_col.base_children)
             self.set_base_mask(new_col.base_mask)
-            self._weak_ref = None
 
     def _mimic_inplace(self, other_col, inplace=False):
         """
@@ -377,7 +373,6 @@ cdef class Column:
             self._offset = other_col.offset
             self._size = other_col.size
             self._dtype = other_col._dtype
-            self._weak_ref = other_col._weak_ref
             self.set_base_data(other_col.base_data)
             self.set_base_children(other_col.base_children)
             self.set_base_mask(other_col.base_mask)
