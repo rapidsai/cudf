@@ -150,9 +150,15 @@ public:
     if (cls == nullptr) {
       throw cudf::jni::jni_exception("class not found");
     }
-    on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(J)Z");
+    on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(JI)Z");
     if (on_alloc_fail_method == nullptr) {
-      throw cudf::jni::jni_exception("onAllocFailure method");
+      use_old_alloc_fail_interface = true;
+      on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(J)Z");
+      if (on_alloc_fail_method == nullptr) {
+        throw cudf::jni::jni_exception("onAllocFailure method");
+      }
+    } else {
+      use_old_alloc_fail_interface = false;
     }
     on_alloc_threshold_method = env->GetMethodID(cls, "onAllocThreshold", "(J)V");
     if (on_alloc_threshold_method == nullptr) {
@@ -190,6 +196,7 @@ private:
   JavaVM *jvm;
   jobject handler_obj;
   jmethodID on_alloc_fail_method;
+  bool use_old_alloc_fail_interface;
   jmethodID on_alloc_threshold_method;
   jmethodID on_dealloc_threshold_method;
 
@@ -209,10 +216,18 @@ private:
     }
   }
 
-  bool on_alloc_fail(std::size_t num_bytes) {
+  bool on_alloc_fail(std::size_t num_bytes, int retry_count) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    jboolean result =
-        env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
+    jboolean result = false;
+    if (!use_old_alloc_fail_interface) {
+      result =
+          env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes),
+                                 static_cast<jint>(retry_count));
+
+    } else {
+      result =
+          env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
+    }
     if (env->ExceptionCheck()) {
       throw std::runtime_error("onAllocFailure handler threw an exception");
     }
@@ -240,13 +255,17 @@ private:
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     std::size_t total_before;
     void *result;
+    // a non-zero retry_count signifies that the `on_alloc_fail`
+    // callback is being invoked while re-attempting an allocation
+    // that had previously failed.
+    int retry_count = 0;
     while (true) {
       try {
         total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
       } catch (rmm::out_of_memory const &e) {
-        if (!on_alloc_fail(num_bytes)) {
+        if (!on_alloc_fail(num_bytes, retry_count++)) {
           throw;
         }
       }

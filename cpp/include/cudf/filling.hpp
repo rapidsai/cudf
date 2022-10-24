@@ -103,26 +103,22 @@ std::unique_ptr<column> fill(
  * ```
  * @p count should not have null values; should not contain negative values;
  * and the sum of count elements should not overflow the size_type's limit.
- * It is undefined behavior if @p count has negative values or the sum overflows
- * and @p check_count is set to false.
+ * The behavior of this function is undefined if @p count has negative values
+ * or the sum overflows.
  *
  * @throws cudf::logic_error if the data type of @p count is not size_type.
  * @throws cudf::logic_error if @p input_table and @p count have different
  * number of rows.
  * @throws cudf::logic_error if @p count has null values.
- * @throws cudf::logic_error if @p check_count is set to true and @p count
- * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
  * @param count Non-nullable column of an integral type
- * @param check_count Whether to check count (negative values and overflow)
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
-  bool check_count                    = false,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

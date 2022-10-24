@@ -46,6 +46,20 @@ def _divisions(setting):
     return {"gather_statistics": setting}
 
 
+@pytest.mark.skipif(
+    not dask_cudf.core.DASK_BACKEND_SUPPORT,
+    reason="No backend-dispatch support",
+)
+def test_roundtrip_backend_dispatch(tmpdir):
+    # Test ddf.read_parquet cudf-backend dispatch
+    tmpdir = str(tmpdir)
+    ddf.to_parquet(tmpdir, engine="pyarrow")
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf2 = dd.read_parquet(tmpdir, index=False)
+    assert isinstance(ddf2, dask_cudf.DataFrame)
+    dd.assert_eq(ddf.reset_index(drop=False), ddf2)
+
+
 @pytest.mark.parametrize("write_metadata_file", [True, False])
 @pytest.mark.parametrize("divisions", [True, False])
 def test_roundtrip_from_dask(tmpdir, divisions, write_metadata_file):

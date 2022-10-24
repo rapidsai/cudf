@@ -68,7 +68,7 @@ size_type column_view_base::null_count() const
 {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::detail::null_count(
-      null_mask(), offset(), offset() + size(), cudf::default_stream_value);
+      null_mask(), offset(), offset() + size(), cudf::get_default_stream());
   }
   return _null_count;
 }
@@ -79,7 +79,7 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
   return (null_count() == 0)
            ? 0
            : cudf::detail::null_count(
-               null_mask(), offset() + begin, offset() + end, cudf::default_stream_value);
+               null_mask(), offset() + begin, offset() + end, cudf::get_default_stream());
 }
 
 // Struct to use custom hash combine and fold expression

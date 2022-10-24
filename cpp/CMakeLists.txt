@@ -693,7 +693,6 @@ add_library(
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
   tests/utilities/table_utilities.cu
-  tests/strings/utilities.cpp
 )
 
 set_target_properties(

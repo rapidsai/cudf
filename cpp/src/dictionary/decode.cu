@@ -68,7 +68,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::decode(source, cudf::default_stream_value, mr);
+  return detail::decode(source, cudf::get_default_stream(), mr);
 }
 
 }  // namespace dictionary
