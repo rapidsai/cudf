@@ -16,6 +16,22 @@ import cudf
 import dask_cudf
 
 
+@pytest.mark.skipif(
+    not dask_cudf.core.DASK_BACKEND_SUPPORT,
+    reason="No backend-dispatch support",
+)
+def test_csv_roundtrip_backend_dispatch(tmp_path):
+    # Test ddf.read_csv cudf-backend dispatch
+    df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+    csv_path = str(tmp_path / "data-*.csv")
+    ddf.to_csv(csv_path, index=False)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf2 = dd.read_csv(csv_path)
+    assert isinstance(ddf2, dask_cudf.DataFrame)
+    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+
+
 def test_csv_roundtrip(tmp_path):
     df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
     ddf = dask_cudf.from_cudf(df, npartitions=2)

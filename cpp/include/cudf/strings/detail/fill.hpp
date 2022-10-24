@@ -47,7 +47,7 @@ std::unique_ptr<column> fill(
   size_type begin,
   size_type end,
   string_scalar const& value,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

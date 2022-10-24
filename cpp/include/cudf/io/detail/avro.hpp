@@ -39,7 +39,7 @@ namespace avro {
 table_with_metadata read_avro(
   std::unique_ptr<cudf::io::datasource>&& source,
   avro_reader_options const& options,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace avro

@@ -61,7 +61,7 @@ std::unique_ptr<column> make_strings_column(
   device_span<size_type> offsets,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();

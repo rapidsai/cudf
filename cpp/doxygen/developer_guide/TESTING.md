@@ -6,6 +6,13 @@ Unit tests in libcudf are written using
 **Important:** Instead of including `gtest/gtest.h` directly, use
 `#include <cudf_test/cudf_gtest.hpp>`.
 
+Also, write test code in the global namespace. That is,
+do not write test code in the `cudf` or the `cudf::test` namespace or their
+sub-namespaces.
+Likewise, do not use `using namespace cudf;` or `using namespace cudf::test;`
+in the global namespace.
+
+
 ## Best Practices: What Should We Test?
 
 In general we should test to make sure all code paths are covered. This is not always easy or
@@ -38,8 +45,8 @@ groupby).  Here are some other guidelines.
    does happen); columns with zero size but that somehow have non-null data pointers; and struct
    columns with no children.
 
- * Decimal types are not included in the `NumericTypes` type list, but are included in
-   `FixedWidthTypes`, so be careful that tests either include or exclude decimal types as
+ * Decimal types are not included in the `cudf::test::NumericTypes` type list, but are included in
+   `cudf::test::FixedWidthTypes`, so be careful that tests either include or exclude decimal types as
    appropriate.
 
 
@@ -99,8 +106,8 @@ list defined in `TestTypes` (`int, float, double`).
 
 The list of types that are used in tests should be consistent across all tests. To ensure
 consistency, several sets of common type lists are provided in
-`include/cudf_test/type_lists.hpp`. For example, `NumericTypes` is a type list of all numeric types,
-`FixedWidthTypes` is a list of all fixed-width element types, and `AllTypes` is a list of every
+`include/cudf_test/type_lists.hpp`. For example, `cudf::test::NumericTypes` is a type list of all numeric types,
+`FixedWidthTypes` is a list of all fixed-width element types, and `cudf::test::AllTypes` is a list of every
 element type that libcudf supports.
 
 ```c++
@@ -126,9 +133,8 @@ the `N`th type within the nested list, use `GetType<NestedList, N>`.
 Imagine testing all possible two-type combinations of `<int,float>`. This could be done manually:
 
 ```c++
-using namespace cudf::test;
 template <typename TwoTypes>
-TwoTypesFixture : BaseFixture{...};
+TwoTypesFixture : cudf::test::BaseFixture{...};
 using TwoTypesList = Types< Types<int, int>, Types<int, float>,
                             Types<float, int>, Types<float, float> >;
 TYPED_TEST_SUITE(TwoTypesFixture, TwoTypesList);
@@ -178,9 +184,9 @@ transparently passed to any API expecting a `column_view` or `mutable_column_vie
 
 #### fixed_width_column_wrapper
 
-The `fixed_width_column_wrapper` class should be used for constructing and initializing columns of
+The `cudf::test::fixed_width_column_wrapper` class should be used for constructing and initializing columns of
 any fixed-width element type, e.g., numeric types, timestamp types, Boolean, etc.
-`fixed_width_column_wrapper` provides constructors that accept an iterator range to generate each
+`cudf::test::fixed_width_column_wrapper` provides constructors that accept an iterator range to generate each
 element in the column. For nullable columns, an additional iterator can be provided to indicate the
 validity of each element. There are also constructors that accept a `std::initializer_list<T>` for
 the column elements and optionally for the validity of each element.
@@ -189,25 +195,25 @@ Example:
 
 ```c++
 // Creates a non-nullable column of INT32 elements with 5 elements: {0, 1, 2, 3, 4}
-auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
-fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
+auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i;});
+cudf::test::fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
 
 // Creates a nullable column of INT32 elements with 5 elements: {null, 1, null, 3, null}
-auto elements = make_counting_transform_iterator(0, [](auto i){return i;});
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;})
-fixed_width_column_wrapper<int32_t> w(elements, elements + 5, validity);
+auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i;});
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;})
+cudf::test::fixed_width_column_wrapper<int32_t> w(elements, elements + 5, validity);
 
 // Creates a non-nullable INT32 column with 4 elements: {1, 2, 3, 4}
-fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
+cudf::test::fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
 
 // Creates a nullable INT32 column with 4 elements: {1, NULL, 3, NULL}
-fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
+cudf::test::fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
 ```
 
 #### fixed_point_column_wrapper
 
-The `fixed_point_column_wrapper` class should be used for constructing and initializing columns of
-any fixed-point element type (DECIMAL32 or DECIMAL64). `fixed_point_column_wrapper` provides
+The `cudf::test::fixed_point_column_wrapper` class should be used for constructing and initializing columns of
+any fixed-point element type (DECIMAL32 or DECIMAL64). `cudf::test::fixed_point_column_wrapper` provides
 constructors that accept an iterator range to generate each element in the column. For nullable
 columns, an additional iterator can be provided to indicate the validity of each element.
 Constructors also take the scale of the fixed-point values to create.
@@ -215,20 +221,20 @@ Constructors also take the scale of the fixed-point values to create.
 Example:
 
 ```c++
-    // Creates a non-nullable column of 4 DECIMAL32 elements of scale 3: {1000, 2000, 3000, 4000}
-    auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
-    fixed_point_column_wrapper<int32_t> w(elements, elements + 4, 3);
+// Creates a non-nullable column of 4 DECIMAL32 elements of scale 3: {1000, 2000, 3000, 4000}
+auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i; });
+cudf::test::fixed_point_column_wrapper<int32_t> w(elements, elements + 4, 3);
 
-    // Creates a nullable column of 5 DECIMAL32 elements of scale 2: {null, 100, null, 300, null}
-    auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
-    auto validity = make_counting_transform_iterator(0, [](auto i){ return i % 2; });
-    fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
+// Creates a nullable column of 5 DECIMAL32 elements of scale 2: {null, 100, null, 300, null}
+auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i; });
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i % 2; });
+cudf::test::fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
 ```
 
 #### dictionary_column_wrapper
 
-The `dictionary_column_wrapper` class should be used to create dictionary columns.
-`dictionary_column_wrapper` provides constructors that accept an iterator range to generate each
+The `cudf::test::dictionary_column_wrapper` class should be used to create dictionary columns.
+`cudf::test::dictionary_column_wrapper` provides constructors that accept an iterator range to generate each
 element in the column. For nullable columns, an additional iterator can be provided to indicate the
 validity of each element. There are also constructors that accept a `std::initializer_list<T>` for
 the column elements and optionally for the validity of each element.
@@ -239,43 +245,43 @@ Example:
 // Creates a non-nullable dictionary column of INT32 elements with 5 elements
 // keys = {0, 2, 6}, indices = {0, 1, 1, 2, 2}
 std::vector<int32_t> elements{0, 2, 2, 6, 6};
-dictionary_column_wrapper<int32_t> w(element.begin(), elements.end());
+cudf::test::dictionary_column_wrapper<int32_t> w(element.begin(), elements.end());
 
 // Creates a nullable dictionary column with 5 elements and a validity iterator.
 std::vector<int32_t> elements{0, 2, 0, 6, 0};
 // Validity iterator here sets even rows to null.
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;})
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;})
 // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
-dictionary_column_wrapper<int32_t> w(elements, elements + 5, validity);
+cudf::test::dictionary_column_wrapper<int32_t> w(elements, elements + 5, validity);
 
 // Creates a non-nullable dictionary column with 4 elements.
 // keys = {1, 2, 3}, indices = {0, 1, 2, 0}
-dictionary_column_wrapper<int32_t> w{{1, 2, 3, 1}};
+cudf::test::dictionary_column_wrapper<int32_t> w{{1, 2, 3, 1}};
 
 // Creates a nullable dictionary column with 4 elements and validity initializer.
 // keys = {1, 3}, indices = {0, NULL, 1, NULL}
-dictionary_column_wrapper<int32_t> w{ {1, 0, 3, 0}, {1, 0, 1, 0}};
+cudf::test::dictionary_column_wrapper<int32_t> w{ {1, 0, 3, 0}, {1, 0, 1, 0}};
 
 // Creates a nullable column of dictionary elements with 5 elements and validity initializer.
 std::vector<int32_t> elements{0, 2, 2, 6, 6};
 // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
-dictionary_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
+cudf::test::dictionary_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
 
 // Creates a non-nullable dictionary column with 7 string elements
 std::vector<std::string> strings{"", "aaa", "bbb", "aaa", "bbb", "ccc", "bbb"};
 // keys = {"","aaa","bbb","ccc"}, indices = {0, 1, 2, 1, 2, 3, 2}
-dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
+cudf::test::dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
 
 // Creates a nullable dictionary column with 7 string elements and a validity iterator.
 // Validity iterator here sets even rows to null.
 // keys = {"a", "bb"}, indices = {NULL, 1, NULL, 1, NULL, 0, NULL}
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
-dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;});
+cudf::test::dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
 ```
 
 #### strings_column_wrapper
 
-The `strings_column_wrapper` class should be used to create columns of strings. It provides
+The `cudf::test::strings_column_wrapper` class should be used to create columns of strings. It provides
 constructors that accept an iterator range to generate each string in the column. For nullable
 columns, an additional iterator can be provided to indicate the validity of each string. There are
 also constructors that accept a `std::initializer_list<std::string>` for the column's strings and
@@ -287,27 +293,27 @@ Example:
 // Creates a non-nullable STRING column with 7 string elements:
 // {"", "this", "is", "a", "column", "of", "strings"}
 std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
-strings_column_wrapper s(strings.begin(), strings.end());
+cudf::test::strings_column_wrapper s(strings.begin(), strings.end());
 
 // Creates a nullable STRING column with 7 string elements:
 // {NULL, "this", NULL, "a", NULL, "of", NULL}
 std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings"};
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
-strings_column_wrapper s(strings.begin(), strings.end(), validity);
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;});
+cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), validity);
 
 // Creates a non-nullable STRING column with 7 string elements:
 // {"", "this", "is", "a", "column", "of", "strings"}
-strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"});
+cudf::test::strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"});
 
 // Creates a nullable STRING column with 7 string elements:
 // {NULL, "this", NULL, "a", NULL, "of", NULL}
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
-strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;});
+cudf::test::strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, validity);
 ```
 
 #### lists_column_wrapper
 
-The `lists_column_wrapper` class should be used to create columns of lists. It provides
+The `cudf::test::lists_column_wrapper` class should be used to create columns of lists. It provides
 constructors that accept an iterator range to generate each list in the column. For nullable
 columns, an additional iterator can be provided to indicate the validity of each list. There are
 also constructors that accept a `std::initializer_list<T>` for the column's lists and
@@ -318,50 +324,50 @@ Example:
 ```c++
 // Creates an empty LIST column
 // []
-lists_column_wrapper l{};
+cudf::test::lists_column_wrapper l{};
 
 // Creates a LIST column with 1 list composed of 2 total integers
 // [{0, 1}]
-lists_column_wrapper l{0, 1};
+cudf::test::lists_column_wrapper l{0, 1};
 
 // Creates a LIST column with 3 lists
 // [{0, 1}, {2, 3}, {4, 5}]
-lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} };
+cudf::test::lists_column_wrapper l{ {0, 1}, {2, 3}, {4, 5} };
 
 // Creates a LIST of LIST columns with 2 lists on the top level and
 // 4 below
 // [ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} ]
-lists_column_wrapper l{ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} };
+cudf::test::lists_column_wrapper l{ {{0, 1}, {2, 3}}, {{4, 5}, {6, 7}} };
 
 // Creates a LIST column with 1 list composed of 5 total integers
 // [{0, 1, 2, 3, 4}]
-auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
-lists_column_wrapper l(elements, elements+5);
+auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i*2;});
+cudf::test::lists_column_wrapper l(elements, elements+5);
 
 // Creates a LIST column with 1 lists composed of 2 total integers
 // [{0, NULL}]
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
-lists_column_wrapper l{{0, 1}, validity};
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;});
+cudf::test::lists_column_wrapper l{{0, 1}, validity};
 
 // Creates a LIST column with 1 lists composed of 5 total integers
 // [{0, NULL, 2, NULL, 4}]
-auto elements = make_counting_transform_iterator(0, [](auto i){return i*2;});
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
-lists_column_wrapper l(elements, elements+5, validity);
+auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i*2;});
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;});
+cudf::test::lists_column_wrapper l(elements, elements+5, validity);
 
 // Creates a LIST column with 1 list composed of 2 total strings
 // [{"abc", "def"}]
-lists_column_wrapper l{"abc", "def"};
+cudf::test::lists_column_wrapper l{"abc", "def"};
 
 // Creates a LIST of LIST columns with 2 lists on the top level and 4 below
 // [ {{0, 1}, NULL}, {{4, 5}, NULL} ]
-auto validity = make_counting_transform_iterator(0, [](auto i){return i % 2;});
-lists_column_wrapper l{ {{{0, 1}, {2, 3}}, validity}, {{{4, 5}, {6, 7}}, validity} };
+auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i % 2;});
+cudf::test::lists_column_wrapper l{ {{{0, 1}, {2, 3}}, validity}, {{{4, 5}, {6, 7}}, validity} };
 ```
 
 #### structs_column_wrapper
 
-The `structs_column_wrapper` class should be used to create columns of structs. It provides
+The `cudf::test::structs_column_wrapper` class should be used to create columns of structs. It provides
 constructors that accept a vector or initializer list of pre-constructed columns or column wrappers
 for child columns. For nullable columns, an additional iterator can be provided to indicate the
 validity of each struct.
@@ -370,41 +376,41 @@ Examples:
 
 ```c++
 // The following constructs a column for struct< int, string >.
-auto child_int_col = fixed_width_column_wrapper<int32_t>{ 1, 2, 3, 4, 5 }.release();
-auto child_string_col = string_column_wrapper {"All", "the", "leaves", "are", "brown"}.release();
+auto child_int_col = cudf::test::fixed_width_column_wrapper<int32_t>{ 1, 2, 3, 4, 5 }.release();
+auto child_string_col = cudf::test::string_column_wrapper {"All", "the", "leaves", "are", "brown"}.release();
 
-std::vector<std::unique_ptr<column>> child_columns;
+std::vector<std::unique_ptr<cudf::column>> child_columns;
 child_columns.push_back(std::move(child_int_col));
 child_columns.push_back(std::move(child_string_col));
 
-struct_column_wrapper struct_column_wrapper{
+cudf::test::struct_col wrapper wrapper{
   child_cols,
   {1,0,1,0,1} // Validity
 };
 
-auto struct_col {struct_column_wrapper.release()};
+auto struct_col {wrapper.release()};
 
 // The following constructs a column for struct< int, string >.
-fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
-string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+cudf::test::fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+cudf::test::string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
 
-struct_column_wrapper struct_column_wrapper{
+cudf::test::struct_column_wrapper wrapper{
   {child_int_col_wrapper, child_string_col_wrapper}
   {1,0,1,0,1} // Validity
 };
 
-auto struct_col {struct_column_wrapper.release()};
+auto struct_col {wrapper.release()};
 
 // The following constructs a column for struct< int, string >.
-fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
-string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
+cudf::test::fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
+cudf::test::string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
 
-struct_column_wrapper struct_column_wrapper{
+cudf::test::struct_column_wrapper wrapper{
   {child_int_col_wrapper, child_string_col_wrapper}
   cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i % 2; }) // Validity
 };
 
-auto struct_col {struct_column_wrapper.release()};
+auto struct_col {wrapper.release()};
 ```
 
 ### Column Comparison Utilities

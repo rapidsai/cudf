@@ -3333,7 +3333,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def nlargest(self, n, columns, keep="first"):
-        """Get the rows of the DataFrame sorted by the n largest value of *columns*
+        """Return the first *n* rows ordered by *columns* in descending order.
+
+        Return the first *n* rows with the largest values in *columns*, in
+        descending order. The columns that are not specified are returned as
+        well, but not used for ordering.
 
         Parameters
         ----------
@@ -3396,7 +3400,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(True, n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
-        """Get the rows of the DataFrame sorted by the n smallest value of *columns*
+        """Return the first *n* rows ordered by *columns* in ascending order.
+
+        Return the first *n* rows with the smallest values in *columns*, in
+        ascending order. The columns that are not specified are returned as
+        well, but not used for ordering.
 
         Parameters
         ----------
@@ -5879,7 +5887,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def select_dtypes(self, include=None, exclude=None):
-        """Return a subset of the DataFrame’s columns based on the column dtypes.
+        """Return a subset of the DataFrame's columns based on the column dtypes.
 
         Parameters
         ----------
@@ -5938,7 +5946,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """
+        """  # noqa: E501
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
