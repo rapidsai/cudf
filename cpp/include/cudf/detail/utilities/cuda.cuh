@@ -171,7 +171,7 @@ __global__ void single_thread_kernel(F f)
  */
 template <class Functor>
 void device_single_thread(Functor functor,
-                          rmm::cuda_stream_view stream = cudf::default_stream_value)
+                          rmm::cuda_stream_view stream = cudf::get_default_stream())
 {
   single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
 }

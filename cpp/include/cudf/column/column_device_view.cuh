@@ -821,7 +821,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`source_view` available in device memory.
    */
   static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(
-    column_view source_view, rmm::cuda_stream_view stream = cudf::default_stream_value);
+    column_view source_view, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Destroy the `column_device_view` object.
@@ -974,7 +974,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   static std::unique_ptr<mutable_column_device_view,
                          std::function<void(mutable_column_device_view*)>>
   create(mutable_column_view source_view,
-         rmm::cuda_stream_view stream = cudf::default_stream_value);
+         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to

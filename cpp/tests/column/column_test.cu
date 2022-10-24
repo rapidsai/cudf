@@ -43,15 +43,15 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
-    : data{_num_elements * cudf::size_of(type()), cudf::default_stream_value},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements), cudf::default_stream_value}
+    : data{_num_elements * cudf::size_of(type()), cudf::get_default_stream()},
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements), cudf::get_default_stream()}
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
     thrust::sequence(
-      rmm::exec_policy(cudf::default_stream_value), typed_data, typed_data + data.size());
+      rmm::exec_policy(cudf::get_default_stream()), typed_data, typed_data + data.size());
     thrust::sequence(
-      rmm::exec_policy(cudf::default_stream_value), typed_mask, typed_mask + mask.size());
+      rmm::exec_policy(cudf::get_default_stream()), typed_mask, typed_mask + mask.size());
   }
 
   cudf::size_type num_elements() { return _num_elements; }
@@ -247,8 +247,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask)
 {
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, cudf::default_stream_value},
-                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}};
+                   rmm::device_buffer{this->data, cudf::get_default_stream()},
+                   rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_TRUE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -352,8 +352,8 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
 TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
 {
   rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
-                                          cudf::default_stream_value};
-  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
+                                          cudf::get_default_stream()};
+  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
                static_cast<TypeParam*>(this->data.data()),
                static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
                original.begin());
@@ -369,8 +369,8 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
 TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
 {
   rmm::device_uvector<TypeParam> original{static_cast<std::size_t>(this->num_elements()),
-                                          cudf::default_stream_value};
-  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
+                                          cudf::get_default_stream()};
+  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
                static_cast<TypeParam*>(this->data.data()),
                static_cast<TypeParam*>(this->data.data()) + this->num_elements(),
                original.begin());
@@ -392,17 +392,17 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren)
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT8},
     42,
-    rmm::device_buffer{this->data, cudf::default_stream_value},
-    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
+    rmm::device_buffer{this->data, cudf::get_default_stream()},
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::FLOAT64},
     314,
-    rmm::device_buffer{this->data, cudf::default_stream_value},
-    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
+    rmm::device_buffer{this->data, cudf::get_default_stream()},
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, cudf::default_stream_value},
-                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value},
+                   rmm::device_buffer{this->data, cudf::get_default_stream()},
+                   rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
                    cudf::UNKNOWN_NULL_COUNT,
                    std::move(children)};
 
@@ -437,17 +437,17 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
-    rmm::device_buffer{this->data, cudf::default_stream_value},
-    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
+    rmm::device_buffer{this->data, cudf::get_default_stream()},
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
-    rmm::device_buffer{this->data, cudf::default_stream_value},
-    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
+    rmm::device_buffer{this->data, cudf::get_default_stream()},
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, cudf::default_stream_value},
-                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value},
+                   rmm::device_buffer{this->data, cudf::get_default_stream()},
+                   rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
                    cudf::UNKNOWN_NULL_COUNT,
                    std::move(children)};
 

@@ -48,7 +48,7 @@ conditional_join(table_view const& left,
                  ast::expression const& binary_predicate,
                  join_kind JoinKind,
                  std::optional<std::size_t> output_size = {},
-                 rmm::cuda_stream_view stream           = cudf::default_stream_value,
+                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
                  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
@@ -68,7 +68,7 @@ std::size_t compute_conditional_join_output_size(
   table_view const& right,
   ast::expression const& binary_predicate,
   join_kind JoinKind,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

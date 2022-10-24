@@ -35,24 +35,24 @@ std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function               = hash_id::HASH_MURMUR3,
   uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
   uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> spark_murmur_hash3_32(
   table_view const& input,
   uint32_t seed                       = cudf::DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /* Copyright 2005-2014 Daniel James.

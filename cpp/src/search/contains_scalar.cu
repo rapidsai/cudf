@@ -153,7 +153,7 @@ bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_strea
 bool contains(column_view const& haystack, scalar const& needle)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, cudf::default_stream_value);
+  return detail::contains(haystack, needle, cudf::get_default_stream());
 }
 
 }  // namespace cudf
