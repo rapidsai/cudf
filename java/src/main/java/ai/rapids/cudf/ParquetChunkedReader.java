@@ -24,20 +24,23 @@ import java.io.File;
  * TODO
  */
 public class ParquetChunkedReader implements AutoCloseable {
-  private long handle;
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
 
 
   /**
    * TODO
    */
-  ParquetChunkedReader(long chunkSizeByteLimit, File path) {
+  public ParquetChunkedReader(long chunkSizeByteLimit, File path) {
     this(chunkSizeByteLimit, ParquetOptions.DEFAULT, path);
   }
 
   /**
    * TODO
    */
-  ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, File path) {
+  public ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, File path) {
     handle = create(chunkSizeByteLimit, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId());
   }
@@ -50,7 +53,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @param offset
    * @param len
    */
-  ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, HostMemoryBuffer buffer,
+  public ParquetChunkedReader(long chunkSizeByteLimit, ParquetOptions opts, HostMemoryBuffer buffer,
       long offset, long len) {
     handle = create(chunkSizeByteLimit, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
         buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId());
@@ -82,6 +85,9 @@ public class ParquetChunkedReader implements AutoCloseable {
       handle = 0;
     }
   }
+
+
+  private long handle;
 
   /**
    * TODO
