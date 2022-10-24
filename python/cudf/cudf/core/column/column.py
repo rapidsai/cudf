@@ -95,10 +95,6 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-def custom_weakref_callback(ref):
-    pass
-
-
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
         "any",
@@ -128,7 +124,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     @property
     def _data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
-        View the data as a device array object
+        Internal implementation for viewing the data as a device array object
+        without triggering a deep-copy.
         """
         return cuda.as_cuda_array(
             SimpleNamespace(
@@ -142,7 +139,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     @property
     def _mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
-        View the mask as a device array
+        Internal implementation for viewing the mask as a device array object
+        without triggering a deep-copy.
         """
         return cuda.as_cuda_array(
             SimpleNamespace(

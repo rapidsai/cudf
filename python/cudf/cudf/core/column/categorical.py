@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import weakref
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -26,11 +25,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-
-
-def custom_weakref_callback(ref):
-    pass
-
 
 if TYPE_CHECKING:
     from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
