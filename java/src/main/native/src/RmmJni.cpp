@@ -89,6 +89,7 @@ public:
   std::size_t get_max_total_allocated() override { return max_total_allocated; }
 
   void reset_scoped_max_total_allocated(std::size_t initial_value) override {
+    std::scoped_lock lock(max_total_allocated_mutex);
     scoped_allocated = 0;
     scoped_max_total_allocated = initial_value;
   }
