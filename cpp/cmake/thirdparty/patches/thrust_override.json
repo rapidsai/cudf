@@ -25,7 +25,7 @@
         },
         {
           "file" : "${current_json_dir}/thrust_faster_scan_compile_times.diff",
-          "issue" : "Improve Thrust scane compile times [https://github.com/rapidsai/cudf/pull/8183]",
+          "issue" : "Improve Thrust scan compile times by reducing the number of kernels generated [https://github.com/rapidsai/cudf/pull/8183]",
           "fixed_in" : ""
         }
       ]
