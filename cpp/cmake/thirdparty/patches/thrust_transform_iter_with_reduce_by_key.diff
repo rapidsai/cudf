@@ -1,0 +1,26 @@
+diff --git a/thrust/iterator/transform_input_output_iterator.h b/thrust/iterator/transform_input_output_iterator.h
+index f512a36..a5f725d 100644
+--- a/thrust/iterator/transform_input_output_iterator.h
++++ b/thrust/iterator/transform_input_output_iterator.h
+@@ -102,6 +102,8 @@ template <typename InputFunction, typename OutputFunction, typename Iterator>
+   /*! \endcond
+    */
+ 
++  transform_input_output_iterator() = default;
++
+   /*! This constructor takes as argument a \c Iterator an \c InputFunction and an
+    * \c OutputFunction and copies them to a new \p transform_input_output_iterator
+    *
+diff --git a/thrust/iterator/transform_output_iterator.h b/thrust/iterator/transform_output_iterator.h
+index 66fb46a..4a68cb5 100644
+--- a/thrust/iterator/transform_output_iterator.h
++++ b/thrust/iterator/transform_output_iterator.h
+@@ -104,6 +104,8 @@ template <typename UnaryFunction, typename OutputIterator>
+   /*! \endcond
+    */
+ 
++  transform_output_iterator() = default;
++
+   /*! This constructor takes as argument an \c OutputIterator and an \c
+    * UnaryFunction and copies them to a new \p transform_output_iterator
+    *
