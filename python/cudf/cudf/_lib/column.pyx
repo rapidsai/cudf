@@ -394,6 +394,7 @@ cdef class Column:
         return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
+        self._detach_refs()
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:

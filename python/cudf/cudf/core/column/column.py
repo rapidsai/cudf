@@ -373,7 +373,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 inplace=True,
             )
 
-        self._detach_refs()
         if not slr.is_valid() and not self.nullable:
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
