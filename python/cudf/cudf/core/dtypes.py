@@ -673,6 +673,9 @@ class DecimalDtype(_BaseDtype):
 
     @property
     def precision(self):
+        """
+        The decimal precision, in number of decimal digits (an integer).
+        """
         return self._typ.precision
 
     @precision.setter
@@ -682,10 +685,16 @@ class DecimalDtype(_BaseDtype):
 
     @property
     def scale(self):
+        """
+        The decimal scale (an integer).
+        """
         return self._typ.scale
 
     @property
     def itemsize(self):
+        """
+        Length of one column element in bytes.
+        """
         return self.ITEMSIZE
 
     @property
@@ -694,10 +703,37 @@ class DecimalDtype(_BaseDtype):
         return decimal.Decimal
 
     def to_arrow(self):
+        """
+        Return the equivalent ``pyarrow`` dtype.
+        """
         return self._typ
 
     @classmethod
     def from_arrow(cls, typ):
+        """
+        Construct a cudf decimal dtype from a ``pyarrow`` dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> pa_type = pa.decimal128(precision=9, scale=2)
+
+        Constructing a ``Decimal32Dtype``:
+
+        >>> cudf.Decimal32Dtype.from_arrow(pa_type)
+        Decimal64Dtype(precision=9, scale=2)
+
+        Constructing a ``Decimal64Dtype``:
+
+        >>> cudf.Decimal64Dtype.from_arrow(pa_type)
+        Decimal64Dtype(precision=9, scale=2)
+
+        Constructing a ``Decimal128Dtype``:
+
+        >>> cudf.Decimal128Dtype.from_arrow(pa_type)
+        Decimal128Dtype(precision=9, scale=2)
+        """
         return cls(typ.precision, typ.scale)
 
     def __repr__(self):
