@@ -184,7 +184,7 @@ void percentile_approx_test(column_view const& _keys,
       // result is a scalar, but we want to extract out the underlying column
       auto scalar_result =
         cudf::reduce(values,
-                     cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
+                     *cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
                      data_type{type_id::STRUCT});
       auto tbl = static_cast<cudf::struct_scalar const*>(scalar_result.get())->view();
       std::vector<std::unique_ptr<cudf::column>> cols;

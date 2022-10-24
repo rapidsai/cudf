@@ -49,7 +49,7 @@ struct reduce_dispatch_functor {
   }
 
   template <aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(std::unique_ptr<reduce_aggregation> const& agg)
+  std::unique_ptr<scalar> operator()(reduce_aggregation const& agg)
   {
     switch (k) {
       case aggregation::SUM: return reduction::sum(col, output_dtype, init, stream, mr);
@@ -62,12 +62,12 @@ struct reduce_dispatch_functor {
         return reduction::sum_of_squares(col, output_dtype, stream, mr);
       case aggregation::MEAN: return reduction::mean(col, output_dtype, stream, mr);
       case aggregation::VARIANCE: {
-        auto var_agg = dynamic_cast<var_aggregation const*>(agg.get());
-        return reduction::variance(col, output_dtype, var_agg->_ddof, stream, mr);
+        auto var_agg = static_cast<var_aggregation const&>(agg);
+        return reduction::variance(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::STD: {
-        auto var_agg = dynamic_cast<std_aggregation const*>(agg.get());
-        return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, stream, mr);
+        auto var_agg = static_cast<std_aggregation const&>(agg);
+        return reduction::standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::MEDIAN: {
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
@@ -78,60 +78,59 @@ struct reduce_dispatch_functor {
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::QUANTILE: {
-        auto quantile_agg = dynamic_cast<quantile_aggregation const*>(agg.get());
-        CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
+        auto quantile_agg = static_cast<quantile_aggregation const&>(agg);
+        CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
         auto col_ptr = quantile(col,
-                                quantile_agg->_quantiles,
-                                quantile_agg->_interpolation,
+                                quantile_agg._quantiles,
+                                quantile_agg._interpolation,
                                 valid_sorted_indices,
                                 true,
                                 stream);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::NUNIQUE: {
-        auto nunique_agg = dynamic_cast<nunique_aggregation const*>(agg.get());
+        auto nunique_agg = static_cast<nunique_aggregation const&>(agg);
         return make_fixed_width_scalar(
-          detail::distinct_count(
-            col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
+          detail::distinct_count(col, nunique_agg._null_handling, nan_policy::NAN_IS_VALID, stream),
           stream,
           mr);
       }
       case aggregation::NTH_ELEMENT: {
-        auto nth_agg = dynamic_cast<nth_element_aggregation const*>(agg.get());
-        return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, stream, mr);
+        auto nth_agg = static_cast<nth_element_aggregation const&>(agg);
+        return reduction::nth_element(col, nth_agg._n, nth_agg._null_handling, stream, mr);
       }
       case aggregation::COLLECT_LIST: {
-        auto col_agg = dynamic_cast<collect_list_aggregation const*>(agg.get());
-        return reduction::collect_list(col, col_agg->_null_handling, stream, mr);
+        auto col_agg = static_cast<collect_list_aggregation const&>(agg);
+        return reduction::collect_list(col, col_agg._null_handling, stream, mr);
       }
       case aggregation::COLLECT_SET: {
-        auto col_agg = dynamic_cast<collect_set_aggregation const*>(agg.get());
+        auto col_agg = static_cast<collect_set_aggregation const&>(agg);
         return reduction::collect_set(
-          col, col_agg->_null_handling, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
+          col, col_agg._null_handling, col_agg._nulls_equal, col_agg._nans_equal, stream, mr);
       }
       case aggregation::MERGE_LISTS: {
         return reduction::merge_lists(col, stream, mr);
       }
       case aggregation::MERGE_SETS: {
-        auto col_agg = dynamic_cast<merge_sets_aggregation const*>(agg.get());
-        return reduction::merge_sets(col, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
+        auto col_agg = static_cast<merge_sets_aggregation const&>(agg);
+        return reduction::merge_sets(col, col_agg._nulls_equal, col_agg._nans_equal, stream, mr);
       }
       case aggregation::TDIGEST: {
         CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
                      "Tdigest aggregations expect output type to be STRUCT");
-        auto td_agg = dynamic_cast<tdigest_aggregation const*>(agg.get());
-        return detail::tdigest::reduce_tdigest(col, td_agg->max_centroids, stream, mr);
+        auto td_agg = static_cast<tdigest_aggregation const&>(agg);
+        return detail::tdigest::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       case aggregation::MERGE_TDIGEST: {
         CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
                      "Tdigest aggregations expect output type to be STRUCT");
-        auto td_agg = dynamic_cast<merge_tdigest_aggregation const*>(agg.get());
-        return detail::tdigest::reduce_merge_tdigest(col, td_agg->max_centroids, stream, mr);
+        auto td_agg = static_cast<merge_tdigest_aggregation const&>(agg);
+        return detail::tdigest::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       default: CUDF_FAIL("Unsupported reduction operator");
     }
@@ -140,7 +139,7 @@ struct reduce_dispatch_functor {
 
 std::unique_ptr<scalar> reduce(
   column_view const& col,
-  std::unique_ptr<reduce_aggregation> const& agg,
+  reduce_aggregation const& agg,
   data_type output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
@@ -148,16 +147,16 @@ std::unique_ptr<scalar> reduce(
 {
   CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
                "column and initial value must be the same type");
-  if (init.has_value() && !(agg->kind == aggregation::SUM || agg->kind == aggregation::PRODUCT ||
-                            agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
-                            agg->kind == aggregation::ANY || agg->kind == aggregation::ALL)) {
+  if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
+                            agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
+                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
     CUDF_FAIL(
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
   }
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
-    if (agg->kind == aggregation::TDIGEST || agg->kind == aggregation::MERGE_TDIGEST) {
+    if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
       return detail::tdigest::make_empty_tdigest_scalar();
     }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
@@ -176,12 +175,12 @@ std::unique_ptr<scalar> reduce(
   }
 
   return aggregation_dispatcher(
-    agg->kind, reduce_dispatch_functor{col, output_dtype, init, stream, mr}, agg);
+    agg.kind, reduce_dispatch_functor{col, output_dtype, init, stream, mr}, agg);
 }
 }  // namespace detail
 
 std::unique_ptr<scalar> reduce(column_view const& col,
-                               std::unique_ptr<reduce_aggregation> const& agg,
+                               reduce_aggregation const& agg,
                                data_type output_dtype,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -190,7 +189,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
-                               std::unique_ptr<reduce_aggregation> const& agg,
+                               reduce_aggregation const& agg,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::mr::device_memory_resource* mr)
