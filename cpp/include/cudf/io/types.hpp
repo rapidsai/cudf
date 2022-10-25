@@ -216,7 +216,7 @@ struct source_info {
    * @param host_buffers Input buffers in host memory
    */
   explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
+    : _type(io_type::HOST_BUFFER), _host_buffers(host_buffers)
   {
   }
 
@@ -227,7 +227,7 @@ struct source_info {
    * @param size Size of the buffer
    */
   explicit source_info(const char* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
+    : _type(io_type::HOST_BUFFER), _host_buffers({{host_data, size}})
   {
   }
 
@@ -268,7 +268,7 @@ struct source_info {
    *
    * @return The host buffers of the input
    */
-  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& buffers() const { return _host_buffers; }
   /**
    * @brief Get the input files
    *
@@ -285,7 +285,7 @@ struct source_info {
  private:
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
-  std::vector<host_buffer> _buffers;
+  std::vector<host_buffer> _host_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 
