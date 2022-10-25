@@ -22,7 +22,7 @@ list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 list(APPEND CUDF_CUDA_FLAGS -Werror=cross-execution-space-call)
 list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations)
 
-if(DISABLE_DEPRECATION_WARNING)
+if(DISABLE_DEPRECATION_WARNINGS)
   list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
   list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
 endif()
