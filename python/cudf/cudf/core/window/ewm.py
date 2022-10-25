@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 from typing import Union
 
 import numpy as np
@@ -14,6 +16,7 @@ class ExponentialMovingWindow(_RollingBase):
     Available EW functions: ``mean()``
     Exactly one parameter: ``com``, ``span``, ``halflife``, or ``alpha``
     must be provided.
+
     Parameters
     ----------
     com : float, optional
