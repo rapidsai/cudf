@@ -53,6 +53,7 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
 using strings_col = cudf::test::strings_column_wrapper;
+using structs_col = cudf::test::structs_column_wrapper;
 
 auto chunked_read(std::string const& filepath, std::size_t byte_limit)
 {
@@ -150,4 +151,35 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
   }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleStructs)
+{
+  auto constexpr num_rows = 100'000;
+  auto const filepath     = temp_env->get_temp_filepath("chunked_read_simple_structs.parquet");
+
+  auto const int_iter = thrust::make_counting_iterator(0);
+  auto const str_iter =
+    cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return std::to_string(i); });
+
+  auto const a = int32s_col(int_iter, int_iter + num_rows);
+  auto const b = [=] {
+    auto child1 = int32s_col(int_iter, int_iter + num_rows);
+    auto child2 = int32s_col(int_iter + num_rows, int_iter + num_rows * 2);
+    auto child3 = strings_col{str_iter, str_iter + num_rows};
+    return structs_col{{child1, child2, child3}};
+  }();
+  auto const input = cudf::table_view{{a, b}};
+
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input)
+      .max_page_size_bytes(512 * 1024)  // 512KB per page
+      .max_page_size_rows(20000)        // 20k rows per page
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  auto const [result, num_chunks] = chunked_read(filepath, 500'000);
+  EXPECT_EQ(num_chunks, 5);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result->view());
 }
