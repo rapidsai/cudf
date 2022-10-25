@@ -445,7 +445,7 @@ class chunked_parquet_reader {
   ~chunked_parquet_reader();
 
   /**
-   * @brief Check if there is any data of the given file has not yet processed.
+   * @brief Check if there is any data of the given file has not yet read.
    *
    * @return A boolean value indicating if there is any data left to read
    */
