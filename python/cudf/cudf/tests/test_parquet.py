@@ -2682,6 +2682,7 @@ def test_parquet_writer_time_delta_physical_type():
 
     got = pd.read_parquet(buffer)
     assert_eq(got.shape, (1, 4))
+    assert list(got.columns) == ["s", "ms", "us", "ns"]
 
 
 def test_parquet_roundtrip_time_delta():
