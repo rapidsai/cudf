@@ -80,8 +80,6 @@ install_requires.append(
 )
 
 
-cmdclass = versioneer.get_cmdclass()
-
 setup(
     name="cudf",
     version=versioneer.get_version(),
@@ -102,7 +100,7 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
-    cmdclass=cmdclass,
+    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,
