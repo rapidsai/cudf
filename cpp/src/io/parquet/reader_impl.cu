@@ -171,9 +171,6 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   }
 }
 
-/**
- * @copydoc cudf::io::detail::parquet::read_column_chunks
- */
 std::future<void> reader::impl::read_column_chunks(
   std::vector<std::unique_ptr<datasource::buffer>>& page_data,
   hostdevice_vector<gpu::ColumnChunkDesc>& chunks,  // TODO const?
@@ -232,9 +229,6 @@ std::future<void> reader::impl::read_column_chunks(
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
 
-/**
- * @copydoc cudf::io::detail::parquet::count_page_headers
- */
 size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks)
 {
   size_t total_pages = 0;
@@ -250,9 +244,6 @@ size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>&
   return total_pages;
 }
 
-/**
- * @copydoc cudf::io::detail::parquet::decode_page_headers
- */
 void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                        hostdevice_vector<gpu::PageInfo>& pages)
 {
@@ -269,9 +260,6 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(_stream, true);
 }
 
-/**
- * @copydoc cudf::io::detail::parquet::decompress_page_data
- */
 rmm::device_buffer reader::impl::decompress_page_data(
   hostdevice_vector<gpu::ColumnChunkDesc>& chunks, hostdevice_vector<gpu::PageInfo>& pages)
 {
@@ -443,9 +431,6 @@ rmm::device_buffer reader::impl::decompress_page_data(
   return decomp_pages;
 }
 
-/**
- * @copydoc cudf::io::detail::parquet::allocate_nesting_info
- */
 void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
                                          hostdevice_vector<gpu::PageInfo>& pages,
                                          hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info)
@@ -566,9 +551,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
   page_nesting_info.host_to_device(_stream);
 }
 
-/**
- * @copydoc cudf::io::detail::parquet::decode_page_data
- */
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
@@ -788,18 +770,6 @@ void reader::impl::preprocess_file_and_columns(
     preprocess_file(skip_rows, num_rows, row_group_list);
 
   if (_file_itm_data.has_data) {
-    // - compute column sizes and allocate output buffers.
-    //   important:
-    //   for nested schemas, we have to do some further preprocessing to determine:
-    //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
-    //    of
-    //      nesting and it's size is the row count)
-    //
-    // - for nested schemas, output buffer offset values per-page, per nesting-level for the
-    // purposes of decoding.
-    // TODO: make this a parameter.
-
-    //      auto const _chunk_read_limit = 0;
     preprocess_columns(_file_itm_data.chunks,
                        _file_itm_data.pages_info,
                        skip_rows_corrected,
@@ -807,7 +777,7 @@ void reader::impl::preprocess_file_and_columns(
                        uses_custom_row_bounds,
                        _chunk_read_limit);
 
-    if (_chunk_read_limit == 0) {
+    if (_chunk_read_limit == 0) {  // read the whole file at once
       CUDF_EXPECTS(_chunk_read_info.size() == 1,
                    "Reading the whole file should yield only one chunk.");
     }
@@ -889,9 +859,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        std::vector<std::vector<size_type>> const& row_group_list)
 {
 #if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
-  preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
+  preprocess_file_and_columns(
+    skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
   return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
-#else 
+#else
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
   preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds, row_group_list);
   return read_chunk_internal(uses_custom_row_bounds);
