@@ -882,15 +882,20 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
+// #define ALLOW_PLAIN_READ_CHUNK_LIMIT
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_list)
 {
+#if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
+  preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
+  return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
+#else 
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
-
   preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds, row_group_list);
   return read_chunk_internal(uses_custom_row_bounds);
+#endif
 }
 
 table_with_metadata reader::impl::read_chunk()

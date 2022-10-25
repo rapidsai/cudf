@@ -188,7 +188,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                                 page_input,
                                 c_info.begin(),
                                 thrust::equal_to{},
-                                cumulative_row_sum{});
+                                cumulative_row_sum{});  
   // clang-format off
   /*
   stream.synchronize();
