@@ -58,6 +58,7 @@ using strings_col      = cudf::test::strings_column_wrapper;
 using structs_col      = cudf::test::structs_column_wrapper;
 using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
 
+// TODO: Remove the last 2 params
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
                 bool nullable,
