@@ -41,7 +41,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                 following_window,
                                 min_periods,
                                 agg,
-                                cudf::default_stream_value,
+                                cudf::get_default_stream(),
                                 mr);
 }
 
@@ -62,7 +62,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                 following_window,
                                 min_periods,
                                 agg,
-                                cudf::default_stream_value,
+                                cudf::get_default_stream(),
                                 mr);
 }
 
@@ -76,7 +76,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::rolling_window(
-    input, preceding_window, following_window, min_periods, agg, cudf::default_stream_value, mr);
+    input, preceding_window, following_window, min_periods, agg, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

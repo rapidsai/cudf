@@ -70,7 +70,6 @@ junit-cudf.xml
 test-results
 
 ## Patching
-*.diff
 *.orig
 *.rej
 

@@ -270,7 +270,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, cudf::default_stream_value, mr);
+    strings_columns, separator, narep, separate_nulls, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -286,7 +286,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              separator_narep,
                              col_narep,
                              separate_nulls,
-                             cudf::default_stream_value,
+                             cudf::get_default_stream(),
                              mr);
 }
 
