@@ -72,8 +72,7 @@ std::unique_ptr<table> unique(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
-  null_equality nulls_equal = null_equality::EQUAL,
-  // TODO: Move before nulls_equal?
+  null_equality nulls_equal           = null_equality::EQUAL,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -85,10 +84,9 @@ std::unique_ptr<table> unique(
 std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option keep = duplicate_keep_option::KEEP_ANY,
-  null_equality nulls_equal  = null_equality::EQUAL,
-  nan_equality nans_equal    = nan_equality::ALL_EQUAL,
-  // TODO: Move before keep?
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -115,10 +113,9 @@ std::unique_ptr<table> distinct(
 std::unique_ptr<table> stable_distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option keep = duplicate_keep_option::KEEP_ANY,
-  null_equality nulls_equal  = null_equality::EQUAL,
-  nan_equality nans_equal    = nan_equality::ALL_EQUAL,
-  // TODO: Move before keep?
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -138,10 +135,9 @@ std::unique_ptr<table> stable_distinct(
  */
 rmm::device_uvector<size_type> get_distinct_indices(
   table_view const& input,
-  duplicate_keep_option keep = duplicate_keep_option::KEEP_ANY,
-  null_equality nulls_equal  = null_equality::EQUAL,
-  nan_equality nans_equal    = nan_equality::ALL_EQUAL,
-  // TODO: Move before keep?
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -161,8 +157,7 @@ cudf::size_type unique_count(column_view const& input,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 cudf::size_type unique_count(table_view const& input,
-                             null_equality nulls_equal = null_equality::EQUAL,
-                             // TODO: Move before nulls_equal?
+                             null_equality nulls_equal    = null_equality::EQUAL,
                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
@@ -181,8 +176,7 @@ cudf::size_type distinct_count(column_view const& input,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal = null_equality::EQUAL,
-                               // TODO: Move before keep?
+                               null_equality nulls_equal    = null_equality::EQUAL,
                                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 }  // namespace detail

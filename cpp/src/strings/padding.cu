@@ -56,9 +56,8 @@ struct compute_pad_output_length_fn {
 std::unique_ptr<column> pad(
   strings_column_view const& strings,
   size_type width,
-  side_type side             = side_type::RIGHT,
-  std::string_view fill_char = " ",
-  // TODO: Move before side?
+  side_type side                      = side_type::RIGHT,
+  std::string_view fill_char          = " ",
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

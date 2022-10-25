@@ -53,8 +53,7 @@ namespace detail {
  */
 std::unique_ptr<column> encode(
   column_view const& column,
-  data_type indices_type = data_type{type_id::UINT32},
-  // TODO: Move before indices_type?
+  data_type indices_type              = data_type{type_id::UINT32},
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

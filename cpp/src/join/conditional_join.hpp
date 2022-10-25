@@ -48,9 +48,8 @@ conditional_join(table_view const& left,
                  ast::expression const& binary_predicate,
                  join_kind JoinKind,
                  std::optional<std::size_t> output_size = {},
-                 // TODO: Move above output size?
-                 rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+                 rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Computes the size of a join operation between two tables without

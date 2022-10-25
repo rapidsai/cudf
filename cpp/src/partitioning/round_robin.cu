@@ -151,8 +151,7 @@ namespace detail {
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
-  cudf::size_type start_partition = 0,
-  // TODO: Move before start_partition?
+  cudf::size_type start_partition     = 0,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

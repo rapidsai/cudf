@@ -221,8 +221,7 @@ packed_columns pack(cudf::table_view const& input,
 std::unique_ptr<column> allocate_like(
   column_view const& input,
   size_type size,
-  mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
-  // TODO: Move before mask_alloc?
+  mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -288,7 +287,6 @@ std::unique_ptr<table> sample(
   size_type const n,
   sample_with_replacement replacement = sample_with_replacement::FALSE,
   int64_t const seed                  = 0,
-  // TODO: Move before replacement?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

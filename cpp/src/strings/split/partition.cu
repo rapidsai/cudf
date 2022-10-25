@@ -183,8 +183,7 @@ struct rpartition_fn : public partition_fn {
 
 std::unique_ptr<table> partition(
   strings_column_view const& strings,
-  string_scalar const& delimiter = string_scalar(""),
-  // TODO: Move before delimiter?
+  string_scalar const& delimiter      = string_scalar(""),
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {

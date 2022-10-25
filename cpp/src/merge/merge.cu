@@ -170,8 +170,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      table_view const& right_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
-                                     bool nullable = true,
-                                     // TODO: Move before nullable?
+                                     bool nullable                = true,
                                      rmm::cuda_stream_view stream = cudf::get_default_stream())
 {
   const size_type left_size  = left_table.num_rows();

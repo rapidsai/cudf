@@ -104,7 +104,6 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
-                                       // TODO: Move before metadata?
                                        rmm::cuda_stream_view stream = cudf::get_default_stream(),
                                        arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
 

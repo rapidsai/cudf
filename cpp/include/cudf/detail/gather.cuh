@@ -651,8 +651,7 @@ std::unique_ptr<table> gather(
   table_view const& source_table,
   MapIterator gather_map_begin,
   MapIterator gather_map_end,
-  out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
-  // TODO: Move before bounds_policy?
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
