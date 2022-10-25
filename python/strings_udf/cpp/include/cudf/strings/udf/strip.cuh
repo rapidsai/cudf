@@ -28,7 +28,7 @@ namespace udf {
 /**
  * @brief Strip characters from the beginning and/or end of the given string
  *
- * The `d_to_strip` is interpretted as an array of characters to be removed.
+ * The `d_to_strip` is interpreted as an array of characters to be removed.
  * If `d_to_strip` is an empty string, whitespace characters are stripped.
  *
  * @code{.cpp}
@@ -58,7 +58,7 @@ __device__ udf_string strip(cudf::string_view const d_str,
 /**
  * @brief Strip characters from the beginning of the given string
  *
- * The `d_to_strip` is interpretted as an array of characters to be removed.
+ * The `d_to_strip` is interpreted as an array of characters to be removed.
  * If `d_to_strip` is an empty string, whitespace characters are stripped.
  *
  * @code{.cpp}
@@ -83,7 +83,7 @@ __device__ udf_string lstrip(cudf::string_view const d_str, cudf::string_view d_
 /**
  * @brief Strip characters from the end of the given string
  *
- * The `d_to_strip` is interpretted as an array of characters to be removed.
+ * The `d_to_strip` is interpreted as an array of characters to be removed.
  * If `d_to_strip` is an empty string, whitespace characters are stripped.
  *
  * @code{.cpp}

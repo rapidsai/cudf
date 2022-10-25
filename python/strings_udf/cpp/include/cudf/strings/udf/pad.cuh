@@ -53,11 +53,11 @@ __device__ udf_string pad(cudf::string_view const d_str,
  *
  * If the `width` is smaller than the length of `d_str` no change occurs.
  *
- * If d_str starts with a sign character ('-' or '+') then '0' padding
+ * If `d_str` starts with a sign character ('-' or '+') then '0' padding
  * starts after the sign.
  *
  * @param d_str String to fill
- * @param width Minimum length in characters of the output string
+ * @param width Minimum length in characters of the output string (including the sign character)
  */
 __device__ udf_string zfill(cudf::string_view const d_str, cudf::size_type width)
 {

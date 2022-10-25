@@ -103,6 +103,7 @@ __device__ inline udf_string convert_case(
  * @tparam CapitalizeNextFn returns true if the next candidate character should be capitalized
  * @param tables The char tables required for conversion
  * @param d_str Input string to convert
+ * @param next_fn Function for next character capitalized
  * @return New string containing the converted characters
  */
 template <typename CapitalizeNextFn>
