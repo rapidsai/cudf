@@ -2680,7 +2680,8 @@ def test_parquet_writer_time_delta_physical_type():
     buffer = BytesIO()
     df.to_parquet(buffer)
 
-    pd.read_parquet(buffer)  # should not throw
+    got = pd.read_parquet(buffer)
+    assert_eq(got.shape, (1, 4))
 
 
 def test_parquet_roundtrip_time_delta():
