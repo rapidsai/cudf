@@ -11,7 +11,6 @@ arith_ops = [
     operator.floordiv,
     operator.mod,
     operator.pow,
-    operator.mod,
     operator.iadd,
     operator.isub,
     operator.imul,
