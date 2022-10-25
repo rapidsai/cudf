@@ -515,9 +515,10 @@ std::unique_ptr<Base> make_collect_list_aggregation(
  * @return A COLLECT_SET aggregation object
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
-                                                   null_equality nulls_equal = null_equality::EQUAL,
-                                                   nan_equality nans_equal = nan_equality::UNEQUAL);
+std::unique_ptr<Base> make_collect_set_aggregation(
+  null_policy null_handling = null_policy::INCLUDE,
+  null_equality nulls_equal = null_equality::EQUAL,
+  nan_equality nans_equal   = nan_equality::ALL_EQUAL);
 
 /**
  * @brief Factory to create a LAG aggregation
