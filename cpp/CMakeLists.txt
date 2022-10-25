@@ -124,12 +124,6 @@ rapids_find_package(
 )
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
-# ctest cuda memcheck
-find_program(CUDA_SANITIZER compute-sanitizer)
-set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
-set(MEMORYCHECK_TYPE CudaSanitizer)
-set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
-
 # ##################################################################################################
 # * dependencies ----------------------------------------------------------------------------------
 
@@ -738,6 +732,13 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+
+  # ctest cuda memcheck
+  find_program(CUDA_SANITIZER compute-sanitizer)
+  set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
+  set(MEMORYCHECK_TYPE CudaSanitizer)
+  set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
+
   # Always print verbose output when tests fail if run using `make test`.
   list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
@@ -760,11 +761,6 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
   rapids_cpm_nvbench()
   add_subdirectory(benchmarks)
-endif()
-
-# build pretty-printer load script
-if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
-  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
 endif()
 
 # ##################################################################################################
@@ -930,3 +926,11 @@ add_custom_target(
   DEPENDS CUDF_DOXYGEN
   COMMENT "Custom command for building cudf doxygen docs."
 )
+
+# ##################################################################################################
+# * make gdb helper scripts ------------------------------------------------------------------------
+
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
+endif()
