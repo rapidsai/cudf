@@ -49,7 +49,6 @@ class parquet_reader_options_builder;
  * @brief Settings for `read_parquet()`.
  */
 class parquet_reader_options {
- protected:
   source_info _source;
 
   // Path in schema of column to read; `nullopt` is all
@@ -87,11 +86,6 @@ class parquet_reader_options {
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
   explicit parquet_reader_options() = default;
-
-  /**
-   * @brief Default destructor, needs to be virtual for polymorphism.
-   */
-  virtual ~parquet_reader_options() = default;
 
   /**
    * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
@@ -257,7 +251,6 @@ class parquet_reader_options {
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
  */
 class parquet_reader_options_builder {
- protected:
   parquet_reader_options options;
 
  public:
