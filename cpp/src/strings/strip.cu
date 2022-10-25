@@ -15,11 +15,9 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/strip.cuh>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/strip.hpp>
@@ -35,35 +33,24 @@ namespace detail {
 namespace {
 
 /**
- * @brief Strip characters from the beginning and/or end of a string.
+ * @brief Strip characters from the beginning and/or end of a string
  *
  * This functor strips the beginning and/or end of each string
  * of any characters found in d_to_strip or whitespace if
  * d_to_strip is empty.
  *
  */
-struct strip_fn {
+struct strip_transform_fn {
   column_device_view const d_strings;
   side_type const side;  // right, left, or both
   string_view const d_to_strip;
-  int32_t* d_offsets{};
-  char* d_chars{};
 
-  __device__ void operator()(size_type idx)
+  __device__ string_index_pair operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
-
-    auto const d_str = d_strings.element<string_view>(idx);
-
+    if (d_strings.is_null(idx)) { return string_index_pair{nullptr, 0}; }
+    auto const d_str      = d_strings.element<string_view>(idx);
     auto const d_stripped = strip(d_str, d_to_strip, side);
-    if (d_chars) {
-      copy_string(d_chars + d_offsets[idx], d_stripped);
-    } else {
-      d_offsets[idx] = d_stripped.size_bytes();
-    }
+    return string_index_pair{d_stripped.data(), d_stripped.size_bytes()};
   }
 };
 
@@ -83,15 +70,14 @@ std::unique_ptr<column> strip(
 
   auto const d_column = column_device_view::create(input.parent(), stream);
 
-  // this utility calls the strip_fn to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    strip_fn{*d_column, side, d_to_strip}, input.size(), stream, mr);
+  auto result = rmm::device_uvector<string_index_pair>(input.size(), stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(input.size()),
+                    result.begin(),
+                    strip_transform_fn{*d_column, side, d_to_strip});
 
-  return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
-                             input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+  return make_strings_column(result.begin(), result.end(), stream, mr);
 }
 
 }  // namespace detail
