@@ -82,6 +82,11 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
+        """
+        Struct columns are immutable, so both deep
+        and shallow copies share the underlying
+        device data and mask.
+        """
 
         result = cudf.core.column.build_column(
             self.base_data,

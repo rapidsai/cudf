@@ -198,9 +198,10 @@ class ListColumn(ColumnBase):
         return self
 
     def copy(self, deep: bool = True):
-        """Columns are immutable, so a deep copy produces a copy of the
-        underlying data and mask and a shallow copy creates a new column and
-        copies the references of the data and mask.
+        """
+        List columns are immutable, so both deep
+        and shallow copies share the underlying
+        device data and mask.
         """
         return column.build_column(
             self.base_data,

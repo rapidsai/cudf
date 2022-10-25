@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import warnings
-import weakref
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
@@ -5250,13 +5249,11 @@ class StringColumn(column.ColumnBase):
         self._start_offset = None
         self._end_offset = None
 
-    def has_a_weakref(self):
-        return any(child.has_a_weakref() for child in self.children)
-
     def copy(self, deep: bool = True):
-        """String Columns are immutable, so a deep/shallow copy
-        produces a new column and copies the references of the
-        data and mask.
+        """
+        String columns are immutable, so both deep
+        and shallow copies share the underlying
+        device data and mask.
         """
 
         return column.build_column(
