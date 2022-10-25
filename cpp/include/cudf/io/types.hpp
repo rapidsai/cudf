@@ -237,7 +237,7 @@ struct source_info {
    * @param d_buffer Input buffer in device memory
    */
   explicit source_info(device_buffer const& d_buffer)
-    : _type(io_type::DEVICE_BUFFER), _device_buffer(d_buffer)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers(d_buffer)
   {
   }
 
@@ -280,6 +280,12 @@ struct source_info {
    */
   [[nodiscard]] auto const& host_buffers() const { return _host_buffers; }
   /**
+   * @brief Get the device buffers of the input
+   *
+   * @return The device buffers of the input
+   */
+  [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
+  /**
    * @brief Get the input files
    *
    * @return The input files
@@ -296,7 +302,7 @@ struct source_info {
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
   std::vector<host_buffer> _host_buffers;
-  device_buffer _device_buffer;
+  device_buffer _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 
