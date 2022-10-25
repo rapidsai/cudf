@@ -57,10 +57,8 @@ using strings_col = cudf::test::strings_column_wrapper;
 auto chunked_read(std::string const& filepath, std::size_t byte_limit)
 {
   auto const read_opts =
-    cudf::io::chunked_parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .byte_limit(byte_limit)
-      .build();
-  auto reader = cudf::io::chunked_parquet_reader(read_opts);
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+  auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
 
   auto num_chunks = 0;
   auto result     = std::make_unique<cudf::table>();

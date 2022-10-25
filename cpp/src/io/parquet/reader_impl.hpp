@@ -38,10 +38,8 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace parquet {
+namespace cudf::io::detail::parquet {
+
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
@@ -81,6 +79,21 @@ class reader::impl {
                            size_type num_rows,
                            bool uses_custom_row_bounds,
                            std::vector<std::vector<size_type>> const& row_group_indices);
+
+  /**
+   * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
+   *
+   * @param chunk_read_limit The byte size limit to read each chunk
+   * @param sources Dataset sources
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit impl(std::size_t chunk_read_limit,
+                std::vector<std::unique_ptr<datasource>>&& sources,
+                parquet_reader_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * TODO
@@ -286,7 +299,4 @@ class reader::impl {
   parquet_reader_options const _options;
 };
 
-}  // namespace parquet
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail::parquet

@@ -30,8 +30,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 /**
  * @addtogroup io_readers
  * @{
@@ -407,119 +406,6 @@ table_with_metadata read_parquet(
   parquet_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// chunked reader stuff
-class chunked_parquet_reader_options_builder;
-
-/**
- * @brief Settings for `chunked_parquet_reader`.
- */
-class chunked_parquet_reader_options : public parquet_reader_options {
-  // Limit the number of maximum bytes that chunked_parquet_reader will read each time.
-  std::size_t _byte_limit;
-
-  friend class chunked_parquet_reader_options_builder;
-
- public:
-  /**
-   * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
-   */
-  explicit chunked_parquet_reader_options() = default;
-
-  /**
-   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
-   *
-   * @param src Source information to read parquet file
-   * @return Builder to build reader options
-   */
-  static chunked_parquet_reader_options_builder builder(source_info const& src);
-
-  /**
-   * @brief Return the maximum number of bytes that will be read by
-   * `chunked_parquet_reader::read()`.
-   *
-   * @return Number of maximum bytes to read each time
-   */
-  [[nodiscard]] size_type get_byte_limit() const { return _byte_limit; }
-
-  /**
-   * @brief Sets the maximum number of bytes that will be read by
-   * `chunked_parquet_reader::read()`.
-   *
-   * @param byte_limit Number of maximum bytes to read each time
-   */
-  void set_byte_limit(std::size_t byte_limit) { _byte_limit = byte_limit; }
-};
-
-/**
- * @brief Builds a `chunked_parquet_reader_options` instance to use with `chunked_parquet_reader`
- * class.
- */
-class chunked_parquet_reader_options_builder : public parquet_reader_options_builder {
-  chunked_parquet_reader_options chunked_reader_options{};
-  bool options_built{false};
-
-  /**
-   * @brief Create a `chunked_parquet_reader_options` object.
-   *
-   * The returned object is a result of taking over the ownership of the internal states.
-   * Therefore, this should be called at most once to avoid data corruption.
-   */
-  chunked_parquet_reader_options create_options()
-  {
-    CUDF_EXPECTS(!options_built, "This function should not be called more than once");
-    options_built = true;
-
-    dynamic_cast<parquet_reader_options&>(chunked_reader_options) = std::move(options);
-    return std::move(chunked_reader_options);
-  }
-
- public:
-  /**
-   * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
-   */
-  chunked_parquet_reader_options_builder() = default;
-
-  /**
-   * @brief Constructor from source info.
-   *
-   * @param src The source information used to read parquet file
-   */
-  explicit chunked_parquet_reader_options_builder(source_info const& src)
-    : parquet_reader_options_builder(src)
-  {
-  }
-
-  /**
-   * @brief Sets number of byte limit to read each time.
-   *
-   * @param limit Number of maximum bytes to read per `read_next()` call
-   * @return this for chaining
-   */
-  chunked_parquet_reader_options_builder& byte_limit(std::size_t limit)
-  {
-    chunked_reader_options.set_byte_limit(limit);
-    return *this;
-  }
-
-  /**
-   * @brief Return `chunked_parquet_reader_options` instance once this's built.
-   */
-  operator chunked_parquet_reader_options() { return create_options(); }
-
-  /**
-   * @brief Return `chunked_parquet_reader_options` instance once this's built.
-   *
-   * This has been added since Cython does not support overloading of conversion operators.
-   *
-   * @return Built `chunked_parquet_reader_options` object's r-value reference
-   */
-  chunked_parquet_reader_options build() { return create_options(); }
-};
-
 /**
  * @brief The chunked parquet reader class to handle options and read tables in chunks.
  *
@@ -531,18 +417,25 @@ class chunked_parquet_reader {
  public:
   /**
    * @brief Default constructor, this should never be used.
-   *        This is added just to satisfy cython.
+   *
+   * This is added just to satisfy cython.
    */
   chunked_parquet_reader() = default;
 
   /**
-   * @brief Constructor with chunked reader options.
+   * @brief Constructor for chunked reader.
    *
-   * @param options The options used to read file
+   * This constructor accepts the same `parquet_reader_option` parameter as in `read_parquet()`, but
+   * with an additional parameter to specify the size byte limit of the output table for each
+   * reading.
+   *
+   * @param chunk_read_limit The limit (in bytes) to read each time
+   * @param options The options used to read Parquet file
    * @param mr Device memory resource to use for device memory allocation
    */
   chunked_parquet_reader(
-    chunked_parquet_reader_options const& options,
+    std::size_t chunk_read_limit,
+    parquet_reader_options const& options,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -551,39 +444,26 @@ class chunked_parquet_reader {
   ~chunked_parquet_reader();
 
   /**
-   * @brief Check if there is any data of the given file has not yet processed.
+   * @brief Check if there is any data of the given file has not yet read.
    *
-   * If the file has been closed (i.e., the `close()` function has been called), this will always
-   * return `false`.
-   *
-   * @return A boolean value indicating if there is any data left to process
+   * @return A boolean value indicating if there is any data left to read
    */
   bool has_next();
 
   /**
    * @brief Read a chunk of Parquet dataset into a set of columns.
    *
-   * The sequence of returned tables, if concatenated by their order, guarantee to form a complete
+   * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
    * dataset as reading the entire given file at once.
    *
-   * An empty table will be returned if all the data in the given file has been read and returned by
-   * the previous calls, or the `close()` function has been called.
+   * An empty table will be returned if the file is empty, or all the data in the given file has
+   * been read and returned by the previous calls.
    *
-   * @return The set of columns along with metadata
+   * @return The output `cudf::table` along with its metadata
    */
   table_with_metadata read_chunk();
 
  private:
-  /**
-   * @brief Perform all necessary preprocessing work for reading the given file.
-   *
-   * The preprocessing is performed for the entire file, not just by chunks, which may include:
-   *  - Parsing the schema.
-   *  - Decompressing and processing pages.
-   *  - Any other necessary preprocessing steps.
-   */
-  //  void preprocess();
-
   std::unique_ptr<cudf::io::detail::parquet::chunked_reader> reader;
 };
 
@@ -1639,5 +1519,5 @@ class parquet_chunked_writer {
 };
 
 /** @} */  // end of group
-}  // namespace io
-}  // namespace cudf
+
+}  // namespace cudf::io
