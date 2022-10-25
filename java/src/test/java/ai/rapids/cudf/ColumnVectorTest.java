@@ -4194,6 +4194,182 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testLike() {
+    // Scalar defaultEscape = Scalar.fromString("\\");
+    // Basic patterns (with null string entry)
+    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "ovér the", "lazy @dog", "1234", "00:0:00");
+        //  String patternString1 = "";
+        //  String patternString2 = "1234";
+        //  ColumnVector res1 = testStrings.like(Scalar.fromString(patternString1), defaultEscape);
+        //  ColumnVector res2 = testStrings.like(Scalar.fromString(patternString2), defaultEscape);
+        ColumnVector res1 = testStrings.like(Scalar.fromString(""), Scalar.fromString("\\"));
+         ColumnVector res2 = testStrings.like(Scalar.fromString("1234"), Scalar.fromString("\\"));
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+           true, null, false, false, false, false);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+           false, null, false, false, true, false)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+    }
+    // Wildcard patterns
+    // try (ColumnVector testStrings = ColumnVector.fromStrings(
+    //        "a", "aa", "aaa", "aba", "b", "bb", "bba", "", "áéêú", "a1b2c3");
+    //      String patternString1 = "_";
+    //      String patternString2 = "%";
+    //      String patternString3 = "a_";
+    //      String patternString4 = "_a_";
+    //      String patternString5 = "b_a";
+    //      String patternString6 = "__a";
+    //      String patternString7 = "a%";
+    //      String patternString8 = "á%";
+    //      String patternString9 = "__a%";
+    //      String patternString10 = "%a";
+    //      String patternString11 = "%a%";
+    //      String patternString12 = "%_a";
+    //      String patternString13 = "a%b_";
+    //      String patternString14 = "a%b_%";
+    //      String patternString15 = "a%b%c";
+    //      String patternString16 = "a%b%c%";
+    //      ColumnVector res1 = testStrings.like(Scalar.fromString(patternString1), defaultEscape);
+    //      ColumnVector res2 = testStrings.like(Scalar.fromString(patternString2), defaultEscape);
+    //      ColumnVector res3 = testStrings.like(Scalar.fromString(patternString3), defaultEscape);
+    //      ColumnVector res4 = testStrings.like(Scalar.fromString(patternString4), defaultEscape);
+    //      ColumnVector res5 = testStrings.like(Scalar.fromString(patternString5), defaultEscape);
+    //      ColumnVector res6 = testStrings.like(Scalar.fromString(patternString6), defaultEscape);
+    //      ColumnVector res7 = testStrings.like(Scalar.fromString(patternString7), defaultEscape);
+    //      ColumnVector res8 = testStrings.like(Scalar.fromString(patternString8), defaultEscape);
+    //      ColumnVector res9 = testStrings.like(Scalar.fromString(patternString9), defaultEscape);
+    //      ColumnVector res10 = testStrings.like(Scalar.fromString(patternString10), defaultEscape);
+    //      ColumnVector res11 = testStrings.like(Scalar.fromString(patternString11), defaultEscape);
+    //      ColumnVector res12 = testStrings.like(Scalar.fromString(patternString12), defaultEscape);
+    //      ColumnVector res13 = testStrings.like(Scalar.fromString(patternString13), defaultEscape);
+    //      ColumnVector res14 = testStrings.like(Scalar.fromString(patternString14), defaultEscape);
+    //      ColumnVector res15 = testStrings.like(Scalar.fromString(patternString15), defaultEscape);
+    //      ColumnVector res16 = testStrings.like(Scalar.fromString(patternString16), defaultEscape);
+    //      ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+    //        true, false, false, false, true, false, false, false, false, false);
+    //      ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+    //        true, true, true, true, true, true, true, true, true, true);
+      //    ColumnVector expected3 = ColumnVector.fromBoxedBooleans(
+      //      false, true, false, false, false, false, false, false, false, false);
+      //    ColumnVector expected4 = ColumnVector.fromBoxedBooleans(
+      //      false, false, true, false, false, false, false, false, false, false);
+      //    ColumnVector expected5 = ColumnVector.fromBoxedBooleans(
+      //      false, false, false, false, false, false, true, false, false, false);
+      //    ColumnVector expected6 = ColumnVector.fromBoxedBooleans(
+      //      false, false, true, true, false, false, true, false, false, false);
+      //    ColumnVector expected7 = ColumnVector.fromBoxedBooleans(
+      //      true, true, true, true, false, false, false, false, false, true);
+      //    ColumnVector expected8 = ColumnVector.fromBoxedBooleans(
+      //      false, false, false, false, false, false, false, false, true, false);
+      //    ColumnVector expected9 = ColumnVector.fromBoxedBooleans(
+      //      false, false, true, true, false, false, true, false, false, false);
+      //    ColumnVector expected10 = ColumnVector.fromBoxedBooleans(
+      //      true, true, true, true, false, false, true, false, false, false);
+      //    ColumnVector expected11 = ColumnVector.fromBoxedBooleans(
+      //      true, true, true, true, false, false, true, false, false, true);
+      //    ColumnVector expected12 = ColumnVector.fromBoxedBooleans(
+      //      false, true, true, true, false, false, true, false, false, false);
+      //    ColumnVector expected13 = ColumnVector.fromBoxedBooleans(
+      //      false, false, false, true, false, false, false, false, false, false);
+      //    ColumnVector expected14 = ColumnVector.fromBoxedBooleans(
+      //      false, false, false, true, false, false, false, false, false, true);
+      //    ColumnVector expected15 = ColumnVector.fromBoxedBooleans(
+      //      false, false, false, false, false, false, false, false, false, false);
+      //    ColumnVector expected16 = ColumnVector.fromBoxedBooleans(
+      //      false, false, false, false, false, false, false, false, false, true)) {
+      // assertColumnsAreEqual(expected1, res1);
+      // assertColumnsAreEqual(expected2, res2);
+      // assertColumnsAreEqual(expected3, res3);
+      // assertColumnsAreEqual(expected4, res4);
+      // assertColumnsAreEqual(expected5, res5);
+      // assertColumnsAreEqual(expected6, res6);
+      // assertColumnsAreEqual(expected7, res7);
+      // assertColumnsAreEqual(expected8, res8);
+      // assertColumnsAreEqual(expected9, res9);
+      // assertColumnsAreEqual(expected10, res10);
+      // assertColumnsAreEqual(expected11, res11);
+      // assertColumnsAreEqual(expected12, res12);
+      // assertColumnsAreEqual(expected13, res13);
+      // assertColumnsAreEqual(expected14, res14);
+      // assertColumnsAreEqual(expected15, res15);
+      // assertColumnsAreEqual(expected16, res16);
+    // }
+    // Patterns with escape characters
+    // try (ColumnVector testStrings = ColumnVector.fromStrings(
+    //        "10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "aéb", "_%_", "_%a");
+    //      String patternString1 = "%\\_%";
+    //      String patternString2 = "_\\_%";
+    //      String patternString3 = "%\\%%";
+    //      String patternString4 = "\\__\\_";
+    //      String patternString5 = "_\\%\\_";
+    //      String patternString6 = "10\\%-20\\%";
+    //      String patternString7 = "10%%%%-20%%";
+    //      String patternString8 = "_%__";
+    //      String patternString9 = "a__b";
+    //      String patternString10 = "___%%";
+    //      String patternString11 = "__a_";
+    //      String patternString12 = "%a%%a%%";
+    //      String escapeChar1 = Scalar.fromString("%");
+    //      String escapeChar2 = Scalar.fromString("_");
+    //      String escapeChar3 = Scalar.fromString("a");
+        //  ColumnVector res1 = testStrings.like(Scalar.fromString(patternString1), defaultEscape);
+        //  ColumnVector res2 = testStrings.like(Scalar.fromString(patternString2), defaultEscape);
+        //  ColumnVector res3 = testStrings.like(Scalar.fromString(patternString3), defaultEscape);
+        //  ColumnVector res4 = testStrings.like(Scalar.fromString(patternString4), defaultEscape);
+        //  ColumnVector res5 = testStrings.like(Scalar.fromString(patternString5), defaultEscape);
+        //  ColumnVector res6 = testStrings.like(Scalar.fromString(patternString6), defaultEscape);
+        //  ColumnVector res7 = testStrings.like(Scalar.fromString(patternString7), escapeChar1);
+        //  ColumnVector res8 = testStrings.like(Scalar.fromString(patternString8), escapeChar1);
+        //  ColumnVector res9 = testStrings.like(Scalar.fromString(patternString9), escapeChar2);
+        //  ColumnVector res10 = testStrings.like(Scalar.fromString(patternString10), escapeChar2);
+        //  ColumnVector res11 = testStrings.like(Scalar.fromString(patternString11), escapeChar3);
+        //  ColumnVector res12 = testStrings.like(Scalar.fromString(patternString12), escapeChar3);
+        //  ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, true, true, true, false, false, true, true);
+        //  ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, true, true, true, false, false, false, false);
+        //  ColumnVector expected3 = ColumnVector.fromBoxedBooleans(
+        //    true, false, true, false, false, false, false, false, true, true);
+        //  ColumnVector expected4 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, false, false, true, false, false, true, false);
+        //  ColumnVector expected5 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, false, false, false, false, false, true, false);
+        //  ColumnVector expected6 = ColumnVector.fromBoxedBooleans(
+        //    true, false, false, false, false, false, false, false, false, false);
+        //  ColumnVector expected7 = ColumnVector.fromBoxedBooleans(
+        //    false, false, true, false, false, false, false, false, false, false);
+        //  ColumnVector expected8 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, false, true, true, true, false, false, false);
+        //  ColumnVector expected9 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, true, false, false, false, false, false, false);
+        //  ColumnVector expected10 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, false, false, false, false, false, true, true);
+        //  ColumnVector expected11 = ColumnVector.fromBoxedBooleans(
+        //    false, false, false, false, false, true, false, false, true, false);
+        //  ColumnVector expected12 = ColumnVector.fromBoxedBooleans(
+        //    true, false, true, false, false, false, false, false, false, false)) {
+    //   assertColumnsAreEqual(expected1, res1);
+    //   assertColumnsAreEqual(expected2, res2);
+    //   assertColumnsAreEqual(expected3, res3);
+    //   assertColumnsAreEqual(expected4, res4);
+    //   assertColumnsAreEqual(expected5, res5);
+    //   assertColumnsAreEqual(expected6, res6);
+    //   assertColumnsAreEqual(expected7, res7);
+    //   assertColumnsAreEqual(expected8, res8);
+    //   assertColumnsAreEqual(expected9, res9);
+    //   assertColumnsAreEqual(expected10, res10);
+    //   assertColumnsAreEqual(expected11, res11);
+    //   assertColumnsAreEqual(expected12, res12);
+    // }
+    // assertThrows(AssertionError.class, () -> {
+    //   try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+    //          "lazy @dog", "1234", "00:0:00");
+    //        ColumnVector res = testStrings.like(patternString4, "\\")) {}
+    // });
+  }
+
+  @Test
   void testUrlDecode() {
     String[] inputs = new String[] {
         "foobar.site%2Fq%3Fx%3D%C3%A9%25",
