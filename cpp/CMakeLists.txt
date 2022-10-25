@@ -749,13 +749,8 @@ endif()
 
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
-  rapids_cpm_find(
-    benchmark 1.5.2
-    GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.5.2
-    GIT_SHALLOW TRUE
-    OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF"
-  )
+  include(${rapids-cmake-dir}/cpm/gbench.cmake)
+  rapids_cpm_gbench()
 
   # Find or install NVBench
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
