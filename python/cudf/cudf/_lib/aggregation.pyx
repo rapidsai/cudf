@@ -807,7 +807,6 @@ cdef class ScanAggregation:
         )
         return agg
 
-
     # scan aggregations
     # TODO: update this after adding per algorithm aggregation derived types
     # https://github.com/rapidsai/cudf/issues/7106

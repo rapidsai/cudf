@@ -249,6 +249,7 @@ class segmented_reduce_aggregation : public virtual aggregation {
 enum class udf_type : bool { CUDA, PTX };
 /// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
+/// Type of treatment of EWM input values first value
 enum class ewm_history : int32_t { INFINITE, FINITE };
 
 /// Factory to create a SUM aggregation
@@ -435,8 +436,9 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * then when computing y_2 one should weigh y_0 as if it occurs two periods
  * before y_2 rather than just one.
  *
- * @param com the center of mass.
- * @param adjust which assumption to make about the first value
+ * @param center_of_mass the center of mass.
+ * @param history which assumption to make about the first value
+ * @return A EWM aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_ewma_aggregation(double const center_of_mass, ewm_history history);

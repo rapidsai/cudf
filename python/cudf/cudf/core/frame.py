@@ -38,7 +38,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
-from cudf.core.window import Rolling, ExponentialMovingWindow
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type

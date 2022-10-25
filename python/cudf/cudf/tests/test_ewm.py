@@ -30,7 +30,7 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("adjust", [True, False])
 def test_ewma(data, params, adjust):
     """
-    the most basic test asserts that we obtain
+    The most basic test asserts that we obtain
     the same numerical values as pandas for various
     sets of keyword arguemnts that effect the raw
     coefficients of the formula
