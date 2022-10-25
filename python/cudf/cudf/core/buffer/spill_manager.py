@@ -115,7 +115,7 @@ class SpillManager:
     """Manager of spillable buffers.
 
     This class implements tracking of all known spillable buffers, on-demand
-    spilling of said buffers, and (optional) maintains a memory usage limit.
+    spilling of said buffers, and (optionally) maintains a memory usage limit.
 
     When `spill_on_demand=True`, the manager registers an RMM out-of-memory
     error handler, which will spill spillable buffers in order to free up

@@ -103,7 +103,7 @@ class SpillableBuffer(Buffer):
         # First, we extract the memory pointer, size, and owner.
         # If it points to host memory we either:
         #   - copy to device memory if exposed=True
-        #   - or create a new buffer that are marked as spilled already.
+        #   - or create a new buffer that is marked as spilled already.
         if isinstance(data, SpillableBuffer):
             raise ValueError(
                 "Cannot create from a SpillableBuffer, "
@@ -246,7 +246,7 @@ class SpillableBuffer(Buffer):
         return spill_lock
 
     def get_ptr(self, spill_lock: SpillLock = None) -> int:
-        """Get a device pointer to the memory of the buffer
+        """Get a device pointer to the memory of the buffer.
 
         If spill_lock is not None, a reference to this buffer is added
         to spill_lock, which disable spilling of this buffer while
@@ -401,7 +401,7 @@ class SpillableBuffer(Buffer):
 class SpillableBufferSlice(SpillableBuffer):
     """A slice of a spillable buffer
 
-    This buffer applies the slicing and then deligates all
+    This buffer applies the slicing and then delegates all
     operations to its base buffer.
 
     Parameters
@@ -460,7 +460,7 @@ class SpillableBufferSlice(SpillableBuffer):
             f"offset={format_bytes(self._offset)} of {self._base} "
         )
 
-    # The rest of the methods deligate to the base buffer.
+    # The rest of the methods delegate to the base buffer.
     def __spill__(self, target: str = "cpu") -> None:
         return self._base.__spill__(target=target)
 
