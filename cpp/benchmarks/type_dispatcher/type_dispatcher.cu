@@ -188,10 +188,10 @@ void type_dispatcher_benchmark(::benchmark::State& state)
   std::vector<rmm::device_buffer> h_vec(n_cols);
   std::vector<TypeParam*> h_vec_p(n_cols);
   std::transform(h_vec.begin(), h_vec.end(), h_vec_p.begin(), [source_size](auto& col) {
-    col.resize(source_size * sizeof(TypeParam), cudf::default_stream_value);
+    col.resize(source_size * sizeof(TypeParam), cudf::get_default_stream());
     return static_cast<TypeParam*>(col.data());
   });
-  rmm::device_uvector<TypeParam*> d_vec(n_cols, cudf::default_stream_value);
+  rmm::device_uvector<TypeParam*> d_vec(n_cols, cudf::get_default_stream());
 
   if (dispatching_type == NO_DISPATCHING) {
     CUDF_CUDA_TRY(cudaMemcpy(

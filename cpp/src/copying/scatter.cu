@@ -490,7 +490,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, scatter_map, target, cudf::default_stream_value, mr);
+  return detail::scatter(source, scatter_map, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
@@ -499,7 +499,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, indices, target, cudf::default_stream_value, mr);
+  return detail::scatter(source, indices, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
@@ -508,7 +508,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::default_stream_value, mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
@@ -518,7 +518,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::default_stream_value, mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

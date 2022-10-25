@@ -128,6 +128,10 @@ struct PageInfo {
                        // decompression
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
+  // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
+  // indicator. instead the lengths for these are stored in the header.
+  int32_t def_lvl_bytes;  // length of the definition levels (V2 header)
+  int32_t rep_lvl_bytes;  // length of the repetition levels (V2 header)
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
@@ -138,6 +142,7 @@ struct PageInfo {
   int32_t num_input_values;
   int32_t chunk_row;       // starting row of this page relative to the start of the chunk
   int32_t num_rows;        // number of rows in this page
+  int32_t num_nulls;       // number of null values (V2 header)
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
   uint8_t flags;           // PAGEINFO_FLAGS_XXX

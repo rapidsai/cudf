@@ -40,7 +40,7 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  hostdevice_vector() : hostdevice_vector(0, cudf::default_stream_value) {}
+  hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
     : hostdevice_vector(size, size, stream)

@@ -36,7 +36,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
+  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
 };
 
 template <typename T>
