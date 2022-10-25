@@ -168,8 +168,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        self._detach_refs()
-        self._zero_copied = True
+        self._detach_refs(zero_copied=True)
 
         output = {
             "shape": (len(self),),

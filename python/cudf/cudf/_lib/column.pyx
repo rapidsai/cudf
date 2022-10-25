@@ -357,7 +357,7 @@ cdef class Column:
             )
         )
 
-    def _detach_refs(self):
+    def _detach_refs(self, zero_copied=False):
         """
         Detaches a column from it's current Buffers by making
         a true deep-copy.
@@ -371,6 +371,10 @@ cdef class Column:
             self.set_base_data(new_col.base_data)
             self.set_base_children(new_col.base_children)
             self.set_base_mask(new_col.base_mask)
+        if self.base_data is not None:
+            self.base_data._zero_copied = zero_copied
+        if self.base_mask is not None:
+            self.base_mask._zero_copied = zero_copied
 
     def _mimic_inplace(self, other_col, inplace=False):
         """

@@ -116,8 +116,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         View the data as a device array object
         """
-        self._detach_refs()
-        self._zero_copied = True
+        self._detach_refs(zero_copied=True)
 
         return self._data_array_view
 

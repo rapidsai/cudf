@@ -347,8 +347,7 @@ class Buffer(Serializable):
             # method should return False in that case as there is only
             # one Buffer pointing to the device memory.
             return (
-                not weakref.getweakrefs(self.get_ref())[0]()
-                is not self.get_ref()
+                weakref.getweakrefs(self.get_ref())[0]() is not self.get_ref()
             )
         else:
             return weakref_count > 0
@@ -387,16 +386,20 @@ class Buffer(Serializable):
                 copied_buf._weak_ref = None
                 copied_buf._zero_copied = False
 
-                if self._weak_ref is None:
-                    self._weak_ref = copied_buf.get_weakref()
-                    copied_buf._weak_ref = self.get_weakref()
+                if self.has_a_weakref():
+                    # If `self` has weak-references
+                    # we will then have to keep that
+                    # weak-reference alive, hence
+                    # pass it onto `copied_buf`
+                    copied_buf._weak_ref = self._weak_ref
                 else:
-                    if self.has_a_weakref():
-                        copied_buf._weak_ref = self._weak_ref
-                        self._weak_ref = copied_buf.get_weakref()
-                    else:
-                        self._weak_ref = copied_buf.get_weakref()
-                        copied_buf._weak_ref = self.get_weakref()
+                    # If `self` has no weak-references,
+                    # we will have to generate a new weak-reference
+                    # and assign it to `copied_buf`
+                    copied_buf._weak_ref = self.get_weakref()
+
+                self._weak_ref = copied_buf.get_weakref()
+
                 return copied_buf
             else:
                 owner_copy = copy.copy(self._owner)
@@ -441,18 +444,19 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> dict:
         # Detach if there are any weak-references.
-        self._detach_refs()
-        # Mark the Buffer as ``_zero_copied=True``,
+
+        # Mark the Buffer as ``zero_copied=True``,
         # which will prevent any copy-on-write
         # mechanism post this operation.
         # This is done because we don't have any
         # control over knowing if a third-party library
         # has modified the data this Buffer is
         # pointing to.
-        self._zero_copied = True
+        self._detach_refs(zero_copied=True)
+
         return self._cai
 
-    def _detach_refs(self):
+    def _detach_refs(self, zero_copied=False):
         """
         Detaches a Buffer from it's weak-references by making
         a true deep-copy.
@@ -465,6 +469,7 @@ class Buffer(Serializable):
             self._ptr = new_buf.ptr
             self._size = new_buf.size
             self._owner = new_buf
+        self._zero_copied = zero_copied
 
     def memoryview(self) -> memoryview:
         host_buf = bytearray(self.size)
