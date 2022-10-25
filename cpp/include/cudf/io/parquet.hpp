@@ -30,8 +30,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 /**
  * @addtogroup io_readers
  * @{
@@ -1520,5 +1519,5 @@ class parquet_chunked_writer {
 };
 
 /** @} */  // end of group
-}  // namespace io
-}  // namespace cudf
+
+}  // namespace cudf::io
