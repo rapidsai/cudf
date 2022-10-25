@@ -30,16 +30,14 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
 class chunked_parquet_writer_options;
 
-namespace detail {
-namespace parquet {
+namespace detail::parquet {
 
 /**
  * @brief Class to read Parquet dataset data into columns.
@@ -48,6 +46,11 @@ class reader {
  protected:
   class impl;
   std::unique_ptr<impl> _impl;
+
+  /**
+   * @brief Default constructor, needed for subclassing.
+   */
+  reader();
 
  public:
   /**
@@ -75,21 +78,21 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  virtual table_with_metadata read(parquet_reader_options const& options);
+  table_with_metadata read(parquet_reader_options const& options);
 };
 
 /**
- * TODO
+ * @brief The reader class that supports chunked reading of a given file.
  *
- * @brief The chunked_reader class
+ * This class intentionally subclasses the `reader` class with private inheritance to hide the
+ * `reader::read()` API. As such, only chunked reading APIs are supported.
  */
 class chunked_reader : reader {
  public:
   /**
-   * TODO
+   * @brief Constructor from a read limit and an array of data sources with reader options.
    *
-   * @brief Constructor from an array of datasources
-   *
+   * @param chunk_read_limit The byte size limit to read each chunk
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -102,23 +105,17 @@ class chunked_reader : reader {
                           rmm::mr::device_memory_resource* mr);
 
   /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
+   * @brief Destructor explicitly-declared to avoid inlined in header.
    */
   ~chunked_reader();
 
   /**
-   * TODO
-   *
-   * @brief has_next
-   * @return
+   * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
   bool has_next();
 
   /**
-   * TODO
-   *
-   * @brief read_chunk
-   * @return
+   * @copydoc cudf::io::chunked_parquet_reader::read_chunk
    */
   table_with_metadata read_chunk();
 };
@@ -199,7 +196,5 @@ class writer {
     const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 
-};  // namespace parquet
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+}  // namespace detail::parquet
+}  // namespace cudf::io

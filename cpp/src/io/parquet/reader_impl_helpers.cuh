@@ -62,6 +62,7 @@ class aggregate_reader_metadata {
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   size_type num_rows;
   size_type num_row_groups;
+
   /**
    * @brief Create a metadata object from each element in the source vector
    */

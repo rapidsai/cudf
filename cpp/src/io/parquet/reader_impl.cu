@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.cu
- * @brief cuDF-IO Parquet reader class implementation
- */
-
 #include "reader_impl.hpp"
 #include "reader_impl_helpers.cuh"
 
@@ -35,10 +30,7 @@
 #include <thrust/fill.h>
 #include <thrust/logical.h>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace parquet {
+namespace cudf::io::detail::parquet {
 
 namespace {
 
@@ -771,6 +763,19 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
+reader::impl::impl(std::size_t chunk_read_limit,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
+                   parquet_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : impl(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
+         options,
+         stream,
+         mr)
+{
+  _chunk_read_limit = chunk_read_limit;
+}
+
 void reader::impl::preprocess_file_and_columns(
   size_type skip_rows,
   size_type num_rows,
@@ -877,15 +882,20 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
+// #define ALLOW_PLAIN_READ_CHUNK_LIMIT
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_list)
 {
+#if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
+  preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
+  return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
+#else 
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
-
   preprocess_file_and_columns(skip_rows, num_rows, uses_custom_row_bounds, row_group_list);
   return read_chunk_internal(uses_custom_row_bounds);
+#endif
 }
 
 table_with_metadata reader::impl::read_chunk()
@@ -910,51 +920,4 @@ bool reader::impl::has_next()
   return _current_read_chunk < _chunk_read_info.size();
 }
 
-// Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-               parquet_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sources), options, stream, mr))
-{
-}
-
-// Destructor within this translation unit
-reader::~reader() = default;
-
-// Forward to implementation
-table_with_metadata reader::read(parquet_reader_options const& options)
-{
-  // if the user has specified custom row bounds
-  bool const uses_custom_row_bounds = options.get_num_rows() >= 0 || options.get_skip_rows() != 0;
-  return _impl->read(options.get_skip_rows(),
-                     options.get_num_rows(),
-                     uses_custom_row_bounds,
-                     options.get_row_groups());
-}
-
-// Forward to implementation
-chunked_reader::chunked_reader(std::size_t chunk_read_limit,
-                               std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                               parquet_reader_options const& options,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-  : reader(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
-           options,
-           stream,
-           mr)
-{
-  _impl->set_chunk_read_limit(chunk_read_limit);
-}
-
-// Destructor within this translation unit
-chunked_reader::~chunked_reader() = default;
-
-bool chunked_reader::has_next() { return _impl->has_next(); }
-
-table_with_metadata chunked_reader::read_chunk() { return _impl->read_chunk(); }
-
-}  // namespace parquet
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail::parquet

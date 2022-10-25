@@ -287,11 +287,13 @@ __device__ void gpuDecodeStream(
  *
  * @return The new output position
  */
-__device__ int gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_pos, int t)
+template<bool sizes_only>
+__device__ std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_pos, int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
   int pos            = s->dict_pos;
+  int str_len = 0;  
 
   while (pos < target_pos) {
     int is_literal, batch_len;
@@ -336,6 +338,8 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_p
     __syncwarp();
     is_literal = shuffle(is_literal);
     batch_len  = shuffle(batch_len);
+    
+    int len = 0;
     if (t < batch_len) {
       int dict_idx = s->dict_val;
       if (is_literal) {
@@ -357,11 +361,39 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_p
           dict_idx &= (1 << dict_bits) - 1;
         }
       }
-      s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx;
+      
+      // if we're computing indices, store it off.
+      if constexpr(sizes_only){        
+        len = [&](){
+          // we may end up decoding more indices than we asked for. so don't include those in the size
+          // calculation
+          if(pos + t >= target_pos){
+            return 0;
+          }          
+          // TODO:  refactor this with gpuGetStringData / gpuGetStringSize
+          uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
+          if (target_pos && dict_pos < (uint32_t)s->dict_size) {
+            const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+            return src->second;            
+          }
+          return 0;
+        }();
+      } else {
+        s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx;
+      }
     }
+
+    // if we're computing sizes, sum it
+    if constexpr(sizes_only){     
+      typedef cub::WarpReduce<size_type> WarpReduce;
+      __shared__ typename WarpReduce::TempStorage temp_storage;
+      // note: str_len will only be valid on thread 0.
+      str_len += WarpReduce(temp_storage).Sum(len);
+    }
+
     pos += batch_len;
   }
-  return pos;
+  return {pos, str_len};
 }
 
 /**
@@ -436,9 +468,11 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
  *
  * @return The new output position
  */
-__device__ void gpuInitStringDescriptors(volatile page_state_s* s, int target_pos, int t)
-{
+__device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int target_pos, int t)
+{  
   int pos = s->dict_pos;
+  int total_len = 0;    
+
   // This step is purely serial
   if (!t) {
     const uint8_t* cur = s->data_start;
@@ -457,11 +491,14 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s* s, int target_po
       s->dict_idx[pos & (non_zero_buffer_size - 1)] = k;
       s->str_len[pos & (non_zero_buffer_size - 1)]  = len;
       k += len;
+      total_len += len;
       pos++;
     }
     s->dict_val = k;
     __threadfence_block();
   }
+
+  return total_len;
 }
 
 inline __device__ std::pair<const char*, size_t> gpuGetStringData(volatile page_state_s* s,
@@ -500,7 +537,7 @@ inline __device__ std::pair<const char*, size_t> gpuGetStringData(volatile page_
  *
  * @return The length of the string
  */
-inline __device__ size_type gpuGetStringSize(volatile page_state_s* s, int src_pos)
+inline __device__ size_t gpuGetStringSize(volatile page_state_s* s, int src_pos)
 {
   if (s->dtype_len == 4) { return 4; }
   auto [_, len] = gpuGetStringData(s, src_pos);
@@ -1423,7 +1460,6 @@ __device__ void gpuDecodeLevels(page_state_s* s, int32_t target_leaf_count, int 
  * @param[in] bounds_set Whether or not s->row_index_lower_bound, s->first_row and s->num_rows
  * have been computed for this page (they will only be set in the second/trim pass).
  */
-template <bool is_string_column>
 static __device__ void gpuUpdatePageSizes(page_state_s* s,
                                           int32_t target_input_value_count,
                                           int t,
@@ -1437,6 +1473,9 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   int input_leaf_count = s->input_leaf_count;
   // how many rows we've processed in the page so far
   int input_row_count = s->input_row_count;
+  
+  // how many valid leaves we've processed
+  // int input_leaf_valid_count = s->input_leaf_valid_count;
 
   while (input_value_count < target_input_value_count) {
     int start_depth, end_depth, d;
@@ -1475,39 +1514,25 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
       }
     }
 
-    // increment counts across all nesting depths
+    // increment value counts across all nesting depths
     for (int s_idx = 0; s_idx < max_depth; s_idx++) {
+      PageNestingInfo* pni = &s->page.nesting[s_idx];
+
       // if we are within the range of nesting levels we should be adding value indices for
       int const in_nesting_bounds =
         (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
       uint32_t const count_mask = ballot(in_nesting_bounds);
       if (!t) {
-        s->page.nesting[s_idx].size += __popc(count_mask);
+        pni->size += __popc(count_mask);
       }
 
-      // string lengths, if applicable
-      if constexpr (is_string_column) {
-        if (s_idx == max_depth - 1) {
-          // string len for each thread
-          size_type const str_len = [&]() {
-            if (is_new_leaf) {
-              int const src_pos  = input_leaf_count + __popc(warp_leaf_count_mask & ((1 << t) - 1));
-              auto const str_len = gpuGetStringSize(s, src_pos);
-              return str_len;
-            }
-            return 0;
-          }();
-
-          // sum sizes from all threads.
-          using warp_reduce = cub::WarpReduce<uint32_t>;
-          __shared__ typename warp_reduce::TempStorage temp_storage[1];
-          size_type warp_total_str_len = warp_reduce(temp_storage[0]).Sum(str_len);
-          if (!t) {
-            s->page.str_bytes += warp_total_str_len;
-            // printf("STR BYTES: %d\n", s->page.str_bytes);
-          }
-        }
+      /*
+      if (s_idx == max_depth - 1) {
+        bool const is_valid = is_new_leaf && in_nesting_bounds;
+        uint32_t const warp_leaf_valid_mask = ballot(is_valid);
+        input_leaf_valid_count += __popc(warp_leaf_valid_mask);
       }
+      */
     }
 
     input_value_count += min(32, (target_input_value_count - input_value_count));
@@ -1519,8 +1544,24 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   if (!t) {
     s->input_value_count = target_input_value_count;
     s->input_leaf_count  = input_leaf_count;
+    // s->input_leaf_valid_count = input_leaf_valid_count;
     s->input_row_count   = input_row_count;
   }
+}
+
+__device__ size_type gpuGetStringSizes(page_state_s* s, int target_count, int t)
+{  
+  auto dict_target_pos = target_count;  
+  size_type str_len = 0;
+  if (s->dict_base) {
+    auto const[new_target_pos, len] = gpuDecodeDictionaryIndices<true>(s, target_count, t);
+    dict_target_pos = new_target_pos;
+    str_len = len;
+  } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
+    str_len = gpuInitStringDescriptors(s, target_count, t);    
+  }
+  if (!t) { *(volatile int32_t*)&s->dict_pos = dict_target_pos; }
+  return str_len;  
 }
 
 /**
@@ -1621,26 +1662,17 @@ __global__ void __launch_bounds__(block_size)
       int actual_input_count = has_repetition ? min(s->lvl_count[level_type::REPETITION],
                                                     s->lvl_count[level_type::DEFINITION])
                                               : s->lvl_count[level_type::DEFINITION];
-      actual_input_count     = min(actual_input_count, s->num_input_values);
-
+            
       // process what we got back
+      gpuUpdatePageSizes(s, actual_input_count, t, !compute_num_rows_pass);
       if (compute_string_sizes) {
-        auto src_target_pos = target_input_count;
-        // TODO: compute this in another warp like the decode step does
-        if (s->dict_base) {
-          src_target_pos = gpuDecodeDictionaryIndices(s, src_target_pos, t);
-        } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-          gpuInitStringDescriptors(s, src_target_pos, t);
+        auto const str_len = gpuGetStringSizes(s, s->input_leaf_count, t);
+        if(!t){
+          s->page.str_bytes += str_len;
         }
-        if (!t) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
-
-        gpuUpdatePageSizes<true>(s, actual_input_count, t, !compute_num_rows_pass);
-      } else {
-        gpuUpdatePageSizes<false>(s, actual_input_count, t, !compute_num_rows_pass);
       }
 
-      // target_input_count = actual_input_count + batch_size;
-      target_input_count += batch_size;
+      target_input_count = actual_input_count + batch_size;  
       __syncwarp();
     }
   }
@@ -1652,6 +1684,7 @@ __global__ void __launch_bounds__(block_size)
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
     pp->str_bytes           = s->page.str_bytes;
+    // printf("STR BYTES: %d\n", s->page.str_bytes);
   }
 }
 
@@ -1720,7 +1753,8 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 
       // WARP1: Decode dictionary indices, booleans or string positions
       if (s->dict_base) {
-        src_target_pos = gpuDecodeDictionaryIndices(s, src_target_pos, t & 0x1f);
+        auto const[new_target_pos, _] = gpuDecodeDictionaryIndices<false>(s, src_target_pos, t & 0x1f);
+        src_target_pos = new_target_pos;
       } else if ((s->col.data_type & 7) == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, src_target_pos, t & 0x1f);
       } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
