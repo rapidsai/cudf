@@ -237,7 +237,7 @@ struct source_info {
    * @param d_buffer Input buffer in device memory
    */
   explicit source_info(device_buffer const& d_buffer)
-    : _type(io_type::DEVICE_BUFFER), _device_buffers(d_buffer)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers({{d_buffer._data, d_buffer._size}})
   {
   }
 
@@ -302,7 +302,7 @@ struct source_info {
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
   std::vector<host_buffer> _host_buffers;
-  device_buffer _device_buffers;
+  std::vector<device_buffer> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 

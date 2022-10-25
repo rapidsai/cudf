@@ -121,6 +121,7 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
       return sources;
     }
     case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.host_buffers());
+    case io_type::DEVICE_BUFFER: return cudf::io::datasource::create(info.device_buffers());
     case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources());
     default: CUDF_FAIL("Unsupported source type");
   }

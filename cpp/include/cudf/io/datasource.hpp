@@ -97,12 +97,20 @@ class datasource {
                                             size_t size   = 0);
 
   /**
-   * @brief Creates a source from a memory buffer.
+   * @brief Creates a source from a host memory buffer.
    *
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
+
+  /**
+   * @brief Creates a source from a device memory buffer.
+   *
+   * @param[in] buffer Device buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(device_buffer const& buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.

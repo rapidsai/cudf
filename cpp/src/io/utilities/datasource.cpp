@@ -269,6 +269,12 @@ std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
     reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
 }
 
+std::unique_ptr<datasource> datasource::create(device_buffer const& buffer)
+{
+  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
+    reinterpret_cast<const uint8_t*>(buffer._data), buffer._size));
+}
+
 std::unique_ptr<datasource> datasource::create(datasource* source)
 {
   // instantiate a wrapper that forwards the calls to the user implementation
