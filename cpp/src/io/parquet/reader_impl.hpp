@@ -278,10 +278,15 @@ class reader::impl {
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
+
   // output columns to be generated
   std::vector<column_buffer> _output_columns;
+
   // _output_columns associated schema indices
   std::vector<int> _output_column_schemas;
+
+  // _output_columns associated metadata
+  std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;

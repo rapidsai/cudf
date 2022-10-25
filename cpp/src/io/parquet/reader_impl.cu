@@ -788,10 +788,11 @@ void reader::impl::preprocess_file_and_columns(
 
 table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bounds)
 {
-  table_metadata out_metadata;
+  // If `_output_metadata` has been constructed, just copy it over.
+  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
 
   // output cudf columns as determined by the top level schema
-  std::vector<std::unique_ptr<column>> out_columns;
+  auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_columns.size());
 
   if (!has_next()) { return finalize_output(out_metadata, out_columns); }
@@ -818,11 +819,16 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
 
   // create the final output cudf columns
   for (size_t i = 0; i < _output_columns.size(); ++i) {
-    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-    auto const metadata        = _reader_column_schema.has_value()
-                                   ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                                   : std::nullopt;
-    out_columns.emplace_back(make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
+    auto const metadata = _reader_column_schema.has_value()
+                            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                            : std::nullopt;
+    // Only construct `out_metadata` if `_output_metadata` has not been cached.
+    if (!_output_metadata) {
+      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+      out_columns.emplace_back(make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
+    } else {
+      out_columns.emplace_back(make_column(_output_columns[i], nullptr, metadata, _stream, _mr));
+    }
   }
 
   return finalize_output(out_metadata, out_columns);
@@ -833,21 +839,30 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
-    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-    out_columns.emplace_back(io::detail::empty_like(_output_columns[i], &col_name, _stream, _mr));
+    if (!_output_metadata) {
+      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+      out_columns.emplace_back(io::detail::empty_like(_output_columns[i], &col_name, _stream, _mr));
+    } else {
+      out_columns.emplace_back(io::detail::empty_like(_output_columns[i], nullptr, _stream, _mr));
+    }
   }
 
-  // Return column names (must match order of returned columns)
-  out_metadata.column_names.resize(_output_columns.size());
-  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-    auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
-    out_metadata.column_names[i] = schema.name;
-  }
+  if (!_output_metadata) {
+    // Return column names (must match order of returned columns)
+    out_metadata.column_names.resize(_output_columns.size());
+    for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+      auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
+      out_metadata.column_names[i] = schema.name;
+    }
 
-  // Return user metadata
-  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
-  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                            out_metadata.per_file_user_data[0].end()};
+    // Return user metadata
+    out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+    out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                              out_metadata.per_file_user_data[0].end()};
+
+    // Finally, save the output table metadata into `_output_metadata` for reuse next time.
+    _output_metadata = std::make_unique<table_metadata>(out_metadata);
+  }
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
