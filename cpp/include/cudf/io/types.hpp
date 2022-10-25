@@ -232,6 +232,16 @@ struct source_info {
   }
 
   /**
+   * @brief Construct a new source info object from a device buffer
+   *
+   * @param d_buffer Input buffer in device memory
+   */
+  explicit source_info(device_buffer const& d_buffer)
+    : _type(io_type::DEVICE_BUFFER), _device_buffer(d_buffer)
+  {
+  }
+
+  /**
    * @brief Construct a new source info object for multiple user-implemented sources
    *
    * @param sources  User-implemented input sources
@@ -268,7 +278,7 @@ struct source_info {
    *
    * @return The host buffers of the input
    */
-  [[nodiscard]] auto const& buffers() const { return _host_buffers; }
+  [[nodiscard]] auto const& host_buffers() const { return _host_buffers; }
   /**
    * @brief Get the input files
    *
@@ -286,6 +296,7 @@ struct source_info {
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
   std::vector<host_buffer> _host_buffers;
+  device_buffer _device_buffer;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 
