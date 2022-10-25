@@ -195,9 +195,6 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
   return metadatas;
 }
 
-/**
- * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
- */
 std::vector<std::unordered_map<std::string, std::string>>
 aggregate_reader_metadata::collect_keyval_metadata()
 {
@@ -219,9 +216,6 @@ aggregate_reader_metadata::collect_keyval_metadata()
   return kv_maps;
 }
 
-/**
- * @brief Sums up the number of rows of each source
- */
 size_type aggregate_reader_metadata::calc_num_rows() const
 {
   return std::accumulate(
@@ -230,9 +224,6 @@ size_type aggregate_reader_metadata::calc_num_rows() const
     });
 }
 
-/**
- * @brief Sums up the number of row groups of each source
- */
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
   return std::accumulate(
@@ -287,15 +278,6 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   return col->meta_data;
 }
 
-/**
- * @brief Extracts the pandas "index_columns" section
- *
- * PANDAS adds its own metadata to the key_value section when writing out the
- * dataframe to a file to aid in exact reconstruction. The JSON-formatted
- * metadata contains the index column(s) and PANDA-specific datatypes.
- *
- * @return comma-separated index column names in quotes
- */
 std::string aggregate_reader_metadata::get_pandas_index() const
 {
   // Assumes that all input files have the same metadata
@@ -324,11 +306,6 @@ std::string aggregate_reader_metadata::get_pandas_index() const
   return "";
 }
 
-/**
- * @brief Extracts the column name(s) used for the row indexes in a dataframe
- *
- * @param names List of column names to load, where index column name(s) will be added
- */
 std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() const
 {
   std::vector<std::string> names;
@@ -349,15 +326,6 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-/**
- * @brief Filters and reduces down to a selection of row groups
- *
- * @param row_groups Lists of row groups to read, one per source
- * @param row_start Starting row of the selection
- * @param row_count Total number of rows selected
- *
- * @return List of row group indexes and its starting row
- */
 std::vector<aggregate_reader_metadata::row_group_info> aggregate_reader_metadata::select_row_groups(
   std::vector<std::vector<size_type>> const& row_groups,
   size_type& row_start,
@@ -407,18 +375,6 @@ std::vector<aggregate_reader_metadata::row_group_info> aggregate_reader_metadata
   return selection;
 }
 
-/**
- * @brief Filters and reduces down to a selection of columns
- *
- * @param use_names List of paths of column names to select; `nullopt` if user did not select
- * columns to read
- * @param include_index Whether to always include the PANDAS index column(s)
- * @param strings_to_categorical Type conversion parameter
- * @param timestamp_type_id Type conversion parameter
- *
- * @return input column information, output column information, list of output column schema
- * indices
- */
 std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>
 aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
                                           bool include_index,
