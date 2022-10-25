@@ -75,6 +75,7 @@ enum class compression_type {
 enum class io_type {
   FILEPATH,          ///< Input/output is a file path
   HOST_BUFFER,       ///< Input/output is a buffer in host memory
+  DEVICE_BUFFER,     ///< Input/output is a buffer in device memory
   VOID,              ///< Input/output is nothing. No work is done. Useful for benchmarking
   USER_IMPLEMENTED,  ///< Input/output is handled by a custom user class
 };
@@ -167,6 +168,24 @@ struct host_buffer {
    * @param size Size of the buffer
    */
   host_buffer(const char* data, size_t size) : data(data), size(size) {}
+};
+
+/**
+ * @brief Non-owning view of a device memory buffer
+ *
+ * Used to describe buffer input in `source_info` objects.
+ */
+struct device_buffer {
+  const char* _data = nullptr;  //!< Pointer to the buffer
+  size_t _size      = 0;        //!< Size of the buffer
+  device_buffer()   = default;
+  /**
+   * @brief Construct a new device buffer object
+   *
+   * @param data Pointer to the buffer
+   * @param size Size of the buffer
+   */
+  device_buffer(const char* data, size_t size) : _data(data), _size(size) {}
 };
 
 /**
