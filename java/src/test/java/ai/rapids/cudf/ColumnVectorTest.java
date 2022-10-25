@@ -4195,15 +4195,15 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testLike() {
-    // Scalar defaultEscape = Scalar.fromString("\\");
+    Scalar defaultEscape = Scalar.fromString("\\");
     // Basic patterns (with null string entry)
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "ovér the", "lazy @dog", "1234", "00:0:00");
         //  String patternString1 = "";
         //  String patternString2 = "1234";
         //  ColumnVector res1 = testStrings.like(Scalar.fromString(patternString1), defaultEscape);
         //  ColumnVector res2 = testStrings.like(Scalar.fromString(patternString2), defaultEscape);
-        ColumnVector res1 = testStrings.like(Scalar.fromString(""), Scalar.fromString("\\"));
-         ColumnVector res2 = testStrings.like(Scalar.fromString("1234"), Scalar.fromString("\\"));
+        ColumnVector res1 = testStrings.like(Scalar.fromString(""), defaultEscape);
+         ColumnVector res2 = testStrings.like(Scalar.fromString("1234"), defaultEscape);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
            true, null, false, false, false, false);
          ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
