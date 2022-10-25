@@ -60,7 +60,7 @@ option(
          stream to external libraries."
   OFF
 )
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
@@ -79,7 +79,7 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
+  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
   VERBOSE
