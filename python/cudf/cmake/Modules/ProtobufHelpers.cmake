@@ -25,6 +25,8 @@ function(codegen_protoc)
   foreach(_proto_path IN LISTS ARGV)
     string(REPLACE "\.proto" "_pb2\.py" pb2_py_path "${_proto_path}")
     set(pb2_py_path "${CMAKE_CURRENT_SOURCE_DIR}/${pb2_py_path}")
+    # Note: If we ever need to process larger numbers of protobuf files we should consider switching
+    # to protobuf_generate_python from the FindProtobuf module.
     execute_process(
       COMMAND ${protoc_COMMAND} --python_out=. "${_proto_path}"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMAND_ERROR_IS_FATAL ANY
