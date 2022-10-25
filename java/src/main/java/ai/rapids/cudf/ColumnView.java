@@ -3311,7 +3311,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType().equals(DType.STRING) : "pattern scalar must be a string scalar";
-    // assert !pattern.getJavaString().isEmpty() : "pattern string may not be empty";
     assert escapeChar != null : "escapeChar scalar may not be null";
     assert escapeChar.getType().equals(DType.STRING) : "escapeChar scalar must be a string scalar";
     return new ColumnVector(like(getNativeView(), pattern.getScalarHandle(), escapeChar.getScalarHandle()));
