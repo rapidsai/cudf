@@ -77,10 +77,10 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
  *               Pass `nullptr` to just get the token count.
  * @return Number of tokens returned
  */
-__device__ inline int split(cudf::string_view const d_str,
-                            char const* tgt,
-                            cudf::size_type bytes,
-                            cudf::string_view* result)
+__device__ inline cudf::size_type split(cudf::string_view const d_str,
+                                        char const* tgt,
+                                        cudf::size_type bytes,
+                                        cudf::string_view* result)
 {
   return split(d_str, cudf::string_view{tgt, bytes}, result);
 }
@@ -94,9 +94,9 @@ __device__ inline int split(cudf::string_view const d_str,
  *               Pass `nullptr` to just get the token count.
  * @return Number of tokens returned
  */
-__device__ inline int split(cudf::string_view const d_str,
-                            char const* tgt,
-                            cudf::string_view* result)
+__device__ inline cudf::size_type split(cudf::string_view const d_str,
+                                        char const* tgt,
+                                        cudf::string_view* result)
 {
   return split(d_str, tgt, detail::bytes_in_null_terminated_string(tgt), result);
 }
