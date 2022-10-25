@@ -35,7 +35,7 @@ namespace udf {
  * This class manages a device buffer of UTF-8 encoded characters
  * for string manipulation in a device kernel.
  *
- * It's methods and behavior are modelled after std::string but
+ * Its methods and behavior are modelled after std::string but
  * with special consideration for UTF-8 encoded strings and for
  * use within a cuDF UDF.
  */
@@ -103,47 +103,47 @@ class udf_string {
   __device__ udf_string(udf_string const& src);
 
   /**
-   * @brief Create a string object from a move reference
+   * @brief Move a string object from an rvalue reference
    *
    * The string data is moved from `src` into the instance returned.
    * The `src` will have no content.
    *
    * @param src String to copy
    */
-  __device__ udf_string(udf_string&& src);
+  __device__ udf_string(udf_string&& src) noexcept;
 
   __device__ ~udf_string();
 
   __device__ udf_string& operator=(udf_string const&);
-  __device__ udf_string& operator=(udf_string&&);
+  __device__ udf_string& operator=(udf_string&&) noexcept;
   __device__ udf_string& operator=(cudf::string_view const);
   __device__ udf_string& operator=(char const*);
 
   /**
    * @brief Return the number of bytes in this string
    */
-  __device__ cudf::size_type size_bytes() const;
+  __device__ cudf::size_type size_bytes() const noexcept;
 
   /**
    * @brief Return the number of characters in this string
    */
-  __device__ cudf::size_type length() const;
+  __device__ cudf::size_type length() const noexcept;
 
   /**
    * @brief Return the maximum number of bytes a udf_string can hold
    */
-  __device__ cudf::size_type max_size() const;
+  __device__ cudf::size_type max_size() const noexcept;
 
   /**
    * @brief Return the internal pointer to the character array for this object
    */
-  __device__ char* data();
-  __device__ char const* data() const;
+  __device__ char* data() noexcept;
+  __device__ char const* data() const noexcept;
 
   /**
    * @brief Returns true if there are no characters in this string
    */
-  __device__ bool is_empty() const;
+  __device__ bool is_empty() const noexcept;
 
   /**
    * @brief Returns an iterator that can be used to navigate through
@@ -151,8 +151,8 @@ class udf_string {
    *
    * This returns a `cudf::string_view::const_iterator` which is read-only.
    */
-  __device__ cudf::string_view::const_iterator begin() const;
-  __device__ cudf::string_view::const_iterator end() const;
+  __device__ cudf::string_view::const_iterator begin() const noexcept;
+  __device__ cudf::string_view::const_iterator end() const noexcept;
 
   /**
    * @brief Returns the character at the specified position
@@ -199,7 +199,7 @@ class udf_string {
    *            not match is ordered after the corresponding character in `str`,
    *            or all compared characters match but the `str` string is longer.
    */
-  __device__ int compare(cudf::string_view const str) const;
+  __device__ int compare(cudf::string_view const str) const noexcept;
 
   /**
    * @brief Comparing target character array with this string
@@ -219,39 +219,39 @@ class udf_string {
   /**
    * @brief Returns true if `rhs` matches this string exactly
    */
-  __device__ bool operator==(cudf::string_view const rhs) const;
+  __device__ bool operator==(cudf::string_view const rhs) const noexcept;
 
   /**
    * @brief Returns true if `rhs` does not match this string
    */
-  __device__ bool operator!=(cudf::string_view const rhs) const;
+  __device__ bool operator!=(cudf::string_view const rhs) const noexcept;
 
   /**
    * @brief Returns true if this string is ordered before `rhs`
    */
-  __device__ bool operator<(cudf::string_view const rhs) const;
+  __device__ bool operator<(cudf::string_view const rhs) const noexcept;
 
   /**
    * @brief Returns true if `rhs` is ordered before this string
    */
-  __device__ bool operator>(cudf::string_view const rhs) const;
+  __device__ bool operator>(cudf::string_view const rhs) const noexcept;
 
   /**
    * @brief Returns true if this string matches or is ordered before `rhs`
    */
-  __device__ bool operator<=(cudf::string_view const rhs) const;
+  __device__ bool operator<=(cudf::string_view const rhs) const noexcept;
 
   /**
    * @brief Returns true if `rhs` matches or is ordered before this string
    */
-  __device__ bool operator>=(cudf::string_view const rhs) const;
+  __device__ bool operator>=(cudf::string_view const rhs) const noexcept;
 
   /**
    * @brief Remove all bytes from this string
    *
    * All pointers, references, and iterators are invalidated.
    */
-  __device__ void clear();
+  __device__ void clear() noexcept;
 
   /**
    * @brief Resizes string to contain `count` bytes
@@ -279,7 +279,7 @@ class udf_string {
   /**
    * @brief Returns the number of bytes that the string has allocated
    */
-  __device__ cudf::size_type capacity() const;
+  __device__ cudf::size_type capacity() const noexcept;
 
   /**
    * @brief Reduces internal allocation to just `size_bytes()`
@@ -291,16 +291,18 @@ class udf_string {
   /**
    * @brief Moves the contents of `str` into this string instance
    *
+   * On return, the `str` will have no contents.
+   *
    * @param str String to move
-   * @return This string new contents
+   * @return This string with new contents
    */
-  __device__ udf_string& assign(udf_string&& str);
+  __device__ udf_string& assign(udf_string&& str) noexcept;
 
   /**
    * @brief Replaces the contents of this string with contents of `str`
    *
    * @param str String to copy
-   * @return This string new contents
+   * @return This string with new contents
    */
   __device__ udf_string& assign(cudf::string_view const str);
 
@@ -308,7 +310,7 @@ class udf_string {
    * @brief Replaces the contents of this string with contents of `str`
    *
    * @param str Null-terminated UTF-8 character array
-   * @return This string new contents
+   * @return This string with new contents
    */
   __device__ udf_string& assign(char const* str);
 
@@ -317,7 +319,7 @@ class udf_string {
    *
    * @param str UTF-8 character array
    * @param bytes Number of bytes to copy from `str`
-   * @return This string new contents
+   * @return This string with new contents
    */
   __device__ udf_string& assign(char const* str, cudf::size_type bytes);
 

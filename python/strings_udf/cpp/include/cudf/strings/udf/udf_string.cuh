@@ -94,7 +94,7 @@ __device__ inline udf_string::udf_string(udf_string const& src)
   memcpy(m_data, src.m_data, m_bytes);
 }
 
-__device__ inline udf_string::udf_string(udf_string&& src)
+__device__ inline udf_string::udf_string(udf_string&& src) noexcept
   : m_data(src.m_data), m_bytes(src.m_bytes), m_capacity(src.m_capacity)
 {
   src.m_data     = nullptr;
@@ -113,7 +113,7 @@ __device__ inline udf_string::~udf_string() { deallocate(m_data); }
 
 __device__ inline udf_string& udf_string::operator=(udf_string const& str) { return assign(str); }
 
-__device__ inline udf_string& udf_string::operator=(udf_string&& str)
+__device__ inline udf_string& udf_string::operator=(udf_string&& str) noexcept
 {
   return assign(std::move(str));
 }
@@ -125,7 +125,7 @@ __device__ inline udf_string& udf_string::operator=(cudf::string_view const str)
 
 __device__ inline udf_string& udf_string::operator=(char const* str) { return assign(str); }
 
-__device__ udf_string& udf_string::assign(udf_string&& str)
+__device__ udf_string& udf_string::assign(udf_string&& str) noexcept
 {
   if (this == &str) { return *this; }
   m_data         = str.m_data;
@@ -160,30 +160,30 @@ __device__ udf_string& udf_string::assign(char const* str, cudf::size_type bytes
   return *this;
 }
 
-__device__ inline cudf::size_type udf_string::size_bytes() const { return m_bytes; }
+__device__ inline cudf::size_type udf_string::size_bytes() const noexcept { return m_bytes; }
 
-__device__ inline cudf::size_type udf_string::length() const
+__device__ inline cudf::size_type udf_string::length() const noexcept
 {
   return cudf::strings::detail::characters_in_string(m_data, m_bytes);
 }
 
-__device__ cudf::size_type udf_string::max_size() const
+__device__ cudf::size_type udf_string::max_size() const noexcept
 {
   return std::numeric_limits<cudf::size_type>::max() - 1;
 }
 
-__device__ inline char* udf_string::data() { return m_data; }
+__device__ inline char* udf_string::data() noexcept { return m_data; }
 
-__device__ inline char const* udf_string::data() const { return m_data; }
+__device__ inline char const* udf_string::data() const noexcept { return m_data; }
 
-__device__ inline bool udf_string::is_empty() const { return m_bytes == 0; }
+__device__ inline bool udf_string::is_empty() const noexcept { return m_bytes == 0; }
 
-__device__ inline cudf::string_view::const_iterator udf_string::begin() const
+__device__ inline cudf::string_view::const_iterator udf_string::begin() const noexcept
 {
   return cudf::string_view::const_iterator(cudf::string_view(m_data, m_bytes), 0);
 }
 
-__device__ inline cudf::string_view::const_iterator udf_string::end() const
+__device__ inline cudf::string_view::const_iterator udf_string::end() const noexcept
 {
   return cudf::string_view::const_iterator(cudf::string_view(m_data, m_bytes), length());
 }
@@ -216,7 +216,7 @@ __device__ inline cudf::size_type udf_string::byte_offset(cudf::size_type pos) c
   return offset;
 }
 
-__device__ inline int udf_string::compare(cudf::string_view const in) const
+__device__ inline int udf_string::compare(cudf::string_view const in) const noexcept
 {
   return compare(in.data(), in.size_bytes());
 }
@@ -227,39 +227,39 @@ __device__ inline int udf_string::compare(char const* data, cudf::size_type byte
   return view.compare(data, bytes);
 }
 
-__device__ inline bool udf_string::operator==(cudf::string_view const rhs) const
+__device__ inline bool udf_string::operator==(cudf::string_view const rhs) const noexcept
 {
   return m_bytes == rhs.size_bytes() && compare(rhs) == 0;
 }
 
-__device__ inline bool udf_string::operator!=(cudf::string_view const rhs) const
+__device__ inline bool udf_string::operator!=(cudf::string_view const rhs) const noexcept
 {
   return compare(rhs) != 0;
 }
 
-__device__ inline bool udf_string::operator<(cudf::string_view const rhs) const
+__device__ inline bool udf_string::operator<(cudf::string_view const rhs) const noexcept
 {
   return compare(rhs) < 0;
 }
 
-__device__ inline bool udf_string::operator>(cudf::string_view const rhs) const
+__device__ inline bool udf_string::operator>(cudf::string_view const rhs) const noexcept
 {
   return compare(rhs) > 0;
 }
 
-__device__ inline bool udf_string::operator<=(cudf::string_view const rhs) const
+__device__ inline bool udf_string::operator<=(cudf::string_view const rhs) const noexcept
 {
   int rc = compare(rhs);
   return (rc == 0) || (rc < 0);
 }
 
-__device__ inline bool udf_string::operator>=(cudf::string_view const rhs) const
+__device__ inline bool udf_string::operator>=(cudf::string_view const rhs) const noexcept
 {
   int rc = compare(rhs);
   return (rc == 0) || (rc > 0);
 }
 
-__device__ inline void udf_string::clear()
+__device__ inline void udf_string::clear() noexcept
 {
   deallocate(m_data);
   m_data     = nullptr;
@@ -284,7 +284,7 @@ __device__ void udf_string::reserve(cudf::size_type count)
   if (count < max_size() && count > m_capacity) { reallocate(count); }
 }
 
-__device__ cudf::size_type udf_string::capacity() const { return m_capacity; }
+__device__ cudf::size_type udf_string::capacity() const noexcept { return m_capacity; }
 
 __device__ void udf_string::shrink_to_fit()
 {

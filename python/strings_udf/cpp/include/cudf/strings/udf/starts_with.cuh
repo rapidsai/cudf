@@ -24,7 +24,7 @@ namespace udf {
 
 /**
  * @brief Returns true if the beginning of the specified string
- * matches the given character array
+ * matches the given character array.
  *
  * @param dstr String to check
  * @param tgt Character array encoded in UTF-8
@@ -42,7 +42,7 @@ __device__ inline bool starts_with(cudf::string_view const dstr,
 
 /**
  * @brief Returns true if the beginning of the specified string
- * matches the given target string
+ * matches the given target string.
  *
  * @param dstr String to check
  * @param tgt String to match
@@ -55,7 +55,7 @@ __device__ inline bool starts_with(cudf::string_view const dstr, cudf::string_vi
 
 /**
  * @brief Returns true if the end of the specified string
- * matches the given character array
+ * matches the given character array.
  *
  * @param dstr String to check
  * @param tgt Character array encoded in UTF-8
@@ -73,7 +73,7 @@ __device__ inline bool ends_with(cudf::string_view const dstr,
 
 /**
  * @brief Returns true if the end of the specified string
- * matches the given target` string
+ * matches the given target` string.
  *
  * @param dstr String to check
  * @param tgt String to match

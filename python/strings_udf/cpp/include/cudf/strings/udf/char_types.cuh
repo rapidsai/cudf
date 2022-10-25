@@ -25,7 +25,7 @@ namespace strings {
 namespace udf {
 
 /**
- * @brief Returns true if all characters in the string are of the type specified
+ * @brief Returns true if all characters in the string are of the type specified.
  *
  * The output will be false if the string is empty or has at least one character
  * not of the specified type. If all characters fit the type then true is returned.
