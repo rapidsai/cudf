@@ -11,24 +11,14 @@ arith_ops = [
     operator.floordiv,
     operator.mod,
     operator.pow,
-    operator.iadd,
-    operator.iand,
-    operator.ifloordiv,
     operator.mod,
-    operator.imul,
-    operator.ior,
-    operator.ipow,
+    operator.iadd,
     operator.isub,
+    operator.imul,
     operator.itruediv,
-    operator.ixor,
-]
-
-# only distinct for separate testing
-shift_ops = [
-    operator.lshift,
-    operator.rshift,
-    operator.ilshift,
-    operator.irshift,
+    operator.floordiv,
+    operator.ipow,
+    operator.imod,
 ]
 
 bitwise_ops = [operator.and_, operator.or_, operator.xor]
