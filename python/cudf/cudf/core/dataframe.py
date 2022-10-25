@@ -300,12 +300,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
-            if isinstance(arg[0], slice):
-                start = arg[0].start
-                if start is None:
-                    start = self._frame.index[0]
-                df.index = as_index(start, name=self._frame.index.name)
-            else:
+            if not isinstance(arg[0], slice):
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
                     df.index = self._frame.index._apply_boolean_mask(
