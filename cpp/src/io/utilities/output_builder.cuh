@@ -41,12 +41,24 @@ class split_device_span_iterator;
 template <typename T>
 class split_device_span {
  public:
+  using element_type    = T;
+  using value_type      = std::remove_cv<T>;
+  using size_type       = std::size_t;
+  using difference_type = std::ptrdiff_t;
+  using pointer         = T*;
+  using iterator        = split_device_span_iterator<T>;
+  using const_pointer   = T const*;
+  using reference       = T&;
+  using const_reference = T const&;
+
+  split_device_span() = default;
+
   explicit constexpr split_device_span(device_span<T> head, device_span<T> tail = {})
     : _head{head}, _tail{tail}
   {
   }
 
-  [[nodiscard]] constexpr T& operator[](size_type i) const
+  [[nodiscard]] constexpr reference operator[](size_type i) const
   {
     return i < _head.size() ? _head[i] : _tail[i - _head.size()];
   }
@@ -57,9 +69,9 @@ class split_device_span {
 
   [[nodiscard]] constexpr device_span<T> tail() const { return _tail; }
 
-  [[nodiscard]] constexpr split_device_span_iterator<T> begin() const;
+  [[nodiscard]] constexpr iterator begin() const;
 
-  [[nodiscard]] constexpr split_device_span_iterator<T> end() const;
+  [[nodiscard]] constexpr iterator end() const;
 
  private:
   device_span<T> _head;
@@ -76,7 +88,8 @@ class split_device_span_iterator {
   using it = split_device_span_iterator;
 
  public:
-  using difference_type   = size_type;
+  using size_type         = std::size_t;
+  using difference_type   = std::ptrdiff_t;
   using value_type        = T;
   using pointer           = value_type*;
   using reference         = value_type&;
