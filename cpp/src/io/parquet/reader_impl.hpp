@@ -302,9 +302,6 @@ class reader::impl {
   std::size_t _chunk_read_limit{0};
   std::size_t _current_read_chunk{0};
   bool _file_preprocessed{false};
-
-  // TODO: Remove below
-  parquet_reader_options const _options;
 };
 
 }  // namespace cudf::io::detail::parquet

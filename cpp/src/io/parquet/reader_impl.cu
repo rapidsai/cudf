@@ -738,7 +738,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _stream(stream), _mr(mr), _sources(std::move(sources)), _options(options)
+  : _stream(stream), _mr(mr), _sources(std::move(sources))
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
