@@ -9,8 +9,6 @@ import weakref
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
-import numpy
-
 import rmm
 
 from cudf.core.buffer.buffer import Buffer, Frame, get_ptr_and_size
@@ -79,9 +77,9 @@ class SpillableBuffer(Buffer):
         An buffer-like object representing device or host memory. `data` Cannot
         be SpillableBuffer, use `data[:]` to create a view instead.
     exposed : bool, optional
-        Whether or not a raw pointer (integer or C pointer) has
-        been exposed to the outside world. If this is the case,
-        the buffer cannot be spilled.
+        Whether or not a raw pointer (integer or C pointer) has been exposed to
+        the outside world. If this is the case, the buffer cannot be spilled.
+        If `data` represents host memory, the exposed argument is ignored.
     manager : SpillManager
         The manager overseeing this buffer.
     """
@@ -100,10 +98,6 @@ class SpillableBuffer(Buffer):
         self._exposed = exposed
         self._last_accessed = time.monotonic()
 
-        # First, we extract the memory pointer, size, and owner.
-        # If it points to host memory we either:
-        #   - copy to device memory if exposed=True
-        #   - or create a new buffer that is marked as spilled already.
         if isinstance(data, SpillableBuffer):
             raise ValueError(
                 "Cannot create from a SpillableBuffer, "
@@ -121,27 +115,16 @@ class SpillableBuffer(Buffer):
             )
             self._owner = data
         else:
-            if self._exposed:
-                self._ptr_desc = {"type": "gpu"}
-                ptr, size = get_ptr_and_size(
-                    numpy.array(data, copy=False).__array_interface__
-                )
-                buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-                self._ptr = buf.ptr
-                self._size = buf.size
-                self._owner = buf
-                # Since we are copying the data, we know that the device
-                # memory has not been exposed even if the original host
-                # memory has been exposed.
-                self._exposed = False
-            else:
-                data = memoryview(data)
-                if not data.c_contiguous:
-                    raise ValueError("memoryview must be C-contiguous")
-                self._ptr_desc = {"type": "cpu", "memoryview": data}
-                self._ptr = 0
-                self._size = data.nbytes
-                self._owner = None
+            # When `data` represent host memory, we create a new buffer that
+            # is spilled already.
+            data = memoryview(data)
+            if not data.c_contiguous:
+                raise ValueError("memoryview must be C-contiguous")
+            self._ptr_desc = {"type": "cpu", "memoryview": data}
+            self._ptr = 0
+            self._size = data.nbytes
+            self._owner = None
+            self._exposed = False  # Host memory is never exposed
 
         if self._ptr:
             # TODO: run the following asserts in "debug mode" or not at all.

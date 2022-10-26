@@ -60,9 +60,9 @@ def as_device_buffer_like(
           protocol.
         If `data` represents host memory, data will be copied to device.
     exposed : bool, optional
-        Whether or not a raw pointer (integer or C pointer) has
-        been exposed to the outside world. If this is the case,
-        the buffer cannot be spilled.
+        Whether or not a raw pointer (integer or C pointer) has been exposed to
+        the outside world. If this is the case, the buffer cannot be spilled.
+        If `data` represents host memory, the exposed argument is ignored.
     size : int, optional
         Size of memory in bytes. Must be specified if `data` is an integer
         otherwise it must be None.
