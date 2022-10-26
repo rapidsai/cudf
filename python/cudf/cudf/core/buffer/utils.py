@@ -90,12 +90,13 @@ def as_device_buffer_like(
 
 
 def get_columns(obj: Any) -> List[Column]:
+    """Return all columns in `obj` (no duplicates)"""
+
     from cudf._lib.column import Column
     from cudf.core.column_accessor import ColumnAccessor
     from cudf.core.frame import Frame
     from cudf.core.indexed_frame import IndexedFrame
 
-    """Return all columns in `obj` (no duplicates)"""
     found: List[Column] = []
     found_ids: Set[int] = set()
 
